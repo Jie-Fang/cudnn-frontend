@@ -28,7 +28,7 @@ class EngineHeuristics : public BackendDescriptor {
         return ss.str();
     }
 
-    EngineHeuristics(EngineHeuristics &&from) : BackendDescriptor(from.desc), mode(from.mode), opGraph(from.opGraph) {
+    EngineHeuristics(EngineHeuristics &&from) : BackendDescriptor(from.desc, from.get_status(), from.get_error()), mode(from.mode), opGraph(from.opGraph) {
         from.opGraph = nullptr;
     }
 
@@ -58,7 +58,10 @@ class EngineHeuristics : public BackendDescriptor {
         for (auto i = 0u; i < count; ++i) {
             cudnnBackendDescriptor_t engConfig = nullptr;
             status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR, &engConfig);
-            throw_if(status != CUDNN_STATUS_SUCCESS, "Engine Config creation failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(this, status, "Engine Heuristics: Engine Config cudnnCreate failed");
+                return m_heuristic_results;
+            };
             m_heuristic_results.emplace_back(engConfig);
         }
         int64_t result = -1;
@@ -68,7 +71,9 @@ class EngineHeuristics : public BackendDescriptor {
                 count,
                 &result,
                 m_heuristic_results.data());
-        throw_if(status != CUDNN_STATUS_SUCCESS, "Engine Config Query failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this, status, "Engine Heuristics: Get Attribute Heuristic failed");
+        };
         return m_heuristic_results;
     }
 
@@ -83,7 +88,9 @@ class EngineHeuristics : public BackendDescriptor {
                 0,
                 &count,
                 nullptr);
-        throw_if(status != CUDNN_STATUS_SUCCESS, "Engine Config Query failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this, status, "Engine Heuristics: Get Attribute Heuristic Count failed");
+        };
         return count;
     }
     /** @} */
@@ -126,26 +133,41 @@ class EngineHeuristicsBuilder {
     //! Throws the appropriate error message
     EngineHeuristics &&
     build() {
-        throw_if([this]() { return (m_heuristics.opGraph == nullptr); }, "Check and set the opset for heuristic field");
+        if (m_heuristics.opGraph == nullptr) {
+            set_error_and_throw_exception(&m_heuristics, CUDNN_STATUS_BAD_PARAM, "Check and set the opset for heuristic field");
+            return std::move(m_heuristics);
+        };
 
         // Create a descriptor. Memory allocation happens here.
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR, &m_heuristics.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Create Descriptor failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: cudnnCreate failed");
+            return std::move(m_heuristics);
+        };
 
         status = cudnnBackendSetAttribute(m_heuristics.desc,
                                           CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           1,
                                           &m_heuristics.opGraph);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Heuristics Operation Set set failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: Set Attribute  opset failed");
+            return std::move(m_heuristics);
+        };
         status = cudnnBackendSetAttribute(
             m_heuristics.desc, CUDNN_ATTR_ENGINEHEUR_MODE, CUDNN_TYPE_HEUR_MODE, 1, &m_heuristics.mode);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Heuristics mode failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: Set Attribute Heuristic Mode failed");
+            return std::move(m_heuristics);
+        };
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_heuristics.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Heuristics finalize failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: cudnn Finalize failed");
+            return std::move(m_heuristics);
+        };
 
         return std::move(m_heuristics);
     }

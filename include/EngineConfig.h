@@ -36,7 +36,7 @@ class EngineConfig : public BackendDescriptor {
         return ss.str();
     }
     EngineConfig(EngineConfig &&from)
-        : BackendDescriptor(from.desc), engine(from.engine), numKnobs(from.numKnobs) {
+        : BackendDescriptor(from.desc, from.get_status(), from.get_error()), engine(from.engine), numKnobs(from.numKnobs) {
         from.engine = nullptr;
         bChoices = from.bChoices;
         from.bChoices.fill(nullptr);
@@ -60,7 +60,10 @@ class EngineConfig : public BackendDescriptor {
         cudnnStatus_t status;
         for (uint64_t i = 0; i < bChoices.size(); i++) {
             status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR, &bChoices[i]);
-            throw_if(status != CUDNN_STATUS_SUCCESS, "Choice creation failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(this, status, "Choice creation failed");
+                break;
+            }
         }
     }
     EngineConfig(EngineConfig const &) = delete;
@@ -92,11 +95,17 @@ class EngineConfigBuilder {
             cudnnBackendKnobType_t type = knobs[i].getKnobType();
             int64_t value = knobs[i].getChoice();
             status = cudnnBackendSetAttribute(m_engine_config.bChoices[i], CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE, CUDNN_TYPE_KNOB_TYPE, 1, &type);
-            throw_if(status != CUDNN_STATUS_SUCCESS, "Choice Type set failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(&m_engine_config, status, "Engine Config Set Descriptor Choice Type failed");
+            }
             status = cudnnBackendSetAttribute(m_engine_config.bChoices[i], CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE, CUDNN_TYPE_INT64, 1, &value);
-            throw_if(status != CUDNN_STATUS_SUCCESS, "Choice Value set failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(&m_engine_config, status, "Engine Config Set Descriptor Choice Value failed");
+            }
             status = cudnnBackendFinalize(m_engine_config.bChoices[i]);
-            throw_if(status != CUDNN_STATUS_SUCCESS, "Choice Finalize failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(&m_engine_config, status, "Choice Finalize failed");
+            }
         }
         return *this;
     }
@@ -106,18 +115,31 @@ class EngineConfigBuilder {
     //! Throws the appropriate error message
     EngineConfig &&
     build() {
-        throw_if([this]() { return m_engine_config.engine == nullptr; }, "Initialize the engine correctly");
+        if (m_engine_config.status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_engine_config, m_engine_config.status, "Engien config not initialized properly");
+            return std::move(m_engine_config);
+        }
+        if (m_engine_config.engine == nullptr) {
+            set_error_and_throw_exception(&m_engine_config, CUDNN_STATUS_BAD_PARAM,"Initialize the engine correctly");
+            return std::move(m_engine_config);
+        }
         // Create a descriptor. Memory allocation happens here.
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR, &m_engine_config.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Create Descriptor failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_engine_config, status, "cudnn Create Descriptor failed");
+            return std::move(m_engine_config);
+        }
 
         status = cudnnBackendSetAttribute(m_engine_config.desc,
                                           CUDNN_ATTR_ENGINECFG_ENGINE,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           1,
                                           &m_engine_config.engine);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Engine is invalid");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_engine_config, status, "cudnn Set Attribute Engine failed");
+            return std::move(m_engine_config);
+        }
 
         if (m_engine_config.numKnobs > 0) {
             status = cudnnBackendSetAttribute(m_engine_config.desc,
@@ -125,12 +147,18 @@ class EngineConfigBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               m_engine_config.numKnobs,
                                               m_engine_config.bChoices.data());
-            throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Choices are invalid");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(&m_engine_config, status, "cudnn Set Attribute Engine failed");
+                return std::move(m_engine_config);
+            }
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_engine_config.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Engine Config Finalize failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_engine_config, status, "Engine Config Finalize failed");
+            return std::move(m_engine_config);
+        }
         return std::move(m_engine_config);
     }
 

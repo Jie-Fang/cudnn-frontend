@@ -49,7 +49,7 @@ class Operation : public BackendDescriptor {
     }
 
     Operation(Operation &&from)
-        : BackendDescriptor(from.desc),
+        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           op_mode(from.op_mode),
           xdesc(from.xdesc),
           ydesc(from.ydesc),
@@ -134,13 +134,11 @@ class OperationBuilder {
     }
     auto
     setOpMode(cudnnBackendDescriptorType_t mode) -> OperationBuilder & {
-        throw_if(
-            [mode]() {
-                return !((mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
-                         (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
-                         (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR));
-            },
-            "Check the operation mode you have set for Operation");
+        if(!((mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
+             (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
+             (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR))) {
+            set_error_and_throw_exception(&m_operation, m_operation.status, "Check the operation mode you have set for Operation");
+        }
         m_operation.op_mode = mode;
         return *this;
     }
@@ -174,10 +172,26 @@ class OperationBuilder {
     //! Throws the appropriate error message
     Operation &&
     build() {
-        throw_if([this]() { return m_operation.xdesc == nullptr; }, "cudnn xDesc is not set correctly");
-        throw_if([this]() { return m_operation.wdesc == nullptr; }, "cudnn wDesc is not set correctly");
-        throw_if([this]() { return m_operation.ydesc == nullptr; }, "cudnn yDesc is not set correctly");
-        throw_if([this]() { return m_operation.cdesc == nullptr; }, "cudnn cDesc is not set correctly");
+        if (m_operation.status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operation, m_operation.status, "Operation not initialized properly");
+            return std::move(m_operation);
+        }
+        if (m_operation.xdesc == nullptr) {
+            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "cudnn xDesc is not set correctly");
+            return std::move(m_operation);
+        }
+        if (m_operation.wdesc == nullptr) {
+            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "cudnn wDesc is not set correctly");
+            return std::move(m_operation);
+        }
+        if (m_operation.ydesc == nullptr) {
+            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "cudnn yDesc is not set correctly");
+            return std::move(m_operation);
+        }
+        if (m_operation.cdesc == nullptr) {
+            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "cudnn cDesc is not set correctly");
+            return std::move(m_operation);
+        }
 
         // Create the descriptor.
         auto status = CUDNN_STATUS_SUCCESS;
@@ -198,67 +212,100 @@ class OperationBuilder {
                 throw(cudnnException("Check the operation op_mode you have set for Operation"));
                 break;
         }
-        throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "Bad Allocation.");
+        if (status != CUDNN_STATUS_SUCCESS){
+            set_error_and_throw_exception(&m_operation, status, "Operation Bad cudnnCreate Allocation");
+            return std::move(m_operation);
+        }
         if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.xdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "xdesc not set for forward op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "xdesc not set for forward op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_W,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.wdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "ydesc not set for forward op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "ydesc not set for forward op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.ydesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "wdesc not set for forward op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "wdesc not set for forward op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.cdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for forward op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for forward op.");
+                return std::move(m_operation);
+            }
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
                                                                          : static_cast<void *>(&m_operation.alpha_d));
             void *beta = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.beta_s)
                                                                         : static_cast<void *>(&m_operation.beta_d));
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA, m_operation.alphabetaType, 1, alpha);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for forward alpha.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for forward alpha");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA, m_operation.alphabetaType, 1, beta);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for forward beta.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for forward beta");
+                return std::move(m_operation);
+            }
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.xdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "xdesc not set for bwd_filter op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "xdesc not set for bwd_filter op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.wdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "wdesc not set for bwd_filter op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "wdesc not set for bwd_filter op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.ydesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "ydesc not set for bwd_filter op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "ydesc not set for bwd_filter op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_CONV_DESC,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.cdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for bwd_filter op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for bwd_filter op.");
+                return std::move(m_operation);
+            }
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
                                                                          : static_cast<void *>(&m_operation.alpha_d));
             void *beta = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.beta_s)
@@ -268,48 +315,75 @@ class OperationBuilder {
                                               m_operation.alphabetaType,
                                               1,
                                               alpha);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for bwd_filter alpha.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for bwd_filter op Alpha.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_BETA, m_operation.alphabetaType, 1, beta);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for bwd_filter beta.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for bwd_filter op Beta.");
+                return std::move(m_operation);
+            }
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.xdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "xdesc not set for bwd_data op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "xdesc not set for bwd_data op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.wdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "wdesc not set for bwd_data op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "wdesc not set for bwd_data op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.ydesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "ydesc not set for bwd_data op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "ydesc not set for bwd_data op.");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.cdesc);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for bwd_data op.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for bwd_data op.");
+                return std::move(m_operation);
+            }
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
                                                                          : static_cast<void *>(&m_operation.alpha_d));
             void *beta = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.beta_s)
                                                                         : static_cast<void *>(&m_operation.beta_d));
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_ALPHA, m_operation.alphabetaType, 1, alpha);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for bwd_data alpha.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for bwd_data alpha");
+                return std::move(m_operation);
+            }
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_BETA, m_operation.alphabetaType, 1, beta);
-            throw_if([status]() { return status != CUDNN_STATUS_SUCCESS; }, "cdesc not set for bwd_data beta.");
+            if (status != CUDNN_STATUS_SUCCESS){
+                set_error_and_throw_exception(&m_operation, status, "cdesc not set for bwd_data beta");
+                return std::move(m_operation);
+            }
         }
         status = cudnnBackendFinalize(m_operation.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnnFinalize for Operation failed");
+        if (status != CUDNN_STATUS_SUCCESS){
+            set_error_and_throw_exception(&m_operation, status, "cudnnFinalize for Operation failed");
+            return std::move(m_operation);
+        }
         return std::move(m_operation);
     }
 

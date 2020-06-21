@@ -26,4 +26,15 @@ throw_if(bool expr, const char* message) {
         throw cudnnException(message);
     }
 }
+
+static inline void
+set_error_and_throw_exception(BackendDescriptor *desc, cudnnStatus_t status, const char *message) {
+    if (desc != nullptr) {
+        desc->set_status(status);
+        desc->set_error(message);
+    }
+#ifndef CUDNN_SUPPORTS_EXCEPTION 
+    throw cudnnException(message);
+#endif
+}
 }
