@@ -33,7 +33,7 @@ set_error_and_throw_exception(BackendDescriptor *desc, cudnnStatus_t status, con
         desc->set_status(status);
         desc->set_error(message);
     }
-#ifndef CUDNN_SUPPORTS_EXCEPTION 
+#ifndef NV_CUDNN_DISABLE_EXCEPTION 
     throw cudnnException(message);
 #endif
 }

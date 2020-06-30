@@ -59,7 +59,7 @@ class EngineHeuristics : public BackendDescriptor {
             cudnnBackendDescriptor_t engConfig = nullptr;
             status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR, &engConfig);
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(this, status, "Engine Heuristics: Engine Config cudnnCreate failed");
+                set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: CUDNN_BACKEND_ENGINECFG_DESCRIPTOR cudnnCreate Failed");
                 return m_heuristic_results;
             };
             m_heuristic_results.emplace_back(engConfig);
@@ -72,7 +72,7 @@ class EngineHeuristics : public BackendDescriptor {
                 &result,
                 m_heuristic_results.data());
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this, status, "Engine Heuristics: Get Attribute Heuristic failed");
+            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: GetAttribute CUDNN_ATTR_ENGINEHEUR_RESULTS Failed");
         };
         return m_heuristic_results;
     }
@@ -89,7 +89,7 @@ class EngineHeuristics : public BackendDescriptor {
                 &count,
                 nullptr);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this, status, "Engine Heuristics: Get Attribute Heuristic Count failed");
+            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: GetAttribute CUDNN_ATTR_ENGINEHEUR_RESULTS Count Failed");
         };
         return count;
     }
@@ -134,7 +134,7 @@ class EngineHeuristicsBuilder {
     EngineHeuristics &&
     build() {
         if (m_heuristics.opGraph == nullptr) {
-            set_error_and_throw_exception(&m_heuristics, CUDNN_STATUS_BAD_PARAM, "Check and set the opset for heuristic field");
+            set_error_and_throw_exception(&m_heuristics, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: Check and Set the CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH field for heuristic");
             return std::move(m_heuristics);
         };
 
@@ -142,7 +142,7 @@ class EngineHeuristicsBuilder {
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR, &m_heuristics.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: cudnnCreate failed");
+            set_error_and_throw_exception(&m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_heuristics);
         };
 
@@ -152,20 +152,20 @@ class EngineHeuristicsBuilder {
                                           1,
                                           &m_heuristics.opGraph);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: Set Attribute  opset failed");
+            set_error_and_throw_exception(&m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: SetAttribute  CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH Failed");
             return std::move(m_heuristics);
         };
         status = cudnnBackendSetAttribute(
             m_heuristics.desc, CUDNN_ATTR_ENGINEHEUR_MODE, CUDNN_TYPE_HEUR_MODE, 1, &m_heuristics.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: Set Attribute Heuristic Mode failed");
+            set_error_and_throw_exception(&m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: SetAttribute CUDNN_ATTR_ENGINEHEUR_MODE Failed");
             return std::move(m_heuristics);
         };
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_heuristics.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_heuristics, status, "Engine Heuristics: cudnn Finalize failed");
+            set_error_and_throw_exception(&m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: cudnn Finalize failed");
             return std::move(m_heuristics);
         };
 

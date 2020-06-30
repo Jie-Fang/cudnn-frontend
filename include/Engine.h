@@ -99,22 +99,22 @@ class Engine : public BackendDescriptor {
             status =
                 cudnnBackendGetAttribute(bKnob, CUDNN_ATTR_KNOB_INFO_TYPE, CUDNN_TYPE_KNOB_TYPE, 1, &elemCount, &type);
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(this, status, "Engine: Get Attribute Knob failed");
+                set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR GetAttribute CUDNN_ATTR_KNOB_INFO_TYPE failed");
             }
             status = cudnnBackendGetAttribute(
                 bKnob, CUDNN_ATTR_KNOB_INFO_MAXIMUM_VALUE, CUDNN_TYPE_INT64, 1, &elemCount, &maxValue);
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(this, status, "Engine: Get Attribute Knob Max Value failed");
+                set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR GetAttribute CUDNN_ATTR_KNOB_INFO_MAXIMUM_VALUE Failed");
             }
             status = cudnnBackendGetAttribute(
                 bKnob, CUDNN_ATTR_KNOB_INFO_MINIMUM_VALUE, CUDNN_TYPE_INT64, 1, &elemCount, &minValue);
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(this, status, "Engine: Get Attribute Knob Min Value failed");
+                set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR GetAttribute CUDNN_ATTR_KNOB_INFO_MINIMUM_VALUE Failed");
             }
             status =
                 cudnnBackendGetAttribute(bKnob, CUDNN_ATTR_KNOB_INFO_STRIDE, CUDNN_TYPE_INT64, 1, &elemCount, &stride);
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(this, status, "Engine: Get Attribute Stride Value failed");
+                set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR GetAttribute CUDNN_ATTR_KNOB_INFO_STRIDE Failed");
             }
             knobs.emplace_back(Knob(type, maxValue, minValue, stride));
         }
@@ -136,17 +136,17 @@ class Engine : public BackendDescriptor {
         for (uint64_t i = 0; i < bKnobs.size(); i++) {
             status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR, &bKnobs[i]);
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(this, status, "Engine: Knob Creation (cudnnCreate) failed");
+                set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR cudnnCreate Failed");
             }
         }
         status = cudnnBackendGetAttribute(desc,
-                                          CUDNN_ATTR_ENGINE_KNOB_INFOS,
+                                          CUDNN_ATTR_ENGINE_KNOB_INFO,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           CUDNN_KNOB_TYPE_COUNTS,
                                           &numKnobs,
                                           bKnobs.data());
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this, status, "Engine: Get Attribute knob count query failed");
+            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: GetAttribute CUDNN_ATTR_ENGINE_KNOB_INFO Query Failed");
         }
         buildKnobs();
     }
@@ -199,11 +199,11 @@ class EngineBuilder {
     Engine &&
     build() {
         if (m_engine.idx < 0) {
-            set_error_and_throw_exception(&m_engine, CUDNN_STATUS_BAD_PARAM, "Set the engine idx to valid value");
+            set_error_and_throw_exception(&m_engine, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: Check and Set the CUDNN_ATTR_ENGINE_GLOBAL_INDEX to valid value");
             return std::move(m_engine);
         }
         if (m_engine.opGraph == nullptr) {
-            set_error_and_throw_exception(&m_engine, CUDNN_STATUS_BAD_PARAM, "Set Opgraph to valid value");
+            set_error_and_throw_exception(&m_engine, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: Check and Set CUDNN_ATTR_ENGINE_OPERATION_GRAPH to valid value");
             return std::move(m_engine);
         }
 
@@ -211,28 +211,28 @@ class EngineBuilder {
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &m_engine.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_engine, status, "Engine: cudnn Create Descriptor failed");
+            set_error_and_throw_exception(&m_engine, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: cudnnCreate Descriptor Failed");
             return std::move(m_engine);
         }
 
         status = cudnnBackendSetAttribute(
             m_engine.desc, CUDNN_ATTR_ENGINE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &m_engine.opGraph);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_engine, status, "Engine: Set Attribute OperationGraph failed");
+            set_error_and_throw_exception(&m_engine, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: SetAttribute CUDNN_ATTR_ENGINE_OPERATION_GRAPH Failed");
             return std::move(m_engine);
         }
 
         status =
             cudnnBackendSetAttribute(m_engine.desc, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &m_engine.idx);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_engine, status, "Engine: Set Attribute Global Index failed");
+            set_error_and_throw_exception(&m_engine, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: SetAttribute CUDNN_ATTR_ENGINE_GLOBAL_INDEX Failed");
             return std::move(m_engine);
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_engine.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_engine, status, "Engine: Finalize Failed");
+            set_error_and_throw_exception(&m_engine, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: cudnnFinalize Failed");
             return std::move(m_engine);
         }
 

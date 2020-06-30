@@ -152,15 +152,15 @@ class ConvDescBuilder {
     build() {
         // Sanity check if non-default fields have been set correctly.
         if (m_convDesc.nDims <= 0) {
-            set_error_and_throw_exception(&m_convDesc, CUDNN_STATUS_BAD_PARAM, "Check and set the spatial dimensions field");
+            set_error_and_throw_exception(&m_convDesc, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: Check and Set the CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS field");
             return std::move(m_convDesc);
         };
         if (m_convDesc.stride[0] <= 0) {
-            set_error_and_throw_exception(&m_convDesc, CUDNN_STATUS_BAD_PARAM, "Check and set the Strides Correctly");
+            set_error_and_throw_exception(&m_convDesc, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: Check and Set the CUDNN_ATTR_CONVOLUTION_FILTER_STRIDES field");
             return std::move(m_convDesc);
         }
         if (m_convDesc.desc != nullptr) {
-            set_error_and_throw_exception(&m_convDesc, CUDNN_STATUS_BAD_PARAM, "Bad ConvDesc created");
+            set_error_and_throw_exception(&m_convDesc, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: Bad descriptor created");
             return std::move(m_convDesc);
         }
 
@@ -168,7 +168,7 @@ class ConvDescBuilder {
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR, &m_convDesc.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "Bad ConvDesc created");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_convDesc);
         }
 
@@ -176,21 +176,21 @@ class ConvDescBuilder {
         status = cudnnBackendSetAttribute(
             m_convDesc.desc, CUDNN_ATTR_CONVOLUTION_COMP_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &m_convDesc.data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute DataType Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_COMP_TYPE Failed");
             return std::move(m_convDesc);
         }
 
         status = cudnnBackendSetAttribute(
             m_convDesc.desc, CUDNN_ATTR_CONVOLUTION_MODE, CUDNN_TYPE_CONVOLUTION_MODE, 1, &m_convDesc.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute CONVOLUTION MODE Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_MODE Failed");
             return std::move(m_convDesc);
         }
 
         status = cudnnBackendSetAttribute(
             m_convDesc.desc, CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS, CUDNN_TYPE_INT64, 1, &m_convDesc.nDims);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute CONV DIM Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS Failed");
             return std::move(m_convDesc);
         }
 
@@ -200,7 +200,7 @@ class ConvDescBuilder {
                                           m_convDesc.nDims,
                                           m_convDesc.padLower);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute Pre Psdding Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_PRE_PADDINGS Failed");
             return std::move(m_convDesc);
         }
 
@@ -210,7 +210,7 @@ class ConvDescBuilder {
                                           m_convDesc.nDims,
                                           m_convDesc.padUpper);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute Post Psdding Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_POST_PADDINGS Failed");
             return std::move(m_convDesc);
         }
 
@@ -220,7 +220,7 @@ class ConvDescBuilder {
                                           m_convDesc.nDims,
                                           m_convDesc.dilation);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute Dilation Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_DILATIONS Failed");
             return std::move(m_convDesc);
         }
 
@@ -230,14 +230,14 @@ class ConvDescBuilder {
                                           m_convDesc.nDims,
                                           m_convDesc.stride);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc SetAttribute Filter Strides Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_FILTER_STRIDES Failed");
             return std::move(m_convDesc);
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_convDesc.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "ConvDesc Finalize Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: cudnnFinalize Failed");
             return std::move(m_convDesc);
         }
 

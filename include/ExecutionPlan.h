@@ -57,11 +57,11 @@ class ExecutionPlan : public BackendDescriptor {
         auto status            = cudnnBackendGetAttribute(
             desc, CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL, &workSpaceSize);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this, status, "Workspace Size query failed");
+            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE Failed");
             return workSpaceSize;
         }
         if (workSpaceSize < 0) {
-            set_error_and_throw_exception(this, status, "Workspace Size invalid");
+            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute Workspace Size Invalid");
             return workSpaceSize;
         }
         return workSpaceSize;
@@ -112,11 +112,11 @@ class ExecutionPlanBuilder {
     ExecutionPlan &&
     build() {
         if(m_execution_plan.handle == nullptr) {
-            set_error_and_throw_exception(&m_execution_plan, CUDNN_STATUS_BAD_PARAM, "Initialize the ExecutionPlan handle");
+            set_error_and_throw_exception(&m_execution_plan, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Check and Set the CUDNN_ATTR_EXECUTION_PLAN_HANDLE");
             return std::move(m_execution_plan);
         };
         if(m_execution_plan.engine_config == nullptr) {
-            set_error_and_throw_exception(&m_execution_plan, CUDNN_STATUS_BAD_PARAM, "Initialize the ExecutionPlan Engine Config");
+            set_error_and_throw_exception(&m_execution_plan, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Check and Set the CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG");
             return std::move(m_execution_plan);
         };
 
@@ -124,7 +124,7 @@ class ExecutionPlanBuilder {
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR, &m_execution_plan.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "Execution Plan: Cudnn Create Descriptor failed");
+            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_execution_plan);
         }
 
@@ -134,20 +134,20 @@ class ExecutionPlanBuilder {
                                           1,
                                           &m_execution_plan.engine_config);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "Execution Plan: Set Attribute Engine Config failed");
+            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG Failed");
             return std::move(m_execution_plan);
         }
         status = cudnnBackendSetAttribute(
             m_execution_plan.desc, CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_execution_plan.handle);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "Execution Plan: Set Attribute Handle failed");
+            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_HANDLE Failed");
             return std::move(m_execution_plan);
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_execution_plan.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "Execution Plan: Cudnn Finalize Descriptor failed");
+            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed");
             return std::move(m_execution_plan);
         }
         return std::move(m_execution_plan);
