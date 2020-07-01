@@ -36,7 +36,7 @@ class VariantPack : public BackendDescriptor {
            << " has " << num_ptrs << " data pointers";
         return ss.str();
     }
-    VariantPack(VariantPack &&from) : BackendDescriptor(from.desc), workspace(from.workspace), num_ptrs(from.num_ptrs) {
+    VariantPack(VariantPack &&from) : BackendDescriptor(from.desc, from.get_status(), from.get_error()), workspace(from.workspace), num_ptrs(from.num_ptrs) {
         std::copy(std::begin(from.data_pointers), std::end(from.data_pointers), data_pointers);
         std::copy(std::begin(from.uid), std::end(from.uid), uid);
     }
@@ -107,32 +107,47 @@ class VariantPackBuilder {
         // Create a descriptor. Memory allocation happens here.
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR, &m_variant_pack.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Create Descriptor failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: cudnnCreate Failed");
+            return std::move(m_variant_pack);
+        }
 
         status = cudnnBackendSetAttribute(m_variant_pack.desc,
                                           CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS,
                                           CUDNN_TYPE_VOID_PTR,
                                           m_variant_pack.num_ptrs,
                                           m_variant_pack.data_pointers);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn variant Pack failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS Failed");
+            return std::move(m_variant_pack);
+        }
 
         status = cudnnBackendSetAttribute(m_variant_pack.desc,
                                           CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS,
                                           CUDNN_TYPE_INT64,
                                           m_variant_pack.num_ptrs,
                                           m_variant_pack.uid);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn variant pack Uid failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS Failed");
+            return std::move(m_variant_pack);
+        }
 
         status = cudnnBackendSetAttribute(m_variant_pack.desc,
                                           CUDNN_ATTR_VARIANT_PACK_WORKSPACE,
                                           CUDNN_TYPE_VOID_PTR,
                                           1,
                                           &m_variant_pack.workspace);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Workspace Attribute failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_WORKSPACE Failed");
+            return std::move(m_variant_pack);
+        }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_variant_pack.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Variant Pack Finalize failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: cudnnFinalize Failed");
+            return std::move(m_variant_pack);
+        }
         return std::move(m_variant_pack);
     }
 

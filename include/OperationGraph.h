@@ -35,7 +35,7 @@ class OperationGraph : public BackendDescriptor {
         return ss.str();
     }
 
-    OperationGraph(OperationGraph &&from) : BackendDescriptor(from.desc), handle(from.handle), ops(from.ops), numOps(from.numOps) {
+    OperationGraph(OperationGraph &&from) : BackendDescriptor(from.desc, from.get_status(), from.get_error()), handle(from.handle), ops(from.ops), numOps(from.numOps) {
         for (auto i  = 0; i < ops.size(); i++) { // TODO: Use std::fill
             from.ops[i] = nullptr;
         }
@@ -60,12 +60,13 @@ class OperationGraph : public BackendDescriptor {
      */
     //! Query the total count of the engines for the Operation Set
     auto
-    getEngineCount(void) const -> const int64_t {
+    getEngineCount(void) -> const int64_t {
         int64_t global_count = -1;
         auto status          = cudnnBackendGetAttribute(
             desc, CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT, CUDNN_TYPE_INT64, 1, NULL, &global_count);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Global count query failed");
-        throw_if([global_count]() { return (global_count < 0); }, "Global count value is invalid");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: GetAttribute CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT Failed");
+        }
         return global_count;
     }
     /** @} */
@@ -111,28 +112,49 @@ class OperationGraphBuilder {
     //! Throws the appropriate error message
     OperationGraph &&
     build() {
-        throw_if([this]() { return (m_operationGraph.numOps <= 0); }, "Check and set the numOps field");
-        throw_if([this]() { return (m_operationGraph.ops[0] == nullptr); }, "Check and set the ops field");
-        throw_if([this]() { return (m_operationGraph.handle == nullptr); }, "Check and set the cudnnhandle field");
+        if (m_operationGraph.numOps <= 0) {
+            set_error_and_throw_exception(&m_operationGraph, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: Check and Set the CUDNN_ATTR_OPERATIONGRAPH_OPS Count field");
+            return std::move(m_operationGraph);
+        }
+        if (m_operationGraph.ops[0] == nullptr) {
+            set_error_and_throw_exception(&m_operationGraph, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: Check and set CUDNN_ATTR_OPERATIONGRAPH_OPS field");
+            return std::move(m_operationGraph);
+        }
+        if (m_operationGraph.handle == nullptr) {
+            set_error_and_throw_exception(&m_operationGraph, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: Check and Set CUDNN_ATTR_OPERATIONGRAPH_HANDLE");
+            return std::move(m_operationGraph);
+        }
 
         // Create a descriptor. Memory allocation happens here.
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR, &m_operationGraph.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Create Descriptor failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operationGraph, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: cudnnCreate Failed");
+            return std::move(m_operationGraph);
+        }
 
         status = cudnnBackendSetAttribute(m_operationGraph.desc,
                                           CUDNN_ATTR_OPERATIONGRAPH_OPS,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           m_operationGraph.numOps,
                                           m_operationGraph.ops.data());
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Operation Set gen failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operationGraph, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: SetAttribute CUDNN_ATTR_OPERATIONGRAPH_OPS Failed");
+            return std::move(m_operationGraph);
+        }
         status = cudnnBackendSetAttribute(
             m_operationGraph.desc, CUDNN_ATTR_OPERATIONGRAPH_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_operationGraph.handle);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Operation Set handle failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operationGraph, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: SetAttribute CUDNN_ATTR_OPERATIONGRAPH_HANDLE Failed");
+            return std::move(m_operationGraph);
+        }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_operationGraph.desc);
-        throw_if([this, status]() { return (status != CUDNN_STATUS_SUCCESS); }, "cudnn Operation Set failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operationGraph, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: cudnnFinalize Failed");
+            return std::move(m_operationGraph);
+        }
 
         return std::move(m_operationGraph);
     }
