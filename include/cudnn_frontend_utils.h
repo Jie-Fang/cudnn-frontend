@@ -3,7 +3,7 @@
 
 #include "cudnn_backend_base.h"
 
-namespace cudnn_api_wrapper {
+namespace cudnn_frontend {
 
 class cudnnException : public std::runtime_error {
    public:

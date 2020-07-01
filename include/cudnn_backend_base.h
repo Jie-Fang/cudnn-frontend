@@ -2,7 +2,7 @@
 
 #include <cudnn.h>
 
-namespace cudnn_api_wrapper {
+namespace cudnn_frontend {
 
 template <typename T> using manager = T;
 
@@ -16,9 +16,9 @@ class BackendDescriptor {
     describe() const = 0;
 
     //! Get ownersip of the raw descriptor pointer
-    cudnn_api_wrapper::manager<cudnnBackendDescriptor_t>
+    cudnn_frontend::manager<cudnnBackendDescriptor_t>
     get_desc() const {
-        cudnn_api_wrapper::manager<cudnnBackendDescriptor_t> ptr = desc;
+        cudnn_frontend::manager<cudnnBackendDescriptor_t> ptr = desc;
         desc = nullptr;
         return ptr;
     }

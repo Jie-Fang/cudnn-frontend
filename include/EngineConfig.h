@@ -10,10 +10,10 @@
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_backend_wrap_utils.h"
+#include "cudnn_frontend_utils.h"
 #include "Engine.h"
 
-namespace cudnn_api_wrapper {
+namespace cudnn_frontend {
 ///
 /// EngineConfig Class
 /// This class tells the Configuration of the Engine in terms of the knob choices
