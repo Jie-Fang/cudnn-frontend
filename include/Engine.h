@@ -11,10 +11,10 @@
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_backend_wrap_utils.h"
+#include "cudnn_frontend_utils.h"
 #include "OperationGraph.h"
 
-namespace cudnn_api_wrapper {
+namespace cudnn_frontend {
 
 ///
 /// Engine Class

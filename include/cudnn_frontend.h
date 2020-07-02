@@ -10,4 +10,4 @@
 #include "ExecutionPlan.h"
 #include "VariantPack.h"
 
-namespace cudnn_api_wrapper {}
+namespace cudnn_frontend {}
