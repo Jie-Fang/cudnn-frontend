@@ -181,9 +181,9 @@ class ConvDescBuilder {
         }
 
         status = cudnnBackendSetAttribute(
-            m_convDesc.desc, CUDNN_ATTR_CONVOLUTION_MODE, CUDNN_TYPE_CONVOLUTION_MODE, 1, &m_convDesc.mode);
+            m_convDesc.desc, CUDNN_ATTR_CONVOLUTION_CONV_MODE, CUDNN_TYPE_CONVOLUTION_MODE, 1, &m_convDesc.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_MODE Failed");
+            set_error_and_throw_exception(&m_convDesc, status, "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_CONV_MODE Failed");
             return std::move(m_convDesc);
         }
 
