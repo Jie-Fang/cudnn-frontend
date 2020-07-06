@@ -28,12 +28,12 @@ throw_if(bool expr, const char* message) {
 }
 
 static inline void
-set_error_and_throw_exception(BackendDescriptor *desc, cudnnStatus_t status, const char *message) {
+set_error_and_throw_exception(BackendDescriptor* desc, cudnnStatus_t status, const char* message) {
     if (desc != nullptr) {
         desc->set_status(status);
         desc->set_error(message);
     }
-#ifndef NV_CUDNN_DISABLE_EXCEPTION 
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
     throw cudnnException(message);
 #endif
 }

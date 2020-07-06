@@ -35,7 +35,9 @@ class ExecutionPlan : public BackendDescriptor {
         return ss.str();
     }
     ExecutionPlan(ExecutionPlan &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()), handle(from.handle), engine_config(from.engine_config) {
+        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+          handle(from.handle),
+          engine_config(from.engine_config) {
         from.engine_config = nullptr;
     }
     ~ExecutionPlan() {
@@ -57,11 +59,15 @@ class ExecutionPlan : public BackendDescriptor {
         auto status            = cudnnBackendGetAttribute(
             desc, CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL, &workSpaceSize);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE Failed");
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE Failed");
             return workSpaceSize;
         }
         if (workSpaceSize < 0) {
-            set_error_and_throw_exception(this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute Workspace Size Invalid");
+            set_error_and_throw_exception(
+                this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute Workspace Size Invalid");
             return workSpaceSize;
         }
         return workSpaceSize;
@@ -74,7 +80,7 @@ class ExecutionPlan : public BackendDescriptor {
     operator=(ExecutionPlan const &) = delete;
 
     manager<cudnnBackendDescriptor_t> engine_config = nullptr;
-    cudnnHandle_t handle                   = nullptr;
+    cudnnHandle_t handle                            = nullptr;
 };
 
 ///
@@ -100,9 +106,9 @@ class ExecutionPlanBuilder {
     }
     //! Set engine Config for the Plan
     auto
-    setEngineConfig(cudnnBackendDescriptor_t & desc) -> ExecutionPlanBuilder & {
+    setEngineConfig(cudnnBackendDescriptor_t &desc) -> ExecutionPlanBuilder & {
         m_execution_plan.engine_config = desc;
-        desc = nullptr;
+        desc                           = nullptr;
         return *this;
     }
     /** @} */
@@ -111,12 +117,18 @@ class ExecutionPlanBuilder {
     //! Throws the appropriate error message
     ExecutionPlan &&
     build() {
-        if(m_execution_plan.handle == nullptr) {
-            set_error_and_throw_exception(&m_execution_plan, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Check and Set the CUDNN_ATTR_EXECUTION_PLAN_HANDLE");
+        if (m_execution_plan.handle == nullptr) {
+            set_error_and_throw_exception(
+                &m_execution_plan,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Check and Set the CUDNN_ATTR_EXECUTION_PLAN_HANDLE");
             return std::move(m_execution_plan);
         };
-        if(m_execution_plan.engine_config == nullptr) {
-            set_error_and_throw_exception(&m_execution_plan, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Check and Set the CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG");
+        if (m_execution_plan.engine_config == nullptr) {
+            set_error_and_throw_exception(
+                &m_execution_plan,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Check and Set the CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG");
             return std::move(m_execution_plan);
         };
 
@@ -124,7 +136,8 @@ class ExecutionPlanBuilder {
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR, &m_execution_plan.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed");
+            set_error_and_throw_exception(
+                &m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_execution_plan);
         }
 
@@ -134,20 +147,27 @@ class ExecutionPlanBuilder {
                                           1,
                                           &m_execution_plan.engine_config);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG Failed");
+            set_error_and_throw_exception(
+                &m_execution_plan,
+                status,
+                "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG Failed");
             return std::move(m_execution_plan);
         }
         status = cudnnBackendSetAttribute(
             m_execution_plan.desc, CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_execution_plan.handle);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_HANDLE Failed");
+            set_error_and_throw_exception(
+                &m_execution_plan,
+                status,
+                "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_HANDLE Failed");
             return std::move(m_execution_plan);
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_execution_plan.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed");
+            set_error_and_throw_exception(
+                &m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed");
             return std::move(m_execution_plan);
         }
         return std::move(m_execution_plan);
