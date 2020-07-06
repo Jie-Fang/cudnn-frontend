@@ -36,7 +36,10 @@ class VariantPack : public BackendDescriptor {
            << " has " << num_ptrs << " data pointers";
         return ss.str();
     }
-    VariantPack(VariantPack &&from) : BackendDescriptor(from.desc, from.get_status(), from.get_error()), workspace(from.workspace), num_ptrs(from.num_ptrs) {
+    VariantPack(VariantPack &&from)
+        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+          workspace(from.workspace),
+          num_ptrs(from.num_ptrs) {
         std::copy(std::begin(from.data_pointers), std::end(from.data_pointers), data_pointers);
         std::copy(std::begin(from.uid), std::end(from.uid), uid);
     }
@@ -108,7 +111,8 @@ class VariantPackBuilder {
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR, &m_variant_pack.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: cudnnCreate Failed");
+            set_error_and_throw_exception(
+                &m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_variant_pack);
         }
 
@@ -118,7 +122,10 @@ class VariantPackBuilder {
                                           m_variant_pack.num_ptrs,
                                           m_variant_pack.data_pointers);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS Failed");
+            set_error_and_throw_exception(
+                &m_variant_pack,
+                status,
+                "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS Failed");
             return std::move(m_variant_pack);
         }
 
@@ -128,24 +135,28 @@ class VariantPackBuilder {
                                           m_variant_pack.num_ptrs,
                                           m_variant_pack.uid);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS Failed");
+            set_error_and_throw_exception(
+                &m_variant_pack,
+                status,
+                "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS Failed");
             return std::move(m_variant_pack);
         }
 
-        status = cudnnBackendSetAttribute(m_variant_pack.desc,
-                                          CUDNN_ATTR_VARIANT_PACK_WORKSPACE,
-                                          CUDNN_TYPE_VOID_PTR,
-                                          1,
-                                          &m_variant_pack.workspace);
+        status = cudnnBackendSetAttribute(
+            m_variant_pack.desc, CUDNN_ATTR_VARIANT_PACK_WORKSPACE, CUDNN_TYPE_VOID_PTR, 1, &m_variant_pack.workspace);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_WORKSPACE Failed");
+            set_error_and_throw_exception(
+                &m_variant_pack,
+                status,
+                "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: SetAttribute CUDNN_ATTR_VARIANT_PACK_WORKSPACE Failed");
             return std::move(m_variant_pack);
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_variant_pack.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: cudnnFinalize Failed");
+            set_error_and_throw_exception(
+                &m_variant_pack, status, "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR: cudnnFinalize Failed");
             return std::move(m_variant_pack);
         }
         return std::move(m_variant_pack);

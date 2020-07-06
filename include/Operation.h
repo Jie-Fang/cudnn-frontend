@@ -134,10 +134,13 @@ class OperationBuilder {
     }
     auto
     setOpMode(cudnnBackendDescriptorType_t mode) -> OperationBuilder & {
-        if(!((mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
-             (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
-             (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR))) {
-            set_error_and_throw_exception(&m_operation, m_operation.status, "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_BACKEND_OPERATION_MODE for the Operation");
+        if (!((mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
+              (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
+              (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR))) {
+            set_error_and_throw_exception(
+                &m_operation,
+                m_operation.status,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_BACKEND_OPERATION_MODE for the Operation");
         }
         m_operation.op_mode = mode;
         return *this;
@@ -145,25 +148,25 @@ class OperationBuilder {
     auto
     setAlpha(float alpha) -> OperationBuilder & {
         m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
-        m_operation.alpha_s = alpha;
+        m_operation.alpha_s       = alpha;
         return *this;
     }
     auto
     setAlpha(double alpha) -> OperationBuilder & {
         m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
-        m_operation.alpha_d = alpha;
+        m_operation.alpha_d       = alpha;
         return *this;
     }
     auto
     setBeta(float beta) -> OperationBuilder & {
         m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
-        m_operation.beta_s = beta;
+        m_operation.beta_s        = beta;
         return *this;
     }
     auto
     setBeta(double beta) -> OperationBuilder & {
         m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
-        m_operation.beta_d = beta;
+        m_operation.beta_d        = beta;
         return *this;
     }
     /** @} */
@@ -173,23 +176,36 @@ class OperationBuilder {
     Operation &&
     build() {
         if (m_operation.status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_operation, m_operation.status, "CUDNN_BACKEND_OPERATION: Operation not initialized properly");
+            set_error_and_throw_exception(
+                &m_operation, m_operation.status, "CUDNN_BACKEND_OPERATION: Operation not initialized properly");
             return std::move(m_operation);
         }
         if (m_operation.xdesc == nullptr) {
-            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
             return std::move(m_operation);
         }
         if (m_operation.wdesc == nullptr) {
-            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_W");
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_W");
             return std::move(m_operation);
         }
         if (m_operation.ydesc == nullptr) {
-            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_Y");
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_Y");
             return std::move(m_operation);
         }
         if (m_operation.cdesc == nullptr) {
-            set_error_and_throw_exception(&m_operation, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_CONV_DESC");
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_CONV_DESC");
             return std::move(m_operation);
         }
 
@@ -212,7 +228,7 @@ class OperationBuilder {
                 throw(cudnnException("Check the operation op_mode you have set for Operation"));
                 break;
         }
-        if (status != CUDNN_STATUS_SUCCESS){
+        if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnCreate Failed");
             return std::move(m_operation);
         }
@@ -222,8 +238,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.xdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -231,8 +250,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.wdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_W Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_W Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -240,8 +262,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.ydesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -249,8 +274,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.cdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC Failed");
                 return std::move(m_operation);
             }
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
@@ -259,14 +287,20 @@ class OperationBuilder {
                                                                         : static_cast<void *>(&m_operation.beta_d));
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA, m_operation.alphabetaType, 1, alpha);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA, m_operation.alphabetaType, 1, beta);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA Failed");
                 return std::move(m_operation);
             }
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
@@ -275,8 +309,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.xdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -284,8 +321,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.wdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -293,8 +333,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.ydesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -302,8 +345,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.cdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_CONV_DESC Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(&m_operation,
+                                              status,
+                                              "CUDNN_BACKEND_OPERATION: SetAttribute "
+                                              "CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_CONV_DESC Failed");
                 return std::move(m_operation);
             }
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
@@ -315,14 +361,20 @@ class OperationBuilder {
                                               m_operation.alphabetaType,
                                               1,
                                               alpha);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_ALPHA Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_ALPHA Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_BETA, m_operation.alphabetaType, 1, beta);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_BETA Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_BETA Failed");
                 return std::move(m_operation);
             }
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
@@ -331,8 +383,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.xdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -340,8 +395,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.wdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -349,8 +407,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.ydesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(m_operation.desc,
@@ -358,8 +419,11 @@ class OperationBuilder {
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
                                               &m_operation.cdesc);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC Failed");
                 return std::move(m_operation);
             }
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
@@ -368,19 +432,25 @@ class OperationBuilder {
                                                                         : static_cast<void *>(&m_operation.beta_d));
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_ALPHA, m_operation.alphabetaType, 1, alpha);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_ALPHA Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_ALPHA Failed");
                 return std::move(m_operation);
             }
             status = cudnnBackendSetAttribute(
                 m_operation.desc, CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_BETA, m_operation.alphabetaType, 1, beta);
-            if (status != CUDNN_STATUS_SUCCESS){
-                set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_BETA Failed");
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_BETA Failed");
                 return std::move(m_operation);
             }
         }
         status = cudnnBackendFinalize(m_operation.desc);
-        if (status != CUDNN_STATUS_SUCCESS){
+        if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
             return std::move(m_operation);
         }

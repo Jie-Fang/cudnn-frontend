@@ -126,71 +126,94 @@ class TensorBuilder {
     Tensor &&
     build() {
         // Sanity check if non-default fields have been set correctly.
-        if(m_tensor.alignment <= 0) {
-            set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT field");
+        if (m_tensor.alignment <= 0) {
+            set_error_and_throw_exception(
+                &m_tensor,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT field");
             return std::move(m_tensor);
         }
-        if(m_tensor.id <= 0) {
-            set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_UNIQUE_ID as a valid value");
+        if (m_tensor.id <= 0) {
+            set_error_and_throw_exception(
+                &m_tensor,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_UNIQUE_ID as a valid value");
             return std::move(m_tensor);
         }
-        if(m_tensor.btensor_strA[0] <= 0) {
-            set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_STRIDES Correctly");
+        if (m_tensor.btensor_strA[0] <= 0) {
+            set_error_and_throw_exception(
+                &m_tensor,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_STRIDES Correctly");
             return std::move(m_tensor);
         }
-        if(m_tensor.btensor_dimA[0] <= 0) {
-            set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_DIMENSIONS Correctly");
+        if (m_tensor.btensor_dimA[0] <= 0) {
+            set_error_and_throw_exception(
+                &m_tensor,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_DIMENSIONS Correctly");
             return std::move(m_tensor);
         }
-        if(m_tensor.desc != nullptr) {
-            set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_BAD_PARAM, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Bad tensor created. The tensor already seems to be pointing to something");
+        if (m_tensor.desc != nullptr) {
+            set_error_and_throw_exception(&m_tensor,
+                                          CUDNN_STATUS_BAD_PARAM,
+                                          "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Bad tensor created. The tensor already "
+                                          "seems to be pointing to something");
             return std::move(m_tensor);
         }
-    
+
         // Create a descriptor. Memory allocation happens here.
         auto status = CUDNN_STATUS_SUCCESS;
         status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &m_tensor.desc);
 
         if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: cudnnCreate Descriptor Failed");
+            set_error_and_throw_exception(
+                &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: cudnnCreate Descriptor Failed");
             return std::move(m_tensor);
         }
 
         // Once Created lets set the descriptor parameters.
         status = cudnnBackendSetAttribute(
             m_tensor.desc, CUDNN_ATTR_TENSOR_DATA_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &m_tensor.data_type);
-        if(status != CUDNN_STATUS_SUCCESS){
-            set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DATA_TYPE Failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DATA_TYPE Failed");
             return std::move(m_tensor);
         }
         status = cudnnBackendSetAttribute(
             m_tensor.desc, CUDNN_ATTR_TENSOR_DIMENSIONS, CUDNN_TYPE_INT64, m_tensor.nDims, m_tensor.btensor_dimA);
-        if(status != CUDNN_STATUS_SUCCESS){
-            set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DIMENSIONS Failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DIMENSIONS Failed");
             return std::move(m_tensor);
         }
         status = cudnnBackendSetAttribute(
             m_tensor.desc, CUDNN_ATTR_TENSOR_STRIDES, CUDNN_TYPE_INT64, m_tensor.nDims, m_tensor.btensor_strA);
-        if(status != CUDNN_STATUS_SUCCESS){
-            set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_STRIDES Failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_STRIDES Failed");
             return std::move(m_tensor);
         }
         status =
             cudnnBackendSetAttribute(m_tensor.desc, CUDNN_ATTR_TENSOR_UNIQUE_ID, CUDNN_TYPE_INT64, 1, &m_tensor.id);
-        if(status != CUDNN_STATUS_SUCCESS){
-            set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_UNIQUE_ID Failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_UNIQUE_ID Failed");
             return std::move(m_tensor);
         }
         cudnnBackendSetAttribute(
             m_tensor.desc, CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT, CUDNN_TYPE_INT64, 1, &m_tensor.alignment);
-        if(status != CUDNN_STATUS_SUCCESS){
-            set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT Failed");
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_tensor,
+                status,
+                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT Failed");
             return std::move(m_tensor);
         }
 
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_tensor.desc);
-        if(status != CUDNN_STATUS_SUCCESS){
+        if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR cudnnFinalize failed");
             return std::move(m_tensor);
         }
