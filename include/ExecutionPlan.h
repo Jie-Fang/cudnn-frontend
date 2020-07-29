@@ -1,22 +1,23 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <functional>
 #include <memory>
 #include <sstream>
-#include <algorithm>
-#include <functional>
 #include <utility>
 
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_frontend_utils.h"
 #include "Engine.h"
+#include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 ///
 /// ExecutionPlan Class
-/// This class tells the Configuration of the Engine in terms of the knob choices
+/// This class tells the Configuration of the Engine in terms of the knob
+/// choices
 /// Properties:
 ///    - num knobs
 ///    - Choice

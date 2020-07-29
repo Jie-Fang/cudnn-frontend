@@ -1,12 +1,12 @@
 #pragma once
 
-#include <array>
-#include <memory>
-#include <sstream>
 #include <algorithm>
+#include <array>
 #include <functional>
-#include <utility>
+#include <memory>
 #include <set>
+#include <sstream>
+#include <utility>
 
 #include <cudnn.h>
 #include <cudnn_backend.h>
@@ -17,7 +17,8 @@ namespace cudnn_frontend {
 
 ///
 /// VariantPack Class
-/// This class tells the Configuration of the Engine in terms of the knob choices
+/// This class tells the Configuration of the Engine in terms of the knob
+/// choices
 /// Properties:
 ///    - num knobs
 ///    - Choice

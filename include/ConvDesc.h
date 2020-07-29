@@ -1,10 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <functional>
 #include <memory>
 #include <sstream>
-#include <algorithm>
-#include <functional>
 #include <utility>
 
 #include <cudnn.h>

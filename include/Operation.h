@@ -1,18 +1,18 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <functional>
 #include <memory>
 #include <sstream>
-#include <algorithm>
-#include <functional>
 #include <utility>
 
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_frontend_utils.h"
-#include "Tensor.h"
 #include "ConvDesc.h"
+#include "Tensor.h"
+#include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 

@@ -1,10 +1,12 @@
 #pragma once
 
+#include <vector>
+
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_frontend_utils.h"
 #include "OperationGraph.h"
+#include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 ///
@@ -43,9 +45,6 @@ class EngineHeuristics : public BackendDescriptor {
             }
         }
         m_heuristic_results.clear();
-        if (opGraph != nullptr) {
-            cudnnBackendDestroyDescriptor(opGraph);
-        }
     }
 
     /** @defgroup EngineHeuristicsQuery
@@ -105,8 +104,8 @@ class EngineHeuristics : public BackendDescriptor {
     EngineHeuristics &
     operator=(EngineHeuristics const &) = delete;
 
-    cudnnBackendHeurMode_t mode               = CUDNN_HEUR_MODE_INSTANT;
-    manager<cudnnBackendDescriptor_t> opGraph = nullptr;
+    cudnnBackendHeurMode_t mode      = CUDNN_HEUR_MODE_INSTANT;
+    cudnnBackendDescriptor_t opGraph = nullptr;
     std::vector<cudnnBackendDescriptor_t> m_heuristic_results;  //! storage of heuristic results
 };
 
@@ -119,10 +118,10 @@ class EngineHeuristicsBuilder {
      *  Set individual property of EngineHeuristics class
      *  @{
      */
-    //! Set operationGraph for the engine
+    //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
     setOperationGraph(OperationGraph &opGraph_) -> EngineHeuristicsBuilder & {
-        m_heuristics.opGraph = opGraph_.get_desc();
+        m_heuristics.opGraph = opGraph_.get_raw_desc();
         return *this;
     }
     //! Set cudnnHandle for the operations

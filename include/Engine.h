@@ -1,24 +1,25 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
-#include <vector>
+#include <functional>
 #include <memory>
 #include <sstream>
-#include <algorithm>
-#include <functional>
 #include <utility>
+#include <vector>
 
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_frontend_utils.h"
 #include "OperationGraph.h"
+#include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 
 ///
 /// Engine Class
-/// This class tells the properties of the Engine on which performs the operation requested
+/// This class tells the properties of the Engine on which performs the
+/// operation requested
 /// Properties:
 ///    - Index
 ///    - OperationGraph
@@ -181,9 +182,6 @@ class Engine : public BackendDescriptor {
                 cudnnBackendDestroyDescriptor(bKnobs[i]);
             }
         }
-        if (opGraph != nullptr) {
-            cudnnBackendDestroyDescriptor(opGraph);
-        }
     }
 
     //! Returns a vector of knobs to the user
@@ -205,7 +203,13 @@ class EngineBuilder {
     //! Set operationGraph for the engine
     auto
     setOperationGraph(OperationGraph const &opGraph_) -> EngineBuilder & {
-        m_engine.opGraph = opGraph_.get_desc();
+        m_engine.opGraph = opGraph_.get_raw_desc();
+        return *this;
+    }
+    //! Set operationGraph for the engine
+    auto
+    setOperationGraph(cudnnBackendDescriptor_t desc_) -> EngineBuilder & {
+        m_engine.opGraph = desc_;
         return *this;
     }
     //! Set engine index for the engine
