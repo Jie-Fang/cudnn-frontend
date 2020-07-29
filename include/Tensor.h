@@ -1,10 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <functional>
 #include <memory>
 #include <sstream>
-#include <algorithm>
-#include <functional>
 #include <utility>
 
 #include "cudnn_frontend_utils.h"
@@ -13,7 +13,8 @@ namespace cudnn_frontend {
 
 ///
 /// Tensor Class
-/// This class tells the properties of the Tensor on which the operation will be performed
+/// This class tells the properties of the Tensor on which the operation will be
+/// performed
 /// Properties:
 ///    - dataType
 ///    - alignment
