@@ -8,7 +8,7 @@ static constexpr std::array<int64_t, 3> fallback_engine_conv_list  = {0, 1, 28};
 static constexpr std::array<int64_t, 3> fallback_engine_dgrad_list = {0, 1, 25};
 static constexpr std::array<int64_t, 3> fallback_engine_wgrad_list = {0, 1, 20};
 
-class EngineFallBackList : BackendDescriptor {
+class EngineFallbackList : public BackendDescriptor {
    private:
     auto
     get_fallback_list_size(cudnnBackendDescriptorType_t type) -> int64_t {
@@ -25,7 +25,7 @@ class EngineFallBackList : BackendDescriptor {
     }
 
    public:
-    friend class EngineFallBackListBuilder;
+    friend class EngineFallbackListBuilder;
 
     std::string
     describe() const override {
@@ -35,11 +35,11 @@ class EngineFallBackList : BackendDescriptor {
     }
 
     auto
-    get_fallback_list() -> std::vector<cudnnBackendDescriptor_t> & {
+    getFallbackList() -> std::vector<cudnnBackendDescriptor_t> & {
         return m_engine_configs;
     }
 
-    ~EngineFallBackList() {
+    ~EngineFallbackList() {
         for (auto i = 0; i < m_engine_configs.size(); i++) {
             if (m_engine_configs[i] != nullptr) {
                 cudnnBackendDestroyDescriptor(m_engine_configs[i]);
@@ -47,17 +47,17 @@ class EngineFallBackList : BackendDescriptor {
             }
         }
     }
-    EngineFallBackList(EngineFallBackList &&from)
+    EngineFallbackList(EngineFallbackList &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()), mode(from.mode), opGraph(from.opGraph) {
         from.opGraph = nullptr;
         m_engine_configs.swap(from.m_engine_configs);
     }
 
    private:
-    EngineFallBackList()                           = default;
-    EngineFallBackList(EngineFallBackList const &) = delete;
-    EngineFallBackList &
-    operator=(EngineFallBackList const &) = delete;
+    EngineFallbackList()                           = default;
+    EngineFallbackList(EngineFallbackList const &) = delete;
+    EngineFallbackList &
+    operator=(EngineFallbackList const &) = delete;
 
     cudnnBackendDescriptor_t opGraph = nullptr;
     cudnnBackendDescriptorType_t mode;
@@ -67,28 +67,28 @@ class EngineFallBackList : BackendDescriptor {
 ///
 /// EngineHeuristicsBuilder Class
 /// Helper class used to build EngineHeuristics class
-class EngineFallBackListBuilder {
+class EngineFallbackListBuilder {
    public:
-    /** @defgroup EngineFallBackListBuilder
-     *  Set individual property of EngineFallBackList class
+    /** @defgroup EngineFallbackListBuilder
+     *  Set individual property of EngineFallbackList class
      *  @{
      */
     //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
-    setOperationGraph(OperationGraph &opGraph_) -> EngineFallBackListBuilder & {
+    setOperationGraph(OperationGraph &opGraph_) -> EngineFallbackListBuilder & {
         m_fallback_list.opGraph = opGraph_.get_raw_desc();
         return *this;
     }
     auto
-    setOperation(cudnnBackendDescriptorType_t mode) -> EngineFallBackListBuilder & {
+    setOperation(cudnnBackendDescriptorType_t mode) -> EngineFallbackListBuilder & {
         m_fallback_list.mode = mode;
         return *this;
     }
     /** @} */
 
-    //! constructs the EngineHeuristics by calling the cudnn API
+    //! constructs the EngineFallbackList by calling the cudnn API
     //! Throws the appropriate error message
-    EngineFallBackList &&
+    EngineFallbackList &&
     build() {
         if (m_fallback_list.opGraph == nullptr) {
             set_error_and_throw_exception(&m_fallback_list,
@@ -130,14 +130,14 @@ class EngineFallBackListBuilder {
         return std::move(m_fallback_list);
     }
 
-    explicit EngineFallBackListBuilder()                         = default;
-    ~EngineFallBackListBuilder()                                 = default;
-    EngineFallBackListBuilder(EngineFallBackListBuilder &&)      = delete;
-    EngineFallBackListBuilder(EngineFallBackListBuilder const &) = delete;
-    EngineFallBackListBuilder &
-    operator=(EngineFallBackListBuilder const &) = delete;
+    explicit EngineFallbackListBuilder()                         = default;
+    ~EngineFallbackListBuilder()                                 = default;
+    EngineFallbackListBuilder(EngineFallbackListBuilder &&)      = delete;
+    EngineFallbackListBuilder(EngineFallbackListBuilder const &) = delete;
+    EngineFallbackListBuilder &
+    operator=(EngineFallbackListBuilder const &) = delete;
 
    private:
-    EngineFallBackList m_fallback_list;
+    EngineFallbackList m_fallback_list;
 };
 }

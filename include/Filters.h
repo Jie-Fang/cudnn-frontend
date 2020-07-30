@@ -19,6 +19,10 @@ filter(std::vector<cudnnBackendDescriptor_t> &from,
     from.erase(p, from.end());
 }
 
+bool allowAll(cudnnBackendDescriptor_t & engine_config) {
+    return false;
+}
+
 bool
 isNonDeterministic(cudnnBackendDescriptor_t &engine_config) {
     bool isNondeterministic         = false;
