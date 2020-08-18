@@ -10,8 +10,8 @@
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "ConvDesc.h"
-#include "Tensor.h"
+#include "cudnn_frontend_ConvDesc.h"
+#include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {

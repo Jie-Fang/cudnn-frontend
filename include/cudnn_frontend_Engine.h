@@ -11,7 +11,7 @@
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "OperationGraph.h"
+#include "cudnn_frontend_OperationGraph.h"
 #include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
