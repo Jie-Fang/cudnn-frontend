@@ -10,7 +10,9 @@ make:
     tags:
     - cudnn-frontend-runner
     stage: build
-    script: "docker build -t cudnn_frontend  . "
+    script: 
+        -  dockerd
+        - "docker build -t cudnn_frontend  . "
     
 run:
     tags:
