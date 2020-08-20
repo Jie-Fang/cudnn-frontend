@@ -1,2 +1,11 @@
-build:
+stages:
+  - build
+  - test
+
+make:
+    stage: build
     script: "docker build -t cudnn_frontend  . "
+    
+run:
+    stage: test
+    script: "ls"
