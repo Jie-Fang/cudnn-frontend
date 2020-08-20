@@ -1,0 +1,2 @@
+build:
+    script: "docker build -t cudnn_frontend  . "
