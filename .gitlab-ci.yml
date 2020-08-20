@@ -11,7 +11,7 @@ make:
     - cudnn-frontend-runner
     stage: build
     script: 
-        -  dockerd
+        -  sudo dockerd
         - "docker build -t cudnn_frontend  . "
     
 run:
