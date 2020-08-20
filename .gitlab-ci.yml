@@ -3,9 +3,13 @@ stages:
   - test
 
 make:
+    tags:
+    - cudnn_frontend
     stage: build
     script: "docker build -t cudnn_frontend  . "
     
 run:
+    tags:
+    - cudnn_frontend
     stage: test
     script: "ls"
