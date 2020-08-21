@@ -18,5 +18,5 @@ run:
     - cudnn-frontend-runner
     stage: test
     script:
-        - docker run --gpus all -it --name=sample cudnn_frontend /samples/conv_sample
+        - docker run --gpus all -i --name=sample cudnn_frontend /samples/conv_sample
         - docker rm -v sample
