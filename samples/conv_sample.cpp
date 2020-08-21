@@ -83,9 +83,9 @@
 #include <cudnn_frontend.h>
 #include "fp16_dev.h"
 #include "fp16_emu.h"
+#include "helpers.h"
 
 #define SWITCH_CHAR '-'
-#define THRESHOLD 2.0e-2
 
 #if defined(__linux__)
 #include <stddef.h>
@@ -111,7 +111,7 @@ static double second(void)
 #endif
 
 // Generate uniform numbers [0,1)
-static void initImage(float* image, int64_t imageSize) {
+void initImage(float* image, int64_t imageSize) {
     static unsigned seed = 123456789;
     for (int index = 0; index < imageSize; index++) {
         seed         = (1103515245 * seed + 12345) & 0xffffffff;
@@ -119,7 +119,7 @@ static void initImage(float* image, int64_t imageSize) {
     }
 }
 
-static void initImage(half1* image, int64_t imageSize) {
+void initImage(half1* image, int64_t imageSize) {
     static unsigned seed = 123456789;
     for (int index = 0; index < imageSize; index++) {
         seed         = (1103515245 * seed + 12345) & 0xffffffff;
@@ -128,7 +128,7 @@ static void initImage(half1* image, int64_t imageSize) {
 }
 
 // Currently set to generate uniform integers [-2, 2] to avoid int8 overflow
-static void initImage(int8_t* image, int imageSize) {
+void initImage(int8_t* image, int imageSize) {
     static unsigned seed = 123456789;
     for (int64_t index = 0; index < imageSize; index++) {
         seed = (1103515245 * seed + 12345) & 0xffffffff;
@@ -137,7 +137,7 @@ static void initImage(int8_t* image, int imageSize) {
     }
 }
 
-static void initImagePadded(int8_t* image, int64_t dimA[], int64_t dimPadded[], int64_t stridePadded[], cudnnDataType_t dataType) {
+void initImagePadded(int8_t* image, int64_t dimA[], int64_t dimPadded[], int64_t stridePadded[], cudnnDataType_t dataType) {
     static unsigned seed = 123456789;
     int resizeFactor     = (dataType == CUDNN_DATA_INT8x4) ? 4 : 32;
     int totalSize        = dimPadded[0] * dimPadded[1] * dimPadded[2] * dimPadded[3];
@@ -156,7 +156,7 @@ static void initImagePadded(int8_t* image, int64_t dimA[], int64_t dimPadded[], 
     }
 }
 
-static int checkCudaError(cudaError_t code, const char* expr, const char* file, int line) {
+int checkCudaError(cudaError_t code, const char* expr, const char* file, int line) {
     if (code) {
         printf("CUDA error at %s:%d, code=%d (%s) in '%s'", file, line, (int)code, cudaGetErrorString(code), expr);
         return 1;
@@ -164,31 +164,13 @@ static int checkCudaError(cudaError_t code, const char* expr, const char* file, 
     return 0;
 }
 
-static int checkCudnnError(cudnnStatus_t code, const char* expr, const char* file, int line) {
+int checkCudnnError(cudnnStatus_t code, const char* expr, const char* file, int line) {
     if (code) {
         printf("CUDNN error at %s:%d, code=%d (%s) in '%s'\n", file, line, (int)code, cudnnGetErrorString(code), expr);
         return 1;
     }
     return 0;
 }
-
-#define checkCudaErr(...)                                                        \
-    do {                                                                         \
-        int err = checkCudaError(__VA_ARGS__, #__VA_ARGS__, __FILE__, __LINE__); \
-        if (err) {                                                               \
-            numErrors++;                                                         \
-            goto clean;                                                          \
-        }                                                                        \
-    } while (0)
-
-#define checkCudnnErr(...)                                                        \
-    do {                                                                          \
-        int err = checkCudnnError(__VA_ARGS__, #__VA_ARGS__, __FILE__, __LINE__); \
-        if (err) {                                                                \
-            numErrors++;                                                          \
-            goto clean;                                                           \
-        }                                                                         \
-    } while (0)
 
 static void printPerf(
     double cudaTime,
@@ -211,10 +193,10 @@ static void printPerf(
     }
 }
 
-static void generateStrides(const int64_t* dimA, int64_t* strideA, int nbDims, cudnnTensorFormat_t filterFormat) {
+void generateStrides(const int64_t* dimA, int64_t* strideA, int nbDims, cudnnTensorFormat_t filterFormat) {
     // For INT8x4 and INT8x32 we still compute standard strides here to input
     // into the cuDNN functions. We will manually scale by resizeFactor in the cpu ref.
-    if (filterFormat == CUDNN_TENSOR_NCHW || filterFormat == CUDNN_TENSOR_NCHW_VECT_C) {
+    if (filterFormat == CUDNN_TENSOR_NCHW) {
         strideA[nbDims - 1] = 1;
         for (int64_t d = nbDims - 2; d >= 0; d--) {
             strideA[d] = strideA[d + 1] * dimA[d + 1];
@@ -255,35 +237,7 @@ static int dim2lin(const int64_t* ids, const int64_t* strides, int length) {
     }
     return res;
 }
-
-static float doFma(float fval, float ival, float tmp) {
-    return fval * ival + tmp;
-}
-
-static float doFma(half1 fval, half1 ival, float tmp) {
-    return cpu_half2float(fval) * cpu_half2float(ival) + tmp;
-}
-
-static int32_t doFma(int8_t fval, int8_t ival, int32_t tmp) {
-    return int32_t(fval) * int32_t(ival) + tmp;
-}
-
-// Garbage function, resolves overloaded function ambiguity for an invalid type combination
-static int32_t doFma(float fval, float ival, int32_t tmp) {
-    return 0;
-}
-
-// Garbage function, resolves overloaded function ambiguity for an invalid type combination
-static int32_t doFma(half1 fval, half1 ival, int32_t tmp) {
-    return 0;
-}
-
-// Garbage function, resolves overloaded function ambiguity for an invalid type combination
-static float doFma(int8_t fval, int8_t ival, float tmp) {
-    return 0;
-}
-
-static void doEpilog(float* out, int idx, float alphaAcc, float beta) {
+void doEpilog(float* out, int idx, float alphaAcc, float beta) {
     if (beta == 0.f) {
         out[idx] = alphaAcc;
     } else {
@@ -291,7 +245,7 @@ static void doEpilog(float* out, int idx, float alphaAcc, float beta) {
     }
 }
 
-static void doEpilog(half1* out, int idx, float alphaAcc, float beta) {
+void doEpilog(half1* out, int idx, float alphaAcc, float beta) {
     if (beta == 0.f) {
         out[idx] = cpu_float2half_rn(alphaAcc);
     } else {
@@ -299,7 +253,7 @@ static void doEpilog(half1* out, int idx, float alphaAcc, float beta) {
     }
 }
 
-static void doEpilog(int8_t* out, int idx, int32_t alphaAcc, float beta) {
+void doEpilog(int8_t* out, int idx, int32_t alphaAcc, float beta) {
     int32_t val;
     if (beta == 0.f) {
         val = alphaAcc;
@@ -451,6 +405,12 @@ static void dataGrad_cpu_ref(
     assert(inDims[1] == filDims[0]);   // k
     assert(outDims[1] == filDims[1]);  // cactualOutId
 
+    int64_t strideA_padded[8];
+    int64_t outstrideA_padded[8];
+
+    generateStrides(inDims, strideA_padded, nbDims, filterFormat);
+    generateStrides(outDims, outstrideA_padded, nbDims, filterFormat);
+
     int64_t filStride[8] = {0};
     generateStrides(filDims, filStride, nbDims, filterFormat);
 
@@ -523,91 +483,6 @@ static void dataGrad_cpu_ref(
     }
 }
 
-template <typename T_ELEM>
-static void weightGrad_cpu_ref(
-    const T_ELEM* image,
-    const T_ELEM* diffData,
-    float alpha,
-    float beta,
-    T_ELEM* output,
-    cudnnTensorFormat_t filterFormat,
-    const int64_t* inDims,
-    const int64_t* filDims,
-    const int64_t* diffDims,
-    const int64_t* inStride,
-    const int64_t* diffStride,
-    const int64_t* stride,
-    const int64_t* pad,
-    const int64_t* dilation,
-    int nbDims) 
-{
-    // Some sanity checks
-    // image   is n x c x h x w
-    // diff    is n x k x p x q
-    // filter  is k x c x r x s
-    assert(inDims[0] == diffDims[0]);
-    assert(inDims[1] == filDims[1]);
-    assert(diffDims[1] == filDims[0]);
-
-    // Filter stride
-    int64_t filterStride[4];
-    generateStrides(filDims, filterStride, nbDims, filterFormat);
-
-    bool isConv = true;  //(CUDNN_CONVOLUTION == mode) ;
-
-    // For every filter pixel (k x c x r x s)
-    for (int ci = 0; ci < inDims[1]; ci++) {               // Loop over filter output pixels
-        for (int ri = 0; ri < filDims[2]; ri++) {          //        ^
-            for (int si = 0; si < filDims[3]; si++) {      //    ^
-                for (int ki = 0; ki < filDims[0]; ki++) {  // ^
-                    int filIdx = ki * filterStride[0] + ci * filterStride[1] + ri * filterStride[2] + si * filterStride[3];
-                    float val = 0.f;
-                    // For every image (n)
-                    for (int ni = 0; ni < inDims[0]; ni++) {  // Sum over the batch
-                        int offset_image = ni * inStride[0] + ci * inStride[1];
-                        int offset_diff  = ni * diffStride[0] + ki * diffStride[1];
-                        // For every pixel in diff (p x q)
-                        for (int pi = 0; pi < diffDims[2]; pi++) {      // Sum over the pixels of diff
-                            for (int qi = 0; qi < diffDims[3]; qi++) {  //  ^
-                                // Fetch the value in image and diff, product and accumulate
-                                int y = pi * stride[0] - pad[0];
-                                int x = qi * stride[1] - pad[1];
-                                // Convolution = Correlation with a flipped filter
-                                // So basically, for the convolution, we replace r by dim-1-r 
-                                // and s by dim-1-s to "flip" the filter.
-                                // We can then just reason in term of correlation
-                                if (isConv) {
-                                    y += (filDims[2] - 1 - ri) * dilation[0];
-                                    x += (filDims[3] - 1 - si) * dilation[1];
-                                } else {
-                                    // The effect of dilation on the gradient is to start
-                                    // the "zone of influence" of a given pixel further
-                                    // into the image, so dilation
-                                    // only produces a shift in x and y
-                                    y += ri * dilation[0];
-                                    x += si * dilation[1];
-                                }
-                                // Image value
-                                int inBounds = ((x >= 0) && (x < inDims[3]) && (y >= 0) && (y < inDims[2]));
-                                if (inBounds) {
-                                    int imIdx = offset_image + y * inStride[2] + x * inStride[3];
-                                    // Diff value
-                                    int diffIdx = offset_diff + pi * diffStride[2] + qi * diffStride[3];
-                                    // Prod and accumulate
-                                    T_ELEM imTmp   = image[imIdx];
-                                    T_ELEM diffTmp = diffData[diffIdx];
-                                    val            = doFma(diffTmp, imTmp, val);
-                                }
-                            }
-                        }
-                    }
-                    doEpilog(output, filIdx, alpha * val, beta);
-                }
-            }
-        }
-    }
-}
-
 float getError(float dev, float ref) {
     if (ref > 1.0 || ref < -1.0)
         return (dev - ref) / ref;
@@ -626,15 +501,15 @@ int8_t getError(int8_t dev, int8_t ref) {
     return dev - ref;
 }
 
-static inline int getFwdConvDilatedFilterDim(int filterDim, int dilation) {
+int getFwdConvDilatedFilterDim(int filterDim, int dilation) {
     return ((filterDim - 1) * dilation) + 1;
 }
 
-static inline int getFwdConvPaddedImageDim(int tensorDim, int pad) {
+int getFwdConvPaddedImageDim(int tensorDim, int pad) {
     return tensorDim + (2 * pad);
 }
 
-static inline int getFwdConvOutputDim(
+int getFwdConvOutputDim(
     int tensorDim, 
     int pad, 
     int filterDim, 
@@ -645,189 +520,33 @@ static inline int getFwdConvOutputDim(
     return (p);
 }
 
-template <typename T_ELEM>
-int doWgrad(
-    cudnnHandle_t handle_,
-    T_ELEM* devPtrI,
-    T_ELEM* devPtrF,
-    T_ELEM* devPtrO,
-    T_ELEM* hostI,
-    T_ELEM* hostF,
-    T_ELEM* hostO,
-    float alpha,
-    float beta,
-    cudnnTensorFormat_t filterFormat,
-    const int64_t* dimA,
-    const int64_t* filterdimA,
-    const int64_t* outdimA,
-    const int64_t* strideA,
-    const int64_t* outstrideA,
-    const int64_t* convstrideA,
-    const int64_t* padA,
-    const int64_t* dilationA,
-    const int64_t benchmark) 
-{
-    int filsize                          = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
-    T_ELEM* hostFfromdev                 = (T_ELEM*)calloc(filsize, sizeof(hostF[0]));
-
-    int numErrors = 0;
-    double start, stop;
-    start = second();
-    checkCudaErr(cudaDeviceSynchronize());
-    stop = second();
-
-    printPerf(stop - start, 0, 0, 0, 0, 0, 0);
-    checkCudaErr(cudaMemcpy(hostFfromdev, devPtrF, sizeof(hostF[0]) * filsize, cudaMemcpyDeviceToHost));
-    checkCudaErr(cudaDeviceSynchronize());
-
-    if (!benchmark) {
-        weightGrad_cpu_ref<T_ELEM>(hostI,
-                                   hostO,
-                                   alpha,
-                                   beta,
-                                   hostF,
-                                   filterFormat,
-                                   dimA,
-                                   filterdimA,
-                                   outdimA,
-                                   strideA,
-                                   outstrideA,
-                                   convstrideA,
-                                   padA,
-                                   dilationA,
-                                   4);
-        for (int index = 0; index < filsize; index++) {  // assuming in data is packed
-            float diff         = getError(hostFfromdev[index], hostF[index]);
-            if (diff < 0) diff = -diff;
-            if (diff > THRESHOLD) {
-                numErrors++;
-            }
-        }
-    }
-
-    clean:
-
-    if (hostFfromdev) free(hostFfromdev);
-    return numErrors;
-}
-
-template <typename T_ELEM>
 int doTest(
-    int algo,
-    int64_t* dimA,
+    int64_t* dimA_padded,
     int64_t* padA,
     int64_t* convstrideA,
-    int64_t* filterdimA,
-    cudnnTensorFormat_t filterFormat,
+    int64_t* dilationA,
+    int64_t* filterdimA_padded,
+    int64_t* outdimA_padded,
     cudnnDataType_t dataType,
-    int mathType,
-    int benchmark,
-    bool fold,
-    cudnnConvolutionMode_t mode) 
+    cudnnConvolutionMode_t mode,
+    float * devPtrI,
+    float * devPtrF,
+    float * devPtrO)
 {
     cudnnHandle_t handle_;
-    T_ELEM* devPtrI;
-    T_ELEM* devPtrF;
-    T_ELEM* devPtrO;
-    T_ELEM* hostI;
-    T_ELEM* hostF;
-    T_ELEM* hostO;
-
-    constexpr int convDim = 2;
+    const int convDim = 2;
 
     float alpha     = 1.0f;
     float beta      = 0.0;
-    int numErrors   = 0;
-    int64_t dilationA[] = {1, 1};
-    int insize      = 0;
-    int filtersize  = 0;
-    int64_t outdimA[]   = {1, 8, 30, 30};
-    int outsize     = 0;
 
-    int64_t dimA_padded[4];
-    int64_t outdimA_padded[4];
-    int64_t filterdimA_padded[4];
     int64_t strideA_padded[4];
     int64_t outstrideA_padded[4];
     int64_t filterstrideA_padded[4];
 
-    outdimA[0] = dimA[0];
-    outdimA[1] = filterdimA[0];
-    for (int dim = 0; dim < 2; dim++) {
-        outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
-    }
+    generateStrides(filterdimA_padded, filterstrideA_padded, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(dimA_padded, strideA_padded, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(outdimA_padded, outstrideA_padded, 4, CUDNN_TENSOR_NCHW);
 
-    for (int i = 0; i < 4; i++) {
-        dimA_padded[i]       = dimA[i];
-        outdimA_padded[i]    = outdimA[i];
-        filterdimA_padded[i] = filterdimA[i];
-    }
-
-    // If vectorized, pad to proper dims. If not vectorized. dim_padded == dim
-    if (filterFormat == CUDNN_TENSOR_NCHW_VECT_C) {
-        int vecSize;
-        if (dataType == CUDNN_DATA_INT8x32) {
-            vecSize = 32;
-        } else {
-            vecSize = 4;
-        }
-
-        if (dimA_padded[1] % vecSize != 0) {
-            dimA_padded[1] = dimA_padded[1] + vecSize - (dimA_padded[1] % vecSize);
-        }
-        if (filterdimA_padded[1] % vecSize != 0) {
-            filterdimA_padded[1] = filterdimA_padded[1] + vecSize - (filterdimA_padded[1] % vecSize);
-        }
-        if (filterdimA_padded[0] % vecSize != 0) {
-            filterdimA_padded[0] = filterdimA_padded[0] + vecSize - (filterdimA_padded[0] % vecSize);
-            outdimA_padded[1]    = filterdimA_padded[0];
-        }
-    }
-
-    printf("====USER DIMENSIONS====\n");
-    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
-    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
-    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA_padded[0], dimA_padded[1], dimA_padded[2], dimA_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA_padded[0], filterdimA_padded[1], filterdimA_padded[2], filterdimA_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA_padded[0], outdimA_padded[1], outdimA_padded[2], outdimA_padded[3]);
-
-    generateStrides(dimA_padded, strideA_padded, 4, filterFormat);
-    insize = dimA_padded[0] * dimA_padded[1] * dimA_padded[2] * dimA_padded[3];
-
-    generateStrides(filterdimA_padded, filterstrideA_padded, 4, filterFormat);
-    filtersize = filterdimA_padded[0] * filterdimA_padded[1] * filterdimA_padded[2] * filterdimA_padded[3];
-
-    generateStrides(outdimA_padded, outstrideA_padded, 4, filterFormat);
-    outsize = outdimA_padded[0] * outdimA_padded[1] * outdimA_padded[2] * outdimA_padded[3];
-
-    checkCudaErr(cudaMalloc((void**)&(devPtrI), (insize) * sizeof(devPtrI[0])));
-    checkCudaErr(cudaMalloc((void**)&(devPtrF), (filtersize) * sizeof(devPtrF[0])));
-    checkCudaErr(cudaMalloc((void**)&(devPtrO), (outsize) * sizeof(devPtrO[0])));
-
-    hostI = (T_ELEM*)calloc(insize, sizeof(hostI[0]));
-    hostF = (T_ELEM*)calloc(filtersize, sizeof(hostF[0]));
-    hostO = (T_ELEM*)calloc(outsize, sizeof(hostO[0]));
-
-    std::cout << "Value of hostF " << std::hex << hostF << std::endl;
-
-    if (filterFormat == CUDNN_TENSOR_NCHW_VECT_C) {
-        initImagePadded((int8_t*)hostI, dimA, dimA_padded, strideA_padded, dataType);
-        initImagePadded((int8_t*)hostF, filterdimA, filterdimA_padded, filterstrideA_padded, dataType);
-        initImagePadded((int8_t*)hostO, outdimA, outdimA_padded, outstrideA_padded, dataType);
-    } else {
-        initImage(hostI, insize);
-        initImage(hostF, filtersize);
-        initImage(hostO, outsize);
-    }
-
-    checkCudaErr(cudaMemcpy(devPtrI, hostI, sizeof(hostI[0]) * insize, cudaMemcpyHostToDevice));
-    checkCudaErr(cudaMemcpy(devPtrF, hostF, sizeof(hostF[0]) * filtersize, cudaMemcpyHostToDevice));
-    checkCudaErr(cudaMemcpy(devPtrO, hostO, sizeof(hostO[0]) * outsize, cudaMemcpyHostToDevice));
-    checkCudaErr(cudaDeviceSynchronize());
-
-    std::cout << "Value of hostF 2 " << std::hex << hostF << std::endl;
     try {
         auto tensor_x = cudnn_frontend::TensorBuilder()
             .setDim(4, dimA_padded)
@@ -956,222 +675,32 @@ int doTest(
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
-
-        numErrors = doWgrad(handle_,
-                devPtrI,
-                devPtrF,
-                devPtrO,
-                hostI,
-                hostF,
-                hostO,
-                alpha,
-                beta,
-                filterFormat,
-                dimA,
-                filterdimA,
-                outdimA,
-                strideA_padded,
-                outstrideA_padded,
-                convstrideA,
-                padA,
-                dilationA,
-                benchmark);
     } catch (cudnn_frontend::cudnnException e) {
         std::cout << "Exception " << e.what() << std::endl;
-        exit(0);
+        return 1;
     }
 
-    std::cout << "Value of hostF 3 " << std::hex << hostF << std::endl;
-
-    if (!benchmark) {
-        if (numErrors == 0) {
-            printf("Test PASSED\n");
-        } else {
-            printf("Test FAILED, num errors = %d\n", numErrors);
-        }
-    }
-
-    clean:
-
-    if (devPtrI) cudaFree(devPtrI);
-    if (devPtrF) cudaFree(devPtrF);
-    if (devPtrO) cudaFree(devPtrO);
-    if (hostI) free(hostI);
-    std::cout << "Value of hostF 4 " << std::hex << hostF << std::endl;
-    if (hostF) free(hostF);
-    if (hostO) free(hostO);
+clean:
     if (handle_) cudnnDestroy(handle_);
 
-    return benchmark ? 0 : numErrors;
+    return 0;
 }
 
-static char* baseFile(char* fname) 
-{
-    char* base;
-    for (base = fname; *fname != '\0'; fname++) {
-        if (*fname == '/' || *fname == '\\') {
-            base = fname + 1;
-        }
-    }
-    return base;
-}
 
-int main(int argc, char** argv) 
-{
-    int algo      = 0;
-    int mathType  = 0;
-    int benchmark = 0;
-
-    int64_t dimA[] = {1, 32, 4, 4};
-
-    int64_t padA[]        = {0, 0};
-    int64_t convstrideA[] = {1, 1};
-
-    // batch size and feature layers must be multiples of 4 or 32 when using int8x4 or int8x32 respectively
-    int64_t filterdimA[] = {32, 32, 1, 1};
-
-    cudnnTensorFormat_t filterFormat = CUDNN_TENSOR_NCHW;
-    bool fold                        = false;
-    cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
-
-    int driver_version, rt_version;
-    cudaRuntimeGetVersion(&rt_version);
-    cudaDriverGetVersion(&driver_version);
-    printf("Executing: %s\n", baseFile(argv[0]));
-    printf("RT version: %d\n", rt_version);
-    printf("Driver Version: %d\n", driver_version);
-    for (int i = 1; i < argc; i++) {
-        printf(" %s", argv[i]);
-    }
-    printf("\n");
-
-    int error = 0;
-    argc -= 1;
-    argv++;
-    while (argc) {
-        if (*argv[0] == SWITCH_CHAR) {
-            switch (*(argv[0] + 1)) {
-                case 'b':
-                    benchmark = 1;
-                    break;
-                case 'c':
-                    dimA[1]       = atol(argv[0] + 2);
-                    filterdimA[1] = dimA[1];
-                    break;
-                case 'd':
-                    if (strncmp(argv[0] + 1, "dgrad", strlen("dgrad")) == 0) {
-                        algo = 1;
-                    }
-                    break;
-                case 'f':
-                    if (strncmp(argv[0] + 1, "filterFormat", strlen("filterFormat")) == 0) {
-                        filterFormat = (cudnnTensorFormat_t)(atoi(argv[0] + 1 + strlen("filterFormat")));
-                    }
-                    if (strncmp(argv[0] + 1, "fold", strlen("fold")) == 0) {
-                        fold = true;
-                    }
-
-                    break;
-                case 'h':
-                    dimA[2] = atol(argv[0] + 2);
-                    break;
-                case 'k':
-                    filterdimA[0] = atol(argv[0] + 2);
-                    break;
-                case 'm':
-                    if (strncmp(argv[0] + 1, "mathType1", strlen("mathType1")) == 0) {
-                        mathType = 1;
-                    }
-                    break;
-                case 'n':
-                    dimA[0] = atol(argv[0] + 2);
-                    break;
-                case 'p':
-                    if (strncmp(argv[0] + 1, "pad_h", strlen("pad_h")) == 0) {
-                        padA[0] = (int)atol(argv[0] + 1 + strlen("pad_h"));
-                    } else if (strncmp(argv[0] + 1, "pad_w", strlen("pad_w")) == 0) {
-                        padA[1] = (int)atol(argv[0] + 1 + strlen("pad_w"));
-                    }
-                    break;
-                case 'r':
-                    filterdimA[2] = atol(argv[0] + 2);
-                    break;
-                case 's':
-                    filterdimA[3] = atol(argv[0] + 2);
-                    break;
-                case 'u':
-                    convstrideA[0] = atol(argv[0] + 2);
-                    break;
-                case 'v':
-                    convstrideA[1] = atol(argv[0] + 2);
-                    break;
-                case 'w':
-                    if (strncmp(argv[0] + 1, "wgrad", strlen("wgrad")) == 0) {
-                        algo = 2;
-                    } else {
-                        dimA[3] = atol(argv[0] + 2);
-                    }
-                    break;
-                case 'x':
-                    mode = CUDNN_CROSS_CORRELATION;
-                    break;
-                default:
-                    error++;
-                    break;
-            }
-            if (error) {
-                fprintf(stderr, "Unknown switch '%c%s'\n", SWITCH_CHAR, argv[0] + 1);
-                return error;
-            }
-        } else {
-            fprintf(stderr, "Invalid separator '%c' for option '%s'\n", *argv[0], argv[0]);
-            return 1;
-        }
-        argc -= 1;
-        argv++;
-    }
-
-    int device, ret = 0;
-    struct cudaDeviceProp devProp;
-    cudaGetDevice(&device);
-    cudaGetDeviceProperties(&devProp, device);
-    int deviceVer = devProp.major * 10 + devProp.minor;
-
-    if (filterFormat != CUDNN_TENSOR_NCHW_VECT_C) {
-        if (filterFormat == CUDNN_TENSOR_NCHW) {
-            printf("Using format CUDNN_TENSOR_NCHW (for INT8x4 and INT8x32 tests use CUDNN_TENSOR_NCHW_VECT_C)\n");
-        } else if (filterFormat == CUDNN_TENSOR_NHWC) {
-            printf("Using format CUDNN_TENSOR_NHWC (for INT8x4 and INT8x32 tests use CUDNN_TENSOR_NCHW_VECT_C)\n");
-        } else {
-            printf("This sample only supports CUDNN_TENSOR_NCHW, CUDNN_TENSOR_NHWC, and CUDNN_TENSOR_NCHW_VECT_C!\n");
-            return 0;
-        }
-
-        printf("Testing single precision\n");
-        ret += doTest<float>(algo, dimA, padA, convstrideA, filterdimA, filterFormat, CUDNN_DATA_FLOAT, mathType, benchmark, fold, mode);
-        // printf("Testing half precision (math in single precision)\n");
-        // ret += doTest<half1>(algo, dimA, padA, convstrideA, filterdimA, filterFormat, CUDNN_DATA_HALF, mathType, benchmark, fold, mode);
-    } else {
-        printf("Using format CUDNN_TENSOR_NCHW_VECT_C (for single and double precision tests use a different format)\n");
-        if (algo == 0) {  // Only convolution
-            if (deviceVer < 61) {
-                printf("Skipping test, SM%d does not support int8x4\n", deviceVer);
-            } else {
-                printf("Testing int8x4 (math in int32)\n");
-                ret += doTest<int8_t>(algo, dimA, padA, convstrideA, filterdimA, filterFormat, CUDNN_DATA_INT8x4, mathType, benchmark, fold, mode);
-            }
-
-            if (deviceVer < 72) {
-                printf("Skipping test, SM%d does not support int8x32\n", deviceVer);
-            } else {
-                printf("Testing int8x32 (math in int32)\n");
-                ret += doTest<int8_t>(algo, dimA, padA, convstrideA, filterdimA, filterFormat, CUDNN_DATA_INT8x32, mathType, benchmark, fold, mode);
-            }
-        } else {
-            printf("This sample does not support dgrad or wgrad for INT8x4 and INT8x32!\n");
-        }
-    }
-
-    return (ret ? -1 : 0);
-}
+// int main(int argc, char** argv) 
+// {
+//     int64_t dimA[]       = {1, 32, 4, 4};
+//     int64_t filterdimA[] = {32, 32, 1, 1};
+// 
+//     int64_t padA[]        = {0, 0};
+//     int64_t convstrideA[] = {1, 1};
+// 
+//     // batch size and feature layers must be multiples of 4 or 32 when using int8x4 or int8x32 respectively
+// 
+//     cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
+// 
+//     auto ret = doTest<float>(dimA, padA, convstrideA, filterdimA, CUDNN_DATA_FLOAT, mode);
+// 
+//     return (ret ? -1 : 0);
+// }
 

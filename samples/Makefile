@@ -78,7 +78,7 @@ else ifneq ($(TARGET_ARCH),$(HOST_ARCH))
     endif
 endif
 HOST_COMPILER ?= g++
-NVCC          := $(CUDA_PATH)/bin/nvcc -ccbin $(HOST_COMPILER)
+NVCC          ?= $(CUDA_PATH)/bin/nvcc -ccbin $(HOST_COMPILER)
 
 # internal flags
 NVCCFLAGS   := -m${TARGET_SIZE}
@@ -193,7 +193,7 @@ else
 	@echo "Sample is ready - all dependencies have been met"
 endif
 
-OBJ = fp16_dev.o fp16_emu.o conv_sample.o
+OBJ = fp16_dev.o fp16_emu.o conv_sample.o test_list.o catch.o
 INC = $(wildcard *.h)
 
 conv_sample: $(OBJ)
