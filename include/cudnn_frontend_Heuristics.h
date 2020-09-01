@@ -17,12 +17,12 @@ namespace cudnn_frontend {
 ///    - heuristic mode
 ///    - operation graph
 ///
-/// Use EngineHeuristicsBuilder to build this class.
-/// Describe returns a string describing the EngineHeuristics class
+/// Use EngineHeuristicsBuilder_v8 to build this class.
+/// Describe returns a string describing the EngineHeuristics_v8 class
 ///
-class EngineHeuristics : public BackendDescriptor {
+class EngineHeuristics_v8 : public BackendDescriptor {
    public:
-    friend class EngineHeuristicsBuilder;
+    friend class EngineHeuristicsBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -30,12 +30,12 @@ class EngineHeuristics : public BackendDescriptor {
         return ss.str();
     }
 
-    EngineHeuristics(EngineHeuristics &&from)
+    EngineHeuristics_v8(EngineHeuristics_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()), mode(from.mode), opGraph(from.opGraph) {
         from.opGraph = nullptr;
     }
 
-    ~EngineHeuristics() {
+    ~EngineHeuristics_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
@@ -48,7 +48,7 @@ class EngineHeuristics : public BackendDescriptor {
     }
 
     /** @defgroup EngineHeuristicsQuery
-     *  Query individual property of EngineHeuristics class
+     *  Query individual property of EngineHeuristics_v8 class
      *  @{
      */
     //! Query the total count of the engines for the Operation Set
@@ -99,10 +99,10 @@ class EngineHeuristics : public BackendDescriptor {
     /** @} */
 
    private:
-    EngineHeuristics()                         = default;
-    EngineHeuristics(EngineHeuristics const &) = delete;
-    EngineHeuristics &
-    operator=(EngineHeuristics const &) = delete;
+    EngineHeuristics_v8()                         = default;
+    EngineHeuristics_v8(EngineHeuristics_v8 const &) = delete;
+    EngineHeuristics_v8 &
+    operator=(EngineHeuristics_v8 const &) = delete;
 
     cudnnBackendHeurMode_t mode      = CUDNN_HEUR_MODE_INSTANT;
     cudnnBackendDescriptor_t opGraph = nullptr;
@@ -110,31 +110,31 @@ class EngineHeuristics : public BackendDescriptor {
 };
 
 ///
-/// EngineHeuristicsBuilder Class
-/// Helper class used to build EngineHeuristics class
-class EngineHeuristicsBuilder {
+/// EngineHeuristicsBuilder_v8 Class
+/// Helper class used to build EngineHeuristics_v8 class
+class EngineHeuristicsBuilder_v8 {
    public:
-    /** @defgroup EngineHeuristicsBuilder
-     *  Set individual property of EngineHeuristics class
+    /** @defgroup EngineHeuristicsBuilder_v8
+     *  Set individual property of EngineHeuristics_v8 class
      *  @{
      */
     //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
-    setOperationGraph(OperationGraph &opGraph_) -> EngineHeuristicsBuilder & {
+    setOperationGraph(OperationGraph_v8 &opGraph_) -> EngineHeuristicsBuilder_v8 & {
         m_heuristics.opGraph = opGraph_.get_raw_desc();
         return *this;
     }
     //! Set cudnnHandle for the operations
     auto
-    setHeurMode(cudnnBackendHeurMode_t mode_) -> EngineHeuristicsBuilder & {
+    setHeurMode(cudnnBackendHeurMode_t mode_) -> EngineHeuristicsBuilder_v8 & {
         m_heuristics.mode = mode_;
         return *this;
     }
     /** @} */
 
-    //! constructs the EngineHeuristics by calling the cudnn API
+    //! constructs the EngineHeuristics_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    EngineHeuristics &&
+    EngineHeuristics_v8 &&
     build() {
         if (m_heuristics.opGraph == nullptr) {
             set_error_and_throw_exception(&m_heuristics,
@@ -186,14 +186,14 @@ class EngineHeuristicsBuilder {
         return std::move(m_heuristics);
     }
 
-    explicit EngineHeuristicsBuilder()                       = default;
-    ~EngineHeuristicsBuilder()                               = default;
-    EngineHeuristicsBuilder(EngineHeuristicsBuilder &&)      = delete;
-    EngineHeuristicsBuilder(EngineHeuristicsBuilder const &) = delete;
-    EngineHeuristicsBuilder &
-    operator=(EngineHeuristicsBuilder const &) = delete;
+    explicit EngineHeuristicsBuilder_v8()                       = default;
+    ~EngineHeuristicsBuilder_v8()                               = default;
+    EngineHeuristicsBuilder_v8(EngineHeuristicsBuilder_v8 &&)      = delete;
+    EngineHeuristicsBuilder_v8(EngineHeuristicsBuilder_v8 const &) = delete;
+    EngineHeuristicsBuilder_v8 &
+    operator=(EngineHeuristicsBuilder_v8 const &) = delete;
 
    private:
-    EngineHeuristics m_heuristics;
+    EngineHeuristics_v8 m_heuristics;
 };
 }

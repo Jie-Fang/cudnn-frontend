@@ -8,7 +8,7 @@ namespace cudnn_frontend {
 // The engine config will be filtered out and will
 // not be part of the to list.
 
-void
+static void
 filter(std::vector<cudnnBackendDescriptor_t> &from,
        std::vector<cudnnBackendDescriptor_t> &to,
        std::function<bool(cudnnBackendDescriptor_t &)> filter_fn) {
@@ -19,11 +19,11 @@ filter(std::vector<cudnnBackendDescriptor_t> &from,
     from.erase(p, from.end());
 }
 
-bool allowAll(cudnnBackendDescriptor_t & engine_config) {
+static bool allowAll(cudnnBackendDescriptor_t & engine_config) {
     return false;
 }
 
-bool
+static bool
 isNonDeterministic(cudnnBackendDescriptor_t &engine_config) {
     bool isNondeterministic         = false;
     cudnnBackendDescriptor_t engine = nullptr;

@@ -193,7 +193,7 @@ else
 	@echo "Sample is ready - all dependencies have been met"
 endif
 
-OBJ = fp16_dev.o fp16_emu.o conv_sample.o test_list.o catch.o
+OBJ = fp16_dev.o fp16_emu.o conv_sample.o test_list.o catch.o helpers.o
 INC = $(wildcard *.h)
 
 conv_sample: $(OBJ)

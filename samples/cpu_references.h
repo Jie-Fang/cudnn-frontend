@@ -97,21 +97,35 @@ void conv_cpu_ref(
     const T_ELEM* inputData,
     const T_ELEM* filterData,
     T_ELEM* outputData,
-    float alpha,
-    float beta,
     int resizeFactor,
     cudnnTensorFormat_t filterFormat,
     const int64_t* inDims,
     const int64_t* filDims,
-    const int64_t* outDims,
-    const int64_t* inStride,
-    const int64_t* outStride,
+    const int64_t* diffDims,
     const int64_t* stride,
     const int64_t* pad,
     const int64_t* dilation,
     int64_t nbDims) 
 {
     int imDims = nbDims - 2;
+    float alpha     = 1.0f;
+    float beta      = 0.0;
+    // Some sanity checks
+    // image   is n x c x h x w
+    // diff    is n x k x p x q
+    // filter  is k x c x r x s
+    assert(inDims[0] == diffDims[0]);
+    assert(inDims[1] == filDims[1]);
+    assert(diffDims[1] == filDims[0]);
+
+    // Filter stride
+    int64_t filterStride[8];
+    int64_t inStride[8];
+    int64_t diffStride[8];
+
+    generateStrides(inDims, inStride, nbDims, filterFormat);
+    generateStrides(diffDims, diffStride, nbDims, filterFormat);
+    generateStrides(filDims, filterStride, nbDims, filterFormat);
 
     int64_t filStride[8] = {0};
     generateStrides(filDims, filStride, nbDims, filterFormat);
@@ -121,7 +135,7 @@ void conv_cpu_ref(
     // Number of pixels in output
     int nPixelsOut = 1;
     for (int i = 2; i < nbDims; i++) {
-        nPixelsOut *= outDims[i];
+        nPixelsOut *= diffDims[i];
     }
 
     // Number of pixels in filter
@@ -137,14 +151,14 @@ void conv_cpu_ref(
     int64_t tmpIds[8] = {0};
 
     // For each image in the output
-    for (int64_t ni = 0; ni < outDims[0]; ni++) {
+    for (int64_t ni = 0; ni < diffDims[0]; ni++) {
         // For each outer feature layer of the output image
-        for (int ki_outer = 0; ki_outer < outDims[1] / resizeFactor; ki_outer++) {
-            int outputOffset = ni * outStride[0] / resizeFactor + ki_outer * outStride[1];
+        for (int ki_outer = 0; ki_outer < diffDims[1] / resizeFactor; ki_outer++) {
+            int outputOffset = ni * diffStride[0] / resizeFactor + ki_outer * diffStride[1];
             // For every pixel in this output image's feature layer
             for (int outId = 0; outId < nPixelsOut; outId++) {
                 // Get output pixel ids
-                lin2dim(outId, outIds, outDims + 2, imDims);  // Skip n and k dimensions
+                lin2dim(outId, outIds, diffDims + 2, imDims);  // Skip n and k dimensions
                 // Now we get the coordinates in input space of the "top left" corner 
                 // of the filter: multiply by stride and remove pad
                 for (int d = 0; d < imDims; d++) {
@@ -192,7 +206,7 @@ void conv_cpu_ref(
                     }
 
                     // Store final result in proper position in output image
-                    int actualOutId = outputOffset + dim2lin(outIds, (outStride) + 2, imDims);
+                    int actualOutId = outputOffset + dim2lin(outIds, (diffStride) + 2, imDims);
                     doEpilog(outputData, actualOutId * resizeFactor + ki_inner, alpha * tmp, beta);
                 }
             }
@@ -205,14 +219,10 @@ void dataGrad_cpu_ref(
     const T_ELEM* weight,
     const T_ELEM* top_diff,
     T_ELEM* output,
-    float alpha,
-    float beta,
     cudnnTensorFormat_t filterFormat,
     const int64_t* inDims,
     const int64_t* filDims,
     const int64_t* outDims,
-    const int64_t* inStride,
-    const int64_t* outStride,
     const int64_t* stride,
     const int64_t* pad,
     const int64_t* dilation,
@@ -227,11 +237,14 @@ void dataGrad_cpu_ref(
     assert(inDims[1] == filDims[0]);   // k
     assert(outDims[1] == filDims[1]);  // cactualOutId
 
-    int64_t strideA_padded[8];
-    int64_t outstrideA_padded[8];
+    int64_t inStride[8];
+    int64_t outStride[8];
 
-    generateStrides(inDims, strideA_padded, nbDims, filterFormat);
-    generateStrides(outDims, outstrideA_padded, nbDims, filterFormat);
+    float alpha     = 1.0f;
+    float beta      = 0.0;
+
+    generateStrides(inDims, inStride, nbDims, filterFormat);
+    generateStrides(outDims, outStride, nbDims, filterFormat);
 
     int64_t filStride[8] = {0};
     generateStrides(filDims, filStride, nbDims, filterFormat);

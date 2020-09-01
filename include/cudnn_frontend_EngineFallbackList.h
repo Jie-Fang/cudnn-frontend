@@ -8,7 +8,7 @@ static constexpr std::array<int64_t, 3> fallback_engine_conv_list  = {0, 1, 28};
 static constexpr std::array<int64_t, 3> fallback_engine_dgrad_list = {0, 1, 25};
 static constexpr std::array<int64_t, 3> fallback_engine_wgrad_list = {0, 1, 20};
 
-class EngineFallbackList : public BackendDescriptor {
+class EngineFallbackList_v8 : public BackendDescriptor {
    private:
     auto
     get_fallback_list_size(cudnnBackendDescriptorType_t type) -> int64_t {
@@ -25,7 +25,7 @@ class EngineFallbackList : public BackendDescriptor {
     }
 
    public:
-    friend class EngineFallbackListBuilder;
+    friend class EngineFallbackListBuilder_v8;
 
     std::string
     describe() const override {
@@ -39,7 +39,7 @@ class EngineFallbackList : public BackendDescriptor {
         return m_engine_configs;
     }
 
-    ~EngineFallbackList() {
+    ~EngineFallbackList_v8() {
         for (auto i = 0; i < m_engine_configs.size(); i++) {
             if (m_engine_configs[i] != nullptr) {
                 cudnnBackendDestroyDescriptor(m_engine_configs[i]);
@@ -47,17 +47,17 @@ class EngineFallbackList : public BackendDescriptor {
             }
         }
     }
-    EngineFallbackList(EngineFallbackList &&from)
+    EngineFallbackList_v8(EngineFallbackList_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()), mode(from.mode), opGraph(from.opGraph) {
         from.opGraph = nullptr;
         m_engine_configs.swap(from.m_engine_configs);
     }
 
    private:
-    EngineFallbackList()                           = default;
-    EngineFallbackList(EngineFallbackList const &) = delete;
-    EngineFallbackList &
-    operator=(EngineFallbackList const &) = delete;
+    EngineFallbackList_v8()                           = default;
+    EngineFallbackList_v8(EngineFallbackList_v8 const &) = delete;
+    EngineFallbackList_v8 &
+    operator=(EngineFallbackList_v8 const &) = delete;
 
     cudnnBackendDescriptor_t opGraph = nullptr;
     cudnnBackendDescriptorType_t mode;
@@ -65,30 +65,30 @@ class EngineFallbackList : public BackendDescriptor {
 };
 
 ///
-/// EngineHeuristicsBuilder Class
-/// Helper class used to build EngineHeuristics class
-class EngineFallbackListBuilder {
+/// EngineFallBackListBuilder Class
+/// Helper class used to build EngineFallBackList class
+class EngineFallbackListBuilder_v8 {
    public:
-    /** @defgroup EngineFallbackListBuilder
-     *  Set individual property of EngineFallbackList class
+    /** @defgroup EngineFallbackListBuilder_v8
+     *  Set individual property of EngineFallbackList_v8 class
      *  @{
      */
     //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
-    setOperationGraph(OperationGraph &opGraph_) -> EngineFallbackListBuilder & {
+    setOperationGraph(OperationGraph_v8 &opGraph_) -> EngineFallbackListBuilder_v8 & {
         m_fallback_list.opGraph = opGraph_.get_raw_desc();
         return *this;
     }
     auto
-    setOperation(cudnnBackendDescriptorType_t mode) -> EngineFallbackListBuilder & {
+    setOperation(cudnnBackendDescriptorType_t mode) -> EngineFallbackListBuilder_v8 & {
         m_fallback_list.mode = mode;
         return *this;
     }
     /** @} */
 
-    //! constructs the EngineFallbackList by calling the cudnn API
+    //! constructs the EngineFallbackList_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    EngineFallbackList &&
+    EngineFallbackList_v8 &&
     build() {
         if (m_fallback_list.opGraph == nullptr) {
             set_error_and_throw_exception(&m_fallback_list,
@@ -99,45 +99,45 @@ class EngineFallbackListBuilder {
         };
         if (m_fallback_list.mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
             for (auto i = 0; i < fallback_engine_conv_list.size(); i++) {
-                auto engine = cudnn_frontend::EngineBuilder()
+                auto engine = cudnn_frontend::EngineBuilder_v8()
                                   .setGlobalEngineIdx(fallback_engine_conv_list[i])
                                   .setOperationGraph(m_fallback_list.opGraph)
                                   .build();
-                auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+                auto engine_config = cudnn_frontend::EngineConfigBuilder_v8().setEngine(engine).build();
                 m_fallback_list.m_engine_configs.emplace_back(engine_config.get_desc());
             }
         }
         if (m_fallback_list.mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
             for (auto i = 0; i < fallback_engine_dgrad_list.size(); i++) {
-                auto engine = cudnn_frontend::EngineBuilder()
+                auto engine = cudnn_frontend::EngineBuilder_v8()
                                   .setGlobalEngineIdx(fallback_engine_dgrad_list[i])
                                   .setOperationGraph(m_fallback_list.opGraph)
                                   .build();
-                auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+                auto engine_config = cudnn_frontend::EngineConfigBuilder_v8().setEngine(engine).build();
                 m_fallback_list.m_engine_configs.emplace_back(engine_config.get_desc());
             }
         }
         if (m_fallback_list.mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
             for (auto i = 0; i < fallback_engine_wgrad_list.size(); i++) {
-                auto engine = cudnn_frontend::EngineBuilder()
+                auto engine = cudnn_frontend::EngineBuilder_v8()
                                   .setGlobalEngineIdx(fallback_engine_wgrad_list[i])
                                   .setOperationGraph(m_fallback_list.opGraph)
                                   .build();
-                auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+                auto engine_config = cudnn_frontend::EngineConfigBuilder_v8().setEngine(engine).build();
                 m_fallback_list.m_engine_configs.push_back(engine_config.get_desc());
             }
         }
         return std::move(m_fallback_list);
     }
 
-    explicit EngineFallbackListBuilder()                         = default;
-    ~EngineFallbackListBuilder()                                 = default;
-    EngineFallbackListBuilder(EngineFallbackListBuilder &&)      = delete;
-    EngineFallbackListBuilder(EngineFallbackListBuilder const &) = delete;
-    EngineFallbackListBuilder &
-    operator=(EngineFallbackListBuilder const &) = delete;
+    explicit EngineFallbackListBuilder_v8()                         = default;
+    ~EngineFallbackListBuilder_v8()                                 = default;
+    EngineFallbackListBuilder_v8(EngineFallbackListBuilder_v8 &&)      = delete;
+    EngineFallbackListBuilder_v8(EngineFallbackListBuilder_v8 const &) = delete;
+    EngineFallbackListBuilder_v8 &
+    operator=(EngineFallbackListBuilder_v8 const &) = delete;
 
    private:
-    EngineFallbackList m_fallback_list;
+    EngineFallbackList_v8 m_fallback_list;
 };
 }

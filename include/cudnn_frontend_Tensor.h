@@ -12,8 +12,8 @@
 namespace cudnn_frontend {
 
 ///
-/// Tensor Class
-/// This class tells the properties of the Tensor on which the operation will be
+/// Tensor_v8 Class
+/// This class tells the properties of the Tensor_v8 on which the operation will be
 /// performed
 /// Properties:
 ///    - dataType
@@ -22,12 +22,12 @@ namespace cudnn_frontend {
 ///    - tensor dimensions
 ///    - tensor strides
 ///
-/// Use TensorBuilder to build this class.
+/// Use TensorBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
 ///
-class Tensor : public BackendDescriptor {
+class Tensor_v8 : public BackendDescriptor {
    public:
-    friend class TensorBuilder;
+    friend class TensorBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -49,7 +49,7 @@ class Tensor : public BackendDescriptor {
         return ss.str();
     }
 
-    Tensor(Tensor &&from)
+    Tensor_v8(Tensor_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           data_type(from.data_type),
           id(from.id),
@@ -60,17 +60,17 @@ class Tensor : public BackendDescriptor {
         from.desc = nullptr;
     }
 
-    ~Tensor() {
+    ~Tensor_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
     }
 
    private:
-    Tensor()               = default;
-    Tensor(Tensor const &) = delete;
-    Tensor &
-    operator=(Tensor const &) = delete;
+    Tensor_v8()               = default;
+    Tensor_v8(Tensor_v8 const &) = delete;
+    Tensor_v8 &
+    operator=(Tensor_v8 const &) = delete;
 
     cudnnDataType_t data_type               = CUDNN_DATA_FLOAT;
     int64_t btensor_dimA[CUDNN_DIM_MAX + 1] = {-1};  // n, g, c, d, h, w
@@ -81,50 +81,50 @@ class Tensor : public BackendDescriptor {
 };
 
 ///
-/// TensorBuilder Class
-/// Helper class used to build Tensor class
-class TensorBuilder {
+/// TensorBuilder_v8 Class
+/// Helper class used to build Tensor_v8 class
+class TensorBuilder_v8 {
    public:
-    /** @defgroup TensorBuilder
-     *  Set individual property of Tensor class
+    /** @defgroup TensorBuilder_v8
+     *  Set individual property of Tensor_v8 class
      *  @{
      */
-    //! Set Datatype for the Tensor
+    //! Set Datatype for the Tensor_v8
     auto
-    setDataType(cudnnDataType_t data_type_) -> TensorBuilder & {
+    setDataType(cudnnDataType_t data_type_) -> TensorBuilder_v8 & {
         m_tensor.data_type = data_type_;
         return *this;
     }
     //! Set Dimensions of the tensor
     auto
-    setDim(int64_t ndim, int64_t *dim) -> TensorBuilder & {
+    setDim(int64_t ndim, int64_t *dim) -> TensorBuilder_v8 & {
         std::copy((dim), dim + ndim, m_tensor.btensor_dimA);
         m_tensor.nDims = ndim;
         return *this;
     }
     //! Set Strides of the tensor
     auto
-    setStrides(int64_t ndim, int64_t *strides) -> TensorBuilder & {
+    setStrides(int64_t ndim, int64_t *strides) -> TensorBuilder_v8 & {
         std::copy(strides, strides + ndim, m_tensor.btensor_strA);
         return *this;
     }
     //! Set Unique Id  of the tensor
     auto
-    setId(int64_t id_) -> TensorBuilder & {
+    setId(int64_t id_) -> TensorBuilder_v8 & {
         m_tensor.id = id_;
         return *this;
     }
     //! Set Alignment of the tensor
     auto
-    setAlignment(int64_t alignment_) -> TensorBuilder & {
+    setAlignment(int64_t alignment_) -> TensorBuilder_v8 & {
         m_tensor.alignment = alignment_;
         return *this;
     }
     /** @} */
 
-    //! constructs the Tensor by calling the cudnn API
+    //! constructs the Tensor_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    Tensor &&
+    Tensor_v8 &&
     build() {
         // Sanity check if non-default fields have been set correctly.
         if (m_tensor.alignment <= 0) {
@@ -218,18 +218,17 @@ class TensorBuilder {
             set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR cudnnFinalize failed");
             return std::move(m_tensor);
         }
-
         return std::move(m_tensor);
     }
 
-    explicit TensorBuilder()             = default;
-    ~TensorBuilder()                     = default;
-    TensorBuilder(TensorBuilder &&)      = delete;
-    TensorBuilder(TensorBuilder const &) = delete;
-    TensorBuilder &
-    operator=(TensorBuilder const &) = delete;
+    explicit TensorBuilder_v8()             = default;
+    ~TensorBuilder_v8()                     = default;
+    TensorBuilder_v8(TensorBuilder_v8 &&)      = delete;
+    TensorBuilder_v8(TensorBuilder_v8 const &) = delete;
+    TensorBuilder_v8 &
+    operator=(TensorBuilder_v8 const &) = delete;
 
    private:
-    Tensor m_tensor;
+    Tensor_v8 m_tensor;
 };
 }
