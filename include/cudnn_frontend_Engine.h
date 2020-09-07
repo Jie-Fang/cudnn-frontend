@@ -17,22 +17,22 @@
 namespace cudnn_frontend {
 
 ///
-/// Engine Class
-/// This class tells the properties of the Engine on which performs the
+/// Engine_v8 Class
+/// This class tells the properties of the Engine_v8 on which performs the
 /// operation requested
 /// Properties:
 ///    - Index
-///    - OperationGraph
+///    - OperationGraph_v8
 ///
-/// Use EngineBuilder to build this class.
+/// Use EngineBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
 ///
-class Engine : public BackendDescriptor {
+class Engine_v8 : public BackendDescriptor {
    private:
-    Engine()               = default;
-    Engine(Engine const &) = delete;
-    Engine &
-    operator=(Engine const &) = delete;
+    Engine_v8()               = default;
+    Engine_v8(Engine_v8 const &) = delete;
+    Engine_v8 &
+    operator=(Engine_v8 const &) = delete;
 
     /// Internal class which controls the different knobs for a given engine
     /// Has min-max and stride as the options.
@@ -139,7 +139,7 @@ class Engine : public BackendDescriptor {
     }
 
    public:
-    friend class EngineBuilder;
+    friend class EngineBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -148,7 +148,7 @@ class Engine : public BackendDescriptor {
         ss << " Has " << numKnobs << " knobs";
         return ss.str();
     }
-    Engine(Engine &&from)
+    Engine_v8(Engine_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()), opGraph(from.opGraph), idx(from.idx) {
         cudnnStatus_t status;
         from.opGraph = nullptr;
@@ -173,7 +173,7 @@ class Engine : public BackendDescriptor {
         }
         buildKnobs();
     }
-    ~Engine() {
+    ~Engine_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
@@ -192,37 +192,37 @@ class Engine : public BackendDescriptor {
 };
 
 ///
-/// EngineBuilder Class
-/// Helper class used to build Engine class
-class EngineBuilder {
+/// EngineBuilder_v8 Class
+/// Helper class used to build Engine_v8 class
+class EngineBuilder_v8 {
    public:
-    /** @defgroup EngineBuilder
-     *  Set individual property of Engine class
+    /** @defgroup EngineBuilder_v8
+     *  Set individual property of Engine_v8 class
      *  @{
      */
     //! Set operationGraph for the engine
     auto
-    setOperationGraph(OperationGraph const &opGraph_) -> EngineBuilder & {
+    setOperationGraph(OperationGraph_v8 const &opGraph_) -> EngineBuilder_v8 & {
         m_engine.opGraph = opGraph_.get_raw_desc();
         return *this;
     }
     //! Set operationGraph for the engine
     auto
-    setOperationGraph(cudnnBackendDescriptor_t desc_) -> EngineBuilder & {
+    setOperationGraph(cudnnBackendDescriptor_t desc_) -> EngineBuilder_v8 & {
         m_engine.opGraph = desc_;
         return *this;
     }
     //! Set engine index for the engine
     auto
-    setGlobalEngineIdx(int64_t idx_) -> EngineBuilder & {
+    setGlobalEngineIdx(int64_t idx_) -> EngineBuilder_v8 & {
         m_engine.idx = idx_;
         return *this;
     }
     /** @} */
 
-    //! constructs the Engine by calling the cudnn API
+    //! constructs the Engine_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    Engine &&
+    Engine_v8 &&
     build() {
         if (m_engine.idx < 0) {
             set_error_and_throw_exception(
@@ -278,14 +278,14 @@ class EngineBuilder {
         return std::move(m_engine);
     }
 
-    explicit EngineBuilder()             = default;
-    ~EngineBuilder()                     = default;
-    EngineBuilder(EngineBuilder &&)      = delete;
-    EngineBuilder(EngineBuilder const &) = delete;
-    EngineBuilder &
-    operator=(EngineBuilder const &) = delete;
+    explicit EngineBuilder_v8()             = default;
+    ~EngineBuilder_v8()                     = default;
+    EngineBuilder_v8(EngineBuilder_v8 &&)      = delete;
+    EngineBuilder_v8(EngineBuilder_v8 const &) = delete;
+    EngineBuilder_v8 &
+    operator=(EngineBuilder_v8 const &) = delete;
 
    private:
-    Engine m_engine;
+    Engine_v8 m_engine;
 };
 }

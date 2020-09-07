@@ -26,12 +26,12 @@ namespace cudnn_frontend {
 ///    - Convolution Mode
 ///    - Convolution spatial dimensions
 ///
-/// Use ConvDescBuilder to build this class.
+/// Use ConvDescBuilder_v8 to build this class.
 /// Describe returns a string describing the convolution operation
 ///
-class ConvDesc : public BackendDescriptor {
+class ConvDesc_v8 : public BackendDescriptor {
    public:
-    friend class ConvDescBuilder;
+    friend class ConvDescBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -63,7 +63,7 @@ class ConvDesc : public BackendDescriptor {
         return ss.str();
     }
 
-    ConvDesc(ConvDesc &&from)
+    ConvDesc_v8(ConvDesc_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           data_type(from.data_type),
           mode(from.mode),
@@ -75,17 +75,17 @@ class ConvDesc : public BackendDescriptor {
         from.desc = nullptr;
     }
 
-    ~ConvDesc() {
+    ~ConvDesc_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
     }
 
    private:
-    ConvDesc()                 = default;
-    ConvDesc(ConvDesc const &) = delete;
-    ConvDesc &
-    operator=(ConvDesc const &) = delete;
+    ConvDesc_v8()                 = default;
+    ConvDesc_v8(ConvDesc_v8 const &) = delete;
+    ConvDesc_v8 &
+    operator=(ConvDesc_v8 const &) = delete;
 
     cudnnDataType_t data_type           = CUDNN_DATA_FLOAT;
     cudnnConvolutionMode_t mode         = CUDNN_CONVOLUTION;
@@ -97,61 +97,61 @@ class ConvDesc : public BackendDescriptor {
 };
 
 ///
-/// ConvDescBuilder Class
-/// Helper class used to build ConvDesc class
-class ConvDescBuilder {
+/// ConvDescBuilder_v8 Class
+/// Helper class used to build ConvDesc_v8 class
+class ConvDescBuilder_v8 {
    public:
-    /** @defgroup ConvDescBuilder
-     *  Set individual property of ConvDesc class
+    /** @defgroup ConvDescBuilder_v8
+     *  Set individual property of ConvDesc_v8 class
      *  @{
      */
     //! Set Datatype for the Convolution Operation
     auto
-    setDataType(cudnnDataType_t data_type_) -> ConvDescBuilder & {
+    setDataType(cudnnDataType_t data_type_) -> ConvDescBuilder_v8 & {
         m_convDesc.data_type = data_type_;
         return *this;
     }
     //! Set Padding Lower of the convDesc
     auto
-    setPrePadding(int64_t ndims, int64_t *padding) -> ConvDescBuilder & {
+    setPrePadding(int64_t ndims, int64_t *padding) -> ConvDescBuilder_v8 & {
         std::copy(padding, padding + ndims, m_convDesc.padLower);
         return *this;
     }
     //! Set Padding Upper of the convDesc
     auto
-    setPostPadding(int64_t ndims, int64_t *padding) -> ConvDescBuilder & {
+    setPostPadding(int64_t ndims, int64_t *padding) -> ConvDescBuilder_v8 & {
         std::copy(padding, padding + ndims, m_convDesc.padUpper);
         return *this;
     }
     //! Set Dilation of the convDesc
     auto
-    setDilation(int64_t ndims, int64_t *dilation) -> ConvDescBuilder & {
+    setDilation(int64_t ndims, int64_t *dilation) -> ConvDescBuilder_v8 & {
         std::copy(dilation, dilation + ndims, m_convDesc.dilation);
         return *this;
     }
     //! Set Strides of the convDesc
     auto
-    setStrides(int64_t ndims, int64_t *strides) -> ConvDescBuilder & {
+    setStrides(int64_t ndims, int64_t *strides) -> ConvDescBuilder_v8 & {
         std::copy(strides, strides + ndims, m_convDesc.stride);
         return *this;
     }
     //! Set Num Spatial Dimensions of the convolution Operation
     auto
-    setNDims(int64_t nDims_) -> ConvDescBuilder & {
+    setNDims(int64_t nDims_) -> ConvDescBuilder_v8 & {
         m_convDesc.nDims = nDims_;
         return *this;
     }
     //! Set Convolution Mode of the convolution Operation
     auto
-    setMathMode(cudnnConvolutionMode_t mode_) -> ConvDescBuilder & {
+    setMathMode(cudnnConvolutionMode_t mode_) -> ConvDescBuilder_v8 & {
         m_convDesc.mode = mode_;
         return *this;
     }
     /** @} */
 
-    //! constructs the ConvDesc by calling the cudnn API
+    //! constructs the ConvDesc_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    ConvDesc &&
+    ConvDesc_v8 &&
     build() {
         // Sanity check if non-default fields have been set correctly.
         if (m_convDesc.nDims <= 0) {
@@ -274,14 +274,14 @@ class ConvDescBuilder {
         return std::move(m_convDesc);
     }
 
-    explicit ConvDescBuilder()               = default;
-    ~ConvDescBuilder()                       = default;
-    ConvDescBuilder(ConvDescBuilder &&)      = delete;
-    ConvDescBuilder(ConvDescBuilder const &) = delete;
-    ConvDescBuilder &
-    operator=(ConvDescBuilder const &) = delete;
+    explicit ConvDescBuilder_v8()               = default;
+    ~ConvDescBuilder_v8()                       = default;
+    ConvDescBuilder_v8(ConvDescBuilder_v8 &&)      = delete;
+    ConvDescBuilder_v8(ConvDescBuilder_v8 const &) = delete;
+    ConvDescBuilder_v8 &
+    operator=(ConvDescBuilder_v8 const &) = delete;
 
    private:
-    ConvDesc m_convDesc;
+    ConvDesc_v8 m_convDesc;
 };
 }
