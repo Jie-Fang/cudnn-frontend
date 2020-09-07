@@ -16,19 +16,19 @@
 namespace cudnn_frontend {
 
 ///
-/// OperationGraph Class
-/// This class tells the properties of the Tensor on which the operation will be
+/// OperationGraph_v8 Class
+/// This class tells the properties of the Tensor_v8 on which the operation will be
 /// performed
 /// Properties:
 ///    - handle
 ///    - operation
 ///
-/// Use OperationGraphBuilder to build this class.
+/// Use OperationGraphBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
 ///
-class OperationGraph : public BackendDescriptor {
+class OperationGraph_v8 : public BackendDescriptor {
    public:
-    friend class OperationGraphBuilder;
+    friend class OperationGraphBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -36,7 +36,7 @@ class OperationGraph : public BackendDescriptor {
         return ss.str();
     }
 
-    OperationGraph(OperationGraph &&from)
+    OperationGraph_v8(OperationGraph_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           handle(from.handle),
           ops(from.ops),
@@ -46,7 +46,7 @@ class OperationGraph : public BackendDescriptor {
         }
     }
 
-    ~OperationGraph() {
+    ~OperationGraph_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
@@ -60,7 +60,7 @@ class OperationGraph : public BackendDescriptor {
     }
 
     /** @defgroup OperationGraphQuery
-     *  Query individual property of OperationGraph class
+     *  Query individual property of OperationGraph_v8 class
      *  @{
      */
     //! Query the total count of the engines for the Operation Set
@@ -80,10 +80,10 @@ class OperationGraph : public BackendDescriptor {
     /** @} */
 
    private:
-    OperationGraph()                       = default;
-    OperationGraph(OperationGraph const &) = delete;
-    OperationGraph &
-    operator=(OperationGraph const &) = delete;
+    OperationGraph_v8()                       = default;
+    OperationGraph_v8(OperationGraph_v8 const &) = delete;
+    OperationGraph_v8 &
+    operator=(OperationGraph_v8 const &) = delete;
 
     cudnnHandle_t handle = nullptr;
     std::array<manager<cudnnBackendDescriptor_t>, 10> ops{};
@@ -91,23 +91,23 @@ class OperationGraph : public BackendDescriptor {
 };
 
 ///
-/// OperationGraphBuilder Class
-/// Helper class used to build OperationGraph class
-class OperationGraphBuilder {
+/// OperationGraphBuilder_v8 Class
+/// Helper class used to build OperationGraph_v8 class
+class OperationGraphBuilder_v8 {
    public:
-    /** @defgroup OperationGraphBuilder
-     *  Set individual property of OperationGraph class
+    /** @defgroup OperationGraphBuilder_v8
+     *  Set individual property of OperationGraph_v8 class
      *  @{
      */
     //! Set cudnnHandle for the operations
     auto
-    setHandle(cudnnHandle_t handle_) -> OperationGraphBuilder & {
+    setHandle(cudnnHandle_t handle_) -> OperationGraphBuilder_v8 & {
         m_operationGraph.handle = handle_;
         return *this;
     }
     //! Set numoperations and the operations
     auto
-    setOperationGraph(int64_t numOps_, Operation const **ops_) -> OperationGraphBuilder & {
+    setOperationGraph(int64_t numOps_, Operation_v8 const **ops_) -> OperationGraphBuilder_v8 & {
         m_operationGraph.numOps = numOps_;
         for (auto i = 0u; i < numOps_; i++) {
             m_operationGraph.ops[i] = ops_[i]->get_desc();
@@ -116,9 +116,9 @@ class OperationGraphBuilder {
     }
     /** @} */
 
-    //! constructs the OperationGraph by calling the cudnn API
+    //! constructs the OperationGraph_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    OperationGraph &&
+    OperationGraph_v8 &&
     build() {
         if (m_operationGraph.numOps <= 0) {
             set_error_and_throw_exception(
@@ -184,14 +184,14 @@ class OperationGraphBuilder {
         return std::move(m_operationGraph);
     }
 
-    explicit OperationGraphBuilder()                     = default;
-    ~OperationGraphBuilder()                             = default;
-    OperationGraphBuilder(OperationGraphBuilder &&)      = delete;
-    OperationGraphBuilder(OperationGraphBuilder const &) = delete;
-    OperationGraphBuilder &
-    operator=(OperationGraphBuilder const &) = delete;
+    explicit OperationGraphBuilder_v8()                     = default;
+    ~OperationGraphBuilder_v8()                             = default;
+    OperationGraphBuilder_v8(OperationGraphBuilder_v8 &&)      = delete;
+    OperationGraphBuilder_v8(OperationGraphBuilder_v8 const &) = delete;
+    OperationGraphBuilder_v8 &
+    operator=(OperationGraphBuilder_v8 const &) = delete;
 
    private:
-    OperationGraph m_operationGraph;
+    OperationGraph_v8 m_operationGraph;
 };
 }

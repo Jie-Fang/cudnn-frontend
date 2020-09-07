@@ -15,20 +15,20 @@
 
 namespace cudnn_frontend {
 ///
-/// EngineConfig Class
-/// This class tells the Configuration of the Engine in terms of the knob
+/// EngineConfig_v8 Class
+/// This class tells the Configuration of the Engine_v8 in terms of the knob
 /// choices
 /// Properties:
 ///    - num knobs
 ///    - Choice
-///    - Engine
+///    - Engine_v8
 ///
-/// Use EngineConfigBuilder to build this class.
+/// Use EngineConfigBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
 ///
-class EngineConfig : public BackendDescriptor {
+class EngineConfig_v8 : public BackendDescriptor {
    public:
-    friend class EngineConfigBuilder;
+    friend class EngineConfigBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -36,7 +36,7 @@ class EngineConfig : public BackendDescriptor {
         ss << " Number of knobs: " << numKnobs;
         return ss.str();
     }
-    EngineConfig(EngineConfig &&from)
+    EngineConfig_v8(EngineConfig_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           engine(from.engine),
           numKnobs(from.numKnobs) {
@@ -44,7 +44,7 @@ class EngineConfig : public BackendDescriptor {
         bChoices    = from.bChoices;
         from.bChoices.fill(nullptr);
     }
-    ~EngineConfig() {
+    ~EngineConfig_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
@@ -59,7 +59,7 @@ class EngineConfig : public BackendDescriptor {
     }
 
    private:
-    EngineConfig() : BackendDescriptor(nullptr) {
+    EngineConfig_v8() : BackendDescriptor(nullptr) {
         cudnnStatus_t status;
         for (uint64_t i = 0; i < bChoices.size(); i++) {
             status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR, &bChoices[i]);
@@ -72,9 +72,9 @@ class EngineConfig : public BackendDescriptor {
             }
         }
     }
-    EngineConfig(EngineConfig const &) = delete;
-    EngineConfig &
-    operator=(EngineConfig const &) = delete;
+    EngineConfig_v8(EngineConfig_v8 const &) = delete;
+    EngineConfig_v8 &
+    operator=(EngineConfig_v8 const &) = delete;
 
     manager<cudnnBackendDescriptor_t> engine = nullptr;
     int64_t numKnobs                         = 0;
@@ -83,17 +83,17 @@ class EngineConfig : public BackendDescriptor {
 };
 
 ///
-/// EngineConfigBuilder Class
-/// Helper class used to build EngineConfig class
-class EngineConfigBuilder {
+/// EngineConfigBuilder_v8 Class
+/// Helper class used to build EngineConfig_v8 class
+class EngineConfigBuilder_v8 {
    public:
-    /** @defgroup EngineConfigBuilder
-     *  Set individual property of EngineConfig class
+    /** @defgroup EngineConfigBuilder_v8
+     *  Set individual property of EngineConfig_v8 class
      *  @{
      */
-    //! Set engine for the EngineConfig
+    //! Set engine for the EngineConfig_v8
     auto
-    setEngine(Engine const &engine_) -> EngineConfigBuilder & {
+    setEngine(Engine_v8 const &engine_) -> EngineConfigBuilder_v8 & {
         m_engine_config.engine   = engine_.get_desc();
         auto &knobs              = engine_.getKnobs();
         m_engine_config.numKnobs = knobs.size();
@@ -131,9 +131,9 @@ class EngineConfigBuilder {
     }
     /** @} */
 
-    //! constructs the Engine Config by calling the cudnn API
+    //! constructs the Engine_v8 Config by calling the cudnn API
     //! Throws the appropriate error message
-    EngineConfig &&
+    EngineConfig_v8 &&
     build() {
         if (m_engine_config.status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_engine_config,
@@ -195,14 +195,14 @@ class EngineConfigBuilder {
         return std::move(m_engine_config);
     }
 
-    explicit EngineConfigBuilder()                   = default;
-    ~EngineConfigBuilder()                           = default;
-    EngineConfigBuilder(EngineConfigBuilder &&)      = delete;
-    EngineConfigBuilder(EngineConfigBuilder const &) = delete;
-    EngineConfigBuilder &
-    operator=(EngineConfigBuilder const &) = delete;
+    explicit EngineConfigBuilder_v8()                   = default;
+    ~EngineConfigBuilder_v8()                           = default;
+    EngineConfigBuilder_v8(EngineConfigBuilder_v8 &&)      = delete;
+    EngineConfigBuilder_v8(EngineConfigBuilder_v8 const &) = delete;
+    EngineConfigBuilder_v8 &
+    operator=(EngineConfigBuilder_v8 const &) = delete;
 
    private:
-    EngineConfig m_engine_config;
+    EngineConfig_v8 m_engine_config;
 };
 }

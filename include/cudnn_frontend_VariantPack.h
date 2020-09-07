@@ -16,7 +16,7 @@
 namespace cudnn_frontend {
 
 ///
-/// VariantPack Class
+/// VariantPack_v8 Class
 /// This class tells the Configuration of the Engine in terms of the knob
 /// choices
 /// Properties:
@@ -24,12 +24,12 @@ namespace cudnn_frontend {
 ///    - Choice
 ///    - Engine
 ///
-/// Use VariantPackBuilder to build this class.
+/// Use VariantPackBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
 ///
-class VariantPack : public BackendDescriptor {
+class VariantPack_v8 : public BackendDescriptor {
    public:
-    friend class VariantPackBuilder;
+    friend class VariantPackBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -37,24 +37,24 @@ class VariantPack : public BackendDescriptor {
            << " has " << num_ptrs << " data pointers";
         return ss.str();
     }
-    VariantPack(VariantPack &&from)
+    VariantPack_v8(VariantPack_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           workspace(from.workspace),
           num_ptrs(from.num_ptrs) {
         std::copy(std::begin(from.data_pointers), std::end(from.data_pointers), data_pointers);
         std::copy(std::begin(from.uid), std::end(from.uid), uid);
     }
-    ~VariantPack() {
+    ~VariantPack_v8() {
         if (desc != nullptr) {
             ::cudnnBackendDestroyDescriptor(desc);
         }
     }
 
    private:
-    VariantPack()                    = default;
-    VariantPack(VariantPack const &) = delete;
-    VariantPack &
-    operator=(VariantPack const &) = delete;
+    VariantPack_v8()                    = default;
+    VariantPack_v8(VariantPack_v8 const &) = delete;
+    VariantPack_v8 &
+    operator=(VariantPack_v8 const &) = delete;
 
     void *workspace         = nullptr;
     void *data_pointers[10] = {nullptr};
@@ -63,30 +63,30 @@ class VariantPack : public BackendDescriptor {
 };
 
 ///
-/// VariantPackBuilder Class
-/// Helper class used to build VariantPack class
-class VariantPackBuilder {
+/// VariantPackBuilder_v8 Class
+/// Helper class used to build VariantPack_v8 class
+class VariantPackBuilder_v8 {
    public:
-    /** @defgroup VariantPackBuilder
-     *  Set individual property of VariantPack class
+    /** @defgroup VariantPackBuilder_v8
+     *  Set individual property of VariantPack_v8 class
      *  @{
      */
-    //! Set dataPointers for the VariantPack
+    //! Set dataPointers for the VariantPack_v8
     auto
-    setDataPointers(int64_t num_ptr, void **ptrs) -> VariantPackBuilder & {
+    setDataPointers(int64_t num_ptr, void **ptrs) -> VariantPackBuilder_v8 & {
         std::copy(ptrs, ptrs + num_ptr, m_variant_pack.data_pointers);
         m_variant_pack.num_ptrs = num_ptr;
         return *this;
     }
-    //! Set Uids for the VariantPack
+    //! Set Uids for the VariantPack_v8
     auto
-    setUids(int64_t num_uids, int64_t *uid) -> VariantPackBuilder & {
+    setUids(int64_t num_uids, int64_t *uid) -> VariantPackBuilder_v8 & {
         std::copy(uid, uid + num_uids, m_variant_pack.uid);
         return *this;
     }
     //! Initialize a set of pairs containing uid and data pointer.
     auto
-    setDataPointers(std::set<std::pair<uint64_t, void *>> const &data_pointers) -> VariantPackBuilder & {
+    setDataPointers(std::set<std::pair<uint64_t, void *>> const &data_pointers) -> VariantPackBuilder_v8 & {
         auto i = 0;
         for (auto &data_pointer : data_pointers) {
             m_variant_pack.uid[i]           = data_pointer.first;
@@ -98,7 +98,7 @@ class VariantPackBuilder {
     }
     //! Set Workspace
     auto
-    setWorkspacePointer(void *ws) -> VariantPackBuilder & {
+    setWorkspacePointer(void *ws) -> VariantPackBuilder_v8 & {
         m_variant_pack.workspace = ws;
         return *this;
     }
@@ -106,7 +106,7 @@ class VariantPackBuilder {
 
     //! constructs the Engine Config by calling the cudnn API
     //! Throws the appropriate error message
-    VariantPack &&
+    VariantPack_v8 &&
     build() {
         // Create a descriptor. Memory allocation happens here.
         auto status = CUDNN_STATUS_SUCCESS;
@@ -163,14 +163,14 @@ class VariantPackBuilder {
         return std::move(m_variant_pack);
     }
 
-    explicit VariantPackBuilder()                  = default;
-    ~VariantPackBuilder()                          = default;
-    VariantPackBuilder(VariantPackBuilder &&)      = delete;
-    VariantPackBuilder(VariantPackBuilder const &) = delete;
-    VariantPackBuilder &
-    operator=(VariantPackBuilder const &) = delete;
+    explicit VariantPackBuilder_v8()                  = default;
+    ~VariantPackBuilder_v8()                          = default;
+    VariantPackBuilder_v8(VariantPackBuilder_v8 &&)      = delete;
+    VariantPackBuilder_v8(VariantPackBuilder_v8 const &) = delete;
+    VariantPackBuilder_v8 &
+    operator=(VariantPackBuilder_v8 const &) = delete;
 
    private:
-    VariantPack m_variant_pack;
+    VariantPack_v8 m_variant_pack;
 };
 }

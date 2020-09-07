@@ -17,7 +17,7 @@
 namespace cudnn_frontend {
 
 ///
-/// Operation Class
+/// Operation_v8 Class
 /// This class has the properties of the operation
 /// Properties:
 ///    - xDesc
@@ -27,12 +27,12 @@ namespace cudnn_frontend {
 ///    - alpha
 ///    - beta
 ///
-/// Use OperationBuilder to build this class.
+/// Use OperationBuilder_v8 to build this class.
 /// Describe returns a string describing the convolution operation
 ///
-class Operation : public BackendDescriptor {
+class Operation_v8 : public BackendDescriptor {
    public:
-    friend class OperationBuilder;
+    friend class OperationBuilder_v8;
     std::string
     describe() const override {
         std::stringstream ss;
@@ -48,7 +48,7 @@ class Operation : public BackendDescriptor {
         return ss.str();
     }
 
-    Operation(Operation &&from)
+    Operation_v8(Operation_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           op_mode(from.op_mode),
           xdesc(from.xdesc),
@@ -66,7 +66,8 @@ class Operation : public BackendDescriptor {
         from.cdesc = nullptr;
     }
 
-    ~Operation() {
+    ~Operation_v8() {
+        std::cout << "Delete Operation " << (desc == nullptr)  << std::endl;
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
@@ -85,10 +86,10 @@ class Operation : public BackendDescriptor {
     }
 
    private:
-    Operation()                  = default;
-    Operation(Operation const &) = delete;
-    Operation &
-    operator=(Operation const &) = delete;
+    Operation_v8()                  = default;
+    Operation_v8(Operation_v8 const &) = delete;
+    Operation_v8 &
+    operator=(Operation_v8 const &) = delete;
 
     cudnnBackendDescriptorType_t op_mode = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
 
@@ -103,37 +104,37 @@ class Operation : public BackendDescriptor {
 };
 
 ///
-/// OperationBuilder Class
-/// Helper class used to build Tensor class
+/// OperationBuilder_v8 Class
+/// Helper class used to build Operation_v8 class
 
-class OperationBuilder {
+class OperationBuilder_v8 {
    public:
-    /** @defgroup OperationBuilder
-     *  Set individual property of Operation class
+    /** @defgroup OperationBuilder_v8
+     *  Set individual property of Operation_v8 class
      *  @{
      */
     auto
-    setxDesc(Tensor const &tensor) -> OperationBuilder & {
+    setxDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.xdesc = tensor.get_desc();
         return *this;
     }
     auto
-    setyDesc(Tensor const &tensor) -> OperationBuilder & {
+    setyDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.ydesc = tensor.get_desc();
         return *this;
     }
     auto
-    setwDesc(Tensor const &tensor) -> OperationBuilder & {
+    setwDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.wdesc = tensor.get_desc();
         return *this;
     }
     auto
-    setcDesc(ConvDesc const &conv) -> OperationBuilder & {
+    setcDesc(ConvDesc_v8 const &conv) -> OperationBuilder_v8 & {
         m_operation.cdesc = conv.get_desc();
         return *this;
     }
     auto
-    setOpMode(cudnnBackendDescriptorType_t mode) -> OperationBuilder & {
+    setOpMode(cudnnBackendDescriptorType_t mode) -> OperationBuilder_v8 & {
         if (!((mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
               (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
               (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR))) {
@@ -146,34 +147,34 @@ class OperationBuilder {
         return *this;
     }
     auto
-    setAlpha(float alpha) -> OperationBuilder & {
+    setAlpha(float alpha) -> OperationBuilder_v8 & {
         m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
         m_operation.alpha_s       = alpha;
         return *this;
     }
     auto
-    setAlpha(double alpha) -> OperationBuilder & {
+    setAlpha(double alpha) -> OperationBuilder_v8 & {
         m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         m_operation.alpha_d       = alpha;
         return *this;
     }
     auto
-    setBeta(float beta) -> OperationBuilder & {
+    setBeta(float beta) -> OperationBuilder_v8 & {
         m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
         m_operation.beta_s        = beta;
         return *this;
     }
     auto
-    setBeta(double beta) -> OperationBuilder & {
+    setBeta(double beta) -> OperationBuilder_v8 & {
         m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         m_operation.beta_d        = beta;
         return *this;
     }
     /** @} */
 
-    //! constructs the backend Operation by calling the cudnn API
+    //! constructs the backend Operation_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    Operation &&
+    Operation_v8 &&
     build() {
         if (m_operation.status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
@@ -458,6 +459,6 @@ class OperationBuilder {
     }
 
    private:
-    Operation m_operation;
+    Operation_v8 m_operation;
 };
 }

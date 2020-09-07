@@ -15,7 +15,7 @@
 
 namespace cudnn_frontend {
 ///
-/// ExecutionPlan Class
+/// ExecutionPlan_v8 Class
 /// This class tells the Configuration of the Engine in terms of the knob
 /// choices
 /// Properties:
@@ -23,25 +23,20 @@ namespace cudnn_frontend {
 ///    - Choice
 ///    - Engine
 ///
-/// Use ExecutionPlanBuilder to build this class.
+/// Use ExecutionPlanBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
 ///
-class ExecutionPlan : public BackendDescriptor {
+class ExecutionPlan_v8 : public BackendDescriptor {
    public:
-    friend class ExecutionPlanBuilder;
-    std::string
-    describe() const override {
-        std::stringstream ss;
-        ss << "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR :";
-        return ss.str();
-    }
-    ExecutionPlan(ExecutionPlan &&from)
+    friend class ExecutionPlanBuilder_v8;
+
+    ExecutionPlan_v8(ExecutionPlan_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           handle(from.handle),
           engine_config(from.engine_config) {
         from.engine_config = nullptr;
     }
-    ~ExecutionPlan() {
+    ~ExecutionPlan_v8() {
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }
@@ -50,7 +45,7 @@ class ExecutionPlan : public BackendDescriptor {
         }
     }
     /** @defgroup ExecutionPlanQuery
-     *  Query individual property of ExecutionPlan class
+     *  Query individual property of ExecutionPlan_v8 class
      *  @{
      */
     //! Query the workspace requirement for the given plan
@@ -74,40 +69,47 @@ class ExecutionPlan : public BackendDescriptor {
         return workSpaceSize;
     }
 
+    std::string
+    describe() const override {
+        std::stringstream ss;
+        ss << "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR :";
+        return ss.str();
+    }
+
    private:
-    ExecutionPlan()                      = default;
-    ExecutionPlan(ExecutionPlan const &) = delete;
-    ExecutionPlan &
-    operator=(ExecutionPlan const &) = delete;
+    ExecutionPlan_v8()                      = default;
+    ExecutionPlan_v8(ExecutionPlan_v8 const &) = delete;
+    ExecutionPlan_v8 &
+    operator=(ExecutionPlan_v8 const &) = delete;
 
     manager<cudnnBackendDescriptor_t> engine_config = nullptr;
     cudnnHandle_t handle                            = nullptr;
 };
 
 ///
-/// ExecutionPlanBuilder Class
-/// Helper class used to build ExecutionPlan class
-class ExecutionPlanBuilder {
+/// ExecutionPlanBuilder_v8 Class
+/// Helper class used to build ExecutionPlan_v8 class
+class ExecutionPlanBuilder_v8 {
    public:
-    /** @defgroup ExecutionPlanBuilder
-     *  Set individual property of ExecutionPlan class
+    /** @defgroup ExecutionPlanBuilder_v8
+     *  Set individual property of ExecutionPlan_v8 class
      *  @{
      */
-    //! Set engine for the ExecutionPlan
+    //! Set engine for the ExecutionPlan_v8
     auto
-    setHandle(cudnnHandle_t handle_) -> ExecutionPlanBuilder & {
+    setHandle(cudnnHandle_t handle_) -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.handle = handle_;
         return *this;
     }
     //! Set engine Config for the Plan
     auto
-    setEngineConfig(EngineConfig const &engine_config_) -> ExecutionPlanBuilder & {
+    setEngineConfig(EngineConfig_v8 const &engine_config_) -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.engine_config = engine_config_.get_desc();
         return *this;
     }
     //! Set engine Config for the Plan
     auto
-    setEngineConfig(cudnnBackendDescriptor_t &desc) -> ExecutionPlanBuilder & {
+    setEngineConfig(cudnnBackendDescriptor_t &desc) -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.engine_config = desc;
         desc                           = nullptr;
         return *this;
@@ -116,7 +118,7 @@ class ExecutionPlanBuilder {
 
     //! constructs the Engine Config by calling the cudnn API
     //! Throws the appropriate error message
-    ExecutionPlan &&
+    ExecutionPlan_v8 &&
     build() {
         if (m_execution_plan.handle == nullptr) {
             set_error_and_throw_exception(
@@ -174,14 +176,14 @@ class ExecutionPlanBuilder {
         return std::move(m_execution_plan);
     }
 
-    explicit ExecutionPlanBuilder()                    = default;
-    ~ExecutionPlanBuilder()                            = default;
-    ExecutionPlanBuilder(ExecutionPlanBuilder &&)      = delete;
-    ExecutionPlanBuilder(ExecutionPlanBuilder const &) = delete;
-    ExecutionPlanBuilder &
-    operator=(ExecutionPlanBuilder const &) = delete;
+    explicit ExecutionPlanBuilder_v8()                    = default;
+    ~ExecutionPlanBuilder_v8()                            = default;
+    ExecutionPlanBuilder_v8(ExecutionPlanBuilder_v8 &&)      = delete;
+    ExecutionPlanBuilder_v8(ExecutionPlanBuilder_v8 const &) = delete;
+    ExecutionPlanBuilder_v8 &
+    operator=(ExecutionPlanBuilder_v8 const &) = delete;
 
    private:
-    ExecutionPlan m_execution_plan;
+    ExecutionPlan_v8 m_execution_plan;
 };
 }
