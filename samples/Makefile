@@ -134,7 +134,7 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 ALL_LDFLAGS += $(addprefix -Xlinker ,$(EXTRA_LDFLAGS))
 
 # Common includes and paths for CUDA
-INCLUDES := -I$(CUDNN_WRAP_PATH)/contrib -I$(CUDNN_WRAP_PATH)/include -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/ppc64le-linux/include
+INCLUDES := -I$(CUDNN_WRAP_PATH)/contrib/catch2 -I$(CUDNN_WRAP_PATH)/include -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/ppc64le-linux/include
 LIBRARIES := -L$(CUDA_PATH)/lib64 -L$(CUDA_PATH)/targets/ppc64le-linux/lib
 
 ################################################################################
