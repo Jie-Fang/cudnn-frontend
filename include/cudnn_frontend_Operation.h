@@ -89,7 +89,6 @@ class Operation_v8 : public BackendDescriptor {
     }
 
     ~Operation_v8() {
-        std::cout << "Delete Operation " << (desc == nullptr)  << std::endl;
         if (desc != nullptr) {
             cudnnBackendDestroyDescriptor(desc);
         }

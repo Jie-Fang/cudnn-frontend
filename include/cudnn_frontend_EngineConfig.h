@@ -228,3 +228,18 @@ class EngineConfigBuilder_v8 {
     EngineConfig_v8 m_engine_config;
 };
 }
+
+///
+/// EngineConfigList class 
+/// This is a RAII type class that holds naked 
+/// EngineConfig backendDescriptor.
+/// The purpose of this class is to provide an
+/// easy interface to store the EngineConfigs generated
+/// from various source and apply a filter. 
+
+class EngineConfigList : public std::vector<cudnnBackendDescriptor_t> {
+    public:
+    ~EngineConfigList() {
+        for_each(begin(), end(),[](cudnnBackendDescriptor_t const& p) {cudnnBackendDestroyDescriptor(p);});
+    }
+};
