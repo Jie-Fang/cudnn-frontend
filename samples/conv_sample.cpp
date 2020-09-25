@@ -293,7 +293,7 @@ void run_with_external_config (
         auto &fallback_list = fallback.getFallbackList();
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
 
-        EngineConfigList filtered_configs;
+        cudnn_frontend::EngineConfigList filtered_configs;
         cudnn_frontend::filter(engine_config, filtered_configs, cudnn_frontend::isNonDeterministic);
         cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
 
