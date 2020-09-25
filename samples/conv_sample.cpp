@@ -293,7 +293,7 @@ void run_with_external_config (
         auto &fallback_list = fallback.getFallbackList();
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
 
-        std::vector <cudnnBackendDescriptor_t> filtered_configs;
+        EngineConfigList filtered_configs;
         cudnn_frontend::filter(engine_config, filtered_configs, cudnn_frontend::isNonDeterministic);
         cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
 
@@ -305,13 +305,6 @@ void run_with_external_config (
             .setHandle(handle_)
             .setEngineConfig(filtered_configs[0])
             .build();
-
-        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
-        for (auto i = 0; i < filtered_configs.size(); i++) {
-            if (filtered_configs[i] != nullptr) {
-                cudnnBackendDestroyDescriptor(filtered_configs[i]);
-            }
-        }
 
         std::cout << plan.describe() << std::endl;
         auto workspace_size = plan.getWorkspaceSize(); 
