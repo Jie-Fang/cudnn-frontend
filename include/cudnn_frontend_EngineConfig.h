@@ -227,7 +227,6 @@ class EngineConfigBuilder_v8 {
    private:
     EngineConfig_v8 m_engine_config;
 };
-}
 
 ///
 /// EngineConfigList class 
@@ -243,3 +242,4 @@ class EngineConfigList : public std::vector<cudnnBackendDescriptor_t> {
         for_each(begin(), end(),[](cudnnBackendDescriptor_t const& p) {cudnnBackendDestroyDescriptor(p);});
     }
 };
+}
