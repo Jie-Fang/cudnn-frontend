@@ -77,3 +77,18 @@ void run_with_external_config(
     float * devPtrI,
     float * devPtrF,
     float * devPtrO);
+
+void
+run_conv_bias_add_activation(
+    int64_t* x_dim_padded,
+    int64_t* pad,
+    int64_t* convstride,
+    int64_t* dilation,
+    int64_t* w_dim_padded,
+    int64_t* y_dim_padded,
+    cudnnDataType_t dataType,
+    float * devPtrX,
+    float * devPtrW,
+    float * devPtrY,
+    float * devPtrZ,
+    float * devPtrB);

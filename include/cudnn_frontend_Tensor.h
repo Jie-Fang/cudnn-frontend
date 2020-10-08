@@ -76,7 +76,8 @@ class Tensor_v8 : public BackendDescriptor {
           data_type(from.data_type),
           id(from.id),
           alignment(from.alignment),
-          nDims(from.nDims) {
+          nDims(from.nDims),
+          isVirtual(from.isVirtual) {
         std::copy(std::begin(from.btensor_dimA), std::end(from.btensor_dimA), btensor_dimA);
         std::copy(std::begin(from.btensor_strA), std::end(from.btensor_strA), btensor_strA);
         from.desc = nullptr;
@@ -100,6 +101,7 @@ class Tensor_v8 : public BackendDescriptor {
     int64_t id                              = -1;
     int64_t alignment                       = -1;
     int64_t nDims                           = -1;
+    bool    isVirtual                       = false;
 };
 
 ///
@@ -140,6 +142,12 @@ class TensorBuilder_v8 {
     auto
     setAlignment(int64_t alignment_) -> TensorBuilder_v8 & {
         m_tensor.alignment = alignment_;
+        return *this;
+    }
+        //! Set Alignment of the tensor
+    auto
+    setVirtual() -> TensorBuilder_v8 & {
+        m_tensor.isVirtual = true;
         return *this;
     }
     /** @} */
@@ -232,6 +240,16 @@ class TensorBuilder_v8 {
                 status,
                 "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT Failed");
             return std::move(m_tensor);
+        }
+        if (m_tensor.isVirtual) {
+            cudnnBackendSetAttribute(m_tensor.desc, CUDNN_ATTR_TENSOR_IS_VIRTUAL, CUDNN_TYPE_BOOLEAN, 1, &m_tensor.isVirtual);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_tensor,
+                    status,
+                    "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT Failed");
+                return std::move(m_tensor);
+            }
         }
 
         // Finalizing the descriptor

@@ -33,12 +33,15 @@
 #include "cudnn_frontend_OperationGraph.h"
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_VariantPack.h"
+#include "cudnn_frontend_PointWiseDesc.h"
 
 namespace cudnn_frontend {
     using Tensor = Tensor_v8;
     using TensorBuilder = TensorBuilder_v8;
     using ConvDesc = ConvDesc_v8;
     using ConvDescBuilder = ConvDescBuilder_v8;
+    using PointWiseDescBuilder = PointWiseDescBuilder_v8;
+    using PointWiseDesc = PointWiseDesc_v8;
     using Operation = Operation_v8;
     using OperationBuilder = OperationBuilder_v8;
     using OperationGraph = OperationGraph_v8;
