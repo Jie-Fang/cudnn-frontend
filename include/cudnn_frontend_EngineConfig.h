@@ -239,7 +239,8 @@ class EngineConfigBuilder_v8 {
 class EngineConfigList : public std::vector<cudnnBackendDescriptor_t> {
     public:
     ~EngineConfigList() {
-        for_each(begin(), end(),[](cudnnBackendDescriptor_t const& p) {cudnnBackendDestroyDescriptor(p);});
+        for_each(begin(), end(),[](cudnnBackendDescriptor_t const& p) {
+                if (p != nullptr) {cudnnBackendDestroyDescriptor(p);} });
     }
 };
 }

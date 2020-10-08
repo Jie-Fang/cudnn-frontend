@@ -116,13 +116,24 @@ public:
     T_ELEM* devPtrX = NULL;
     T_ELEM* devPtrW = NULL;
     T_ELEM* devPtrY = NULL;
-    T_ELEM* hostX     = NULL;
-    T_ELEM* hostW     = NULL;
-    T_ELEM* hostY     = NULL;
+    T_ELEM* devPtrZ = NULL;
+    T_ELEM* devPtrB = NULL;
+    T_ELEM* devPtrAfterAdd = NULL;
+    T_ELEM* devPtrAfterConv = NULL;
+    T_ELEM* devPtrAfterBias = NULL;
+
+    T_ELEM* hostX          = NULL;
+    T_ELEM* hostW          = NULL;
+    T_ELEM* hostY          = NULL;
+    T_ELEM* hostZ          = NULL;
+    T_ELEM* hostB          = NULL;
+    T_ELEM* hostAfterAdd   = NULL;
+    T_ELEM* hostAfterConv  = NULL;
+    T_ELEM* hostAfterBias  = NULL;
     T_ELEM* host_ref = NULL;
 
 
- explicit SurfaceManager(int64_t Xsize, int64_t Wsize, int64_t Ysize, int ref_size) {
+explicit SurfaceManager(int64_t Xsize, int64_t Wsize, int64_t Ysize, int ref_size) {
     checkCudaErr(cudaMalloc((void**)&(devPtrX), (Xsize) * sizeof(devPtrX[0])));
     checkCudaErr(cudaMalloc((void**)&(devPtrW), (Wsize) * sizeof(devPtrW[0])));
     checkCudaErr(cudaMalloc((void**)&(devPtrY), (Ysize) * sizeof(devPtrY[0])));
@@ -142,13 +153,65 @@ public:
     checkCudaErr(cudaDeviceSynchronize());
 }
 
+explicit SurfaceManager(int64_t Xsize, int64_t Wsize, int64_t Ysize, int64_t Bsize, bool isConvBiasAdd) {
+    checkCudaErr(cudaMalloc((void**)&(devPtrX), (Xsize) * sizeof(devPtrX[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrW), (Wsize) * sizeof(devPtrW[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrY), (Ysize) * sizeof(devPtrY[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrZ), (Ysize) * sizeof(devPtrZ[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrB), (Bsize) * sizeof(devPtrB[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrAfterConv), (Ysize) * sizeof(devPtrAfterConv[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrAfterAdd), (Ysize) * sizeof(devPtrAfterAdd[0])));
+    checkCudaErr(cudaMalloc((void**)&(devPtrAfterBias), (Ysize) * sizeof(devPtrAfterBias[0])));
+
+    hostX     = (T_ELEM*) calloc(Xsize, sizeof(hostX[0]));
+    hostW     = (T_ELEM*) calloc(Wsize, sizeof(hostW[0]));
+    hostY     = (T_ELEM*) calloc(Ysize, sizeof(hostY[0]));
+    hostZ     = (T_ELEM*) calloc(Ysize, sizeof(hostZ[0]));
+    hostB     = (T_ELEM*) calloc(Bsize, sizeof(hostB[0]));
+    hostAfterConv = (T_ELEM*) calloc(Ysize, sizeof(hostAfterConv[0]));
+    hostAfterAdd  = (T_ELEM*) calloc(Ysize, sizeof(hostAfterAdd[0]));
+    hostAfterBias = (T_ELEM*) calloc(Ysize, sizeof(hostAfterBias[0]));
+    host_ref  = (T_ELEM*) calloc(Ysize, sizeof(host_ref[0]));
+
+    initImage(hostX, Xsize);
+    initImage(hostW, Wsize);
+    initImage(hostY, Ysize);
+    initImage(hostZ, Ysize);
+    initImage(hostB, Bsize);
+    initImage(hostAfterAdd, Ysize);
+    initImage(hostAfterBias, Ysize);
+    initImage(hostAfterConv, Ysize);
+    
+    checkCudaErr(cudaMemcpy(devPtrX, hostX, sizeof(hostX[0]) * Xsize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrW, hostW, sizeof(hostW[0]) * Wsize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrY, hostY, sizeof(hostY[0]) * Ysize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrZ, hostZ, sizeof(hostZ[0]) * Ysize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrB, hostB, sizeof(hostB[0]) * Bsize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrAfterAdd, hostAfterAdd, sizeof(hostAfterAdd[0]) * Ysize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrAfterBias, hostAfterBias, sizeof(hostAfterBias[0]) * Ysize, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devPtrAfterConv, hostAfterConv, sizeof(hostAfterConv[0]) * Ysize, cudaMemcpyHostToDevice));
+
+    checkCudaErr(cudaDeviceSynchronize());
+}
+
 ~SurfaceManager() {
     if (devPtrX) cudaFree(devPtrX);
     if (devPtrW) cudaFree(devPtrW);
     if (devPtrY) cudaFree(devPtrY);
+    if (devPtrZ) cudaFree(devPtrZ);
+    if (devPtrB) cudaFree(devPtrB);
+    if (devPtrAfterAdd) cudaFree(devPtrAfterAdd);
+    if (devPtrAfterBias) cudaFree(devPtrAfterBias);
+    if (devPtrAfterConv) cudaFree(devPtrAfterConv);
+
     if (hostX) free(hostX);
     if (hostW) free(hostW);
     if (hostY) free(hostY);
+    if (hostZ) free(hostZ);
+    if (hostB) free(hostB);
+    if (hostAfterAdd) free(hostAfterAdd);
+    if (hostAfterBias) free(hostAfterBias);
+    if (hostAfterConv) free(hostAfterConv);
     if (host_ref) free(host_ref);
 }
 
