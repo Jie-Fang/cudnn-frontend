@@ -22,6 +22,7 @@
 
 #pragma once
 #include <exception>
+#include <string>
 
 #include "cudnn_backend_base.h"
 
@@ -56,7 +57,7 @@ set_error_and_throw_exception(BackendDescriptor* desc, cudnnStatus_t status, con
         desc->set_error(message);
     }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
-    throw cudnnException(message);
+    throw cudnnException(std::string(std::string(message) + std::string(" cudnn_status: ") + std::to_string(status)).c_str());
 #endif
 }
 }
