@@ -398,7 +398,7 @@ void run_with_external_config (
             .build();
 
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
-        auto &engine_config = heuristics.getEngineConfig();
+        auto &engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
 
         auto fallback = cudnn_frontend::EngineFallbackListBuilder()
             .setOperationGraph(opGraph)
@@ -408,7 +408,7 @@ void run_with_external_config (
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
 
         cudnn_frontend::EngineConfigList filtered_configs;
-        cudnn_frontend::filter(engine_config, filtered_configs, cudnn_frontend::isNonDeterministic);
+        cudnn_frontend::filter(engine_config, filtered_configs, cudnn_frontend::isNonDeterministicOrisDowncasting);
         cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
 
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;

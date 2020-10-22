@@ -45,9 +45,10 @@ static bool allowAll(cudnnBackendDescriptor_t & engine_config) {
     return false;
 }
 
-static bool
-isNonDeterministic(cudnnBackendDescriptor_t &engine_config) {
-    bool isNondeterministic         = false;
+template <cudnnBackendNumericalNote_t NUMERIC_NOTE>
+bool
+hasNumericalNote(cudnnBackendDescriptor_t &engine_config) {
+    bool hasNumerics         = false;
     cudnnBackendDescriptor_t engine = nullptr;
     cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &engine);
     int64_t engine_count = -1;
@@ -63,12 +64,33 @@ isNonDeterministic(cudnnBackendDescriptor_t &engine_config) {
                                  &elem_count,
                                  notes);
         if (std::any_of(notes, notes + elem_count, [](cudnnBackendNumericalNote_t note) {
-                return note == CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC;
+                return note == NUMERIC_NOTE;
             })) {
-            isNondeterministic = true;
+            hasNumerics = true;
         }
     }
     cudnnBackendDestroyDescriptor(engine);
-    return isNondeterministic;
+    return hasNumerics;
 }
+
+static bool 
+isNonDeterministic(cudnnBackendDescriptor_t &engine_config) {
+    return hasNumericalNote<CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC>(engine_config);
+}
+
+static bool 
+isReducedPrecisionReduction(cudnnBackendDescriptor_t &engine_config) {
+    return hasNumericalNote<CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION>(engine_config);
+}
+
+static bool 
+isDownConvertingInputs(cudnnBackendDescriptor_t &engine_config) {
+    return hasNumericalNote<CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS>(engine_config);
+}
+
+static bool 
+isNonDeterministicOrisDowncasting(cudnnBackendDescriptor_t &engine_config) {
+    return isNonDeterministic(engine_config) || isDownConvertingInputs(engine_config);
+}
+
 }
