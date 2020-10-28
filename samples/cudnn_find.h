@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */ 
+
+
+#pragma once
+
+#include <map>
+
+struct executionOption {
+    cudnn_frontend::ExecutionPlan plan; // One can get the underlying EngineConfig from the ExecutionPlan
+    float    time_ms;
+};
+
+using executionOptions = std::vector<struct executionOption>;
+using executionPlans   = std::vector<cudnn_frontend::ExecutionPlan>;
+using engineConfigs    = std::vector<cudnn_frontend::EngineConfig>;
+using Predicate = std::function<bool(cudnn_frontend::ExecutionPlan & plan)>;
+
+auto cudnnFind(cudnnHandle_t handle, cudnn_frontend::OperationGraph &&opGraph, cudnn_frontend::VariantPack &&variantPack, Predicate) -> executionPlans;
+
+using engine_config_generator = std::function<engineConfigs(cudnn_frontend::OperationGraph&&)>;
+class EngineConfigGenerator {
+    private:
+        std::vector<engine_config_generator> engine_config_generators;
+        EngineConfigGenerator() = default;
+    public:
+        void register_engine_config_generator(engine_config_generator fn_ptr) { engine_config_generators.push_back(fn_ptr);};
+        auto generate_engine_config(cudnn_frontend::OperationGraph &&opGraph) -> engineConfigs {
+            engineConfigs engine_configs;
+            for (auto fn : engine_config_generators) {
+                // TODO: Fix compiler error
+                // auto new_engine_config = fn(std::move(opGraph));
+                // std::move(new_engine_config.begin(), new_engine_config.end(), std::inserter(engine_configs, engine_configs.end()));
+                for (auto& cfg : fn(std::move(opGraph))) {
+                    engine_configs.push_back(std::move(cfg));
+                }
+            }
+            return engine_configs;
+        }
+        static EngineConfigGenerator& getInstance() {
+            static EngineConfigGenerator instance;
+            return instance;
+        }
+};
+
+// Filter out the execution plan based on the prerequisite conditions.
+auto filter(Predicate pred, executionPlans & plans) -> executionPlans {
+    executionPlans filtered_plans;
+    // TODO: fix compiler error
+    // std::copy_if(std::make_move_iterator(begin(plans)), std::make_move_iterator(end(plans)), back_inserter(filtered_plans), pred);
+    for (auto& plan : plans) {
+        if (pred(plan)) {
+            filtered_plans.push_back(std::move(plan));
+        }
+    }
+    return filtered_plans;
+}
+
+// Execute each filtered plan.
+auto time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::VariantPack &&variantPack) -> executionPlans {
+    executionPlans time_sorted_plans;
+    std::map <float, cudnn_frontend::ExecutionPlan &> timed_execution_plans;
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaDeviceSynchronize();
+    float time_ms;
+
+    for (auto& plan : plans) {
+        cudaEventRecord(start);
+
+        ::cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&time_ms, start, stop);
+
+        timed_execution_plans.insert({time_ms, plan});
+        printf("[RA] Plan finished in %3.4f ms\n",time_ms);fflush(0);
+    }
+    std::transform(
+        timed_execution_plans.begin(),
+        timed_execution_plans.end(),
+        std::back_inserter(time_sorted_plans),
+        [](const std::map<float, cudnn_frontend::ExecutionPlan &>::value_type &pair) {
+            return std::move(pair.second);
+        });
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    return time_sorted_plans;
+}
+
+auto cudnnFind(cudnnHandle_t handle, cudnn_frontend::OperationGraph &&opGraph, cudnn_frontend::VariantPack &&variantPack, Predicate pred) -> executionPlans {
+    // Creating a set of execution plans that are supported.
+    executionPlans plans;
+    for(auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(std::move(opGraph))) { // Transform a engineConfig into a plan
+         plans.push_back(cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build()); // Use a try catch block if the plan is not supported.
+    }
+    return time_sorted_plan(handle, filter(pred,plans), std::move(variantPack));
+}
