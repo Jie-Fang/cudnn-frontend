@@ -47,12 +47,8 @@ class EngineConfigGenerator {
         auto generate_engine_config(cudnn_frontend::OperationGraph &&opGraph) -> engineConfigs {
             engineConfigs engine_configs;
             for (auto fn : engine_config_generators) {
-                // TODO: Fix compiler error
-                // auto new_engine_config = fn(std::move(opGraph));
-                // std::move(new_engine_config.begin(), new_engine_config.end(), std::inserter(engine_configs, engine_configs.end()));
-                for (auto& cfg : fn(std::move(opGraph))) {
-                    engine_configs.push_back(std::move(cfg));
-                }
+                auto new_engine_config = fn(std::move(opGraph));
+                std::copy(std::make_move_iterator(begin(new_engine_config)), std::make_move_iterator(end(new_engine_config)), std::back_inserter(engine_configs));
             }
             return engine_configs;
         }
@@ -69,7 +65,7 @@ auto filter(Predicate pred, executionPlans & plans) -> executionPlans {
     // std::copy_if(std::make_move_iterator(begin(plans)), std::make_move_iterator(end(plans)), back_inserter(filtered_plans), pred);
     for (auto& plan : plans) {
         if (pred(plan)) {
-            filtered_plans.push_back(std::move(plan));
+            filtered_plans.emplace_back(std::move(plan));
         }
     }
     return filtered_plans;

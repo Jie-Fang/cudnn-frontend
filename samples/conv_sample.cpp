@@ -22,7 +22,7 @@
 
 
 #include "conv_sample.h"
-#include "cudnn_find.h"
+#include "cudnn_frontend_find.h"
 
 enum {
     X_TENSOR,
