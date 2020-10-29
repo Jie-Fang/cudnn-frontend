@@ -33,7 +33,7 @@ struct executionOption {
 
 using executionOptions = std::vector<struct executionOption>;
 using executionPlans   = std::vector<cudnn_frontend::ExecutionPlan>;
-using engineConfigs    = std::vector<cudnn_frontend::EngineConfig>;
+using engineConfigs    = std::vector<cudnnBackendDescriptor_t>;
 using Predicate        = std::function<bool(cudnn_frontend::ExecutionPlan & plan)>;
 
 enum class CudnnFindSamplingTechnique {

@@ -657,8 +657,8 @@ void run_from_cudnn_find (
             return plan.getWorkspaceSize() == 0;
         };
 
-        auto heurgen_method = [](cudnn_frontend::OperationGraph & opGraph) -> std::vector<cudnn_frontend::EngineConfig> {
-            std::vector<cudnn_frontend::EngineConfig> engine_configs;
+        auto heurgen_method = [](cudnn_frontend::OperationGraph & opGraph) -> std::vector<cudnnBackendDescriptor_t> {
+            std::vector<cudnnBackendDescriptor_t> engine_configs;
             auto total_engines = opGraph.getEngineCount();
 
             for (int i = 0; i < total_engines; i++) {
@@ -668,26 +668,24 @@ void run_from_cudnn_find (
                         .setOperationGraph(opGraph)
                         .build();
 
-                    engine_configs.push_back(cudnn_frontend::EngineConfigBuilder().setEngine(engine).build());
+                    auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+                    engine_configs.push_back(engine_config.get_desc());
                 } catch (cudnn_frontend::cudnnException e) {}
             }
             return engine_configs;
         };
 
-        auto fallback_method = [](cudnn_frontend::OperationGraph & opGraph) -> std::vector<cudnn_frontend::EngineConfig> {
-            std::vector<cudnn_frontend::EngineConfig> engine_configs;
-            // TODO: implement getFallbackEngineConfigs routine?
-/*
+        auto fallback_method = [](cudnn_frontend::OperationGraph & opGraph) -> std::vector<cudnnBackendDescriptor_t> {
             auto fallback = cudnn_frontend::EngineFallbackListBuilder()
                 .setOperationGraph(opGraph)
                 .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
                 .build();
             auto &fallback_list = fallback.getFallbackList();
 
-            cudnn_frontend::EngineConfigList filtered_configs;
+            std::vector<cudnnBackendDescriptor_t> filtered_configs;
             cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
-*/
-            return engine_configs;
+
+            return filtered_configs;
         };
 
         EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
