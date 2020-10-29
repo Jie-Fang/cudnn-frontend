@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <cudnn_frontend.h>
 #include <map>
 
 struct executionOption {
@@ -33,11 +34,15 @@ struct executionOption {
 using executionOptions = std::vector<struct executionOption>;
 using executionPlans   = std::vector<cudnn_frontend::ExecutionPlan>;
 using engineConfigs    = std::vector<cudnn_frontend::EngineConfig>;
-using Predicate = std::function<bool(cudnn_frontend::ExecutionPlan & plan)>;
+using Predicate        = std::function<bool(cudnn_frontend::ExecutionPlan & plan)>;
 
-auto cudnnFind(cudnnHandle_t handle, cudnn_frontend::OperationGraph &&opGraph, cudnn_frontend::VariantPack &&variantPack, Predicate) -> executionPlans;
+enum class CudnnFindSamplingTechnique {
+    CUDNN_FIND_SAMPLE_ONCE, // Sample once quick but may have unstable values 
+    CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE, // Sample 3 times and take median.
+    CUDNN_FIND_SAMPLE_TILL_STABLE  // Sample multiple times till stable.
+};
 
-using engine_config_generator = std::function<engineConfigs(cudnn_frontend::OperationGraph&&)>;
+using engine_config_generator = std::function<engineConfigs(cudnn_frontend::OperationGraph&)>;
 class EngineConfigGenerator {
     private:
         std::vector<engine_config_generator> engine_config_generators;
@@ -47,7 +52,7 @@ class EngineConfigGenerator {
         auto generate_engine_config(cudnn_frontend::OperationGraph &&opGraph) -> engineConfigs {
             engineConfigs engine_configs;
             for (auto fn : engine_config_generators) {
-                auto new_engine_config = fn(std::move(opGraph));
+                auto new_engine_config = fn(opGraph);
                 std::copy(std::make_move_iterator(begin(new_engine_config)), std::make_move_iterator(end(new_engine_config)), std::back_inserter(engine_configs));
             }
             return engine_configs;
@@ -62,7 +67,7 @@ class EngineConfigGenerator {
 auto filter(Predicate pred, executionPlans & plans) -> executionPlans {
     executionPlans filtered_plans;
     // TODO: fix compiler error
-    // std::copy_if(std::make_move_iterator(begin(plans)), std::make_move_iterator(end(plans)), back_inserter(filtered_plans), pred);
+    // std::copy_if(std::make_move_iterator(begin(plans)), std::make_move_iterator(end(plans)), std::back_inserter(filtered_plans), pred);
     for (auto& plan : plans) {
         if (pred(plan)) {
             filtered_plans.emplace_back(std::move(plan));
@@ -71,10 +76,14 @@ auto filter(Predicate pred, executionPlans & plans) -> executionPlans {
     return filtered_plans;
 }
 
-// Execute each filtered plan.
+template <CudnnFindSamplingTechnique samplingTechnique>
 auto time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::VariantPack &&variantPack) -> executionPlans {
     executionPlans time_sorted_plans;
     std::map <float, cudnn_frontend::ExecutionPlan &> timed_execution_plans;
+
+    const int maxIterCount = (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_ONCE) ? 1 :
+                             (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE) ? 3 : 100;
+    const float threshhold = 0.95f;
 
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
@@ -83,16 +92,39 @@ auto time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend
     float time_ms;
 
     for (auto& plan : plans) {
-        cudaEventRecord(start);
+        float time_ms       = 0.0f;
+        float total_time_ms = 0.0f;
+        float min_time_ms   = std::numeric_limits<float>::max();
 
+        // Warm-up run
         ::cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
+        cudaDeviceSynchronize();
 
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time_ms, start, stop);
+        for (int i = 0; i < maxIterCount; i++) {
+            cudaEventRecord(start);
 
-        timed_execution_plans.insert({time_ms, plan});
-        printf("[RA] Plan finished in %3.4f ms\n",time_ms);fflush(0);
+            ::cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
+
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&time_ms, start, stop);
+
+            if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
+                if (time_ms / min_time_ms < threshhold) {
+                    min_time_ms = std::min<float>(min_time_ms, time_ms);
+                } else {
+                    time_ms = std::min(min_time_ms, time_ms);
+                    break;
+                }
+            } else {
+                total_time_ms += time_ms;
+            }
+        }
+        if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
+            timed_execution_plans.insert({time_ms, plan});
+        } else {
+            timed_execution_plans.insert({total_time_ms / maxIterCount, plan});
+        }
     }
     std::transform(
         timed_execution_plans.begin(),
@@ -108,11 +140,14 @@ auto time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend
     return time_sorted_plans;
 }
 
+template <CudnnFindSamplingTechnique samplingTechnique>
 auto cudnnFind(cudnnHandle_t handle, cudnn_frontend::OperationGraph &&opGraph, cudnn_frontend::VariantPack &&variantPack, Predicate pred) -> executionPlans {
     // Creating a set of execution plans that are supported.
     executionPlans plans;
-    for(auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(std::move(opGraph))) { // Transform a engineConfig into a plan
-         plans.push_back(cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build()); // Use a try catch block if the plan is not supported.
+    for(auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(std::move(opGraph))) {
+        try {
+            plans.push_back(cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
+        } catch (cudnn_frontend::cudnnException e) {}
     }
-    return time_sorted_plan(handle, filter(pred,plans), std::move(variantPack));
+    return time_sorted_plan<samplingTechnique>(handle, filter(pred,plans), std::move(variantPack));
 }

@@ -22,7 +22,7 @@
 
 
 #include "conv_sample.h"
-#include "cudnn_frontend_find.h"
+#include <cudnn_frontend_find.h>
 
 enum {
     X_TENSOR,
@@ -653,43 +653,47 @@ void run_from_cudnn_find (
             .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
-        // New code
         auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan & plan) -> bool {
             return plan.getWorkspaceSize() == 0;
         };
 
-        auto heurgen_method = [](cudnn_frontend::OperationGraph &&opGraph) -> std::vector<cudnn_frontend::EngineConfig> {
+        auto heurgen_method = [](cudnn_frontend::OperationGraph & opGraph) -> std::vector<cudnn_frontend::EngineConfig> {
             std::vector<cudnn_frontend::EngineConfig> engine_configs;
             auto total_engines = opGraph.getEngineCount();
 
-//            for (int i = 0; i < total_engines; i++) {
-            for (int i = 0; i < 1; i++) {
-                auto engine = cudnn_frontend::EngineBuilder()
-                    .setGlobalEngineIdx(i)
-                    .setOperationGraph(opGraph)
-                    .build();
-/*
-                auto knobs = engine.getKnobs();
-                for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-                    std::cout << it->describe() << std::endl;
-                }
-                if (knobs.begin() != knobs.end()) {
-                    std::cout << "Updated knob choice" << std::endl;
-                    knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
-                    std::cout << knobs.begin()->describe() << std::endl;
-                }
-*/
-                engine_configs.push_back(cudnn_frontend::EngineConfigBuilder().setEngine(engine).build());
+            for (int i = 0; i < total_engines; i++) {
+                try {
+                    auto engine = cudnn_frontend::EngineBuilder()
+                        .setGlobalEngineIdx(i)
+                        .setOperationGraph(opGraph)
+                        .build();
+
+                    engine_configs.push_back(cudnn_frontend::EngineConfigBuilder().setEngine(engine).build());
+                } catch (cudnn_frontend::cudnnException e) {}
             }
             return engine_configs;
         };
 
-        // TODO: Fix compiler error
-        // auto heuristic_generator = std::bind(heurgen_method, std::move(opGraph));
-        // EngineConfigGenerator::getInstance().register_engine_config_generator(heuristic_generator);
-        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
+        auto fallback_method = [](cudnn_frontend::OperationGraph & opGraph) -> std::vector<cudnn_frontend::EngineConfig> {
+            std::vector<cudnn_frontend::EngineConfig> engine_configs;
+            // TODO: implement getFallbackEngineConfigs routine?
+/*
+            auto fallback = cudnn_frontend::EngineFallbackListBuilder()
+                .setOperationGraph(opGraph)
+                .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                .build();
+            auto &fallback_list = fallback.getFallbackList();
 
-        auto options = cudnnFind(handle_, std::move(opGraph), std::move(variantPack), sample_predicate_function);
+            cudnn_frontend::EngineConfigList filtered_configs;
+            cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
+*/
+            return engine_configs;
+        };
+
+        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
+        EngineConfigGenerator::getInstance().register_engine_config_generator(fallback_method);
+
+        auto options = cudnnFind<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(handle_, std::move(opGraph), std::move(variantPack), sample_predicate_function);
 
         cudnnStatus_t status = cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
 
