@@ -55,10 +55,11 @@ class EngineConfigGenerator {
     generate_engine_config(cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
         cudnn_frontend::EngineConfigList engine_configs;
         for (auto fn : engine_config_generators) {
-            std::vector<cudnnBackendDescriptor_t> new_engine_config = fn(opGraph);
-            std::copy(std::make_move_iterator(begin(new_engine_config)),
-                      std::make_move_iterator(end(new_engine_config)),
+            cudnn_frontend::EngineConfigList new_engine_config = fn(opGraph);
+            std::copy(new_engine_config.begin(),
+                      new_engine_config.end(),
                       std::back_inserter(engine_configs));
+            new_engine_config.clear();
         }
         return engine_configs;
     }
