@@ -616,8 +616,8 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() == 0;
         };
 
-        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> std::vector<cudnnBackendDescriptor_t> {
-            std::vector<cudnnBackendDescriptor_t> engine_configs;
+        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
+            cudnn_frontend::EngineConfigList engine_configs;
             auto total_engines = opGraph.getEngineCount();
 
             for (int i = 0; i < total_engines; i++) {
@@ -633,14 +633,14 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             return engine_configs;
         };
 
-        auto fallback_method = [](cudnn_frontend::OperationGraph& opGraph) -> std::vector<cudnnBackendDescriptor_t> {
+        auto fallback_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
             auto fallback = cudnn_frontend::EngineFallbackListBuilder()
                                 .setOperationGraph(opGraph)
                                 .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
                                 .build();
             auto& fallback_list = fallback.getFallbackList();
 
-            std::vector<cudnnBackendDescriptor_t> filtered_configs;
+            cudnn_frontend::EngineConfigList filtered_configs;
             cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
 
             return filtered_configs;

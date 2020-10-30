@@ -40,7 +40,7 @@ enum class CudnnFindSamplingTechnique {
     CUDNN_FIND_SAMPLE_TILL_STABLE       // Sample multiple times till stable.
 };
 
-using engine_config_generator = std::function<std::vector<cudnnBackendDescriptor_t>(cudnn_frontend::OperationGraph &)>;
+using engine_config_generator = std::function<cudnn_frontend::EngineConfigList(cudnn_frontend::OperationGraph &)>;
 class EngineConfigGenerator {
    private:
     std::vector<engine_config_generator> engine_config_generators;
@@ -55,7 +55,7 @@ class EngineConfigGenerator {
     generate_engine_config(cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
         cudnn_frontend::EngineConfigList engine_configs;
         for (auto fn : engine_config_generators) {
-            auto new_engine_config = fn(opGraph);
+            std::vector<cudnnBackendDescriptor_t> new_engine_config = fn(opGraph);
             std::copy(std::make_move_iterator(begin(new_engine_config)),
                       std::make_move_iterator(end(new_engine_config)),
                       std::back_inserter(engine_configs));
