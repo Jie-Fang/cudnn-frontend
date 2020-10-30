@@ -53,7 +53,7 @@ class EngineConfigGenerator {
         engine_config_generators.push_back(fn_ptr);
     };
     auto
-    generate_engine_config(cudnn_frontend::OperationGraph &&opGraph) -> engineConfigs {
+    generate_engine_config(cudnn_frontend::OperationGraph& opGraph) -> engineConfigs {
         engineConfigs engine_configs;
         for (auto fn : engine_config_generators) {
             auto new_engine_config = fn(opGraph);
@@ -162,7 +162,7 @@ cudnnFind(cudnnHandle_t handle,
           Predicate pred) -> executionOptions {
     // Creating a set of execution plans that are supported.
     executionPlans plans;
-    for (auto &engine_config : EngineConfigGenerator::getInstance().generate_engine_config(std::move(opGraph))) {
+    for (auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(opGraph)) {
         try {
             plans.push_back(
                 cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
