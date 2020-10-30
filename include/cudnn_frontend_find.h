@@ -32,7 +32,6 @@ struct executionOption {
 
 using executionOptions = std::vector<struct executionOption>;
 using executionPlans   = std::vector<cudnn_frontend::ExecutionPlan>;
-using engineConfigs    = std::vector<cudnnBackendDescriptor_t>;
 using Predicate        = std::function<bool(cudnn_frontend::ExecutionPlan &plan)>;
 
 enum class CudnnFindSamplingTechnique {
@@ -41,7 +40,7 @@ enum class CudnnFindSamplingTechnique {
     CUDNN_FIND_SAMPLE_TILL_STABLE       // Sample multiple times till stable.
 };
 
-using engine_config_generator = std::function<engineConfigs(cudnn_frontend::OperationGraph &)>;
+using engine_config_generator = std::function<std::vector<cudnnBackendDescriptor_t>(cudnn_frontend::OperationGraph &)>;
 class EngineConfigGenerator {
    private:
     std::vector<engine_config_generator> engine_config_generators;
@@ -53,8 +52,8 @@ class EngineConfigGenerator {
         engine_config_generators.push_back(fn_ptr);
     };
     auto
-    generate_engine_config(cudnn_frontend::OperationGraph& opGraph) -> engineConfigs {
-        engineConfigs engine_configs;
+    generate_engine_config(cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
+        cudnn_frontend::EngineConfigList engine_configs;
         for (auto fn : engine_config_generators) {
             auto new_engine_config = fn(opGraph);
             std::copy(std::make_move_iterator(begin(new_engine_config)),
