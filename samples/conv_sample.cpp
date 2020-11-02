@@ -613,7 +613,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
         auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan& plan) -> bool {
-            return plan.getWorkspaceSize() == 0;
+            return plan.getWorkspaceSize() != 0;
         };
 
         auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
@@ -651,7 +651,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
-            std::cout << "Plan=" << opt.plan.get_raw_desc() << " finished in " << opt.time_ms << " ms" << std::endl;
+            std::cout << "Plan=" << opt.plan.get_raw_desc() << " finished in " << opt.time_ms << " ms" << " workspace: " << opt.plan.getWorkspaceSize() << std::endl;
         });
 
         cudnnStatus_t status =

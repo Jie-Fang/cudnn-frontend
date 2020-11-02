@@ -75,7 +75,7 @@ auto
 filter(Predicate pred, executionPlans &plans) -> executionPlans {
     executionPlans filtered_plans;
     for (auto &plan : plans) {
-        if (pred(plan)) {
+        if (!pred(plan)) {
             filtered_plans.emplace_back(std::move(plan));
         }
     }

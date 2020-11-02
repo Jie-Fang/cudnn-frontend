@@ -256,7 +256,7 @@ TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
     checkCudaErr(cudaDeviceSynchronize());
 }
 
-TEST_CASE("Use cudnnFind for execution", "[frontend][heuristics][conv]" ) {
+TEST_CASE("Use cudnnFind for execution", "[frontend][cudnnFind][conv]" ) {
     INFO("TEST_CASE :: Use cudnnFind for engine generation");
     int64_t dimA[]        = {8, 32, 4, 4};
     int64_t filterdimA[]  = {32, 32, 1, 1};
