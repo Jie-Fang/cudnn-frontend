@@ -177,8 +177,6 @@ class OperationBuilder_v8 {
     auto
     setbDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         if (is_convolution_op == true) {
-            std::cout << is_convolution_op << " for op "  << m_operation.op_mode << std::endl;
-
             set_error_and_throw_exception(
                     &m_operation,
                     CUDNN_STATUS_BAD_PARAM,
@@ -336,8 +334,11 @@ class OperationBuilder_v8 {
                 status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, &m_operation.desc);
                 break;
             default:
-                throw(cudnnException("Check the operation op_mode you have set for Operation"));
-                break;
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check the operation op_mode you have set for Operation");
+                return std::move(m_operation);
         }
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnCreate Failed");
