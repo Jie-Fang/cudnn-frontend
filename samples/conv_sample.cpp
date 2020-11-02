@@ -617,20 +617,16 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         };
 
         auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
-            cudnn_frontend::EngineConfigList engine_configs;
-            auto total_engines = opGraph.getEngineCount();
+            auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                .build();
+            std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
 
-            for (int i = 0; i < total_engines; i++) {
-                try {
-                    auto engine =
-                        cudnn_frontend::EngineBuilder().setGlobalEngineIdx(i).setOperationGraph(opGraph).build();
-
-                    auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-                    engine_configs.push_back(engine_config.get_desc());
-                } catch (cudnn_frontend::cudnnException e) {
-                }
-            }
-            return engine_configs;
+            auto& engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::EngineConfigList filtered_configs;
+            cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::allowAll);
+            return filtered_configs;
         };
 
         auto fallback_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
@@ -641,6 +637,8 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             auto& fallback_list = fallback.getFallbackList();
 
             cudnn_frontend::EngineConfigList filtered_configs;
+            // We create this filter to pre-remove configs being passed to cudnnFind.
+            // This is just a sample and is not necessary
             cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
 
             return filtered_configs;

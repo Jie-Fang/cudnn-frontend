@@ -99,11 +99,10 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::Var
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaDeviceSynchronize();
-    float time_ms;
 
     for (auto &plan : plans) {
         float time_ms       = 0.0f;
-        float total_time_ms = 0.0f;
+        float final_time_ms = 0.0f;
         float min_time_ms   = std::numeric_limits<float>::max();
 
         // Warm-up run
@@ -120,21 +119,17 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::Var
             cudaEventElapsedTime(&time_ms, start, stop);
 
             if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
+                final_time_ms = std::min(min_time_ms, time_ms);
                 if (time_ms / min_time_ms < threshhold) {
-                    min_time_ms = std::min<float>(min_time_ms, time_ms);
+                    min_time_ms = final_time_ms;
                 } else {
-                    time_ms = std::min(min_time_ms, time_ms);
                     break;
                 }
             } else {
-                total_time_ms += time_ms;
+                final_time_ms = i == (maxIterCount / 2) ? time_ms : final_time_ms;
             }
         }
-        if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
-            timed_execution_plans.insert({time_ms, plan});
-        } else {
-            timed_execution_plans.insert({total_time_ms / maxIterCount, plan});
-        }
+        timed_execution_plans.insert({final_time_ms, plan});
     }
     std::transform(
         timed_execution_plans.begin(),
