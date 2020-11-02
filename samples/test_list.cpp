@@ -27,7 +27,6 @@
 #include "cpu_references.h"
 #include "conv_sample.h"
 
-#if 0
 TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" ) {
     INFO("TEST_CASE :: Use  global index for engine generation");
     int64_t dimA[]        = {1, 32, 4, 4};
@@ -256,7 +255,6 @@ TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 }
-#endif
 
 TEST_CASE("Use cudnnFind for execution", "[frontend][heuristics][conv]" ) {
     INFO("TEST_CASE :: Use cudnnFind for engine generation");
