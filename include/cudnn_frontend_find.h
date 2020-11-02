@@ -74,10 +74,6 @@ class EngineConfigGenerator {
 auto
 filter(Predicate pred, executionPlans &plans) -> executionPlans {
     executionPlans filtered_plans;
-    // TODO: fix compiler error
-    // std::copy_if(std::make_move_iterator(begin(plans)),
-    // std::make_move_iterator(end(plans)), std::back_inserter(filtered_plans),
-    // pred);
     for (auto &plan : plans) {
         if (pred(plan)) {
             filtered_plans.emplace_back(std::move(plan));
