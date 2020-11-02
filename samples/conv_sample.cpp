@@ -650,7 +650,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         EngineConfigGenerator::getInstance().register_engine_config_generator(fallback_method);
 
         auto options = cudnnFind<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
-            handle_, std::move(opGraph), std::move(variantPack), sample_predicate_function);
+            handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
             std::cout << "Plan=" << opt.plan.get_raw_desc() << " finished in " << opt.time_ms << " ms" << std::endl;

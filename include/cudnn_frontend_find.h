@@ -84,7 +84,7 @@ filter(Predicate pred, executionPlans &plans) -> executionPlans {
 
 template <CudnnFindSamplingTechnique samplingTechnique>
 auto
-time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::VariantPack &&variantPack)
+time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::VariantPack &variantPack)
     -> executionOptions {
     executionOptions time_sorted_plans;
     std::map<float, cudnn_frontend::ExecutionPlan &> timed_execution_plans;
@@ -154,7 +154,7 @@ template <CudnnFindSamplingTechnique samplingTechnique>
 auto
 cudnnFind(cudnnHandle_t handle,
           cudnn_frontend::OperationGraph &&opGraph,
-          cudnn_frontend::VariantPack &&variantPack,
+          cudnn_frontend::VariantPack &variantPack,
           Predicate pred) -> executionOptions {
     // Creating a set of execution plans that are supported.
     executionPlans plans;
@@ -165,5 +165,5 @@ cudnnFind(cudnnHandle_t handle,
         } catch (cudnn_frontend::cudnnException e) {
         }
     }
-    return time_sorted_plan<samplingTechnique>(handle, filter(pred, plans), std::move(variantPack));
+    return time_sorted_plan<samplingTechnique>(handle, filter(pred, plans), variantPack);
 }
