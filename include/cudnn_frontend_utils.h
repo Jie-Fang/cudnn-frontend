@@ -28,6 +28,7 @@
 
 namespace cudnn_frontend {
 
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
 class cudnnException : public std::runtime_error {
    public:
     cudnnException(const char *message) throw() : std::runtime_error(message) {}
@@ -36,17 +37,22 @@ class cudnnException : public std::runtime_error {
         return std::runtime_error::what();
     }
 };
+#endif
 
 static inline void
 throw_if(std::function<bool()> expr, const char *message) {
     if (expr()) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
         throw cudnnException(message);
+#endif
     }
 }
 static inline void
 throw_if(bool expr, const char *message) {
     if (expr) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
         throw cudnnException(message);
+#endif
     }
 }
 
