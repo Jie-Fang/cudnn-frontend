@@ -121,14 +121,14 @@ class TensorBuilder_v8 {
     }
     //! Set Dimensions of the tensor
     auto
-    setDim(int64_t ndim, int64_t *dim) -> TensorBuilder_v8 & {
+    setDim(int64_t ndim, int64_t const *dim) -> TensorBuilder_v8 & {
         std::copy((dim), dim + ndim, m_tensor.btensor_dimA);
         m_tensor.nDims = ndim;
         return *this;
     }
     //! Set Strides of the tensor
     auto
-    setStrides(int64_t ndim, int64_t *strides) -> TensorBuilder_v8 & {
+    setStrides(int64_t ndim, int64_t const *strides) -> TensorBuilder_v8 & {
         std::copy(strides, strides + ndim, m_tensor.btensor_strA);
         return *this;
     }
