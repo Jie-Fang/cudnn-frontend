@@ -33,7 +33,7 @@ static constexpr std::array<int64_t, 3> fallback_engine_wgrad_list = {0, 1, 20};
 class EngineFallbackList_v8 : public BackendDescriptor {
    private:
     auto
-    get_fallback_list_size(cudnnBackendDescriptorType_t type) -> int64_t {
+    get_fallback_list_size(cudnnBackendDescriptorType_t type) const -> int64_t {
         switch (type) {
             case CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR:
                 return fallback_engine_conv_list.size();

@@ -87,7 +87,7 @@ class OperationGraph_v8 : public BackendDescriptor {
      */
     //! Query the total count of the engines for the Operation Set
     auto
-    getEngineCount(void) -> const int64_t {
+    getEngineCount(void) const -> int64_t {
         int64_t global_count = -1;
         auto status          = cudnnBackendGetAttribute(
             desc, CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT, CUDNN_TYPE_INT64, 1, NULL, &global_count);

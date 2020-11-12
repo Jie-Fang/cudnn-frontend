@@ -105,7 +105,7 @@ class EngineHeuristics_v8 : public BackendDescriptor {
 
     //! Query the total count of the engine config for the Operation Set
     auto
-    getEngineConfigCount(void) -> int64_t {
+    getEngineConfigCount(void) const -> int64_t {
         cudnnStatus_t status;
         int64_t count = -1;
         status        = cudnnBackendGetAttribute(
