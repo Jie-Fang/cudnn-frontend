@@ -135,25 +135,25 @@ class ConvDescBuilder_v8 {
     }
     //! Set Padding Lower of the convDesc
     auto
-    setPrePadding(int64_t ndims, int64_t *padding) -> ConvDescBuilder_v8 & {
+    setPrePadding(int64_t ndims, int64_t const *padding) -> ConvDescBuilder_v8 & {
         std::copy(padding, padding + ndims, m_convDesc.padLower);
         return *this;
     }
     //! Set Padding Upper of the convDesc
     auto
-    setPostPadding(int64_t ndims, int64_t *padding) -> ConvDescBuilder_v8 & {
+    setPostPadding(int64_t ndims, int64_t const *padding) -> ConvDescBuilder_v8 & {
         std::copy(padding, padding + ndims, m_convDesc.padUpper);
         return *this;
     }
     //! Set Dilation of the convDesc
     auto
-    setDilation(int64_t ndims, int64_t *dilation) -> ConvDescBuilder_v8 & {
+    setDilation(int64_t ndims, int64_t const *dilation) -> ConvDescBuilder_v8 & {
         std::copy(dilation, dilation + ndims, m_convDesc.dilation);
         return *this;
     }
     //! Set Strides of the convDesc
     auto
-    setStrides(int64_t ndims, int64_t *strides) -> ConvDescBuilder_v8 & {
+    setStrides(int64_t ndims, int64_t const *strides) -> ConvDescBuilder_v8 & {
         std::copy(strides, strides + ndims, m_convDesc.stride);
         return *this;
     }
