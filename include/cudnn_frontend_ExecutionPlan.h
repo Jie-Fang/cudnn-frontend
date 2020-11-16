@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -98,8 +98,114 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         return ss.str();
     }
 
+    std::string
+    getTag() {
+        // Compute a unique tag for execution plan:
+        struct TempDescriptors {
+            cudnnBackendDescriptor_t extractedEngine = nullptr;
+            std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> extractedKnobs{nullptr};
+
+            ~TempDescriptors() {
+                for (auto &knob : extractedKnobs) {
+                    if (knob != nullptr) {
+                        cudnnBackendDestroyDescriptor(knob);
+                    }
+                }
+                if (extractedEngine != nullptr) {
+                    cudnnBackendDestroyDescriptor(extractedEngine);
+                }
+            }
+        };
+        auto status = CUDNN_STATUS_SUCCESS;
+        std::stringstream tag{""};
+        int64_t elemCount = 0, engineId = 0, numKnobs = 0;
+        TempDescriptors td;
+
+        status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &td.extractedEngine);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed when compute tag");
+            return tag.str();
+        }
+
+        for (auto &knob : td.extractedKnobs) {
+            status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR, &knob);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed when compute tag");
+                return tag.str();
+            }
+        }
+        status = cudnnBackendGetAttribute(
+            engine_config, CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &elemCount, &td.extractedEngine);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINECFG_ENGINE Failed");
+            return tag.str();
+        }
+        status = cudnnBackendGetAttribute(
+            td.extractedEngine, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &elemCount, &engineId);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINE_GLOBAL_INDEX Failed");
+            return tag.str();
+        }
+        tag << "engine" << engineId;
+
+        status = cudnnBackendGetAttribute(engine_config,
+                                          CUDNN_ATTR_ENGINECFG_KNOB_CHOICES,
+                                          CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                          CUDNN_KNOB_TYPE_COUNTS,
+                                          &numKnobs,
+                                          &td.extractedKnobs[0]);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINECFG_KNOB_CHOICES Failed");
+            return tag.str();
+        }
+        if (numKnobs > CUDNN_KNOB_TYPE_COUNTS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "numKnobs exceed the CUDNN_KNOB_TYPE_COUNTS");
+            return tag.str();
+        }
+        for (int64_t idx = 0; idx < numKnobs; ++idx) {
+            const cudnnBackendDescriptor_t &knob = td.extractedKnobs[idx];
+            cudnnBackendKnobType_t type          = CUDNN_KNOB_TYPE_COUNTS;
+            int64_t choice                       = -2;
+            status                               = cudnnBackendGetAttribute(
+                knob, CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE, CUDNN_TYPE_KNOB_TYPE, 1, nullptr, &type);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(this,
+                                              status,
+                                              "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                              "CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE Failed");
+                return tag.str();
+            }
+            status = cudnnBackendGetAttribute(
+                knob, CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE, CUDNN_TYPE_INT64, 1, nullptr, &choice);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(this,
+                                              status,
+                                              "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                              "CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE Failed");
+                return tag.str();
+            }
+            tag << "_knob" << type << "(" << choice << ")";
+        }
+
+        return tag.str();
+    }
+
    private:
-    ExecutionPlan_v8()                      = default;
+    ExecutionPlan_v8()                         = default;
     ExecutionPlan_v8(ExecutionPlan_v8 const &) = delete;
     ExecutionPlan_v8 &
     operator=(ExecutionPlan_v8 const &) = delete;
@@ -198,8 +304,8 @@ class ExecutionPlanBuilder_v8 {
         return std::move(m_execution_plan);
     }
 
-    explicit ExecutionPlanBuilder_v8()                    = default;
-    ~ExecutionPlanBuilder_v8()                            = default;
+    explicit ExecutionPlanBuilder_v8()                       = default;
+    ~ExecutionPlanBuilder_v8()                               = default;
     ExecutionPlanBuilder_v8(ExecutionPlanBuilder_v8 &&)      = delete;
     ExecutionPlanBuilder_v8(ExecutionPlanBuilder_v8 const &) = delete;
     ExecutionPlanBuilder_v8 &

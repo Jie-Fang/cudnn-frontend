@@ -243,6 +243,8 @@ run_from_heuristics(int64_t* x_dim_padded,
 
         auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config[0]).build();
 
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
         auto workspace_size = plan.getWorkspaceSize();
         std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
         void* workspace_ptr = nullptr;
@@ -316,6 +318,8 @@ run_from_global_index(int64_t* x_dim_padded,
         auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
         std::cout << engine_config.describe() << std::endl;
         auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();
         std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
@@ -391,6 +395,8 @@ run_with_external_config(int64_t* x_dim_padded,
 
         auto plan =
             cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0]).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         std::cout << plan.describe() << std::endl;
         auto workspace_size = plan.getWorkspaceSize();
@@ -552,6 +558,8 @@ run_conv_bias_add_activation(int64_t* x_dim_padded,
         std::cout << engine_config.describe() << std::endl;
 
         auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();
         std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
