@@ -73,7 +73,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
      */
     //! Query the workspace requirement for the given plan
     auto
-    getWorkspaceSize(void) -> const int64_t {
+    getWorkspaceSize(void) const -> int64_t {
         uint64_t workSpaceSize = 0;
         auto status            = cudnnBackendGetAttribute(
             desc, CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL, &workSpaceSize);

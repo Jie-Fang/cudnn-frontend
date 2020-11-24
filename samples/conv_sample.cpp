@@ -620,7 +620,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         auto variantPack  = cudnn_frontend::VariantPackBuilder().setDataPointers(3, data_ptrs).setUids(3, uids).build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
-        auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan& plan) -> bool {
+        auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan const& plan) -> bool {
             return plan.getWorkspaceSize() != 0;
         };
 

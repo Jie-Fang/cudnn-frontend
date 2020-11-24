@@ -61,13 +61,13 @@ class BackendDescriptor {
 
     //! Set status of the descriptor
     void
-    set_status(cudnnStatus_t const status_) {
+    set_status(cudnnStatus_t const status_) const {
         status = status_;
     }
 
     //! Set Diagonistic error message.
     void
-    set_error(const char* message) {
+    set_error(const char* message) const {
         err_msg = message;
     }
 
@@ -88,7 +88,7 @@ class BackendDescriptor {
 
     mutable cudnnBackendDescriptor_t desc = nullptr;
 
-    cudnnStatus_t status = CUDNN_STATUS_SUCCESS;  //!< Error code if any being set
-    std::string err_msg;                          //!< Error message if any being set
+    mutable cudnnStatus_t status = CUDNN_STATUS_SUCCESS;  //!< Error code if any being set
+    mutable std::string err_msg;                          //!< Error message if any being set
 };
 }
