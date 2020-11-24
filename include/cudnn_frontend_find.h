@@ -158,6 +158,7 @@ cudnnFind(cudnnHandle_t handle,
             plans.push_back(
                 cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
         } catch (cudnn_frontend::cudnnException e) {
+            std::cout << "[INFO] Plan is not supported!" << std::endl;
         }
     }
     return time_sorted_plan<samplingTechnique>(handle, filter(pred, plans), variantPack);

@@ -306,7 +306,7 @@ run_from_global_index(int64_t* x_dim_padded,
         // Selecting "0" by default
         auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
         std::cout << engine.describe() << std::endl;
-        auto knobs = engine.getKnobs();
+        auto& knobs = engine.getSupportedKnobs();
         for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
             std::cout << it->describe() << std::endl;
         }
@@ -543,7 +543,7 @@ run_conv_bias_add_activation(int64_t* x_dim_padded,
         // Selecting "0" by default
         auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
         std::cout << engine.describe() << std::endl;
-        auto knobs = engine.getKnobs();
+        auto& knobs = engine.getSupportedKnobs();
         for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
             std::cout << it->describe() << std::endl;
         }
@@ -659,7 +659,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
-            std::cout << "Plan=" << opt.plan.get_raw_desc() << " finished in " << opt.time_ms << " ms" << " workspace: " << opt.plan.getWorkspaceSize() << std::endl;
+            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms," << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
 
         cudnnStatus_t status =
@@ -672,4 +672,169 @@ run_from_cudnn_find(int64_t* x_dim_padded,
 
     if (handle_) cudnnDestroy(handle_);
     return;
+}
+
+void
+run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
+                                             int64_t* pad,
+                                             int64_t* convstride,
+                                             int64_t* dilation,
+                                             int64_t* w_dim_padded,
+                                             int64_t* y_dim_padded,
+                                             cudnnDataType_t dataType,
+                                             float* devPtrX,
+                                             float* devPtrW,
+                                             float* devPtrY,
+                                             float* devPtrZ,
+                                             float* devPtrB) {
+    cudnnHandle_t handle_;
+    try {
+        int convDim = 2;
+        // Create cudnn handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Creates the necessary tensor descriptors
+        common_convbias_descriptors tensors = create_conv_bias_add_act_descriptors(
+            x_dim_padded, pad, convstride, dilation, w_dim_padded, y_dim_padded, dataType);
+        std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<W_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<Z_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<B_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<AFTERADD_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<AFTERBIAS_TENSOR>(tensors).describe() << std::endl;
+        std::cout << std::get<AFTERCONV_TENSOR>(tensors).describe() << std::endl;
+
+        // Define the add operation
+        auto addDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_ADD)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << addDesc.describe() << std::endl;
+
+        // Define the bias operation
+        auto addDesc2 = cudnn_frontend::PointWiseDescBuilder()
+                            .setMode(CUDNN_POINTWISE_ADD)
+                            .setMathPrecision(CUDNN_DATA_FLOAT)
+                            .build();
+        std::cout << addDesc2.describe() << std::endl;
+
+        // Define the activation operation
+        auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_RELU_FWD)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << actDesc.describe() << std::endl;
+
+        // Define the convolution problem
+        auto convDesc = cudnn_frontend::ConvDescBuilder()
+                            .setDataType(dataType)
+                            .setMathMode(CUDNN_CONVOLUTION)
+                            .setNDims(convDim)
+                            .setStrides(convDim, convstride)
+                            .setPrePadding(convDim, pad)
+                            .setPostPadding(convDim, pad)
+                            .setDilation(convDim, dilation)
+                            .build();
+        std::cout << convDesc.describe() << std::endl;
+
+        float alpha  = 1.0f;
+        float alpha2 = 0.5f;
+        float beta   = 0.0f;
+
+        // Create a convolution Node
+        auto conv_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                           .setxDesc(std::get<X_TENSOR>(tensors))
+                           .setwDesc(std::get<W_TENSOR>(tensors))
+                           .setyDesc(std::get<AFTERCONV_TENSOR>(tensors))
+                           .setcDesc(convDesc)
+                           .setAlpha(alpha)
+                           .setBeta(beta)
+                           .build();
+        std::cout << conv_op.describe() << std::endl;
+
+        // Create a Add Node with scaling parameters.
+        auto add_op1 = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                           .setxDesc(conv_op.getOutputTensor())
+                           .setbDesc(std::get<Z_TENSOR>(tensors))
+                           .setyDesc(std::get<AFTERADD_TENSOR>(tensors))
+                           .setpwDesc(addDesc)
+                           .setAlpha(alpha)
+                           .setAlpha2(alpha2)
+                           .build();
+        std::cout << add_op1.describe() << std::endl;
+
+        // Create a Bias Node.
+        auto add_op2 = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                           .setxDesc(add_op1.getOutputTensor())
+                           .setbDesc(std::get<B_TENSOR>(tensors))
+                           .setyDesc(std::get<AFTERBIAS_TENSOR>(tensors))
+                           .setpwDesc(addDesc2)
+                           .build();
+        std::cout << add_op2.describe() << std::endl;
+
+        // Create an Activation Node.
+        auto act_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(add_op2.getOutputTensor())
+                          .setyDesc(std::get<Y_TENSOR>(tensors))
+                          .setpwDesc(actDesc)
+                          .build();
+        std::cout << act_op.describe() << std::endl;
+
+        // Create an Operation Graph. In this case it is convolution add bias activation
+        std::array<cudnn_frontend::Operation const*, 4> ops = {&conv_op, &add_op1, &add_op2, &act_op};
+
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+
+        auto workspace_size = 10*1024*1024; // 10 MiB
+        void* workspace_ptr = nullptr;
+        checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+
+        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW, devPtrZ, devPtrB};
+        int64_t uids[]    = {'x', 'y', 'w', 'z', 'b'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(5, data_ptrs)
+                               .setUids(5, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+
+        auto sample_predicate_function = [=](cudnn_frontend::ExecutionPlan const& plan) -> bool {
+            return plan.getWorkspaceSize() > workspace_size;
+        };
+
+        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
+            auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                .build();
+            std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+
+            auto& engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::EngineConfigList filtered_configs;
+            cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::isNonDeterministic);
+            return filtered_configs;
+        };
+
+        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
+
+        auto options = cudnnFind<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+            handle_, std::move(opGraph), variantPack, sample_predicate_function);
+
+        std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
+            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms," << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
+        });
+
+        cudnnStatus_t status =
+            cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
+
+        checkCudaErr(cudaFree(workspace_ptr));
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+
+    } catch (cudnn_frontend::cudnnException e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+    }
 }

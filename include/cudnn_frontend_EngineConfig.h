@@ -117,7 +117,7 @@ class EngineConfigBuilder_v8 {
     auto
     setEngine(Engine_v8 const &engine_) -> EngineConfigBuilder_v8 & {
         m_engine_config.engine   = engine_.get_desc();
-        auto &knobs              = engine_.getKnobs();
+        auto &knobs              = engine_.getFinalizedKnobs();
         m_engine_config.numKnobs = knobs.size();
         for (auto i = 0; i < knobs.size(); i++) {
             cudnnStatus_t status;

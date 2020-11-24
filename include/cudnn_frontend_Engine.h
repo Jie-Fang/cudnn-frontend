@@ -101,7 +101,7 @@ class Engine_v8 : public BackendDescriptor {
 
         const int64_t
         getStride() const {
-            return minValue;
+            return stride;
         }
 
        private:
@@ -206,9 +206,15 @@ class Engine_v8 : public BackendDescriptor {
         }
     }
 
-    //! Returns a vector of knobs to the user
+    //! Returns a vector of knobs to the user for modification
+    std::vector<Knob> &
+    getSupportedKnobs() {
+        return knobs;
+    }
+
+    //! Returns a final vector of knobs. Used in EngineConfigBuilder
     std::vector<Knob> const &
-    getKnobs() const {
+    getFinalizedKnobs() const {
         return knobs;
     }
 };
