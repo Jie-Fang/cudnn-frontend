@@ -291,7 +291,6 @@ class ExecutionPlanBuilder_v8 {
                 "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_HANDLE Failed");
             return std::move(m_execution_plan);
         }
-
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_execution_plan.desc);
         if (status != CUDNN_STATUS_SUCCESS) {
