@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <cudnn_frontend.h>
+#include <cudnn_frontend_EngineConfigGenerator.h>
 #include <map>
 
 struct executionOption {
@@ -31,56 +31,12 @@ struct executionOption {
 };
 
 using executionOptions = std::vector<struct executionOption>;
-using executionPlans   = std::vector<cudnn_frontend::ExecutionPlan>;
-using Predicate        = std::function<bool(cudnn_frontend::ExecutionPlan &plan)>;
 
 enum class CudnnFindSamplingTechnique {
     CUDNN_FIND_SAMPLE_ONCE,             // Sample once quick but may have unstable values
     CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE,  // Sample 3 times and take median.
     CUDNN_FIND_SAMPLE_TILL_STABLE       // Sample multiple times till stable.
 };
-
-using engine_config_generator = std::function<cudnn_frontend::EngineConfigList(cudnn_frontend::OperationGraph &)>;
-class EngineConfigGenerator {
-   private:
-    std::vector<engine_config_generator> engine_config_generators;
-    EngineConfigGenerator() = default;
-
-   public:
-    void
-    register_engine_config_generator(engine_config_generator fn_ptr) {
-        engine_config_generators.push_back(fn_ptr);
-    };
-    auto
-    generate_engine_config(cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
-        cudnn_frontend::EngineConfigList engine_configs;
-        for (auto fn : engine_config_generators) {
-            cudnn_frontend::EngineConfigList new_engine_config = fn(opGraph);
-            std::copy(new_engine_config.begin(),
-                      new_engine_config.end(),
-                      std::back_inserter(engine_configs));
-            new_engine_config.clear();
-        }
-        return engine_configs;
-    }
-    static EngineConfigGenerator &
-    getInstance() {
-        static EngineConfigGenerator instance;
-        return instance;
-    }
-};
-
-// Filter out the execution plan based on the prerequisite conditions.
-auto
-filter(Predicate pred, executionPlans &plans) -> executionPlans {
-    executionPlans filtered_plans;
-    for (auto& plan : plans) {
-        if (!pred(plan)) {
-            filtered_plans.emplace_back(std::move(plan));
-        }
-    }
-    return filtered_plans;
-}
 
 template <CudnnFindSamplingTechnique samplingTechnique>
 auto
@@ -147,10 +103,10 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::Var
 
 template <CudnnFindSamplingTechnique samplingTechnique>
 auto
-cudnnFind(cudnnHandle_t handle,
-          cudnn_frontend::OperationGraph &&opGraph,
-          cudnn_frontend::VariantPack &variantPack,
-          Predicate pred) -> executionOptions {
+cudnnFindPlan(cudnnHandle_t handle,
+              cudnn_frontend::OperationGraph &&opGraph,
+              cudnn_frontend::VariantPack &variantPack,
+              Predicate pred) -> executionOptions {
     // Creating a set of execution plans that are supported.
     executionPlans plans;
     for (auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(opGraph)) {
