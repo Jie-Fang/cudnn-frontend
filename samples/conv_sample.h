@@ -119,3 +119,16 @@ void run_conv_bias_add_activation_with_cudnn_find(
     float* devPtrY,
     float* devPtrZ,
     float* devPtrB);
+
+void run_from_cudnn_get(
+    int64_t* dimA_padded,
+    int64_t* padA,
+    int64_t* convstrideA,
+    int64_t* dilationA,
+    int64_t* filterdimA_padded,
+    int64_t* outdimA_padded,
+    cudnnDataType_t dataType,
+    cudnnConvolutionMode_t mode,
+    float * devPtrI,
+    float * devPtrF,
+    float * devPtrO);

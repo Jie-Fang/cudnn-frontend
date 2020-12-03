@@ -21,7 +21,8 @@
  */
 
 #include "conv_sample.h"
-#include <cudnn_frontend_find.h>
+#include <cudnn_frontend_find_plan.h>
+#include <cudnn_frontend_get_plan.h>
 
 enum {
     X_TENSOR,
@@ -655,7 +656,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
         EngineConfigGenerator::getInstance().register_engine_config_generator(fallback_method);
 
-        auto options = cudnnFind<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+        auto options = cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
@@ -821,7 +822,7 @@ run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
 
         EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
 
-        auto options = cudnnFind<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+        auto options = cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
@@ -837,4 +838,74 @@ run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
     } catch (cudnn_frontend::cudnnException e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
     }
+}
+
+void
+run_from_cudnn_get(int64_t* x_dim_padded,
+                   int64_t* padA,
+                   int64_t* convstrideA,
+                   int64_t* dilationA,
+                   int64_t* w_dim_padded,
+                   int64_t* y_dim_padded,
+                   cudnnDataType_t dataType,
+                   cudnnConvolutionMode_t mode,
+                   float* devPtrX,
+                   float* devPtrW,
+                   float* devPtrY) {
+    cudnnHandle_t handle_;
+
+    try {
+        checkCudnnErr(cudnnCreate(&handle_));
+        common_conv_descriptors descriptors = create_common_descriptors(
+            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+
+        std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<W_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<3>(descriptors).describe() << std::endl;
+
+        auto opGraph =
+            create_operation_graph(descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR, handle_);
+        std::cout << opGraph.describe() << std::endl;
+
+        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW};
+        int64_t uids[]    = {'x', 'y', 'w'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder().setDataPointers(3, data_ptrs).setUids(3, uids).build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+
+        auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan const& plan) -> bool {
+            return plan.getWorkspaceSize() != 0;
+        };
+
+        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
+            auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                .build();
+            std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+
+            auto& engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::EngineConfigList filtered_configs;
+            cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::allowAll);
+            return filtered_configs;
+        };
+
+        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
+
+        auto plans = cudnnGetPlan(handle_, std::move(opGraph), sample_predicate_function);
+
+        std::for_each(plans.begin(), plans.end(), [](cudnn_frontend::ExecutionPlan& plan) {
+            std::cout << "Plan: " << plan.getTag() << " workspace: " << plan.getWorkspaceSize() << " bytes" << std::endl;
+        });
+
+        cudnnStatus_t status =
+            cudnnBackendExecute(handle_, plans.front().get_raw_desc(), variantPack.get_raw_desc());
+
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+    } catch (cudnn_frontend::cudnnException e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+    }
+
+    if (handle_) cudnnDestroy(handle_);
+    return;
 }
