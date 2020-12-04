@@ -62,7 +62,8 @@ class OperationGraph_v8 : public BackendDescriptor {
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           handle(from.handle),
           ops(from.ops),
-          numOps(from.numOps) {
+          numOps(from.numOps),
+          opGraphTag(from.opGraphTag) {
         for (auto i = 0; i < ops.size(); i++) {  // TODO: Use std::fill
             from.ops[i] = nullptr;
         }
@@ -101,6 +102,11 @@ class OperationGraph_v8 : public BackendDescriptor {
     }
     /** @} */
 
+    std::string const &
+    getTag() const {
+        return opGraphTag;
+    }
+
    private:
     OperationGraph_v8()                       = default;
     OperationGraph_v8(OperationGraph_v8 const &) = delete;
@@ -110,6 +116,7 @@ class OperationGraph_v8 : public BackendDescriptor {
     cudnnHandle_t handle = nullptr;
     std::array<manager<cudnnBackendDescriptor_t>, 10> ops{};
     int64_t numOps = -1;
+    std::string opGraphTag = "";
 };
 
 ///
@@ -133,6 +140,7 @@ class OperationGraphBuilder_v8 {
         m_operationGraph.numOps = numOps_;
         for (auto i = 0u; i < numOps_; i++) {
             m_operationGraph.ops[i] = ops_[i]->get_desc();
+            m_operationGraph.opGraphTag += ops_[i]->getTag() + '_';
         }
         return *this;
     }

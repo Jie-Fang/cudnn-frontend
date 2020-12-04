@@ -61,7 +61,8 @@ class EngineConfig_v8 : public BackendDescriptor {
     EngineConfig_v8(EngineConfig_v8 &&from)
         : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
           engine(from.engine),
-          numKnobs(from.numKnobs) {
+          numKnobs(from.numKnobs),
+          opGraphTag(from.opGraphTag) {
         from.engine = nullptr;
         bChoices    = from.bChoices;
         from.bChoices.fill(nullptr);
@@ -78,6 +79,11 @@ class EngineConfig_v8 : public BackendDescriptor {
         if (engine != nullptr) {
             cudnnBackendDestroyDescriptor(engine);
         }
+    }
+
+    std::string const &
+    getTag() const {
+        return opGraphTag;
     }
 
    private:
@@ -100,6 +106,7 @@ class EngineConfig_v8 : public BackendDescriptor {
 
     manager<cudnnBackendDescriptor_t> engine = nullptr;
     int64_t numKnobs                         = 0;
+    std::string opGraphTag;
     std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> bChoices =
         {};  //!< Opaque pointer to the backend knobs
 };
@@ -116,9 +123,10 @@ class EngineConfigBuilder_v8 {
     //! Set engine for the EngineConfig_v8
     auto
     setEngine(Engine_v8 const &engine_) -> EngineConfigBuilder_v8 & {
-        m_engine_config.engine   = engine_.get_desc();
-        auto &knobs              = engine_.getFinalizedKnobs();
-        m_engine_config.numKnobs = knobs.size();
+        m_engine_config.engine     = engine_.get_desc();
+        m_engine_config.opGraphTag = engine_.getTag();
+        auto &knobs                = engine_.getFinalizedKnobs();
+        m_engine_config.numKnobs   = knobs.size();
         for (auto i = 0; i < knobs.size(); i++) {
             cudnnStatus_t status;
             cudnnBackendKnobType_t type = knobs[i].getKnobType();

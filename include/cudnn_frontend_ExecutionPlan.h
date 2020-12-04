@@ -157,7 +157,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                           "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
                                           "CUDNN_ATTR_ENGINE_GLOBAL_INDEX Failed");
         }
-        tag << "engine" << engineId;
+        tag << "eng" << engineId;
 
         status = cudnnBackendGetAttribute(engine_config,
                                           CUDNN_ATTR_ENGINECFG_KNOB_CHOICES,
@@ -197,9 +197,9 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                               "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
                                               "CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE Failed");
             }
-            tag << "_knob" << type << "(" << choice << ")";
+            tag << "_k" << type << "(" << choice << ")";
         }
-        planTag = tag.str();
+        planTag += tag.str();
     }
 
     ExecutionPlan_v8()                         = default;
@@ -209,7 +209,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
 
     manager<cudnnBackendDescriptor_t> engine_config = nullptr;
     cudnnHandle_t handle                            = nullptr;
-    std::string planTag                             = "";
+    std::string planTag;
 };
 
 ///
@@ -231,13 +231,15 @@ class ExecutionPlanBuilder_v8 {
     auto
     setEngineConfig(EngineConfig_v8 const &engine_config_) -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.engine_config = engine_config_.get_desc();
+        m_execution_plan.planTag       = engine_config_.getTag();
         return *this;
     }
     //! Set engine Config for the Plan
     auto
-    setEngineConfig(cudnnBackendDescriptor_t &desc) -> ExecutionPlanBuilder_v8 & {
+    setEngineConfig(cudnnBackendDescriptor_t &desc, std::string const &opGraphTag_ = "") -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.engine_config = desc;
         desc                           = nullptr;
+        m_execution_plan.planTag       = opGraphTag_;
         return *this;
     }
     /** @} */

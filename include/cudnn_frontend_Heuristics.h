@@ -53,7 +53,10 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     }
 
     EngineHeuristics_v8(EngineHeuristics_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()), mode(from.mode), opGraph(from.opGraph) {
+        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+          mode(from.mode),
+          opGraph(from.opGraph),
+          opGraphTag(from.opGraphTag) {
         from.opGraph = nullptr;
     }
 
@@ -129,6 +132,7 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     cudnnBackendHeurMode_t mode      = CUDNN_HEUR_MODE_INSTANT;
     cudnnBackendDescriptor_t opGraph = nullptr;
     std::vector<cudnnBackendDescriptor_t> m_heuristic_results;  //! storage of heuristic results
+    std::string opGraphTag;
 };
 
 ///
@@ -143,7 +147,8 @@ class EngineHeuristicsBuilder_v8 {
     //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
     setOperationGraph(OperationGraph_v8 &opGraph_) -> EngineHeuristicsBuilder_v8 & {
-        m_heuristics.opGraph = opGraph_.get_raw_desc();
+        m_heuristics.opGraph    = opGraph_.get_raw_desc();
+        m_heuristics.opGraphTag = opGraph_.getTag();
         return *this;
     }
     //! Set cudnnHandle for the operations

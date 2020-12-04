@@ -242,7 +242,7 @@ run_from_heuristics(int64_t* x_dim_padded,
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
         auto& engine_config = heuristics.getEngineConfig();
 
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config[0]).build();
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config[0], opGraph.getTag()).build();
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -395,7 +395,7 @@ run_with_external_config(int64_t* x_dim_padded,
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
         auto plan =
-            cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0]).build();
+            cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
