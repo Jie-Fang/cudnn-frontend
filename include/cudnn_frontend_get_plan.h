@@ -25,12 +25,11 @@
 #include <cudnn_frontend_EngineConfigGenerator.h>
 
 auto
-cudnnGetPlan(cudnnHandle_t handle,
-             cudnn_frontend::OperationGraph &&opGraph,
-             Predicate pred) -> executionPlans {
+EngineConfigGenerator::cudnnGetPlan(cudnnHandle_t handle, cudnn_frontend::OperationGraph&& opGraph, Predicate pred)
+    -> executionPlans {
     // Creating a set of execution plans that are supported.
     executionPlans plans;
-    for (auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(opGraph)) {
+    for (auto& engine_config : generate_engine_config(opGraph)) {
         try {
             plans.push_back(
                 cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
