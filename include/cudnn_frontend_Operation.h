@@ -88,7 +88,8 @@ class Operation_v8 : public BackendDescriptor {
           beta_s(from.beta_s),
           beta_d(from.beta_d),
           pointwise_port_count(from.pointwise_port_count),
-          pointwise_mode(from.pointwise_mode) {
+          pointwise_mode(from.pointwise_mode),
+          operationTag(from.operationTag) {
         from.xdesc = nullptr;
         from.ydesc = nullptr;
         from.wdesc = nullptr;
@@ -102,6 +103,11 @@ class Operation_v8 : public BackendDescriptor {
         cudnn_frontend::manager<cudnnBackendDescriptor_t> ptr = ydesc;
         ydesc                                                 = nullptr;
         return ptr;
+    }
+
+    std::string const &
+    getTag() const {
+        return operationTag;
     }
 
     ~Operation_v8() {
@@ -148,6 +154,7 @@ class Operation_v8 : public BackendDescriptor {
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
     int64_t pointwise_port_count = -1;
     cudnnPointwiseMode_t pointwise_mode;
+    std::string operationTag;
 };
 
 ///
@@ -345,6 +352,8 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
         if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+            m_operation.operationTag = "ConvFwd";
+
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -415,8 +424,10 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA Failed");
                 return std::move(m_operation);
             }
-        } 
+        }
         else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+            m_operation.operationTag = "ConvBwdFilter";
+
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -492,6 +503,8 @@ class OperationBuilder_v8 {
             }
         }
         else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+            m_operation.operationTag = "ConvBwdData";
+
             status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -564,7 +577,28 @@ class OperationBuilder_v8 {
             }
         } 
         else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR) {
-            status = cudnnBackendSetAttribute(m_operation.desc,                                 
+            switch (m_operation.pointwise_mode) {
+                case CUDNN_POINTWISE_ADD:
+                    m_operation.operationTag = "Add"; break;
+                case CUDNN_POINTWISE_MUL:
+                    m_operation.operationTag = "Mul"; break;
+                case CUDNN_POINTWISE_MIN:
+                    m_operation.operationTag = "Min"; break;
+                case CUDNN_POINTWISE_MAX:
+                    m_operation.operationTag = "Max"; break;
+                case CUDNN_POINTWISE_SQRT:
+                    m_operation.operationTag = "Sqrt"; break;
+                case CUDNN_POINTWISE_RELU_FWD:
+                    m_operation.operationTag = "ReluFwd"; break;
+                case CUDNN_POINTWISE_TANH_FWD:
+                    m_operation.operationTag = "TanhFwd"; break;
+                case CUDNN_POINTWISE_SIGMOID_FWD:
+                    m_operation.operationTag = "SigmoidFwd"; break;
+                case CUDNN_POINTWISE_ELU_FWD:
+                    m_operation.operationTag = "EluFwd"; break;
+            }
+
+            status = cudnnBackendSetAttribute(m_operation.desc,
                                               CUDNN_ATTR_OPERATION_POINTWISE_XDESC,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,

@@ -115,6 +115,7 @@ class Engine_v8 : public BackendDescriptor {
     int64_t numKnobs                          = 0;   //!< Count of the backend knobs in the engine
     std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> bKnobs = {};  //!< Opaque pointer to the backend knobs
     std::vector<Knob> knobs;
+    std::string opGraphTag;
 
     //! Called from the constructor builds the internal knobs vector
     void
@@ -171,7 +172,10 @@ class Engine_v8 : public BackendDescriptor {
         return ss.str();
     }
     Engine_v8(Engine_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()), opGraph(from.opGraph), idx(from.idx) {
+        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+          opGraph(from.opGraph),
+          idx(from.idx),
+          opGraphTag(from.opGraphTag) {
         cudnnStatus_t status;
         from.opGraph = nullptr;
         for (uint64_t i = 0; i < bKnobs.size(); i++) {
@@ -206,6 +210,11 @@ class Engine_v8 : public BackendDescriptor {
         }
     }
 
+    std::string const &
+    getTag() const {
+        return opGraphTag;
+    }
+
     //! Returns a vector of knobs to the user for modification
     std::vector<Knob> &
     getSupportedKnobs() {
@@ -231,7 +240,8 @@ class EngineBuilder_v8 {
     //! Set operationGraph for the engine
     auto
     setOperationGraph(OperationGraph_v8 const &opGraph_) -> EngineBuilder_v8 & {
-        m_engine.opGraph = opGraph_.get_raw_desc();
+        m_engine.opGraph    = opGraph_.get_raw_desc();
+        m_engine.opGraphTag = opGraph_.getTag();
         return *this;
     }
     //! Set operationGraph for the engine
