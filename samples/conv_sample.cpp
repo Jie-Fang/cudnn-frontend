@@ -206,6 +206,36 @@ create_operation_graph(common_conv_descriptors& descriptors, cudnnBackendDescrip
     return cudnn_frontend::OperationGraphBuilder().setHandle(handle_).setOperationGraph(ops.size(), ops.data()).build();
 }
 
+// Method for engine config generator based on heuristics
+auto heurgen_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_frontend::EngineConfigList {
+    auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
+                          .setOperationGraph(opGraph)
+                          .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                          .build();
+    std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+
+    auto &engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+    cudnn_frontend::EngineConfigList filtered_configs;
+    cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::allowAll);
+    return filtered_configs;
+};
+
+// Method for engine config generator based on fallback list
+auto fallback_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_frontend::EngineConfigList {
+    auto fallback = cudnn_frontend::EngineFallbackListBuilder()
+                        .setOperationGraph(opGraph)
+                        .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                        .build();
+    auto &fallback_list = fallback.getFallbackList();
+
+    cudnn_frontend::EngineConfigList filtered_configs;
+    // We create this filter to pre-remove configs being passed to cudnnFind.
+    // This is just a sample and is not necessary
+    cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
+
+    return filtered_configs;
+};
+
 void
 run_from_heuristics(int64_t* x_dim_padded,
                     int64_t* padA,
@@ -625,42 +655,15 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() != 0;
         };
 
-        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
-            auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
-                .setOperationGraph(opGraph)
-                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
-                .build();
-            std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+        std::array<generatorSource const, 2> sources = {heurgen_method, fallback_method};
+        EngineConfigGenerator generator(sources.size(), sources.data());
 
-            auto& engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
-            cudnn_frontend::EngineConfigList filtered_configs;
-            cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::allowAll);
-            return filtered_configs;
-        };
-
-        auto fallback_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
-            auto fallback = cudnn_frontend::EngineFallbackListBuilder()
-                                .setOperationGraph(opGraph)
-                                .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                .build();
-            auto& fallback_list = fallback.getFallbackList();
-
-            cudnn_frontend::EngineConfigList filtered_configs;
-            // We create this filter to pre-remove configs being passed to cudnnFind.
-            // This is just a sample and is not necessary
-            cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
-
-            return filtered_configs;
-        };
-
-        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
-        EngineConfigGenerator::getInstance().register_engine_config_generator(fallback_method);
-
-        auto options = cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+        auto options = generator.cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
-            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms," << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
+            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
+                      << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
 
         cudnnStatus_t status =
@@ -790,9 +793,9 @@ run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        auto workspace_size = 10*1024*1024; // 10 MiB
+        auto max_workspace_size = 10 * 1024 * 1024;  // 10 MiB
         void* workspace_ptr = nullptr;
-        checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        checkCudaErr(cudaMalloc(&workspace_ptr, max_workspace_size));
 
         void* data_ptrs[] = {devPtrX, devPtrY, devPtrW, devPtrZ, devPtrB};
         int64_t uids[]    = {'x', 'y', 'w', 'z', 'b'};
@@ -804,29 +807,18 @@ run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
         auto sample_predicate_function = [=](cudnn_frontend::ExecutionPlan const& plan) -> bool {
-            return plan.getWorkspaceSize() > workspace_size;
+            return plan.getWorkspaceSize() > max_workspace_size;
         };
 
-        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
-            auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
-                .setOperationGraph(opGraph)
-                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
-                .build();
-            std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+        std::array<generatorSource const, 1> sources = {heurgen_method};
+        EngineConfigGenerator generator(sources.size(), sources.data());
 
-            auto& engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
-            cudnn_frontend::EngineConfigList filtered_configs;
-            cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::isNonDeterministic);
-            return filtered_configs;
-        };
-
-        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
-
-        auto options = cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+        auto options = generator.cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
-            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms," << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
+            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
+                      << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
 
         cudnnStatus_t status =
@@ -877,29 +869,17 @@ run_from_cudnn_get(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() != 0;
         };
 
-        auto heurgen_method = [](cudnn_frontend::OperationGraph& opGraph) -> cudnn_frontend::EngineConfigList {
-            auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
-                .setOperationGraph(opGraph)
-                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
-                .build();
-            std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+        std::array<generatorSource const, 1> sources = {heurgen_method};
+        EngineConfigGenerator generator(sources.size(), sources.data());
 
-            auto& engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
-            cudnn_frontend::EngineConfigList filtered_configs;
-            cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::allowAll);
-            return filtered_configs;
-        };
-
-        EngineConfigGenerator::getInstance().register_engine_config_generator(heurgen_method);
-
-        auto plans = cudnnGetPlan(handle_, std::move(opGraph), sample_predicate_function);
+        auto plans = generator.cudnnGetPlan(handle_, std::move(opGraph), sample_predicate_function);
 
         std::for_each(plans.begin(), plans.end(), [](cudnn_frontend::ExecutionPlan& plan) {
-            std::cout << "Plan: " << plan.getTag() << " workspace: " << plan.getWorkspaceSize() << " bytes" << std::endl;
+            std::cout << "Plan: " << plan.getTag() << " workspace: " << plan.getWorkspaceSize() << " bytes"
+                      << std::endl;
         });
 
-        cudnnStatus_t status =
-            cudnnBackendExecute(handle_, plans.front().get_raw_desc(), variantPack.get_raw_desc());
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plans.front().get_raw_desc(), variantPack.get_raw_desc());
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
     } catch (cudnn_frontend::cudnnException e) {

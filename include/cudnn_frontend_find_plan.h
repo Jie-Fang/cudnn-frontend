@@ -25,19 +25,6 @@
 #include <cudnn_frontend_EngineConfigGenerator.h>
 #include <map>
 
-struct executionOption {
-    cudnn_frontend::ExecutionPlan plan;  // One can get the underlying EngineConfig from the ExecutionPlan
-    float time_ms;
-};
-
-using executionOptions = std::vector<struct executionOption>;
-
-enum class CudnnFindSamplingTechnique {
-    CUDNN_FIND_SAMPLE_ONCE,             // Sample once quick but may have unstable values
-    CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE,  // Sample 3 times and take median.
-    CUDNN_FIND_SAMPLE_TILL_STABLE       // Sample multiple times till stable.
-};
-
 template <CudnnFindSamplingTechnique samplingTechnique>
 auto
 time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::VariantPack &variantPack)
@@ -103,13 +90,13 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::Var
 
 template <CudnnFindSamplingTechnique samplingTechnique>
 auto
-cudnnFindPlan(cudnnHandle_t handle,
-              cudnn_frontend::OperationGraph &&opGraph,
-              cudnn_frontend::VariantPack &variantPack,
-              Predicate pred) -> executionOptions {
+EngineConfigGenerator::cudnnFindPlan(cudnnHandle_t handle,
+                                     cudnn_frontend::OperationGraph &&opGraph,
+                                     cudnn_frontend::VariantPack &variantPack,
+                                     Predicate pred) -> executionOptions {
     // Creating a set of execution plans that are supported.
     executionPlans plans;
-    for (auto& engine_config : EngineConfigGenerator::getInstance().generate_engine_config(opGraph)) {
+    for (auto &engine_config : generate_engine_config(opGraph)) {
         try {
             plans.push_back(
                 cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
