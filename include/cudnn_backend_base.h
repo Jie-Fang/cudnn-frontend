@@ -26,8 +26,40 @@
 
 namespace cudnn_frontend {
 
-template <typename T>
-using manager = T;
+class OpaqueBackendPointer {
+    cudnnBackendDescriptor_t m_desc = nullptr; //Raw void pointer
+    cudnnStatus_t status = CUDNN_STATUS_SUCCESS;
+    public:
+    OpaqueBackendPointer(const OpaqueBackendPointer&) = delete;
+    OpaqueBackendPointer & operator=(const OpaqueBackendPointer&) = delete;
+    OpaqueBackendPointer(OpaqueBackendPointer &&) = default;
+
+    OpaqueBackendPointer(cudnnBackendDescriptorType_t type) {
+        status = cudnnBackendCreateDescriptor(type, &m_desc);
+    }
+    ~OpaqueBackendPointer() {
+        cudnnBackendDestroyDescriptor(m_desc);
+    };
+    cudnnBackendDescriptor_t const &
+    get_backend_descriptor() const {
+        return m_desc;
+    }
+    cudnnStatus_t 
+    get_status() const {
+        return status;
+    }
+    bool
+    is_good() const {
+        return status == CUDNN_STATUS_SUCCESS;
+    }
+};
+
+using ManagedOpaqueDescriptor = std::shared_ptr<OpaqueBackendPointer>;
+
+static ManagedOpaqueDescriptor
+make_shared_backend_pointer(cudnnBackendDescriptorType_t type) {
+    return std::make_shared<OpaqueBackendPointer>(type);
+}
 
 ///
 /// BackendDescriptor class
@@ -38,19 +70,11 @@ class BackendDescriptor {
     virtual std::string
     describe() const = 0;
 
-    //! Get ownersip of the raw descriptor pointer
-    cudnn_frontend::manager<cudnnBackendDescriptor_t>
-    get_desc() const {
-        cudnn_frontend::manager<cudnnBackendDescriptor_t> ptr = desc;
-        desc                                                  = nullptr;
-        return ptr;
-    }
-
     //! Get a copy of the raw descriptor pointer. Ownership is reatined and
     //! gets deleted when out of scope
     cudnnBackendDescriptor_t
     get_raw_desc() const {
-        return desc;
+        return pointer->get_backend_descriptor();
     }
 
     //! Current status of the descriptor
@@ -77,18 +101,27 @@ class BackendDescriptor {
         return err_msg.c_str();
     }
 
-   protected:
-    //! Constructor
-    BackendDescriptor(cudnnBackendDescriptor_t& desc_, cudnnStatus_t status_, std::string err_msg_)
-        : desc(desc_), status(status_), err_msg(err_msg_) {
-        desc_ = nullptr;
+    ManagedOpaqueDescriptor
+    get_desc() const {
+        return pointer;
     }
-    BackendDescriptor(cudnnBackendDescriptor_t&& desc_) : desc(desc_) {}
+
+    cudnnStatus_t
+    initialize_managed_backend_pointer(cudnnBackendDescriptorType_t type) {
+        pointer = make_shared_backend_pointer(type);
+        return pointer->get_status();
+    }
+
+   protected:
+    BackendDescriptor(ManagedOpaqueDescriptor pointer_, cudnnStatus_t status_, std::string err_msg_)
+        : pointer(pointer_), status(status_), err_msg(err_msg_) {
+    }
     BackendDescriptor() = default;
 
-    mutable cudnnBackendDescriptor_t desc = nullptr;
+    ManagedOpaqueDescriptor pointer;
 
     mutable cudnnStatus_t status = CUDNN_STATUS_SUCCESS;  //!< Error code if any being set
     mutable std::string err_msg;                          //!< Error message if any being set
 };
+
 }

@@ -57,24 +57,17 @@ class EngineFallbackList_v8 : public BackendDescriptor {
     }
 
     auto
-    getFallbackList() -> std::vector<cudnnBackendDescriptor_t> & {
+    getFallbackList() -> std::vector<ManagedOpaqueDescriptor> & {
         return m_engine_configs;
     }
 
-    ~EngineFallbackList_v8() {
-        for (auto i = 0; i < m_engine_configs.size(); i++) {
-            if (m_engine_configs[i] != nullptr) {
-                cudnnBackendDestroyDescriptor(m_engine_configs[i]);
-                m_engine_configs[i] = nullptr;
-            }
-        }
-    }
+    ~EngineFallbackList_v8() = default;
+
     EngineFallbackList_v8(EngineFallbackList_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           mode(from.mode),
           opGraph(from.opGraph),
           opGraphTag(from.opGraphTag) {
-        from.opGraph = nullptr;
         m_engine_configs.swap(from.m_engine_configs);
     }
 
@@ -84,9 +77,9 @@ class EngineFallbackList_v8 : public BackendDescriptor {
     EngineFallbackList_v8 &
     operator=(EngineFallbackList_v8 const &) = delete;
 
-    cudnnBackendDescriptor_t opGraph = nullptr;
+    ManagedOpaqueDescriptor opGraph = nullptr;
     cudnnBackendDescriptorType_t mode;
-    std::vector<cudnnBackendDescriptor_t> m_engine_configs;
+    std::vector<ManagedOpaqueDescriptor> m_engine_configs;
     std::string opGraphTag;
 };
 
@@ -102,7 +95,7 @@ class EngineFallbackListBuilder_v8 {
     //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
     setOperationGraph(OperationGraph_v8 &opGraph_) -> EngineFallbackListBuilder_v8 & {
-        m_fallback_list.opGraph    = opGraph_.get_raw_desc();
+        m_fallback_list.opGraph    = opGraph_.get_desc();
         m_fallback_list.opGraphTag = opGraph_.getTag();
         return *this;
     }

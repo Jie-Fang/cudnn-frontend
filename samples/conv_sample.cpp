@@ -199,7 +199,7 @@ create_operation_graph(common_conv_descriptors& descriptors, cudnnBackendDescrip
                   .setBeta(beta)
                   .build();
 
-    std::cout << op.describe() << std::endl;
+    std::cout << "Operation is " << op.describe() << std::endl;
 
     std::array<cudnn_frontend::Operation const*, 1> ops = {&op};
 
@@ -341,6 +341,7 @@ run_from_global_index(int64_t* x_dim_padded,
         for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
             std::cout << it->describe() << std::endl;
         }
+
         if (knobs.begin() != knobs.end()) {
             std::cout << "Updated knob choice" << std::endl;
             knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);

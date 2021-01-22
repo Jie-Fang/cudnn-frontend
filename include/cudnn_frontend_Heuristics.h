@@ -53,24 +53,13 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     }
 
     EngineHeuristics_v8(EngineHeuristics_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           mode(from.mode),
           opGraph(from.opGraph),
           opGraphTag(from.opGraphTag) {
-        from.opGraph = nullptr;
     }
 
-    ~EngineHeuristics_v8() {
-        if (desc != nullptr) {
-            cudnnBackendDestroyDescriptor(desc);
-        }
-        for (auto i = 0u; i < m_heuristic_results.size(); ++i) {
-            if (m_heuristic_results[i] != nullptr) {
-                cudnnBackendDestroyDescriptor(m_heuristic_results[i]);
-            }
-        }
-        m_heuristic_results.clear();
-    }
+    ~EngineHeuristics_v8() = default;
 
     /** @defgroup EngineHeuristicsQuery
      *  Query individual property of EngineHeuristics_v8 class
@@ -78,27 +67,31 @@ class EngineHeuristics_v8 : public BackendDescriptor {
      */
     //! Query the total count of the engines for the Operation Set
     auto
-    getEngineConfig(int64_t count = 1) -> std::vector<cudnnBackendDescriptor_t> & {
+    getEngineConfig(int64_t count = 1) -> std::vector<ManagedOpaqueDescriptor> & {
         cudnnStatus_t status;
         for (auto i = 0u; i < count; ++i) {
-            cudnnBackendDescriptor_t engConfig = nullptr;
-            status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR, &engConfig);
-            if (status != CUDNN_STATUS_SUCCESS) {
+            ManagedOpaqueDescriptor engConfig = nullptr;
+            engConfig = make_shared_backend_pointer(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR);
+            if (engConfig->is_good() == false) {
                 set_error_and_throw_exception(
                     this,
-                    status,
+                    engConfig->get_status(),
                     "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: CUDNN_BACKEND_ENGINECFG_DESCRIPTOR cudnnCreate Failed");
                 return m_heuristic_results;
             };
             m_heuristic_results.emplace_back(engConfig);
         }
+        std::vector<cudnnBackendDescriptor_t> heuristic_results_;
+        for (auto i = 0; i < m_heuristic_results.size(); i++) {
+            heuristic_results_.emplace_back(m_heuristic_results[i]->get_backend_descriptor());
+        }
         int64_t result = -1;
-        status         = cudnnBackendGetAttribute(desc,
+        status         = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_ENGINEHEUR_RESULTS,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           count,
                                           &result,
-                                          m_heuristic_results.data());
+                                          heuristic_results_.data());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 this, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: GetAttribute CUDNN_ATTR_ENGINEHEUR_RESULTS Failed");
@@ -112,7 +105,7 @@ class EngineHeuristics_v8 : public BackendDescriptor {
         cudnnStatus_t status;
         int64_t count = -1;
         status        = cudnnBackendGetAttribute(
-            desc, CUDNN_ATTR_ENGINEHEUR_RESULTS, CUDNN_TYPE_BACKEND_DESCRIPTOR, 0, &count, nullptr);
+            pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINEHEUR_RESULTS, CUDNN_TYPE_BACKEND_DESCRIPTOR, 0, &count, nullptr);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 this,
@@ -130,8 +123,8 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     operator=(EngineHeuristics_v8 const &) = delete;
 
     cudnnBackendHeurMode_t mode      = CUDNN_HEUR_MODE_INSTANT;
-    cudnnBackendDescriptor_t opGraph = nullptr;
-    std::vector<cudnnBackendDescriptor_t> m_heuristic_results;  //! storage of heuristic results
+    ManagedOpaqueDescriptor opGraph = nullptr;
+    std::vector<ManagedOpaqueDescriptor> m_heuristic_results;  //! storage of heuristic results
     std::string opGraphTag;
 };
 
@@ -147,7 +140,7 @@ class EngineHeuristicsBuilder_v8 {
     //! Set operationGraph for the engine (opGraph is not destroyed)
     auto
     setOperationGraph(OperationGraph_v8 &opGraph_) -> EngineHeuristicsBuilder_v8 & {
-        m_heuristics.opGraph    = opGraph_.get_raw_desc();
+        m_heuristics.opGraph    = opGraph_.get_desc();
         m_heuristics.opGraphTag = opGraph_.getTag();
         return *this;
     }
@@ -172,19 +165,18 @@ class EngineHeuristicsBuilder_v8 {
         };
 
         // Create a descriptor. Memory allocation happens here.
-        auto status = CUDNN_STATUS_SUCCESS;
-        status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR, &m_heuristics.desc);
+        auto status = m_heuristics.initialize_managed_backend_pointer(CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_heuristics);
         };
 
-        status = cudnnBackendSetAttribute(m_heuristics.desc,
+        status = cudnnBackendSetAttribute(m_heuristics.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           1,
-                                          &m_heuristics.opGraph);
+                                          &(m_heuristics.opGraph->get_backend_descriptor()));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_heuristics,
@@ -193,7 +185,7 @@ class EngineHeuristicsBuilder_v8 {
             return std::move(m_heuristics);
         };
         status = cudnnBackendSetAttribute(
-            m_heuristics.desc, CUDNN_ATTR_ENGINEHEUR_MODE, CUDNN_TYPE_HEUR_MODE, 1, &m_heuristics.mode);
+            m_heuristics.pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINEHEUR_MODE, CUDNN_TYPE_HEUR_MODE, 1, &m_heuristics.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_heuristics,
@@ -203,7 +195,7 @@ class EngineHeuristicsBuilder_v8 {
         };
 
         // Finalizing the descriptor
-        status = cudnnBackendFinalize(m_heuristics.desc);
+        status = cudnnBackendFinalize(m_heuristics.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: cudnn Finalize failed");

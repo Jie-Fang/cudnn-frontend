@@ -110,10 +110,10 @@ class Engine_v8 : public BackendDescriptor {
         int64_t choice = 0;                              //!< Choice set by the user
     };
 
-    manager<cudnnBackendDescriptor_t> opGraph = nullptr;
+    ManagedOpaqueDescriptor opGraph = nullptr;
     int64_t idx                               = -1;  //!< Global Index of the engine for the given operationGraph.
     int64_t numKnobs                          = 0;   //!< Count of the backend knobs in the engine
-    std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> bKnobs = {};  //!< Opaque pointer to the backend knobs
+    std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> bKnobs = {};  //!< Opaque pointer to the backend knobs
     std::vector<Knob> knobs;
     std::string opGraphTag;
 
@@ -122,7 +122,7 @@ class Engine_v8 : public BackendDescriptor {
     buildKnobs() {
         cudnnStatus_t status;
         for (auto i = 0; i < numKnobs; i++) {
-            auto bKnob = bKnobs[i];
+            auto bKnob = bKnobs[i]->get_backend_descriptor();
             cudnnBackendKnobType_t type;
             int64_t maxValue, minValue, stride, elemCount;
             status =
@@ -172,43 +172,39 @@ class Engine_v8 : public BackendDescriptor {
         return ss.str();
     }
     Engine_v8(Engine_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           opGraph(from.opGraph),
           idx(from.idx),
           opGraphTag(from.opGraphTag) {
         cudnnStatus_t status;
-        from.opGraph = nullptr;
         for (uint64_t i = 0; i < bKnobs.size(); i++) {
-            status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR, &bKnobs[i]);
-            if (status != CUDNN_STATUS_SUCCESS) {
+            bKnobs[i] = make_shared_backend_pointer(CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR);
+            if (bKnobs[i]->is_good() == false) {
+                status = bKnobs[i]->get_status();
                 set_error_and_throw_exception(
                     this,
                     status,
                     "CUDNN_BACKEND_ENGINE_DESCRIPTOR: CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR cudnnCreate Failed");
             }
         }
-        status = cudnnBackendGetAttribute(desc,
+
+        std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> bKnobs_ = {};  //!< Opaque pointer to the backend knobs
+        for (auto i = 0; i < bKnobs.size(); i++) {
+            bKnobs_[i] = bKnobs[i]->get_backend_descriptor();
+        }
+        status = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_ENGINE_KNOB_INFO,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           CUDNN_KNOB_TYPE_COUNTS,
                                           &numKnobs,
-                                          bKnobs.data());
+                                          bKnobs_.data());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 this, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: GetAttribute CUDNN_ATTR_ENGINE_KNOB_INFO Query Failed");
         }
         buildKnobs();
     }
-    ~Engine_v8() {
-        if (desc != nullptr) {
-            cudnnBackendDestroyDescriptor(desc);
-        }
-        for (uint64_t i = 0; i < bKnobs.size(); i++) {
-            if (bKnobs[i] != nullptr) {
-                cudnnBackendDestroyDescriptor(bKnobs[i]);
-            }
-        }
-    }
+    ~Engine_v8() = default;
 
     std::string const &
     getTag() const {
@@ -240,13 +236,19 @@ class EngineBuilder_v8 {
     //! Set operationGraph for the engine
     auto
     setOperationGraph(OperationGraph_v8 const &opGraph_) -> EngineBuilder_v8 & {
-        m_engine.opGraph    = opGraph_.get_raw_desc();
+        m_engine.opGraph    = opGraph_.get_desc();
         m_engine.opGraphTag = opGraph_.getTag();
         return *this;
     }
     //! Set operationGraph for the engine
     auto
     setOperationGraph(cudnnBackendDescriptor_t desc_) -> EngineBuilder_v8 & {
+        // TBD
+        return *this;
+    }
+    //! Set operationGraph for the engine
+    auto
+    setOperationGraph(ManagedOpaqueDescriptor desc_) -> EngineBuilder_v8 & {
         m_engine.opGraph = desc_;
         return *this;
     }
@@ -278,8 +280,7 @@ class EngineBuilder_v8 {
         }
 
         // Create a descriptor. Memory allocation happens here.
-        auto status = CUDNN_STATUS_SUCCESS;
-        status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &m_engine.desc);
+        auto status = m_engine.initialize_managed_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_engine, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: cudnnCreate Descriptor Failed");
@@ -287,7 +288,7 @@ class EngineBuilder_v8 {
         }
 
         status = cudnnBackendSetAttribute(
-            m_engine.desc, CUDNN_ATTR_ENGINE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &m_engine.opGraph);
+            m_engine.pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &(m_engine.opGraph->get_backend_descriptor()));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_engine,
@@ -297,7 +298,7 @@ class EngineBuilder_v8 {
         }
 
         status =
-            cudnnBackendSetAttribute(m_engine.desc, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &m_engine.idx);
+            cudnnBackendSetAttribute(m_engine.pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &m_engine.idx);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_engine,
@@ -307,7 +308,7 @@ class EngineBuilder_v8 {
         }
 
         // Finalizing the descriptor
-        status = cudnnBackendFinalize(m_engine.desc);
+        status = cudnnBackendFinalize(m_engine.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_engine, status, "CUDNN_BACKEND_ENGINE_DESCRIPTOR: cudnnFinalize Failed");
             return std::move(m_engine);

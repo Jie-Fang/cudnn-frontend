@@ -29,35 +29,37 @@ namespace cudnn_frontend {
 // If filter_fn returns true
 // The engine config will be filtered out and will
 // not be part of the to list.
-
 static void
-filter(std::vector<cudnnBackendDescriptor_t> &from,
-       std::vector<cudnnBackendDescriptor_t> &to,
-       std::function<bool(cudnnBackendDescriptor_t &)> filter_fn) {
-    auto p = std::stable_partition(from.begin(), from.end(), filter_fn);
+filter(EngineConfigList &from,
+       EngineConfigList &to,
+       std::function<bool(cudnnBackendDescriptor_t)> filter_fn) {
+    auto p = std::stable_partition(from.begin(), from.end(), [filter_fn](ManagedOpaqueDescriptor &p) {
+            return filter_fn(const_cast<cudnnBackendDescriptor_t>(p->get_backend_descriptor()));});
     // range insert with move
     to.insert(to.end(), std::make_move_iterator(p), std::make_move_iterator(from.end()));
     // erase the moved-from elements.
     from.erase(p, from.end());
 }
 
-static bool allowAll(cudnnBackendDescriptor_t & engine_config) {
+
+static bool allowAll(cudnnBackendDescriptor_t engine_config) {
     return false;
 }
 
 template <cudnnBackendNumericalNote_t NUMERIC_NOTE>
 bool
-hasNumericalNote(cudnnBackendDescriptor_t &engine_config) {
+hasNumericalNote(cudnnBackendDescriptor_t engine_config) {
     bool hasNumerics         = false;
-    cudnnBackendDescriptor_t engine = nullptr;
-    cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &engine);
+    auto status              = CUDNN_STATUS_SUCCESS;
+    ManagedOpaqueDescriptor engine = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+    cudnnBackendDescriptor_t engine_ = engine->get_backend_descriptor();
     int64_t engine_count = -1;
-    auto status          = cudnnBackendGetAttribute(
-        engine_config, CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &engine_count, &engine);
+    status          = cudnnBackendGetAttribute(
+        engine_config, CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &engine_count, &engine_);
     if (status == CUDNN_STATUS_SUCCESS) {
         cudnnBackendNumericalNote_t notes[CUDNN_NUMERICAL_NOTE_TYPE_COUNT];
         int64_t elem_count = 0;
-        cudnnBackendGetAttribute(engine,
+        cudnnBackendGetAttribute(engine->get_backend_descriptor(),
                                  CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
                                  CUDNN_TYPE_NUMERICAL_NOTE,
                                  CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
@@ -69,27 +71,26 @@ hasNumericalNote(cudnnBackendDescriptor_t &engine_config) {
             hasNumerics = true;
         }
     }
-    cudnnBackendDestroyDescriptor(engine);
     return hasNumerics;
 }
 
 static bool 
-isNonDeterministic(cudnnBackendDescriptor_t &engine_config) {
+isNonDeterministic(cudnnBackendDescriptor_t engine_config) {
     return hasNumericalNote<CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC>(engine_config);
 }
 
 static bool 
-isReducedPrecisionReduction(cudnnBackendDescriptor_t &engine_config) {
+isReducedPrecisionReduction(cudnnBackendDescriptor_t engine_config) {
     return hasNumericalNote<CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION>(engine_config);
 }
 
 static bool 
-isDownConvertingInputs(cudnnBackendDescriptor_t &engine_config) {
+isDownConvertingInputs(cudnnBackendDescriptor_t engine_config) {
     return hasNumericalNote<CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS>(engine_config);
 }
 
 static bool 
-isNonDeterministicOrisDowncasting(cudnnBackendDescriptor_t &engine_config) {
+isNonDeterministicOrisDowncasting(cudnnBackendDescriptor_t engine_config) {
     return isNonDeterministic(engine_config) || isDownConvertingInputs(engine_config);
 }
 

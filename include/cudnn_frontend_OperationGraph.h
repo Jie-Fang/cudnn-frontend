@@ -59,28 +59,14 @@ class OperationGraph_v8 : public BackendDescriptor {
     }
 
     OperationGraph_v8(OperationGraph_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           handle(from.handle),
           ops(from.ops),
           numOps(from.numOps),
           opGraphTag(from.opGraphTag) {
-        for (auto i = 0; i < ops.size(); i++) {  // TODO: Use std::fill
-            from.ops[i] = nullptr;
-        }
     }
 
-    ~OperationGraph_v8() {
-        if (desc != nullptr) {
-            cudnnBackendDestroyDescriptor(desc);
-        }
-
-        for (auto i = 0; i < ops.size(); i++) {
-            if (ops[i] != nullptr) {
-                cudnnBackendDestroyDescriptor(ops[i]);
-                ops[i] = nullptr;
-            }
-        }
-    }
+    ~OperationGraph_v8() = default;
 
     /** @defgroup OperationGraphQuery
      *  Query individual property of OperationGraph_v8 class
@@ -91,7 +77,7 @@ class OperationGraph_v8 : public BackendDescriptor {
     getEngineCount(void) const -> int64_t {
         int64_t global_count = -1;
         auto status          = cudnnBackendGetAttribute(
-            desc, CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT, CUDNN_TYPE_INT64, 1, NULL, &global_count);
+            pointer->get_backend_descriptor(), CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT, CUDNN_TYPE_INT64, 1, NULL, &global_count);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -114,7 +100,7 @@ class OperationGraph_v8 : public BackendDescriptor {
     operator=(OperationGraph_v8 const &) = delete;
 
     cudnnHandle_t handle = nullptr;
-    std::array<manager<cudnnBackendDescriptor_t>, 10> ops{};
+    std::array<ManagedOpaqueDescriptor, 10> ops{};
     int64_t numOps = -1;
     std::string opGraphTag = "";
 };
@@ -173,19 +159,23 @@ class OperationGraphBuilder_v8 {
         }
 
         // Create a descriptor. Memory allocation happens here.
-        auto status = CUDNN_STATUS_SUCCESS;
-        status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR, &m_operationGraph.desc);
+        auto status = m_operationGraph.initialize_managed_backend_pointer(CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_operationGraph, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_operationGraph);
         }
 
-        status = cudnnBackendSetAttribute(m_operationGraph.desc,
+        std::array<cudnnBackendDescriptor_t, 10> ops_raw{nullptr};
+        for (auto i= 0u; i < m_operationGraph.numOps; i++) {
+            ops_raw[i] = m_operationGraph.ops[i]->get_backend_descriptor();
+        }
+
+        status = cudnnBackendSetAttribute(m_operationGraph.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_OPERATIONGRAPH_OPS,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           m_operationGraph.numOps,
-                                          m_operationGraph.ops.data());
+                                          ops_raw.data());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_operationGraph,
@@ -194,7 +184,7 @@ class OperationGraphBuilder_v8 {
             return std::move(m_operationGraph);
         }
         status = cudnnBackendSetAttribute(
-            m_operationGraph.desc, CUDNN_ATTR_OPERATIONGRAPH_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_operationGraph.handle);
+            m_operationGraph.pointer->get_backend_descriptor(), CUDNN_ATTR_OPERATIONGRAPH_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_operationGraph.handle);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_operationGraph,
@@ -204,7 +194,7 @@ class OperationGraphBuilder_v8 {
         }
 
         // Finalizing the descriptor
-        status = cudnnBackendFinalize(m_operationGraph.desc);
+        status = cudnnBackendFinalize(m_operationGraph.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_operationGraph, status, "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: cudnnFinalize Failed");
