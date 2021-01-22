@@ -73,20 +73,15 @@ namespace cudnn_frontend {
     }
 
     PointWiseDesc_v8(PointWiseDesc_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           math_precision(from.math_precision),
           mode(from.mode),
           nan_propagation(from.nan_propagation),
           upper_clip(from.upper_clip),
           lower_clip(from.lower_clip) {
-        from.desc = nullptr;
     }
 
-    ~PointWiseDesc_v8() {
-        if (desc != nullptr) {
-            cudnnBackendDestroyDescriptor(desc);
-        }
-    }
+    ~PointWiseDesc_v8() = default;
 
    private:
     PointWiseDesc_v8()                 = default;
@@ -140,8 +135,7 @@ class PointWiseDescBuilder_v8 {
     build() {
 
         // Create a descriptor. Memory allocation happens here.
-        auto status = CUDNN_STATUS_SUCCESS;
-        status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_POINTWISE_DESCRIPTOR, &m_pointWiseDesc.desc);
+        auto status = m_pointWiseDesc.initialize_managed_backend_pointer(CUDNN_BACKEND_POINTWISE_DESCRIPTOR);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc, status, "CUDNN_BACKEND_POINTWISE_DESCRIPTOR: cudnnCreate Failed");
@@ -150,7 +144,7 @@ class PointWiseDescBuilder_v8 {
 
         // Once Created lets set the descriptor parameters.
         status = cudnnBackendSetAttribute(
-            m_pointWiseDesc.desc, CUDNN_ATTR_POINTWISE_MODE, CUDNN_TYPE_POINTWISE_MODE, 1, &m_pointWiseDesc.mode);
+            m_pointWiseDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_POINTWISE_MODE, CUDNN_TYPE_POINTWISE_MODE, 1, &m_pointWiseDesc.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc,
@@ -160,7 +154,7 @@ class PointWiseDescBuilder_v8 {
         }
 
         status = cudnnBackendSetAttribute(
-            m_pointWiseDesc.desc, CUDNN_ATTR_POINTWISE_MATH_PREC, CUDNN_TYPE_DATA_TYPE, 1, &m_pointWiseDesc.math_precision);
+            m_pointWiseDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_POINTWISE_MATH_PREC, CUDNN_TYPE_DATA_TYPE, 1, &m_pointWiseDesc.math_precision);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc,
@@ -171,7 +165,7 @@ class PointWiseDescBuilder_v8 {
 
         if (m_pointWiseDesc.mode == CUDNN_POINTWISE_RELU_FWD) {
             status = cudnnBackendSetAttribute(
-                m_pointWiseDesc.desc, CUDNN_ATTR_POINTWISE_NAN_PROPAGATION, CUDNN_TYPE_NAN_PROPOGATION, 1, &m_pointWiseDesc.nan_propagation);
+                m_pointWiseDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_POINTWISE_NAN_PROPAGATION, CUDNN_TYPE_NAN_PROPOGATION, 1, &m_pointWiseDesc.nan_propagation);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_pointWiseDesc,
@@ -180,7 +174,7 @@ class PointWiseDescBuilder_v8 {
                 return std::move(m_pointWiseDesc);
             }
 
-            status = cudnnBackendSetAttribute(m_pointWiseDesc.desc,
+            status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_POINTWISE_RELU_LOWER_CLIP,
                                             CUDNN_TYPE_DOUBLE,
                                             1,
@@ -193,7 +187,7 @@ class PointWiseDescBuilder_v8 {
                 return std::move(m_pointWiseDesc);
             }
 
-            status = cudnnBackendSetAttribute(m_pointWiseDesc.desc,
+            status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_POINTWISE_RELU_UPPER_CLIP,
                                             CUDNN_TYPE_DOUBLE,
                                             1,
@@ -208,7 +202,7 @@ class PointWiseDescBuilder_v8 {
         }
 
         // Finalizing the descriptor
-        status = cudnnBackendFinalize(m_pointWiseDesc.desc);
+        status = cudnnBackendFinalize(m_pointWiseDesc.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc, status, "CUDNN_BACKEND_POINTWISE_DESCRIPTOR: cudnnFinalize Failed");

@@ -53,20 +53,12 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     friend class ExecutionPlanBuilder_v8;
 
     ExecutionPlan_v8(ExecutionPlan_v8 &&from)
-        : BackendDescriptor(from.desc, from.get_status(), from.get_error()),
+        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           handle(from.handle),
           engine_config(from.engine_config),
           planTag(from.planTag) {
-        from.engine_config = nullptr;
     }
-    ~ExecutionPlan_v8() {
-        if (desc != nullptr) {
-            cudnnBackendDestroyDescriptor(desc);
-        }
-        if (engine_config != nullptr) {
-            cudnnBackendDestroyDescriptor(engine_config);
-        }
-    }
+    ~ExecutionPlan_v8() = default;
     /** @defgroup ExecutionPlanQuery
      *  Query individual property of ExecutionPlan_v8 class
      *  @{
@@ -76,7 +68,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     getWorkspaceSize(void) const -> int64_t {
         uint64_t workSpaceSize = 0;
         auto status            = cudnnBackendGetAttribute(
-            desc, CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL, &workSpaceSize);
+            pointer->get_backend_descriptor(), CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL, &workSpaceSize);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -108,41 +100,35 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     void
     computeTag() {
         // Compute a unique tag for execution plan:
-        struct TempDescriptors {
-            cudnnBackendDescriptor_t extractedEngine = nullptr;
-            std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> extractedKnobs{nullptr};
-
-            ~TempDescriptors() {
-                for (auto &knob : extractedKnobs) {
-                    if (knob != nullptr) {
-                        cudnnBackendDestroyDescriptor(knob);
-                    }
-                }
-                if (extractedEngine != nullptr) {
-                    cudnnBackendDestroyDescriptor(extractedEngine);
-                }
-            }
-        };
         auto status = CUDNN_STATUS_SUCCESS;
         std::stringstream tag{""};
         int64_t elemCount = 0, engineId = 0, numKnobs = 0;
-        TempDescriptors td;
 
-        status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_ENGINE_DESCRIPTOR, &td.extractedEngine);
+        ManagedOpaqueDescriptor extractedEngine = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+        status = extractedEngine->get_status();
+        std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> extractedKnobs{{nullptr}};
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed when compute tag");
         }
 
-        for (auto &knob : td.extractedKnobs) {
-            status = cudnnBackendCreateDescriptor(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR, &knob);
+        for (auto &knob : extractedKnobs) {
+            knob = make_shared_backend_pointer(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR);
+            status = knob->get_status();
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed when compute tag");
             }
         }
+
+        cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
+        std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> extractedKnobs_{{nullptr}};
+        for (auto i = 0; i < extractedKnobs.size(); i++) {
+            extractedKnobs_[i] = extractedKnobs[i]->get_backend_descriptor();
+        }
+
         status = cudnnBackendGetAttribute(
-            engine_config, CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &elemCount, &td.extractedEngine);
+            engine_config->get_backend_descriptor(), CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &elemCount, &extractedEngine_);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -150,7 +136,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                           "CUDNN_ATTR_ENGINECFG_ENGINE Failed");
         }
         status = cudnnBackendGetAttribute(
-            td.extractedEngine, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &elemCount, &engineId);
+            extractedEngine_, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &elemCount, &engineId);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -159,12 +145,12 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         }
         tag << "eng" << engineId;
 
-        status = cudnnBackendGetAttribute(engine_config,
+        status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
                                           CUDNN_ATTR_ENGINECFG_KNOB_CHOICES,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           CUDNN_KNOB_TYPE_COUNTS,
                                           &numKnobs,
-                                          &td.extractedKnobs[0]);
+                                          &(extractedKnobs_[0]));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -178,7 +164,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                           "numKnobs exceed the CUDNN_KNOB_TYPE_COUNTS");
         }
         for (int64_t idx = 0; idx < numKnobs; ++idx) {
-            const cudnnBackendDescriptor_t &knob = td.extractedKnobs[idx];
+            const cudnnBackendDescriptor_t &knob = extractedKnobs_[idx];
             cudnnBackendKnobType_t type          = CUDNN_KNOB_TYPE_COUNTS;
             int64_t choice                       = -2;
             status                               = cudnnBackendGetAttribute(
@@ -186,7 +172,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(this,
                                               status,
-                                              "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                              "computeTag CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
                                               "CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE Failed");
             }
             status = cudnnBackendGetAttribute(
@@ -207,7 +193,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     ExecutionPlan_v8 &
     operator=(ExecutionPlan_v8 const &) = delete;
 
-    manager<cudnnBackendDescriptor_t> engine_config = nullptr;
+    ManagedOpaqueDescriptor engine_config = nullptr;
     cudnnHandle_t handle                            = nullptr;
     std::string planTag;
 };
@@ -234,11 +220,15 @@ class ExecutionPlanBuilder_v8 {
         m_execution_plan.planTag       = engine_config_.getTag();
         return *this;
     }
-    //! Set engine Config for the Plan
     auto
     setEngineConfig(cudnnBackendDescriptor_t &desc, std::string const &opGraphTag_ = "") -> ExecutionPlanBuilder_v8 & {
+        // TBD
+        return *this;
+    }
+    //! Set engine Config for the Plan
+    auto
+    setEngineConfig(ManagedOpaqueDescriptor &desc, std::string const &opGraphTag_ = "") -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.engine_config = desc;
-        desc                           = nullptr;
         m_execution_plan.planTag       = opGraphTag_;
         return *this;
     }
@@ -264,19 +254,18 @@ class ExecutionPlanBuilder_v8 {
         };
 
         // Create a descriptor. Memory allocation happens here.
-        auto status = CUDNN_STATUS_SUCCESS;
-        status      = cudnnBackendCreateDescriptor(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR, &m_execution_plan.desc);
+        auto status = m_execution_plan.initialize_managed_backend_pointer(CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed");
             return std::move(m_execution_plan);
         }
 
-        status = cudnnBackendSetAttribute(m_execution_plan.desc,
+        status = cudnnBackendSetAttribute(m_execution_plan.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG,
                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                           1,
-                                          &m_execution_plan.engine_config);
+                                          &(m_execution_plan.engine_config->get_backend_descriptor()));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_execution_plan,
@@ -285,7 +274,7 @@ class ExecutionPlanBuilder_v8 {
             return std::move(m_execution_plan);
         }
         status = cudnnBackendSetAttribute(
-            m_execution_plan.desc, CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_execution_plan.handle);
+            m_execution_plan.pointer->get_backend_descriptor(), CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_execution_plan.handle);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_execution_plan,
@@ -294,7 +283,7 @@ class ExecutionPlanBuilder_v8 {
             return std::move(m_execution_plan);
         }
         // Finalizing the descriptor
-        status = cudnnBackendFinalize(m_execution_plan.desc);
+        status = cudnnBackendFinalize(m_execution_plan.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed");
