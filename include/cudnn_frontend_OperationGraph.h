@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -63,8 +63,7 @@ class OperationGraph_v8 : public BackendDescriptor {
           handle(from.handle),
           ops(from.ops),
           numOps(from.numOps),
-          opGraphTag(from.opGraphTag) {
-    }
+          opGraphTag(from.opGraphTag) {}
 
     ~OperationGraph_v8() = default;
 
@@ -76,8 +75,12 @@ class OperationGraph_v8 : public BackendDescriptor {
     auto
     getEngineCount(void) const -> int64_t {
         int64_t global_count = -1;
-        auto status          = cudnnBackendGetAttribute(
-            pointer->get_backend_descriptor(), CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT, CUDNN_TYPE_INT64, 1, NULL, &global_count);
+        auto status          = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
+                                               CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT,
+                                               CUDNN_TYPE_INT64,
+                                               1,
+                                               NULL,
+                                               &global_count);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -94,14 +97,14 @@ class OperationGraph_v8 : public BackendDescriptor {
     }
 
    private:
-    OperationGraph_v8()                       = default;
+    OperationGraph_v8()                          = default;
     OperationGraph_v8(OperationGraph_v8 const &) = delete;
     OperationGraph_v8 &
     operator=(OperationGraph_v8 const &) = delete;
 
     cudnnHandle_t handle = nullptr;
     std::array<ManagedOpaqueDescriptor, 10> ops{};
-    int64_t numOps = -1;
+    int64_t numOps         = -1;
     std::string opGraphTag = "";
 };
 
@@ -167,7 +170,7 @@ class OperationGraphBuilder_v8 {
         }
 
         std::array<cudnnBackendDescriptor_t, 10> ops_raw{nullptr};
-        for (auto i= 0u; i < m_operationGraph.numOps; i++) {
+        for (auto i = 0u; i < m_operationGraph.numOps; i++) {
             ops_raw[i] = m_operationGraph.ops[i]->get_backend_descriptor();
         }
 
@@ -183,8 +186,11 @@ class OperationGraphBuilder_v8 {
                 "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR: SetAttribute CUDNN_ATTR_OPERATIONGRAPH_OPS Failed");
             return std::move(m_operationGraph);
         }
-        status = cudnnBackendSetAttribute(
-            m_operationGraph.pointer->get_backend_descriptor(), CUDNN_ATTR_OPERATIONGRAPH_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_operationGraph.handle);
+        status = cudnnBackendSetAttribute(m_operationGraph.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_OPERATIONGRAPH_HANDLE,
+                                          CUDNN_TYPE_HANDLE,
+                                          1,
+                                          &m_operationGraph.handle);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_operationGraph,
@@ -204,8 +210,8 @@ class OperationGraphBuilder_v8 {
         return std::move(m_operationGraph);
     }
 
-    explicit OperationGraphBuilder_v8()                     = default;
-    ~OperationGraphBuilder_v8()                             = default;
+    explicit OperationGraphBuilder_v8()                        = default;
+    ~OperationGraphBuilder_v8()                                = default;
     OperationGraphBuilder_v8(OperationGraphBuilder_v8 &&)      = delete;
     OperationGraphBuilder_v8(OperationGraphBuilder_v8 const &) = delete;
     OperationGraphBuilder_v8 &

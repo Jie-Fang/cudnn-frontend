@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -99,7 +99,7 @@ class ConvDesc_v8 : public BackendDescriptor {
     ~ConvDesc_v8() = default;
 
    private:
-    ConvDesc_v8()                 = default;
+    ConvDesc_v8()                    = default;
     ConvDesc_v8(ConvDesc_v8 const &) = delete;
     ConvDesc_v8 &
     operator=(ConvDesc_v8 const &) = delete;
@@ -201,8 +201,11 @@ class ConvDescBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
-        status = cudnnBackendSetAttribute(
-            m_convDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_CONVOLUTION_COMP_TYPE, CUDNN_TYPE_DATA_TYPE, 1, &m_convDesc.data_type);
+        status = cudnnBackendSetAttribute(m_convDesc.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_CONVOLUTION_COMP_TYPE,
+                                          CUDNN_TYPE_DATA_TYPE,
+                                          1,
+                                          &m_convDesc.data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_convDesc,
@@ -211,8 +214,11 @@ class ConvDescBuilder_v8 {
             return std::move(m_convDesc);
         }
 
-        status = cudnnBackendSetAttribute(
-            m_convDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_CONVOLUTION_CONV_MODE, CUDNN_TYPE_CONVOLUTION_MODE, 1, &m_convDesc.mode);
+        status = cudnnBackendSetAttribute(m_convDesc.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_CONVOLUTION_CONV_MODE,
+                                          CUDNN_TYPE_CONVOLUTION_MODE,
+                                          1,
+                                          &m_convDesc.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_convDesc,
@@ -221,8 +227,11 @@ class ConvDescBuilder_v8 {
             return std::move(m_convDesc);
         }
 
-        status = cudnnBackendSetAttribute(
-            m_convDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS, CUDNN_TYPE_INT64, 1, &m_convDesc.nDims);
+        status = cudnnBackendSetAttribute(m_convDesc.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS,
+                                          CUDNN_TYPE_INT64,
+                                          1,
+                                          &m_convDesc.nDims);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_convDesc,
@@ -257,8 +266,11 @@ class ConvDescBuilder_v8 {
             return std::move(m_convDesc);
         }
 
-        status = cudnnBackendSetAttribute(
-            m_convDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_CONVOLUTION_DILATIONS, CUDNN_TYPE_INT64, m_convDesc.nDims, m_convDesc.dilation);
+        status = cudnnBackendSetAttribute(m_convDesc.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_CONVOLUTION_DILATIONS,
+                                          CUDNN_TYPE_INT64,
+                                          m_convDesc.nDims,
+                                          m_convDesc.dilation);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_convDesc,
@@ -291,8 +303,8 @@ class ConvDescBuilder_v8 {
         return std::move(m_convDesc);
     }
 
-    explicit ConvDescBuilder_v8()               = default;
-    ~ConvDescBuilder_v8()                       = default;
+    explicit ConvDescBuilder_v8()                  = default;
+    ~ConvDescBuilder_v8()                          = default;
     ConvDescBuilder_v8(ConvDescBuilder_v8 &&)      = delete;
     ConvDescBuilder_v8(ConvDescBuilder_v8 const &) = delete;
     ConvDescBuilder_v8 &

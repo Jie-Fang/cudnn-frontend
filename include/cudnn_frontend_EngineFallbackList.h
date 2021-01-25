@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -72,7 +72,7 @@ class EngineFallbackList_v8 : public BackendDescriptor {
     }
 
    private:
-    EngineFallbackList_v8()                           = default;
+    EngineFallbackList_v8()                              = default;
     EngineFallbackList_v8(EngineFallbackList_v8 const &) = delete;
     EngineFallbackList_v8 &
     operator=(EngineFallbackList_v8 const &) = delete;
@@ -150,8 +150,8 @@ class EngineFallbackListBuilder_v8 {
         return std::move(m_fallback_list);
     }
 
-    explicit EngineFallbackListBuilder_v8()                         = default;
-    ~EngineFallbackListBuilder_v8()                                 = default;
+    explicit EngineFallbackListBuilder_v8()                            = default;
+    ~EngineFallbackListBuilder_v8()                                    = default;
     EngineFallbackListBuilder_v8(EngineFallbackListBuilder_v8 &&)      = delete;
     EngineFallbackListBuilder_v8(EngineFallbackListBuilder_v8 const &) = delete;
     EngineFallbackListBuilder_v8 &

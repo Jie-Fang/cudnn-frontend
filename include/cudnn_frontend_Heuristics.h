@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -56,8 +56,7 @@ class EngineHeuristics_v8 : public BackendDescriptor {
         : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           mode(from.mode),
           opGraph(from.opGraph),
-          opGraphTag(from.opGraphTag) {
-    }
+          opGraphTag(from.opGraphTag) {}
 
     ~EngineHeuristics_v8() = default;
 
@@ -71,7 +70,7 @@ class EngineHeuristics_v8 : public BackendDescriptor {
         cudnnStatus_t status;
         for (auto i = 0u; i < count; ++i) {
             ManagedOpaqueDescriptor engConfig = nullptr;
-            engConfig = make_shared_backend_pointer(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR);
+            engConfig                         = make_shared_backend_pointer(CUDNN_BACKEND_ENGINECFG_DESCRIPTOR);
             if (engConfig->is_good() == false) {
                 set_error_and_throw_exception(
                     this,
@@ -104,8 +103,12 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     getEngineConfigCount(void) const -> int64_t {
         cudnnStatus_t status;
         int64_t count = -1;
-        status        = cudnnBackendGetAttribute(
-            pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINEHEUR_RESULTS, CUDNN_TYPE_BACKEND_DESCRIPTOR, 0, &count, nullptr);
+        status        = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_ENGINEHEUR_RESULTS,
+                                          CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                          0,
+                                          &count,
+                                          nullptr);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 this,
@@ -117,12 +120,12 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     /** @} */
 
    private:
-    EngineHeuristics_v8()                         = default;
+    EngineHeuristics_v8()                            = default;
     EngineHeuristics_v8(EngineHeuristics_v8 const &) = delete;
     EngineHeuristics_v8 &
     operator=(EngineHeuristics_v8 const &) = delete;
 
-    cudnnBackendHeurMode_t mode      = CUDNN_HEUR_MODE_INSTANT;
+    cudnnBackendHeurMode_t mode     = CUDNN_HEUR_MODE_INSTANT;
     ManagedOpaqueDescriptor opGraph = nullptr;
     std::vector<ManagedOpaqueDescriptor> m_heuristic_results;  //! storage of heuristic results
     std::string opGraphTag;
@@ -184,8 +187,11 @@ class EngineHeuristicsBuilder_v8 {
                 "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: SetAttribute  CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH Failed");
             return std::move(m_heuristics);
         };
-        status = cudnnBackendSetAttribute(
-            m_heuristics.pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINEHEUR_MODE, CUDNN_TYPE_HEUR_MODE, 1, &m_heuristics.mode);
+        status = cudnnBackendSetAttribute(m_heuristics.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_ENGINEHEUR_MODE,
+                                          CUDNN_TYPE_HEUR_MODE,
+                                          1,
+                                          &m_heuristics.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_heuristics,
@@ -205,8 +211,8 @@ class EngineHeuristicsBuilder_v8 {
         return std::move(m_heuristics);
     }
 
-    explicit EngineHeuristicsBuilder_v8()                       = default;
-    ~EngineHeuristicsBuilder_v8()                               = default;
+    explicit EngineHeuristicsBuilder_v8()                          = default;
+    ~EngineHeuristicsBuilder_v8()                                  = default;
     EngineHeuristicsBuilder_v8(EngineHeuristicsBuilder_v8 &&)      = delete;
     EngineHeuristicsBuilder_v8(EngineHeuristicsBuilder_v8 const &) = delete;
     EngineHeuristicsBuilder_v8 &

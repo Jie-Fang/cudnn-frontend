@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -27,24 +27,22 @@
 namespace cudnn_frontend {
 
 class OpaqueBackendPointer {
-    cudnnBackendDescriptor_t m_desc = nullptr; //Raw void pointer
-    cudnnStatus_t status = CUDNN_STATUS_SUCCESS;
-    public:
-    OpaqueBackendPointer(const OpaqueBackendPointer&) = delete;
-    OpaqueBackendPointer & operator=(const OpaqueBackendPointer&) = delete;
-    OpaqueBackendPointer(OpaqueBackendPointer &&) = default;
+    cudnnBackendDescriptor_t m_desc = nullptr;  // Raw void pointer
+    cudnnStatus_t status            = CUDNN_STATUS_SUCCESS;
 
-    OpaqueBackendPointer(cudnnBackendDescriptorType_t type) {
-        status = cudnnBackendCreateDescriptor(type, &m_desc);
-    }
-    ~OpaqueBackendPointer() {
-        cudnnBackendDestroyDescriptor(m_desc);
-    };
-    cudnnBackendDescriptor_t const &
+   public:
+    OpaqueBackendPointer(const OpaqueBackendPointer&) = delete;
+    OpaqueBackendPointer&
+    operator=(const OpaqueBackendPointer&)       = delete;
+    OpaqueBackendPointer(OpaqueBackendPointer&&) = default;
+
+    OpaqueBackendPointer(cudnnBackendDescriptorType_t type) { status = cudnnBackendCreateDescriptor(type, &m_desc); }
+    ~OpaqueBackendPointer() { cudnnBackendDestroyDescriptor(m_desc); };
+    cudnnBackendDescriptor_t const&
     get_backend_descriptor() const {
         return m_desc;
     }
-    cudnnStatus_t 
+    cudnnStatus_t
     get_status() const {
         return status;
     }
@@ -114,8 +112,7 @@ class BackendDescriptor {
 
    protected:
     BackendDescriptor(ManagedOpaqueDescriptor pointer_, cudnnStatus_t status_, std::string err_msg_)
-        : pointer(pointer_), status(status_), err_msg(err_msg_) {
-    }
+        : pointer(pointer_), status(status_), err_msg(err_msg_) {}
     BackendDescriptor() = default;
 
     ManagedOpaqueDescriptor pointer;
@@ -123,5 +120,4 @@ class BackendDescriptor {
     mutable cudnnStatus_t status = CUDNN_STATUS_SUCCESS;  //!< Error code if any being set
     mutable std::string err_msg;                          //!< Error message if any being set
 };
-
 }

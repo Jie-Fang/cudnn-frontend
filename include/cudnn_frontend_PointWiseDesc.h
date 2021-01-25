@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -35,7 +35,7 @@
 #include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
-    class PointWiseDesc_v8 : public BackendDescriptor {
+class PointWiseDesc_v8 : public BackendDescriptor {
    public:
     friend class PointWiseDescBuilder_v8;
     std::string
@@ -43,14 +43,13 @@ namespace cudnn_frontend {
         std::stringstream ss;
         char sep = ' ';
         ss << "CUDNN_BACKEND_POINTWISE_DESCRIPTOR :"
-           << " Mode: " << (mode)
-           << " Math precision " << (math_precision);
+           << " Mode: " << (mode) << " Math precision " << (math_precision);
         return ss.str();
     }
 
     int64_t
     getPortCount() const {
-        switch(mode) {
+        switch (mode) {
             case CUDNN_POINTWISE_ADD:
             case CUDNN_POINTWISE_MUL:
             case CUDNN_POINTWISE_MIN:
@@ -62,7 +61,7 @@ namespace cudnn_frontend {
             case CUDNN_POINTWISE_SIGMOID_FWD:
             case CUDNN_POINTWISE_ELU_FWD:
                 return 2;
-            default:                               
+            default:
                 return -1;
         }
     }
@@ -78,13 +77,12 @@ namespace cudnn_frontend {
           mode(from.mode),
           nan_propagation(from.nan_propagation),
           upper_clip(from.upper_clip),
-          lower_clip(from.lower_clip) {
-    }
+          lower_clip(from.lower_clip) {}
 
     ~PointWiseDesc_v8() = default;
 
    private:
-    PointWiseDesc_v8()                 = default;
+    PointWiseDesc_v8()                         = default;
     PointWiseDesc_v8(PointWiseDesc_v8 const &) = delete;
     PointWiseDesc_v8 &
     operator=(PointWiseDesc_v8 const &) = delete;
@@ -92,8 +90,8 @@ namespace cudnn_frontend {
     cudnnDataType_t math_precision        = CUDNN_DATA_FLOAT;
     cudnnPointwiseMode_t mode             = CUDNN_POINTWISE_ADD;
     cudnnNanPropagation_t nan_propagation = CUDNN_NOT_PROPAGATE_NAN;
-    double upper_clip = std::numeric_limits<double>::max();
-    double lower_clip = std::numeric_limits<double>::min();
+    double upper_clip                     = std::numeric_limits<double>::max();
+    double lower_clip                     = std::numeric_limits<double>::min();
 };
 
 ////
@@ -112,18 +110,21 @@ class PointWiseDescBuilder_v8 {
         return *this;
     }
     //! Set upper and lower limits for the RELU activation
-    auto setClipping(double l, double u) -> PointWiseDescBuilder_v8 & {
+    auto
+    setClipping(double l, double u) -> PointWiseDescBuilder_v8 & {
         m_pointWiseDesc.upper_clip = u;
         m_pointWiseDesc.lower_clip = l;
         return *this;
     }
     //! Set upper and lower limits for the RELU activation
-    auto setMode(cudnnPointwiseMode_t mode_) -> PointWiseDescBuilder_v8 & {
+    auto
+    setMode(cudnnPointwiseMode_t mode_) -> PointWiseDescBuilder_v8 & {
         m_pointWiseDesc.mode = mode_;
         return *this;
     }
     //! Set NaN propagation mode
-    auto setMode(cudnnNanPropagation_t nan_mode_) -> PointWiseDescBuilder_v8 & {
+    auto
+    setMode(cudnnNanPropagation_t nan_mode_) -> PointWiseDescBuilder_v8 & {
         m_pointWiseDesc.nan_propagation = nan_mode_;
         return *this;
     }
@@ -133,7 +134,6 @@ class PointWiseDescBuilder_v8 {
     //! Throws the appropriate error message
     PointWiseDesc_v8 &&
     build() {
-
         // Create a descriptor. Memory allocation happens here.
         auto status = m_pointWiseDesc.initialize_managed_backend_pointer(CUDNN_BACKEND_POINTWISE_DESCRIPTOR);
         if (status != CUDNN_STATUS_SUCCESS) {
@@ -143,8 +143,11 @@ class PointWiseDescBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
-        status = cudnnBackendSetAttribute(
-            m_pointWiseDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_POINTWISE_MODE, CUDNN_TYPE_POINTWISE_MODE, 1, &m_pointWiseDesc.mode);
+        status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_POINTWISE_MODE,
+                                          CUDNN_TYPE_POINTWISE_MODE,
+                                          1,
+                                          &m_pointWiseDesc.mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc,
@@ -153,8 +156,11 @@ class PointWiseDescBuilder_v8 {
             return std::move(m_pointWiseDesc);
         }
 
-        status = cudnnBackendSetAttribute(
-            m_pointWiseDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_POINTWISE_MATH_PREC, CUDNN_TYPE_DATA_TYPE, 1, &m_pointWiseDesc.math_precision);
+        status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_POINTWISE_MATH_PREC,
+                                          CUDNN_TYPE_DATA_TYPE,
+                                          1,
+                                          &m_pointWiseDesc.math_precision);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc,
@@ -164,8 +170,11 @@ class PointWiseDescBuilder_v8 {
         }
 
         if (m_pointWiseDesc.mode == CUDNN_POINTWISE_RELU_FWD) {
-            status = cudnnBackendSetAttribute(
-                m_pointWiseDesc.pointer->get_backend_descriptor(), CUDNN_ATTR_POINTWISE_NAN_PROPAGATION, CUDNN_TYPE_NAN_PROPOGATION, 1, &m_pointWiseDesc.nan_propagation);
+            status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_POINTWISE_NAN_PROPAGATION,
+                                              CUDNN_TYPE_NAN_PROPOGATION,
+                                              1,
+                                              &m_pointWiseDesc.nan_propagation);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_pointWiseDesc,
@@ -175,10 +184,10 @@ class PointWiseDescBuilder_v8 {
             }
 
             status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
-                                            CUDNN_ATTR_POINTWISE_RELU_LOWER_CLIP,
-                                            CUDNN_TYPE_DOUBLE,
-                                            1,
-                                            &m_pointWiseDesc.lower_clip);
+                                              CUDNN_ATTR_POINTWISE_RELU_LOWER_CLIP,
+                                              CUDNN_TYPE_DOUBLE,
+                                              1,
+                                              &m_pointWiseDesc.lower_clip);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_pointWiseDesc,
@@ -188,10 +197,10 @@ class PointWiseDescBuilder_v8 {
             }
 
             status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
-                                            CUDNN_ATTR_POINTWISE_RELU_UPPER_CLIP,
-                                            CUDNN_TYPE_DOUBLE,
-                                            1,
-                                            &m_pointWiseDesc.upper_clip);
+                                              CUDNN_ATTR_POINTWISE_RELU_UPPER_CLIP,
+                                              CUDNN_TYPE_DOUBLE,
+                                              1,
+                                              &m_pointWiseDesc.upper_clip);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_pointWiseDesc,
@@ -212,8 +221,8 @@ class PointWiseDescBuilder_v8 {
         return std::move(m_pointWiseDesc);
     }
 
-    explicit PointWiseDescBuilder_v8()               = default;
-    ~PointWiseDescBuilder_v8()                       = default;
+    explicit PointWiseDescBuilder_v8()                       = default;
+    ~PointWiseDescBuilder_v8()                               = default;
     PointWiseDescBuilder_v8(PointWiseDescBuilder_v8 &&)      = delete;
     PointWiseDescBuilder_v8(PointWiseDescBuilder_v8 const &) = delete;
     PointWiseDescBuilder_v8 &

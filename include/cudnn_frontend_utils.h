@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 #include <exception>
@@ -57,13 +57,14 @@ throw_if(bool expr, const char *message) {
 }
 
 static inline void
-set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char* message) {
+set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
     if (desc != nullptr) {
         desc->set_status(status);
         desc->set_error(message);
     }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
-    throw cudnnException(std::string(std::string(message) + std::string(" cudnn_status: ") + std::to_string(status)).c_str());
+    throw cudnnException(
+        std::string(std::string(message) + std::string(" cudnn_status: ") + std::to_string(status)).c_str());
 #endif
 }
 }

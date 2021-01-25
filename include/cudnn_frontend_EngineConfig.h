@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -63,7 +63,7 @@ class EngineConfig_v8 : public BackendDescriptor {
           engine(from.engine),
           numKnobs(from.numKnobs),
           opGraphTag(from.opGraphTag) {
-        bChoices    = from.bChoices;
+        bChoices = from.bChoices;
     }
     ~EngineConfig_v8() = default;
 
@@ -92,10 +92,9 @@ class EngineConfig_v8 : public BackendDescriptor {
     operator=(EngineConfig_v8 const &) = delete;
 
     ManagedOpaqueDescriptor engine = nullptr;
-    int64_t numKnobs                         = 0;
+    int64_t numKnobs               = 0;
     std::string opGraphTag;
-    std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> bChoices =
-        {};  //!< Opaque pointer to the backend knobs
+    std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> bChoices = {};  //!< Opaque pointer to the backend knobs
 };
 
 ///
@@ -118,8 +117,11 @@ class EngineConfigBuilder_v8 {
             cudnnStatus_t status;
             cudnnBackendKnobType_t type = knobs[i].getKnobType();
             int64_t value               = knobs[i].getChoice();
-            status                      = cudnnBackendSetAttribute(
-                m_engine_config.bChoices[i]->get_backend_descriptor(), CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE, CUDNN_TYPE_KNOB_TYPE, 1, &type);
+            status = cudnnBackendSetAttribute(m_engine_config.bChoices[i]->get_backend_descriptor(),
+                                              CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE,
+                                              CUDNN_TYPE_KNOB_TYPE,
+                                              1,
+                                              &type);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(&m_engine_config,
                                               status,
@@ -127,8 +129,11 @@ class EngineConfigBuilder_v8 {
                                               "CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR SetAttribute "
                                               "CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE Failed");
             }
-            status = cudnnBackendSetAttribute(
-                m_engine_config.bChoices[i]->get_backend_descriptor(), CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE, CUDNN_TYPE_INT64, 1, &value);
+            status = cudnnBackendSetAttribute(m_engine_config.bChoices[i]->get_backend_descriptor(),
+                                              CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE,
+                                              CUDNN_TYPE_INT64,
+                                              1,
+                                              &value);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(&m_engine_config,
                                               status,
@@ -215,8 +220,8 @@ class EngineConfigBuilder_v8 {
         return std::move(m_engine_config);
     }
 
-    explicit EngineConfigBuilder_v8()                   = default;
-    ~EngineConfigBuilder_v8()                           = default;
+    explicit EngineConfigBuilder_v8()                      = default;
+    ~EngineConfigBuilder_v8()                              = default;
     EngineConfigBuilder_v8(EngineConfigBuilder_v8 &&)      = delete;
     EngineConfigBuilder_v8(EngineConfigBuilder_v8 const &) = delete;
     EngineConfigBuilder_v8 &
@@ -227,13 +232,12 @@ class EngineConfigBuilder_v8 {
 };
 
 ///
-/// EngineConfigList class 
-/// This is a RAII type class that holds naked 
+/// EngineConfigList class
+/// This is a RAII type class that holds naked
 /// EngineConfig backendDescriptor.
 /// The purpose of this class is to provide an
 /// easy interface to store the EngineConfigs generated
-/// from various source and apply a filter. 
+/// from various source and apply a filter.
 
 using EngineConfigList = std::vector<ManagedOpaqueDescriptor>;
-
 }

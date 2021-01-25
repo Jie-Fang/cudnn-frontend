@@ -56,8 +56,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
           handle(from.handle),
           engine_config(from.engine_config),
-          planTag(from.planTag) {
-    }
+          planTag(from.planTag) {}
     ~ExecutionPlan_v8() = default;
     /** @defgroup ExecutionPlanQuery
      *  Query individual property of ExecutionPlan_v8 class
@@ -67,8 +66,12 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     auto
     getWorkspaceSize(void) const -> int64_t {
         uint64_t workSpaceSize = 0;
-        auto status            = cudnnBackendGetAttribute(
-            pointer->get_backend_descriptor(), CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE, CUDNN_TYPE_INT64, 1, NULL, &workSpaceSize);
+        auto status            = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
+                                               CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE,
+                                               CUDNN_TYPE_INT64,
+                                               1,
+                                               NULL,
+                                               &workSpaceSize);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -105,7 +108,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         int64_t elemCount = 0, engineId = 0, numKnobs = 0;
 
         ManagedOpaqueDescriptor extractedEngine = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
-        status = extractedEngine->get_status();
+        status                                  = extractedEngine->get_status();
         std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> extractedKnobs{{nullptr}};
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
@@ -113,7 +116,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         }
 
         for (auto &knob : extractedKnobs) {
-            knob = make_shared_backend_pointer(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR);
+            knob   = make_shared_backend_pointer(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR);
             status = knob->get_status();
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
@@ -127,8 +130,12 @@ class ExecutionPlan_v8 : public BackendDescriptor {
             extractedKnobs_[i] = extractedKnobs[i]->get_backend_descriptor();
         }
 
-        status = cudnnBackendGetAttribute(
-            engine_config->get_backend_descriptor(), CUDNN_ATTR_ENGINECFG_ENGINE, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &elemCount, &extractedEngine_);
+        status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
+                                          CUDNN_ATTR_ENGINECFG_ENGINE,
+                                          CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                          1,
+                                          &elemCount,
+                                          &extractedEngine_);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
                                           status,
@@ -194,7 +201,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     operator=(ExecutionPlan_v8 const &) = delete;
 
     ManagedOpaqueDescriptor engine_config = nullptr;
-    cudnnHandle_t handle                            = nullptr;
+    cudnnHandle_t handle                  = nullptr;
     std::string planTag;
 };
 
@@ -273,8 +280,11 @@ class ExecutionPlanBuilder_v8 {
                 "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: SetAttribute CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG Failed");
             return std::move(m_execution_plan);
         }
-        status = cudnnBackendSetAttribute(
-            m_execution_plan.pointer->get_backend_descriptor(), CUDNN_ATTR_EXECUTION_PLAN_HANDLE, CUDNN_TYPE_HANDLE, 1, &m_execution_plan.handle);
+        status = cudnnBackendSetAttribute(m_execution_plan.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_EXECUTION_PLAN_HANDLE,
+                                          CUDNN_TYPE_HANDLE,
+                                          1,
+                                          &m_execution_plan.handle);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_execution_plan,

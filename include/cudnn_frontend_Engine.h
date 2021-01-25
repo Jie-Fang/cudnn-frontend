@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -51,7 +51,7 @@ namespace cudnn_frontend {
 ///
 class Engine_v8 : public BackendDescriptor {
    private:
-    Engine_v8()               = default;
+    Engine_v8()                  = default;
     Engine_v8(Engine_v8 const &) = delete;
     Engine_v8 &
     operator=(Engine_v8 const &) = delete;
@@ -111,8 +111,8 @@ class Engine_v8 : public BackendDescriptor {
     };
 
     ManagedOpaqueDescriptor opGraph = nullptr;
-    int64_t idx                               = -1;  //!< Global Index of the engine for the given operationGraph.
-    int64_t numKnobs                          = 0;   //!< Count of the backend knobs in the engine
+    int64_t idx                     = -1;  //!< Global Index of the engine for the given operationGraph.
+    int64_t numKnobs                = 0;   //!< Count of the backend knobs in the engine
     std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> bKnobs = {};  //!< Opaque pointer to the backend knobs
     std::vector<Knob> knobs;
     std::string opGraphTag;
@@ -188,7 +188,8 @@ class Engine_v8 : public BackendDescriptor {
             }
         }
 
-        std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> bKnobs_ = {};  //!< Opaque pointer to the backend knobs
+        std::array<cudnnBackendDescriptor_t, CUDNN_KNOB_TYPE_COUNTS> bKnobs_ =
+            {};  //!< Opaque pointer to the backend knobs
         for (auto i = 0; i < bKnobs.size(); i++) {
             bKnobs_[i] = bKnobs[i]->get_backend_descriptor();
         }
@@ -287,8 +288,11 @@ class EngineBuilder_v8 {
             return std::move(m_engine);
         }
 
-        status = cudnnBackendSetAttribute(
-            m_engine.pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &(m_engine.opGraph->get_backend_descriptor()));
+        status = cudnnBackendSetAttribute(m_engine.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_ENGINE_OPERATION_GRAPH,
+                                          CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                          1,
+                                          &(m_engine.opGraph->get_backend_descriptor()));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_engine,
@@ -297,8 +301,11 @@ class EngineBuilder_v8 {
             return std::move(m_engine);
         }
 
-        status =
-            cudnnBackendSetAttribute(m_engine.pointer->get_backend_descriptor(), CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &m_engine.idx);
+        status = cudnnBackendSetAttribute(m_engine.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_ENGINE_GLOBAL_INDEX,
+                                          CUDNN_TYPE_INT64,
+                                          1,
+                                          &m_engine.idx);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_engine,
@@ -317,8 +324,8 @@ class EngineBuilder_v8 {
         return std::move(m_engine);
     }
 
-    explicit EngineBuilder_v8()             = default;
-    ~EngineBuilder_v8()                     = default;
+    explicit EngineBuilder_v8()                = default;
+    ~EngineBuilder_v8()                        = default;
     EngineBuilder_v8(EngineBuilder_v8 &&)      = delete;
     EngineBuilder_v8(EngineBuilder_v8 const &) = delete;
     EngineBuilder_v8 &

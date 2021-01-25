@@ -18,7 +18,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- */ 
+ */
 
 #pragma once
 
@@ -66,10 +66,10 @@ class VariantPack_v8 : public BackendDescriptor {
         std::copy(std::begin(from.data_pointers), std::end(from.data_pointers), data_pointers);
         std::copy(std::begin(from.uid), std::end(from.uid), uid);
     }
-    ~VariantPack_v8()  = default;
+    ~VariantPack_v8() = default;
 
    private:
-    VariantPack_v8()                    = default;
+    VariantPack_v8()                       = default;
     VariantPack_v8(VariantPack_v8 const &) = delete;
     VariantPack_v8 &
     operator=(VariantPack_v8 const &) = delete;
@@ -160,8 +160,11 @@ class VariantPackBuilder_v8 {
             return std::move(m_variant_pack);
         }
 
-        status = cudnnBackendSetAttribute(
-            m_variant_pack.pointer->get_backend_descriptor(), CUDNN_ATTR_VARIANT_PACK_WORKSPACE, CUDNN_TYPE_VOID_PTR, 1, &m_variant_pack.workspace);
+        status = cudnnBackendSetAttribute(m_variant_pack.pointer->get_backend_descriptor(),
+                                          CUDNN_ATTR_VARIANT_PACK_WORKSPACE,
+                                          CUDNN_TYPE_VOID_PTR,
+                                          1,
+                                          &m_variant_pack.workspace);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_variant_pack,
@@ -180,8 +183,8 @@ class VariantPackBuilder_v8 {
         return std::move(m_variant_pack);
     }
 
-    explicit VariantPackBuilder_v8()                  = default;
-    ~VariantPackBuilder_v8()                          = default;
+    explicit VariantPackBuilder_v8()                     = default;
+    ~VariantPackBuilder_v8()                             = default;
     VariantPackBuilder_v8(VariantPackBuilder_v8 &&)      = delete;
     VariantPackBuilder_v8(VariantPackBuilder_v8 const &) = delete;
     VariantPackBuilder_v8 &
