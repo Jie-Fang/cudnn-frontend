@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -24,33 +24,44 @@
 
 #include <cudnn_frontend.h>
 
+namespace cudnn_frontend {
+/// A pair of execution plan and its run time.
+/// Necessary to return a sorted executionPlan
 struct executionOption {
-    cudnn_frontend::ExecutionPlan plan;  // One can get the underlying EngineConfig from the ExecutionPlan
-    float time_ms;
+    cudnn_frontend::ExecutionPlan plan;  //! One can get the underlying EngineConfig from the ExecutionPlan
+    float time_ms;                       //! Time taken to execute the above plan
 };
 
-using executionOptions = std::vector<struct executionOption>;
-using executionPlans   = std::vector<cudnn_frontend::ExecutionPlan>;
-using Predicate        = std::function<bool(cudnn_frontend::ExecutionPlan const &plan)>;
-using generatorSource  = std::function<cudnn_frontend::EngineConfigList(cudnn_frontend::OperationGraph &)>;
+/// Variety of renames.
+using executionOptions_t = std::vector<struct executionOption>;
+using executionPlans_t   = std::vector<cudnn_frontend::ExecutionPlan>;
+using Predicate          = std::function<bool(cudnn_frontend::ExecutionPlan const &plan)>;
+using GeneratorSource    = std::function<cudnn_frontend::EngineConfigList(cudnn_frontend::OperationGraph &)>;
 
 enum class CudnnFindSamplingTechnique {
-    CUDNN_FIND_SAMPLE_ONCE,             // Sample once quick but may have unstable values
-    CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE,  // Sample 3 times and take median.
-    CUDNN_FIND_SAMPLE_TILL_STABLE       // Sample multiple times till stable.
+    CUDNN_FIND_SAMPLE_ONCE,             //!< Sample once quick but may have unstable values
+    CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE,  //!< Sample 3 times and take median.
+    CUDNN_FIND_SAMPLE_TILL_STABLE       //!< Sample multiple times till stable.
 };
 
+/// EngineConfigGenerator class
+/// Contains a vector of methods that generate a vector of backend descriptor
+/// that can be used to create a plan for the method.
 class EngineConfigGenerator {
    private:
-    std::vector<generatorSource> engine_config_generators;
+    std::vector<GeneratorSource> engine_config_generators;
 
    public:
-    EngineConfigGenerator(int const sourceSize, generatorSource const *sources) {
+    /// Constructor that takes int a array of function pointers that will be called later.
+    /// in the generate_engine_config function.
+    EngineConfigGenerator(int const sourceSize, GeneratorSource const *sources) {
         for (int i = 0; i < sourceSize; i++) {
             engine_config_generators.push_back(sources[i]);
         }
     };
 
+    /// Calls the vector of engine_config_generators one by one and concatenates the generated
+    /// engine together into a single list.
     auto
     generate_engine_config(cudnn_frontend::OperationGraph &opGraph) -> cudnn_frontend::EngineConfigList {
         cudnn_frontend::EngineConfigList engine_configs;
@@ -62,25 +73,31 @@ class EngineConfigGenerator {
         return engine_configs;
     }
 
+    /// Returns the concatenated plan in the order of heuristic results.
     auto
-    cudnnGetPlan(cudnnHandle_t handle, cudnn_frontend::OperationGraph &&opGraph, Predicate pred) -> executionPlans;
+    cudnnGetPlan(cudnnHandle_t handle, cudnn_frontend::OperationGraph &&opGraph, Predicate pred) -> executionPlans_t;
 
+    /// Reruns the concatenated plans and measures the execution time following which
+    /// a sorted order of executionPlans are return to the user.
     template <CudnnFindSamplingTechnique samplingTechnique>
     auto
     cudnnFindPlan(cudnnHandle_t handle,
                   cudnn_frontend::OperationGraph &&opGraph,
                   cudnn_frontend::VariantPack &variantPack,
-                  Predicate pred) -> executionOptions;
+                  Predicate pred) -> executionOptions_t;
 };
 
-// Filter out the execution plan based on the prerequisite conditions.
+/// Filter out the execution plan based on the prerequisite conditions.
+/// Goes through vector of execution plans and if the predicate returns
+/// not to block, it is inserted into the filtered plans.
 auto
-filter(Predicate pred, executionPlans &plans) -> executionPlans {
-    executionPlans filtered_plans;
+filter(Predicate pred, executionPlans_t &plans) -> executionPlans_t {
+    executionPlans_t filtered_plans;
     for (auto &plan : plans) {
         if (!pred(plan)) {
             filtered_plans.emplace_back(std::move(plan));
         }
     }
     return filtered_plans;
+}
 }

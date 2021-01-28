@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -40,11 +40,6 @@ filter(EngineConfigList &from, EngineConfigList &to, std::function<bool(cudnnBac
     from.erase(p, from.end());
 }
 
-static bool
-allowAll(cudnnBackendDescriptor_t engine_config) {
-    return false;
-}
-
 template <cudnnBackendNumericalNote_t NUMERIC_NOTE>
 bool
 hasNumericalNote(cudnnBackendDescriptor_t engine_config) {
@@ -70,25 +65,5 @@ hasNumericalNote(cudnnBackendDescriptor_t engine_config) {
         }
     }
     return hasNumerics;
-}
-
-static bool
-isNonDeterministic(cudnnBackendDescriptor_t engine_config) {
-    return hasNumericalNote<CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC>(engine_config);
-}
-
-static bool
-isReducedPrecisionReduction(cudnnBackendDescriptor_t engine_config) {
-    return hasNumericalNote<CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION>(engine_config);
-}
-
-static bool
-isDownConvertingInputs(cudnnBackendDescriptor_t engine_config) {
-    return hasNumericalNote<CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS>(engine_config);
-}
-
-static bool
-isNonDeterministicOrisDowncasting(cudnnBackendDescriptor_t engine_config) {
-    return isNonDeterministic(engine_config) || isDownConvertingInputs(engine_config);
 }
 }

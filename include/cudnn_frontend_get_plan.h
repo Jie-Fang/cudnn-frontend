@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -24,18 +24,24 @@
 
 #include <cudnn_frontend_EngineConfigGenerator.h>
 
+namespace cudnn_frontend {
+
 auto
-EngineConfigGenerator::cudnnGetPlan(cudnnHandle_t handle, cudnn_frontend::OperationGraph&& opGraph, Predicate pred)
-    -> executionPlans {
+EngineConfigGenerator::cudnnGetPlan(cudnnHandle_t handle, OperationGraph&& opGraph, Predicate pred)
+    -> executionPlans_t {
     // Creating a set of execution plans that are supported.
-    executionPlans plans;
+    executionPlans_t plans;
     for (auto& engine_config : generate_engine_config(opGraph)) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
-            plans.push_back(
-                cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
-        } catch (cudnn_frontend::cudnnException e) {
-            std::cout << "[INFO] Plan is not supported!" << std::endl;
+#endif
+            plans.push_back(ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        } catch (cudnnException e) {
+            continue;
         }
+#endif
     }
     return filter(pred, plans);
+}
 }

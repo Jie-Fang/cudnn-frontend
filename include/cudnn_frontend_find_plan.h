@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -25,12 +25,18 @@
 #include <cudnn_frontend_EngineConfigGenerator.h>
 #include <map>
 
+namespace cudnn_frontend {
+
+/// Sorts the execution plans by their run time.
+/// The run time of plan may not trivial and hence we
+/// run it multiple times till we get a stable value.
+/// We have an additional dry-run which helps stabilize the
+/// time further.
 template <CudnnFindSamplingTechnique samplingTechnique>
 auto
-time_sorted_plan(cudnnHandle_t handle, executionPlans plans, cudnn_frontend::VariantPack &variantPack)
-    -> executionOptions {
-    executionOptions time_sorted_plans;
-    std::map<float, cudnn_frontend::ExecutionPlan &> timed_execution_plans;
+time_sorted_plan(cudnnHandle_t handle, executionPlans_t plans, VariantPack &variantPack) -> executionOptions_t {
+    executionOptions_t time_sorted_plans;
+    std::map<float, ExecutionPlan &> timed_execution_plans;
 
     const int maxIterCount =
         (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_ONCE)
@@ -93,16 +99,21 @@ auto
 EngineConfigGenerator::cudnnFindPlan(cudnnHandle_t handle,
                                      cudnn_frontend::OperationGraph &&opGraph,
                                      cudnn_frontend::VariantPack &variantPack,
-                                     Predicate pred) -> executionOptions {
-    // Creating a set of execution plans that are supported.
-    executionPlans plans;
+                                     Predicate pred) -> executionOptions_t {
+    /// Creating a set of execution plans that are supported.
+    executionPlans_t plans;
     for (auto &engine_config : generate_engine_config(opGraph)) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
+#endif
             plans.push_back(
                 cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).setEngineConfig(engine_config).build());
-        } catch (cudnn_frontend::cudnnException e) {
-            std::cout << "[INFO] Plan is not supported!" << std::endl;
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        } catch (cudnnException e) {
+            continue;
         }
+#endif
     }
     return time_sorted_plan<samplingTechnique>(handle, filter(pred, plans), variantPack);
+}
 }

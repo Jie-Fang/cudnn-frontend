@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,19 @@
 #include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
+///
+/// PointWiseDesc  Descriptor Class
+/// This class tells the properties of the PointWise operation
+/// Properties:
+///    - math_precision
+///    - mode
+///    - nan_propagation
+///    - upper_clip
+///    - lower_clip
+///
+/// Use PointWiseDesc_v8 to build this class.
+/// Describe returns a string describing the PointWise operation
+///
 class PointWiseDesc_v8 : public BackendDescriptor {
    public:
     friend class PointWiseDescBuilder_v8;
