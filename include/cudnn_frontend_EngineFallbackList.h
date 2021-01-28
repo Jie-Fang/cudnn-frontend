@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -23,29 +23,48 @@
 #pragma once
 
 #include <cudnn.h>
+#include <numeric>
 
 namespace cudnn_frontend {
 
-static constexpr std::array<int64_t, 3> fallback_engine_conv_list  = {0, 1, 28};
-static constexpr std::array<int64_t, 3> fallback_engine_dgrad_list = {0, 1, 25};
-static constexpr std::array<int64_t, 3> fallback_engine_wgrad_list = {0, 1, 20};
+auto static get_fallback_engine_list(cudnnBackendDescriptorType_t mode) -> std::vector<int> {
+    auto major_version = cudnnGetVersion() / 1000;
+    ;
+    auto minor_version = (cudnnGetVersion() / 100) % 10;
+    if (major_version >= 8) {
+        if (minor_version == 0) {
+            if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+                return {0, 1, 28};
+            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+                return {0, 1, 25};
+            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+                return {0, 1, 20};
+            } else {
+                return {};
+            }
+        } else if (minor_version == 1) {
+            if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+                std::vector<int> engine_list(50);
+                std::iota(engine_list.begin(), engine_list.end(), 0);
+                return engine_list;
+            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+                std::vector<int> engine_list(61);
+                std::iota(engine_list.begin(), engine_list.end(), 0);
+                return engine_list;
+            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+                return {0, 1, 20};
+            } else {
+                return {};
+            }
+        } else {
+            return {};
+        }
+    } else {
+        return {};
+    }
+}
 
 class EngineFallbackList_v8 : public BackendDescriptor {
-   private:
-    auto
-    get_fallback_list_size(cudnnBackendDescriptorType_t type) const -> int64_t {
-        switch (type) {
-            case CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR:
-                return fallback_engine_conv_list.size();
-            case CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR:
-                return fallback_engine_dgrad_list.size();
-            case CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR:
-                return fallback_engine_wgrad_list.size();
-            default:
-                return 0;
-        }
-    }
-
    public:
     friend class EngineFallbackListBuilder_v8;
 
@@ -117,35 +136,22 @@ class EngineFallbackListBuilder_v8 {
                                           "CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH field for heuristic");
             return std::move(m_fallback_list);
         };
-        if (m_fallback_list.mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
-            for (auto i = 0; i < fallback_engine_conv_list.size(); i++) {
+        auto fallback_engine_list = get_fallback_engine_list(m_fallback_list.mode);
+        for (auto i = 0; i < fallback_engine_list.size(); i++) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+            try {
+#endif
                 auto engine = cudnn_frontend::EngineBuilder_v8()
-                                  .setGlobalEngineIdx(fallback_engine_conv_list[i])
+                                  .setGlobalEngineIdx(fallback_engine_list[i])
                                   .setOperationGraph(m_fallback_list.opGraph)
                                   .build();
                 auto engine_config = cudnn_frontend::EngineConfigBuilder_v8().setEngine(engine).build();
                 m_fallback_list.m_engine_configs.emplace_back(engine_config.get_desc());
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+            } catch (cudnn_frontend::cudnnException) {
+                continue;
             }
-        }
-        if (m_fallback_list.mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
-            for (auto i = 0; i < fallback_engine_dgrad_list.size(); i++) {
-                auto engine = cudnn_frontend::EngineBuilder_v8()
-                                  .setGlobalEngineIdx(fallback_engine_dgrad_list[i])
-                                  .setOperationGraph(m_fallback_list.opGraph)
-                                  .build();
-                auto engine_config = cudnn_frontend::EngineConfigBuilder_v8().setEngine(engine).build();
-                m_fallback_list.m_engine_configs.emplace_back(engine_config.get_desc());
-            }
-        }
-        if (m_fallback_list.mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
-            for (auto i = 0; i < fallback_engine_wgrad_list.size(); i++) {
-                auto engine = cudnn_frontend::EngineBuilder_v8()
-                                  .setGlobalEngineIdx(fallback_engine_wgrad_list[i])
-                                  .setOperationGraph(m_fallback_list.opGraph)
-                                  .build();
-                auto engine_config = cudnn_frontend::EngineConfigBuilder_v8().setEngine(engine).build();
-                m_fallback_list.m_engine_configs.push_back(engine_config.get_desc());
-            }
+#endif
         }
         return std::move(m_fallback_list);
     }

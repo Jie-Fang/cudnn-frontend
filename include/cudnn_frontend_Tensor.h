@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -43,6 +43,7 @@ namespace cudnn_frontend {
 ///    - unique identifier
 ///    - tensor dimensions
 ///    - tensor strides
+///    - isVirtual
 ///
 /// Use TensorBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
@@ -90,13 +91,14 @@ class Tensor_v8 : public BackendDescriptor {
     Tensor_v8 &
     operator=(Tensor_v8 const &) = delete;
 
-    cudnnDataType_t data_type               = CUDNN_DATA_FLOAT;
-    int64_t btensor_dimA[CUDNN_DIM_MAX + 1] = {-1};  // n, g, c, d, h, w
-    int64_t btensor_strA[CUDNN_DIM_MAX + 1] = {-1};  // n, g, c, d, h, w
-    int64_t id                              = -1;
-    int64_t alignment                       = -1;
-    int64_t nDims                           = -1;
-    bool isVirtual                          = false;
+    cudnnDataType_t data_type               = CUDNN_DATA_FLOAT;  //! Datatype of the elements
+    int64_t btensor_dimA[CUDNN_DIM_MAX + 1] = {-1};              //! n, g, c, d, h, w
+    int64_t btensor_strA[CUDNN_DIM_MAX + 1] = {-1};              //! n, g, c, d, h, w
+    int64_t id                              = -1;                //! Unique id of the tensor
+    int64_t alignment                       = -1;                //! Alignment of the tensor.
+    //! Certain engine config expect minimum alignment of 16B
+    int64_t nDims  = -1;     //! Number of Dimensions of the tensor
+    bool isVirtual = false;  //! Whether it is an intermediate tensor of an op graph
 };
 
 ///
@@ -141,8 +143,8 @@ class TensorBuilder_v8 {
     }
     //! Set Alignment of the tensor
     auto
-    setVirtual() -> TensorBuilder_v8 & {
-        m_tensor.isVirtual = true;
+    setVirtual(bool virtual_ = true) -> TensorBuilder_v8 & {
+        m_tensor.isVirtual = virtual_;
         return *this;
     }
     /** @} */
@@ -278,6 +280,6 @@ class TensorBuilder_v8 {
     operator=(TensorBuilder_v8 const &) = delete;
 
    private:
-    Tensor_v8 m_tensor;
+    Tensor_v8 m_tensor;  //! Tensor built by the TensorBuilder class.
 };
 }

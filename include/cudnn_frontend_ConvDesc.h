@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -104,13 +104,13 @@ class ConvDesc_v8 : public BackendDescriptor {
     ConvDesc_v8 &
     operator=(ConvDesc_v8 const &) = delete;
 
-    cudnnDataType_t data_type           = CUDNN_DATA_FLOAT;
-    cudnnConvolutionMode_t mode         = CUDNN_CONVOLUTION;
-    int64_t nDims                       = -1;
-    int64_t padLower[CUDNN_DIM_MAX + 1] = {0};   // n, g, c, d, h, w
-    int64_t padUpper[CUDNN_DIM_MAX + 1] = {0};   // n, g, c, d, h, w
-    int64_t dilation[CUDNN_DIM_MAX + 1] = {0};   // n, g, c, d, h, w
-    int64_t stride[CUDNN_DIM_MAX + 1]   = {-1};  // n, g, c, d, h, w
+    cudnnDataType_t data_type           = CUDNN_DATA_FLOAT;   //! Convolution operation data type
+    cudnnConvolutionMode_t mode         = CUDNN_CONVOLUTION;  //! Convolution vs cross correlation
+    int64_t nDims                       = -1;                 //! number of dimensions
+    int64_t padLower[CUDNN_DIM_MAX + 1] = {0};                //! n, g, c, d, h, w
+    int64_t padUpper[CUDNN_DIM_MAX + 1] = {0};                //! n, g, c, d, h, w
+    int64_t dilation[CUDNN_DIM_MAX + 1] = {0};                //! n, g, c, d, h, w
+    int64_t stride[CUDNN_DIM_MAX + 1]   = {-1};               //! n, g, c, d, h, w
 };
 
 ///

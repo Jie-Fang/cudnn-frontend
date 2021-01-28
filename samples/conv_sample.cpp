@@ -24,6 +24,32 @@
 #include <cudnn_frontend_find_plan.h>
 #include <cudnn_frontend_get_plan.h>
 
+namespace {
+bool
+isNonDeterministic(cudnnBackendDescriptor_t engine_config) {
+    return cudnn_frontend::hasNumericalNote<CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC>(engine_config);
+}
+
+bool
+isReducedPrecisionReduction(cudnnBackendDescriptor_t engine_config) {
+    return cudnn_frontend::hasNumericalNote<CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION>(engine_config);
+}
+
+bool
+isDownConvertingInputs(cudnnBackendDescriptor_t engine_config) {
+    return cudnn_frontend::hasNumericalNote<CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS>(engine_config);
+}
+
+bool
+isNonDeterministicOrisDownConverting(cudnnBackendDescriptor_t engine_config) {
+    return isNonDeterministic(engine_config) || isDownConvertingInputs(engine_config);
+}
+
+bool
+allowAll(cudnnBackendDescriptor_t engine_config) {
+    return false;
+}
+}
 enum {
     X_TENSOR,
     Y_TENSOR,
@@ -216,7 +242,7 @@ auto heurgen_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_front
 
     auto &engine_configs = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
     cudnn_frontend::EngineConfigList filtered_configs;
-    cudnn_frontend::filter(engine_configs, filtered_configs, cudnn_frontend::allowAll);
+    cudnn_frontend::filter(engine_configs, filtered_configs, ::allowAll);
     return filtered_configs;
 };
 
@@ -231,7 +257,7 @@ auto fallback_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_fron
     cudnn_frontend::EngineConfigList filtered_configs;
     // We create this filter to pre-remove configs being passed to cudnnFind.
     // This is just a sample and is not necessary
-    cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
+    cudnn_frontend::filter(fallback_list, filtered_configs, ::isNonDeterministic);
 
     return filtered_configs;
 };
@@ -418,8 +444,8 @@ run_with_external_config(int64_t* x_dim_padded,
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
 
         cudnn_frontend::EngineConfigList filtered_configs;
-        cudnn_frontend::filter(engine_config, filtered_configs, cudnn_frontend::isNonDeterministicOrisDowncasting);
-        cudnn_frontend::filter(fallback_list, filtered_configs, cudnn_frontend::isNonDeterministic);
+        cudnn_frontend::filter(engine_config, filtered_configs, ::isNonDeterministicOrisDownConverting);
+        cudnn_frontend::filter(fallback_list, filtered_configs, ::isNonDeterministic);
 
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
@@ -656,13 +682,13 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() != 0;
         };
 
-        std::array<generatorSource const, 2> sources = {heurgen_method, fallback_method};
-        EngineConfigGenerator generator(sources.size(), sources.data());
+        std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
+        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
-        auto options = generator.cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+        auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
-        std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
+        std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
             std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
                       << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
@@ -811,13 +837,13 @@ run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() > max_workspace_size;
         };
 
-        std::array<generatorSource const, 1> sources = {heurgen_method};
-        EngineConfigGenerator generator(sources.size(), sources.data());
+        std::array<cudnn_frontend::GeneratorSource const, 1> sources = {heurgen_method};
+        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
-        auto options = generator.cudnnFindPlan<CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
+        auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
-        std::for_each(options.begin(), options.end(), [](struct executionOption& opt) {
+        std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
             std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
                       << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
@@ -870,8 +896,8 @@ run_from_cudnn_get(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() != 0;
         };
 
-        std::array<generatorSource const, 1> sources = {heurgen_method};
-        EngineConfigGenerator generator(sources.size(), sources.data());
+        std::array<cudnn_frontend::GeneratorSource const, 1> sources = {heurgen_method};
+        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
         auto plans = generator.cudnnGetPlan(handle_, std::move(opGraph), sample_predicate_function);
 
