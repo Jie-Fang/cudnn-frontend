@@ -54,7 +54,6 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     std::string
     describe() const override {
         std::stringstream ss;
-        char sep = ' ';
         ss << "CUDNN_BACKEND_POINTWISE_DESCRIPTOR :"
            << " Mode: " << (mode) << " Math precision " << (math_precision);
         return ss.str();
@@ -104,7 +103,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     cudnnPointwiseMode_t mode             = CUDNN_POINTWISE_ADD;
     cudnnNanPropagation_t nan_propagation = CUDNN_NOT_PROPAGATE_NAN;
     double upper_clip                     = std::numeric_limits<double>::max();
-    double lower_clip                     = std::numeric_limits<double>::min();
+    double lower_clip                     = 0.0;
 };
 
 ////
