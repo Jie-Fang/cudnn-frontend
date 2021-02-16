@@ -21,10 +21,12 @@
  */
 
 #include "conv_sample.h"
+#include <cudnn_frontend.h>
 #include <cudnn_frontend_find_plan.h>
 #include <cudnn_frontend_get_plan.h>
 
 namespace {
+
 bool
 isNonDeterministic(cudnnBackendDescriptor_t engine_config) {
     return cudnn_frontend::hasNumericalNote<CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC>(engine_config);
@@ -47,8 +49,10 @@ isNonDeterministicOrisDownConverting(cudnnBackendDescriptor_t engine_config) {
 
 bool
 allowAll(cudnnBackendDescriptor_t engine_config) {
+    (void)engine_config;
     return false;
 }
+
 }
 enum {
     X_TENSOR,
@@ -81,8 +85,9 @@ create_conv_bias_add_act_descriptors(int64_t* x_dim_padded,
                                      int64_t* w_dim_padded,
                                      int64_t* y_dim_padded,
                                      cudnnDataType_t dataType) {
-    const int convDim = 2;
-
+    (void)padA;
+    (void)convstrideA;
+    (void)dilationA;
     int64_t b_dim_padded[4];
     b_dim_padded[0] = y_dim_padded[0];
     b_dim_padded[1] = y_dim_padded[1];
@@ -358,7 +363,6 @@ run_from_global_index(int64_t* x_dim_padded,
             descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR, handle_);
         std::cout << opGraph.describe() << std::endl;
 
-        auto total_engines = opGraph.getEngineCount();
         // We have to randomly pick one engine from [0, total_engines)
         // Selecting "0" by default
         auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
@@ -457,7 +461,6 @@ run_with_external_config(int64_t* x_dim_padded,
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         std::cout << plan.describe() << std::endl;
-        auto workspace_size = plan.getWorkspaceSize();
         void* data_ptrs[]   = {devPtrX, devPtrY, devPtrW};
         int64_t uids[]      = {'x', 'y', 'w'};
         auto variantPack    = cudnn_frontend::VariantPackBuilder()

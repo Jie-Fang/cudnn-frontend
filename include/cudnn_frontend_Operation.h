@@ -84,9 +84,11 @@ class Operation_v8 : public BackendDescriptor {
           pwdesc(from.pwdesc),
           alphabetaType(from.alphabetaType),
           alpha_s(from.alpha_s),
-          alpha_d(from.alpha_d),
           beta_s(from.beta_s),
+          alpha2_s(from.alpha2_s),
+          alpha_d(from.alpha_d),
           beta_d(from.beta_d),
+          alpha2_d(from.alpha2_d),
           pointwise_port_count(from.pointwise_port_count),
           pointwise_mode(from.pointwise_mode),
           operationTag(from.operationTag) {}
@@ -562,6 +564,9 @@ class OperationBuilder_v8 {
                     break;
                 case CUDNN_POINTWISE_ELU_FWD:
                     m_operation.operationTag = "EluFwd";
+                    break;
+                default:
+                    m_operation.operationTag = "OtherOp";
                     break;
             }
 

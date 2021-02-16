@@ -33,7 +33,7 @@
 #include <tuple>
 #include <functional>
 
-#include <cudnn_frontend.h>
+#include <cudnn.h>
 #include "fp16_dev.h"
 #include "fp16_emu.h"
 #include "helpers.h"

@@ -223,8 +223,6 @@ TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
     int64_t yTensorDim_padded[4];
     int64_t wTensorDim_padded[4];
 
-    int numErrors = 0;
-
     yTensorDim[0] = xTensorDim[0];
     yTensorDim[1] = wTensorDim[0];
     for (int dim = 0; dim < 2; dim++) {
@@ -329,8 +327,6 @@ TEST_CASE("ConvBiasAct sample with cudnnFindPlan", "[frontend][cudnnFindPlan][co
     int64_t xTensorDim_padded[4];
     int64_t yTensorDim_padded[4];
     int64_t wTensorDim_padded[4];
-
-    int numErrors = 0;
 
     yTensorDim[0] = xTensorDim[0];
     yTensorDim[1] = wTensorDim[0];
