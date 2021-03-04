@@ -38,7 +38,6 @@
 #include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
-
 ///
 /// Operation_v8 Class
 /// This class has the properties of the operation
@@ -46,6 +45,9 @@ namespace cudnn_frontend {
 ///    - xDesc
 ///    - yDesc
 ///    - wdesc
+///    - bdesc
+///    - dydesc
+///    - dxdesc
 ///    - cdesc
 ///    - alpha
 ///    - beta
@@ -65,6 +67,8 @@ class Operation_v8 : public BackendDescriptor {
         ss << std::hex << " Y " << ydesc;
         ss << std::hex << " W " << wdesc;
         ss << std::hex << " B " << bdesc;
+        ss << std::hex << " DY " << dydesc;
+        ss << std::hex << " DX " << dxdesc;
         ss << std::hex << " C " << cdesc;
         ss << std::hex << " P " << pwdesc;
         ss << std::dec << " alphabetaType " << alphabetaType;
@@ -80,6 +84,8 @@ class Operation_v8 : public BackendDescriptor {
           ydesc(from.ydesc),
           wdesc(from.wdesc),
           bdesc(from.bdesc),
+          dydesc(from.dydesc),
+          dxdesc(from.dxdesc),
           cdesc(from.cdesc),
           pwdesc(from.pwdesc),
           alphabetaType(from.alphabetaType),
@@ -117,6 +123,8 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor ydesc  = nullptr;
     ManagedOpaqueDescriptor wdesc  = nullptr;
     ManagedOpaqueDescriptor bdesc  = nullptr;
+    ManagedOpaqueDescriptor dydesc = nullptr;
+    ManagedOpaqueDescriptor dxdesc = nullptr;
     ManagedOpaqueDescriptor cdesc  = nullptr;
     ManagedOpaqueDescriptor pwdesc = nullptr;
 
@@ -125,6 +133,9 @@ class Operation_v8 : public BackendDescriptor {
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
     int64_t pointwise_port_count = -1;
     cudnnPointwiseMode_t pointwise_mode;
+    bool is_pointwise_activation_fwd_op = false;
+    bool is_pointwise_activation_bwd_op = false;
+    bool is_pointwise_math_op           = false;
     std::string operationTag;
 };
 
@@ -136,6 +147,7 @@ class OperationBuilder_v8 {
    private:
     Operation_v8 m_operation;
     bool is_convolution_op = false;
+    bool is_pointwise_op   = false;
 
    public:
     /** @defgroup OperationBuilder_v8
@@ -180,6 +192,23 @@ class OperationBuilder_v8 {
         m_operation.wdesc = tensor.get_desc();
         return *this;
     }
+
+    auto
+    setdyDesc(ManagedOpaqueDescriptor const &raw_tensor) -> OperationBuilder_v8 & {
+        m_operation.dydesc = raw_tensor;
+        return *this;
+    }
+    auto
+    setdyDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.dydesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setdxDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.dxdesc = tensor.get_desc();
+        return *this;
+    }
+
     auto
     setcDesc(ConvDesc_v8 const &conv) -> OperationBuilder_v8 & {
         if (is_convolution_op == false) {
@@ -202,8 +231,32 @@ class OperationBuilder_v8 {
         m_operation.pwdesc               = pointWiseDesc.get_desc();
         m_operation.pointwise_port_count = pointWiseDesc.getPortCount();
         m_operation.pointwise_mode       = pointWiseDesc.getPointWiseMode();
+
+        m_operation.is_pointwise_math_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_ADD) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MUL) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_SQRT));
+
+        m_operation.is_pointwise_activation_fwd_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_RELU_FWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_TANH_FWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SIGMOID_FWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_FWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_FWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_FWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_FWD));
+
+        m_operation.is_pointwise_activation_bwd_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_RELU_BWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_TANH_BWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SIGMOID_BWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_BWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_BWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_BWD) ||
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_BWD));
+
         return *this;
     }
+
     auto
     setAlpha(float alpha) -> OperationBuilder_v8 & {
         m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
@@ -252,6 +305,8 @@ class OperationBuilder_v8 {
         is_convolution_op   = ((m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
                              (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
                              (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR));
+
+        is_pointwise_op = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR);
     }
     /** @} */
 
@@ -264,13 +319,23 @@ class OperationBuilder_v8 {
                 &m_operation, m_operation.status, "CUDNN_BACKEND_OPERATION: Operation not initialized properly");
             return std::move(m_operation);
         }
+
         if (m_operation.xdesc == nullptr) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
-            return std::move(m_operation);
+            if (is_convolution_op) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
+                return std::move(m_operation);
+            } else if (is_pointwise_op) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_XDESC");
+                return std::move(m_operation);
+            }
         }
+
         if (m_operation.wdesc == nullptr && is_convolution_op) {
             set_error_and_throw_exception(
                 &m_operation,
@@ -278,13 +343,48 @@ class OperationBuilder_v8 {
                 "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_W");
             return std::move(m_operation);
         }
-        if (m_operation.ydesc == nullptr && is_convolution_op) {
+
+        if (m_operation.bdesc == nullptr) {
+            if (m_operation.is_pointwise_math_op && m_operation.pointwise_port_count == 3) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_BDESC");
+                return std::move(m_operation);
+            }
+        }
+
+        if (m_operation.ydesc == nullptr) {
+            if (is_convolution_op) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_Y");
+                return std::move(m_operation);
+            } else if (m_operation.is_pointwise_activation_fwd_op || m_operation.is_pointwise_math_op) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_YDESC");
+                return std::move(m_operation);
+            }
+        }
+
+        if (m_operation.dydesc == nullptr && m_operation.is_pointwise_activation_bwd_op) {
             set_error_and_throw_exception(
                 &m_operation,
                 CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_Y");
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_DYDESC");
             return std::move(m_operation);
         }
+        if (m_operation.dxdesc == nullptr && m_operation.is_pointwise_activation_bwd_op) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_DXDESC");
+            return std::move(m_operation);
+        }
+
         if (m_operation.cdesc == nullptr && is_convolution_op) {
             set_error_and_throw_exception(
                 &m_operation,
@@ -299,6 +399,7 @@ class OperationBuilder_v8 {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnCreate Failed");
             return std::move(m_operation);
         }
+
         if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
             m_operation.operationTag = "ConvFwd";
 
@@ -565,9 +666,52 @@ class OperationBuilder_v8 {
                 case CUDNN_POINTWISE_ELU_FWD:
                     m_operation.operationTag = "EluFwd";
                     break;
+                case CUDNN_POINTWISE_GELU_FWD:
+                    m_operation.operationTag = "GeluFwd";
+                    break;
+                case CUDNN_POINTWISE_SOFTPLUS_FWD:
+                    m_operation.operationTag = "SoftplusFwd";
+                    break;
+                case CUDNN_POINTWISE_SWISH_FWD:
+                    m_operation.operationTag = "SwishFwd";
+                    break;
+                case CUDNN_POINTWISE_RELU_BWD:
+                    m_operation.operationTag = "ReluBwd";
+                    break;
+                case CUDNN_POINTWISE_TANH_BWD:
+                    m_operation.operationTag = "TanhBwd";
+                    break;
+                case CUDNN_POINTWISE_SIGMOID_BWD:
+                    m_operation.operationTag = "SigmoidBwd";
+                    break;
+                case CUDNN_POINTWISE_ELU_BWD:
+                    m_operation.operationTag = "EluBwd";
+                    break;
+                case CUDNN_POINTWISE_GELU_BWD:
+                    m_operation.operationTag = "GeluBwd";
+                    break;
+                case CUDNN_POINTWISE_SOFTPLUS_BWD:
+                    m_operation.operationTag = "SoftplusBwd";
+                    break;
+                case CUDNN_POINTWISE_SWISH_BWD:
+                    m_operation.operationTag = "SwishBwd";
+                    break;
                 default:
                     m_operation.operationTag = "OtherOp";
                     break;
+            }
+
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR,
+                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                              1,
+                                              &(m_operation.pwdesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR Failed");
+                return std::move(m_operation);
             }
 
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
@@ -582,30 +726,48 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_XDESC Failed");
                 return std::move(m_operation);
             }
-            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                                              CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR,
-                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                              1,
-                                              &(m_operation.pwdesc->get_backend_descriptor()));
-            if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR Failed");
-                return std::move(m_operation);
+
+            if (!m_operation.is_pointwise_activation_bwd_op) {
+                status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                                  CUDNN_ATTR_OPERATION_POINTWISE_YDESC,
+                                                  CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                  1,
+                                                  &(m_operation.ydesc->get_backend_descriptor()));
+                if (status != CUDNN_STATUS_SUCCESS) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_YDESC Failed");
+                    return std::move(m_operation);
+                }
+            } else {
+                status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                                  CUDNN_ATTR_OPERATION_POINTWISE_DYDESC,
+                                                  CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                  1,
+                                                  &(m_operation.dydesc->get_backend_descriptor()));
+                if (status != CUDNN_STATUS_SUCCESS) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_DYDESC Failed");
+                    return std::move(m_operation);
+                }
+
+                status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                                  CUDNN_ATTR_OPERATION_POINTWISE_DXDESC,
+                                                  CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                  1,
+                                                  &(m_operation.dxdesc->get_backend_descriptor()));
+                if (status != CUDNN_STATUS_SUCCESS) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_DXDESC Failed");
+                    return std::move(m_operation);
+                }
             }
-            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                                              CUDNN_ATTR_OPERATION_POINTWISE_YDESC,
-                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                              1,
-                                              &(m_operation.ydesc->get_backend_descriptor()));
-            if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_YDESC Failed");
-                return std::move(m_operation);
-            }
+
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
                                                                          : static_cast<void *>(&m_operation.alpha_d));
             void *alpha2 = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha2_s)
@@ -634,7 +796,8 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_ALPHA2 Failed");
                 return std::move(m_operation);
             }
-            if (m_operation.pointwise_port_count == 3) {
+
+            if (m_operation.pointwise_port_count == 3 && !m_operation.is_pointwise_activation_bwd_op) {
                 status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                                   CUDNN_ATTR_OPERATION_POINTWISE_BDESC,
                                                   CUDNN_TYPE_BACKEND_DESCRIPTOR,
