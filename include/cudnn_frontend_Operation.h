@@ -740,9 +740,7 @@ class OperationBuilder_v8 {
                         "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_YDESC Failed");
                     return std::move(m_operation);
                 }
-            }
-
-            if (m_operation.is_pointwise_activation_bwd_op) {
+            } else {
                 status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                                   CUDNN_ATTR_OPERATION_POINTWISE_DYDESC,
                                                   CUDNN_TYPE_BACKEND_DESCRIPTOR,
