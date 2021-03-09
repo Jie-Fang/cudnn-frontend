@@ -78,7 +78,7 @@ using common_convbias_descriptors = std::tuple<cudnn_frontend::Tensor,
                                                cudnn_frontend::Tensor>;
 
 common_convbias_descriptors
-create_conv_bias_add_act_descriptors(int64_t* x_dim_padded,
+create_conv_add_bias_act_descriptors(int64_t* x_dim_padded,
                                      int64_t* padA,
                                      int64_t* convstrideA,
                                      int64_t* dilationA,
@@ -483,7 +483,7 @@ run_with_external_config(int64_t* x_dim_padded,
 
 // create_plan(std::vector<cudnnBackendDescriptor_t> &)
 void
-run_conv_bias_add_activation(int64_t* x_dim_padded,
+run_conv_add_bias_activation(int64_t* x_dim_padded,
                              int64_t* pad,
                              int64_t* convstride,
                              int64_t* dilation,
@@ -502,7 +502,7 @@ run_conv_bias_add_activation(int64_t* x_dim_padded,
         checkCudnnErr(cudnnCreate(&handle_));
 
         // Creates the necessary tensor descriptors
-        common_convbias_descriptors tensors = create_conv_bias_add_act_descriptors(
+        common_convbias_descriptors tensors = create_conv_add_bias_act_descriptors(
             x_dim_padded, pad, convstride, dilation, w_dim_padded, y_dim_padded, dataType);
         std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;
@@ -709,7 +709,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
 }
 
 void
-run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
+run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
                                              int64_t* pad,
                                              int64_t* convstride,
                                              int64_t* dilation,
@@ -728,7 +728,7 @@ run_conv_bias_add_activation_with_cudnn_find(int64_t* x_dim_padded,
         checkCudnnErr(cudnnCreate(&handle_));
 
         // Creates the necessary tensor descriptors
-        common_convbias_descriptors tensors = create_conv_bias_add_act_descriptors(
+        common_convbias_descriptors tensors = create_conv_add_bias_act_descriptors(
             x_dim_padded, pad, convstride, dilation, w_dim_padded, y_dim_padded, dataType);
         std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;

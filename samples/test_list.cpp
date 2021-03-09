@@ -26,6 +26,7 @@
 
 #include "cpu_references.h"
 #include "conv_sample.h"
+#include "fusion_sample.h"
 
 TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" ) {
     INFO("TEST_CASE :: Use  global index for engine generation");
@@ -36,9 +37,6 @@ TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" )
     int64_t dilationA[] = {1, 1};
     int64_t convstrideA[] = {1, 1};
 
-    int64_t dimA_padded[4];
-    int64_t outdimA_padded[4];
-    int64_t filterdimA_padded[4];
 
     int numErrors = 0;
 
@@ -48,31 +46,22 @@ TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" )
         outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        dimA_padded[i]       = dimA[i];
-        outdimA_padded[i]    = outdimA[i];
-        filterdimA_padded[i] = filterdimA[i];
-    }
 
     cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
 
-    printf("====USER DIMENSIONS====\n");
+    printf("====DIMENSIONS====\n");
     printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
     printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
     printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
 
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA_padded[0], dimA_padded[1], dimA_padded[2], dimA_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA_padded[0], filterdimA_padded[1], filterdimA_padded[2], filterdimA_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA_padded[0], outdimA_padded[1], outdimA_padded[2], outdimA_padded[3]);
 
-    int Xsize = dimA_padded[0] * dimA_padded[1] * dimA_padded[2] * dimA_padded[3];
-    int Wsize = filterdimA_padded[0] * filterdimA_padded[1] * filterdimA_padded[2] * filterdimA_padded[3];
-    int Ysize = outdimA_padded[0] * outdimA_padded[1] * outdimA_padded[2] * outdimA_padded[3];
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Wsize);
 
-    run_from_global_index(dimA, padA, convstrideA, dilationA, filterdimA_padded, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    run_from_global_index(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostW, sm.devPtrW, sizeof(sm.hostW[0]) * Wsize, cudaMemcpyDeviceToHost));
@@ -97,10 +86,6 @@ TEST_CASE("Use heuristics for execution", "[frontend][heuristics][conv]" ) {
     int64_t dilationA[] = {1, 1};
     int64_t convstrideA[] = {1, 1};
 
-    int64_t dimA_padded[4];
-    int64_t outdimA_padded[4];
-    int64_t filterdimA_padded[4];
-
     int numErrors = 0;
 
     outdimA[0] = dimA[0];
@@ -109,31 +94,22 @@ TEST_CASE("Use heuristics for execution", "[frontend][heuristics][conv]" ) {
         outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        dimA_padded[i]       = dimA[i];
-        outdimA_padded[i]    = outdimA[i];
-        filterdimA_padded[i] = filterdimA[i];
-    }
 
     cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
 
-    printf("====USER DIMENSIONS====\n");
+    printf("====DIMENSIONS====\n");
     printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
     printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
     printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
 
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA_padded[0], dimA_padded[1], dimA_padded[2], dimA_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA_padded[0], filterdimA_padded[1], filterdimA_padded[2], filterdimA_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA_padded[0], outdimA_padded[1], outdimA_padded[2], outdimA_padded[3]);
 
-    int Xsize = dimA_padded[0] * dimA_padded[1] * dimA_padded[2] * dimA_padded[3];
-    int Wsize = filterdimA_padded[0] * filterdimA_padded[1] * filterdimA_padded[2] * filterdimA_padded[3];
-    int Ysize = outdimA_padded[0] * outdimA_padded[1] * outdimA_padded[2] * outdimA_padded[3];
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Ysize);
 
-    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA_padded, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
@@ -158,9 +134,6 @@ TEST_CASE("Use fallback for execution", "[frontend][global_index][dgrad]" ) {
     int64_t dilationA[] = {1, 1};
     int64_t convstrideA[] = {1, 1};
 
-    int64_t dimA_padded[4];
-    int64_t outdimA_padded[4];
-    int64_t filterdimA_padded[4];
 
     int numErrors = 0;
 
@@ -170,31 +143,21 @@ TEST_CASE("Use fallback for execution", "[frontend][global_index][dgrad]" ) {
         outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        dimA_padded[i]       = dimA[i];
-        outdimA_padded[i]    = outdimA[i];
-        filterdimA_padded[i] = filterdimA[i];
-    }
-
     cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
 
-    printf("====USER DIMENSIONS====\n");
+    printf("====DIMENSIONS====\n");
     printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
     printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
     printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
 
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA_padded[0], dimA_padded[1], dimA_padded[2], dimA_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA_padded[0], filterdimA_padded[1], filterdimA_padded[2], filterdimA_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA_padded[0], outdimA_padded[1], outdimA_padded[2], outdimA_padded[3]);
 
-    int Xsize = dimA_padded[0] * dimA_padded[1] * dimA_padded[2] * dimA_padded[3];
-    int Wsize = filterdimA_padded[0] * filterdimA_padded[1] * filterdimA_padded[2] * filterdimA_padded[3];
-    int Ysize = outdimA_padded[0] * outdimA_padded[1] * outdimA_padded[2] * outdimA_padded[3];
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Xsize);
 
-    run_with_external_config(dimA, padA, convstrideA, dilationA, filterdimA_padded, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    run_with_external_config(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostX, sm.devPtrX, sizeof(sm.hostX[0]) * Xsize, cudaMemcpyDeviceToHost));
@@ -219,9 +182,6 @@ TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
     int64_t dilation[]   = {1, 1};
     int64_t convstride[] = {1, 1};
     
-    int64_t xTensorDim_padded[4];
-    int64_t yTensorDim_padded[4];
-    int64_t wTensorDim_padded[4];
 
     yTensorDim[0] = xTensorDim[0];
     yTensorDim[1] = wTensorDim[0];
@@ -229,25 +189,20 @@ TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
         yTensorDim[dim + 2] = getFwdConvOutputDim(xTensorDim[dim + 2], padding[dim], wTensorDim[dim + 2], convstride[dim], dilation[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        xTensorDim_padded[i] = xTensorDim[i];
-        yTensorDim_padded[i] = yTensorDim[i];
-        wTensorDim_padded[i] = wTensorDim[i];
-    }
 
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim_padded[0], xTensorDim_padded[1], xTensorDim_padded[2], xTensorDim_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim_padded[0], wTensorDim_padded[1], wTensorDim_padded[2], wTensorDim_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", yTensorDim_padded[0], yTensorDim_padded[1], yTensorDim_padded[2], yTensorDim_padded[3]);
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim[0], xTensorDim[1], xTensorDim[2], xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim[0], wTensorDim[1], wTensorDim[2], wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", yTensorDim[0], yTensorDim[1], yTensorDim[2], yTensorDim[3]);
 
-    int Xsize = xTensorDim_padded[0] * xTensorDim_padded[1] * xTensorDim_padded[2] * xTensorDim_padded[3];
-    int Ysize = yTensorDim_padded[0] * yTensorDim_padded[1] * yTensorDim_padded[2] * yTensorDim_padded[3];
-    int Wsize = wTensorDim_padded[0] * wTensorDim_padded[1] * wTensorDim_padded[2] * wTensorDim_padded[3];
-    int Bsize = yTensorDim_padded[0] * yTensorDim_padded[1] * 1 * 1;
+    int Xsize = xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3];
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    int Wsize = wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3];
+    int Bsize = yTensorDim[0] * yTensorDim[1] * 1 * 1;
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Bsize, true);
 
-    run_conv_bias_add_activation(xTensorDim_padded, padding, convstride, dilation, wTensorDim_padded, yTensorDim_padded, CUDNN_DATA_FLOAT, sm.devPtrX, sm.devPtrW, sm.devPtrY, sm.devPtrZ, sm.devPtrB);
+    run_conv_add_bias_activation(xTensorDim, padding, convstride, dilation, wTensorDim, yTensorDim, CUDNN_DATA_FLOAT, sm.devPtrX, sm.devPtrW, sm.devPtrY, sm.devPtrZ, sm.devPtrB);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
@@ -263,10 +218,6 @@ TEST_CASE("Use cudnnFindPlan for execution", "[frontend][cudnnFindPlan][conv]" )
     int64_t dilationA[] = {1, 1};
     int64_t convstrideA[] = {1, 1};
 
-    int64_t dimA_padded[4];
-    int64_t outdimA_padded[4];
-    int64_t filterdimA_padded[4];
-
     int numErrors = 0;
 
     outdimA[0] = dimA[0];
@@ -275,31 +226,22 @@ TEST_CASE("Use cudnnFindPlan for execution", "[frontend][cudnnFindPlan][conv]" )
         outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        dimA_padded[i]       = dimA[i];
-        outdimA_padded[i]    = outdimA[i];
-        filterdimA_padded[i] = filterdimA[i];
-    }
 
     cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
 
-    printf("====USER DIMENSIONS====\n");
+    printf("====DIMENSIONS====\n");
     printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
     printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
     printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
 
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA_padded[0], dimA_padded[1], dimA_padded[2], dimA_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA_padded[0], filterdimA_padded[1], filterdimA_padded[2], filterdimA_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA_padded[0], outdimA_padded[1], outdimA_padded[2], outdimA_padded[3]);
 
-    int Xsize = dimA_padded[0] * dimA_padded[1] * dimA_padded[2] * dimA_padded[3];
-    int Wsize = filterdimA_padded[0] * filterdimA_padded[1] * filterdimA_padded[2] * filterdimA_padded[3];
-    int Ysize = outdimA_padded[0] * outdimA_padded[1] * outdimA_padded[2] * outdimA_padded[3];
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Ysize);
 
-    run_from_cudnn_find(dimA, padA, convstrideA, dilationA, filterdimA_padded, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    run_from_cudnn_find(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
@@ -324,9 +266,6 @@ TEST_CASE("ConvBiasAct sample with cudnnFindPlan", "[frontend][cudnnFindPlan][co
     int64_t dilation[]   = {1, 1};
     int64_t convstride[] = {1, 1};
 
-    int64_t xTensorDim_padded[4];
-    int64_t yTensorDim_padded[4];
-    int64_t wTensorDim_padded[4];
 
     yTensorDim[0] = xTensorDim[0];
     yTensorDim[1] = wTensorDim[0];
@@ -334,25 +273,20 @@ TEST_CASE("ConvBiasAct sample with cudnnFindPlan", "[frontend][cudnnFindPlan][co
         yTensorDim[dim + 2] = getFwdConvOutputDim(xTensorDim[dim + 2], padding[dim], wTensorDim[dim + 2], convstride[dim], dilation[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        xTensorDim_padded[i] = xTensorDim[i];
-        yTensorDim_padded[i] = yTensorDim[i];
-        wTensorDim_padded[i] = wTensorDim[i];
-    }
 
     printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim_padded[0], xTensorDim_padded[1], xTensorDim_padded[2], xTensorDim_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim_padded[0], wTensorDim_padded[1], wTensorDim_padded[2], wTensorDim_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", yTensorDim_padded[0], yTensorDim_padded[1], yTensorDim_padded[2], yTensorDim_padded[3]);
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim[0], xTensorDim[1], xTensorDim[2], xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim[0], wTensorDim[1], wTensorDim[2], wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", yTensorDim[0], yTensorDim[1], yTensorDim[2], yTensorDim[3]);
 
-    int Xsize = xTensorDim_padded[0] * xTensorDim_padded[1] * xTensorDim_padded[2] * xTensorDim_padded[3];
-    int Ysize = yTensorDim_padded[0] * yTensorDim_padded[1] * yTensorDim_padded[2] * yTensorDim_padded[3];
-    int Wsize = wTensorDim_padded[0] * wTensorDim_padded[1] * wTensorDim_padded[2] * wTensorDim_padded[3];
-    int Bsize = yTensorDim_padded[0] * yTensorDim_padded[1] * 1 * 1;
+    int Xsize = xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3];
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    int Wsize = wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3];
+    int Bsize = yTensorDim[0] * yTensorDim[1] * 1 * 1;
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Bsize, true);
 
-    run_conv_bias_add_activation_with_cudnn_find(xTensorDim_padded, padding, convstride, dilation, wTensorDim_padded, yTensorDim_padded, CUDNN_DATA_FLOAT, sm.devPtrX, sm.devPtrW, sm.devPtrY, sm.devPtrZ, sm.devPtrB);
+    run_conv_add_bias_activation_with_cudnn_find(xTensorDim, padding, convstride, dilation, wTensorDim, yTensorDim, CUDNN_DATA_FLOAT, sm.devPtrX, sm.devPtrW, sm.devPtrY, sm.devPtrZ, sm.devPtrB);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
@@ -368,9 +302,6 @@ TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
     int64_t dilationA[] = {1, 1};
     int64_t convstrideA[] = {1, 1};
 
-    int64_t dimA_padded[4];
-    int64_t outdimA_padded[4];
-    int64_t filterdimA_padded[4];
 
     int numErrors = 0;
 
@@ -380,31 +311,22 @@ TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
         outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
     }
 
-    for (int i = 0; i < 4; i++) {
-        dimA_padded[i]       = dimA[i];
-        outdimA_padded[i]    = outdimA[i];
-        filterdimA_padded[i] = filterdimA[i];
-    }
 
     cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
 
-    printf("====USER DIMENSIONS====\n");
+    printf("====DIMENSIONS====\n");
     printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
     printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
     printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
 
-    printf("====PADDING DIMENSIONS====\n");
-    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA_padded[0], dimA_padded[1], dimA_padded[2], dimA_padded[3]);
-    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA_padded[0], filterdimA_padded[1], filterdimA_padded[2], filterdimA_padded[3]);
-    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA_padded[0], outdimA_padded[1], outdimA_padded[2], outdimA_padded[3]);
 
-    int Xsize = dimA_padded[0] * dimA_padded[1] * dimA_padded[2] * dimA_padded[3];
-    int Wsize = filterdimA_padded[0] * filterdimA_padded[1] * filterdimA_padded[2] * filterdimA_padded[3];
-    int Ysize = outdimA_padded[0] * outdimA_padded[1] * outdimA_padded[2] * outdimA_padded[3];
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Ysize);
 
-    run_from_cudnn_get(dimA, padA, convstrideA, dilationA, filterdimA_padded, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    run_from_cudnn_get(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
@@ -418,4 +340,75 @@ TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
         if (diff > THRESHOLD) { numErrors++;}
     }
     REQUIRE(numErrors == 0);
+}
+
+
+TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]") {
+    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    int64_t xTensorDim[]      = { 4, 24, 31, 31};
+    int64_t wTensorDim[]      = {32, 24,  9,  9};
+    int64_t yTensorDim[]      = { 4, 32,  5,  5}; 
+    
+    int64_t conv_padA[]        = {3, 3};
+    int64_t conv_dilationA[] = {1, 1};
+    int64_t conv_strideA[] = {7, 7};
+
+    int64_t sTensorDim[]      = {1, 32, 1, 1};  //scale
+    int64_t bTensorDim[]      = {1, 32, 1, 1};  //bias
+    int64_t aTensorDim[]      = {4, 32, 5, 5}; //add
+
+    
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim[0], xTensorDim[1], xTensorDim[2], xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim[0], wTensorDim[1], wTensorDim[2], wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", yTensorDim[0], yTensorDim[1], yTensorDim[2], yTensorDim[3]);
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+
+    Surface<float> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<float> W(wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3], false);
+    Surface<float> Y(Ysize, true);
+
+    Surface<float> S(sTensorDim[0] * sTensorDim[1] * sTensorDim[2] * sTensorDim[3], false);
+    Surface<float> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2] * bTensorDim[3], false);
+    Surface<float> A(aTensorDim[0] * aTensorDim[1] * aTensorDim[2] * aTensorDim[3], false);
+
+    run_conv_scale_bias_add_relu(xTensorDim, wTensorDim, yTensorDim, sTensorDim, bTensorDim, aTensorDim, CUDNN_DATA_FLOAT, 
+                                2, conv_padA, conv_dilationA, conv_strideA, 
+                                X.devPtr, W.devPtr, Y.devPtr, S.devPtr, B.devPtr, A.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+}
+
+
+TEST_CASE("MatmulBiasAct sample", "[frontend][fusion][MatmulBiasAct]") {
+    INFO("TEST_CASE :: Sample matmul runtime fusion code with backend API");
+    int64_t aTensorDim[]      = {1, 64, 32}; //batch M K
+    int64_t bTensorDim[]      = {1, 32, 64}; //batch K N
+    int64_t cTensorDim[]      = {1, 64, 64}; //batch M N
+
+    int64_t zTensorDim[]      = {1, 1, 64};  //bias
+    
+
+    printf("====DIMENSIONS====\n");
+    printf("a matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", aTensorDim[0], aTensorDim[1], aTensorDim[2]);
+    printf("b matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", bTensorDim[0], bTensorDim[1], bTensorDim[2]);
+    printf("c matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", cTensorDim[0], cTensorDim[1], cTensorDim[2]);
+
+    int Csize = cTensorDim[0] * cTensorDim[1] * cTensorDim[2];
+
+    Surface<float> A(aTensorDim[0] * aTensorDim[1] * aTensorDim[2], false);
+    Surface<float> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2], false);
+    Surface<float> C(Csize, true);
+
+    Surface<float> Z(zTensorDim[0] * zTensorDim[1] * zTensorDim[2], false);
+
+    run_matmul_bias_gelu(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_FLOAT, A.devPtr, B.devPtr, C.devPtr, Z.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(C.hostPtr, C.devPtr, sizeof(C.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
 }

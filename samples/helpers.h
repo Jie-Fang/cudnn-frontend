@@ -226,3 +226,30 @@ explicit SurfaceManager(int64_t Xsize, int64_t Wsize, int64_t Ysize, int64_t Bsi
 }
 
 };
+
+
+
+template <typename T_ELEM>
+struct Surface {
+    T_ELEM* devPtr = NULL;
+    T_ELEM* hostPtr = NULL;
+    T_ELEM* hostRefPtr = NULL;
+
+    explicit Surface(int64_t size, bool hasRef) {
+        checkCudaErr(cudaMalloc((void**)&(devPtr), (size) * sizeof(devPtr[0])));
+        hostPtr = (T_ELEM*) calloc(size, sizeof(hostPtr[0]));
+        if(hasRef) {
+            hostRefPtr = (T_ELEM*) calloc(size, sizeof(hostRefPtr[0]));
+        }
+        initImage(hostPtr, size);
+        checkCudaErr(cudaMemcpy(devPtr, hostPtr, sizeof(hostPtr[0]) * size, cudaMemcpyHostToDevice));
+        checkCudaErr(cudaDeviceSynchronize());
+    }
+
+    ~Surface() {
+        if (devPtr) cudaFree(devPtr);
+        if (hostPtr) free(hostPtr);
+        if (hostRefPtr) free(hostRefPtr);
+    }
+
+};
