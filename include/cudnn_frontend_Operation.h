@@ -34,6 +34,7 @@
 
 #include "cudnn_frontend_ConvDesc.h"
 #include "cudnn_frontend_PointWiseDesc.h"
+#include "cudnn_frontend_MatMulDesc.h"
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_utils.h"
 
@@ -70,7 +71,11 @@ class Operation_v8 : public BackendDescriptor {
         ss << std::hex << " DY " << dydesc;
         ss << std::hex << " DX " << dxdesc;
         ss << std::hex << " C " << cdesc;
+        ss << std::hex << " A Mtrix " << amatdesc;
+        ss << std::hex << " B Mtrix " << bmatdesc;
+        ss << std::hex << " C Mtrix " << cmatdesc;
         ss << std::hex << " P " << pwdesc;
+        ss << std::hex << " MatMul " << matmuldesc;
         ss << std::dec << " alphabetaType " << alphabetaType;
         ss << " Alpha: " << alpha_s << " " << alpha_d;
         ss << " Alpha2: " << alpha2_s << " " << alpha2_d;
@@ -87,7 +92,11 @@ class Operation_v8 : public BackendDescriptor {
           dydesc(from.dydesc),
           dxdesc(from.dxdesc),
           cdesc(from.cdesc),
+          amatdesc(from.amatdesc),
+          bmatdesc(from.bmatdesc),
+          cmatdesc(from.cmatdesc),
           pwdesc(from.pwdesc),
+          matmuldesc(from.matmuldesc),
           alphabetaType(from.alphabetaType),
           alpha_s(from.alpha_s),
           beta_s(from.beta_s),
@@ -101,7 +110,7 @@ class Operation_v8 : public BackendDescriptor {
 
     ManagedOpaqueDescriptor
     getOutputTensor() {
-        return ydesc;
+        return (op_mode == CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR) ? cmatdesc : ydesc;
     }
 
     std::string const &
@@ -119,14 +128,18 @@ class Operation_v8 : public BackendDescriptor {
 
     cudnnBackendDescriptorType_t op_mode = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
 
-    ManagedOpaqueDescriptor xdesc  = nullptr;
-    ManagedOpaqueDescriptor ydesc  = nullptr;
-    ManagedOpaqueDescriptor wdesc  = nullptr;
-    ManagedOpaqueDescriptor bdesc  = nullptr;
-    ManagedOpaqueDescriptor dydesc = nullptr;
-    ManagedOpaqueDescriptor dxdesc = nullptr;
-    ManagedOpaqueDescriptor cdesc  = nullptr;
-    ManagedOpaqueDescriptor pwdesc = nullptr;
+    ManagedOpaqueDescriptor xdesc      = nullptr;
+    ManagedOpaqueDescriptor ydesc      = nullptr;
+    ManagedOpaqueDescriptor wdesc      = nullptr;
+    ManagedOpaqueDescriptor bdesc      = nullptr;
+    ManagedOpaqueDescriptor dydesc     = nullptr;
+    ManagedOpaqueDescriptor dxdesc     = nullptr;
+    ManagedOpaqueDescriptor cdesc      = nullptr;
+    ManagedOpaqueDescriptor amatdesc   = nullptr;
+    ManagedOpaqueDescriptor bmatdesc   = nullptr;
+    ManagedOpaqueDescriptor cmatdesc   = nullptr;
+    ManagedOpaqueDescriptor pwdesc     = nullptr;
+    ManagedOpaqueDescriptor matmuldesc = nullptr;
 
     cudnnBackendAttributeType_t alphabetaType = CUDNN_TYPE_FLOAT;
     float alpha_s = 1.0f, beta_s = .0f, alpha2_s = 1.0f;
@@ -148,6 +161,7 @@ class OperationBuilder_v8 {
     Operation_v8 m_operation;
     bool is_convolution_op = false;
     bool is_pointwise_op   = false;
+    bool is_matmul_op      = false;
 
    public:
     /** @defgroup OperationBuilder_v8
@@ -167,11 +181,11 @@ class OperationBuilder_v8 {
     }
     auto
     setbDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
-        if (is_convolution_op == true) {
+        if (is_pointwise_op == false) {
             set_error_and_throw_exception(
                 &m_operation,
                 CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Convolution operation does not need bTensor");
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Pointwise operation does not need bTensor");
         }
         m_operation.bdesc = tensor.get_desc();
         return *this;
@@ -221,12 +235,56 @@ class OperationBuilder_v8 {
         return *this;
     }
     auto
-    setpwDesc(PointWiseDesc_v8 const &pointWiseDesc) -> OperationBuilder_v8 & {
-        if (is_convolution_op == true) {
+    setaMatDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
             set_error_and_throw_exception(
                 &m_operation,
                 CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Convolution operation does not need POINTWISE DESCRIPTOR");
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need a Matrix Tensor");
+        }
+        m_operation.amatdesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setbMatDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need b Matrix Tensor");
+        }
+        m_operation.bmatdesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setcMatDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need c Matrix Tensor");
+        }
+        m_operation.cmatdesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setmatmulDesc(MatMulDesc_v8 const &matmulDesc) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need MATMUL DESCRIPTOR");
+        }
+        m_operation.matmuldesc = matmulDesc.get_desc();
+        return *this;
+    }
+    auto
+    setpwDesc(PointWiseDesc_v8 const &pointWiseDesc) -> OperationBuilder_v8 & {
+        if (is_pointwise_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Pointwise operation does not need POINTWISE DESCRIPTOR");
         }
         m_operation.pwdesc               = pointWiseDesc.get_desc();
         m_operation.pointwise_port_count = pointWiseDesc.getPortCount();
@@ -307,6 +365,7 @@ class OperationBuilder_v8 {
                              (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR));
 
         is_pointwise_op = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR);
+        is_matmul_op    = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR);
     }
     /** @} */
 
@@ -390,6 +449,27 @@ class OperationBuilder_v8 {
                 &m_operation,
                 CUDNN_STATUS_BAD_PARAM,
                 "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_CONV_DESC");
+            return std::move(m_operation);
+        }
+        if (m_operation.amatdesc == nullptr && is_matmul_op) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_ADESC");
+            return std::move(m_operation);
+        }
+        if (m_operation.bmatdesc == nullptr && is_matmul_op) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_BDESC");
+            return std::move(m_operation);
+        }
+        if (m_operation.cmatdesc == nullptr && is_matmul_op) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_CDESC");
             return std::move(m_operation);
         }
 
@@ -810,6 +890,56 @@ class OperationBuilder_v8 {
                         "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_BDESC Failed");
                     return std::move(m_operation);
                 }
+            }
+        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR) {
+            m_operation.operationTag = "Matmul";
+            status                   = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_OPERATION_MATMUL_ADESC,
+                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                              1,
+                                              &(m_operation.amatdesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_ADESC Failed");
+                return std::move(m_operation);
+            }
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_OPERATION_MATMUL_BDESC,
+                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                              1,
+                                              &(m_operation.bmatdesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_BDESC Failed");
+                return std::move(m_operation);
+            }
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_OPERATION_MATMUL_CDESC,
+                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                              1,
+                                              &(m_operation.cmatdesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_CDESC Failed");
+                return std::move(m_operation);
+            }
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_OPERATION_MATMUL_DESC,
+                                              CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                              1,
+                                              &(m_operation.matmuldesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_DESC Failed");
+                return std::move(m_operation);
             }
         }
         status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
