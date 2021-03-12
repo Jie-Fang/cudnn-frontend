@@ -66,3 +66,29 @@ run_matmul_bias_gelu(int64_t* a_dim,
                      float* devPtrB,
                      float* devPtrC,
                      float* devPtrZ);
+
+void
+run_conv_drelu(int64_t* x,
+               int64_t* pad,
+               int64_t* convstride,
+               int64_t* dilation,
+               int64_t* w,
+               int64_t* y,
+               cudnnDataType_t dataType,
+               float* devPtrX,
+               float* devPtrW,
+               float* devPtrY,
+               float* devPtrExtra_X);
+
+void
+run_dgrad_drelu(int64_t* x,
+                int64_t* pad,
+                int64_t* convstride,
+                int64_t* dilation,
+                int64_t* w,
+                int64_t* y,
+                cudnnDataType_t dataType,
+                float* devPtrX,
+                float* devPtrW,
+                float* devPtrY,
+                float* devPtrExtra_X);

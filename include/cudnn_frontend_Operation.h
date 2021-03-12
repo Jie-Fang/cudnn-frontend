@@ -134,6 +134,7 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor bdesc      = nullptr;
     ManagedOpaqueDescriptor dydesc     = nullptr;
     ManagedOpaqueDescriptor dxdesc     = nullptr;
+    ManagedOpaqueDescriptor dwdesc     = nullptr;
     ManagedOpaqueDescriptor cdesc      = nullptr;
     ManagedOpaqueDescriptor amatdesc   = nullptr;
     ManagedOpaqueDescriptor bmatdesc   = nullptr;
@@ -220,6 +221,11 @@ class OperationBuilder_v8 {
     auto
     setdxDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.dxdesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setdwDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.dwdesc = tensor.get_desc();
         return *this;
     }
 
@@ -379,97 +385,198 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
 
-        if (m_operation.xdesc == nullptr) {
-            if (is_convolution_op) {
+        if (is_convolution_op) {
+            if (m_operation.cdesc == nullptr) {
                 set_error_and_throw_exception(
                     &m_operation,
                     CUDNN_STATUS_BAD_PARAM,
-                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_CONV_DESC");
                 return std::move(m_operation);
-            } else if (is_pointwise_op) {
+            }
+            if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+                if (m_operation.xdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
+                    return std::move(m_operation);
+                }
+                if (m_operation.wdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_W");
+                    return std::move(m_operation);
+                }
+                if (m_operation.ydesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_Y");
+                    return std::move(m_operation);
+                }
+
+            } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+                if (m_operation.ydesc != nullptr && m_operation.dydesc != nullptr) {
+                    set_error_and_throw_exception(&m_operation,
+                                                  CUDNN_STATUS_BAD_PARAM,
+                                                  "CUDNN_BACKEND_OPERATION: Ambiguous specification. Choose and Set "
+                                                  "only one of setyDesc() or setdyDesc()");
+                    return std::move(m_operation);
+                }
+                if (m_operation.ydesc == nullptr && m_operation.dydesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Choose and Set one of setyDesc() or setdyDesc()");
+                    return std::move(m_operation);
+                }
+                if (m_operation.xdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X");
+                    return std::move(m_operation);
+                }
+                if (m_operation.wdesc != nullptr && m_operation.dwdesc != nullptr) {
+                    set_error_and_throw_exception(&m_operation,
+                                                  CUDNN_STATUS_BAD_PARAM,
+                                                  "CUDNN_BACKEND_OPERATION: Ambiguous specification. Choose and Set "
+                                                  "only one of setwDesc() or setdwDesc()");
+                    return std::move(m_operation);
+                }
+                if (m_operation.wdesc == nullptr && m_operation.dwdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Choose and Set one of setwDesc() or setdwDesc()");
+                    return std::move(m_operation);
+                }
+            } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+                if (m_operation.ydesc != nullptr && m_operation.dydesc != nullptr) {
+                    set_error_and_throw_exception(&m_operation,
+                                                  CUDNN_STATUS_BAD_PARAM,
+                                                  "CUDNN_BACKEND_OPERATION: Ambiguous specification. Choose and Set "
+                                                  "only one of setyDesc() or setdyDesc()");
+                    return std::move(m_operation);
+                }
+                if (m_operation.ydesc == nullptr && m_operation.dydesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Choose and Set one of setyDesc() or setdyDesc()");
+                    return std::move(m_operation);
+                }
+                if (m_operation.wdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_W");
+                    return std::move(m_operation);
+                }
+                if (m_operation.xdesc != nullptr && m_operation.dxdesc != nullptr) {
+                    set_error_and_throw_exception(&m_operation,
+                                                  CUDNN_STATUS_BAD_PARAM,
+                                                  "CUDNN_BACKEND_OPERATION: Ambiguous specification. Choose and Set "
+                                                  "only one of setxDesc() or setdxDesc()");
+                    return std::move(m_operation);
+                }
+                if (m_operation.xdesc == nullptr && m_operation.dxdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Choose and Set one of setxDesc() or setdxDesc()");
+                    return std::move(m_operation);
+                }
+            } else {
+                set_error_and_throw_exception(&m_operation,
+                                              CUDNN_STATUS_BAD_PARAM,
+                                              "CUDNN_BACKEND_OPERATION: Unsupported convolution operation. Check and "
+                                              "set CUDNN_BACKEND_OPERATION_CONVOLUTION_*_DESCRIPTOR");
+                return std::move(m_operation);
+            }
+        } else if (is_pointwise_op) {
+            if (m_operation.xdesc == nullptr) {
                 set_error_and_throw_exception(
                     &m_operation,
                     CUDNN_STATUS_BAD_PARAM,
                     "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_XDESC");
                 return std::move(m_operation);
             }
-        }
 
-        if (m_operation.wdesc == nullptr && is_convolution_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_W");
-            return std::move(m_operation);
-        }
-
-        if (m_operation.bdesc == nullptr) {
-            if (m_operation.is_pointwise_math_op && m_operation.pointwise_port_count == 3) {
+            if (m_operation.is_pointwise_math_op) {
+                if (m_operation.pointwise_port_count == 3 && m_operation.bdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_BDESC");
+                    return std::move(m_operation);
+                }
+                if (m_operation.ydesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_YDESC");
+                    return std::move(m_operation);
+                }
+            } else if (m_operation.is_pointwise_activation_fwd_op) {
+                if (m_operation.ydesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_YDESC");
+                    return std::move(m_operation);
+                }
+            } else if (m_operation.is_pointwise_activation_bwd_op) {
+                if (m_operation.dydesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_DYDESC");
+                    return std::move(m_operation);
+                }
+                if (m_operation.dxdesc == nullptr) {
+                    set_error_and_throw_exception(
+                        &m_operation,
+                        CUDNN_STATUS_BAD_PARAM,
+                        "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_DXDESC");
+                    return std::move(m_operation);
+                }
+            } else {
                 set_error_and_throw_exception(
                     &m_operation,
                     CUDNN_STATUS_BAD_PARAM,
-                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_BDESC");
+                    "CUDNN_BACKEND_OPERATION: Unsupported cudnn pointwise mode. Check and set CUDNN_POINTWISE_*");
                 return std::move(m_operation);
             }
-        }
 
-        if (m_operation.ydesc == nullptr) {
-            if (is_convolution_op) {
+        } else if (is_matmul_op) {
+            if (m_operation.amatdesc == nullptr) {
                 set_error_and_throw_exception(
                     &m_operation,
                     CUDNN_STATUS_BAD_PARAM,
-                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_Y");
-                return std::move(m_operation);
-            } else if (m_operation.is_pointwise_activation_fwd_op || m_operation.is_pointwise_math_op) {
-                set_error_and_throw_exception(
-                    &m_operation,
-                    CUDNN_STATUS_BAD_PARAM,
-                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_YDESC");
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_ADESC");
                 return std::move(m_operation);
             }
-        }
-
-        if (m_operation.dydesc == nullptr && m_operation.is_pointwise_activation_bwd_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_DYDESC");
-            return std::move(m_operation);
-        }
-        if (m_operation.dxdesc == nullptr && m_operation.is_pointwise_activation_bwd_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_POINTWISE_DXDESC");
-            return std::move(m_operation);
-        }
-
-        if (m_operation.cdesc == nullptr && is_convolution_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_CONV_DESC");
-            return std::move(m_operation);
-        }
-        if (m_operation.amatdesc == nullptr && is_matmul_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_ADESC");
-            return std::move(m_operation);
-        }
-        if (m_operation.bmatdesc == nullptr && is_matmul_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_BDESC");
-            return std::move(m_operation);
-        }
-        if (m_operation.cmatdesc == nullptr && is_matmul_op) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_CDESC");
+            if (m_operation.bmatdesc == nullptr) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_BDESC");
+                return std::move(m_operation);
+            }
+            if (m_operation.cmatdesc == nullptr) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    CUDNN_STATUS_BAD_PARAM,
+                    "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_MATMUL_CDESC");
+                return std::move(m_operation);
+            }
+        } else {
+            set_error_and_throw_exception(&m_operation,
+                                          CUDNN_STATUS_BAD_PARAM,
+                                          "CUDNN_BACKEND_OPERATION_DESCRIPTOR: Unsupported cudnn backend descriptor "
+                                          "type. Check and set CUDNN_BACKEND_OPERATION_*_DESCRIPTOR");
             return std::move(m_operation);
         }
 
@@ -574,11 +681,13 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X Failed");
                 return std::move(m_operation);
             }
+
+            auto dwdesc_ = m_operation.dwdesc != nullptr ? m_operation.dwdesc : m_operation.wdesc;
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
-                                              &(m_operation.wdesc->get_backend_descriptor()));
+                                              &(dwdesc_->get_backend_descriptor()));
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_operation,
@@ -586,11 +695,13 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW Failed");
                 return std::move(m_operation);
             }
+
+            auto dydesc_ = m_operation.dydesc != nullptr ? m_operation.dydesc : m_operation.ydesc;
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
-                                              &(m_operation.ydesc->get_backend_descriptor()));
+                                              &(dydesc_->get_backend_descriptor()));
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_operation,
@@ -598,6 +709,7 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY Failed");
                 return std::move(m_operation);
             }
+
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_CONV_DESC,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -641,11 +753,12 @@ class OperationBuilder_v8 {
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
             m_operation.operationTag = "ConvBwdData";
 
+            auto dxdesc_ = m_operation.dxdesc != nullptr ? m_operation.dxdesc : m_operation.xdesc;
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
-                                              &(m_operation.xdesc->get_backend_descriptor()));
+                                              &(dxdesc_->get_backend_descriptor()));
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_operation,
@@ -653,6 +766,7 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX Failed");
                 return std::move(m_operation);
             }
+
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -665,11 +779,13 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W Failed");
                 return std::move(m_operation);
             }
+
+            auto dydesc_ = m_operation.dydesc != nullptr ? m_operation.dydesc : m_operation.ydesc;
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                               1,
-                                              &(m_operation.ydesc->get_backend_descriptor()));
+                                              &(dydesc_->get_backend_descriptor()));
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_operation,
@@ -677,6 +793,7 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY Failed");
                 return std::move(m_operation);
             }
+
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC,
                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -689,6 +806,7 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC Failed");
                 return std::move(m_operation);
             }
+
             void *alpha = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.alpha_s)
                                                                          : static_cast<void *>(&m_operation.alpha_d));
             void *beta = (m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? static_cast<void *>(&m_operation.beta_s)

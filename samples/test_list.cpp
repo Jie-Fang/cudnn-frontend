@@ -412,3 +412,141 @@ TEST_CASE("MatmulBiasAct sample", "[frontend][fusion][MatmulBiasAct]") {
     checkCudaErr(cudaMemcpy(C.hostPtr, C.devPtr, sizeof(C.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 }
+
+TEST_CASE("ConvDrelu sample", "[frontend][convDrelu][drelu]") {
+    INFO("TEST_CASE :: Sample conv drelu");
+    int64_t xTensorDim[] = {4, 24, 31, 31};
+    int64_t wTensorDim[] = {32, 24, 9, 9};
+    int64_t yTensorDim[] = {0, 0, 0, 0};  // Computed Below
+    int64_t padding[]    = {3, 3};
+    int64_t dilation[]   = {1, 1};
+    int64_t convstride[] = {7, 7};
+
+    int64_t xTensorDim_padded[4];
+    int64_t yTensorDim_padded[4];
+    int64_t wTensorDim_padded[4];
+
+    yTensorDim[0] = xTensorDim[0];
+    yTensorDim[1] = wTensorDim[0];
+    for (int dim = 0; dim < 2; dim++) {
+        yTensorDim[dim + 2] =
+            getFwdConvOutputDim(xTensorDim[dim + 2], padding[dim], wTensorDim[dim + 2], convstride[dim], dilation[dim]);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        xTensorDim_padded[i] = xTensorDim[i];
+        yTensorDim_padded[i] = yTensorDim[i];
+        wTensorDim_padded[i] = wTensorDim[i];
+    }
+
+    printf("====PADDING DIMENSIONS====\n");
+    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           xTensorDim_padded[0],
+           xTensorDim_padded[1],
+           xTensorDim_padded[2],
+           xTensorDim_padded[3]);
+    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           wTensorDim_padded[0],
+           wTensorDim_padded[1],
+           wTensorDim_padded[2],
+           wTensorDim_padded[3]);
+    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           yTensorDim_padded[0],
+           yTensorDim_padded[1],
+           yTensorDim_padded[2],
+           yTensorDim_padded[3]);
+
+    int Xsize = xTensorDim_padded[0] * xTensorDim_padded[1] * xTensorDim_padded[2] * xTensorDim_padded[3];
+    int Ysize = yTensorDim_padded[0] * yTensorDim_padded[1] * yTensorDim_padded[2] * yTensorDim_padded[3];
+    int Wsize = wTensorDim_padded[0] * wTensorDim_padded[1] * wTensorDim_padded[2] * wTensorDim_padded[3];
+
+    Surface<float> x_mem(Xsize, false);
+    Surface<float> w_mem(Wsize, false);
+    Surface<float> y_mem(Ysize, false);
+    Surface<float> extra_x_mem(Xsize, false);
+
+    run_conv_drelu(xTensorDim_padded,
+                   padding,
+                   convstride,
+                   dilation,
+                   wTensorDim_padded,
+                   yTensorDim_padded,
+                   CUDNN_DATA_FLOAT,
+                   x_mem.devPtr,
+                   w_mem.devPtr,
+                   y_mem.devPtr,
+                   extra_x_mem.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(y_mem.hostPtr, y_mem.devPtr, sizeof(y_mem.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+}
+
+TEST_CASE("DgradDrelu sample", "[frontend][dgradDrelu][drelu]") {
+    INFO("TEST_CASE :: Sample dgrad drelu");
+    int64_t xTensorDim[] = {4, 32, 32, 32};
+    int64_t wTensorDim[] = {32, 32, 3, 3};
+    int64_t yTensorDim[] = {0, 0, 0, 0};  // Computed Below
+    int64_t padding[]    = {0, 0};
+    int64_t dilation[]   = {1, 1};
+    int64_t convstride[] = {1, 1};
+
+    int64_t xTensorDim_padded[4];
+    int64_t yTensorDim_padded[4];
+    int64_t wTensorDim_padded[4];
+
+    yTensorDim[0] = xTensorDim[0];
+    yTensorDim[1] = wTensorDim[0];
+    for (int dim = 0; dim < 2; dim++) {
+        yTensorDim[dim + 2] =
+            getFwdConvOutputDim(xTensorDim[dim + 2], padding[dim], wTensorDim[dim + 2], convstride[dim], dilation[dim]);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        xTensorDim_padded[i] = xTensorDim[i];
+        yTensorDim_padded[i] = yTensorDim[i];
+        wTensorDim_padded[i] = wTensorDim[i];
+    }
+
+    printf("====PADDING DIMENSIONS====\n");
+    printf("padded input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           xTensorDim_padded[0],
+           xTensorDim_padded[1],
+           xTensorDim_padded[2],
+           xTensorDim_padded[3]);
+    printf("padded filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           wTensorDim_padded[0],
+           wTensorDim_padded[1],
+           wTensorDim_padded[2],
+           wTensorDim_padded[3]);
+    printf("padded output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           yTensorDim_padded[0],
+           yTensorDim_padded[1],
+           yTensorDim_padded[2],
+           yTensorDim_padded[3]);
+
+    int Xsize = xTensorDim_padded[0] * xTensorDim_padded[1] * xTensorDim_padded[2] * xTensorDim_padded[3];
+    int Ysize = yTensorDim_padded[0] * yTensorDim_padded[1] * yTensorDim_padded[2] * yTensorDim_padded[3];
+    int Wsize = wTensorDim_padded[0] * wTensorDim_padded[1] * wTensorDim_padded[2] * wTensorDim_padded[3];
+
+    Surface<float> x_mem(Xsize, false);
+    Surface<float> w_mem(Wsize, false);
+    Surface<float> y_mem(Ysize, false);
+    Surface<float> extra_x_mem(Xsize, false);
+
+    run_dgrad_drelu(xTensorDim_padded,
+                    padding,
+                    convstride,
+                    dilation,
+                    wTensorDim_padded,
+                    yTensorDim_padded,
+                    CUDNN_DATA_FLOAT,
+                    x_mem.devPtr,
+                    w_mem.devPtr,
+                    y_mem.devPtr,
+                    extra_x_mem.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(x_mem.hostPtr, x_mem.devPtr, sizeof(x_mem.hostPtr[0]) * Xsize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+}
