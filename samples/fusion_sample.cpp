@@ -171,7 +171,7 @@ run_conv_scale_bias_add_relu(int64_t* x_dim,
         std::cout << actDesc.describe() << std::endl;
 
         // Define the convolution problem
-        auto convDesc         = cudnn_frontend::ConvDescBuilder()
+        auto convDesc = cudnn_frontend::ConvDescBuilder()
                             .setDataType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setNDims(convDim)
@@ -449,6 +449,360 @@ run_matmul_bias_gelu(int64_t* a_dim,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+
+    } catch (cudnn_frontend::cudnnException e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+    }
+}
+
+void
+run_conv_drelu(int64_t* x_dim,
+               int64_t* pad,
+               int64_t* convstride,
+               int64_t* dilation,
+               int64_t* w_dim,
+               int64_t* y_dim,
+               cudnnDataType_t dataType,
+               float* dev_ptr_x,
+               float* dev_ptr_w,
+               float* dev_ptr_y,
+               float* dev_ptr_bwd_act_x) {
+    cudnnHandle_t handle_;
+    try {
+        int convDim = 2;
+
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        int64_t x_id         = 101;
+        int64_t w_id         = 102;
+        int64_t bwd_act_x_id = 201;
+        int64_t y_id         = 301;
+
+        int64_t after_conv_id = 1001;
+
+        int64_t x_stride_padded[4];
+        int64_t y_stride_padded[4];
+        int64_t w_stride_padded[4];
+
+        generateStrides(w_dim, w_stride_padded, 4, CUDNN_TENSOR_NHWC);
+        generateStrides(x_dim, x_stride_padded, 4, CUDNN_TENSOR_NHWC);
+        generateStrides(y_dim, y_stride_padded, 4, CUDNN_TENSOR_NHWC);
+
+        auto x_tensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, x_dim)
+                            .setStrides(4, x_stride_padded)
+                            .setId(x_id)
+                            .setAlignment(4)
+                            .setDataType(dataType)
+                            .build();
+
+        auto w_tensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, w_dim)
+                            .setStrides(4, w_stride_padded)
+                            .setId(w_id)
+                            .setAlignment(4)
+                            .setDataType(dataType)
+                            .build();
+
+        auto after_conv_tensor = cudnn_frontend::TensorBuilder()
+                                     .setDim(4, y_dim)
+                                     .setStrides(4, y_stride_padded)
+                                     .setId(after_conv_id)
+                                     .setAlignment(4)
+                                     .setVirtual()
+                                     .setDataType(dataType)
+                                     .build();
+
+        auto bwd_act_x_tensor = cudnn_frontend::TensorBuilder()
+                                    .setDim(4, y_dim)
+                                    .setStrides(4, y_stride_padded)
+                                    .setId(bwd_act_x_id)
+                                    .setAlignment(4)
+                                    .setDataType(dataType)
+                                    .build();
+
+        auto after_activation_tensor = cudnn_frontend::TensorBuilder()
+                                           .setDim(4, y_dim)
+                                           .setStrides(4, y_stride_padded)
+                                           .setId(y_id)
+                                           .setAlignment(4)
+                                           .setDataType(dataType)
+                                           .build();
+
+        std::cout << x_tensor.describe() << std::endl;
+        std::cout << w_tensor.describe() << std::endl;
+        std::cout << after_conv_tensor.describe() << std::endl;
+        std::cout << bwd_act_x_tensor.describe() << std::endl;
+        std::cout << after_activation_tensor.describe() << std::endl;
+
+        auto convDesc = cudnn_frontend::ConvDescBuilder()
+                            .setDataType(dataType)
+                            .setMathMode(CUDNN_CROSS_CORRELATION)
+                            .setNDims(convDim)
+                            .setStrides(convDim, convstride)
+                            .setPrePadding(convDim, pad)
+                            .setPostPadding(convDim, pad)
+                            .setDilation(convDim, dilation)
+                            .build();
+        std::cout << convDesc.describe() << std::endl;
+
+        auto conv_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                           .setxDesc(x_tensor)
+                           .setwDesc(w_tensor)
+                           .setyDesc(after_conv_tensor)
+                           .setcDesc(convDesc)
+                           .setAlpha(1.0f)
+                           .setBeta(0.0f)
+                           .build();
+        std::cout << conv_op.describe() << std::endl;
+
+        auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_RELU_BWD)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << actDesc.describe() << std::endl;
+
+        auto act_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setdyDesc(after_conv_tensor)
+                          .setxDesc(bwd_act_x_tensor)
+                          .setdxDesc(after_activation_tensor)
+                          .setpwDesc(actDesc)
+                          .build();
+        std::cout << act_op.describe() << std::endl;
+
+        std::array<cudnn_frontend::Operation const*, 2> ops = {&conv_op, &act_op};
+
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+
+        // How many engines support this operation graph ?
+        auto total_engines = opGraph.getEngineCount();
+        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
+        // We have to randomly pick one engine from [0, total_engines)
+        // Selecting "0" by default
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        std::cout << engine.describe() << std::endl;
+        auto& knobs = engine.getSupportedKnobs();
+        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
+            std::cout << it->describe() << std::endl;
+        }
+        if (knobs.begin() != knobs.end()) {
+            std::cout << "Updated knob choice" << std::endl;
+            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
+            std::cout << knobs.begin()->describe() << std::endl;
+        }
+
+        // Create the requisite engine config
+        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+        std::cout << engine_config.describe() << std::endl;
+
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+        void* data_ptrs[] = {dev_ptr_x, dev_ptr_w, dev_ptr_bwd_act_x, dev_ptr_y};
+        int64_t uids[]    = {x_id, w_id, bwd_act_x_id, y_id};
+
+        auto variantPack = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(4, data_ptrs)
+                               .setUids(4, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+
+    } catch (cudnn_frontend::cudnnException e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+    }
+}
+
+void
+run_dgrad_drelu(int64_t* dx_dim,
+                int64_t* pad,
+                int64_t* convstride,
+                int64_t* dilation,
+                int64_t* w_dim,
+                int64_t* dy_dim,
+                cudnnDataType_t dataType,
+                float* dev_ptr_dx,
+                float* dev_ptr_w,
+                float* dev_ptr_dy,
+                float* dev_ptr_bwd_act_x) {
+    cudnnHandle_t handle_;
+    try {
+        int convDim = 2;
+
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        int64_t dx_id        = 101;
+        int64_t w_id         = 102;
+        int64_t bwd_act_x_id = 201;
+        int64_t dy_id        = 301;
+
+        int64_t after_dgrad_id = 1001;
+
+        int64_t dx_stride[4];
+        int64_t dy_stride[4];
+        int64_t w_stride[4];
+
+        generateStrides(w_dim, w_stride, 4, CUDNN_TENSOR_NHWC);
+        generateStrides(dx_dim, dx_stride, 4, CUDNN_TENSOR_NHWC);
+        generateStrides(dy_dim, dy_stride, 4, CUDNN_TENSOR_NHWC);
+
+        auto after_dgrad_dx_tensor = cudnn_frontend::TensorBuilder()
+                                         .setDim(4, dx_dim)
+                                         .setStrides(4, dx_stride)
+                                         .setId(after_dgrad_id)
+                                         .setAlignment(4)
+                                         .setVirtual()
+                                         .setDataType(dataType)
+                                         .build();
+
+        auto w_tensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, w_dim)
+                            .setStrides(4, w_stride)
+                            .setId(w_id)
+                            .setAlignment(4)
+                            .setDataType(dataType)
+                            .build();
+
+        auto dy_tensor = cudnn_frontend::TensorBuilder()
+                             .setDim(4, dy_dim)
+                             .setStrides(4, dy_stride)
+                             .setId(dy_id)
+                             .setAlignment(4)
+                             .setDataType(dataType)
+                             .build();
+
+        auto bwd_act_x_tensor = cudnn_frontend::TensorBuilder()
+                                    .setDim(4, dx_dim)
+                                    .setStrides(4, dx_stride)
+                                    .setId(bwd_act_x_id)
+                                    .setAlignment(4)
+                                    .setDataType(dataType)
+                                    .build();
+
+        auto after_bwd_activation_dx_tensor = cudnn_frontend::TensorBuilder()
+                                                  .setDim(4, dx_dim)
+                                                  .setStrides(4, dx_stride)
+                                                  .setId(dx_id)
+                                                  .setAlignment(4)
+                                                  .setDataType(dataType)
+                                                  .build();
+
+        std::cout << after_dgrad_dx_tensor.describe() << std::endl;
+        std::cout << w_tensor.describe() << std::endl;
+        std::cout << dy_tensor.describe() << std::endl;
+        std::cout << bwd_act_x_tensor.describe() << std::endl;
+        std::cout << after_bwd_activation_dx_tensor.describe() << std::endl;
+
+        auto convDesc = cudnn_frontend::ConvDescBuilder()
+                            .setDataType(dataType)
+                            .setMathMode(CUDNN_CROSS_CORRELATION)
+                            .setNDims(convDim)
+                            .setStrides(convDim, convstride)
+                            .setPrePadding(convDim, pad)
+                            .setPostPadding(convDim, pad)
+                            .setDilation(convDim, dilation)
+                            .build();
+        std::cout << convDesc.describe() << std::endl;
+
+        auto conv_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR)
+                           .setdyDesc(dy_tensor)
+                           //    .setyDesc(dy_tensor)
+                           .setwDesc(w_tensor)
+                           .setdxDesc(after_dgrad_dx_tensor)
+                           //    .setxDesc(after_dgrad_dx_tensor)
+                           .setcDesc(convDesc)
+                           .setAlpha(1.0f)
+                           .setBeta(0.0f)
+                           .build();
+        std::cout << conv_op.describe() << std::endl;
+
+        auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_RELU_BWD)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << actDesc.describe() << std::endl;
+
+        auto act_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setdyDesc(after_dgrad_dx_tensor)
+                          .setxDesc(bwd_act_x_tensor)
+                          .setdxDesc(after_bwd_activation_dx_tensor)
+                          .setpwDesc(actDesc)
+                          .build();
+        std::cout << act_op.describe() << std::endl;
+
+        std::array<cudnn_frontend::Operation const*, 2> ops = {&conv_op, &act_op};
+
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+
+        // How many engines support this operation graph ?
+        auto total_engines = opGraph.getEngineCount();
+        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
+        // We have to randomly pick one engine from [0, total_engines)
+        // Selecting "0" by default
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        std::cout << engine.describe() << std::endl;
+        auto& knobs = engine.getSupportedKnobs();
+        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
+            std::cout << it->describe() << std::endl;
+        }
+        if (knobs.begin() != knobs.end()) {
+            std::cout << "Updated knob choice" << std::endl;
+            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
+            std::cout << knobs.begin()->describe() << std::endl;
+        }
+
+        // Create the requisite engine config
+        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+        std::cout << engine_config.describe() << std::endl;
+
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+        void* data_ptrs[] = {dev_ptr_dx, dev_ptr_w, dev_ptr_bwd_act_x, dev_ptr_dy};
+        int64_t uids[]    = {dx_id, w_id, bwd_act_x_id, dy_id};
+
+        auto variantPack = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(4, data_ptrs)
+                               .setUids(4, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
     } catch (cudnn_frontend::cudnnException e) {
