@@ -21,7 +21,6 @@
  */
 
 #include "conv_sample.h"
-#include <cudnn_frontend.h>
 #include <cudnn_frontend_find_plan.h>
 #include <cudnn_frontend_get_plan.h>
 
@@ -278,7 +277,8 @@ run_from_heuristics(int64_t* x_dim_padded,
                     cudnnConvolutionMode_t mode,
                     float* devPtrX,
                     float* devPtrW,
-                    float* devPtrY) {
+                    float* devPtrY,
+                    cudnnBackendHeurMode_t heur_mode) {
     cudnnHandle_t handle_;
 
     try {
@@ -297,7 +297,7 @@ run_from_heuristics(int64_t* x_dim_padded,
 
         auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
                               .setOperationGraph(opGraph)
-                              .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                              .setHeurMode(heur_mode)
                               .build();
 
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;

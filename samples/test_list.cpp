@@ -28,6 +28,82 @@
 #include "conv_sample.h"
 #include "fusion_sample.h"
 
+TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
+    // Consider creation of a 2d Tensor
+    // n,c,h,w as 4,32,32,32
+    std::array<int64_t,4> tensor_dim = {4, 32, 32, 32};
+    std::array<int64_t,4> tensor_str = {32768, 1024, 32, 1}; // NCHW format
+    cudnnDataType_t data_type        = CUDNN_DATA_FLOAT;
+    int64_t alignment                = sizeof(float);
+    int64_t id                       = 0xD0D0CACA; // Some magic number
+
+    // Creating Frontend code 
+
+    try {
+        auto tensor =  cudnn_frontend::TensorBuilder()
+                                    .setDim(tensor_dim.size(), tensor_dim.data())
+                                    .setStrides(tensor_str.size(), tensor_str.data())
+                                    .setId(id)
+                                    .setAlignment(alignment)
+                                    .setDataType(data_type)
+                                    .build();
+    
+        std::cout << "Created Tensor" << tensor.describe() << std::endl;
+    } catch (cudnn_frontend::cudnnException e) {
+        std::cout << "Exception in tensor creation " << e.what() << std::endl;
+    }
+
+    auto check_status = [](cudnnStatus_t status) { REQUIRE (status == CUDNN_STATUS_SUCCESS); };
+
+    // Equivalent Backend code 
+    {
+        cudnnBackendDescriptor_t tensor;
+
+        // Allocate memory for the descriptor
+        // This is a c-style malloc which requires 
+        // a equivalent 1-time deletion. Raw backend code
+        // requires tracking allocation and free unlike raw
+        // pointers, else it may lead to memory leak.
+        check_status (cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &tensor));
+
+        // Set the following attributes
+        // Dimensions, Strides, Alignment, Id, DataType
+        check_status (cudnnBackendSetAttribute(tensor,
+                                               CUDNN_ATTR_TENSOR_DATA_TYPE,
+                                               CUDNN_TYPE_DATA_TYPE,
+                                               1,
+                                               &data_type));
+        check_status (cudnnBackendSetAttribute(tensor,
+                                               CUDNN_ATTR_TENSOR_DIMENSIONS,
+                                               CUDNN_TYPE_INT64,
+                                               tensor_dim.size(),
+                                               tensor_dim.data()));
+        check_status (cudnnBackendSetAttribute(tensor,
+                                               CUDNN_ATTR_TENSOR_STRIDES,
+                                               CUDNN_TYPE_INT64,
+                                               tensor_str.size(),
+                                               tensor_str.data()));
+        check_status (cudnnBackendSetAttribute(tensor,
+                                               CUDNN_ATTR_TENSOR_UNIQUE_ID,
+                                               CUDNN_TYPE_INT64,
+                                               1,
+                                               &id));
+        check_status (cudnnBackendSetAttribute(tensor,
+                                               CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT,
+                                               CUDNN_TYPE_INT64,
+                                               1,
+                                               &alignment));
+        // Finalize the descriptor
+        check_status (cudnnBackendFinalize(tensor));
+
+        // Free the memory allocated above. Any short-circuit return will
+        // cause a memory leak. 
+        check_status (cudnnBackendDestroyDescriptor(tensor));
+    }
+
+
+}
+
 TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" ) {
     INFO("TEST_CASE :: Use  global index for engine generation");
     int64_t dimA[]        = {1, 32, 4, 4};
@@ -109,7 +185,55 @@ TEST_CASE("Use heuristics for execution", "[frontend][heuristics][conv]" ) {
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Ysize);
 
-    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY, CUDNN_HEUR_MODE_INSTANT);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    conv_cpu_ref<float,float>(sm.hostX, sm.hostW, sm.host_ref, 1, CUDNN_TENSOR_NCHW, dimA, filterdimA, outdimA, convstrideA, padA, dilationA, 4/*Dims*/);
+
+    for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
+        float diff         = getError(sm.hostY[index], sm.host_ref[index]);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+    }
+    REQUIRE(numErrors == 0);
+}
+
+TEST_CASE("Use DNN based heuristics for execution", "[frontend][dnn_heuristics][conv]" ) {
+    INFO("TEST_CASE :: Use DNN based heuristics for engine generation");
+    int64_t dimA[]        = {8, 32, 4, 4};
+    int64_t filterdimA[]  = {32, 32, 1, 1};
+    int64_t outdimA[]     = {0, 0, 0, 0}; // Computed Below
+    int64_t padA[]        = {0, 0};
+    int64_t dilationA[] = {1, 1};
+    int64_t convstrideA[] = {1, 1};
+
+    int numErrors = 0;
+
+    outdimA[0] = dimA[0];
+    outdimA[1] = filterdimA[0];
+    for (int dim = 0; dim < 2; dim++) {
+        outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
+    }
+
+
+    cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
+
+
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
+
+    SurfaceManager<float> sm(Xsize, Wsize, Ysize, Ysize);
+
+    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY, CUDNN_HEUR_MODE_B);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));

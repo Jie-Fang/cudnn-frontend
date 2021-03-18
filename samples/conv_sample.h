@@ -34,6 +34,11 @@
 #include <functional>
 
 #include <cudnn.h>
+#include <cudnn_backend.h>
+
+#include <cudnn_frontend.h>
+
+
 #include "fp16_dev.h"
 #include "fp16_emu.h"
 #include "helpers.h"
@@ -63,7 +68,8 @@ void run_from_heuristics(
     cudnnConvolutionMode_t mode,
     float * devPtrI,
     float * devPtrF,
-    float * devPtrO);
+    float * devPtrO,
+    cudnnBackendHeurMode_t heur_mode);
 
 void run_with_external_config(
     int64_t* dimA_padded,
