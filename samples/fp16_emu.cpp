@@ -23,7 +23,7 @@
 
 #include "fp16_emu.h"
 
-#define STATIC_ASSERT(cond) { static_assert(cond); }
+#define STATIC_ASSERT(cond) { static_assert(cond, "static_assert failed."); }
 
 // Host functions for converting between FP32 and FP16 formats
 // Paulius Micikevicius (pauliusm@nvidia.com)
