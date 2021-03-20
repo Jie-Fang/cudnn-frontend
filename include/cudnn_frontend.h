@@ -22,6 +22,79 @@
 
 #pragma once
 
+/*! \mainpage CUDNN FRONTEND API
+ *
+ * \section Introduction
+ *
+ * The cuDNN Frontend API is a C++ header-only library that demonstrates how to use the cuDNN C backend API. The cuDNN C backend API is documented in the cuDNN developer guide.
+ *
+ * \section Need Why use Frontend API
+ *
+ * Consider the following code snippet which showcases cudnnBackendTensor creation using the backend API and its equivalent front-end API code. Many among the backend constructs follow similar pattern.
+ *
+ *  ~~~~~~~~~~~~~~~{.cpp}
+ *
+ *  ===========================================================================================
+ *  auto check_status = [](cudnnStatus_t status) { assert (status == CUDNN_STATUS_SUCCESS); };
+ *  ===========================================================================================
+ *  // Backend code for Tensor Creation. 
+ *  cudnnBackendDescriptor_t tensor;
+ *
+ *  check_status (cudnnBackendCreateDescriptor(CUDNN_BACKEND_TENSOR_DESCRIPTOR, &tensor));
+ *
+ *  check_status (cudnnBackendSetAttribute(tensor,
+ *                                         CUDNN_ATTR_TENSOR_DATA_TYPE,
+ *                                         CUDNN_TYPE_DATA_TYPE,
+ *                                         1,
+ *                                         &data_type));
+ *  check_status (cudnnBackendSetAttribute(tensor,
+ *                                         CUDNN_ATTR_TENSOR_DIMENSIONS,
+ *                                         CUDNN_TYPE_INT64,
+ *                                         tensor_dim.size(),
+ *                                         tensor_dim.data()));
+ *  check_status (cudnnBackendSetAttribute(tensor,
+ *                                         CUDNN_ATTR_TENSOR_STRIDES,
+ *                                         CUDNN_TYPE_INT64,
+ *                                         tensor_str.size(),
+ *                                         tensor_str.data()));
+ *  check_status (cudnnBackendSetAttribute(tensor,
+ *                                         CUDNN_ATTR_TENSOR_UNIQUE_ID,
+ *                                         CUDNN_TYPE_INT64,
+ *                                         1,
+ *                                         &id));
+ *  check_status (cudnnBackendSetAttribute(tensor,
+ *                                         CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT,
+ *                                         CUDNN_TYPE_INT64,
+ *                                         1,
+ *                                         &alignment));
+ *  check_status (cudnnBackendFinalize(tensor));
+ *
+ *  check_status (cudnnBackendDestroyDescriptor(tensor));
+ *  ===========================================================================================
+ *  // FrontEnd equivalent code. 
+ *  auto tensor =  cudnn_frontend::TensorBuilder()
+ *                     .setDim(tensor_dim.size(), tensor_dim.data())
+ *                     .setStrides(tensor_str.size(), tensor_str.data())
+ *                     .setId(id)
+ *                     .setAlignment(alignment)
+ *                     .setDataType(data_type)
+ *                     .build();
+ *  check_status(tensor.get_status());
+ *  ===========================================================================================
+ *
+ *  ~~~~~~~~~~~~~~~
+ *  
+ *  Frontend API serves two major purpose as a companion to the backend API.
+ *  - Functional additions:
+ *      - Support for auto-tuning. (cudnnGet and cudnnFind)
+ *      - Errata filters.
+ *  - Programmatic ease:
+ *      - Easy memory management for the cudnnBackendDescriptor_t (RAII based classes).
+ *      - Error handling with optional exception support. Better error messages.
+ *      - Fewer lines of code (5-10x reduction in LOC).
+ *      - Simpler samples on how to use the new API.
+ */
+
 #include "cudnn_frontend_ConvDesc.h"
 #include "cudnn_frontend_Heuristics.h"
 #include "cudnn_frontend_Engine.h"
