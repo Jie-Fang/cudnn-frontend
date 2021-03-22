@@ -280,6 +280,7 @@ run_conv_scale_bias_add_relu(int64_t* x_dim,
 
     } catch (cudnn_frontend::cudnnException e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
     }
 }
 
@@ -453,6 +454,7 @@ run_matmul_bias_gelu(int64_t* a_dim,
 
     } catch (cudnn_frontend::cudnnException e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
     }
 }
 
@@ -629,6 +631,7 @@ run_conv_drelu(int64_t* x_dim,
 
     } catch (cudnn_frontend::cudnnException e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
     }
 }
 
@@ -807,5 +810,6 @@ run_dgrad_drelu(int64_t* dx_dim,
 
     } catch (cudnn_frontend::cudnnException e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
     }
 }
