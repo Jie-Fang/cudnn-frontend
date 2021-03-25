@@ -68,6 +68,7 @@ class Operation_v8 : public BackendDescriptor {
         ss << std::hex << " Y " << ydesc;
         ss << std::hex << " W " << wdesc;
         ss << std::hex << " B " << bdesc;
+        ss << std::hex << " DW " << dwdesc;
         ss << std::hex << " DY " << dydesc;
         ss << std::hex << " DX " << dxdesc;
         ss << std::hex << " C " << cdesc;
@@ -91,6 +92,7 @@ class Operation_v8 : public BackendDescriptor {
           bdesc(from.bdesc),
           dydesc(from.dydesc),
           dxdesc(from.dxdesc),
+          dwdesc(from.dwdesc),
           cdesc(from.cdesc),
           amatdesc(from.amatdesc),
           bmatdesc(from.bmatdesc),
