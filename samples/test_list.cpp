@@ -674,3 +674,39 @@ TEST_CASE("DgradDrelu sample", "[frontend][dgradDrelu][drelu]") {
     checkCudaErr(cudaMemcpy(x_mem.hostPtr, x_mem.devPtr, sizeof(x_mem.hostPtr[0]) * Xsize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 }
+
+TEST_CASE("ConvColReduction sample", "[frontend][fusion][ConvColReduction]") {
+    INFO("TEST_CASE :: Sample conv column reductin add code with backend API");
+    int64_t xTensorDim[]      = { 32,  32, 7, 7};
+    int64_t wTensorDim[]      = {256,  32, 1, 1};
+    int64_t yTensorDim[]      = { 32, 256, 7, 7}; 
+    
+    int64_t conv_padA[]       = {0, 0};
+    int64_t conv_dilationA[]  = {1, 1};
+    int64_t conv_strideA[]    = {1, 1};
+
+    int64_t reducedTensorDim[] = {1, 256, 1, 1}; // output is NPQ * C reduced to C column
+
+    
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim[0], xTensorDim[1], xTensorDim[2], xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim[0], wTensorDim[1], wTensorDim[2], wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", reducedTensorDim[0], reducedTensorDim[1], reducedTensorDim[2], reducedTensorDim[3]);
+
+    int outputSize = reducedTensorDim[0] * reducedTensorDim[1] * reducedTensorDim[2] * reducedTensorDim[3];
+
+    Surface<half> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<half> W(wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3], false);
+    Surface<half> Y(yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3], false);
+
+
+    Surface<float> Reduced(outputSize, true);
+
+    run_conv_reduction(xTensorDim, wTensorDim, yTensorDim, reducedTensorDim, CUDNN_DATA_HALF, 
+                        2, conv_padA, conv_dilationA, conv_strideA, 
+                        X.devPtr, W.devPtr, Reduced.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Reduced.hostPtr, Reduced.devPtr, sizeof(Reduced.hostPtr[0]) * outputSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+}

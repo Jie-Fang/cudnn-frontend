@@ -29,7 +29,7 @@ namespace cudnn_frontend {
 
 auto static get_fallback_engine_list(cudnnBackendDescriptorType_t mode) -> std::vector<int> {
     auto major_version = cudnnGetVersion() / 1000;
-    ;
+    
     auto minor_version = (cudnnGetVersion() / 100) % 10;
     if (major_version >= 8) {
         if (minor_version == 0) {
