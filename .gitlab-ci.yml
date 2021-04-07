@@ -19,6 +19,6 @@ run:
     stage: test
     script:
         - nvidia-smi
-        - docker ps --filter status=exited -q | xargs docker rm -v
+        - docker container prune -f
         - docker run --gpus all -i --name=samples cudnn_frontend /samples/samples
         - docker rm -v samples
