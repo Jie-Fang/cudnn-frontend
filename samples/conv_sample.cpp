@@ -327,7 +327,7 @@ run_from_heuristics(int64_t* x_dim_padded,
         }
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -398,7 +398,7 @@ run_from_global_index(int64_t* x_dim_padded,
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -474,7 +474,7 @@ run_with_external_config(int64_t* x_dim_padded,
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -602,7 +602,7 @@ run_conv_add_bias_activation(int64_t* x_dim_padded,
 
         // How many engines support this operation graph ?
         auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
+        std::cout << "conv_add_bias_activation " << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
         // We have to randomly pick one engine from [0, total_engines)
         // Selecting "0" by default
         auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
@@ -646,7 +646,7 @@ run_conv_add_bias_activation(int64_t* x_dim_padded,
         }
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -696,7 +696,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
-            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
+            std::cout << "Plan tag: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
                       << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
 
@@ -704,7 +704,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
             cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -845,14 +845,14 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
             return plan.getWorkspaceSize() > max_workspace_size;
         };
 
-        std::array<cudnn_frontend::GeneratorSource const, 1> sources = {heurgen_method};
+        std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
         cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, std::move(opGraph), variantPack, sample_predicate_function);
 
         std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
-            std::cout << "Plan: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
+            std::cout << "Plan tag: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
                       << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
         });
 
@@ -862,7 +862,7 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
         checkCudaErr(cudaFree(workspace_ptr));
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
 
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -911,14 +911,14 @@ run_from_cudnn_get(int64_t* x_dim_padded,
         auto plans = generator.cudnnGetPlan(handle_, std::move(opGraph), sample_predicate_function);
 
         std::for_each(plans.begin(), plans.end(), [](cudnn_frontend::ExecutionPlan& plan) {
-            std::cout << "Plan: " << plan.getTag() << " workspace: " << plan.getWorkspaceSize() << " bytes"
+            std::cout << "Plan tag: " << plan.getTag() << " workspace: " << plan.getWorkspaceSize() << " bytes"
                       << std::endl;
         });
 
         cudnnStatus_t status = cudnnBackendExecute(handle_, plans.front().get_raw_desc(), variantPack.get_raw_desc());
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
