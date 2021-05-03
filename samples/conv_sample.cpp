@@ -926,3 +926,84 @@ run_from_cudnn_get(int64_t* x_dim_padded,
     if (handle_) cudnnDestroy(handle_);
     return;
 }
+
+void
+block_using_errata(int64_t* x_dim_padded,
+                   int64_t* padA,
+                   int64_t* convstrideA,
+                   int64_t* dilationA,
+                   int64_t* w_dim_padded,
+                   int64_t* y_dim_padded,
+                   cudnnDataType_t dataType,
+                   cudnnConvolutionMode_t mode,
+                   float* devPtrX,
+                   float* devPtrW,
+                   float* devPtrY) {
+    cudnnHandle_t handle_;
+
+    try {
+        checkCudnnErr(cudnnCreate(&handle_));
+        common_conv_descriptors descriptors = create_common_descriptors(
+            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+
+        (void)devPtrX;
+        (void)devPtrY;
+        (void)devPtrW;
+
+        std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<W_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<3>(descriptors).describe() << std::endl;
+
+        auto opGraph = create_operation_graph(
+            descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR, handle_);
+        std::cout << opGraph.describe() << std::endl;
+
+        // We have to randomly pick one engine from [0, total_engines)
+        // Selecting "0" by default
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        std::cout << engine.describe() << std::endl;
+        auto& knobs = engine.getSupportedKnobs();
+        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
+            std::cout << it->describe() << std::endl;
+        }
+
+        if (knobs.begin() != knobs.end()) {
+            std::cout << "Updated knob choice" << std::endl;
+            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
+            std::cout << knobs.begin()->describe() << std::endl;
+        }
+        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+        std::cout << engine_config.describe() << std::endl;
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto json_handle = json::parse(R"(
+            { "version" : 1, 
+              "rules"   : 
+                [ 
+                    { "rule_id" : 1,
+                      "engine"  : "ConvBwdFilter_eng0", 
+                      "cudnn_version_start" : 8000, 
+                      "cudnn_version_end" : 9999 
+                    }, 
+                    { "rule_id" : 2, 
+                      "engine"  : "ConvFwd_eng28", 
+                      "knob"    : "k2=4_k3=0", 
+                      "cudnn_version_start" : 8000, 
+                      "cudnn_version_end" : 9999 
+                    } 
+                ] 
+            })");
+
+        bool is_plan_blacklisted = cudnn_frontend::check_errata(json_handle, plan.getTag(), handle_);
+        CHECK(is_plan_blacklisted);
+
+    } catch (cudnn_frontend::cudnnException &e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
+    }
+
+    if (handle_) cudnnDestroy(handle_);
+}

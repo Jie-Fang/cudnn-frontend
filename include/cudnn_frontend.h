@@ -102,6 +102,7 @@
 #include "cudnn_frontend_Engine.h"
 #include "cudnn_frontend_EngineConfig.h"
 #include "cudnn_frontend_EngineFallbackList.h"
+#include "cudnn_frontend_Errata.h"
 #include "cudnn_frontend_ExecutionPlan.h"
 #include "cudnn_frontend_Filters.h"
 #include "cudnn_frontend_Operation.h"
