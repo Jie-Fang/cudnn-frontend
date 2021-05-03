@@ -47,10 +47,15 @@ load_from_config(json &json_handle) {
 static bool 
 check_rule(const json &json_handle, const std::string & executionPlanTag,
     cudnnHandle_t handle) {
-    (void) json_handle;
-    (void) executionPlanTag;
+    std::cout << "checking rule " << json_handle["rule_id"] << std::endl;
+    std::string engine   = json_handle["engine"];
+    uint64_t cudnn_start = json_handle["cudnn_version_start"];
+    uint64_t cudnn_end   = json_handle["cudnn_version_end"];
+    return 
+        std::equal(engine.begin(), engine.end(), executionPlanTag.begin()) &&
+        CUDNN_VERSION >= cudnn_start &&
+        CUDNN_VERSION < cudnn_end;
     (void) handle;
-    return true;
 }
 
 // Takes in an initialzed json handle and checks if it satisfies the 
