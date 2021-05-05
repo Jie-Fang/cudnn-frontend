@@ -50,7 +50,7 @@ TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
                                     .build();
     
         std::cout << "Created Tensor" << tensor.describe() << std::endl;
-    } catch (cudnn_frontend::cudnnException e) {
+    } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "Exception in tensor creation " << e.what() << std::endl;
     }
 
