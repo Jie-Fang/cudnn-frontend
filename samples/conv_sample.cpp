@@ -983,16 +983,18 @@ block_using_errata(int64_t* x_dim_padded,
             { "version" : 1, 
               "rules"   : 
                 [ 
-                    { "rule_id" : 1,
-                      "engine"  : "ConvBwdFilter_eng0", 
+                    { "rule_id"             : "ConvBwdData_eng1_k2=2_k3=0", 
+                      "operation"           : "ConvBwdData",
+                      "engine"              : "eng1", 
+                      "knob"                : ["k2=4", "k3=0"],
                       "cudnn_version_start" : 8000, 
-                      "cudnn_version_end" : 9999 
+                      "cudnn_version_end"   : -1 
                     }, 
-                    { "rule_id" : 2, 
-                      "engine"  : "ConvFwd_eng28", 
-                      "knob"    : "k2=4_k3=0", 
+                    { "rule_id"             : "ConvBwdFilter_eng0",
+                      "operation"           : "ConvBwdFilter",
+                      "engine"              : "eng0", 
                       "cudnn_version_start" : 8000, 
-                      "cudnn_version_end" : 9999 
+                      "cudnn_version_end"   : -1 
                     } 
                 ] 
             })");

@@ -47,15 +47,30 @@ load_from_config(json &json_handle) {
 static bool 
 check_rule(const json &json_handle, const std::string & executionPlanTag,
     cudnnHandle_t handle) {
-    std::cout << "checking rule " << json_handle["rule_id"] << std::endl;
-    std::string engine   = json_handle["engine"];
-    uint64_t cudnn_start = json_handle["cudnn_version_start"];
-    uint64_t cudnn_end   = json_handle["cudnn_version_end"];
-    return 
-        std::equal(engine.begin(), engine.end(), executionPlanTag.begin()) &&
+    std::string operation = json_handle["operation"];
+    std::string engine    =  json_handle["engine"];
+    uint64_t cudnn_start     =  0;
+    uint64_t cudnn_end       =  -1;
+    if (json_handle.contains("cudnn_version_start")) {
+        cudnn_start   =  json_handle["cudnn_version_start"];
+    }
+    if (json_handle.contains("cudnn_version_end")) {
+        cudnn_end     =  json_handle["cudnn_version_end"];
+    }
+    std::string tag_prefix = operation + "_" + engine; 
+    bool blocked = 
+        std::equal(tag_prefix.begin(), tag_prefix.end(), executionPlanTag.begin()) &&
         CUDNN_VERSION >= cudnn_start &&
         CUDNN_VERSION < cudnn_end;
+
+    if (blocked && json_handle.contains("knob")) { // Short circuit if operation and engine do not match
+        for (auto& kv : json_handle["knob"]) {
+            blocked = blocked &&
+                (executionPlanTag.find(kv) != std::string::npos);
+        }
+    }
     (void) handle;
+    return blocked;
 }
 
 // Takes in an initialzed json handle and checks if it satisfies the 
