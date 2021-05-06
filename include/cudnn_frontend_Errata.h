@@ -35,18 +35,19 @@ namespace cudnn_frontend {
 // json file is defined by environment variable
 // CUDNN_ERRATA_JSON_FILE
 static void
-load_from_config(json &json_handle) {
-    const char * errata_json = std::getenv("CUDNN_ERRATA_JSON_FILE");
-    if (errata_json == nullptr) {return;}
-    std::ifstream ifs("./errata.json" , std::ifstream::in);
+load_from_config(json &json_handle, const std::string & errata_json) {
+    // const char * errata_json = std::getenv("CUDNN_ERRATA_JSON_FILE");
+    // if (errata_json == nullptr) {return;}
+    std::ifstream ifs(errata_json, std::ifstream::in);
     if (!ifs.is_open() || !ifs.good()) {return;}
     ifs >> json_handle;
     return;
 }
 
+template <typename T>
 static bool 
 check_rule(const json &json_handle, const std::string & executionPlanTag,
-    cudnnHandle_t handle) {
+    cudnnHandle_t handle, T fn) {
     std::string operation = json_handle["operation"];
     std::string engine    =  json_handle["engine"];
     uint64_t cudnn_start     =  0;
@@ -69,19 +70,23 @@ check_rule(const json &json_handle, const std::string & executionPlanTag,
                 (executionPlanTag.find(kv) != std::string::npos);
         }
     }
-    (void) handle;
+
+    blocked = blocked && fn(); 
     return blocked;
+
+    (void) handle;
 }
 
 // Takes in an initialzed json handle and checks if it satisfies the 
 // condition for running it. Returns true if the given executionPlanTag
 // is faulty.
+template <typename T>
 static bool
 check_errata(const json &json_handle, const std::string & executionPlanTag,
-    cudnnHandle_t handle) {
+    cudnnHandle_t handle, T fn) {
 
     for (auto const &rule : json_handle["rules"]) {
-        if (check_rule(rule, executionPlanTag, handle)) {
+        if (check_rule<T>(rule, executionPlanTag, handle, fn)) {
             return true;
         }
     }

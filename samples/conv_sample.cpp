@@ -52,6 +52,11 @@ allowAll(cudnnBackendDescriptor_t engine_config) {
     return false;
 }
 
+bool allowErrata(int64_t *padA) {
+    return std::all_of(padA,padA + 2, [](int64_t pad) {
+            return pad == 0;});
+}
+
 }
 enum {
     X_TENSOR,
@@ -999,7 +1004,8 @@ block_using_errata(int64_t* x_dim_padded,
                 ] 
             })");
 
-        bool is_plan_blacklisted = cudnn_frontend::check_errata(json_handle, plan.getTag(), handle_);
+        auto fn = std::bind(::allowErrata, padA);
+        bool is_plan_blacklisted = cudnn_frontend::check_errata<decltype(fn)>(json_handle, plan.getTag(), handle_, fn);
         CHECK(is_plan_blacklisted);
 
     } catch (cudnn_frontend::cudnnException &e) {
