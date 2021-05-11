@@ -984,6 +984,8 @@ block_using_errata(int64_t* x_dim_padded,
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
+        /// Please note that the json string mentioned below is just an example and is
+        /// not actually a buggy engine config (kernel).
         auto json_handle = json::parse(R"(
             { "version" : 1, 
               "rules"   : 
