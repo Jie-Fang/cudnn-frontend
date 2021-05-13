@@ -1007,8 +1007,8 @@ block_using_errata(int64_t* x_dim_padded,
             })");
 
         auto fn = std::bind(::allowErrata, padA);
-        bool is_plan_blacklisted = cudnn_frontend::check_errata<decltype(fn)>(json_handle, plan.getTag(), handle_, fn);
-        CHECK(is_plan_blacklisted);
+        bool is_plan_blocked = cudnn_frontend::check_errata<decltype(fn)>(json_handle, plan.getTag(), handle_, fn);
+        CHECK(is_plan_blocked);
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
