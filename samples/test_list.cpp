@@ -724,3 +724,42 @@ TEST_CASE("ConvColReduction sample", "[frontend][fusion][ConvColReduction]") {
     checkCudaErr(cudaMemcpy(Reduced.hostPtr, Reduced.devPtr, sizeof(Reduced.hostPtr[0]) * outputSize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 }
+
+TEST_CASE("Use errata to block global(index) for execution", "[frontend][errata][wgrad]" ) {
+    std::cout << "TEST_CASE :: Use  errata to block a global index for engine generation" << std::endl;
+    INFO("TEST_CASE :: Use  errata to block global index for engine generation");
+    int64_t dimA[]        = {1, 32, 4, 4};
+    int64_t filterdimA[]  = {32, 32, 1, 1};
+    int64_t outdimA[]     = {0, 0, 0, 0}; // Computed Below
+    int64_t padA[]        = {0, 0};
+    int64_t dilationA[] = {1, 1};
+    int64_t convstrideA[] = {1, 1};
+
+
+    int numErrors = 0;
+
+    outdimA[0] = dimA[0];
+    outdimA[1] = filterdimA[0];
+    for (int dim = 0; dim < 2; dim++) {
+        outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
+    }
+
+
+    cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
+
+
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
+
+    SurfaceManager<float> sm(Xsize, Wsize, Ysize, Wsize);
+
+    block_using_errata(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+
+    REQUIRE(numErrors == 0);
+}

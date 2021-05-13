@@ -52,6 +52,11 @@ allowAll(cudnnBackendDescriptor_t engine_config) {
     return false;
 }
 
+bool allowErrata(int64_t *padA) {
+    return std::all_of(padA,padA + 2, [](int64_t pad) {
+            return pad == 0;});
+}
+
 }
 enum {
     X_TENSOR,
@@ -925,4 +930,90 @@ run_from_cudnn_get(int64_t* x_dim_padded,
 
     if (handle_) cudnnDestroy(handle_);
     return;
+}
+
+void
+block_using_errata(int64_t* x_dim_padded,
+                   int64_t* padA,
+                   int64_t* convstrideA,
+                   int64_t* dilationA,
+                   int64_t* w_dim_padded,
+                   int64_t* y_dim_padded,
+                   cudnnDataType_t dataType,
+                   cudnnConvolutionMode_t mode,
+                   float* devPtrX,
+                   float* devPtrW,
+                   float* devPtrY) {
+    cudnnHandle_t handle_;
+
+    try {
+        checkCudnnErr(cudnnCreate(&handle_));
+        common_conv_descriptors descriptors = create_common_descriptors(
+            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+
+        (void)devPtrX;
+        (void)devPtrY;
+        (void)devPtrW;
+
+        std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<W_TENSOR>(descriptors).describe() << std::endl;
+        std::cout << std::get<3>(descriptors).describe() << std::endl;
+
+        auto opGraph = create_operation_graph(
+            descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR, handle_);
+        std::cout << opGraph.describe() << std::endl;
+
+        // We have to randomly pick one engine from [0, total_engines)
+        // Selecting "0" by default
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        std::cout << engine.describe() << std::endl;
+        auto& knobs = engine.getSupportedKnobs();
+        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
+            std::cout << it->describe() << std::endl;
+        }
+
+        if (knobs.begin() != knobs.end()) {
+            std::cout << "Updated knob choice" << std::endl;
+            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
+            std::cout << knobs.begin()->describe() << std::endl;
+        }
+        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+        std::cout << engine_config.describe() << std::endl;
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        /// Please note that the json string mentioned below is just an example and is
+        /// not actually a buggy engine config (kernel).
+        auto json_handle = json::parse(R"(
+            { "version" : 1, 
+              "rules"   : 
+                [ 
+                    { "rule_id"             : "ConvBwdData_eng1_k2=2_k3=0", 
+                      "operation"           : "ConvBwdData",
+                      "engine"              : "eng1", 
+                      "knob"                : ["k2=4", "k3=0"],
+                      "cudnn_version_start" : 8000, 
+                      "cudnn_version_end"   : -1 
+                    }, 
+                    { "rule_id"             : "ConvBwdFilter_eng0",
+                      "operation"           : "ConvBwdFilter",
+                      "engine"              : "eng0", 
+                      "cudnn_version_start" : 8000, 
+                      "cudnn_version_end"   : -1 
+                    } 
+                ] 
+            })");
+
+        auto fn = std::bind(::allowErrata, padA);
+        bool is_plan_blocked = cudnn_frontend::check_errata<decltype(fn)>(json_handle, plan.getTag(), handle_, fn);
+        CHECK(is_plan_blocked);
+
+    } catch (cudnn_frontend::cudnnException &e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
+    }
+
+    if (handle_) cudnnDestroy(handle_);
 }
