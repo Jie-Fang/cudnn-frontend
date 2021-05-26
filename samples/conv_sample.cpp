@@ -306,10 +306,22 @@ run_from_heuristics(int64_t* x_dim_padded,
                               .build();
 
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
-        auto& engine_config = heuristics.getEngineConfig();
+        auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
 
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config[0], opGraph.getTag()).build();
+        auto plan_builder = [&]() -> cudnn_frontend::ExecutionPlan {
+            for (auto &ecfg : engine_config) {
+                try {
+                    auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(ecfg, opGraph.getTag()).build();
+                    return plan;
+                } catch (cudnn_frontend::cudnnException &e) {
+                    continue;
+                }
+            }
+            return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config[0], opGraph.getTag()).build();
+        };
 
+        auto plan = plan_builder();
+       
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();
