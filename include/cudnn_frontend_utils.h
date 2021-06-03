@@ -56,6 +56,72 @@ throw_if(bool expr, const char *message) {
     }
 }
 
+static inline std::string
+to_string(cudnnDataType_t type) {
+    switch(type) {
+        case CUDNN_DATA_FLOAT:
+            return std::string("CUDNN_DATA_FLOAT");
+        case CUDNN_DATA_DOUBLE:
+            return std::string("CUDNN_DATA_DOUBLE");
+        case CUDNN_DATA_HALF:
+            return std::string("CUDNN_DATA_HALF");
+        case CUDNN_DATA_INT8:
+            return std::string("CUDNN_DATA_INT8");
+        case CUDNN_DATA_INT32:
+            return std::string("CUDNN_DATA_INT32");
+        case CUDNN_DATA_INT8x4: // x4 and x32 are replaced by vectorized dimension in the v8 API 
+            return std::string("CUDNN_DATA_INT8x4");
+        case CUDNN_DATA_UINT8:
+            return std::string("CUDNN_DATA_UINT8");
+        case CUDNN_DATA_UINT8x4: // x4 and x32 are replaced by vectorized dimension in the v8 API 
+            return std::string("CUDNN_DATA_UINT8x4");
+        case CUDNN_DATA_INT8x32: // x4 and x32 are replaced by vectorized dimension in the v8 API 
+            return std::string("CUDNN_DATA_INT8x32");
+        case CUDNN_DATA_INT64:
+            return std::string("CUDNN_DATA_INT64");
+        case CUDNN_DATA_BFLOAT16:
+            return std::string("CUDNN_DATA_BFLOAT16");
+    }
+    return std::string("");
+}
+
+static inline std::string
+to_string(cudnnStatus_t status) {
+    switch(status) {
+        case CUDNN_STATUS_SUCCESS:
+            return std::string("CUDNN_STATUS_SUCCESS");
+        case CUDNN_STATUS_NOT_INITIALIZED:
+            return std::string("CUDNN_STATUS_NOT_INITIALIZED");
+        case CUDNN_STATUS_ALLOC_FAILED:
+            return std::string("CUDNN_STATUS_ALLOC_FAILED");
+        case CUDNN_STATUS_BAD_PARAM:
+            return std::string("CUDNN_STATUS_BAD_PARAM");
+        case CUDNN_STATUS_INTERNAL_ERROR:
+            return std::string("CUDNN_STATUS_INTERNAL_ERROR");
+        case CUDNN_STATUS_INVALID_VALUE:
+            return std::string("CUDNN_STATUS_INVALID_VALUE");
+        case CUDNN_STATUS_ARCH_MISMATCH:
+            return std::string("CUDNN_STATUS_ARCH_MISMATCH");
+        case CUDNN_STATUS_MAPPING_ERROR:
+            return std::string("CUDNN_STATUS_MAPPING_ERROR");
+        case CUDNN_STATUS_EXECUTION_FAILED:
+            return std::string("CUDNN_STATUS_EXECUTION_FAILED");
+        case CUDNN_STATUS_NOT_SUPPORTED:
+            return std::string("CUDNN_STATUS_NOT_SUPPORTED");
+        case CUDNN_STATUS_LICENSE_ERROR:
+            return std::string("CUDNN_STATUS_LICENSE_ERROR");
+        case CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING:
+            return std::string("CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING");
+        case CUDNN_STATUS_RUNTIME_IN_PROGRESS:
+            return std::string("CUDNN_STATUS_RUNTIME_IN_PROGRESS");
+        case CUDNN_STATUS_RUNTIME_FP_OVERFLOW:
+            return std::string("CUDNN_STATUS_RUNTIME_FP_OVERFLOW");
+        case CUDNN_STATUS_VERSION_MISMATCH:
+            return std::string("CUDNN_STATUS_VERSION_MISMATCH");
+    }
+    return std::string("");
+}
+
 static inline void
 set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
     if (desc != nullptr) {
@@ -64,7 +130,8 @@ set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t statu
     }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
     throw cudnnException(
-        std::string(std::string(message) + std::string(" cudnn_status: ") + std::to_string(status)).c_str());
+        std::string(std::string(message) + std::string(" cudnn_status: ") + to_string(status)).c_str());
 #endif
 }
+
 }
