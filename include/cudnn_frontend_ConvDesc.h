@@ -59,28 +59,28 @@ class ConvDesc_v8 : public BackendDescriptor {
         std::stringstream ss;
         char sep = ' ';
         ss << "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR :"
-           << " Datatype: " << std::to_string(data_type) << " Mode: " << std::to_string(mode)
+           << " Datatype: " << to_string(data_type) << " Mode: " << std::to_string(mode)
            << " Num Dimensions: " << std::to_string(nDims);
         ss << " PadLower [";
-        std::for_each(std::begin(padLower), std::end(padLower), [&ss, sep](int x) mutable {
-            ss << sep << x;
+        for (auto i = 0; i < nDims; i++) {
+            ss << sep << padLower[i];
             sep = ',';
-        });
+        }
         ss << " ] PadUpper [";
-        std::for_each(std::begin(padUpper), std::end(padUpper), [&ss, sep](int x) mutable {
-            ss << sep << x;
+        for (auto i = 0; i < nDims; i++) {
+            ss << sep << padUpper[i];
             sep = ',';
-        });
+        }
         ss << " ] Dilation [";
-        std::for_each(std::begin(dilation), std::end(dilation), [&ss, sep](int x) mutable {
-            ss << sep << x;
+        for (auto i = 0; i < nDims; i++) {
+            ss << sep << dilation[i];
             sep = ',';
-        });
+        }
         ss << " ] Stride [";
-        std::for_each(std::begin(stride), std::end(stride), [&ss, sep](int x) mutable {
-            ss << sep << x;
+        for (auto i = 0; i < nDims; i++) {
+            ss << sep << stride[i];
             sep = ',';
-        });
+        }
         ss << "]";
         return ss.str();
     }

@@ -459,11 +459,20 @@ run_with_external_config(int64_t* x_dim_padded,
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
         auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
 
+#if (CUDNN_VERSION >= 8300)
+        auto fallback = cudnn_frontend::EngineHeuristicsBuilder()
+                              .setOperationGraph(opGraph)
+                              .setHeurMode(CUDNN_HEUR_MODE_FALLBACK)
+                              .build();
+
+        auto& fallback_list = fallback.getEngineConfig(fallback.getEngineConfigCount());
+#else
         auto fallback = cudnn_frontend::EngineFallbackListBuilder()
                             .setOperationGraph(opGraph)
                             .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR)
                             .build();
         auto& fallback_list = fallback.getFallbackList();
+#endif
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
 
         cudnn_frontend::EngineConfigList filtered_configs;

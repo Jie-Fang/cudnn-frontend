@@ -56,18 +56,18 @@ class Tensor_v8 : public BackendDescriptor {
         std::stringstream ss;
         char sep = ' ';
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
-           << " Datatype: " << std::to_string(data_type) << " Id: " << std::to_string(id)
+           << " Datatype: " << to_string(data_type) << " Id: " << std::to_string(id)
            << " Alignment: " << std::to_string(alignment) << " nDims " << nDims;
         ss << " Dim [";
-        std::for_each(std::begin(btensor_dimA), std::end(btensor_dimA), [&ss, sep](int x) mutable {
-            ss << sep << x;
+        for (auto i = 0; i < nDims; i++) {
+            ss << sep << btensor_dimA[i];
             sep = ',';
-        });
+        }
         ss << " ] Str [";
-        std::for_each(std::begin(btensor_strA), std::end(btensor_strA), [&ss, sep](int x) mutable {
-            ss << sep << x;
+        for (auto i = 0; i < nDims; i++) {
+            ss << sep << btensor_strA[i];
             sep = ',';
-        });
+        }
         ss << "]";
         return ss.str();
     }
