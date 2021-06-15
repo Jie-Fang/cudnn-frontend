@@ -31,27 +31,34 @@ namespace cudnn_frontend {
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
 class cudnnException : public std::runtime_error {
    public:
-    cudnnException(const char *message) throw() : std::runtime_error(message) {}
+    cudnnException(const char *message, cudnnStatus_t status) throw() : std::runtime_error(message) {
+        error_status = status;
+    }
     virtual const char *
     what() const throw() {
         return std::runtime_error::what();
     }
+    cudnnStatus_t getCudnnStatus() {
+        return error_status;
+    }
+
+    cudnnStatus_t error_status;
 };
 #endif
 
 static inline void
-throw_if(std::function<bool()> expr, const char *message) {
+throw_if(std::function<bool()> expr, const char *message, cudnnStatus_t status) {
     if (expr()) {
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
-        throw cudnnException(message);
+        throw cudnnException(message, status);
 #endif
     }
 }
 static inline void
-throw_if(bool expr, const char *message) {
+throw_if(bool expr, const char *message, cudnnStatus_t status) {
     if (expr) {
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
-        throw cudnnException(message);
+        throw cudnnException(message, status);
 #endif
     }
 }
@@ -130,7 +137,7 @@ set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t statu
     }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
     throw cudnnException(
-        std::string(std::string(message) + std::string(" cudnn_status: ") + to_string(status)).c_str());
+        std::string(std::string(message) + std::string(" cudnn_status: ") + to_string(status)).c_str(), status);
 #endif
 }
 
