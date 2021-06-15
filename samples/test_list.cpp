@@ -517,6 +517,67 @@ TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]
     checkCudaErr(cudaDeviceSynchronize());
 }
 
+TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
+    std::cout << "TEST_CASE ConvBiasScaleAct :: Sample runtime fusion code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    int64_t xTensorDim[] = {1, 16, 512, 512};
+    int64_t wTensorDim[] = {64, 16, 3, 3};
+    int64_t yTensorDim[] = {1, 64, 512, 512};
+
+    int64_t conv_padA[]      = {1, 1};
+    int64_t conv_dilationA[] = {1, 1};
+    int64_t conv_strideA[]   = {1, 1};
+
+    int64_t bTensorDim[] = {1, 64, 1, 1};  // bias
+    int64_t sTensorDim[] = {1, 64, 1, 1};  // scale
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           xTensorDim[0],
+           xTensorDim[1],
+           xTensorDim[2],
+           xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           wTensorDim[0],
+           wTensorDim[1],
+           wTensorDim[2],
+           wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           yTensorDim[0],
+           yTensorDim[1],
+           yTensorDim[2],
+           yTensorDim[3]);
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+
+    Surface<float> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<float> W(wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3], false);
+    Surface<float> Y(Ysize, true);
+
+    Surface<float> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2] * bTensorDim[3], false);
+    Surface<float> S(sTensorDim[0] * sTensorDim[1] * sTensorDim[2] * sTensorDim[3], false);
+
+    run_conv_bias_scale_relu(xTensorDim,
+                             wTensorDim,
+                             yTensorDim,
+                             bTensorDim,
+                             sTensorDim,
+                             CUDNN_DATA_FLOAT,
+                             2,
+                             conv_padA,
+                             conv_dilationA,
+                             conv_strideA,
+                             X.devPtr,
+                             W.devPtr,
+                             Y.devPtr,
+                             B.devPtr,
+                             S.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+}
+
 
 TEST_CASE("MatmulBiasAct sample", "[frontend][fusion][MatmulBiasAct]") {
     std::cout << "TEST_CASE :: Sample matmul runtime fusion code with backend API" << std::endl;

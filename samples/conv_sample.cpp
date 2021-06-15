@@ -342,7 +342,7 @@ run_from_heuristics(int64_t* x_dim_padded,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
@@ -413,7 +413,7 @@ run_from_global_index(int64_t* x_dim_padded,
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
@@ -498,7 +498,7 @@ run_with_external_config(int64_t* x_dim_padded,
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
@@ -670,7 +670,7 @@ run_conv_add_bias_activation(int64_t* x_dim_padded,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
@@ -732,7 +732,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         cudnnStatus_t status =
             cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
 
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
@@ -889,7 +889,7 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
             cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
 
         checkCudaErr(cudaFree(workspace_ptr));
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
@@ -946,7 +946,7 @@ run_from_cudnn_get(int64_t* x_dim_padded,
 
         cudnnStatus_t status = cudnnBackendExecute(handle_, plans.front().get_raw_desc(), variantPack.get_raw_desc());
 
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
@@ -1148,7 +1148,7 @@ run_imma(
         cudnnStatus_t status =
             cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
 
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error");
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
