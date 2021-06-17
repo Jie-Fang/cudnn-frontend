@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -990,7 +990,7 @@ block_using_errata(int64_t* x_dim_padded,
 
         // We have to randomly pick one engine from [0, total_engines)
         // Selecting "0" by default
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(20).setOperationGraph(opGraph).build();
         std::cout << engine.describe() << std::endl;
         auto& knobs = engine.getSupportedKnobs();
         for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
@@ -1016,14 +1016,14 @@ block_using_errata(int64_t* x_dim_padded,
                 [ 
                     { "rule_id"             : "ConvBwdData_eng1_k2=2_k3=0", 
                       "operation"           : "ConvBwdData",
-                      "engine"              : "eng1", 
+                      "engine"              : 1, 
                       "knob"                : ["k2=4", "k3=0"],
                       "cudnn_version_start" : 8000, 
                       "cudnn_version_end"   : -1 
                     }, 
-                    { "rule_id"             : "ConvBwdFilter_eng0",
+                    { "rule_id"             : "ConvBwdFilter_eng20",
                       "operation"           : "ConvBwdFilter",
-                      "engine"              : "eng0", 
+                      "engine"              : 20, 
                       "cudnn_version_start" : 8000, 
                       "cudnn_version_end"   : -1 
                     } 
