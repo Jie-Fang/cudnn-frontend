@@ -451,6 +451,10 @@ run_with_external_config(int64_t* x_dim_padded,
             create_operation_graph(descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR, handle_);
         std::cout << opGraph.describe() << std::endl;
 
+#if (CUDNN_VERSION >= 8300)
+        cudnn_frontend::EngineConfigList filtered_configs = 
+            cudnn_frontend::get_heuristics_list<2>({CUDNN_HEUR_MODE_INSTANT, CUDNN_HEUR_MODE_FALLBACK}, opGraph,::isNonDeterministic);
+#else
         auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
                               .setOperationGraph(opGraph)
                               .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
@@ -459,20 +463,11 @@ run_with_external_config(int64_t* x_dim_padded,
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
         auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
 
-#if (CUDNN_VERSION >= 8300)
-        auto fallback = cudnn_frontend::EngineHeuristicsBuilder()
-                              .setOperationGraph(opGraph)
-                              .setHeurMode(CUDNN_HEUR_MODE_FALLBACK)
-                              .build();
-
-        auto& fallback_list = fallback.getEngineConfig(fallback.getEngineConfigCount());
-#else
         auto fallback = cudnn_frontend::EngineFallbackListBuilder()
                             .setOperationGraph(opGraph)
                             .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR)
                             .build();
         auto& fallback_list = fallback.getFallbackList();
-#endif
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
 
         cudnn_frontend::EngineConfigList filtered_configs;
@@ -481,6 +476,7 @@ run_with_external_config(int64_t* x_dim_padded,
 
         std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
         std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
+#endif
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
         auto plan =
@@ -722,15 +718,15 @@ run_from_cudnn_find(int64_t* x_dim_padded,
         cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
-            handle_, std::move(opGraph), variantPack, sample_predicate_function);
+            handle_, opGraph, variantPack, sample_predicate_function);
 
-        std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
-            std::cout << "Plan tag: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
-                      << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
+        std::for_each(options.begin(), options.end(), [](cudnn_frontend::ExecutionPlan& opt) {
+            std::cout << "Plan tag: " << opt.getTag() << " finished in " << opt.getExecutionTime() << " ms,"
+                      << " workspace: " << opt.getWorkspaceSize() << " bytes" << std::endl;
         });
 
         cudnnStatus_t status =
-            cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
+            cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {
@@ -878,15 +874,15 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
         cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
-            handle_, std::move(opGraph), variantPack, sample_predicate_function);
+            handle_, opGraph, variantPack, sample_predicate_function);
 
-        std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
-            std::cout << "Plan tag: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
-                      << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
+        std::for_each(options.begin(), options.end(), [](cudnn_frontend::ExecutionPlan& opt) {
+            std::cout << "Plan tag: " << opt.getTag() << " finished in " << opt.getExecutionTime() << " ms,"
+                      << " workspace: " << opt.getWorkspaceSize() << " bytes" << std::endl;
         });
 
         cudnnStatus_t status =
-            cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
+            cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
 
         checkCudaErr(cudaFree(workspace_ptr));
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
@@ -925,26 +921,50 @@ run_from_cudnn_get(int64_t* x_dim_padded,
             create_operation_graph(descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR, handle_);
         std::cout << opGraph.describe() << std::endl;
 
-        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW};
-        int64_t uids[]    = {'x', 'y', 'w'};
-        auto variantPack  = cudnn_frontend::VariantPackBuilder().setDataPointers(3, data_ptrs).setUids(3, uids).build();
-        std::cout << "variantPack " << variantPack.describe() << std::endl;
-
         auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan const& plan) -> bool {
-            return plan.getWorkspaceSize() != 0;
+            (void) plan;
+            return false;
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 1> sources = {heurgen_method};
         cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
-        auto plans = generator.cudnnGetPlan(handle_, std::move(opGraph), sample_predicate_function);
+        auto plans = generator.cudnnGetPlan(handle_, opGraph, sample_predicate_function);
 
-        std::for_each(plans.begin(), plans.end(), [](cudnn_frontend::ExecutionPlan& plan) {
+        int64_t max_workspace_size = 0u;
+        std::for_each(plans.begin(), plans.end(), [&max_workspace_size](cudnn_frontend::ExecutionPlan& plan) {
             std::cout << "Plan tag: " << plan.getTag() << " workspace: " << plan.getWorkspaceSize() << " bytes"
                       << std::endl;
+            if (plan.getWorkspaceSize() > max_workspace_size) {
+                max_workspace_size = plan.getWorkspaceSize();
+            }
         });
 
-        cudnnStatus_t status = cudnnBackendExecute(handle_, plans.front().get_raw_desc(), variantPack.get_raw_desc());
+        std::cout << "Max workspace size required " << max_workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        checkCudaErr(cudaMalloc(&workspace_ptr, max_workspace_size));
+
+        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW};
+        int64_t uids[]    = {'x', 'y', 'w'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+            .setWorkspacePointer(workspace_ptr)
+            .setDataPointers(3, data_ptrs)
+            .setUids(3, uids)
+            .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+        
+        // This is an optional step in this test. 
+        // time_sorted_plan makes this equivalent to using find for autotuning, and this step is not necessary if the intent is to just use the heuristics.
+        auto options = cudnn_frontend::time_sorted_plan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(handle_, std::move(plans), variantPack); 
+
+        std::for_each(options.begin(), options.end(), [](cudnn_frontend::ExecutionPlan& opt) {
+            std::cout << "Plan tag: " << opt.getTag() << " finished in " << opt.getExecutionTime() << " ms,"
+                      << " workspace: " << opt.getWorkspaceSize() << " bytes" << std::endl;
+        });
+
+
+        cudnnStatus_t status = cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {
@@ -1138,15 +1158,15 @@ run_imma(
         cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
-            handle_, std::move(opGraph), variantPack, sample_predicate_function);
+            handle_, opGraph, variantPack, sample_predicate_function);
 
-        std::for_each(options.begin(), options.end(), [](struct cudnn_frontend::executionOption& opt) {
-            std::cout << "Plan tag: " << opt.plan.getTag() << " finished in " << opt.time_ms << " ms,"
-                      << " workspace: " << opt.plan.getWorkspaceSize() << " bytes" << std::endl;
+        std::for_each(options.begin(), options.end(), [](cudnn_frontend::ExecutionPlan& opt) {
+            std::cout << "Plan tag: " << opt.getTag() << " finished in " << opt.getExecutionTime() << " ms,"
+                      << " workspace: " << opt.getWorkspaceSize() << " bytes" << std::endl;
         });
 
         cudnnStatus_t status =
-            cudnnBackendExecute(handle_, options.front().plan.get_raw_desc(), variantPack.get_raw_desc());
+            cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {

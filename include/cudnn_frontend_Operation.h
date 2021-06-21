@@ -985,6 +985,9 @@ class OperationBuilder_v8 {
                 "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Convolution operation does not need Convolution DESCRIPTOR");
         }
         m_operation.cdesc = conv.get_desc();
+        if (conv.getComputePrecision() == CUDNN_DATA_DOUBLE) {
+            m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
+        }
         return *this;
     }
     auto
@@ -1081,42 +1084,36 @@ class OperationBuilder_v8 {
 
     auto
     setAlpha(float alpha) -> OperationBuilder_v8 & {
-        m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
         m_operation.alpha_d       = static_cast<double>(alpha);
         m_operation.alpha_s       = alpha;
         return *this;
     }
     auto
     setAlpha(double alpha) -> OperationBuilder_v8 & {
-        m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         m_operation.alpha_s       = static_cast<float>(alpha);
         m_operation.alpha_d       = alpha;
         return *this;
     }
     auto
     setAlpha2(float alpha) -> OperationBuilder_v8 & {
-        m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
         m_operation.alpha2_d      = static_cast<double>(alpha);
         m_operation.alpha2_s      = alpha;
         return *this;
     }
     auto
     setAlpha2(double alpha) -> OperationBuilder_v8 & {
-        m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         m_operation.alpha2_s      = static_cast<float>(alpha);
         m_operation.alpha2_d      = alpha;
         return *this;
     }
     auto
     setBeta(float beta) -> OperationBuilder_v8 & {
-        m_operation.alphabetaType = CUDNN_TYPE_FLOAT;
         m_operation.beta_d        = static_cast<double>(beta);
         m_operation.beta_s        = beta;
         return *this;
     }
     auto
     setBeta(double beta) -> OperationBuilder_v8 & {
-        m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         m_operation.beta_s        = static_cast<float>(beta);
         m_operation.beta_d        = beta;
         return *this;
