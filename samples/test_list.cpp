@@ -860,7 +860,7 @@ TEST_CASE("IMMA execution with cudnnFindPlan", "[frontend][cudnnFindPlan][conv]"
 
     SurfaceManager<int8_t> sm(Xsize, Wsize, Ysize, Ysize);
 
-    run_imma(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY, vectorCount, vectorDimension);
+    run_dp4a(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY, vectorCount, vectorDimension);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));

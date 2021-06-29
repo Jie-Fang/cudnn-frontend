@@ -57,7 +57,8 @@ class Tensor_v8 : public BackendDescriptor {
         char sep = ' ';
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
            << " Datatype: " << to_string(data_type) << " Id: " << std::to_string(id)
-           << " Alignment: " << std::to_string(alignment) << " nDims " << nDims;
+           << " Alignment: " << alignment << " nDims " << nDims
+           << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
         ss << " Dim [";
         for (auto i = 0; i < nDims; i++) {
             ss << sep << btensor_dimA[i];
@@ -150,7 +151,7 @@ class TensorBuilder_v8 {
         return *this;
     }
     auto
-    setVectorCountandDimension(int64_t vectorCount_, int64_t vectorDimension_) -> TensorBuilder_v8 & {
+    setVectorCountAndDimension(int64_t vectorCount_, int64_t vectorDimension_) -> TensorBuilder_v8 & {
         m_tensor.vectorCount = vectorCount_;
         m_tensor.vectorDimension = vectorDimension_;
         return *this;

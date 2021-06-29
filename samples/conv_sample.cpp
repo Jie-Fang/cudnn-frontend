@@ -82,86 +82,86 @@ using common_convbias_descriptors = std::tuple<cudnn_frontend::Tensor,
                                                cudnn_frontend::Tensor>;
 
 common_convbias_descriptors
-create_conv_add_bias_act_descriptors(int64_t* x_dim_padded,
+create_conv_add_bias_act_descriptors(int64_t* x_dim,
                                      int64_t* padA,
                                      int64_t* convstrideA,
                                      int64_t* dilationA,
-                                     int64_t* w_dim_padded,
-                                     int64_t* y_dim_padded,
+                                     int64_t* w_dim,
+                                     int64_t* y_dim,
                                      cudnnDataType_t dataType) {
     (void)padA;
     (void)convstrideA;
     (void)dilationA;
-    int64_t b_dim_padded[4];
-    b_dim_padded[0] = y_dim_padded[0];
-    b_dim_padded[1] = y_dim_padded[1];
-    b_dim_padded[2] = 1;
-    b_dim_padded[3] = 1;
+    int64_t b_dim[4];
+    b_dim[0] = y_dim[0];
+    b_dim[1] = y_dim[1];
+    b_dim[2] = 1;
+    b_dim[3] = 1;
 
-    int64_t x_stride_padded[4];
-    int64_t y_stride_padded[4];
-    int64_t w_stride_padded[4];
-    int64_t b_stride_padded[4];
+    int64_t x_stride[4];
+    int64_t y_stride[4];
+    int64_t w_stride[4];
+    int64_t b_stride[4];
 
-    generateStrides(w_dim_padded, w_stride_padded, 4, CUDNN_TENSOR_NCHW);
-    generateStrides(x_dim_padded, x_stride_padded, 4, CUDNN_TENSOR_NCHW);
-    generateStrides(y_dim_padded, y_stride_padded, 4, CUDNN_TENSOR_NCHW);
-    generateStrides(b_dim_padded, b_stride_padded, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(w_dim, w_stride, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(x_dim, x_stride, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(y_dim, y_stride, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(b_dim, b_stride, 4, CUDNN_TENSOR_NCHW);
 
     return common_convbias_descriptors(cudnn_frontend::TensorBuilder()
-                                           .setDim(4, x_dim_padded)
-                                           .setStrides(4, x_stride_padded)
+                                           .setDim(4, x_dim)
+                                           .setStrides(4, x_stride)
                                            .setId('x')
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, y_dim_padded)
-                                           .setStrides(4, y_stride_padded)
+                                           .setDim(4, y_dim)
+                                           .setStrides(4, y_stride)
                                            .setId('y')
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, w_dim_padded)
-                                           .setStrides(4, w_stride_padded)
+                                           .setDim(4, w_dim)
+                                           .setStrides(4, w_stride)
                                            .setId('w')
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, y_dim_padded)
-                                           .setStrides(4, y_stride_padded)
+                                           .setDim(4, y_dim)
+                                           .setStrides(4, y_stride)
                                            .setId('z')
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, b_dim_padded)
-                                           .setStrides(4, b_stride_padded)
+                                           .setDim(4, b_dim)
+                                           .setStrides(4, b_stride)
                                            .setId('b')
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, y_dim_padded)
-                                           .setStrides(4, y_stride_padded)
+                                           .setDim(4, y_dim)
+                                           .setStrides(4, y_stride)
                                            .setVirtual()
                                            .setId('A')  // after add
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, y_dim_padded)
-                                           .setStrides(4, y_stride_padded)
+                                           .setDim(4, y_dim)
+                                           .setStrides(4, y_stride)
                                            .setVirtual()
                                            .setId('B')  // after bias
                                            .setAlignment(4)
                                            .setDataType(dataType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
-                                           .setDim(4, y_dim_padded)
-                                           .setStrides(4, y_stride_padded)
+                                           .setDim(4, y_dim)
+                                           .setStrides(4, y_stride)
                                            .setId('C')  // after conv
                                            .setAlignment(4)
                                            .setVirtual()
@@ -170,41 +170,41 @@ create_conv_add_bias_act_descriptors(int64_t* x_dim_padded,
 }
 
 common_conv_descriptors
-create_common_descriptors(int64_t* x_dim_padded,
+create_common_descriptors(int64_t* x_dim,
                           int64_t* padA,
                           int64_t* convstrideA,
                           int64_t* dilationA,
-                          int64_t* w_dim_padded,
-                          int64_t* y_dim_padded,
+                          int64_t* w_dim,
+                          int64_t* y_dim,
                           cudnnDataType_t dataType,
                           cudnnConvolutionMode_t mode) {
     const int convDim = 2;
 
-    int64_t strideA_padded[4];
-    int64_t outstrideA_padded[4];
-    int64_t filterstrideA_padded[4];
+    int64_t strideA[4];
+    int64_t outstrideA[4];
+    int64_t filterstrideA[4];
 
-    generateStrides(w_dim_padded, filterstrideA_padded, 4, CUDNN_TENSOR_NCHW);
-    generateStrides(x_dim_padded, strideA_padded, 4, CUDNN_TENSOR_NCHW);
-    generateStrides(y_dim_padded, outstrideA_padded, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(w_dim, filterstrideA, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(x_dim, strideA, 4, CUDNN_TENSOR_NCHW);
+    generateStrides(y_dim, outstrideA, 4, CUDNN_TENSOR_NCHW);
 
     return common_conv_descriptors(cudnn_frontend::TensorBuilder()
-                                       .setDim(4, x_dim_padded)
-                                       .setStrides(4, strideA_padded)
+                                       .setDim(4, x_dim)
+                                       .setStrides(4, strideA)
                                        .setId('x')
                                        .setAlignment(4)
                                        .setDataType(dataType)
                                        .build(),
                                    cudnn_frontend::TensorBuilder()
-                                       .setDim(4, y_dim_padded)
-                                       .setStrides(4, outstrideA_padded)
+                                       .setDim(4, y_dim)
+                                       .setStrides(4, outstrideA)
                                        .setId('y')
                                        .setAlignment(4)
                                        .setDataType(dataType)
                                        .build(),
                                    cudnn_frontend::TensorBuilder()
-                                       .setDim(4, w_dim_padded)
-                                       .setStrides(4, filterstrideA_padded)
+                                       .setDim(4, w_dim)
+                                       .setStrides(4, filterstrideA)
                                        .setId('w')
                                        .setAlignment(4)
                                        .setDataType(dataType)
@@ -272,12 +272,12 @@ auto fallback_method = [](cudnn_frontend::OperationGraph &opGraph) -> cudnn_fron
 };
 
 void
-run_from_heuristics(int64_t* x_dim_padded,
+run_from_heuristics(int64_t* x_dim,
                     int64_t* padA,
                     int64_t* convstrideA,
                     int64_t* dilationA,
-                    int64_t* w_dim_padded,
-                    int64_t* y_dim_padded,
+                    int64_t* w_dim,
+                    int64_t* y_dim,
                     cudnnDataType_t dataType,
                     cudnnConvolutionMode_t mode,
                     float* devPtrX,
@@ -289,7 +289,7 @@ run_from_heuristics(int64_t* x_dim_padded,
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
-            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+            x_dim, padA, convstrideA, dilationA, w_dim, y_dim, dataType, mode);
 
         std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
@@ -354,12 +354,12 @@ run_from_heuristics(int64_t* x_dim_padded,
 }
 
 void
-run_from_global_index(int64_t* x_dim_padded,
+run_from_global_index(int64_t* x_dim,
                       int64_t* padA,
                       int64_t* convstrideA,
                       int64_t* dilationA,
-                      int64_t* w_dim_padded,
-                      int64_t* y_dim_padded,
+                      int64_t* w_dim,
+                      int64_t* y_dim,
                       cudnnDataType_t dataType,
                       cudnnConvolutionMode_t mode,
                       float* devPtrX,
@@ -370,7 +370,7 @@ run_from_global_index(int64_t* x_dim_padded,
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
-            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+            x_dim, padA, convstrideA, dilationA, w_dim, y_dim, dataType, mode);
 
         std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
@@ -424,12 +424,12 @@ run_from_global_index(int64_t* x_dim_padded,
 }
 
 void
-run_with_external_config(int64_t* x_dim_padded,
+run_with_external_config(int64_t* x_dim,
                          int64_t* padA,
                          int64_t* convstrideA,
                          int64_t* dilationA,
-                         int64_t* w_dim_padded,
-                         int64_t* y_dim_padded,
+                         int64_t* w_dim,
+                         int64_t* y_dim,
                          cudnnDataType_t dataType,
                          cudnnConvolutionMode_t mode,
                          float* devPtrX,
@@ -440,7 +440,7 @@ run_with_external_config(int64_t* x_dim_padded,
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
-            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+            x_dim, padA, convstrideA, dilationA, w_dim, y_dim, dataType, mode);
 
         std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
@@ -508,12 +508,12 @@ run_with_external_config(int64_t* x_dim_padded,
 
 // create_plan(std::vector<cudnnBackendDescriptor_t> &)
 void
-run_conv_add_bias_activation(int64_t* x_dim_padded,
+run_conv_add_bias_activation(int64_t* x_dim,
                              int64_t* pad,
                              int64_t* convstride,
                              int64_t* dilation,
-                             int64_t* w_dim_padded,
-                             int64_t* y_dim_padded,
+                             int64_t* w_dim,
+                             int64_t* y_dim,
                              cudnnDataType_t dataType,
                              float* devPtrX,
                              float* devPtrW,
@@ -528,7 +528,7 @@ run_conv_add_bias_activation(int64_t* x_dim_padded,
 
         // Creates the necessary tensor descriptors
         common_convbias_descriptors tensors = create_conv_add_bias_act_descriptors(
-            x_dim_padded, pad, convstride, dilation, w_dim_padded, y_dim_padded, dataType);
+            x_dim, pad, convstride, dilation, w_dim, y_dim, dataType);
         std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<W_TENSOR>(tensors).describe() << std::endl;
@@ -675,12 +675,12 @@ run_conv_add_bias_activation(int64_t* x_dim_padded,
 }
 
 void
-run_from_cudnn_find(int64_t* x_dim_padded,
+run_from_cudnn_find(int64_t* x_dim,
                     int64_t* padA,
                     int64_t* convstrideA,
                     int64_t* dilationA,
-                    int64_t* w_dim_padded,
-                    int64_t* y_dim_padded,
+                    int64_t* w_dim,
+                    int64_t* y_dim,
                     cudnnDataType_t dataType,
                     cudnnConvolutionMode_t mode,
                     void* devPtrX,
@@ -691,7 +691,7 @@ run_from_cudnn_find(int64_t* x_dim_padded,
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
-            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+            x_dim, padA, convstrideA, dilationA, w_dim, y_dim, dataType, mode);
 
         std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
@@ -739,12 +739,12 @@ run_from_cudnn_find(int64_t* x_dim_padded,
 }
 
 void
-run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
+run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim,
                                              int64_t* pad,
                                              int64_t* convstride,
                                              int64_t* dilation,
-                                             int64_t* w_dim_padded,
-                                             int64_t* y_dim_padded,
+                                             int64_t* w_dim,
+                                             int64_t* y_dim,
                                              cudnnDataType_t dataType,
                                              float* devPtrX,
                                              float* devPtrW,
@@ -759,7 +759,7 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
 
         // Creates the necessary tensor descriptors
         common_convbias_descriptors tensors = create_conv_add_bias_act_descriptors(
-            x_dim_padded, pad, convstride, dilation, w_dim_padded, y_dim_padded, dataType);
+            x_dim, pad, convstride, dilation, w_dim, y_dim, dataType);
         std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<W_TENSOR>(tensors).describe() << std::endl;
@@ -894,12 +894,12 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim_padded,
 }
 
 void
-run_from_cudnn_get(int64_t* x_dim_padded,
+run_from_cudnn_get(int64_t* x_dim,
                    int64_t* padA,
                    int64_t* convstrideA,
                    int64_t* dilationA,
-                   int64_t* w_dim_padded,
-                   int64_t* y_dim_padded,
+                   int64_t* w_dim,
+                   int64_t* y_dim,
                    cudnnDataType_t dataType,
                    cudnnConvolutionMode_t mode,
                    float* devPtrX,
@@ -910,7 +910,7 @@ run_from_cudnn_get(int64_t* x_dim_padded,
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
-            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+            x_dim, padA, convstrideA, dilationA, w_dim, y_dim, dataType, mode);
 
         std::cout << std::get<X_TENSOR>(descriptors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(descriptors).describe() << std::endl;
@@ -977,12 +977,12 @@ run_from_cudnn_get(int64_t* x_dim_padded,
 }
 
 void
-block_using_errata(int64_t* x_dim_padded,
+block_using_errata(int64_t* x_dim,
                    int64_t* padA,
                    int64_t* convstrideA,
                    int64_t* dilationA,
-                   int64_t* w_dim_padded,
-                   int64_t* y_dim_padded,
+                   int64_t* w_dim,
+                   int64_t* y_dim,
                    cudnnDataType_t dataType,
                    cudnnConvolutionMode_t mode,
                    float* devPtrX,
@@ -993,7 +993,7 @@ block_using_errata(int64_t* x_dim_padded,
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
-            x_dim_padded, padA, convstrideA, dilationA, w_dim_padded, y_dim_padded, dataType, mode);
+            x_dim, padA, convstrideA, dilationA, w_dim, y_dim, dataType, mode);
 
         (void)devPtrX;
         (void)devPtrY;
@@ -1063,13 +1063,13 @@ block_using_errata(int64_t* x_dim_padded,
 }
 
 void 
-run_imma(
-    int64_t* x_dim_padded,
+run_dp4a(
+    int64_t* x_dim,
     int64_t* padA,
     int64_t* convstrideA,
     int64_t* dilationA,
-    int64_t* w_dim_padded,
-    int64_t* y_dim_padded,
+    int64_t* w_dim,
+    int64_t* y_dim,
     cudnnConvolutionMode_t mode,
     void * devPtrX,
     void * devPtrW,
@@ -1083,37 +1083,37 @@ run_imma(
         const int convDim = 2;
         (void) convDim;
 
-        int64_t strideA_padded[4];
-        int64_t outstrideA_padded[4];
-        int64_t filterstrideA_padded[4];
+        int64_t strideA[4];
+        int64_t outstrideA[4];
+        int64_t filterstrideA[4];
 
-        generateStrides(w_dim_padded, filterstrideA_padded, 4, CUDNN_TENSOR_NCHW);
-        generateStrides(x_dim_padded, strideA_padded, 4, CUDNN_TENSOR_NCHW);
-        generateStrides(y_dim_padded, outstrideA_padded, 4, CUDNN_TENSOR_NCHW);
+        generateStrides(w_dim, filterstrideA, 4, CUDNN_TENSOR_NCHW);
+        generateStrides(x_dim, strideA, 4, CUDNN_TENSOR_NCHW);
+        generateStrides(y_dim, outstrideA, 4, CUDNN_TENSOR_NCHW);
 
         auto tensor_x = cudnn_frontend::TensorBuilder()
-                                       .setDim(4, x_dim_padded)
-                                       .setStrides(4, strideA_padded)
+                                       .setDim(4, x_dim)
+                                       .setStrides(4, strideA)
                                        .setId('x')
                                        .setAlignment(16)
                                        .setDataType(CUDNN_DATA_INT8)
-                                       .setVectorCountandDimension(vectorCount, vectorDimension)
+                                       .setVectorCountAndDimension(vectorCount, vectorDimension)
                                        .build();
         auto tensor_y = cudnn_frontend::TensorBuilder()
-                                       .setDim(4, y_dim_padded)
-                                       .setStrides(4, outstrideA_padded)
+                                       .setDim(4, y_dim)
+                                       .setStrides(4, outstrideA)
                                        .setId('y')
                                        .setAlignment(16)
                                        .setDataType(CUDNN_DATA_INT8)
-                                       .setVectorCountandDimension(vectorCount, vectorDimension)
+                                       .setVectorCountAndDimension(vectorCount, vectorDimension)
                                        .build();
         auto tensor_w = cudnn_frontend::TensorBuilder()
-                                       .setDim(4, w_dim_padded)
-                                       .setStrides(4, filterstrideA_padded)
+                                       .setDim(4, w_dim)
+                                       .setStrides(4, filterstrideA)
                                        .setId('w')
                                        .setAlignment(16)
                                        .setDataType(CUDNN_DATA_INT8)
-                                       .setVectorCountandDimension(vectorCount, vectorDimension)
+                                       .setVectorCountAndDimension(vectorCount, vectorDimension)
                                        .build();
         auto conv_desc = cudnn_frontend::ConvDescBuilder()
                                        .setDataType(CUDNN_DATA_INT32)

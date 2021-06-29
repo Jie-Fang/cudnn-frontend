@@ -152,7 +152,7 @@ void block_using_errata(
     float * devPtrF,
     float * devPtrO);
 
-void run_imma(
+void run_dp4a(
     int64_t* dimA_padded,
     int64_t* padA,
     int64_t* convstrideA,
