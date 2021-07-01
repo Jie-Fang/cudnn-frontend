@@ -20,5 +20,5 @@ run:
     script:
         - nvidia-smi
         - docker container prune -f
-        - docker run --gpus all -i --name=samples cudnn_frontend /samples/samples
+        - docker run --gpus all -i --name=samples cudnn_frontend /build/Samples
         - docker rm -v samples

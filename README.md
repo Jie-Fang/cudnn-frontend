@@ -44,7 +44,9 @@ Sample tests are written using the [Catch2](https://github.com/catchorg/Catch2) 
         - Link files are in CUDA_PATH/lib64
      - CUDNN_WRAP_PATH has the wrapper header files.
 
-     make CUDA_PATH=/usr/local/cuda CUDNN_WRAP_PATH=/usr/local/include/
+     mkdir build; cd build
+     cmake ..
+     ./Samples
     
 ## cudnnFindPlan and cudnnGetPlan:
 Prior to cuDNN V8, cuDNN provided `cudnnFindConvolution*` and `cudnnGetConvolution*` functions, which provided a way to sample all the algorithms for a given problem and study the run times. This can be further used to cache the best algorithms for a given problem.  In cuDNN V8, this has been replaced with `cudnnFindPlan` and `cudnnGetPlan`.

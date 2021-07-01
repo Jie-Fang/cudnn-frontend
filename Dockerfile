@@ -18,8 +18,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-mark hold libcudnn8 && \
     rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update -y && \
+    apt-get update && \ 
+    apt-get install -y cmake
+
 COPY . .
 
-RUN make -C samples
+RUN mkdir build 
+WORKDIR /build
+RUN cmake ..
+RUN cmake --build .
 
 RUN pwd
