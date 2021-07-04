@@ -212,6 +212,7 @@ class OperationGraphBuilder_v8 {
             return std::move(m_operationGraph);
         }
 
+        getLogger() << "[cudnn_frontend] " << m_operationGraph << std::endl;
         return std::move(m_operationGraph);
     }
 

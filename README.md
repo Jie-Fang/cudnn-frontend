@@ -26,6 +26,9 @@ Each `cudnnBackendDescriptorType_t` documented in the enum is organized into its
 - cudnn_frontend_get_plan.h  -> Implements the `cudnnGetPlan` function
 - cudnn_frontend_Filters.h   -> List of helpful utility functions to filter out execution plans
 
+### Logging
+- cudnn_frontend_Logging.h -> Implements a basic logging framework for cudnn_frontend
+
 ### Error Handling 
 - cudnn_frontend_utils.h
 
@@ -76,6 +79,21 @@ Errata filter gives the cuDNN team an opportunity to block certain faulty kernel
     arch                : ""   - Optional. Architectures where this kernel might be faulty.
 
 PS: The errata filter note is still in beta version. We may add/modify certain features as necessary.
+
+## Logging
+cuDNN Frontend API logging records execution flow through cuDNN frontend API. This functionality is disabled by default, and can be enabled through methods described in this section.
+
+### Method 1: Using Environment Variables:
+| Environment variables                             | CUDNN_FRONTEND_LOG_INFO=0 | CUDNN_FRONTEND_LOG_INFO=1 |
+| ------------------------------------------------- | ------------------------- | -----------               |
+| CUDNN_FRONTEND_LOG_FILE not set                   | No Logging                | No Logging                |
+| CUDNN_FRONTEND_LOG_FILE set to stdout or stderr   | No Logging                | Logging to cout or cerr   |
+| CUDNN_FRONTEND_LOG_FILE set to filename.txt       | No Logging                | Logging to the filename   |
+
+### Method 2: Using API calls:
+Calling `cudnn_frontend::isLoggingEnabled() = true|false` has same effect of setting the environment variable.
+Calling `cudnn_frontend::getStream() = stream_name` can be used to assign the output stream directly. 
+
 
 ## Documentation
 Documentation can be found at https://nvidia.github.io/cudnn-frontend/

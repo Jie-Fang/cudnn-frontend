@@ -1180,6 +1180,7 @@ class OperationBuilder_v8 {
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR) {
             return build_reduction_op();
         }
+        getLogger() << "[cudnn_frontend] " << m_operation << std::endl;
         return std::move(m_operation);
     }
 };

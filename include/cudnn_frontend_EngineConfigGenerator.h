@@ -60,6 +60,8 @@ class EngineConfigGenerator {
         cudnn_frontend::EngineConfigList engine_configs;
         for (auto fn : engine_config_generators) {
             cudnn_frontend::EngineConfigList new_engine_config = fn(opGraph);
+            getLogger() << "[cudnn_frontend] Called engine config generator and produced " 
+                << new_engine_config.size() << " configs." << std::endl; 
             std::copy(new_engine_config.begin(), new_engine_config.end(), std::back_inserter(engine_configs));
             new_engine_config.clear();
         }
@@ -92,14 +94,18 @@ class EngineConfigGenerator {
 /// Filter out the execution plan based on the prerequisite conditions.
 /// Goes through vector of execution plans and if the predicate returns
 /// not to block, it is inserted into the filtered plans.
-auto
+static auto
 filter(Predicate pred, executionPlans_t &plans) -> executionPlans_t {
     executionPlans_t filtered_plans;
     for (auto &plan : plans) {
+        getLogger() << "[cudnn_frontend] "<< "Filtered ";
         if (!pred(plan)) {
+            getLogger() << "and Added ";
             filtered_plans.emplace_back(std::move(plan));
         }
+        getLogger() << filtered_plans.back().getTag() << std::endl;
     }
+    getLogger() << "[cudnn_frontend] Filtered plans count " << filtered_plans.size() << std::endl;
     return filtered_plans;
 }
 }

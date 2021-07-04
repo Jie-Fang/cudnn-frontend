@@ -210,6 +210,7 @@ class EngineHeuristicsBuilder_v8 {
             return std::move(m_heuristics);
         };
 
+        getLogger() << "[cudnn_frontend] " << m_heuristics << std::endl;
         return std::move(m_heuristics);
     }
 

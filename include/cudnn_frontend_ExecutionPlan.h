@@ -312,6 +312,7 @@ class ExecutionPlanBuilder_v8 {
 
         m_execution_plan.computeTag();
 
+        getLogger() << "[cudnn_frontend] " << m_execution_plan << std::endl;
         return std::move(m_execution_plan);
     }
 

@@ -316,6 +316,7 @@ class EngineBuilder_v8 {
             return std::move(m_engine);
         }
 
+        getLogger() << "[cudnn_frontend] " << m_engine << std::endl;
         return std::move(m_engine);
     }
 

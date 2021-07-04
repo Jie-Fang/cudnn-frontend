@@ -23,6 +23,8 @@
 
 #include "contrib/nlohmann/json/json.hpp"
 
+#include "../include/cudnn_frontend_Logging.h"
+
 #include <cstdlib>
 #include <fstream>
 #pragma once
@@ -88,12 +90,15 @@ static bool
 check_errata(const json &json_handle, const std::string & executionPlanTag,
     cudnnHandle_t handle, T fn) {
 
+    cudnn_frontend::getLogger() << "[cudnn_frontend] " << "Verifying " << executionPlanTag;
     for (auto const &rule : json_handle["rules"]) {
         if (check_rule<T>(rule, executionPlanTag, handle, fn)) {
+            cudnn_frontend::getLogger() << ". Blocking." << std::endl;
             return true;
         }
     }
 
+    cudnn_frontend::getLogger() << ". Passed." << std::endl;
     return false;
 }
 
