@@ -143,6 +143,7 @@ class ReductionDescBuilder_v8 {
             return std::move(m_reductionDesc);
         }
 
+        getLogger() << "[cudnn_frontend] " << m_reductionDesc << std::endl;
         return std::move(m_reductionDesc);
     }
 

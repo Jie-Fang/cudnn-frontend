@@ -353,6 +353,7 @@ class PointWiseDescBuilder_v8 {
             return std::move(m_pointWiseDesc);
         }
 
+        getLogger() << "[cudnn_frontend] " << m_pointWiseDesc << std::endl;
         return std::move(m_pointWiseDesc);
     }
 

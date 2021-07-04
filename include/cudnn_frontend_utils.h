@@ -25,6 +25,7 @@
 #include <string>
 
 #include "cudnn_backend_base.h"
+#include "cudnn_frontend_Logging.h"
 
 namespace cudnn_frontend {
 

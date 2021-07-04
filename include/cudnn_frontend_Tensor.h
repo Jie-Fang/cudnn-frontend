@@ -307,6 +307,7 @@ class TensorBuilder_v8 {
             set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR cudnnFinalize failed");
             return std::move(m_tensor);
         }
+        getLogger() << "[cudnn_frontend] " << m_tensor << std::endl;
         return std::move(m_tensor);
     }
 
