@@ -38,23 +38,23 @@
 #include "helpers.h"
 
 void
-run_conv_scale_bias_add_relu(int64_t* x_dim,
-                             int64_t* w_dim,
-                             int64_t* y_dim,
-                             int64_t* s_dim,
-                             int64_t* b_dim,
-                             int64_t* a_dim,
-                             cudnnDataType_t dataType,
-                             int convDim,
-                             int64_t* conv_padA,
-                             int64_t* conv_dilationA,
-                             int64_t* conv_strideA,
-                             void* devPtrX,
-                             void* devPtrW,
-                             void* devPtrY,
-                             void* devPtrS,
-                             void* devPtrB,
-                             void* devPtrA);
+run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
+                                   int64_t* w_dim,
+                                   int64_t* y_dim,
+                                   int64_t* s_dim,
+                                   int64_t* b_dim,
+                                   int64_t* a_dim,
+                                   cudnnDataType_t dataType,
+                                   int convDim,
+                                   int64_t* conv_padA,
+                                   int64_t* conv_dilationA,
+                                   int64_t* conv_strideA,
+                                   void* devPtrX,
+                                   void* devPtrW,
+                                   void* devPtrY,
+                                   void* devPtrS,
+                                   void* devPtrB,
+                                   void* devPtrA);
 
 void
 run_conv_bias_scale_relu(int64_t* x_dim,

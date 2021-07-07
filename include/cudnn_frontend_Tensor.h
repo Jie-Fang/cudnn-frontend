@@ -44,6 +44,7 @@ namespace cudnn_frontend {
 ///    - tensor dimensions
 ///    - tensor strides
 ///    - isVirtual
+///    - isByValue
 ///
 /// Use TensorBuilder_v8 to build this class.
 /// Describe returns a string describing the tensor class
@@ -56,9 +57,8 @@ class Tensor_v8 : public BackendDescriptor {
         std::stringstream ss;
         char sep = ' ';
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
-           << " Datatype: " << to_string(data_type) << " Id: " << std::to_string(id)
-           << " Alignment: " << alignment << " nDims " << nDims
-           << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
+           << " Datatype: " << to_string(data_type) << " Id: " << std::to_string(id) << " Alignment: " << alignment
+           << " nDims " << nDims << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
         ss << " Dim [";
         for (auto i = 0; i < nDims; i++) {
             ss << sep << btensor_dimA[i];
@@ -70,6 +70,7 @@ class Tensor_v8 : public BackendDescriptor {
             sep = ',';
         }
         ss << "]";
+        ss << " isVirtual: " << std::to_string(isVirtual) << " isByValue: " << std::to_string(isByValue);
         return ss.str();
     }
 
@@ -79,7 +80,8 @@ class Tensor_v8 : public BackendDescriptor {
           id(from.id),
           alignment(from.alignment),
           nDims(from.nDims),
-          isVirtual(from.isVirtual) {
+          isVirtual(from.isVirtual),
+          isByValue(from.isByValue) {
         std::copy(std::begin(from.btensor_dimA), std::end(from.btensor_dimA), btensor_dimA);
         std::copy(std::begin(from.btensor_strA), std::end(from.btensor_strA), btensor_strA);
     }
@@ -98,10 +100,11 @@ class Tensor_v8 : public BackendDescriptor {
     int64_t id                              = -1;                //! Unique id of the tensor
     int64_t alignment                       = -1;                //! Alignment of the tensor.
     //! Certain engine config expect minimum alignment of 16B
-    int64_t nDims            = -1;     //! Number of Dimensions of the tensor
-    int64_t vectorDimension  = -1;     //! Which dimension of the tensor is vectorized (Generally the c dim)
-    int64_t vectorCount      = 1;     //! What is the vectorization count (4 or 32)
-    bool isVirtual = false;  //! Whether it is an intermediate tensor of an op graph
+    int64_t nDims           = -1;     //! Number of Dimensions of the tensor
+    int64_t vectorDimension = -1;     //! Which dimension of the tensor is vectorized (Generally the c dim)
+    int64_t vectorCount     = 1;      //! What is the vectorization count (4 or 32)
+    bool isVirtual          = false;  //! Whether it is an intermediate tensor of an op graph
+    bool isByValue          = false;  //! Whether the tensor is in host memory that needs to be passed to the kernel by value
 };
 
 ///
@@ -151,8 +154,13 @@ class TensorBuilder_v8 {
         return *this;
     }
     auto
+    setByValue(bool isByValue_ = true) -> TensorBuilder_v8 & {
+        m_tensor.isByValue = isByValue_;
+        return *this;
+    }
+    auto
     setVectorCountAndDimension(int64_t vectorCount_, int64_t vectorDimension_) -> TensorBuilder_v8 & {
-        m_tensor.vectorCount = vectorCount_;
+        m_tensor.vectorCount     = vectorCount_;
         m_tensor.vectorDimension = vectorDimension_;
         return *this;
     }
@@ -268,6 +276,20 @@ class TensorBuilder_v8 {
                     &m_tensor,
                     status,
                     "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT Failed");
+                return std::move(m_tensor);
+            }
+        }
+        if (m_tensor.isByValue) {
+            cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+                                     CUDNN_ATTR_TENSOR_IS_BY_VALUE,
+                                     CUDNN_TYPE_BOOLEAN,
+                                     1,
+                                     &m_tensor.isByValue);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_tensor,
+                    status,
+                    "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_IS_BY_VALUE Failed");
                 return std::move(m_tensor);
             }
         }
