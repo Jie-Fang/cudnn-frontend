@@ -506,9 +506,9 @@ TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]
     Surface<half> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2] * bTensorDim[3], false);
     Surface<half> A(aTensorDim[0] * aTensorDim[1] * aTensorDim[2] * aTensorDim[3], false);
 
-    run_conv_scale_bias_add_relu(xTensorDim, wTensorDim, yTensorDim, sTensorDim, bTensorDim, aTensorDim, CUDNN_DATA_HALF, 
-                                2, conv_padA, conv_dilationA, conv_strideA, 
-                                X.devPtr, W.devPtr, Y.devPtr, S.devPtr, B.devPtr, A.devPtr);
+    run_conv_scale_bias_add_leaky_relu(xTensorDim, wTensorDim, yTensorDim, sTensorDim, bTensorDim, aTensorDim, CUDNN_DATA_HALF, 
+                                       2, conv_padA, conv_dilationA, conv_strideA, 
+                                       X.devPtr, W.devPtr, Y.devPtr, S.devPtr, B.devPtr, A.devPtr);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
