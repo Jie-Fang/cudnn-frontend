@@ -52,12 +52,10 @@ class ExecutionPlan_v8 : public BackendDescriptor {
    public:
     friend class ExecutionPlanBuilder_v8;
 
-    ExecutionPlan_v8(ExecutionPlan_v8 &&from)
-        : BackendDescriptor(from.get_desc(), from.get_status(), from.get_error()),
-          engine_config(from.engine_config),
-          handle(from.handle),
-          planTag(from.planTag),
-          execution_time_ms(from.execution_time_ms) {}
+    ExecutionPlan_v8(ExecutionPlan_v8 &&from) = default;
+    ExecutionPlan_v8 &
+    operator=(ExecutionPlan_v8 &&) = default;
+
     ~ExecutionPlan_v8() = default;
     /** @defgroup ExecutionPlanQuery
      *  Query individual property of ExecutionPlan_v8 class
@@ -66,32 +64,20 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     //! Query the workspace requirement for the given plan
     auto
     getWorkspaceSize(void) const -> int64_t {
-        std::int64_t workSpaceSize = 0;
-        auto status            = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
-                                               CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE,
-                                               CUDNN_TYPE_INT64,
-                                               1,
-                                               NULL,
-                                               &workSpaceSize);
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this,
-                                          status,
-                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
-                                          "CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE Failed");
-            return workSpaceSize;
-        }
-        if (workSpaceSize < 0) {
-            set_error_and_throw_exception(
-                this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute Workspace Size Invalid");
-            return workSpaceSize;
-        }
         return workSpaceSize;
     }
 
     std::string
     describe() const override {
         std::stringstream ss;
-        ss << "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR :";
+        ss << "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR : ";
+        ss << getTag() << ", ";
+        ss << "numeric_notes:" << " ";
+        for (auto note : numeric_notes) 
+            ss << note << " ";
+        ss << "behavior_notes:" << " ";
+        for (auto note : behavior_notes) 
+            ss << note << " ";
         return ss.str();
     }
 
@@ -112,7 +98,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
 
    private:
     void
-    computeTag() {
+    computeTagAndNotes() {
         // Compute a unique tag for execution plan:
         auto status = CUDNN_STATUS_SUCCESS;
         std::stringstream tag{""};
@@ -204,6 +190,52 @@ class ExecutionPlan_v8 : public BackendDescriptor {
             tag << "_k" << type << "=" << choice;
         }
         planTag += tag.str();
+
+        int64_t elem_count = 0;
+        status = cudnnBackendGetAttribute(extractedEngine_,
+                                 CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                 CUDNN_TYPE_NUMERICAL_NOTE,
+                                 CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                 &elem_count,
+                                 numeric_notes.data());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINE_NUMERICAL_NOTE Failed");
+        }
+        status = cudnnBackendGetAttribute(extractedEngine_,
+                                 CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                 CUDNN_TYPE_BEHAVIOR_NOTE,
+                                 CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                 &elem_count,
+                                 behavior_notes.data());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE Failed");
+        }
+    }
+
+    void
+    computeWorkSpaceSize() {
+        auto status            = cudnnBackendGetAttribute(pointer->get_backend_descriptor(),
+                CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE,
+                CUDNN_TYPE_INT64,
+                1,
+                NULL,
+                &workSpaceSize);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                    status,
+                    "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                    "CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE Failed");
+        }
+        if (workSpaceSize < 0) {
+            set_error_and_throw_exception(
+                    this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute Workspace Size Invalid");
+        }
     }
 
     ExecutionPlan_v8()                         = default;
@@ -214,6 +246,10 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor engine_config = nullptr;
     cudnnHandle_t handle                  = nullptr;
     std::string planTag;
+
+    std::int64_t workSpaceSize = 0;
+    std::array<cudnnBackendNumericalNote_t,CUDNN_NUMERICAL_NOTE_TYPE_COUNT> numeric_notes;
+    std::array<cudnnBackendBehaviorNote_t, CUDNN_BEHAVIOR_NOTE_TYPE_COUNT>  behavior_notes;
 
     float execution_time_ms    = 0.0f;
 
@@ -310,7 +346,8 @@ class ExecutionPlanBuilder_v8 {
             return std::move(m_execution_plan);
         }
 
-        m_execution_plan.computeTag();
+        m_execution_plan.computeTagAndNotes();
+        m_execution_plan.computeWorkSpaceSize();
 
         getLogger() << "[cudnn_frontend] " << m_execution_plan << std::endl;
         return std::move(m_execution_plan);
