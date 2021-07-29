@@ -78,6 +78,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         ss << "behavior_notes:" << " ";
         for (auto note : behavior_notes) 
             ss << note << " ";
+        ss << "workSpaceSize: " << workSpaceSize;
         return ss.str();
     }
 
@@ -96,22 +97,56 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         return execution_time_ms;
     }
 
+    std::array<cudnnBackendNumericalNote_t,CUDNN_NUMERICAL_NOTE_TYPE_COUNT> const &
+    getNumericNotes() const {
+        return numeric_notes;
+    }
+
+    std::array<cudnnBackendBehaviorNote_t, CUDNN_BEHAVIOR_NOTE_TYPE_COUNT> const &
+    getBehaviorNotes() const {
+        return behavior_notes;
+    }
+
    private:
     void
-    computeTagAndNotes() {
+    fetchNotes(ManagedOpaqueDescriptor &extractedEngine) {
+        auto status = CUDNN_STATUS_SUCCESS;
+        int64_t elem_count = 0;
+        cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
+        status = cudnnBackendGetAttribute(extractedEngine_,
+                                 CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                 CUDNN_TYPE_NUMERICAL_NOTE,
+                                 CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                 &elem_count,
+                                 numeric_notes.data());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINE_NUMERICAL_NOTE Failed");
+        }
+        status = cudnnBackendGetAttribute(extractedEngine_,
+                                 CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                 CUDNN_TYPE_BEHAVIOR_NOTE,
+                                 CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                 &elem_count,
+                                 behavior_notes.data());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(this,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE Failed");
+        }
+    }
+
+    void
+    buildTag(ManagedOpaqueDescriptor &extractedEngine) {
         // Compute a unique tag for execution plan:
         auto status = CUDNN_STATUS_SUCCESS;
         std::stringstream tag{""};
         int64_t elemCount = 0, engineId = 0, numKnobs = 0;
 
-        ManagedOpaqueDescriptor extractedEngine = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
-        status                                  = extractedEngine->get_status();
         std::array<ManagedOpaqueDescriptor, CUDNN_KNOB_TYPE_COUNTS> extractedKnobs{{nullptr}};
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                this, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate Failed when compute tag");
-        }
-
         for (auto &knob : extractedKnobs) {
             knob   = make_shared_backend_pointer(CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR);
             status = knob->get_status();
@@ -127,18 +162,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
             extractedKnobs_[i] = extractedKnobs[i]->get_backend_descriptor();
         }
 
-        status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
-                                          CUDNN_ATTR_ENGINECFG_ENGINE,
-                                          CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                          1,
-                                          &elemCount,
-                                          &extractedEngine_);
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this,
-                                          status,
-                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
-                                          "CUDNN_ATTR_ENGINECFG_ENGINE Failed");
-        }
         status = cudnnBackendGetAttribute(
             extractedEngine_, CUDNN_ATTR_ENGINE_GLOBAL_INDEX, CUDNN_TYPE_INT64, 1, &elemCount, &engineId);
         if (status != CUDNN_STATUS_SUCCESS) {
@@ -191,31 +214,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         }
         planTag += tag.str();
 
-        int64_t elem_count = 0;
-        status = cudnnBackendGetAttribute(extractedEngine_,
-                                 CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
-                                 CUDNN_TYPE_NUMERICAL_NOTE,
-                                 CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
-                                 &elem_count,
-                                 numeric_notes.data());
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this,
-                                          status,
-                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
-                                          "CUDNN_ATTR_ENGINE_NUMERICAL_NOTE Failed");
-        }
-        status = cudnnBackendGetAttribute(extractedEngine_,
-                                 CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
-                                 CUDNN_TYPE_BEHAVIOR_NOTE,
-                                 CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
-                                 &elem_count,
-                                 behavior_notes.data());
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(this,
-                                          status,
-                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
-                                          "CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE Failed");
-        }
     }
 
     void
@@ -346,7 +344,31 @@ class ExecutionPlanBuilder_v8 {
             return std::move(m_execution_plan);
         }
 
-        m_execution_plan.computeTagAndNotes();
+        ManagedOpaqueDescriptor extractedEngine = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+        status                                  = extractedEngine->get_status();
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_execution_plan, status, "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnCreate of CUDNN_BACKEND_ENGINE_DESCRIPTOR failed when compute tag");
+            return std::move(m_execution_plan);
+        }
+        cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
+        int64_t elemCount = 0;
+        status = cudnnBackendGetAttribute(m_execution_plan.engine_config->get_backend_descriptor(),
+                                          CUDNN_ATTR_ENGINECFG_ENGINE,
+                                          CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                          1,
+                                          &elemCount,
+                                          &extractedEngine_);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_execution_plan,
+                                          status,
+                                          "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                          "CUDNN_ATTR_ENGINECFG_ENGINE Failed");
+            return std::move(m_execution_plan);
+        }
+
+        m_execution_plan.buildTag(extractedEngine);
+        m_execution_plan.fetchNotes(extractedEngine);
         m_execution_plan.computeWorkSpaceSize();
 
         return std::move(m_execution_plan);
