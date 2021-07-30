@@ -73,6 +73,15 @@ class Tensor_v8 : public BackendDescriptor {
         return ss.str();
     }
 
+    int64_t
+    getElementCount() const {
+        int64_t count = vectorCount;
+        for (auto i = 0; i < nDims; i++) {
+            count = count * btensor_dimA[i];
+        }
+        return count;
+    };
+
     Tensor_v8(Tensor_v8 &&from) = default;
     Tensor_v8 &
     operator=(Tensor_v8 &&) = default;
@@ -313,4 +322,53 @@ class TensorBuilder_v8 {
    private:
     Tensor_v8 m_tensor;  //! Tensor built by the TensorBuilder class.
 };
+
+
+static cudnnStatus_t 
+cudnnReorderFilterAndBias(cudnnHandle_t handle, int64_t ndims,
+        int64_t const * filter_dims,
+        void *dev_filter_ptr, void *reordered_filter_ptr,
+        void *dev_bias_ptr,   void *reordered_bias_ptr) {
+
+    auto cudnn_status = CUDNN_STATUS_SUCCESS;
+
+    if (dev_filter_ptr && reordered_filter_ptr == nullptr) {
+        return CUDNN_STATUS_BAD_PARAM;
+    }
+    if (dev_bias_ptr && reordered_bias_ptr == nullptr) {
+        return CUDNN_STATUS_BAD_PARAM;
+    }
+
+    cudnnFilterDescriptor_t filterDesc = nullptr;
+
+    cudnn_status = cudnnCreateFilterDescriptor(&filterDesc);
+    if (cudnn_status != CUDNN_STATUS_SUCCESS) {return cudnn_status;}
+
+    if (ndims !=4 && ndims != 5) {
+        return CUDNN_STATUS_BAD_PARAM;
+    }
+
+    int filter_dims_[5];
+    for (auto i = 0; i < ndims; i++) {
+        filter_dims_[i] = filter_dims[i];
+    }
+
+    std::cout << "Reorder filter and bias" << std::endl;
+    if (ndims == 4) {
+        cudnn_status = cudnnSetFilter4dDescriptor(filterDesc, CUDNN_DATA_INT8, CUDNN_TENSOR_NCHW, 
+                filter_dims[0], filter_dims[1], filter_dims[2], filter_dims[3]);
+    } else {
+        cudnn_status = cudnnSetFilterNdDescriptor(filterDesc, CUDNN_DATA_INT8, CUDNN_TENSOR_NCHW, 5, filter_dims_);
+    }
+    if (cudnn_status != CUDNN_STATUS_SUCCESS) {return cudnn_status;}
+
+    int reorderBias = (dev_bias_ptr != nullptr);
+
+    cudnn_status = cudnnReorderFilterAndBias(handle,
+        filterDesc, CUDNN_DEFAULT_REORDER, dev_filter_ptr, reordered_filter_ptr, reorderBias, dev_bias_ptr, reordered_bias_ptr);
+
+    cudnnDestroyFilterDescriptor(filterDesc);
+    return cudnn_status;
+}
+
 }

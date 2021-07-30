@@ -874,7 +874,7 @@ TEST_CASE("IMMA execution with manual autotuning", "[frontend][cudnnGetPlan][con
     INFO("TEST_CASE :: Use manual autotuning for plan generation");
     int64_t vectorCount       = 32;
     int64_t vectorDimension   = 1;
-    int64_t dimA[]            = {7, 64/32, 16, 16};
+    int64_t dimA[]            = {7, 64/32, 21, 21};
     int64_t filterdimA[]      = {32, 64/32, 3, 3};
     int64_t outdimA[]         = {0, 0, 0, 0}; // Computed Below
     int64_t padA[]            = {0, 0};

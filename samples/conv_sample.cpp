@@ -93,7 +93,7 @@ create_conv_add_bias_act_descriptors(int64_t* x_dim,
     (void)convstrideA;
     (void)dilationA;
     int64_t b_dim[4];
-    b_dim[0] = y_dim[0];
+    b_dim[0] = 1;
     b_dim[1] = y_dim[1];
     b_dim[2] = 1;
     b_dim[3] = 1;
@@ -1259,25 +1259,11 @@ run_imma(
         void* workspace_ptr = nullptr;
         checkCudaErr(cudaMalloc(&workspace_ptr, max_workspace_size));
 
-        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW};
-        int64_t uids[]    = {'x', 'y', 'w'};
-        auto variantPack  = cudnn_frontend::VariantPackBuilder()
-            .setDataPointers(3, data_ptrs)
-            .setUids(3, uids)
-            .setWorkspacePointer(workspace_ptr)
-            .build();
-        std::cout << "variantPack " << variantPack.describe() << std::endl;
-
-        // auto sample_predicate_function = [max_workspace_size](cudnn_frontend::ExecutionPlan const& plan) -> bool {
-        //     return plan.getWorkspaceSize() > max_workspace_size;
-        // };
-
         auto engine_configs = heurgen_method(opGraph);
 
         std::cout << "engine_configs " << engine_configs.size() << std::endl;
         cudnn_frontend::EngineConfigList filtered_configs;
         cudnn_frontend::filter(engine_configs, filtered_configs, ::allowAll);
-        // cudnn_frontend::filter(engine_configs, filtered_configs, ::allowAll);
         std::cout << "filtered_configs " << filtered_configs.size() << std::endl;
 
         cudnn_frontend::executionPlans_t options;
@@ -1289,21 +1275,35 @@ run_imma(
 
         std::for_each(options.begin(), options.end(), [](cudnn_frontend::ExecutionPlan& opt) {
             std::cout << "Plan tag: " << opt.getTag() << " finished in " << opt.getExecutionTime() << " ms,"
-                      << " workspace: " << opt.getWorkspaceSize() << " bytes" << " Reorder required " 
+                      << " workspace: " << opt.getWorkspaceSize() << " bytes."
                       << std::endl;
         });
+
+        int64_t filter_size = tensor_w.getElementCount();
+        void *reorderedData = nullptr;
+
+        auto cuda_status = cudaMalloc(&reorderedData, filter_size);
+        CHECK(cuda_status == cudaSuccess); 
+
+        auto reorder_status = cudnn_frontend::cudnnReorderFilterAndBias(handle_, 4 /* dims */, w_dim_padded, devPtrW, reorderedData, nullptr, nullptr);
+        CHECK(reorder_status == CUDNN_STATUS_SUCCESS);
+
+        void* data_ptrs[] = {devPtrX, devPtrY, reorderedData};
+        int64_t uids[]    = {'x', 'y', 'w'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+            .setDataPointers(3, data_ptrs)
+            .setUids(3, uids)
+            .setWorkspacePointer(workspace_ptr)
+            .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
 
         CHECK(options.size() > 0);
         if (options.size() == 0) {return;}
 
-        // if (options.front().isFilterReorderRequired()) {
-        //     auto status = ::reorderFilterData(handle_, w_dim_padded, devPtrW, vectorCount);
-        //     CHECK(status);
-        // }
-
         cudnnStatus_t status =
             cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
 
+        cudaFree(reorderedData);
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
