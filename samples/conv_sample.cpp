@@ -57,6 +57,10 @@ bool allowErrata(int64_t *padA) {
             return pad == 0;});
 }
 
+bool isInt8Errata(cudnnDataType_t type) {
+    return type == CUDNN_DATA_INT8;
+}
+
 }
 enum {
     X_TENSOR,
@@ -1259,11 +1263,12 @@ run_imma(
         void* workspace_ptr = nullptr;
         checkCudaErr(cudaMalloc(&workspace_ptr, max_workspace_size));
 
-        auto engine_configs = heurgen_method(opGraph);
+        auto engine_configs_h = heurgen_method(opGraph);
+        auto engine_configs_f = fallback_method(opGraph);
 
-        std::cout << "engine_configs " << engine_configs.size() << std::endl;
         cudnn_frontend::EngineConfigList filtered_configs;
-        cudnn_frontend::filter(engine_configs, filtered_configs, ::allowAll);
+        cudnn_frontend::filter(engine_configs_h, filtered_configs, ::allowAll);
+        cudnn_frontend::filter(engine_configs_f, filtered_configs, ::allowAll);
         std::cout << "filtered_configs " << filtered_configs.size() << std::endl;
 
         cudnn_frontend::executionPlans_t options;
@@ -1300,8 +1305,32 @@ run_imma(
         CHECK(options.size() > 0);
         if (options.size() == 0) {return;}
 
-        cudnnStatus_t status =
-            cudnnBackendExecute(handle_, options.front().get_raw_desc(), variantPack.get_raw_desc());
+        auto json_handle = json::parse(R"(
+            { "version" : 1, 
+              "rules"   : 
+                [ 
+                    { "rule_id"             : "ConvFwd_eng0", 
+                      "operation"           : "ConvFwd",
+                      "engine"              : 0, 
+                      "knob"                : [],
+                      "cudnn_version_start" : 8000, 
+                      "cudnn_version_end"   : -1 
+                    }
+                ] 
+            })");
+
+        auto fn = std::bind(::isInt8Errata, CUDNN_DATA_INT8);
+
+        cudnnStatus_t status = CUDNN_STATUS_SUCCESS;
+
+        for (auto &option : options) {
+            bool is_plan_blocked = cudnn_frontend::check_errata<decltype(fn)>(json_handle, option.getTag(), handle_, fn);
+            if (is_plan_blocked) {continue;}
+
+            std::cout << "Executing " << option.getTag() << std::endl;
+            status = cudnnBackendExecute(handle_, option.get_raw_desc(), variantPack.get_raw_desc());
+        }
+
 
         cudaFree(reorderedData);
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
