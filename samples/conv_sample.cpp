@@ -1284,13 +1284,13 @@ run_imma(
                       << std::endl;
         });
 
-        int64_t filter_size = tensor_w.getElementCount();
+        int64_t filter_size = tensor_w.getPackedElementCount();
         void *reorderedData = nullptr;
 
         auto cuda_status = cudaMalloc(&reorderedData, filter_size);
         CHECK(cuda_status == cudaSuccess); 
 
-        auto reorder_status = cudnn_frontend::cudnnReorderFilterAndBias(handle_, 4 /* dims */, w_dim_padded, devPtrW, reorderedData, nullptr, nullptr);
+        auto reorder_status = cudnn_frontend::cudnnReorderFilterAndBias(handle_, tensor_w, conv_desc, devPtrW, reorderedData, nullptr, nullptr);
         CHECK(reorder_status == CUDNN_STATUS_SUCCESS);
 
         void* data_ptrs[] = {devPtrX, devPtrY, reorderedData};

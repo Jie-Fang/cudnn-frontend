@@ -96,6 +96,11 @@ class ConvDesc_v8 : public BackendDescriptor {
         return compute_precision;
     }
 
+    int64_t
+    getDimensionCount() const {
+        return nDims;
+    }
+
    private:
     ConvDesc_v8()                    = default;
     ConvDesc_v8(ConvDesc_v8 const &) = delete;
