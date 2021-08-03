@@ -1273,9 +1273,13 @@ run_imma(
 
         cudnn_frontend::executionPlans_t options;
         for (auto &cfg : filtered_configs) {
-            options.push_back(cudnn_frontend::ExecutionPlanBuilder()
-                                  .setHandle(handle_).setEngineConfig(cfg, opGraph.getTag())
-                                  .build());
+            try {
+                options.emplace_back(cudnn_frontend::ExecutionPlanBuilder()
+                                      .setHandle(handle_).setEngineConfig(cfg, opGraph.getTag())
+                                      .build());
+            } catch (cudnn_frontend::cudnnException &e) {
+                continue;
+            }
         }
 
         std::for_each(options.begin(), options.end(), [](cudnn_frontend::ExecutionPlan& opt) {
