@@ -74,6 +74,25 @@ class Tensor_v8 : public BackendDescriptor {
         return ss.str();
     }
 
+    int64_t
+    getPackedElementCount() const {
+        int64_t count = vectorCount;
+        for (auto i = 0; i < nDims; i++) {
+            count = count * btensor_dimA[i];
+        }
+        return count;
+    };
+
+    int64_t
+    getDimensionCount() const {
+        return nDims;
+    }
+
+    int64_t const *
+    getDimArray() const {
+        return btensor_dimA;
+    }
+
     Tensor_v8(Tensor_v8 &&from) = default;
     Tensor_v8 &
     operator=(Tensor_v8 &&) = default;
@@ -335,4 +354,5 @@ class TensorBuilder_v8 {
    private:
     Tensor_v8 m_tensor;  //! Tensor built by the TensorBuilder class.
 };
+
 }
