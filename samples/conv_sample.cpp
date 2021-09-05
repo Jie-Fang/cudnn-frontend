@@ -1231,6 +1231,9 @@ run_imma(
                                        .setId('w')
                                        .setAlignment(16)
                                        .setDataType(CUDNN_DATA_INT8)
+#if (CUDNN_VERSION >= 8300)
+                                       .setReorderType(CUDNN_TENSOR_REORDERING_INT8x32)
+#endif
                                        .setVectorCountAndDimension(vectorCount, vectorDimension)
                                        .build();
         auto conv_desc = cudnn_frontend::ConvDescBuilder()
@@ -1318,7 +1321,7 @@ run_imma(
                       "engine"              : 0, 
                       "knob"                : [],
                       "cudnn_version_start" : 8000, 
-                      "cudnn_version_end"   : -1 
+                      "cudnn_version_end"   : 8300 
                     }
                 ] 
             })");
