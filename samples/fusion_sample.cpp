@@ -31,6 +31,47 @@ isRuntimeCompilation(cudnnBackendDescriptor_t engine_config) {
 }
 #endif
 
+cudnn_frontend::ExecutionPlan
+get_execplan_from_heuristics_else_fall_back(cudnn_frontend::OperationGraph&& opGraph, cudnnHandle_t handle_) {
+#if (CUDNN_VERSION >= 8200)
+    {
+        auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
+                              .setOperationGraph(opGraph)
+                              .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                              .build();
+
+        std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+        auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+
+        // Try engine configs returned by the heuristics and pick up the first one that works.
+        for (auto& ecfg : engine_config) {
+            try {
+                auto plan = cudnn_frontend::ExecutionPlanBuilder()
+                                .setHandle(handle_)
+                                .setEngineConfig(ecfg, opGraph.getTag())
+                                .build();
+                return plan;
+            } catch (cudnn_frontend::cudnnException& e) {
+                continue;
+            }
+        }
+    }
+#endif
+
+    {
+        auto total_engines = opGraph.getEngineCount();
+        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        std::cout << engine.describe() << std::endl;
+
+        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+
+        std::cout << engine_config.describe() << std::endl;
+
+        return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+    }
+}
+
 void
 run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
                                    int64_t* w_dim,
@@ -175,7 +216,7 @@ run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
         auto actDesc = cudnn_frontend::PointWiseDescBuilder()
                            .setMode(CUDNN_POINTWISE_RELU_FWD)
                            .setMathPrecision(CUDNN_DATA_FLOAT)
-                           .setReluLowerClipSlope(0.01) // leaky relu
+                           .setReluLowerClipSlope(0.01)  // leaky relu
                            .build();
         std::cout << actDesc.describe() << std::endl;
 
@@ -248,28 +289,7 @@ run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        // How many engines support this operation graph ?
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
-        }
-
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-#if (CUDNN_VERSION >= 8200)
-        if (isRuntimeCompilation(engine_config.get_raw_desc())) {
-            std::cout << "The engine is runtime compilation" << std::endl;
-        } else {
-            std::cout << "The engine is not runtime compilation" << std::endl;
-        }
-#endif
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -292,11 +312,22 @@ run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
-    } catch (cudnn_frontend::cudnnException &e) {
-        std::cout << "[ERROR] Exception " << e.what() << std::endl;
-        CHECK(false);
+    } catch (cudnn_frontend::cudnnException& e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+
+        // this example is only for Ampere cards
+        if (prop.major < 8 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+            std::cout << "Fusion with float inputs is only supported on Ampere or later" << std::endl;
+        } else {
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+            CHECK(false);
+        }
     }
 }
 
@@ -480,34 +511,7 @@ run_conv_bias_scale_relu(int64_t* x_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        // How many engines support this operation graph ?
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
-        }
-
-        if (knobs.begin() != knobs.end() && dataType == CUDNN_DATA_FLOAT) {
-            std::cout << "Updated knob choice" << std::endl;
-            knobs.begin()->setChoice(22);
-            std::cout << knobs.begin()->describe() << std::endl;
-        }
-
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-#if (CUDNN_VERSION >= 8200)
-        if (isRuntimeCompilation(engine_config.get_raw_desc())) {
-            std::cout << "The engine is runtime compilation" << std::endl;
-        } else {
-            std::cout << "The engine is not runtime compilation" << std::endl;
-        }
-#endif
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -530,15 +534,19 @@ run_conv_bias_scale_relu(int64_t* x_dim,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException& e) {
         struct cudaDeviceProp prop;
-        checkCudaErrors(cudaGetDeviceProperties( &prop, 0 ));
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
         // this example is only for Ampere cards
-        if (prop.major < 8 && (e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH || e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED)) {
-            std::cout << "Example is only supported for Ampere GPUs" << std::endl; 
-        }  else {
+        if (prop.major < 8 &&
+            (e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH || e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED)) {
+            std::cout << "Example is only supported for Ampere GPUs" << std::endl;
+        } else {
             std::cout << "[ERROR] Exception " << e.what() << std::endl;
             CHECK(false);
         }
@@ -674,21 +682,7 @@ run_matmul_bias_gelu(int64_t* a_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        // How many engines support this operation graph ?
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
-        }
-
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -711,11 +705,22 @@ run_matmul_bias_gelu(int64_t* a_dim,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
-    } catch (cudnn_frontend::cudnnException &e) {
-        std::cout << "[ERROR] Exception " << e.what() << std::endl;
-        CHECK(false);
+    } catch (cudnn_frontend::cudnnException& e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+
+        // this example is only for Ampere cards
+        if (prop.major < 8 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+            std::cout << "Fusion with float inputs is only supported on Ampere or later" << std::endl;
+        } else {
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+            CHECK(false);
+        }
     }
 }
 
@@ -841,28 +846,7 @@ run_conv_drelu(int64_t* x_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        // How many engines support this operation graph ?
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        // We have to randomly pick one engine from [0, total_engines)
-        // Selecting "0" by default
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
-        }
-        if (knobs.begin() != knobs.end()) {
-            std::cout << "Updated knob choice" << std::endl;
-            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
-            std::cout << knobs.begin()->describe() << std::endl;
-        }
-
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -888,9 +872,11 @@ run_conv_drelu(int64_t* x_dim,
             checkCudaErr(cudaFree(workspace_ptr));
         }
 
+        checkCudnnErr(cudnnDestroy(handle_));
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
-    } catch (cudnn_frontend::cudnnException &e) {
+    } catch (cudnn_frontend::cudnnException& e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -1020,28 +1006,7 @@ run_dgrad_drelu(int64_t* dx_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        // How many engines support this operation graph ?
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        // We have to randomly pick one engine from [0, total_engines)
-        // Selecting "0" by default
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
-        }
-        if (knobs.begin() != knobs.end()) {
-            std::cout << "Updated knob choice" << std::endl;
-            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
-            std::cout << knobs.begin()->describe() << std::endl;
-        }
-
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -1067,9 +1032,11 @@ run_dgrad_drelu(int64_t* dx_dim,
             checkCudaErr(cudaFree(workspace_ptr));
         }
 
+        checkCudnnErr(cudnnDestroy(handle_));
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
-    } catch (cudnn_frontend::cudnnException &e) {
+    } catch (cudnn_frontend::cudnnException& e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -1186,21 +1153,7 @@ run_conv_reduction(int64_t* x_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        // How many engines support this operation graph ?
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
-        }
-
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -1223,9 +1176,12 @@ run_conv_reduction(int64_t* x_dim,
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
-    } catch (cudnn_frontend::cudnnException &e) {
+    } catch (cudnn_frontend::cudnnException& e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
