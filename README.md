@@ -45,7 +45,7 @@ Sample tests are written using the [Catch2](https://github.com/catchorg/Catch2) 
      - CUDA_PATH has the cuda installation. 
         - Include files are in CUDA_PATH/include
         - Link files are in CUDA_PATH/lib64
-     - CUDNN_WRAP_PATH has the wrapper header files.
+     - CUDNN_FRONTEND_PATH has the wrapper header files.
 
      mkdir build; cd build
      cmake ..
