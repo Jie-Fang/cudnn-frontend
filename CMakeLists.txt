@@ -13,12 +13,17 @@ else()
 link_directories(/usr/local/cuda/lib64)
 endif()
 
+link_directories(/home/agopal/trees/cudnn_8/sw/gpgpu/bin/x86_64_Linux_release) #TBD
+
 add_executable(Samples samples/conv_sample.cpp 
                        samples/test_list.cpp 
                        samples/fp16_emu.cpp 
                        samples/catch.cpp 
                        samples/helpers.cpp 
                        samples/fusion_sample.cpp)
+
+target_include_directories(Samples PUBLIC /home/agopal/trees/cudnn_8/sw/gpgpu/bin/x86_64_Linux_release) # TBD
+target_include_directories(Samples PUBLIC /home/agopal/trees/cudnn_8/sw/gpgpu/bin/x86_64_Linux_release/include) # TBD
 
 if(DEFINED ENV{CUDA_PATH})
     target_include_directories(Samples PUBLIC $ENV{CUDA_PATH}/include/)
@@ -28,9 +33,9 @@ else()
     target_include_directories(Samples PUBLIC /usr/local/cuda/targets/ppc64le-linux/include)
 endif()
 
-if(DEFINED ENV{CUDNN_WRAP_PATH})
-    target_include_directories(Samples PUBLIC $ENV{CUDNN_WRAP_PATH}/include/)
-    target_include_directories(Samples PUBLIC $ENV{CUDNN_WRAP_PATH}/contrib/catch2/)
+if(DEFINED ENV{CUDNN_FRONTEND_PATH})
+    target_include_directories(Samples PUBLIC $ENV{CUDNN_FRONTEND_PATH}/include/)
+    target_include_directories(Samples PUBLIC $ENV{CUDNN_FRONTEND_PATH}/contrib/catch2/)
 else()
     target_include_directories(Samples PUBLIC include/)
     target_include_directories(Samples PUBLIC contrib/catch2/)
