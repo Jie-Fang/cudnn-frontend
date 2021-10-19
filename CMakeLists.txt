@@ -13,7 +13,6 @@ else()
 link_directories(/usr/local/cuda/lib64)
 endif()
 
-link_directories(/home/agopal/trees/cudnn_8/sw/gpgpu/bin/x86_64_Linux_release) #TBD
 
 add_executable(Samples samples/conv_sample.cpp 
                        samples/test_list.cpp 
@@ -21,9 +20,6 @@ add_executable(Samples samples/conv_sample.cpp
                        samples/catch.cpp 
                        samples/helpers.cpp 
                        samples/fusion_sample.cpp)
-
-target_include_directories(Samples PUBLIC /home/agopal/trees/cudnn_8/sw/gpgpu/bin/x86_64_Linux_release) # TBD
-target_include_directories(Samples PUBLIC /home/agopal/trees/cudnn_8/sw/gpgpu/bin/x86_64_Linux_release/include) # TBD
 
 if(DEFINED ENV{CUDA_PATH})
     target_include_directories(Samples PUBLIC $ENV{CUDA_PATH}/include/)
