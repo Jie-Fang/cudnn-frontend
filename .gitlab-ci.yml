@@ -4,6 +4,7 @@ variables:
 
 stages:
   - build
+  - build_v8.1
   - test
 
 make:
@@ -12,6 +13,13 @@ make:
     stage: build
     script: 
         - "docker build -t cudnn_frontend  . "
+
+make_v8.1:
+    tags:
+    - cudnn-frontend-runner
+    stage: build_v8.1
+    script: 
+        - "docker build -t cudnn_frontend  -f Dockerfile.8.1 . "
     
 run:
     tags:
