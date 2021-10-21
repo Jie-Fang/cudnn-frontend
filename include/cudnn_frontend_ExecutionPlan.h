@@ -75,9 +75,11 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         ss << "numeric_notes:" << " ";
         for (auto note : numeric_notes) 
             ss << note << " ";
+#if (CUDNN_VERSION >= 8200)  
         ss << "behavior_notes:" << " ";
         for (auto note : behavior_notes) 
             ss << note << " ";
+#endif
         ss << "workSpaceSize: " << workSpaceSize;
         return ss.str();
     }
@@ -102,10 +104,12 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         return numeric_notes;
     }
 
+#if (CUDNN_VERSION >= 8200)  
     std::array<cudnnBackendBehaviorNote_t, CUDNN_BEHAVIOR_NOTE_TYPE_COUNT> const &
     getBehaviorNotes() const {
         return behavior_notes;
     }
+#endif
 
    private:
     void
@@ -125,6 +129,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                           "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
                                           "CUDNN_ATTR_ENGINE_NUMERICAL_NOTE Failed");
         }
+#if (CUDNN_VERSION >= 8200)  
         status = cudnnBackendGetAttribute(extractedEngine_,
                                  CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
                                  CUDNN_TYPE_BEHAVIOR_NOTE,
@@ -137,6 +142,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                           "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
                                           "CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE Failed");
         }
+#endif
     }
 
     void
@@ -247,7 +253,9 @@ class ExecutionPlan_v8 : public BackendDescriptor {
 
     std::int64_t workSpaceSize = 0;
     std::array<cudnnBackendNumericalNote_t,CUDNN_NUMERICAL_NOTE_TYPE_COUNT> numeric_notes;
+#if (CUDNN_VERSION >= 8200)  
     std::array<cudnnBackendBehaviorNote_t, CUDNN_BEHAVIOR_NOTE_TYPE_COUNT>  behavior_notes;
+#endif
 
     float execution_time_ms    = 0.0f;
 
