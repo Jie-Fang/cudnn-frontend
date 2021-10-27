@@ -100,7 +100,7 @@ TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
         check_status (cudnnBackendDestroyDescriptor(tensor));
     }
 
-
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" ) {
@@ -151,6 +151,8 @@ TEST_CASE("Use global(index) for execution", "[frontend][global_index][wgrad]" )
         if (diff > THRESHOLD) { numErrors++; }
     }
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use heuristics for execution", "[frontend][heuristics][conv]" ) {
@@ -200,6 +202,8 @@ TEST_CASE("Use heuristics for execution", "[frontend][heuristics][conv]" ) {
         if (diff > THRESHOLD) { numErrors++;}
     }
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use DNN based heuristics for execution", "[frontend][dnn_heuristics][conv]" ) {
@@ -249,6 +253,8 @@ TEST_CASE("Use DNN based heuristics for execution", "[frontend][dnn_heuristics][
         if (diff > THRESHOLD) { numErrors++;}
     }
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use fallback for execution", "[frontend][global_index][dgrad]" ) {
@@ -298,6 +304,8 @@ TEST_CASE("Use fallback for execution", "[frontend][global_index][dgrad]" ) {
         if (diff > THRESHOLD) { numErrors++; }
     }
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
@@ -335,6 +343,8 @@ TEST_CASE("ConvBiasAct sample", "[frontend][convAddBiasAct]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use cudnnFindPlan for execution", "[frontend][cudnnFindPlan][conv]" ) {
@@ -384,6 +394,8 @@ TEST_CASE("Use cudnnFindPlan for execution", "[frontend][cudnnFindPlan][conv]" )
         if (diff > THRESHOLD) { numErrors++;}
     }
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("ConvBiasAct sample with cudnnFindPlan", "[frontend][cudnnFindPlan][convAddBiasAct]") {
@@ -421,6 +433,8 @@ TEST_CASE("ConvBiasAct sample with cudnnFindPlan", "[frontend][cudnnFindPlan][co
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
@@ -471,6 +485,8 @@ TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
         if (diff > THRESHOLD) { numErrors++;}
     }
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 
@@ -513,6 +529,51 @@ TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+
+TEST_CASE("ConvScaleBiasAddAct sample_float", "[frontend][fusion][ConvScaleBiasAddAct]") {
+    std::cout << "TEST_CASE :: Sample runtime fusion code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    int64_t xTensorDim[]      = { 4, 24, 31, 31};
+    int64_t wTensorDim[]      = {32, 24,  9,  9};
+    int64_t yTensorDim[]      = { 4, 32,  5,  5}; 
+    
+    int64_t conv_padA[]        = {3, 3};
+    int64_t conv_dilationA[] = {1, 1};
+    int64_t conv_strideA[] = {7, 7};
+
+    int64_t sTensorDim[]      = {1, 32, 1, 1};  //scale
+    int64_t bTensorDim[]      = {1, 32, 1, 1};  //bias
+    int64_t aTensorDim[]      = {4, 32, 5, 5}; //add
+
+    
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", xTensorDim[0], xTensorDim[1], xTensorDim[2], xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", wTensorDim[0], wTensorDim[1], wTensorDim[2], wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", yTensorDim[0], yTensorDim[1], yTensorDim[2], yTensorDim[3]);
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+
+    Surface<float> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<float> W(wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3], false);
+    Surface<float> Y(Ysize, true);
+
+    Surface<float> S(sTensorDim[0] * sTensorDim[1] * sTensorDim[2] * sTensorDim[3], false);
+    Surface<float> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2] * bTensorDim[3], false);
+    Surface<float> A(aTensorDim[0] * aTensorDim[1] * aTensorDim[2] * aTensorDim[3], false);
+
+    run_conv_scale_bias_add_leaky_relu(xTensorDim, wTensorDim, yTensorDim, sTensorDim, bTensorDim, aTensorDim, CUDNN_DATA_FLOAT, 
+                                       2, conv_padA, conv_dilationA, conv_strideA, 
+                                       X.devPtr, W.devPtr, Y.devPtr, S.devPtr, B.devPtr, A.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
@@ -574,6 +635,8 @@ TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 
@@ -605,6 +668,40 @@ TEST_CASE("MatmulBiasAct sample", "[frontend][fusion][MatmulBiasAct]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(C.hostPtr, C.devPtr, sizeof(C.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+
+TEST_CASE("MatmulBiasAct sample_float", "[frontend][fusion][MatmulBiasAct]") {
+    std::cout << "TEST_CASE :: Sample matmul runtime fusion code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample matmul runtime fusion code with backend API");
+    int64_t aTensorDim[]      = {1, 64, 32}; //batch M K
+    int64_t bTensorDim[]      = {1, 32, 64}; //batch K N
+    int64_t cTensorDim[]      = {1, 64, 64}; //batch M N
+
+    int64_t zTensorDim[]      = {1, 1, 64};  //bias
+    
+
+    printf("====DIMENSIONS====\n");
+    printf("a matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", aTensorDim[0], aTensorDim[1], aTensorDim[2]);
+    printf("b matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", bTensorDim[0], bTensorDim[1], bTensorDim[2]);
+    printf("c matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", cTensorDim[0], cTensorDim[1], cTensorDim[2]);
+
+    int Csize = cTensorDim[0] * cTensorDim[1] * cTensorDim[2];
+
+    Surface<float> A(aTensorDim[0] * aTensorDim[1] * aTensorDim[2], false);
+    Surface<float> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2], false);
+    Surface<float> C(Csize, true);
+
+    Surface<float> Z(zTensorDim[0] * zTensorDim[1] * zTensorDim[2], false);
+
+    run_matmul_bias_gelu(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_FLOAT, A.devPtr, B.devPtr, C.devPtr, Z.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(C.hostPtr, C.devPtr, sizeof(C.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("ConvDrelu sample", "[frontend][convDrelu][drelu]") {
@@ -675,6 +772,8 @@ TEST_CASE("ConvDrelu sample", "[frontend][convDrelu][drelu]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(y_mem.hostPtr, y_mem.devPtr, sizeof(y_mem.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("DgradDrelu sample", "[frontend][dgradDrelu][drelu]") {
@@ -745,6 +844,8 @@ TEST_CASE("DgradDrelu sample", "[frontend][dgradDrelu][drelu]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(x_mem.hostPtr, x_mem.devPtr, sizeof(x_mem.hostPtr[0]) * Xsize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("ConvColReduction sample", "[frontend][fusion][ConvColReduction]") {
@@ -782,6 +883,8 @@ TEST_CASE("ConvColReduction sample", "[frontend][fusion][ConvColReduction]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(Reduced.hostPtr, Reduced.devPtr, sizeof(Reduced.hostPtr[0]) * outputSize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("Use errata to block global(index) for execution", "[frontend][errata][wgrad]" ) {
@@ -821,6 +924,8 @@ TEST_CASE("Use errata to block global(index) for execution", "[frontend][errata]
     block_using_errata(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("DP4A execution with cudnnFindPlan", "[frontend][cudnnFindPlan][conv]" ) {
@@ -865,6 +970,8 @@ TEST_CASE("DP4A execution with cudnnFindPlan", "[frontend][cudnnFindPlan][conv]"
     checkCudaErr(cudaDeviceSynchronize());
 
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
 
 TEST_CASE("IMMA execution with manual autotuning", "[frontend][cudnnGetPlan][conv]" ) {
@@ -909,4 +1016,6 @@ TEST_CASE("IMMA execution with manual autotuning", "[frontend][cudnnGetPlan][con
     checkCudaErr(cudaDeviceSynchronize());
 
     REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
 }
