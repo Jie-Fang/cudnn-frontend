@@ -96,6 +96,8 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans_t plans, VariantPack const
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+    
+    getLogger() << "[cudnn_frontend] Auto-tuning returns " << time_sorted_plans.size() << " plans." << std::endl;
 
     return time_sorted_plans;
 }
@@ -119,6 +121,22 @@ EngineConfigGenerator::cudnnFindPlan(cudnnHandle_t handle,
     /// Creating a set of execution plans that are supported.
     executionPlans_t plans = cudnnGetPlan(handle, opGraph, pred);
     return time_sorted_plan<samplingTechnique>(handle, std::move(plans), variantPack);
+}
+
+template <CudnnFindSamplingTechnique samplingTechnique>
+auto
+EngineConfigGenerator::cudnnFindPlanAndCache(cudnnHandle_t handle,
+                                     cudnn_frontend::OperationGraph &opGraph,
+                                     cudnn_frontend::VariantPack const &variantPack,
+                                     cudnn_frontend::ExecutionPlanCache &cache,
+                                     Predicate pred) -> cudnn_frontend::ExecutionPlan {
+    /// Creating a set of execution plans that are supported.
+    auto sorted_plans = cudnnFindPlan<samplingTechnique>(handle, opGraph, variantPack, pred);
+
+    /// Adding the plan to the cache 
+    cache.add_plan_to_cache(opGraph, sorted_plans.front());
+    
+    return sorted_plans.front();
 }
 
 }

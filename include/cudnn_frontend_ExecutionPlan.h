@@ -111,6 +111,9 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     }
 #endif
 
+    ExecutionPlan_v8(ExecutionPlan_v8 const &) = default;
+    ExecutionPlan_v8 &
+    operator=(ExecutionPlan_v8 const &) = default;
    private:
     void
     fetchNotes(ManagedOpaqueDescriptor &extractedEngine) {
@@ -243,9 +246,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     }
 
     ExecutionPlan_v8()                         = default;
-    ExecutionPlan_v8(ExecutionPlan_v8 const &) = delete;
-    ExecutionPlan_v8 &
-    operator=(ExecutionPlan_v8 const &) = delete;
 
     ManagedOpaqueDescriptor engine_config = nullptr;
     cudnnHandle_t handle                  = nullptr;
@@ -393,4 +393,7 @@ class ExecutionPlanBuilder_v8 {
    private:
     ExecutionPlan_v8 m_execution_plan;
 };
+
+using ExecutionPlan             = ExecutionPlan_v8;
+using ExecutionPlanBuilder      = ExecutionPlanBuilder_v8;
 }

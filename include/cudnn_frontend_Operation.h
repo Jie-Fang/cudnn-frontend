@@ -107,6 +107,11 @@ class Operation_v8 : public BackendDescriptor {
         return operationTag;
     }
 
+    feature_vector_t
+    getFeatureVector() const {
+        return feature_vector;
+    }
+
     ~Operation_v8() = default;
 
    private:
@@ -141,6 +146,7 @@ class Operation_v8 : public BackendDescriptor {
     bool is_pointwise_activation_bwd_op = false;
     bool is_pointwise_math_op           = false;
     std::string operationTag;
+    feature_vector_t feature_vector;
 };
 
 ///
@@ -156,6 +162,23 @@ class OperationBuilder_v8 {
     bool is_reduction_op   = false;
 
     using Message_t = const char *;
+
+    int64_t xTensor_dimA[CUDNN_DIM_MAX + 1];
+    int64_t xTensor_strA[CUDNN_DIM_MAX + 1];
+    int64_t wTensor_dimA[CUDNN_DIM_MAX + 1];
+    int64_t wTensor_strA[CUDNN_DIM_MAX + 1];
+    int64_t yTensor_dimA[CUDNN_DIM_MAX + 1];
+    int64_t yTensor_strA[CUDNN_DIM_MAX + 1];
+
+    bool is2D = true;
+
+    int64_t conv_padding [CUDNN_DIM_MAX];
+    int64_t conv_dilation[CUDNN_DIM_MAX];
+    int64_t conv_stride  [CUDNN_DIM_MAX];
+    int64_t mode;
+    int64_t xType, yType, wType, cType /* compute_precision */;
+
+    int64_t tensor_dims = 0;
 
     Operation_v8 && 
     build_reduction_op() {
@@ -552,9 +575,10 @@ class OperationBuilder_v8 {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
             return std::move(m_operation);
         }
+        getLogger() << "Extracting the feature vector" << std::endl;
+        extract_feature_vector(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR);
         return std::move(m_operation);
     }
-
 
     Operation_v8 && 
     build_conv_backward_filter() {
@@ -649,6 +673,8 @@ class OperationBuilder_v8 {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
             return std::move(m_operation);
         }
+        getLogger() << "Extracting the feature vector" << std::endl;
+        extract_feature_vector(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR);
         return std::move(m_operation);
     }
 
@@ -739,7 +765,68 @@ class OperationBuilder_v8 {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
             return std::move(m_operation);
         }
+
+        getLogger() << "Extracting the feature vector" << std::endl;
+        extract_feature_vector(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR);
         return std::move(m_operation);
+    }
+
+    void extract_feature_vector(cudnnBackendDescriptorType_t op_type) {
+        /// Build the feature vector of this operation now.
+        m_operation.feature_vector.reserve(50);
+        
+        m_operation.feature_vector.push_back(op_type);
+        for (auto i = 0; i < tensor_dims; i++) {
+            m_operation.feature_vector.push_back(xTensor_dimA[i]); // n, c, (g), d, h , w 
+        }
+        for (auto i = 0; i < tensor_dims; i++) {
+            m_operation.feature_vector.push_back(wTensor_dimA[i]); // n, c, (g), d, h , w 
+        }
+        for (auto i = 0; i < tensor_dims; i++) {
+            m_operation.feature_vector.push_back(yTensor_dimA[i]); // n, c, (g), d, h , w 
+        }
+        const int max_spatial_dim = 3;
+
+        /// Padding
+        for (auto i = 0; i < max_spatial_dim; i++) {
+            if (i == 0 && is2D) {
+                m_operation.feature_vector.push_back(0);
+            } else {
+                m_operation.feature_vector.push_back(conv_padding[i]);
+            }
+        }
+        /// Dilation
+        for (auto i = 0; i < max_spatial_dim; i++) {
+            if (i == 0 && is2D) {
+                m_operation.feature_vector.push_back(0);
+            } else {
+                m_operation.feature_vector.push_back(conv_dilation[i]);
+            }
+        }
+        /// Strides
+        for (auto i = 0; i < max_spatial_dim; i++) {
+            if (i == 0 && is2D) {
+                m_operation.feature_vector.push_back(0);
+            } else {
+                m_operation.feature_vector.push_back(conv_stride[i]);
+            }
+        }
+        
+        m_operation.feature_vector.push_back(xType);
+        m_operation.feature_vector.push_back(wType);
+        m_operation.feature_vector.push_back(yType);
+        m_operation.feature_vector.push_back(cType);
+        m_operation.feature_vector.push_back(mode);
+
+        for (auto i = 0; i < tensor_dims; i++) {
+            m_operation.feature_vector.push_back(xTensor_strA[i]); // n, c, (g), d, h , w 
+        }
+        for (auto i = 0; i < tensor_dims; i++) {
+            m_operation.feature_vector.push_back(wTensor_strA[i]); // n, c, (g), d, h , w 
+        }
+        for (auto i = 0; i < tensor_dims; i++) {
+            m_operation.feature_vector.push_back(yTensor_strA[i]); // n, c, (g), d, h , w 
+        }
     }
 
     cudnnStatus_t
@@ -885,14 +972,19 @@ class OperationBuilder_v8 {
         return CUDNN_STATUS_SUCCESS;
     }
 
-
-    
+    void 
+    copy_dims_and_strides(const int64_t *from, int64_t *to) const {
+        for (auto i = 0; i < CUDNN_DIM_MAX + 1; i++) {
+            to[i] = from[i];
+        }
+    }
 
    public:
     /** @defgroup OperationBuilder_v8
      *  Set individual property of Operation_v8 class
      *  @{
      */
+    /// Will be Deprecated Do not use
     auto
     setxDesc(ManagedOpaqueDescriptor const &raw_tensor) -> OperationBuilder_v8 & {
         m_operation.xdesc = raw_tensor;
@@ -902,6 +994,10 @@ class OperationBuilder_v8 {
     auto
     setxDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.xdesc = tensor.get_desc();
+        copy_dims_and_strides(tensor.getDimArray(), xTensor_dimA);
+        copy_dims_and_strides(tensor.getStrideArray(), xTensor_strA);
+        tensor_dims = tensor.getDimensionCount();
+        xType = tensor.getDataType();
         return *this;
     }
     auto
@@ -918,6 +1014,9 @@ class OperationBuilder_v8 {
     auto
     setyDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.ydesc = tensor.get_desc();
+        copy_dims_and_strides(tensor.getDimArray(), yTensor_dimA);
+        copy_dims_and_strides(tensor.getStrideArray(), yTensor_strA);
+        yType = tensor.getDataType();
         return *this;
     }
     auto
@@ -929,9 +1028,13 @@ class OperationBuilder_v8 {
                 "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Convolution operation does not need wTensor");
         }
         m_operation.wdesc = tensor.get_desc();
+        copy_dims_and_strides(tensor.getDimArray(), wTensor_dimA);
+        copy_dims_and_strides(tensor.getStrideArray(), wTensor_strA);
+        wType = tensor.getDataType();
         return *this;
     }
 
+    /// Will be Deprecated Do not use
     auto
     setdyDesc(ManagedOpaqueDescriptor const &raw_tensor) -> OperationBuilder_v8 & {
         m_operation.dydesc = raw_tensor;
@@ -940,16 +1043,26 @@ class OperationBuilder_v8 {
     auto
     setdyDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.dydesc = tensor.get_desc();
+        copy_dims_and_strides(tensor.getDimArray(), yTensor_dimA);
+        copy_dims_and_strides(tensor.getStrideArray(), yTensor_strA);
+        yType = tensor.getDataType();
         return *this;
     }
     auto
     setdxDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.dxdesc = tensor.get_desc();
+        copy_dims_and_strides(tensor.getDimArray(), xTensor_dimA);
+        copy_dims_and_strides(tensor.getStrideArray(), xTensor_strA);
+        tensor_dims = tensor.getDimensionCount();
+        xType = tensor.getDataType();
         return *this;
     }
     auto
     setdwDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.dwdesc = tensor.get_desc();
+        copy_dims_and_strides(tensor.getDimArray(), wTensor_dimA);
+        copy_dims_and_strides(tensor.getStrideArray(), wTensor_strA);
+        wType = tensor.getDataType();
         return *this;
     }
 
@@ -965,6 +1078,12 @@ class OperationBuilder_v8 {
         if (conv.getComputePrecision() == CUDNN_DATA_DOUBLE) {
             m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         }
+        is2D = conv.getDimensionCount() == 2;
+        copy_dims_and_strides(conv.getPadding(), conv_padding);
+        copy_dims_and_strides(conv.getDilation(), conv_dilation);
+        copy_dims_and_strides(conv.getStride(), conv_stride);
+        cType = conv.getComputePrecision();
+        mode  = conv.getMathMode();
         return *this;
     }
     auto

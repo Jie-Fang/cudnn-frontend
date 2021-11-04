@@ -89,11 +89,19 @@ class EngineConfigGenerator {
     cudnnFindPlan(cudnnHandle_t handle,
                   cudnn_frontend::OperationGraph &opGraph,
                   cudnn_frontend::VariantPack const &variantPack) -> executionPlans_t;
+    
+    template <CudnnFindSamplingTechnique samplingTechnique>
+    auto
+    cudnnFindPlanAndCache(cudnnHandle_t handle,
+                          cudnn_frontend::OperationGraph &opGraph,
+                          cudnn_frontend::VariantPack const &variantPack,
+                          cudnn_frontend::ExecutionPlanCache &cache,
+                          Predicate pred = [](const cudnn_frontend::ExecutionPlan &) {return false;}) -> cudnn_frontend::ExecutionPlan;
 };
 
 /// Filter out the execution plan based on the prerequisite conditions.
 /// Goes through vector of execution plans and if the predicate returns
-/// not to block, it is inserted into the filtered plans.
+/// not to block (false), it is inserted into the filtered plans.
 static auto
 filter(Predicate pred, executionPlans_t &plans) -> executionPlans_t {
     executionPlans_t filtered_plans;

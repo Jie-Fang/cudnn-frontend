@@ -96,6 +96,16 @@ class Tensor_v8 : public BackendDescriptor {
         return btensor_dimA;
     }
 
+    int64_t const *
+    getStrideArray() const {
+        return btensor_strA;
+    }
+
+    int64_t
+    getDataType() const {
+        return static_cast<int64_t>(data_type);
+    }
+
     Tensor_v8(Tensor_v8 &&from) = default;
     Tensor_v8 &
     operator=(Tensor_v8 &&) = default;
