@@ -19,12 +19,14 @@ Each `cudnnBackendDescriptorType_t` documented in the enum is organized into its
 - cudnn_frontend_Engine.h         -> CUDNN_BACKEND_ENGINE_DESCRIPTOR
 - cudnn_frontend_EngineConfig.h   -> CUDNN_BACKEND_ENGINECFG_DESCRIPTOR
 - cudnn_frontend_ExecutionPlan.h  -> CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR
+- cudnn_frontend_ExecutionPlan.h  -> CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR
 - cudnn_frontend_VariantPack.h    -> CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR
 
 ### Utility Functions
-- cudnn_frontend_find_plan.h -> Implements the `cudnnFindPlan` function
-- cudnn_frontend_get_plan.h  -> Implements the `cudnnGetPlan` function
-- cudnn_frontend_Filters.h   -> List of helpful utility functions to filter out execution plans
+- cudnn_frontend_find_plan.h          -> Implements the `cudnnFindPlan` function
+- cudnn_frontend_get_plan.h           -> Implements the `cudnnGetPlan` function
+- cudnn_frontend_Filters.h            -> List of helpful utility functions to filter out execution plans
+- cudnn_frontend_ExecutionPlanCache.h -> Describes and implements the execution plan caching.
 
 ### Logging
 - cudnn_frontend_Logging.h -> Implements a basic logging framework for cudnn_frontend
@@ -45,7 +47,7 @@ Sample tests are written using the [Catch2](https://github.com/catchorg/Catch2) 
      - CUDA_PATH has the cuda installation. 
         - Include files are in CUDA_PATH/include
         - Link files are in CUDA_PATH/lib64
-     - CUDNN_FRONTEND_PATH has the wrapper header files.
+        - CUDNN_FRONTEND_PATH has the cudnn frontend header files.
 
      mkdir build; cd build
      cmake ..
@@ -79,6 +81,15 @@ Errata filter gives the cuDNN team an opportunity to block certain faulty kernel
     arch                : ""   - Optional. Architectures where this kernel might be faulty.
 
 PS: The errata filter note is still in beta version. We may add/modify certain features as necessary.
+
+## Execution Plan Caching
+cuDNN through heuristics provides a way to query a list of good engine configs. Based on this query we build the cudnn_frontend_find_plan function which runs all the engineConfig(s) on the given user system and returns a sorted list of plans. This process of running multiple plans through several iterations is time consuming. The ExecutionPlanCache allows the user to build a cache with operation graph as the key to query an execution plan. It is the responsibilty of the user to maintain different caches for different types of operation_graphs (For eg. different cache for convolutionForward compared to Dgrad or Wgrad).
+
+### API:
+    - add_plan_to_cache(const cudnn_frontend::OperationGraph &op_graph, const cudnn_frontend::ExecutionPlan &plan) : Creates a mapping between the operation graph and executionPlan
+    - bool get_plan(const cudnn_frontend::OperationGraph &op_graph, const cudnn_frontend::ExecutionPlan *&plan) : Sets the executionPlan in the plan pointer and returns true if found.
+
+PS: ExecutionPlanCaching today supports only single operation operation_graphs.
 
 ## Logging
 cuDNN Frontend API logging records execution flow through cuDNN frontend API. This functionality is disabled by default, and can be enabled through methods described in this section.

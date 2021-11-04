@@ -1081,3 +1081,59 @@ TEST_CASE("IMMA execution with manual autotuning", "[frontend][cudnnGetPlan][con
 
     std::cout << "\n========================================================================================\n";
 }
+
+TEST_CASE("Use Plan cache for rerunning the same convolution", "[frontend][dnn_heuristics][conv]" ) {
+    std::cout << "Use Plan cache for rerunning the same convolution" << std::endl;
+    INFO("Use Plan cache for rerunning the same convolution");
+    int64_t dimA[]        = {8, 32, 4, 4};
+    int64_t filterdimA[]  = {32, 32, 1, 1};
+    int64_t outdimA[]     = {0, 0, 0, 0}; // Computed Below
+    int64_t padA[]        = {0, 0};
+    int64_t dilationA[] = {1, 1};
+    int64_t convstrideA[] = {1, 1};
+
+    int numErrors = 0;
+
+    outdimA[0] = dimA[0];
+    outdimA[1] = filterdimA[0];
+    for (int dim = 0; dim < 2; dim++) {
+        outdimA[dim + 2] = getFwdConvOutputDim(dimA[dim + 2], padA[dim], filterdimA[dim + 2], convstrideA[dim], dilationA[dim]);
+    }
+
+    cudnnConvolutionMode_t mode      = CUDNN_CONVOLUTION;
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", dimA[0], dimA[1], dimA[2], dimA[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", filterdimA[0], filterdimA[1], filterdimA[2], filterdimA[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", outdimA[0], outdimA[1], outdimA[2], outdimA[3]);
+
+    int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
+    int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
+    int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
+
+    SurfaceManager<float> sm_0(Xsize, Wsize, Ysize, Ysize);
+    SurfaceManager<float> sm_1(Xsize, Wsize, Ysize, Ysize);
+
+    // In the first call the plan is derived from heuristics.
+    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm_0.devPtrX, sm_0.devPtrW, sm_0.devPtrY, CUDNN_HEUR_MODE_B);
+
+    // In the second call the plan is expected to be in the cache
+    run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm_0.devPtrX, sm_0.devPtrW, sm_1.devPtrY, CUDNN_HEUR_MODE_B, true);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(sm_0.hostY, sm_0.devPtrY, sizeof(sm_0.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(sm_1.hostY, sm_1.devPtrY, sizeof(sm_1.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    conv_cpu_ref<float,float>(sm_0.hostX, sm_0.hostW, sm_0.host_ref, 1, CUDNN_TENSOR_NCHW, dimA, filterdimA, outdimA, convstrideA, padA, dilationA, 4/*Dims*/);
+
+    for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
+        float diff         = getError(sm_0.hostY[index], sm_0.host_ref[index]);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+        diff         = getError(sm_1.hostY[index], sm_0.host_ref[index]);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+    }
+    REQUIRE(numErrors == 0);
+}
