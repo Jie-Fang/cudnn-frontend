@@ -22,7 +22,8 @@ add_executable(Samples samples/conv_sample.cpp
                        samples/fp16_emu.cpp 
                        samples/catch.cpp 
                        samples/helpers.cpp 
-                       samples/fusion_sample.cpp)
+                       samples/fusion_sample.cpp 
+                       samples/mha_sample.cpp)
 
 if(DEFINED ENV{CUDA_PATH})
     target_include_directories(Samples PUBLIC $ENV{CUDA_PATH}/include/)

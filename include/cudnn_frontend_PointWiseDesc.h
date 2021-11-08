@@ -69,6 +69,9 @@ class PointWiseDesc_v8 : public BackendDescriptor {
         switch (mode) {
             case CUDNN_POINTWISE_ADD:
             case CUDNN_POINTWISE_MUL:
+#if (CUDNN_VERSION >= 8300)
+            case CUDNN_POINTWISE_DIV:
+#endif
             case CUDNN_POINTWISE_MIN:
             case CUDNN_POINTWISE_MAX:
             case CUDNN_POINTWISE_RELU_BWD:
@@ -87,6 +90,9 @@ class PointWiseDesc_v8 : public BackendDescriptor {
             case CUDNN_POINTWISE_GELU_FWD:
             case CUDNN_POINTWISE_SOFTPLUS_FWD:
             case CUDNN_POINTWISE_SWISH_FWD:
+#if (CUDNN_VERSION >= 8300)
+            case CUDNN_POINTWISE_EXP:
+#endif
                 return 2;
             default:
                 return -1;
