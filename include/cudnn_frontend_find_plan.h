@@ -132,10 +132,10 @@ EngineConfigGenerator::cudnnFindPlanAndCache(cudnnHandle_t handle,
                                      Predicate pred) -> cudnn_frontend::ExecutionPlan {
     /// Creating a set of execution plans that are supported.
     auto sorted_plans = cudnnFindPlan<samplingTechnique>(handle, opGraph, variantPack, pred);
-
-    /// Adding the plan to the cache 
-    cache.add_plan_to_cache(opGraph, sorted_plans.front());
-    
+    /// Check if the fastest plan is stable enough to be added to the plan cache
+    if (cache.is_fastest_plan_stable(opGraph, sorted_plans.front().getTag())) {
+        cache.add_plan_to_cache(opGraph, sorted_plans.front());
+    }
     return sorted_plans.front();
 }
 

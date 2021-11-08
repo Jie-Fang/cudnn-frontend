@@ -308,7 +308,7 @@ run_from_heuristics(int64_t* x_dim,
         int64_t uids[]    = {'x', 'y', 'w'};
 
         const cudnn_frontend::ExecutionPlan *cached_plan;
-        if (plan_cache.get_plan(opGraph, cached_plan)) {
+        if (plan_cache.get_plan_from_cache(opGraph, cached_plan)) {
             std::cout << "Cached execution plan found." << cached_plan->getTag() << std::endl;
             auto workspace_size = cached_plan->getWorkspaceSize();
             std::cout << cached_plan->describe() << " requires workspace " << workspace_size << std::endl;
