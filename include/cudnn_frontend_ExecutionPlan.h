@@ -245,8 +245,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         }
     }
 
-    ExecutionPlan_v8()                         = default;
-
+    ExecutionPlan_v8()                    = default;
     ManagedOpaqueDescriptor engine_config = nullptr;
     cudnnHandle_t handle                  = nullptr;
     std::string planTag;

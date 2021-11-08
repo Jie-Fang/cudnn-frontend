@@ -307,6 +307,14 @@ class OperationBuilder_v8 {
             case CUDNN_POINTWISE_MUL:
                 m_operation.operationTag = "Mul";
                 break;
+#if (CUDNN_VERSION >= 8300)
+            case CUDNN_POINTWISE_DIV:
+                m_operation.operationTag = "Div";
+                break;
+            case CUDNN_POINTWISE_EXP:
+                m_operation.operationTag = "Exp";
+                break;
+#endif
             case CUDNN_POINTWISE_MIN:
                 m_operation.operationTag = "Min";
                 break;
@@ -1155,6 +1163,9 @@ class OperationBuilder_v8 {
 
         m_operation.is_pointwise_math_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_ADD) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MUL) ||
+#if (CUDNN_VERSION >= 8300)
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_DIV) ||
+#endif
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_SQRT));
@@ -1165,6 +1176,9 @@ class OperationBuilder_v8 {
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_FWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_FWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_FWD) ||
+#if (CUDNN_VERSION >= 8300)
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_EXP) ||
+#endif
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_FWD));
 
         m_operation.is_pointwise_activation_bwd_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_RELU_BWD) ||
