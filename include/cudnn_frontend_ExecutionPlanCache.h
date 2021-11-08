@@ -75,12 +75,10 @@
 
 namespace cudnn_frontend {
 
-
-
-
 /// Plan Cache structure for the above table
 class ExecutionPlanCache_v1 {
 
+   protected:
     struct compare {
         bool operator ()(const feature_vector_t & fv1, const feature_vector_t &fv2) const {
             for (uint32_t i = 0u; i < fv1.size(); i++) {
@@ -97,8 +95,15 @@ class ExecutionPlanCache_v1 {
     /// For a given FeatureVector of type T according to the Operation Graph, we get the plan. 
     using FeatureVectorToPlanMap = std::map<cudnn_frontend::feature_vector_t, cudnn_frontend::ExecutionPlan, cudnn_frontend::ExecutionPlanCache_v1::compare>;
     FeatureVectorToPlanMap  cache;
+
     mutable std::mutex cache_mutex;
+
  public:
+    virtual bool 
+    is_fastest_plan_stable(const cudnn_frontend::OperationGraph &op_graph,
+                           const std::string & tag) {
+        return true;
+    }
 
     void add_plan_to_cache(const cudnn_frontend::OperationGraph &op_graph,
                            const cudnn_frontend::ExecutionPlan &plan) {
@@ -116,8 +121,8 @@ class ExecutionPlanCache_v1 {
     }
 
     // Plan is the output here.
-    bool get_plan(const cudnn_frontend::OperationGraph &op_graph, 
-                  const cudnn_frontend::ExecutionPlan *&plan) const {
+    bool get_plan_from_cache(const cudnn_frontend::OperationGraph &op_graph, 
+                             const cudnn_frontend::ExecutionPlan *&plan) const {
         {
             std::lock_guard<std::mutex> guard(cache_mutex);
             auto it = cache.find(op_graph.getFeatureVector());
@@ -133,6 +138,43 @@ class ExecutionPlanCache_v1 {
     }
 };
 
-using ExecutionPlanCache = ExecutionPlanCache_v1;
+class ExecutionPlanCache_v2 : public ExecutionPlanCache_v1 {
+
+    using SaturationTracker = std::map<std::pair<cudnn_frontend::feature_vector_t, std::string>, int32_t>;
+    SaturationTracker tracker;
+    
+    int32_t saturationCount = 1;
+
+ public:
+    virtual bool 
+    is_fastest_plan_stable(const cudnn_frontend::OperationGraph &op_graph,
+                           const std::string & tag) {
+        if (saturationCount == 1) {return true;} // Special case. Always add to the cache.
+
+        // If plan cache is already created for the op_graph no need to update.
+        // Ideally, one will auto-tune only if the plan cache has no plan for the op_graph.
+        cudnn_frontend::ExecutionPlan const *plan = nullptr;
+        if (get_plan_from_cache(op_graph, plan)) {
+            getLogger() << "[cudnn_frontend] SaturationTracker " << name << " " << op_graph.getTag() << " " << tag << " plan already in cache." << std::endl;
+            return false;
+        }
+
+        // Lock the cache and increase the count till we saturate
+        std::lock_guard<std::mutex> guard(cache_mutex);
+        auto cnt = tracker[std::make_pair(op_graph.getFeatureVector(),tag)] += 1;
+        getLogger() << "[cudnn_frontend] SaturationTracker " << name << " " << op_graph.getTag() << " " << tag << " " << cnt << std::endl;
+        return cnt >= saturationCount;
+    }
+
+    void set_saturation_count(int32_t count) {
+        saturationCount = count;
+    }
+
+    ExecutionPlanCache_v2(const char * name_) : ExecutionPlanCache_v1(name_) {
+    }
+
+};
+
+using ExecutionPlanCache = ExecutionPlanCache_v2;
 
 }
