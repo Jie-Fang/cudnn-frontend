@@ -311,8 +311,74 @@ class OperationBuilder_v8 {
             case CUDNN_POINTWISE_DIV:
                 m_operation.operationTag = "Div";
                 break;
+            case CUDNN_POINTWISE_ADD_SQUARE:
+                m_operation.operationTag = "AddSquare";
+                break;
             case CUDNN_POINTWISE_EXP:
                 m_operation.operationTag = "Exp";
+                break;
+            case CUDNN_POINTWISE_SUB:
+                m_operation.operationTag = "Sub";
+                break;
+            case CUDNN_POINTWISE_CMP_EQ:
+                m_operation.operationTag = "CmpEq";
+                break;
+            case CUDNN_POINTWISE_CMP_NEQ:
+                m_operation.operationTag = "CmpNeq";
+                break;
+            case CUDNN_POINTWISE_CMP_GT:
+                m_operation.operationTag = "CmpGT";
+                break;
+            case CUDNN_POINTWISE_CMP_GE:
+                m_operation.operationTag = "CmpGE";
+                break;
+            case CUDNN_POINTWISE_CMP_LT:
+                m_operation.operationTag = "CmpLT";
+                break;
+            case CUDNN_POINTWISE_CMP_LE:
+                m_operation.operationTag = "CmpLE";
+                break;
+            case CUDNN_POINTWISE_LOGICAL_OR:
+                m_operation.operationTag = "LogicalOr";
+                break;
+            case CUDNN_POINTWISE_LOGICAL_AND:
+                m_operation.operationTag = "LogicalAnd";
+                break;
+            case CUDNN_POINTWISE_LOGICAL_NOT:
+                m_operation.operationTag = "LogicalNot";
+                break;
+            case CUDNN_POINTWISE_LOG:
+                m_operation.operationTag = "Log";
+                break;
+            case CUDNN_POINTWISE_NEG:
+                m_operation.operationTag = "Neg";
+                break;
+            case CUDNN_POINTWISE_MOD:
+                m_operation.operationTag = "Mod";
+                break;
+            case CUDNN_POINTWISE_POW:
+                m_operation.operationTag = "Pow";
+                break;
+            case CUDNN_POINTWISE_ABS:
+                m_operation.operationTag = "Abs";
+                break;
+            case CUDNN_POINTWISE_CEIL:
+                m_operation.operationTag = "Ceil";
+                break;
+            case CUDNN_POINTWISE_FLOOR:
+                m_operation.operationTag = "Floor";
+                break;
+            case CUDNN_POINTWISE_SIN:
+                m_operation.operationTag = "Sine";
+                break;
+            case CUDNN_POINTWISE_COS:
+                m_operation.operationTag = "Cosine";
+                break;
+            case CUDNN_POINTWISE_TAN:
+                m_operation.operationTag = "Tan";
+                break;
+            case CUDNN_POINTWISE_RSQRT:
+                m_operation.operationTag = "RSqrt";
                 break;
 #endif
             case CUDNN_POINTWISE_MIN:
@@ -365,9 +431,6 @@ class OperationBuilder_v8 {
                 break;
             case CUDNN_POINTWISE_SWISH_BWD:
                 m_operation.operationTag = "SwishBwd";
-                break;
-            default:
-                m_operation.operationTag = "OtherOp";
                 break;
         }
 
@@ -1165,6 +1228,28 @@ class OperationBuilder_v8 {
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MUL) ||
 #if (CUDNN_VERSION >= 8300)
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_DIV) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_SUB) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_ADD_SQUARE) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_RSQRT) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_SIN) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_COS) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_TAN) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOGICAL_OR) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOGICAL_AND) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOGICAL_NOT) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_EQ) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_NEQ) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_GT) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_GE) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_LT) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_LE) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOG) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_NEG) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MOD) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_POW) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_ABS) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CEIL) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_FLOOR) ||
 #endif
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
