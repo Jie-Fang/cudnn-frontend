@@ -86,8 +86,11 @@ PS: The errata filter note is still in beta version. We may add/modify certain f
 cuDNN through heuristics provides a way to query a list of good engine configs. Based on this query we build the cudnn_frontend_find_plan function which runs all the engineConfig(s) on the given user system and returns a sorted list of plans. This process of running multiple plans through several iterations is time consuming. The ExecutionPlanCache allows the user to build a cache with operation graph as the key to query an execution plan. It is the responsibilty of the user to maintain different caches for different types of operation_graphs (For eg. different cache for convolutionForward compared to Dgrad or Wgrad).
 
 ### API:
-    - add_plan_to_cache(const cudnn_frontend::OperationGraph &op_graph, const cudnn_frontend::ExecutionPlan &plan) : Creates a mapping between the operation graph and executionPlan
-    - bool get_plan(const cudnn_frontend::OperationGraph &op_graph, const cudnn_frontend::ExecutionPlan *&plan) : Sets the executionPlan in the plan pointer and returns true if found.
+    - void add_plan_to_cache(const cudnn_frontend::OperationGraph &op_graph, const cudnn_frontend::ExecutionPlan &plan) : Creates a mapping between the operation graph and executionPlan
+    - bool get_plan_from_cache(const cudnn_frontend::OperationGraph &op_graph, const cudnn_frontend::ExecutionPlan *&plan) : Sets the executionPlan in the plan pointer and returns true if found.
+    - cudnnFindPlanAndCache(cudnnHandle_t handle, cudnn_frontend::OperationGraph &opGraph, cudnn_frontend::VariantPack const &variantPack, cudnn_frontend::ExecutionPlanCache &cache, Predicate pred) -> cudnn_frontend::ExecutionPlan
+      The above API chains the output of cudnn_frontend_find_plan and caches the result for future usage. 
+
 
 PS: ExecutionPlanCaching today supports only single operation operation_graphs.
 
