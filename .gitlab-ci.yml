@@ -19,7 +19,14 @@ make_v8.1:
     stage: build
     script: 
         - "docker build -t cudnn_frontend_v8.1  -f Dockerfile.8.1 . "
-    
+
+make_v8.2:
+    tags:
+    - cudnn-frontend-runner
+    stage: build
+    script: 
+        - "docker build -t cudnn_frontend_v8.2  -f Dockerfile.8.2 . "
+
 run:
     tags:
     - cudnn-frontend-runner
@@ -40,4 +47,15 @@ run_v8.1:
         - nvidia-smi
         - docker container prune -f
         - docker run --gpus all -i --name=samples cudnn_frontend_v8.1 /build/Samples
+        - docker rm -v samples
+
+run_v8.2:
+    tags:
+    - cudnn-frontend-runner
+    stage: test
+    needs: ["make_v8.2"]
+    script:
+        - nvidia-smi
+        - docker container prune -f
+        - docker run --gpus all -i --name=samples cudnn_frontend_v8.2 /build/Samples
         - docker rm -v samples
