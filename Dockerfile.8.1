@@ -11,7 +11,7 @@ LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
 ENV CUDNN_VERSION 8.1.1.33
 
 LABEL com.nvidia.cudnn.version="${CUDNN_VERSION}"
-
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcudnn8=$CUDNN_VERSION-1+cuda11.2 \
     libcudnn8-dev=$CUDNN_VERSION-1+cuda11.2 \
