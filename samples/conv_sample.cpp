@@ -512,7 +512,7 @@ run_with_external_config(int64_t* x_dim,
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException &e) {
-        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        std::cout << "[ERROR] Exception " << e.what() << " " << cudnn_frontend::to_string(e.getCudnnStatus()) << std::endl;
         CHECK(false);
     }
 

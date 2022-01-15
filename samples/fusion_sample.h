@@ -139,3 +139,20 @@ run_conv_reduction(int64_t* x_dim,
                    void* devPtrX,
                    void* devPtrW,
                    void* devPtrR);
+
+void
+run_bn_conv_gen_stat(int64_t* xTensorDim, 
+                    int64_t* wTensorDim, 
+                    int64_t* yTensorDim,  
+                    int64_t* scaleTensorDim,
+                    int convdim, 
+                    int64_t *conv_padA, 
+                    int64_t* conv_dilationA, 
+                    int64_t* conv_strideA, 
+                    void *XdevPtr, 
+                    void *WdevPtr, 
+                    void *YdevPtr,
+                    void *scaledevPtr, 
+                    void *biasdevPtr, 
+                    void *sumdevPtr, 
+                    void *sqSumdevPtr);
