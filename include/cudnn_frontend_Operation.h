@@ -136,8 +136,13 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor pwdesc        = nullptr;
     ManagedOpaqueDescriptor matmuldesc    = nullptr;
     ManagedOpaqueDescriptor reductiondesc = nullptr;
+    ManagedOpaqueDescriptor sumdesc       = nullptr;
+    ManagedOpaqueDescriptor sqsumdesc     = nullptr;
 
     cudnnBackendAttributeType_t alphabetaType = CUDNN_TYPE_FLOAT;
+    cudnnDataType_t     math_precision   = CUDNN_DATA_FLOAT;
+    cudnnGenStatsMode_t genstats_mode    = CUDNN_GENSTATS_SUM_SQSUM;
+
     float alpha_s = 1.0f, beta_s = .0f, alpha2_s = 1.0f;
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
     int64_t pointwise_port_count = -1;
@@ -160,6 +165,7 @@ class OperationBuilder_v8 {
     bool is_pointwise_op   = false;
     bool is_matmul_op      = false;
     bool is_reduction_op   = false;
+    bool is_genstats_op    = false;
 
     using Message_t = const char *;
 
@@ -650,6 +656,87 @@ class OperationBuilder_v8 {
         extract_feature_vector(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR);
         return std::move(m_operation);
     }
+
+    Operation_v8 &&
+    build_genstats_op() {
+        m_operation.operationTag = "GenStats";
+        auto status = CUDNN_STATUS_SUCCESS;
+
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_GENSTATS_XDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.xdesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_GENSTATS_XDESC Failed");
+            return std::move(m_operation);
+        }
+
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_GENSTATS_SUMDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.sumdesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_GENSTATS_SUMDESC Failed");
+            return std::move(m_operation);
+        }
+
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_GENSTATS_SQSUMDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.sqsumdesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_GENSTATS_SQSUMDESC Failed");
+            return std::move(m_operation);
+        }
+
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_GENSTATS_MODE,
+                CUDNN_TYPE_GENSTATS_MODE,
+                1,
+                &(m_operation.genstats_mode));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_GENSTATS_MODE Failed");
+            return std::move(m_operation);
+        }
+
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_GENSTATS_MATH_PREC,
+                CUDNN_TYPE_DATA_TYPE,
+                1,
+                &(m_operation.math_precision));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_GENSTATS_MATH_PREC Failed");
+            return std::move(m_operation);
+        }
+
+        
+        status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
+            return std::move(m_operation);
+        }
+
+        return std::move(m_operation);
+    }
+
 
     Operation_v8 && 
     build_conv_backward_filter() {
@@ -1157,6 +1244,19 @@ class OperationBuilder_v8 {
         mode  = conv.getMathMode();
         return *this;
     }
+
+    auto
+    setSumDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.sumdesc = tensor.get_desc();
+        return *this;
+    }
+    
+    auto
+    setSqSumDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.sqsumdesc = tensor.get_desc();
+        return *this;
+    }
+
     auto
     setaMatDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         if (is_matmul_op == false) {
@@ -1314,6 +1414,16 @@ class OperationBuilder_v8 {
         return *this;
     }
 
+    auto
+    setMathPrecision(cudnnDataType_t dtype) -> OperationBuilder_v8 & {
+        m_operation.math_precision = dtype;
+    }
+
+    auto
+    setGenStatsMode(cudnnGenStatsMode_t type) -> OperationBuilder_v8 & {
+        m_operation.genstats_mode = type;
+    }
+
     OperationBuilder_v8(cudnnBackendDescriptorType_t mode) {
         m_operation.op_mode = mode;
         is_convolution_op   = ((m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
@@ -1323,6 +1433,7 @@ class OperationBuilder_v8 {
         is_pointwise_op = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR);
         is_matmul_op    = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR);
         is_reduction_op = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
+        is_genstats_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR);
     }
     /** @} */
 
@@ -1346,6 +1457,8 @@ class OperationBuilder_v8 {
             status_ = validate_matmul_op(msg);
         } else if (is_reduction_op) {
             status_ = validate_reduction_op(msg);
+        } else if (is_genstats_op) {
+            status_ = CUDNN_STATUS_SUCCESS;
         } else {
             status_ = CUDNN_STATUS_BAD_PARAM;
             msg = "CUDNN_BACKEND_OPERATION_DESCRIPTOR: Unsupported cudnn backend descriptor type. Check and set CUDNN_BACKEND_OPERATION_*_DESCRIPTOR";
@@ -1374,6 +1487,8 @@ class OperationBuilder_v8 {
             return build_matmul_op();
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR) {
             return build_reduction_op();
+        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR) {
+            return build_genstats_op();
         }
         getLogger() << "[cudnn_frontend] " << m_operation << std::endl;
         return std::move(m_operation);

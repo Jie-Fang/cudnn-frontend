@@ -231,17 +231,15 @@ get_heuristics_list(std::array<cudnnBackendHeurMode_t, SIZE> modes,
     (void) modes;
     EngineConfigList filtered_configs;
 
-
     for (auto mode : modes) {
         auto heuristics = EngineHeuristicsBuilder_v8()
             .setOperationGraph(opGraph)
             .setHeurMode(mode)
             .build();
-
+        getLogger() << "Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
         auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
         cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);
     }
-
     return filtered_configs;
 }
 }

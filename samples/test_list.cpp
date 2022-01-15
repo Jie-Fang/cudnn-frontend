@@ -1196,3 +1196,36 @@ TEST_CASE("Multihead attention sample", "[frontend][fusion][MultiHeadAttention]"
 #endif
     REQUIRE(numErrors == 0);
 }
+
+TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
+    std::cout << "Scale Bias Conv BNGenstats" << std::endl;
+    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
+    int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
+    int64_t xTensorDim[]              = { 32,  32, 7, 7};
+    int64_t wTensorDim[]              = {256,  32, 1, 1};
+    int64_t yTensorDim[]              = { 32, 256, 7, 7}; 
+    int64_t sumTensorDim[]            = { 1,  32, 1, 1};
+    int64_t sqSumTensorDim[]          = { 1,  32, 1, 1};
+
+    int64_t conv_padA[]       = {0, 0};
+    int64_t conv_dilationA[]  = {1, 1};
+    int64_t conv_strideA[]    = {1, 1};
+
+    Surface<half> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<half> W(wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3], false);
+    Surface<half> Y(yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3], false);
+
+    Surface<half> scale(perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3], false);
+    Surface<half> bias(perChannelBiasDim[0] * perChannelBiasDim[1] * perChannelBiasDim[2] * perChannelBiasDim[3], false);
+
+    Surface<float> sum(sumTensorDim[0] * sumTensorDim[1] * sumTensorDim[2] * sumTensorDim[3], false);
+    Surface<float> sqSum(sqSumTensorDim[0] * sqSumTensorDim[1] * sqSumTensorDim[2] * sqSumTensorDim[3], false);
+
+    run_bn_conv_gen_stat(xTensorDim, wTensorDim, yTensorDim, perChannelScaleDim,  
+                    2, conv_padA, conv_dilationA, conv_strideA, 
+                    X.devPtr, W.devPtr, Y.devPtr,
+                    scale.devPtr, bias.devPtr, sum.devPtr, sqSum.devPtr
+                    );
+
+    std::cout << "\n========================================================================================\n";
+}
