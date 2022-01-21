@@ -1417,11 +1417,13 @@ class OperationBuilder_v8 {
     auto
     setMathPrecision(cudnnDataType_t dtype) -> OperationBuilder_v8 & {
         m_operation.math_precision = dtype;
+        return *this;
     }
 
     auto
     setGenStatsMode(cudnnGenStatsMode_t type) -> OperationBuilder_v8 & {
         m_operation.genstats_mode = type;
+        return *this;
     }
 
     OperationBuilder_v8(cudnnBackendDescriptorType_t mode) {
