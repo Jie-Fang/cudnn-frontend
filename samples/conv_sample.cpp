@@ -466,32 +466,11 @@ run_with_external_config(int64_t* x_dim,
             create_operation_graph(descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR, handle_);
         std::cout << opGraph.describe() << std::endl;
 
-#if (CUDNN_VERSION >= 8300)
         cudnn_frontend::EngineConfigList filtered_configs = 
-            cudnn_frontend::get_heuristics_list<2>({CUDNN_HEUR_MODE_INSTANT, CUDNN_HEUR_MODE_FALLBACK}, opGraph,::isNonDeterministic);
-#else
-        auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
-                              .setOperationGraph(opGraph)
-                              .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
-                              .build();
+            cudnn_frontend::get_heuristics_list<2>({"heuristics_instant" 
+            , "heuristics_fallback"
+            }, opGraph,::isNonDeterministic);
 
-        std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
-        auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
-
-        auto fallback = cudnn_frontend::EngineFallbackListBuilder()
-                            .setOperationGraph(opGraph)
-                            .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR)
-                            .build();
-        auto& fallback_list = fallback.getFallbackList();
-        std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
-
-        cudnn_frontend::EngineConfigList filtered_configs;
-        cudnn_frontend::filter(engine_config, filtered_configs, ::isNonDeterministicOrisDownConverting);
-        cudnn_frontend::filter(fallback_list, filtered_configs, ::isNonDeterministic);
-
-        std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
-        std::cout << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
-#endif
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
         auto plan =

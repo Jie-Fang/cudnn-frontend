@@ -29,6 +29,7 @@
 
 #include "cudnn_frontend_OperationGraph.h"
 #include "cudnn_frontend_EngineConfig.h"
+#include "cudnn_frontend_EngineFallbackList.h"
 #include "cudnn_frontend_utils.h"
 #include "cudnn_frontend_Filters.h"
 
@@ -232,6 +233,7 @@ get_heuristics_list(std::array<cudnnBackendHeurMode_t, SIZE> modes,
     EngineConfigList filtered_configs;
 
     for (auto mode : modes) {
+        if (mode == CUDNN_HEUR_MODES_COUNT) {continue;}
         auto heuristics = EngineHeuristicsBuilder_v8()
             .setOperationGraph(opGraph)
             .setHeurMode(mode)
@@ -242,4 +244,70 @@ get_heuristics_list(std::array<cudnnBackendHeurMode_t, SIZE> modes,
     }
     return filtered_configs;
 }
+
+template<std::size_t SIZE>
+EngineConfigList
+get_heuristics_list(std::array<std::string, SIZE> modes,
+    OperationGraph_v8 &opGraph,
+    std::function<bool(cudnnBackendDescriptor_t)> filter_fn) {
+    
+    EngineConfigList filtered_configs;
+
+    for (auto &mode : modes) {
+        if (mode.find("heuristics_instant") != std::string::npos) {
+            auto heuristics = EngineHeuristicsBuilder_v8()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
+                .build();
+            getLogger() << "Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+            auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);
+        } else if (mode.find("heuristics_fallback") != std::string::npos) {
+#if (CUDNN_VERSION >= 8300)
+            auto heuristics = EngineHeuristicsBuilder_v8()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_FALLBACK)
+                .build();
+            getLogger() << "Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+            auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);
+#else
+            cudnnBackendDescriptorType_t op_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR;
+            std::string tag_ = opGraph.getTag();
+            if (tag_.find("ConvFwd") != std::string::npos) {
+                op_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
+            } else if (tag_.find("ConvBwdFilter") != std::string::npos) {
+                op_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR;
+            }
+            auto fallback = cudnn_frontend::EngineFallbackListBuilder_v8()
+                                .setOperationGraph(opGraph)
+                                .setOperation(CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR)
+                                .build();
+            auto& fallback_list = fallback.getFallbackList();
+            getLogger() << "Fallback List has " << fallback_list.size() << " configurations " << std::endl;
+            cudnn_frontend::filter(fallback_list, filtered_configs, filter_fn);
+#endif
+        } else if (mode.find("heuristics_mode_b") != std::string::npos) {
+            auto heuristics = EngineHeuristicsBuilder_v8()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_B)
+                .build();
+            getLogger() << "Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+            auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);
+#if (CUDNN_VERSION >= 8300)
+        } else if (mode.find("heuristics_mode_a") != std::string::npos) {
+            auto heuristics = EngineHeuristicsBuilder_v8()
+                .setOperationGraph(opGraph)
+                .setHeurMode(CUDNN_HEUR_MODE_A)
+                .build();
+            getLogger() << "Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
+            auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
+            cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);
+#endif
+        }
+    }
+    return filtered_configs;
+}
+
 }
