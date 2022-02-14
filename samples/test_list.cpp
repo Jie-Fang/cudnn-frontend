@@ -1145,7 +1145,7 @@ TEST_CASE("Multihead attention sample", "[frontend][fusion][MultiHeadAttention]"
 
     int numErrors = 0;
 
-#if (CUDNN_VERSION >= 8310)
+#if (CUDNN_VERSION >= 8301)
     const int64_t inputSize  = 16; // 1024;
     const int64_t outputSize = 16; // 1024;
     const int64_t headSize   = 8;  // 64;

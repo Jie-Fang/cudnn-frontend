@@ -501,7 +501,7 @@ class MHA_attentionLayer {
 
         const cudnnDataType_t dataType = mhaParams.dataType;
         const cudnnDataType_t mathPrec = mhaParams.mathPrec;
-#if (CUDNN_VERSION >= 8310)
+#if (CUDNN_VERSION >= 8301)
         {
             // Softmax scaler
             const float softmaxScaler = static_cast<float>(1.0 / sqrt(static_cast<double>(headSize)));
@@ -792,7 +792,7 @@ multiHeadAttention(const int64_t inputSize,
                    void const *devPtrQKVBias,
                    void const *devPtrOBias,
                    void *devPtrOut) {
-#if (CUDNN_VERSION >= 8310)
+#if (CUDNN_VERSION >= 8301)
     cudnnHandle_t handle_;
 
     /*
