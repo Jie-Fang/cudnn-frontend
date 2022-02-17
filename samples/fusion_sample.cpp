@@ -1670,3 +1670,139 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
         }
     }
 }
+
+void
+run_bn_finalize( 
+    int64_t *perChannelSum, 
+    int64_t *epsilon,
+
+    void *YSumdevPtr, 
+    void *YSqSumdevPtr, 
+    void *scaledevPtr, 
+    void *biasdevPtr, 
+    void *in_meandevPtr, 
+    void *in_vardevPtr, 
+    void *out_meandevPtr, 
+    void *out_vardevPtr,
+    void *saved_meandevPtr, 
+    void *saved_inv_vardevPtr, 
+    void *eq_scaledevPtr, 
+    void *eq_biasdevPtr,
+
+    double epsilon_val,
+    double exponential_decay_factor,
+    int64_t accumCnt_val
+) {
+    cudnnHandle_t handle_;
+    try {
+        // Create cudnn handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Creates the necessary tensor descriptors
+        int64_t stride[4];
+        generateStrides(perChannelSum, stride, 4, CUDNN_TENSOR_NHWC);
+
+        auto tensor_create = [&stride, &perChannelSum](cudnnDataType_t type,
+                                int64_t id) {
+            return cudnn_frontend::TensorBuilder()
+                   .setDim(4, perChannelSum)
+                   .setStrides(4, stride)
+                   .setId(id)
+                   .setAlignment(16)
+                   .setDataType(type)
+                   .build();
+        };
+
+        auto sumTensor           = tensor_create(CUDNN_DATA_FLOAT, 100);
+        auto sqSumTensor         = tensor_create(CUDNN_DATA_FLOAT, 101);
+        auto scaleTensor         = tensor_create(CUDNN_DATA_FLOAT, 102);
+        auto biasTensor          = tensor_create(CUDNN_DATA_FLOAT, 103);
+        auto inMeanTensor        = tensor_create(CUDNN_DATA_FLOAT, 104);
+        auto inVarTensor         = tensor_create(CUDNN_DATA_FLOAT, 105);
+        auto outMeanTensor       = tensor_create(CUDNN_DATA_FLOAT, 106);
+        auto outVarTensor        = tensor_create(CUDNN_DATA_FLOAT, 107);
+        auto savedMeanTensor     = tensor_create(CUDNN_DATA_FLOAT, 108);
+        auto savedInvVarTensor   = tensor_create(CUDNN_DATA_FLOAT, 109);
+        auto outEqScaleTensor    = tensor_create(CUDNN_DATA_FLOAT, 200);
+        auto outEqBiasTensor     = tensor_create(CUDNN_DATA_FLOAT, 201);
+
+        int64_t epsilon_stride[4];
+        generateStrides(epsilon, epsilon_stride, 4, CUDNN_TENSOR_NHWC);
+        auto scalar_tensor_create = [&epsilon_stride, &epsilon](cudnnDataType_t type,
+                                int64_t id) {
+            return cudnn_frontend::TensorBuilder()
+                   .setDim(4, epsilon)
+                   .setStrides(4, epsilon_stride)
+                   .setId(id)
+                   .setAlignment(16)
+                   .setDataType(type)
+                   .setByValue(true)
+                   .build();
+        };
+
+        auto epsilonTensor       = scalar_tensor_create(CUDNN_DATA_DOUBLE, 300);
+        auto expDecayTensor      = scalar_tensor_create(CUDNN_DATA_DOUBLE, 301);
+        auto accumCountTensor    = scalar_tensor_create(CUDNN_DATA_INT64,  302);
+
+        //Create a Finalize node
+        auto finalize_stat_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR)
+                    .setMathPrecision(CUDNN_DATA_FLOAT)
+                    .setBNFinalizeMode(CUDNN_BN_FINALIZE_STATISTICS_TRAINING)
+                    .setSumDesc(sumTensor)
+                    .setSqSumDesc(sqSumTensor)
+                    .setScaleAndBias(scaleTensor, biasTensor)
+                    .setEqScaleAndBias(outEqScaleTensor, outEqBiasTensor)
+                    .setPrevRunningMeanAndVar(inMeanTensor, inVarTensor)
+                    .setNextRunningMeanAndVar(outMeanTensor, outVarTensor)
+                    .setSavedMeanAndInvVar(savedMeanTensor, savedInvVarTensor)
+                    .setEpsilonTensor(epsilonTensor)
+                    .setAccumCountTensor(accumCountTensor)
+                    .setExpDecayFactorTensor(expDecayTensor)
+                    .build();
+
+        std::array<cudnn_frontend::Operation const*, 1> ops = {&finalize_stat_op};
+        auto opGraph = cudnn_frontend::OperationGraphBuilder().setHandle(handle_).setOperationGraph(ops.size(), ops.data()).build();
+        std::cout << opGraph.describe() << std::endl;
+
+        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
+        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+
+        void* data_ptrs[15] = {YSumdevPtr, YSqSumdevPtr, scaledevPtr, biasdevPtr, 
+                               in_meandevPtr, in_vardevPtr, out_meandevPtr, out_vardevPtr,
+                               saved_meandevPtr, saved_inv_vardevPtr, eq_scaledevPtr, eq_biasdevPtr,
+                               &epsilon_val, &exponential_decay_factor, &accumCountTensor};
+        int64_t uids[15]    = {100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 200, 201, 300, 301, 302};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(15, data_ptrs)
+                               .setUids(15, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+        
+    } catch (cudnn_frontend::cudnnException &e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+#if (CUDNN_VERSION >= 8303)
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+            CHECK(false);
+#endif   
+    }
+}

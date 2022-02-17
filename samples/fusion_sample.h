@@ -156,3 +156,26 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
                     void *biasdevPtr, 
                     void *sumdevPtr, 
                     void *sqSumdevPtr);
+
+void
+run_bn_finalize( 
+    int64_t *perChannelSum, 
+    int64_t *epsilon, 
+
+    void *YSumdevPtr, 
+    void *YSqSumdevPtr, 
+    void *scaledevPtr, 
+    void *biasdevPtr, 
+    void *in_meandevPtr, 
+    void *in_vardevPtr, 
+    void *out_meandevPtr, 
+    void *out_vardevPtr,
+    void *saved_meandevPtr, 
+    void *saved_inv_vardevPtr, 
+    void *eq_scaledevPtr, 
+    void *eq_biasdevPtr,
+
+    double epsilon_val,
+    double exponential_decay_factor,
+    int64_t accumCnt_val
+);
