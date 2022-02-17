@@ -1229,3 +1229,70 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
 
     std::cout << "\n========================================================================================\n";
 }
+
+TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
+    std::cout << "BN Finalize" << std::endl;
+    // This  example shows CUDNN_BN_FINALIZE_STATISTICS_TRAINING
+    // For CUDNN_BN_FINALIZE_STATISTICS_INFERENCE,
+    // Input Statistics like ySum, ySqSum, 
+    // And output statistics like modified mean, Inv variance and AccumulationCount.
+
+    // Here Channel count is output channel.
+
+    int64_t perChannelSum[]            = {1, 32, 1, 1};
+    int64_t perChannelSqSum[]          = {1, 32, 1, 1};
+    int64_t bnScale[]                  = {1, 32, 1, 1}; // BN Scale gamma
+    int64_t bnBias[]                   = {1, 32, 1, 1}; // BN bias beta
+
+
+    int64_t inputRunningMean[]         = {1, 32, 1, 1};
+    int64_t inputRunningVar[]          = {1, 32, 1, 1};
+    int64_t updatedRunningMean[]       = {1, 32, 1, 1};
+    int64_t updatedRunningVar[]        = {1, 32, 1, 1};
+
+
+    int64_t bnSavedMean[]              = {1, 32, 1, 1}; // Required for backward path
+    int64_t bnSavedInvVar[]            = {1, 32, 1, 1}; // Required for backward path
+
+    int64_t eqScaleNext[]              = {1, 32, 1, 1}; // (gamma / ((var + epsilon) ^ 1/2))
+    int64_t eqBiasNext[]               = {1, 32, 1, 1};  // (beta - mu/((var + epsilon) ^ 1/2))
+
+    int64_t accumCnt[]              = {1, 1, 1, 1};     
+    int64_t epsilon[]               = {1, 1, 1, 1};
+    int64_t expAverageFactor[]      = {1, 1, 1, 1};
+
+    auto size_calculator = 
+        [](int64_t *arr) {
+            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
+        };
+
+    Surface<float> YSum(size_calculator(perChannelSum), false);
+    Surface<float> YSqSum(size_calculator(perChannelSqSum), false);
+
+    Surface<float> scale(size_calculator(bnScale), false); 
+    Surface<float> bias(size_calculator(bnBias), false); 
+
+    Surface<float> in_mean(size_calculator(inputRunningMean), false); 
+    Surface<float> in_var(size_calculator(inputRunningVar), false); 
+    Surface<float> out_mean(size_calculator(updatedRunningMean), false); 
+    Surface<float> out_var(size_calculator(updatedRunningVar), false); 
+    Surface<float> saved_mean(size_calculator(bnSavedMean), false); 
+    Surface<float> saved_inv_var(size_calculator(bnSavedInvVar), false); 
+
+    Surface<half> eq_scale(size_calculator(eqScaleNext), false);
+    Surface<half> eq_bias(size_calculator(eqBiasNext), false);
+
+    double epsilon_val = 0.05;
+    double expAverageFactorVal = 0.9;
+    int64_t accumCntVal = 0;
+
+    // Just passing perChannelSum as proxy for all the 1,K,1,1 tensors
+    run_bn_finalize(perChannelSum, epsilon,
+                    YSum.devPtr, YSqSum.devPtr, scale.devPtr, bias.devPtr, 
+                    in_mean.devPtr, in_var.devPtr, out_mean.devPtr, out_var.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr, eq_scale.devPtr, eq_bias.devPtr,
+                    epsilon_val, expAverageFactorVal, accumCntVal);
+                    
+    std::cout << "\n========================================================================================\n";
+    
+}
