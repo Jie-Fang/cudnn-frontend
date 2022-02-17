@@ -97,6 +97,11 @@ class VariantPackBuilder_v8 {
     }
     //! Set Uids for the VariantPack_v8
     auto
+    setUids(int64_t num_uids, const int64_t *uid) -> VariantPackBuilder_v8 & {
+        return setUids(num_uids, const_cast<int64_t *>(uid));
+    }
+
+    auto
     setUids(int64_t num_uids, int64_t *uid) -> VariantPackBuilder_v8 & {
         m_variant_pack.uid.reserve(num_uids);
         std::copy(uid, uid + num_uids, std::back_inserter(m_variant_pack.uid));
