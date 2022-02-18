@@ -466,11 +466,11 @@ run_with_external_config(int64_t* x_dim,
             create_operation_graph(descriptors, CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR, handle_);
         std::cout << opGraph.describe() << std::endl;
 
-        std::vector<cudnnStatus_t> statuses;
-        cudnn_frontend::EngineConfigList filtered_configs = 
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = 
             cudnn_frontend::get_heuristics_list<2>({"heuristics_instant" 
             , "heuristics_fallback"
-            }, opGraph,::isNonDeterministic, statuses);
+            }, opGraph,::isNonDeterministic, filtered_configs);
         
         std::cout << "get_heuristics_list Statuses: ";
         for (auto i = 0 ; i < statuses.size(); i++) {

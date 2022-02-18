@@ -246,14 +246,14 @@ get_heuristics_list(std::array<cudnnBackendHeurMode_t, SIZE> modes,
 }
 
 template<std::size_t SIZE>
-EngineConfigList
+std::vector<cudnnStatus_t>
 get_heuristics_list(std::array<std::string, SIZE> modes,
     OperationGraph_v8 &opGraph,
     std::function<bool(cudnnBackendDescriptor_t)> filter_fn,
-    std::vector<cudnnStatus_t> &statuses,
+    EngineConfigList &filtered_configs,
     bool evaluate_all = false) {
     
-    EngineConfigList filtered_configs;
+    std::vector<cudnnStatus_t> statuses;
 
     for (auto &mode : modes) {
         if (mode.find("heuristics_instant") != std::string::npos) {
@@ -416,7 +416,7 @@ get_heuristics_list(std::array<std::string, SIZE> modes,
 #endif
         }
     }
-    return filtered_configs;
+    return statuses;
 }
 
 }
