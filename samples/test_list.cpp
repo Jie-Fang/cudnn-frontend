@@ -640,6 +640,89 @@ TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
     std::cout << "\n========================================================================================\n";
 }
 
+#if (CUDNN_VERSION >= 8400)
+TEST_CASE("ConvScaleBiasActGenIndexSelection sample", "[frontend][fusion][ConvScaleBiasActGenIndexSelection]") {
+    std::cout << "TEST_CASE ConvScaleBiasActGenIndexSelection :: Sample runtime fusion code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    int64_t xTensorDim[] = {1, 64, 168, 200};
+    int64_t wTensorDim[] = {64, 64, 3, 3};
+    int64_t yTensorDim[] = {1, 64, 168, 200};
+
+    int64_t conv_padA[]      = {1, 1};
+    int64_t conv_dilationA[] = {1, 1};
+    int64_t conv_strideA[]   = {1, 1};
+
+    int64_t bTensorDim[] = {1, 64, 1, 1};  // bias
+    int64_t sTensorDim[] = {1, 64, 1, 1};  // scale
+
+    int64_t thresholdTensorDim[] = {1, 1, 1, 1}; // scalar number
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           xTensorDim[0],
+           xTensorDim[1],
+           xTensorDim[2],
+           xTensorDim[3]);
+    printf("filter dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           wTensorDim[0],
+           wTensorDim[1],
+           wTensorDim[2],
+           wTensorDim[3]);
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           yTensorDim[0],
+           yTensorDim[1],
+           yTensorDim[2],
+           yTensorDim[3]);
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+
+    Surface<half> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<half> W(wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3], false);
+    Surface<half> Y(Ysize, true);
+
+    Surface<half> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2] * bTensorDim[3], false);
+    Surface<half> S(sTensorDim[0] * sTensorDim[1] * sTensorDim[2] * sTensorDim[3], false);
+
+    Surface<int32_t> thresholdTop(1, false);
+    Surface<int32_t> thresholdBottom(1, false);
+
+    thresholdTop.hostPtr[0] = 1;
+    thresholdBottom.hostPtr[1] = 198;
+
+    checkCudaErr(cudaMemcpy(thresholdTop.devPtr, thresholdTop.hostPtr, sizeof(int32_t), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMemcpy(thresholdBottom.devPtr, thresholdBottom.hostPtr, sizeof(int32_t), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    run_conv_scale_bias_relu_gen_index_selection(xTensorDim,
+                                  wTensorDim,
+                                  yTensorDim,
+                                  bTensorDim,
+                                  sTensorDim,
+                                  thresholdTensorDim,
+                                  CUDNN_DATA_HALF,
+                                  2, // spatial dimensions in conv
+                                  conv_padA,
+                                  conv_dilationA,
+                                  conv_strideA,
+                                  2, // index according to H dim (or P dim in y) 
+                                  X.devPtr,
+                                  W.devPtr,
+                                  Y.devPtr,
+                                  B.devPtr,
+                                  S.devPtr,
+                                  thresholdTop.devPtr,
+                                  thresholdBottom.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+#endif
+
 TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_int8]") {
     std::cout << "TEST_CASE ConvScaleBiasAct_int8 :: Sample runtime fusion code with backend API" << std::endl;
     INFO("TEST_CASE :: Sample runtime fusion code with backend API");

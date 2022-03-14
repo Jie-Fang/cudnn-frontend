@@ -48,6 +48,7 @@ namespace cudnn_frontend {
 ///    - yDesc
 ///    - wdesc
 ///    - bdesc
+///    - tDesc
 ///    - dydesc
 ///    - dxdesc
 ///    - cdesc
@@ -76,6 +77,9 @@ class Operation_v8 : public BackendDescriptor {
         ss << std::hex << " Y " << ydesc;
         ss << std::hex << " W " << wdesc;
         ss << std::hex << " B " << bdesc;
+#if (CUDNN_VERSION >= 8400)
+        ss << std::hex << " T " << tdesc;
+#endif
         ss << std::hex << " DW " << dwdesc;
         ss << std::hex << " DY " << dydesc;
         ss << std::hex << " DX " << dxdesc;
@@ -126,6 +130,9 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor ydesc              = nullptr;
     ManagedOpaqueDescriptor wdesc              = nullptr;
     ManagedOpaqueDescriptor bdesc              = nullptr;
+#if (CUDNN_VERSION >= 8400)
+    ManagedOpaqueDescriptor tdesc              = nullptr;
+#endif
     ManagedOpaqueDescriptor dydesc             = nullptr;
     ManagedOpaqueDescriptor dxdesc             = nullptr;
     ManagedOpaqueDescriptor dwdesc             = nullptr;
@@ -453,6 +460,14 @@ class OperationBuilder_v8 {
             case CUDNN_POINTWISE_SWISH_BWD:
                 m_operation.operationTag = "SwishBwd";
                 break;
+#if (CUDNN_VERSION >= 8400)
+            case CUDNN_POINTWISE_GENINDEX:
+                m_operation.operationTag = "GenIndex";
+                break;
+            case CUDNN_POINTWISE_BINARY_SELECTION:
+                m_operation.operationTag = "BinarySelection";
+                break;
+#endif
         }
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
@@ -551,7 +566,7 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
 
-        if (m_operation.pointwise_port_count == 3 && !m_operation.is_pointwise_activation_bwd_op) {
+        if (m_operation.pointwise_port_count >= 3 && !m_operation.is_pointwise_activation_bwd_op) {
             status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                     CUDNN_ATTR_OPERATION_POINTWISE_BDESC,
                     CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -565,6 +580,24 @@ class OperationBuilder_v8 {
                 return std::move(m_operation);
             }
         }
+        
+#if (CUDNN_VERSION >= 8400)
+        if (m_operation.pointwise_port_count == 4) {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                    CUDNN_ATTR_OPERATION_POINTWISE_TDESC,
+                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                    1,
+                    &(m_operation.tdesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_POINTWISE_TDESC Failed");
+                return std::move(m_operation);
+            }
+        }
+#endif
+        
         status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
@@ -1382,6 +1415,19 @@ class OperationBuilder_v8 {
         m_operation.bdesc = tensor.get_desc();
         return *this;
     }
+#if (CUDNN_VERSION >= 8400)
+    auto
+    settDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_pointwise_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Pointwise operation does not need tTensor");
+        }
+        m_operation.tdesc = tensor.get_desc();
+        return *this;
+    }
+#endif
     auto
     setyDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.ydesc = tensor.get_desc();
@@ -1622,6 +1668,10 @@ class OperationBuilder_v8 {
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_ABS) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_CEIL) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_FLOOR) ||
+#endif
+#if (CUDNN_VERSION >= 8400)
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_GENINDEX) ||
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_BINARY_SELECTION) ||
 #endif
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||

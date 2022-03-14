@@ -557,6 +557,380 @@ run_conv_bias_scale_relu(int64_t* x_dim,
     }
 }
 
+#if (CUDNN_VERSION >= 8400)
+void
+run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
+                              int64_t* w_dim,
+                              int64_t* y_dim,
+                              int64_t* s_dim,
+                              int64_t* b_dim,
+                              int64_t* threshold_dim,
+                              cudnnDataType_t dataType,
+                              int convDim,
+                              int64_t* conv_padA,
+                              int64_t* conv_dilationA,
+                              int64_t* conv_strideA,
+                              int axis,
+                              void* devPtrX,
+                              void* devPtrW,
+                              void* devPtrY,
+                              void* devPtrS,
+                              void* devPtrB,
+                              void* devPtrTopThreshold,
+                              void* devPtrBottomThreshold) {
+    cudnnHandle_t handle_;
+    try {
+        // Create cudnn handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Creates the necessary tensor descriptors
+        int64_t stride[4];
+        generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto xTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x_dim)
+                           .setStrides(4, stride)
+                           .setId('x')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setDataType(dataType)
+                           .build();
+        generateStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto wTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, w_dim)
+                           .setStrides(4, stride)
+                           .setId('w')
+                           .setAlignment(16)
+                           .setDataType(dataType)
+                           .build();
+        generateStrides(s_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto sTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, s_dim)
+                           .setStrides(4, stride)
+                           .setId('s')
+                           .setAlignment(16)
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(b_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto bTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, b_dim)
+                           .setStrides(4, stride)
+                           .setId('b')
+                           .setAlignment(16)
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto afterConvTensor = cudnn_frontend::TensorBuilder()
+                                   .setDim(4, y_dim)
+                                   .setStrides(4, stride)
+                                   .setId('A')  // after conv
+                                   .setAlignment(16)
+                                   .setVirtual()
+                                   .setDataType(CUDNN_DATA_FLOAT)
+                                   .build();
+        auto afterScaleTensor = cudnn_frontend::TensorBuilder()
+                                    .setDim(4, y_dim)
+                                    .setStrides(4, stride)
+                                    .setId('B')  // after scale
+                                    .setAlignment(16)
+                                    .setVirtual()
+                                    .setDataType(CUDNN_DATA_FLOAT)
+                                    .build();
+        auto afterBiasTensor = cudnn_frontend::TensorBuilder()
+                                   .setDim(4, y_dim)
+                                   .setStrides(4, stride)
+                                   .setId('C')  // after bias
+                                   .setAlignment(16)
+                                   .setVirtual()
+                                   .setDataType(CUDNN_DATA_FLOAT)
+                                   .build();
+
+        auto afterActivationTensor = cudnn_frontend::TensorBuilder()
+                                   .setDim(4, y_dim)
+                                   .setStrides(4, stride)
+                                   .setId('D')  // after activation
+                                   .setAlignment(16)
+                                   .setVirtual()
+                                   .setDataType(CUDNN_DATA_FLOAT)
+                                   .build();
+
+        auto genIndexTensor = cudnn_frontend::TensorBuilder()
+                                .setDim(4, y_dim)
+                                .setStrides(4, stride)
+                                .setId('I')  // output of the gen index operation
+                                .setAlignment(16)
+                                .setVirtual()
+                                .setDataType(CUDNN_DATA_INT32)
+                                .build();
+
+        auto maskTopTensor = cudnn_frontend::TensorBuilder()
+                                .setDim(4, y_dim)
+                                .setStrides(4, stride)
+                                .setId('m')  // top half of the mask created after the less than
+                                .setAlignment(16)
+                                .setVirtual()
+                                .setDataType(CUDNN_DATA_BOOLEAN)
+                                .build();
+
+        auto maskBottomTensor = cudnn_frontend::TensorBuilder()
+                                .setDim(4, y_dim)
+                                .setStrides(4, stride)
+                                .setId('n')  // bottom half of the mask
+                                .setAlignment(16)
+                                .setVirtual()
+                                .setDataType(CUDNN_DATA_BOOLEAN)
+                                .build();
+
+        auto maskTensor = cudnn_frontend::TensorBuilder()
+                                .setDim(4, y_dim)
+                                .setStrides(4, stride)
+                                .setId('M')  // OR of the top and bottom masks
+                                .setAlignment(16)
+                                .setVirtual()
+                                .setDataType(CUDNN_DATA_BOOLEAN)
+                                .build();
+
+        auto yTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, y_dim)
+                           .setStrides(4, stride)
+                           .setId('y')  // output
+                           .setAlignment(16)
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(threshold_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto thresholdTopTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, threshold_dim)
+                           .setStrides(4, stride)
+                           .setId('t')  // threshold for creating the top mask
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT32)
+                           .build();
+
+        auto thresholdBottomTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, threshold_dim)
+                           .setStrides(4, stride)
+                           .setId('u')  // threshold for creating the bottom mask
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT32)
+                           .build();
+
+
+        std::cout << xTensor.describe() << std::endl;
+        std::cout << wTensor.describe() << std::endl;
+        std::cout << bTensor.describe() << std::endl;
+        std::cout << sTensor.describe() << std::endl;
+        std::cout << afterConvTensor.describe() << std::endl;
+        std::cout << afterBiasTensor.describe() << std::endl;
+        std::cout << afterScaleTensor.describe() << std::endl;
+        std::cout << afterActivationTensor.describe() << std::endl;
+        std::cout << genIndexTensor.describe() << std::endl;
+        std::cout << maskTopTensor.describe() << std::endl;
+        std::cout << maskBottomTensor.describe() << std::endl;
+        std::cout << maskTensor.describe() << std::endl;
+        std::cout << yTensor.describe() << std::endl;
+        std::cout << thresholdTopTensor.describe() << std::endl;
+        std::cout << thresholdBottomTensor.describe() << std::endl;
+
+        // Define the convolution problem
+        auto convDesc = cudnn_frontend::ConvDescBuilder()
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setMathMode(CUDNN_CROSS_CORRELATION)
+                            .setNDims(convDim)
+                            .setStrides(convDim, conv_strideA)
+                            .setPrePadding(convDim, conv_padA)
+                            .setPostPadding(convDim, conv_padA)
+                            .setDilation(convDim, conv_dilationA)
+                            .build();
+        std::cout << convDesc.describe() << std::endl;
+
+        // Define the scale descriptor
+        auto scaleDesc = cudnn_frontend::PointWiseDescBuilder()
+                             .setMode(CUDNN_POINTWISE_MUL)
+                             .setMathPrecision(CUDNN_DATA_FLOAT)
+                             .build();
+        std::cout << scaleDesc.describe() << std::endl;
+
+        // Define the bias descriptor
+        auto biasDesc = cudnn_frontend::PointWiseDescBuilder()
+                            .setMode(CUDNN_POINTWISE_ADD)
+                            .setMathPrecision(CUDNN_DATA_FLOAT)
+                            .build();
+        std::cout << biasDesc.describe() << std::endl;
+
+        // Define the activation descriptor
+        auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_RELU_FWD)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << actDesc.describe() << std::endl;
+
+        // Define the genIndex descriptor
+        auto genIndexDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_GENINDEX)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .setAxis(axis)
+                           .build();
+        std::cout << genIndexDesc.describe() << std::endl;
+
+        // Define the lessThan descriptor
+        auto lessThanDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_CMP_LT)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << lessThanDesc.describe() << std::endl;
+
+        // Define the greaterThan descriptor
+        auto greaterThanDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_CMP_GT)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << greaterThanDesc.describe() << std::endl;
+
+        // Define the logical_or descriptor
+        auto logicalOrDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_LOGICAL_OR)
+                           .setMathPrecision(CUDNN_DATA_BOOLEAN)
+                           .build();
+        std::cout << logicalOrDesc.describe() << std::endl;
+
+        // Define the binary_selection descriptor
+        auto selectionDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_BINARY_SELECTION)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << selectionDesc.describe() << std::endl;
+
+        float alpha = 1.0f;
+        float beta  = 0.0f;
+
+        // Create a convolution Node
+        auto conv_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                           .setxDesc(xTensor)
+                           .setwDesc(wTensor)
+                           .setyDesc(afterConvTensor)
+                           .setcDesc(convDesc)
+                           .setAlpha(alpha)
+                           .setBeta(beta)
+                           .build();
+        std::cout << conv_op.describe() << std::endl;
+
+        // Create a Multiplication Node with scaling parameters.
+        auto scale_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(afterConvTensor)
+                            .setbDesc(sTensor)
+                            .setyDesc(afterScaleTensor)
+                            .setpwDesc(scaleDesc)
+                            .build();
+        std::cout << scale_op.describe() << std::endl;
+
+        // Create a Bias Node.
+        auto bias_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                           .setxDesc(afterScaleTensor)
+                           .setbDesc(bTensor)
+                           .setyDesc(afterBiasTensor)
+                           .setpwDesc(biasDesc)
+                           .build();
+        std::cout << bias_op.describe() << std::endl;
+        
+
+        // Create an Activation Node.
+        auto act_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(afterBiasTensor)
+                          .setyDesc(afterActivationTensor)
+                          .setpwDesc(actDesc)
+                          .build();
+        std::cout << act_op.describe() << std::endl;
+
+        // Create a GenIndex Node.
+        auto genIndex_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(afterActivationTensor)
+                          .setyDesc(genIndexTensor)
+                          .setpwDesc(genIndexDesc)
+                          .build();
+        std::cout << genIndex_op.describe() << std::endl;
+
+        // Create a LessThan Node.
+        auto lessThan_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(genIndexTensor)
+                          .setbDesc(thresholdTopTensor)
+                          .setyDesc(maskTopTensor)
+                          .setpwDesc(lessThanDesc)
+                          .build();
+        std::cout << lessThan_op.describe() << std::endl;
+
+        // Create a GreaterThan Node.
+        auto greaterThan_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(genIndexTensor)
+                          .setbDesc(thresholdBottomTensor)
+                          .setyDesc(maskBottomTensor)
+                          .setpwDesc(greaterThanDesc)
+                          .build();
+        std::cout << greaterThan_op.describe() << std::endl;
+
+        // Create a LogicalOr Node.
+        auto logicalOr_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(maskTopTensor)
+                          .setbDesc(maskBottomTensor)
+                          .setyDesc(maskTensor)
+                          .setpwDesc(logicalOrDesc)
+                          .build();
+        std::cout << logicalOr_op.describe() << std::endl;
+
+        // Create a Binary_Selection Node.
+        auto selection_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(afterConvTensor)
+                          .setbDesc(afterActivationTensor)
+                          .settDesc(maskTensor)
+                          .setyDesc(yTensor)
+                          .setpwDesc(selectionDesc)
+                          .build();
+        std::cout << selection_op.describe() << std::endl;
+
+        // Create an Operation Graph. In this case it is convolution bias scale activation
+        std::array<cudnn_frontend::Operation const*, 9> ops = {&conv_op, &scale_op, &bias_op, &act_op, &genIndex_op, &lessThan_op, &greaterThan_op, &logicalOr_op, &selection_op};
+
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+
+        // How many engines support this operation graph ?
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW, devPtrS, devPtrB, devPtrTopThreshold, devPtrBottomThreshold};
+        int64_t uids[]    = {'x', 'y', 'w', 's', 'b', 't', 'u'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(7, data_ptrs)
+                               .setUids(7, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+        
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+
+    } catch (cudnn_frontend::cudnnException& e) {
+        std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        CHECK(false);
+    }
+}
+#endif
+
 void
 run_conv_scale_bias_relu_int8(int64_t* x_dim,
                               int64_t* w_dim,
