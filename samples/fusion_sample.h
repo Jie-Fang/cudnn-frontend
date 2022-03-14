@@ -94,6 +94,32 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
                               void* devPtrB,
                               void* devPtrTopThreshold,
                               void* devPtrBottomThreshold);
+
+void
+run_set_wait_concat_conv(int64_t* x0_dim,
+                         int64_t* x1_dim,
+                         int64_t* x2_dim,
+                         int64_t* x_dim,
+                         int64_t* w_dim,
+                         int64_t* y_dim,
+                         int64_t* flag_dim,
+                         cudnnDataType_t dataType,
+                         int convDim,
+                         int64_t* conv_padA,
+                         int64_t* conv_dilationA,
+                         int64_t* conv_strideA,
+                         int64_t concat_axis,
+                         int64_t concat_inplace_index,
+                         void* devPtrX0,
+                         void* devPtrX1,
+                         void* devPtrX2,
+                         void* devPtrX,
+                         void* devPtrW,
+                         void* devPtrY,
+                         void* devPtrFlagSet0,
+                         void* devPtrFlagSet2,
+                         void* devPtrFlagWait0,
+                         void* devPtrFlagWait2);
 #endif
 
 void
