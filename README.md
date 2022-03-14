@@ -51,6 +51,7 @@ Sample tests are written using the [Catch2](https://github.com/catchorg/Catch2) 
 
      mkdir build; cd build
      cmake ..
+     make
      ./Samples
     
 ## cudnnFindPlan and cudnnGetPlan:
