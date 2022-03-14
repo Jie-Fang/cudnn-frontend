@@ -767,7 +767,7 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
 
         // Define the genIndex descriptor
         auto genIndexDesc = cudnn_frontend::PointWiseDescBuilder()
-                           .setMode(CUDNN_POINTWISE_GENINDEX)
+                           .setMode(CUDNN_POINTWISE_GEN_INDEX)
                            .setMathPrecision(CUDNN_DATA_FLOAT)
                            .setAxis(axis)
                            .build();
@@ -796,7 +796,7 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
 
         // Define the binary_selection descriptor
         auto selectionDesc = cudnn_frontend::PointWiseDescBuilder()
-                           .setMode(CUDNN_POINTWISE_BINARY_SELECTION)
+                           .setMode(CUDNN_POINTWISE_BINARY_SELECT)
                            .setMathPrecision(CUDNN_DATA_FLOAT)
                            .build();
         std::cout << selectionDesc.describe() << std::endl;
@@ -842,7 +842,7 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
                           .build();
         std::cout << act_op.describe() << std::endl;
 
-        // Create a GenIndex Node.
+        // Create a Gen_Index Node.
         auto genIndex_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
                           .setxDesc(afterActivationTensor)
                           .setyDesc(genIndexTensor)
@@ -927,6 +927,305 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
     } catch (cudnn_frontend::cudnnException& e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
+    }
+}
+
+void
+run_set_wait_concat_conv(int64_t* x0_dim,
+                         int64_t* x1_dim,
+                         int64_t* x2_dim,
+                         int64_t* x_dim,
+                         int64_t* w_dim,
+                         int64_t* y_dim,
+                         int64_t* flag_dim,
+                         cudnnDataType_t dataType,
+                         int convDim,
+                         int64_t* conv_padA,
+                         int64_t* conv_dilationA,
+                         int64_t* conv_strideA,
+                         int64_t concat_axis,
+                         int64_t concat_inplace_index,
+                         void* devPtrX0,
+                         void* devPtrX1,
+                         void* devPtrX2,
+                         void* devPtrX,
+                         void* devPtrW,
+                         void* devPtrY,
+                         void* devPtrFlagSet0,
+                         void* devPtrFlagSet2,
+                         void* devPtrFlagWait0,
+                         void* devPtrFlagWait2) {
+    cudnnHandle_t handle_;
+    try {
+        // Create cudnn handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Creates the necessary tensor descriptors
+        int64_t stride[4];
+        generateStrides(x0_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto x0Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x0_dim)
+                           .setStrides(4, stride)
+                           .setId('a')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setDataType(dataType)
+                           .build();
+
+        auto afterSetx0Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x0_dim)
+                           .setStrides(4, stride)
+                           .setId('e')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setVirtual()
+                           .setDataType(dataType)
+                           .build();
+
+        auto afterWaitx0Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x0_dim)
+                           .setStrides(4, stride)
+                           .setId('f')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setVirtual()
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(x1_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto x1Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x1_dim)
+                           .setStrides(4, stride)
+                           .setId('b')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(x2_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto x2Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x2_dim)
+                           .setStrides(4, stride)
+                           .setId('c')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setDataType(dataType)
+                           .build();
+
+        auto afterSetx2Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x2_dim)
+                           .setStrides(4, stride)
+                           .setId('i')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setVirtual()
+                           .setDataType(dataType)
+                           .build();
+
+        auto afterWaitx2Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x2_dim)
+                           .setStrides(4, stride)
+                           .setId('j')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setVirtual()
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto xTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x_dim)
+                           .setStrides(4, stride)
+                           .setId('x')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setDataType(dataType)
+                           .build();
+        generateStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto wTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, w_dim)
+                           .setStrides(4, stride)
+                           .setId('w')
+                           .setAlignment(16)
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto yTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, y_dim)
+                           .setStrides(4, stride)
+                           .setId('y')  // output
+                           .setAlignment(16)
+                           .setDataType(dataType)
+                           .build();
+
+        generateStrides(flag_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto FlagSet0Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, flag_dim)
+                           .setStrides(4, stride)
+                           .setId('m')
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT64)
+                           .build();
+
+        auto FlagSet2Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, flag_dim)
+                           .setStrides(4, stride)
+                           .setId('n')
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT64)
+                           .build();
+        
+        auto FlagWait0Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, flag_dim)
+                           .setStrides(4, stride)
+                           .setId('o')
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT64)
+                           .build();
+
+        auto FlagWait2Tensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, flag_dim)
+                           .setStrides(4, stride)
+                           .setId('p')
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT64)
+                           .build();
+
+
+        std::cout << x0Tensor.describe() << std::endl;
+        std::cout << afterSetx0Tensor.describe() << std::endl;
+        std::cout << afterWaitx0Tensor.describe() << std::endl;
+        std::cout << x1Tensor.describe() << std::endl;
+        std::cout << x2Tensor.describe() << std::endl;
+        std::cout << afterSetx2Tensor.describe() << std::endl;
+        std::cout << afterWaitx2Tensor.describe() << std::endl;
+        std::cout << xTensor.describe() << std::endl;
+        std::cout << wTensor.describe() << std::endl;
+        std::cout << yTensor.describe() << std::endl;
+        std::cout << FlagSet0Tensor.describe() << std::endl;
+        std::cout << FlagSet2Tensor.describe() << std::endl;
+        std::cout << FlagWait0Tensor.describe() << std::endl;
+        std::cout << FlagWait2Tensor.describe() << std::endl;
+
+        // Define the convolution problem
+        auto convDesc = cudnn_frontend::ConvDescBuilder()
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setMathMode(CUDNN_CROSS_CORRELATION)
+                            .setNDims(convDim)
+                            .setStrides(convDim, conv_strideA)
+                            .setPrePadding(convDim, conv_padA)
+                            .setPostPadding(convDim, conv_padA)
+                            .setDilation(convDim, conv_dilationA)
+                            .build();
+        std::cout << convDesc.describe() << std::endl;
+
+        float alpha = 1.0f;
+        float beta  = 0.0f;
+
+        // Create a signalSet0 Node
+        auto signalSet0_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR)
+                                .setflagDesc(FlagSet0Tensor)
+                                .setSignalValue(1)
+                                .setxDesc(x0Tensor)
+                                .setyDesc(afterSetx0Tensor)
+                                .setSignalMode(CUDNN_SIGNAL_SET)
+                                .build();
+        std::cout << signalSet0_op.describe() << std::endl;
+
+        // Create a signalSet2 Node
+        auto signalSet2_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR)
+                                .setflagDesc(FlagSet2Tensor)
+                                .setSignalValue(1)
+                                .setxDesc(x2Tensor)
+                                .setyDesc(afterSetx2Tensor)
+                                .setSignalMode(CUDNN_SIGNAL_SET)
+                                .build();
+        std::cout << signalSet2_op.describe() << std::endl;
+
+        // Create a signalWait0 Node
+        auto signalWait0_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR)
+                                .setflagDesc(FlagWait0Tensor)
+                                .setSignalValue(1)
+                                .setxDesc(afterSetx0Tensor)
+                                .setyDesc(afterWaitx0Tensor)
+                                .setSignalMode(CUDNN_SIGNAL_WAIT)
+                                .build();
+        std::cout << signalWait0_op.describe() << std::endl;
+
+        // Create a signalWait2 Node
+        auto signalWait2_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR)
+                                .setflagDesc(FlagWait2Tensor)
+                                .setSignalValue(1)
+                                .setxDesc(afterSetx2Tensor)
+                                .setyDesc(afterWaitx2Tensor)
+                                .setSignalMode(CUDNN_SIGNAL_WAIT)
+                                .build();
+        std::cout << signalWait2_op.describe() << std::endl;
+
+        // Create a concat Node
+        std::vector<cudnn_frontend::ManagedOpaqueDescriptor> concatInputDescs;
+        concatInputDescs.push_back(afterWaitx0Tensor.get_desc());
+        concatInputDescs.push_back(x1Tensor.get_desc());
+        concatInputDescs.push_back(afterWaitx2Tensor.get_desc());
+        auto concat_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR)
+                            .setConcatAxis(concat_axis)
+                            .setInputDescs(concatInputDescs)
+                            .setConcatInplaceIndex(concat_inplace_index)
+                            .setyDesc(xTensor)
+                            .build();
+        std::cout << concat_op.describe() << std::endl;
+
+        // Create a convolution Node
+        auto conv_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
+                           .setxDesc(xTensor)
+                           .setwDesc(wTensor)
+                           .setyDesc(yTensor)
+                           .setcDesc(convDesc)
+                           .setAlpha(alpha)
+                           .setBeta(beta)
+                           .build();
+        std::cout << conv_op.describe() << std::endl;
+
+        // Create an Operation Graph. In this case it is convolution bias scale activation
+        std::array<cudnn_frontend::Operation const*, 6> ops = {&signalSet0_op, &signalSet2_op, &signalWait0_op, &signalWait2_op, &concat_op, &conv_op};
+
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+
+        // How many engines support this operation graph ?
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+        void* data_ptrs[] = {devPtrX0, devPtrX1, devPtrX2, devPtrX, devPtrY, devPtrW, devPtrFlagSet0, devPtrFlagSet2, devPtrFlagWait0, devPtrFlagWait2};
+        int64_t uids[]    = {'a', 'b', 'c', 'x', 'y', 'w', 'm', 'n', 'o', 'p'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(10, data_ptrs)
+                               .setUids(10, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+        
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+
+    } catch (cudnn_frontend::cudnnException& e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties( &prop, 0 ));
+        // this example is only for Ampere cards
+        if (prop.major < 8 && (e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH || e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED)) {
+            std::cout << "Example is only supported for Ampere GPUs" << std::endl; 
+        }  else {
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+            CHECK(false);
+        }
     }
 }
 #endif

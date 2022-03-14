@@ -116,11 +116,11 @@ class PointWiseDesc_v8 : public BackendDescriptor {
             case CUDNN_POINTWISE_LOGICAL_NOT:
 #endif
 #if (CUDNN_VERSION >= 8400)
-            case CUDNN_POINTWISE_GENINDEX:
+            case CUDNN_POINTWISE_GEN_INDEX:
 #endif
                 return 2;
 #if (CUDNN_VERSION >= 8400)
-            case CUDNN_POINTWISE_BINARY_SELECTION:
+            case CUDNN_POINTWISE_BINARY_SELECT:
                 return 4;
 #endif
         }
@@ -383,7 +383,7 @@ class PointWiseDescBuilder_v8 {
             }
         } 
 #if (CUDNN_VERSION >= 8400)
-            else if (m_pointWiseDesc.mode == CUDNN_POINTWISE_GENINDEX) {
+            else if (m_pointWiseDesc.mode == CUDNN_POINTWISE_GEN_INDEX) {
                 status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_POINTWISE_AXIS,
                                               CUDNN_TYPE_INT64,
