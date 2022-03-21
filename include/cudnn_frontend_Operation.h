@@ -100,21 +100,6 @@ class Operation_v8 : public BackendDescriptor {
         ss << " Alpha: " << alpha_s << " " << alpha_d;
         ss << " Alpha2: " << alpha2_s << " " << alpha2_d;
         ss << " Beta: " << beta_s << " " << beta_d;
-#if (CUDNN_VERSION >= 8400)
-        if (op_mode == CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR) {
-            ss << " Concat axis " << axis;
-            ss << " Concat inplaceIndex " << inplaceIndex;
-            for (int i = 0; i < inputDescs.size(); i++) {
-                ss << " Concat inputDescs " << i << " ";
-                ss << std::hex << inputDescs[i];
-            }
-        }
-        if (op_mode == CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR) {
-            ss << " Signal mode " << std::to_string(mode);
-            ss << " Signal value " << value;
-            ss << " Signal flag " << flagdesc;
-        }
-#endif
         return ss.str();
     }
 
@@ -185,19 +170,6 @@ class Operation_v8 : public BackendDescriptor {
     cudnnGenStatsMode_t genstats_mode    = CUDNN_GENSTATS_SUM_SQSUM;
     cudnnBnFinalizeStatsMode_t bn_stats_mode = CUDNN_BN_FINALIZE_STATISTICS_TRAINING;
 
-#if (CUDNN_VERSION >= 8400)
-    // attributes for concat operation
-    int64_t axis = -1;
-    std::vector<ManagedOpaqueDescriptor> inputDescs;
-    int64_t inplaceIndex = -1;
-
-    // attributes for signal operation
-    cudnnSignalMode_t mode = CUDNN_SIGNAL_SET;
-    ManagedOpaqueDescriptor flagdesc = nullptr;
-    int64_t value = -1;
-#endif
-    
-
     float alpha_s = 1.0f, beta_s = .0f, alpha2_s = 1.0f;
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
     int64_t pointwise_port_count = -1;
@@ -222,8 +194,6 @@ class OperationBuilder_v8 {
     bool is_reduction_op   = false;
     bool is_genstats_op    = false;
     bool is_bn_finalize_op = false;
-    bool is_concat_op      = false;
-    bool is_signal_op      = false;
 
     using Message_t = const char *;
 
@@ -233,10 +203,6 @@ class OperationBuilder_v8 {
     int64_t wTensor_strA[CUDNN_DIM_MAX + 1];
     int64_t yTensor_dimA[CUDNN_DIM_MAX + 1];
     int64_t yTensor_strA[CUDNN_DIM_MAX + 1];
-
-    // used by signal op
-    int64_t flagTensor_dimA[CUDNN_DIM_MAX + 1];
-    int64_t flagTensor_strA[CUDNN_DIM_MAX + 1];
 
     bool is2D = true;
 
@@ -1215,138 +1181,6 @@ class OperationBuilder_v8 {
         return std::move(m_operation);
     }
 
-#if (CUDNN_VERSION >= 8400)
-    Operation_v8 && 
-    build_concat_op() {
-        m_operation.operationTag = "Concat";
-
-        auto status = CUDNN_STATUS_SUCCESS;
-
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_CONCAT_AXIS,
-                CUDNN_TYPE_INT64,
-                1,
-                &(m_operation.axis));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONCAT_AXIS Failed");
-            return std::move(m_operation);
-        }
-        std::vector<const void*> concat_inputDescs;
-        for (auto desc: m_operation.inputDescs) {
-            concat_inputDescs.push_back(&(desc->get_backend_descriptor()));
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_CONCAT_INPUT_DESCS,
-                CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                concat_inputDescs.size(),
-                concat_inputDescs.data());
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONCAT_INPUT_DESCS Failed");
-            return std::move(m_operation);
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_CONCAT_INPLACE_INDEX,
-                CUDNN_TYPE_INT64,
-                1,
-                &(m_operation.inplaceIndex));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONCAT_INPLACE_INDEX Failed");
-            return std::move(m_operation);
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_CONCAT_OUTPUT_DESC,
-                CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                1,
-                &(m_operation.ydesc->get_backend_descriptor()));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_CONCAT_OUTPUT_DESC Failed");
-            return std::move(m_operation);
-        }
-        return std::move(m_operation);
-    }
-
-    Operation_v8 && 
-    build_signal_op() {
-         m_operation.operationTag = "Signal";
-
-        auto status = CUDNN_STATUS_SUCCESS;
-
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_SIGNAL_MODE,
-                CUDNN_TYPE_SIGNAL_MODE,
-                1,
-                &(m_operation.mode));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_SIGNAL_MODE Failed");
-            return std::move(m_operation);
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_SIGNAL_FLAGDESC,
-                CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                1,
-                &(m_operation.flagdesc->get_backend_descriptor()));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_SIGNAL_FLAGDESC Failed");
-            return std::move(m_operation);
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_SIGNAL_VALUE,
-                CUDNN_TYPE_INT64,
-                1,
-                &(m_operation.value));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_SIGNAL_VALUE Failed");
-            return std::move(m_operation);
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_SIGNAL_XDESC,
-                CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                1,
-                &(m_operation.xdesc->get_backend_descriptor()));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_SIGNAL_XDESC Failed");
-            return std::move(m_operation);
-        }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
-                CUDNN_ATTR_OPERATION_SIGNAL_YDESC,
-                CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                1,
-                &(m_operation.ydesc->get_backend_descriptor()));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_SIGNAL_YDESC Failed");
-            return std::move(m_operation);
-        }
-        return std::move(m_operation);
-    }
-#endif
-
     void extract_feature_vector(cudnnBackendDescriptorType_t op_type) {
         /// Build the feature vector of this operation now.
         m_operation.feature_vector.reserve(50);
@@ -1547,37 +1381,6 @@ class OperationBuilder_v8 {
         }
         return CUDNN_STATUS_SUCCESS;
     }
-#if (CUDNN_VERSION >= 8400)
-    cudnnStatus_t
-    validate_concat_op(Message_t &msg) {
-        if (m_operation.inputDescs.size() == 0) {
-            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONCAT_INPUT_DESCS";
-            return CUDNN_STATUS_BAD_PARAM;
-        }
-        if (m_operation.ydesc == nullptr) {
-            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONCAT_OUTPUT_DESC";
-            return CUDNN_STATUS_BAD_PARAM;
-        }
-        return CUDNN_STATUS_SUCCESS;
-    }
-
-    cudnnStatus_t
-    validate_signal_op(Message_t &msg) {
-        if (m_operation.flagdesc == nullptr) {
-            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_SIGNAL_FLAGDESC";
-            return CUDNN_STATUS_BAD_PARAM;
-        }
-        if (m_operation.xdesc == nullptr) {
-            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_SIGNAL_XDESC";
-            return CUDNN_STATUS_BAD_PARAM;
-        }
-        if (m_operation.ydesc == nullptr) {
-            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_SIGNAL_YDESC";
-            return CUDNN_STATUS_BAD_PARAM;
-        }
-        return CUDNN_STATUS_SUCCESS;
-    }
-#endif
 
     void 
     copy_dims_and_strides(const int64_t *from, int64_t *to) const {
@@ -1653,31 +1456,6 @@ class OperationBuilder_v8 {
         wType = tensor.getDataType();
         return *this;
     }
-
-#if (CUDNN_VERSION >= 8400)
-    auto
-    setflagDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
-        if (is_signal_op == false) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Signal operation does not need flagTensor");
-        }
-        m_operation.flagdesc = tensor.get_desc();
-        return *this;
-    }
-    auto
-    setInputDescs(std::vector<ManagedOpaqueDescriptor> const & tensors) -> OperationBuilder_v8 & {
-        if (is_concat_op == false) {
-            set_error_and_throw_exception(
-                &m_operation,
-                CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Concat operation does not need inputDescs");
-        }
-        m_operation.inputDescs = tensors;
-        return *this;
-    }
-#endif
 
     /// Will be Deprecated Do not use
     auto
@@ -1976,29 +1754,6 @@ class OperationBuilder_v8 {
         return *this;
     }
 
-#if (CUDNN_VERSION >= 8400)
-    auto 
-    setConcatAxis(int64_t axis) -> OperationBuilder_v8 & {
-        m_operation.axis = axis;
-        return *this;
-    }
-    auto 
-    setConcatInplaceIndex(int64_t inplaceIndex) -> OperationBuilder_v8 & {
-        m_operation.inplaceIndex = inplaceIndex;
-        return *this;
-    }
-    auto 
-    setSignalMode(cudnnSignalMode_t mode) -> OperationBuilder_v8 & {
-        m_operation.mode = mode;
-        return *this;
-    }
-    auto 
-    setSignalValue(int64_t value) -> OperationBuilder_v8 & {
-        m_operation.value = value;
-        return *this;
-    }
-#endif
-
     OperationBuilder_v8(cudnnBackendDescriptorType_t mode) {
         m_operation.op_mode = mode;
         is_convolution_op   = ((m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
@@ -2010,10 +1765,6 @@ class OperationBuilder_v8 {
         is_reduction_op   = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
         is_genstats_op    = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR);
         is_bn_finalize_op = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR);
-#if (CUDNN_VERSION >= 8400)
-        is_concat_op      = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR);
-        is_signal_op      = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR);
-#endif
     }
     /** @} */
 
@@ -2041,12 +1792,6 @@ class OperationBuilder_v8 {
             status_ = CUDNN_STATUS_SUCCESS;
         } else if (is_bn_finalize_op) {
             status_ = CUDNN_STATUS_SUCCESS;
-#if (CUDNN_VERSION >= 8400)
-        } else if (is_concat_op) {
-            status_ = validate_concat_op(msg);
-        } else if (is_signal_op) {
-            status_ = validate_signal_op(msg);
-#endif
         }
         else {
             status_ = CUDNN_STATUS_BAD_PARAM;
@@ -2080,12 +1825,6 @@ class OperationBuilder_v8 {
             return build_genstats_op();
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR) {
             return build_bn_finalize_op();
-#if (CUDNN_VERSION >= 8400)
-        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR) {
-            return build_concat_op();
-        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR) {
-            return build_signal_op();
-#endif
         }
         getLogger() << "[cudnn_frontend] " << m_operation << std::endl;
         return std::move(m_operation);
