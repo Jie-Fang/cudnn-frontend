@@ -1324,12 +1324,12 @@ TEST_CASE("Multihead attention sample", "[frontend][fusion][MultiHeadAttention]"
     int numErrors = 0;
 
 #if (CUDNN_VERSION >= 8301)
-    const int64_t inputSize  = 16; // 1024;
-    const int64_t outputSize = 16; // 1024;
+    const int64_t inputSize  = 8; // 1024;
+    const int64_t outputSize = 8; // 1024;
     const int64_t headSize   = 8;  // 64;
-    const int64_t seqLength  = 8;  // 128;
-    const int64_t numHeads   = 2;  // 16;
-    const int64_t batchSize  = 2;  // 32;
+    const int64_t seqLength  = 2;  // 128;
+    const int64_t numHeads   = 1;  // 16;
+    const int64_t batchSize  = 1;  // 32;
 
     const int64_t inputTensorSize     = inputSize * seqLength * batchSize;
     const int64_t outputTensorSize    = outputSize * seqLength * batchSize;
@@ -1351,8 +1351,6 @@ TEST_CASE("Multihead attention sample", "[frontend][fusion][MultiHeadAttention]"
 
     cudaMemset(output.devPtr, 0, sizeof(output.hostPtr[0]) * outputTensorSize);
 
-    checkCudaErr(cudaDeviceSynchronize());
-
     // Call multiHeadAttention sample
     multiHeadAttention(inputSize,
                        headSize,
@@ -1371,6 +1369,7 @@ TEST_CASE("Multihead attention sample", "[frontend][fusion][MultiHeadAttention]"
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(output.hostPtr, output.devPtr, sizeof(output.hostPtr[0]) * outputTensorSize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
 #endif
     REQUIRE(numErrors == 0);
 }

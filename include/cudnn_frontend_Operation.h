@@ -1804,6 +1804,11 @@ class OperationBuilder_v8 {
     }
 
     auto
+    setaMatDesc(ManagedOpaqueDescriptor const &raw_tensor) -> OperationBuilder_v8 & {
+        m_operation.amatdesc = raw_tensor;
+        return *this;
+    }
+    auto
     setaMatDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         if (is_matmul_op == false) {
             set_error_and_throw_exception(
