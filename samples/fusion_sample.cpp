@@ -24,6 +24,12 @@
 #include <cudnn_frontend.h>
 #include "error_util.h"
 
+bool
+allowAll(cudnnBackendDescriptor_t engine_config) {
+    (void)engine_config;
+    return false;
+}
+
 #if (CUDNN_VERSION >= 8200)
 bool
 isRuntimeCompilation(cudnnBackendDescriptor_t engine_config) {
@@ -59,16 +65,20 @@ get_execplan_from_heuristics_else_fall_back(cudnn_frontend::OperationGraph&& opG
 #endif
 
     {
-        auto total_engines = opGraph.getEngineCount();
-        std::cout << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = 
+            cudnn_frontend::get_heuristics_list<1>({
+            "heuristics_fallback"
+            }, opGraph,::allowAll, filtered_configs, true);
+        
+        std::cout << "get_heuristics_list Statuses: ";
+        for (auto i = 0 ; i < statuses.size(); i++) {
+            std::cout << cudnn_frontend::to_string(statuses[i]) << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-
-        std::cout << engine_config.describe() << std::endl;
-
-        return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
     }
 }
 
@@ -1995,15 +2005,21 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
         auto opGraph = cudnn_frontend::OperationGraphBuilder().setHandle(handle_).setOperationGraph(ops.size(), ops.data()).build();
         std::cout << opGraph.describe() << std::endl;
 
-        // We have to randomly pick one engine from [0, total_engines)
-        // Selecting "0" by default
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = 
+            cudnn_frontend::get_heuristics_list<2>({"heuristics_instant" 
+            , "heuristics_fallback"
+            }, opGraph,::allowAll, filtered_configs, true);
+        
+        std::cout << "get_heuristics_list Statuses: ";
+        for (auto i = 0 ; i < statuses.size(); i++) {
+            std::cout << cudnn_frontend::to_string(statuses[i]) << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
-
+        auto plan =
+            cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();
@@ -2138,10 +2154,20 @@ run_bn_finalize(
         auto opGraph = cudnn_frontend::OperationGraphBuilder().setHandle(handle_).setOperationGraph(ops.size(), ops.data()).build();
         std::cout << opGraph.describe() << std::endl;
 
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = 
+            cudnn_frontend::get_heuristics_list<2>({"heuristics_instant" 
+            , "heuristics_fallback"
+            }, opGraph,::allowAll, filtered_configs, true);
+        
+        std::cout << "get_heuristics_list Statuses: ";
+        for (auto i = 0 ; i < statuses.size(); i++) {
+            std::cout << cudnn_frontend::to_string(statuses[i]) << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();

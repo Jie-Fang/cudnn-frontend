@@ -626,26 +626,21 @@ run_conv_add_bias_activation(int64_t* x_dim,
         // How many engines support this operation graph ?
         auto total_engines = opGraph.getEngineCount();
         std::cout << "conv_add_bias_activation " << opGraph.describe() << " has " << total_engines << " engines." << std::endl;
-        // We have to randomly pick one engine from [0, total_engines)
-        // Selecting "0" by default
-        auto engine = cudnn_frontend::EngineBuilder().setGlobalEngineIdx(0).setOperationGraph(opGraph).build();
-        std::cout << engine.describe() << std::endl;
-        auto& knobs = engine.getSupportedKnobs();
-        for (auto it = std::begin(knobs); it != std::end(knobs); ++it) {
-            std::cout << it->describe() << std::endl;
+
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = 
+            cudnn_frontend::get_heuristics_list<2>({"heuristics_instant" 
+            , "heuristics_fallback"
+            }, opGraph,::isNonDeterministic, filtered_configs);
+        
+        std::cout << "get_heuristics_list Statuses: ";
+        for (auto i = 0 ; i < statuses.size(); i++) {
+            std::cout << cudnn_frontend::to_string(statuses[i]) << " ";
         }
-        if (knobs.begin() != knobs.end()) {
-            std::cout << "Updated knob choice" << std::endl;
-            knobs.begin()->setChoice(knobs.begin()->getMinValue() + 1);
-            std::cout << knobs.begin()->describe() << std::endl;
-        }
+        std::cout << std::endl;
+        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        // Create the requisite engine config
-        auto engine_config = cudnn_frontend::EngineConfigBuilder().setEngine(engine).build();
-        std::cout << engine_config.describe() << std::endl;
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(engine_config).build();
-
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();
@@ -1306,7 +1301,6 @@ run_imma(
             .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
-        CHECK(options.size() > 0);
         if (options.size() == 0) {return;}
 
         auto json_handle = json::parse(R"(
