@@ -111,9 +111,10 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     }
 #endif
 
-#if (CUDNN_VERSION >= 8400)
+
     std::string
     getJsonRepresentation() const {
+#if (CUDNN_VERSION >= 8400)
         auto status = CUDNN_STATUS_SUCCESS;
         int64_t serializationSize;
         std::vector<char> serialization_buf;
@@ -144,8 +145,16 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         }
         std::string json_string(serialization_buf.begin(), serialization_buf.end());
         return json_string;
-    }
+#else
+        auto status = CUDNN_STATUS_NOT_SUPPORTED;
+        set_error_and_throw_exception(this,
+                                status,
+                                "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: GetAttribute "
+                                "CUDNN_ATTR_EXECUTION_PLAN_JSON_REPRESENTATION Failed");
+        std::string json_string{""};
+        return json_string;
 #endif
+    }
 
     ExecutionPlan_v8(ExecutionPlan_v8 const &) = default;
     ExecutionPlan_v8 &
@@ -418,9 +427,9 @@ class ExecutionPlanBuilder_v8 {
         return std::move(m_execution_plan);
     }
 
-#if (CUDNN_VERSION >= 8400)
     ExecutionPlan_v8 &&
     loadFromJson(const std::string &json_plan) {
+#if (CUDNN_VERSION >= 8400)
         auto status = CUDNN_STATUS_SUCCESS;
 
         if (m_execution_plan.handle == nullptr) {
@@ -534,8 +543,16 @@ class ExecutionPlanBuilder_v8 {
 
         getLogger() << "[cudnn_frontend] " << m_execution_plan << std::endl;
         return std::move(m_execution_plan);
-    }
+#else
+        auto status = CUDNN_STATUS_NOT_SUPPORTED;
+        set_error_and_throw_exception(&m_execution_plan,
+                                status,
+                                "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: Build "
+                                "From Json Failed");
+        return std::move(m_execution_plan);
 #endif
+    }
+
 
     explicit ExecutionPlanBuilder_v8()                       = default;
     ~ExecutionPlanBuilder_v8()                               = default;
