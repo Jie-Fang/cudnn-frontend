@@ -230,13 +230,15 @@ class PointWiseDescBuilder_v8 {
         return *this;
     }
     
-#if (CUDNN_VERSION >= 8400)
+
     auto
     setAxis(int64_t axis_) -> PointWiseDescBuilder_v8 & {
+#if (CUDNN_VERSION >= 8400)
         m_pointWiseDesc.axis = axis_;
+#endif
         return *this;
     }
-#endif    
+  
 
     //! constructs the PointWiseDesc_v8 by calling the cudnn API
     //! Throws the appropriate error message
