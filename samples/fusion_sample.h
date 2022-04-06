@@ -75,6 +75,25 @@ run_conv_bias_scale_relu(int64_t* x_dim,
 
 #if (CUDNN_VERSION >= 8400)
 void
+run_serialization_conv_bias_scale_relu(int64_t* x_dim,
+                         int64_t* w_dim,
+                         int64_t* y_dim,
+                         int64_t* b_dim,
+                         int64_t* s_dim,
+                         cudnnDataType_t dataType,
+                         int convDim,
+                         int64_t* conv_padA,
+                         int64_t* conv_dilationA,
+                         int64_t* conv_strideA,
+                         void* devPtrX,
+                         void* devPtrW,
+                         void* devPtrY,
+                         void* devPtrB,
+                         void* devPtrS);
+#endif
+
+#if (CUDNN_VERSION >= 8400)
+void
 run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
                               int64_t* w_dim,
                               int64_t* y_dim,
