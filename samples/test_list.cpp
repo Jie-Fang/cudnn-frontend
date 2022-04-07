@@ -640,7 +640,6 @@ TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
     std::cout << "\n========================================================================================\n";
 }
 
-#if (CUDNN_VERSION >= 8400)
 TEST_CASE("ConvBiasScaleActSerialization sample", "[frontend][fusion][serialization]") {
     std::cout << "TEST_CASE Serialization :: Sample serialization for runtime fusion with backend API" << std::endl;
     INFO("TEST_CASE :: Sample serialization for runtime fusion code with backend API");
@@ -703,9 +702,7 @@ TEST_CASE("ConvBiasScaleActSerialization sample", "[frontend][fusion][serializat
 
     std::cout << "\n========================================================================================\n";
 }
-#endif
 
-#if (CUDNN_VERSION >= 8400)
 TEST_CASE("ConvScaleBiasActGenIndexSelection sample", "[frontend][fusion][ConvScaleBiasActGenIndexSelection]") {
     std::cout << "TEST_CASE ConvScaleBiasActGenIndexSelection :: Sample runtime fusion code with backend API" << std::endl;
     INFO("TEST_CASE :: Sample runtime fusion code with backend API");
@@ -786,7 +783,6 @@ TEST_CASE("ConvScaleBiasActGenIndexSelection sample", "[frontend][fusion][ConvSc
 
     std::cout << "\n========================================================================================\n";
 }
-#endif
 
 TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_int8]") {
     std::cout << "TEST_CASE ConvScaleBiasAct_int8 :: Sample runtime fusion code with backend API" << std::endl;
