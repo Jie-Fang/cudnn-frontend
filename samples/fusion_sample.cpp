@@ -567,7 +567,6 @@ run_conv_bias_scale_relu(int64_t* x_dim,
     }
 }
 
-#if (CUDNN_VERSION >= 8400)
 void
 run_serialization_conv_bias_scale_relu(int64_t* x_dim,
                          int64_t* w_dim,
@@ -748,6 +747,7 @@ run_serialization_conv_bias_scale_relu(int64_t* x_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
+
         std::string plan_json;
         {
             // Suppose this is how execution plans are normally created
@@ -803,9 +803,7 @@ run_serialization_conv_bias_scale_relu(int64_t* x_dim,
         }
     }
 }
-#endif
 
-#if (CUDNN_VERSION >= 8400)
 void
 run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
                               int64_t* w_dim,
@@ -828,6 +826,7 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
                               void* devPtrBottomThreshold) {
     cudnnHandle_t handle_;
     try {
+#if (CUDNN_VERSION >= 8400)
         // Create cudnn handle
         checkCudnnErr(cudnnCreate(&handle_));
 
@@ -1171,13 +1170,13 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
         checkCudnnErr(cudnnDestroy(handle_));
         
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+#endif
 
     } catch (cudnn_frontend::cudnnException& e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
 }
-#endif
 
 void
 run_conv_scale_bias_relu_int8(int64_t* x_dim,

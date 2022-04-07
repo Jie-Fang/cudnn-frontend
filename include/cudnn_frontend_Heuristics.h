@@ -30,7 +30,9 @@
 
 #include "cudnn_frontend_OperationGraph.h"
 #include "cudnn_frontend_EngineConfig.h"
+#if (CUDNN_VERSION < 8400)
 #include "cudnn_frontend_EngineFallbackList.h"
+#endif
 #include "cudnn_frontend_utils.h"
 #include "cudnn_frontend_Filters.h"
 
@@ -154,6 +156,12 @@ class EngineHeuristicsBuilder_v8 {
         m_heuristics.opGraphTag = opGraph_.getTag();
         return *this;
     }
+    auto
+    setOperationGraph(ManagedOpaqueDescriptor opGraph, std::string tag) -> EngineHeuristicsBuilder_v8 & {
+        m_heuristics.opGraph    = opGraph;
+        m_heuristics.opGraphTag = tag;
+        return *this;
+    }
     //! Set cudnnHandle for the operations
     auto
     setHeurMode(cudnnBackendHeurMode_t mode_) -> EngineHeuristicsBuilder_v8 & {
@@ -207,14 +215,18 @@ class EngineHeuristicsBuilder_v8 {
             return std::move(m_heuristics);
         };
 
+#if (CUDNN_VERSION >= 8401)
         if (m_heuristics.mode == CUDNN_HEUR_MODE_B) {
             EngineHeuristics_v8::get_heur_b_mutex().lock();
         }
+#endif
         // Finalizing the descriptor
         status = cudnnBackendFinalize(m_heuristics.pointer->get_backend_descriptor());
+#if (CUDNN_VERSION >= 8401)
         if (m_heuristics.mode == CUDNN_HEUR_MODE_B) {
             EngineHeuristics_v8::get_heur_b_mutex().unlock();
         }
+#endif
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_heuristics, status, "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: cudnn Finalize failed");

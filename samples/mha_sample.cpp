@@ -911,8 +911,15 @@ multiHeadAttention(const int64_t inputSize,
         cudaFree(devPtrScaler);
 
     } catch (cudnn_frontend::cudnnException &e) {
-        std::cout << "[ERROR] Exception " << e.what() << std::endl;
-        CHECK(false);
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties( &prop, 0 ));
+        // this example is only for Ampere cards
+        if (prop.major < 8 && (e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH || e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED)) {
+            std::cout << "Example is only supported for Ampere GPUs" << std::endl; 
+        }  else {
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+            CHECK(false);
+        }
     }
 #endif
 }
