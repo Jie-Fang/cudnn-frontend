@@ -22,6 +22,18 @@ run:ampere:
     - cudnn-frontend-ga10x-runner
   needs: ["make:ampere"]
 
+make:ampere:clang:
+  extends: .make.clang
+  tags:
+    - cudnn-frontend-ga10x-runner
+  needs: ["ping:ampere"]
+
+run:ampere:clang:
+  extends: .run.clang
+  tags:
+    - cudnn-frontend-ga10x-runner
+  needs: ["make:ampere:clang"]
+
 make_v8.1:turing:
   extends: .make_v8.1
   tags:
