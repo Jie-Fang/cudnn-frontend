@@ -26,6 +26,11 @@ ping:turing:
     script: 
         - "docker build -t cudnn_frontend  . "
 
+.make.clang:
+    stage: build
+    script: 
+        - "docker build -t cudnn_frontend.clang  -f Dockerfile.clang . "
+
 .make_v8.1:
     stage: build
     script: 
@@ -44,6 +49,14 @@ ping:turing:
         - nvidia-smi
         - docker container prune -f
         - docker run --gpus all -i --name=samples cudnn_frontend /build/Samples
+        - docker rm -v samples
+
+.run.clang:
+    stage: test
+    script:
+        - nvidia-smi
+        - docker container prune -f
+        - docker run --gpus all -i --name=samples cudnn_frontend.clang /build/Samples
         - docker rm -v samples
 
 .run_v8.1:
