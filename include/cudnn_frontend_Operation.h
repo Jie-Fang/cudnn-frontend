@@ -474,6 +474,11 @@ class OperationBuilder_v8 {
                 m_operation.operationTag = "BinarySelect";
                 break;
 #endif
+#if (CUDNN_VERSION >= 8500)
+            case CUDNN_POINTWISE_ERF:
+                m_operation.operationTag = "ERF";
+                break;
+#endif
         }
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),

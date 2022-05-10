@@ -118,6 +118,9 @@ class PointWiseDesc_v8 : public BackendDescriptor {
 #if (CUDNN_VERSION >= 8400)
             case CUDNN_POINTWISE_GEN_INDEX:
 #endif
+#if (CUDNN_VERSION >= 8500)
+            case CUDNN_POINTWISE_ERF:
+#endif
                 return 2;
 #if (CUDNN_VERSION >= 8400)
             case CUDNN_POINTWISE_BINARY_SELECT:
