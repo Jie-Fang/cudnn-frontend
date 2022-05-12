@@ -479,13 +479,13 @@ class OperationBuilder_v8 {
                 m_operation.operationTag = "ERF";
                 break;
             case CUDNN_POINTWISE_GELU_APPROX_FWD:
-                m_operation.operationTag = "GELU_APPROX_FWD";
+                m_operation.operationTag = "GeluApproxFwd";
                 break;
             case CUDNN_POINTWISE_GELU_APPROX_BWD:
-                m_operation.operationTag = "GELU_APPROX_BWD";
+                m_operation.operationTag = "GeluApproxBwd";
                 break;
             case CUDNN_POINTWISE_CONVERT:
-                m_operation.operationTag = "CONVERT";
+                m_operation.operationTag = "Convert";
                 break;
 #endif
         }
