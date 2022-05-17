@@ -92,7 +92,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
             case CUDNN_POINTWISE_SOFTPLUS_BWD:
             case CUDNN_POINTWISE_SWISH_BWD:
 #if (CUDNN_VERSION >= 8500)
-            case CUDNN_POINTWISE_GELU_APPROX_BWD:
+            case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
 #endif
                 return 3;
             case CUDNN_POINTWISE_SQRT:
@@ -123,7 +123,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
 #endif
 #if (CUDNN_VERSION >= 8500)
             case CUDNN_POINTWISE_ERF:
-            case CUDNN_POINTWISE_GELU_APPROX_FWD:
+            case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
             case CUDNN_POINTWISE_CONVERT:
 #endif
                 return 2;
