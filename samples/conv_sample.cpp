@@ -640,29 +640,39 @@ run_conv_add_bias_activation(int64_t* x_dim,
         std::cout << std::endl;
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
-        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+	for (auto &filtered_config : filtered_configs) {
+	    try {
+		auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
+		std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
-        auto workspace_size = plan.getWorkspaceSize();
-        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+                auto workspace_size = plan.getWorkspaceSize();
+                std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
 
-        void* workspace_ptr = nullptr;
-        if (workspace_size > 0) {
-            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
-        }
-        void* data_ptrs[] = {devPtrX, devPtrY, devPtrW, devPtrZ, devPtrB};
-        int64_t uids[]    = {'x', 'y', 'w', 'z', 'b'};
-        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                void* workspace_ptr = nullptr;
+                if (workspace_size > 0) {
+                    checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+                }
+                void* data_ptrs[] = {devPtrX, devPtrY, devPtrW, devPtrZ, devPtrB};
+                int64_t uids[]    = {'x', 'y', 'w', 'z', 'b'};
+                auto variantPack  = cudnn_frontend::VariantPackBuilder()
                                .setWorkspacePointer(workspace_ptr)
                                .setDataPointers(5, data_ptrs)
                                .setUids(5, uids)
                                .build();
-        std::cout << "variantPack " << variantPack.describe() << std::endl;
-        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
-        if (workspace_size > 0) {
-            checkCudaErr(cudaFree(workspace_ptr));
-        }
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+                std::cout << "variantPack " << variantPack.describe() << std::endl;
+                cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+                if (workspace_size > 0) {
+                    checkCudaErr(cudaFree(workspace_ptr));
+                }
+                cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+	    } catch (cudnn_frontend::cudnnException &e) {
+		if (e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+		    continue;
+		} else {
+		    throw e;
+		}
+            }
+	}
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
