@@ -478,6 +478,15 @@ class OperationBuilder_v8 {
             case CUDNN_POINTWISE_ERF:
                 m_operation.operationTag = "ERF";
                 break;
+            case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
+                m_operation.operationTag = "GeluApproxTanhFwd";
+                break;
+            case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
+                m_operation.operationTag = "GeluApproxTanhBwd";
+                break;
+            case CUDNN_POINTWISE_CONVERT:
+                m_operation.operationTag = "Convert";
+                break;
 #endif
         }
 
@@ -1696,6 +1705,9 @@ class OperationBuilder_v8 {
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_GEN_INDEX) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_BINARY_SELECT) ||
 #endif
+#if (CUDNN_VERSION >= 8500)
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_ERF) ||
+#endif
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_SQRT));
@@ -1705,6 +1717,9 @@ class OperationBuilder_v8 {
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SIGMOID_FWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_FWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_FWD) ||
+#if (CUDNN_VERSION >= 8500)
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_APPROX_TANH_FWD) ||
+#endif
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_FWD) ||
 #if (CUDNN_VERSION >= 8300)
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_EXP) ||
@@ -1716,6 +1731,9 @@ class OperationBuilder_v8 {
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SIGMOID_BWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_BWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_BWD) ||
+#if (CUDNN_VERSION >= 8500)
+                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_APPROX_TANH_BWD) ||
+#endif
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_BWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_BWD));
 
