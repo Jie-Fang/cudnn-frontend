@@ -2038,7 +2038,7 @@ run_conv_reduction(int64_t* x_dim,
     }
 }
 
-void
+cudnnStatus_t
 run_bn_conv_gen_stat(int64_t* xTensorDim, 
                     int64_t* wTensorDim, 
                     int64_t* yTensorDim,
@@ -2054,6 +2054,7 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
                     void *biasdevPtr, 
                     void *sumdevPtr, 
                     void *sqSumdevPtr) {
+                        
     cudnnHandle_t handle_;
     try {
         // Create cudnn handle
@@ -2282,6 +2283,8 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
         }
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
+        return status;
+
     } catch (cudnn_frontend::cudnnException& e) {
         struct cudaDeviceProp prop;
         checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
@@ -2295,6 +2298,7 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
             CHECK(false);
 #endif
         }
+        return CUDNN_STATUS_SUCCESS;
     }
 }
 
@@ -2441,5 +2445,289 @@ run_bn_finalize(
             std::cout << "[ERROR] Exception " << e.what() << std::endl;
             CHECK(false);
 #endif   
+    }
+}
+
+cudnnStatus_t run_dsbar(int64_t *Y_dim,
+               int64_t *scaleTensorDim,
+               int64_t *biasTensorDim,
+               void *RP_YdevPtr,
+               void *RP_scaleDevPtr,
+               void *RP_biasDevPtr,
+               void *DP_YdevPtr,
+               void *DP_scaleDevPtr,
+               void *DP_biasDevPtr,
+               void *YdevPtr)
+{
+    cudnnHandle_t handle_;
+
+    try {
+        // Create a handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Create tensor descriptors
+        int64_t stride[4];
+
+        // RP_Y tensor
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto RP_yTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('y')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_HALF)
+                            .build();
+
+        // RP_scale tensor
+        generateStrides(scaleTensorDim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto RP_scaleTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, scaleTensorDim)
+                            .setStrides(4, stride)
+                            .setId('s')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // After RP scale tensor (RP_yTensor * RP_scaleTensor)
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto RP_afterScaleTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('d')
+                            .setVirtual()
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+
+        // RP_bias tensor
+        generateStrides(scaleTensorDim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto RP_biasTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, scaleTensorDim)
+                            .setStrides(4, stride)
+                            .setId('b')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // After RP bias tensor (RP_afterScaleTensor + RP_biasTensor)
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto RP_afterBiasTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('e')
+                            .setVirtual()
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // DP_Y tensor
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto DP_yTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('a')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_HALF)
+                            .build();
+
+        // DP_scale tensor
+        generateStrides(scaleTensorDim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto DP_scaleTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, scaleTensorDim)
+                            .setStrides(4, stride)
+                            .setId('h')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // After DP scale tensor (DP_yTensor * DP_scaleTensor)
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto DP_afterScaleTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('p')
+                            .setVirtual()
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+
+        // DP_bias tensor
+        generateStrides(scaleTensorDim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto DP_biasTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, scaleTensorDim)
+                            .setStrides(4, stride)
+                            .setId('t')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // After DP bias tensor (DP_afterScaleTensor + DP_biasTensor)
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto DP_afterBiasTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('n')
+                            .setVirtual()
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // After add RP_bias and DP_bias tensor (RP_afterBiasTensor + DP_afterBiasTensor)
+        generateStrides(Y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        auto afterAddTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('m')
+                            .setVirtual()
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        // Final output tensor after ReLU
+        auto yTensor = cudnn_frontend::TensorBuilder()
+                            .setDim(4, Y_dim)
+                            .setStrides(4, stride)
+                            .setId('f')
+                            .setAlignment(16) //16 byte alignment
+                            .setDataType(CUDNN_DATA_FLOAT)
+                            .build();
+
+        std::cout << RP_yTensor.describe() << std::endl;
+        std::cout << DP_yTensor.describe() << std::endl;
+
+        // Create the scale, add, and relu problems
+        // Scale descriptor
+        auto scaleDesc = cudnn_frontend::PointWiseDescBuilder()
+                            .setMode(CUDNN_POINTWISE_MUL)
+                            .setMathPrecision(CUDNN_DATA_FLOAT)
+                            .build();
+        std::cout << scaleDesc.describe() << std::endl;
+
+        // Bias (add) descriptor
+        auto addDesc = cudnn_frontend::PointWiseDescBuilder()
+                            .setMode(CUDNN_POINTWISE_ADD)
+                            .setMathPrecision(CUDNN_DATA_FLOAT)
+                            .build();
+        std::cout << addDesc.describe() << std::endl;
+
+        // ReLU descriptor
+        auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+                            .setMode(CUDNN_POINTWISE_RELU_FWD)
+                            .setMathPrecision(CUDNN_DATA_FLOAT)
+                            .build();
+        std::cout << actDesc.describe() << std::endl;
+        std::cout << "Creating Operations now!" << std::endl;
+
+        // Create RP scaling operation
+        auto RP_scaleOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(RP_yTensor)
+                            .setbDesc(RP_scaleTensor)
+                            .setyDesc(RP_afterScaleTensor)
+                            .setpwDesc(scaleDesc)
+                            .build();
+        std::cout << RP_scaleOp.describe() << std::endl;
+
+        // Create RP bias operation
+        auto RP_biasOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(RP_afterScaleTensor)
+                            .setbDesc(RP_biasTensor)
+                            .setyDesc(RP_afterBiasTensor)
+                            .setpwDesc(addDesc)
+                            .build();
+        std::cout << RP_biasOp.describe() << std::endl;
+
+        // Create DP scaling operation
+        auto DP_scaleOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(DP_yTensor)
+                            .setbDesc(DP_scaleTensor)
+                            .setyDesc(DP_afterScaleTensor)
+                            .setpwDesc(scaleDesc)
+                            .build();
+        std::cout << DP_scaleOp.describe() << std::endl;
+
+        // Create DP bias operation
+        auto DP_biasOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(DP_afterScaleTensor)
+                            .setbDesc(DP_biasTensor)
+                            .setyDesc(DP_afterBiasTensor)
+                            .setpwDesc(addDesc)
+                            .build();
+        std::cout << DP_biasOp.describe() << std::endl;
+
+        // Create add operation
+        auto addOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(RP_afterBiasTensor)
+                            .setbDesc(DP_afterBiasTensor)
+                            .setyDesc(afterAddTensor)
+                            .setpwDesc(addDesc)
+                            .build();
+        std::cout << addOp.describe() << std::endl;
+
+        // Create ReLU operation
+        auto actOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                            .setxDesc(afterAddTensor)
+                            .setyDesc(yTensor)
+                            .setpwDesc(actDesc)
+                            .build();
+        std::cout << actOp.describe() << std::endl;
+        std::cout << "Creating operation graph now!" << std::endl;
+
+        // Create an Operation Graph. In this case it is:
+        // RP_scaleOp -> RP_biasOp -> DP_scaleOp -> DP_biasOp -> addOp -> reluOp
+        std::array<cudnn_frontend::Operation const*, 6> ops = {&RP_scaleOp, &RP_biasOp, &DP_scaleOp, &DP_biasOp, &addOp, &actOp};
+        auto opGraph = cudnn_frontend::OperationGraphBuilder().setHandle(handle_).setOperationGraph(ops.size(), ops.data()).build();
+        std::cout << opGraph.describe() << std::endl;
+
+        // Create engine configuration
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = cudnn_frontend::get_heuristics_list<2>({"heuristics_instant", "heuristics_fallback"}, opGraph,::allowAll, filtered_configs, true);
+
+        std::cout << "get_heuristics_list Statuses: ";
+        for (auto i = 0 ; i < statuses.size(); i++) {
+            std::cout << cudnn_frontend::to_string(statuses[i]) << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
+    
+
+        auto plan =
+            cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+
+        void* data_ptrs[] = {RP_YdevPtr, DP_YdevPtr, RP_scaleDevPtr, DP_scaleDevPtr, RP_biasDevPtr, DP_biasDevPtr, YdevPtr};
+        int64_t uids[]    = {'y', 'a', 's', 'h', 'b', 't', 'f'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(7, data_ptrs)
+                               .setUids(7, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+
+        return status;
+        
+    } catch (cudnn_frontend::cudnnException &e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+#if (CUDNN_VERSION >= 8300)
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+            CHECK(false);
+#endif
+        return CUDNN_STATUS_SUCCESS;
     }
 }
