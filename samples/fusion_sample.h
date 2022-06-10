@@ -178,7 +178,7 @@ run_conv_reduction(int64_t* x_dim,
                    void* devPtrW,
                    void* devPtrR);
 
-void
+cudnnStatus_t
 run_bn_conv_gen_stat(int64_t* xTensorDim, 
                     int64_t* wTensorDim, 
                     int64_t* yTensorDim,  
@@ -217,3 +217,14 @@ run_bn_finalize(
     double exponential_decay_factor,
     int64_t accumCnt_val
 );
+
+cudnnStatus_t run_dsbar(int64_t *Y_dim,
+               int64_t *scaleTensorDim,
+               int64_t *biasTensorDim,
+               void *RP_YdevPtr,
+               void *RP_scaleDevPtr,
+               void *RP_biasDevPtr,
+               void *DP_YdevPtr,
+               void *DP_scaleDevPtr,
+               void *DP_biasDevPtr,
+               void *YdevPtr);

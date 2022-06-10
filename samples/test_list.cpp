@@ -1373,6 +1373,196 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
     std::cout << "\n========================================================================================\n";
 }
 
+
+TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
+    std::cout << "Dual Scale Bias Act Relu" << std::endl;
+    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
+    int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
+    int64_t yTensorDim[]              = { 32, 32, 7, 7}; 
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    Surface<half> RP_Y(Ysize, false);
+    Surface<half> DP_Y(Ysize, false);
+    Surface<half> finalY(Ysize, false);
+
+    int scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
+    int biasSize = perChannelBiasDim[0] * perChannelBiasDim[1] * perChannelBiasDim[2] * perChannelBiasDim[3];
+    
+    Surface<float> RP_scale(scaleSize, false);
+    Surface<float> RP_bias(biasSize, false);
+
+    Surface<float> DP_scale(scaleSize, false);
+    Surface<float> DP_bias(biasSize, false);
+    
+    run_dsbar(yTensorDim, perChannelScaleDim, perChannelBiasDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr);
+}
+
+TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
+    std::cout << "Dual Scale Bias Act Relu wiht CPU" << std::endl;
+    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
+    int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
+    int64_t yTensorDim[]              = { 32, 32, 7, 7}; 
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    Surface<half> RP_Y(Ysize, true);
+    Surface<half> DP_Y(Ysize, true);
+    Surface<float> finalY(Ysize, true);
+
+    int scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
+    int biasSize = perChannelBiasDim[0] * perChannelBiasDim[1] * perChannelBiasDim[2] * perChannelBiasDim[3];
+    
+    Surface<float> RP_scale(scaleSize, true);
+    Surface<float> RP_bias(biasSize, true);
+
+    Surface<float> DP_scale(scaleSize, true);
+    Surface<float> DP_bias(biasSize, true);
+
+    cudnnStatus_t status = run_dsbar(yTensorDim, perChannelScaleDim, perChannelBiasDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr);
+
+    if (status != CUDNN_STATUS_SUCCESS) {
+        std::cout << "Error in Dual Scale Bias Act Relu with CPU" << std::endl;
+        exit(1);
+    }
+
+    int numErrors = 0;
+
+#if (CUDNN_VERSION >= 8301)
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(finalY.hostPtr, finalY.devPtr, sizeof(finalY.devPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    Surface<float> RP_afterScaleBias(Ysize, true);
+    Surface<float> DP_afterScaleBias(Ysize, true);
+    Surface<float> finalY_afterAdd(Ysize, true);
+    Surface<float> finalY_cpu(Ysize, true);
+
+    // RP_afterScaleBias = RP_scale * RP_Y + RP_bias
+    scale_and_bias_tensor_cpu<half, float, float>(RP_Y.hostPtr, RP_afterScaleBias.hostPtr, RP_scale.hostPtr, RP_bias.hostPtr, Ysize, yTensorDim);
+
+    // DP_afterScaleBias = DP_scale * DP_Y + DP_bias
+    scale_and_bias_tensor_cpu<half, float, float>(DP_Y.hostPtr, DP_afterScaleBias.hostPtr, DP_scale.hostPtr, DP_bias.hostPtr, Ysize, yTensorDim);
+
+    // finalY_afterAdd = RP_afterScaleBias + DP_afterScaleBias
+    add_tensors_cpu<float>(RP_afterScaleBias.hostPtr, DP_afterScaleBias.hostPtr, finalY_afterAdd.hostPtr, Ysize);
+
+    // finalY = relu(finalY_afterAdd)
+    relu<float, float>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
+
+    for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
+        float diff         = getError(finalY.hostPtr[index], finalY_cpu.hostPtr[index]);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+    }
+
+#endif
+    REQUIRE(numErrors == 0);
+}
+    
+
+TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstas][cpu]") {
+    std::cout << "Scale Bias Conv BNGenstats" << std::endl;
+    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
+    int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
+    int64_t xTensorDim[]              = { 32,  32, 7, 7};
+    int64_t wTensorDim[]              = {256,  32, 1, 1};
+    int64_t yTensorDim[]              = { 32, 256, 7, 7}; 
+    int64_t sumTensorDim[]            = { 1,  32, 1, 1};
+    int64_t sqSumTensorDim[]          = { 1,  32, 1, 1};
+
+    int64_t conv_padA[]       = {0, 0};
+    int64_t conv_dilationA[]  = {1, 1};
+    int64_t conv_strideA[]    = {1, 1};
+
+    int Xsize = xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3];
+    int Wsize = wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3];
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    int Bsize = perChannelBiasDim[0] * perChannelBiasDim[1] * perChannelBiasDim[2] * perChannelBiasDim[3];
+    int Ssize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
+    int Sumsize = sumTensorDim[0] * sumTensorDim[1] * sumTensorDim[2] * sumTensorDim[3];
+    int SqSumsize = sqSumTensorDim[0] * sqSumTensorDim[1] * sqSumTensorDim[2] * sqSumTensorDim[3];
+
+    Surface<half> X(Xsize, true);
+    Surface<half> W(Wsize, true);
+    Surface<half> Y(Ysize, true);
+
+    Surface<half> scale(Ssize, true);
+    Surface<half> bias(Bsize, true);
+
+    Surface<float> afterScaleBiasGPU(Xsize, true);
+
+    Surface<float> sum(Sumsize, true);
+    Surface<float> sqSum(SqSumsize, true);
+
+    cudnnStatus_t status = run_bn_conv_gen_stat(xTensorDim, wTensorDim, yTensorDim, perChannelScaleDim,  
+                    2, conv_padA, conv_dilationA, conv_strideA, 
+                    X.devPtr, W.devPtr, Y.devPtr,
+                    scale.devPtr, bias.devPtr, sum.devPtr, sqSum.devPtr);
+
+    if (status != CUDNN_STATUS_SUCCESS) {
+        std::cout << "BN Conv Gen Stat failed" << std::endl;
+        exit(1);
+    }
+
+    int numErrors = 0;
+    int normalizationErrors = 0;
+
+#if (CUDNN_VERSION >= 8301)
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.devPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    Surface<float> afterScaleBiasTensor(Xsize, true);
+    Surface<half> afterConvTensor(Ysize, true);
+    Surface<half> afterReluTensor(Ysize, true);
+    Surface<half> afterBNTensor(Ysize, true);
+    
+    // Vector of pairs of mean and variance for each batch
+    std::vector<std::pair<float, float>> stats(Sumsize);
+
+    // Scale -> Bias
+    scale_and_bias_tensor_cpu<half, half, float>(X.hostPtr, afterScaleBiasTensor.hostPtr, scale.hostPtr, bias.hostPtr, Xsize, xTensorDim);
+
+    // Activation
+    relu<float, half>(afterScaleBiasTensor.hostPtr, afterReluTensor.hostPtr, Ysize);
+
+    // Conv
+    conv_cpu_ref<half, float>(afterReluTensor.hostPtr, W.hostPtr, afterConvTensor.hostPtr, 1, CUDNN_TENSOR_NHWC, xTensorDim, wTensorDim, yTensorDim, conv_strideA, conv_padA, conv_dilationA, 4/*Dims*/);
+
+    // Gen stats
+    gen_stats_cpu<half>(afterConvTensor.hostPtr, stats, Ysize, yTensorDim);
+
+    batch_normalize<half>(afterConvTensor.hostPtr, afterBNTensor.hostPtr, stats, Ysize, yTensorDim);
+
+    std::vector<std::pair<float, float>> after_normalization(yTensorDim[0]);
+
+    gen_stats_cpu<half>(afterBNTensor.hostPtr, after_normalization, Ysize, yTensorDim);
+
+    for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
+        float diff         = getError(Y.hostPtr[index], afterConvTensor.hostPtr[index]);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+    }
+    REQUIRE(numErrors == 0);
+
+    for (int index = 0; index < Ysize; index++) { 
+
+        // Data should have 0 mean
+        float diff         = getError(0, after_normalization[index].first);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+
+        // Data should have 1 variance
+        diff         = getError(1, after_normalization[index].second);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+    }
+
+#endif
+    REQUIRE(numErrors == 0);
+    REQUIRE(normalizationErrors == 0);
+    std::cout << "\n========================================================================================\n";
+}
+
 TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
     std::cout << "BN Finalize" << std::endl;
     // This  example shows CUDNN_BN_FINALIZE_STATISTICS_TRAINING
