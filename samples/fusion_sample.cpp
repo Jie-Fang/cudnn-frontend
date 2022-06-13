@@ -1403,6 +1403,246 @@ run_conv_scale_bias_relu_int8(int64_t* x_dim,
 }
 
 void
+run_pool_scale_bias_relu_int8(int64_t* x_dim,
+                              int64_t* y_dim,
+                              int64_t* s_dim,
+                              int64_t* b_dim,
+                              void* devPtrX,
+                              void* devPtrY,
+                              void* devPtrS,
+                              void* devPtrB, 
+                              cudnnDataType_t compType,
+#if (CUDNN_VERSION >= 8500)
+                              cudnnResampleMode_t mode,
+                              cudnnNanPropagation_t nanOpt, 
+                              cudnnPaddingMode_t paddingMode,
+#endif       
+                              int32_t nbSpatialDims,                         
+                              double alpha,                           
+                              double beta,
+                              int64_t* windowDimA,
+                              int64_t* prePaddingA,
+                              int64_t* postPaddingA,
+                              int64_t* strideA ) {
+    cudnnHandle_t handle_;
+    try {
+        // Create cudnn handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Creates the necessary tensor descriptors
+        int64_t strideTensor[4];
+        generateStrides(x_dim, strideTensor, 4, CUDNN_TENSOR_NHWC);
+        auto xTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, x_dim)
+                           .setStrides(4, strideTensor)
+                           .setId('x')
+                           .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
+                           .setDataType(CUDNN_DATA_FLOAT)
+                           .build();
+        generateStrides(s_dim, strideTensor, 4, CUDNN_TENSOR_NHWC);
+        auto sTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, s_dim)
+                           .setStrides(4, strideTensor)
+                           .setId('s')
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_FLOAT)
+                           .build();
+
+        generateStrides(b_dim, strideTensor, 4, CUDNN_TENSOR_NHWC);
+        auto bTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, b_dim)
+                           .setStrides(4, strideTensor)
+                           .setId('b')
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_FLOAT)
+                           .build();
+
+        generateStrides(y_dim, strideTensor, 4, CUDNN_TENSOR_NHWC);
+        auto afterPoolTensor = cudnn_frontend::TensorBuilder()
+                                   .setDim(4, y_dim)
+                                   .setStrides(4, strideTensor)
+                                   .setId('A')  // after conv
+                                   .setAlignment(16)
+                                   .setVirtual()
+                                   .setDataType(CUDNN_DATA_FLOAT)
+                                   .build();
+        auto afterScaleTensor = cudnn_frontend::TensorBuilder()
+                                    .setDim(4, y_dim)
+                                    .setStrides(4, strideTensor)
+                                    .setId('B')  // after scale
+                                    .setAlignment(16)
+                                    .setVirtual()
+                                    .setDataType(CUDNN_DATA_FLOAT)
+                                    .build();
+        auto afterBiasTensor = cudnn_frontend::TensorBuilder()
+                                   .setDim(4, y_dim)
+                                   .setStrides(4, strideTensor)
+                                   .setId('C')  // after bias
+                                   .setAlignment(16)
+                                   .setVirtual()
+                                   .setDataType(CUDNN_DATA_FLOAT)
+                                   .build();
+        auto yTensor = cudnn_frontend::TensorBuilder()
+                           .setDim(4, y_dim)
+                           .setStrides(4, strideTensor)
+                           .setId('y')  // output
+                           .setAlignment(16)
+                           .setDataType(CUDNN_DATA_INT8)
+                           .build();
+
+        std::cout << xTensor.describe() << std::endl;
+        std::cout << bTensor.describe() << std::endl;
+        std::cout << sTensor.describe() << std::endl;
+        std::cout << afterPoolTensor.describe() << std::endl;
+        std::cout << afterBiasTensor.describe() << std::endl;
+        std::cout << afterScaleTensor.describe() << std::endl;
+        std::cout << yTensor.describe() << std::endl;
+
+         // Define the resample descriptor
+        auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
+                            .setMathPrecision(compType)
+                            .setNbSpatialDim(nbSpatialDims)
+                            .setAlpha(alpha)
+                            .setBeta(beta)
+#if (CUDNN_VERSION >= 8500)
+                            .setNanPropagation(nanOpt)
+                            .setResampleMode(mode)
+                            .setPaddingMode(paddingMode)
+                            .setWindowDimA(windowDimA)
+                            .setStrideA(strideA)
+                            .setPrePaddingA(prePaddingA)
+                            .setPostPaddingA(postPaddingA)
+#endif
+                            .build(); 
+        std::cout << "Initialized Pool Desc" << std::endl;
+        std::cout << poolDesc.describe() << std::endl;
+
+        // Define the scale descriptor
+        auto scaleDesc = cudnn_frontend::PointWiseDescBuilder()
+                             .setMode(CUDNN_POINTWISE_MUL)
+                             .setMathPrecision(CUDNN_DATA_FLOAT)
+                             .build();
+        std::cout << "Initialized Scale Desc"<< std::endl;
+        std::cout << scaleDesc.describe() << std::endl;
+
+        // Define the bias descriptor
+        auto biasDesc = cudnn_frontend::PointWiseDescBuilder()
+                            .setMode(CUDNN_POINTWISE_ADD)
+                            .setMathPrecision(CUDNN_DATA_FLOAT)
+                            .build();
+        std::cout << "Initialized Bias Desc"<< std::endl;
+        std::cout << biasDesc.describe() << std::endl;
+
+        // Define the activation descriptor
+        auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+                           .setMode(CUDNN_POINTWISE_RELU_FWD)
+                           .setMathPrecision(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << "Initialized Activation Desc"<< std::endl;
+        std::cout << actDesc.describe() << std::endl;
+
+#if (CUDNN_VERSION >= 8500) 
+         // Create a Resample Node
+        auto pool_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR)
+                           .setxDesc(xTensor)
+                           .setyDesc(afterPoolTensor)
+                           .setResampleDesc(poolDesc)
+                           .setAlpha(alpha)
+                           .setBeta(beta)
+                           .build();
+        std::cout << pool_op.describe() << std::endl;
+#endif
+        // Create a Multiplication Node with scaling parameters.
+        auto scale_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+#if (CUDNN_VERSION >= 8500) 
+                            .setxDesc(pool_op.getOutputTensor())
+#endif                    
+                            .setbDesc(sTensor)
+                            .setyDesc(afterScaleTensor)
+                            .setpwDesc(scaleDesc)
+                            .build();
+        std::cout << scale_op.describe() << std::endl;
+
+        // Create a Bias Node.
+        auto bias_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                           .setxDesc(scale_op.getOutputTensor())
+                           .setbDesc(bTensor)
+                           .setyDesc(afterBiasTensor)
+                           .setpwDesc(biasDesc)
+                           .build();
+        std::cout << bias_op.describe() << std::endl;
+        
+        // Create an Activation Node.
+        auto act_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setxDesc(bias_op.getOutputTensor())
+                          .setyDesc(yTensor)
+                          .setpwDesc(actDesc)
+                          .build();
+        std::cout << act_op.describe() << std::endl;
+
+#if (CUDNN_VERSION >= 8500)
+        // Create an Operation Graph. In this case it is convolution bias scale activation
+        std::array<cudnn_frontend::Operation const*, 4> ops = {&pool_op, &scale_op, &bias_op, &act_op};
+#else
+        std::array<cudnn_frontend::Operation const*, 3> ops = {&scale_op, &bias_op, &act_op};
+#endif
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+       
+
+        // How many engines support this operation graph ?
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+
+        // Create the variant pack and associate with the data pointers 
+        void* data_ptrs[] = {devPtrX, devPtrY, devPtrS, devPtrB};
+        int64_t uids[]    = {'x', 'y', 's', 'b'};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(4, data_ptrs)
+                               .setUids(4, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+
+        // Trigger the execute operation 
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+        checkCudnnErr(cudnnDestroy(handle_));
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+        std::cout << "EXECUTE SUCCESS" << std::endl;
+
+    } catch (cudnn_frontend::cudnnException& e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties( &prop, 0 ));
+        
+        // this example is only for Ampere cards
+        if (prop.major < 8 && (e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH || e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED)) {
+            std::cout << "Example is only supported for Ampere GPUs" << std::endl; 
+        }  else {
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+
+#if (CUDNN_VERSION >= 8500)
+            CHECK(false);
+#endif
+        }
+    }
+}
+
+
+void
 run_matmul_bias_gelu(int64_t* a_dim,
                      int64_t* b_dim,
                      int64_t* c_dim,

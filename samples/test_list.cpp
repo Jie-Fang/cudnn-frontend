@@ -186,11 +186,11 @@ TEST_CASE("Use heuristics for execution", "[frontend][heuristics][conv]" ) {
     int Xsize = dimA[0] * dimA[1] * dimA[2] * dimA[3];
     int Wsize = filterdimA[0] * filterdimA[1] * filterdimA[2] * filterdimA[3];
     int Ysize = outdimA[0] * outdimA[1] * outdimA[2] * outdimA[3];
-
+    
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Ysize);
 
     run_from_heuristics(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY, CUDNN_HEUR_MODE_INSTANT);
-
+    
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
@@ -843,6 +843,93 @@ TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_i
     checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 
+    std::cout << "\n========================================================================================\n";
+}
+
+
+TEST_CASE("PoolScaleBiasAct_int8 sample", "[frontend][fusion][PoolScaleBiasAct_int8]") {
+    std::cout << "TEST_CASE PoolScaleBiasAct_int8 :: Sample resample runtime fusion code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample resample runtime fusion code with backend API");    
+
+    int64_t xTensorDim[] = {16, 16, 32, 32};
+    int64_t yTensorDim[] = {16, 16, 16, 16};
+    int64_t bTensorDim[] = {1, 16, 1, 1};  // bias
+    int64_t sTensorDim[] = {1, 16, 1, 1};  // scale
+
+    cudnnDataType_t compType = CUDNN_DATA_FLOAT;  
+#if (CUDNN_VERSION >= 8500)
+    cudnnResampleMode_t mode = CUDNN_RESAMPLE_AVGPOOL;
+    cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
+    cudnnPaddingMode_t paddingMode = CUDNN_ZERO_PAD;
+#endif
+    int32_t nbSpatialDims = 2;
+    double alpha = 1.0;
+    double beta = 0.0;
+
+    /* Shape attributes 
+    * There are two parameter types viz., int64_t and cudnnFractiontype_t that are supported for the below attributes
+    * Both types are interchangeable 
+    * cudnnFractionType_t can be used for modes that require non integer parameters(e.g., adaptive pooling )
+    * */
+    // Illustration: Initiliase the windowDimA as cudnnFractionType {numerator, denoniminator} 
+    // cudnnFraction_t windowDimA[CUDNN_DIM_MAX] = {{2,1},{2,1}};
+    // cudnnFraction_t prePaddingA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
+    // cudnnFraction_t postPaddingA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
+    // cudnnFraction_t strideA[CUDNN_DIM_MAX] = {{2,1},{2,1}};
+
+    // Initialise other attributes as int64_t (can also be cudnnFractionType as shown above)
+    int64_t windowDimA[CUDNN_DIM_MAX] = {2,2};
+    int64_t prePaddingA[CUDNN_DIM_MAX] = {0,0};
+    int64_t postPaddingA[CUDNN_DIM_MAX] = {0,0};
+    int64_t strideA[CUDNN_DIM_MAX] = {2,2};
+
+    printf("====DIMENSIONS====\n");
+    printf("input dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           xTensorDim[0],
+           xTensorDim[1],
+           xTensorDim[2],
+           xTensorDim[3]);
+    
+    printf("output dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n",
+           yTensorDim[0],
+           yTensorDim[1],
+           yTensorDim[2],
+           yTensorDim[3]);
+
+    int Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+
+    Surface<int8_t> X(xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3], false);
+    Surface<int8_t> Y(Ysize, true);
+
+    Surface<float> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2] * bTensorDim[3], false);
+    Surface<float> S(sTensorDim[0] * sTensorDim[1] * sTensorDim[2] * sTensorDim[3], false);
+
+    run_pool_scale_bias_relu_int8(xTensorDim,
+                                  yTensorDim,
+                                  bTensorDim,
+                                  sTensorDim,
+                                  X.devPtr,
+                                  Y.devPtr,
+                                  B.devPtr,
+                                  S.devPtr, 
+                                  compType,
+#if (CUDNN_VERSION >= 8500)
+                                  mode ,
+                                  nanOpt, 
+                                  paddingMode, 
+#endif                        
+
+                                  nbSpatialDims, 
+                                  alpha,                           
+                                  beta, 
+                                  windowDimA,
+                                  prePaddingA,
+                                  postPaddingA,
+                                  strideA);
+    
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.hostPtr[0]) * Ysize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
     std::cout << "\n========================================================================================\n";
 }
 

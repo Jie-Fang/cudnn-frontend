@@ -128,6 +128,30 @@ run_conv_scale_bias_relu_int8(int64_t* x_dim,
                               void* devPtrB);
 
 void
+run_pool_scale_bias_relu_int8(int64_t* x_dim,
+                              int64_t* y_dim,
+                              int64_t* s_dim,
+                              int64_t* b_dim,
+                              void* devPtrX,
+                              void* devPtrY,
+                              void* devPtrS,
+                              void* devPtrB, 
+                              cudnnDataType_t compType,
+#if (CUDNN_VERSION >= 8500) 
+                              cudnnResampleMode_t mode ,
+                              cudnnNanPropagation_t nanOpt, 
+                              cudnnPaddingMode_t paddingMode, 
+#endif
+                              int32_t nbSpatialDims,                         
+                              double alpha,                           
+                              double beta,
+                              int64_t* windowDimA,
+                              int64_t* prePaddingA,
+                              int64_t* postPaddingA,
+                              int64_t* strideA);
+ 
+
+void
 run_matmul_bias_gelu(int64_t* a_dim,
                      int64_t* b_dim,
                      int64_t* c_dim,
