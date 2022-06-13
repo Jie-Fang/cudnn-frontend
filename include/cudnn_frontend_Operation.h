@@ -36,6 +36,7 @@
 #include "cudnn_frontend_PointWiseDesc.h"
 #include "cudnn_frontend_MatMulDesc.h"
 #include "cudnn_frontend_ReductionDesc.h"
+#include "cudnn_frontend_Resample.h"
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_utils.h"
 
@@ -143,6 +144,7 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor dxdesc             = nullptr;
     ManagedOpaqueDescriptor dwdesc             = nullptr;
     ManagedOpaqueDescriptor cdesc              = nullptr;
+    ManagedOpaqueDescriptor resampledesc       = nullptr;
     ManagedOpaqueDescriptor amatdesc           = nullptr;
     ManagedOpaqueDescriptor bmatdesc           = nullptr;
     ManagedOpaqueDescriptor cmatdesc           = nullptr;
@@ -194,6 +196,7 @@ class OperationBuilder_v8 {
     bool is_reduction_op   = false;
     bool is_genstats_op    = false;
     bool is_bn_finalize_op = false;
+    bool is_resample_op    = false;
 
     using Message_t = const char *;
 
@@ -1103,6 +1106,80 @@ class OperationBuilder_v8 {
     }
 
     Operation_v8 && 
+    build_resample_operation() {
+#if (CUDNN_VERSION >= 8500)
+        m_operation.operationTag = "Resample";
+        auto status = CUDNN_STATUS_SUCCESS;
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESAMPLE_FWD_XDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.xdesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESAMPLE_FWD_XDESC Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESAMPLE_FWD_YDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.ydesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESAMPLE_FWD_YDESC Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESAMPLE_FWD_ALPHA,
+                CUDNN_TYPE_DOUBLE,
+                1,
+                &(m_operation.alpha_d));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESAMPLE_FWD_ALPHA Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESAMPLE_FWD_BETA,
+                CUDNN_TYPE_DOUBLE,
+                1,
+                &(m_operation.beta_d));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESAMPLE_FWD_BETA Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESAMPLE_FWD_DESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.resampledesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESAMPLE_FWD_DESC Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
+            return std::move(m_operation);
+        }
+#endif
+        return std::move(m_operation);
+    }
+
+    Operation_v8 && 
     build_conv_forward() {
         m_operation.operationTag = "ConvFwd";
 
@@ -1509,7 +1586,17 @@ class OperationBuilder_v8 {
         wType = tensor.getDataType();
         return *this;
     }
-
+    auto
+    setResampleDesc(ResampleDesc_v8 const &resampleDesc) -> OperationBuilder_v8 & {
+        if (is_resample_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "RESAMPLE_DESC: Non Resample operation does not need Resample DESCRIPTOR");
+        }
+        m_operation.resampledesc = resampleDesc.get_desc();
+        return *this;
+    }
     auto
     setcDesc(ConvDesc_v8 const &conv) -> OperationBuilder_v8 & {
         if (is_convolution_op == false) {
@@ -1800,6 +1887,9 @@ class OperationBuilder_v8 {
         is_reduction_op   = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
         is_genstats_op    = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR);
         is_bn_finalize_op = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR);
+#if (CUDNN_VERSION >= 8500)
+        is_resample_op    = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR);
+#endif
     }
     /** @} */
 
@@ -1826,6 +1916,8 @@ class OperationBuilder_v8 {
         } else if (is_genstats_op) {
             status_ = CUDNN_STATUS_SUCCESS;
         } else if (is_bn_finalize_op) {
+            status_ = CUDNN_STATUS_SUCCESS;
+        } else if (is_resample_op) {
             status_ = CUDNN_STATUS_SUCCESS;
         }
         else {
@@ -1860,6 +1952,10 @@ class OperationBuilder_v8 {
             return build_genstats_op();
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR) {
             return build_bn_finalize_op();
+#if (CUDNN_VERSION >= 8500)
+        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR) {
+            return build_resample_operation();
+#endif
         }
         getLogger() << "[cudnn_frontend] " << m_operation << std::endl;
         return std::move(m_operation);
