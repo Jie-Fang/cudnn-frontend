@@ -2648,7 +2648,20 @@ run_bn_finalize(
         std::cout << std::endl;
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
+        auto plan_builder = [&filtered_configs, &opGraph, &handle_]() {
+            for (auto i = 0; i < filtered_configs.size(); i++) {
+                try {
+                    auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[i], opGraph.getTag()).build();
+		            return plan;
+                } catch (cudnn_frontend::cudnnException &e) {
+                    continue;
+                }
+            }
+            return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
+        };
+
+	    CHECK(filtered_configs.size() > 0);
+        auto plan = plan_builder();
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
         auto workspace_size = plan.getWorkspaceSize();

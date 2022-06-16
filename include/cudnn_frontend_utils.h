@@ -102,6 +102,54 @@ to_string(cudnnDataType_t type) {
     return std::string("");
 }
 
+#if (CUDNN_VERSION >= 8200)  
+static inline std::string
+to_string(cudnnBackendBehaviorNote_t note) {
+    switch(note) {
+        case CUDNN_BEHAVIOR_NOTE_RUNTIME_COMPILATION:
+            return std::string("CUDNN_BEHAVIOR_NOTE_RUNTIME_COMPILATION");
+#if (CUDNN_VERSION >= 8300)
+        case CUDNN_BEHAVIOR_NOTE_REQUIRES_FILTER_INT8x32_REORDER:
+            return std::string("CUDNN_BEHAVIOR_NOTE_REQUIRES_FILTER_INT8x32_REORDER");
+        case CUDNN_BEHAVIOR_NOTE_REQUIRES_BIAS_INT8x32_REORDER:
+            return std::string("CUDNN_BEHAVIOR_NOTE_REQUIRES_BIAS_INT8x32_REORDER");
+#endif
+        case CUDNN_BEHAVIOR_NOTE_TYPE_COUNT:
+            return std::string("CUDNN_BEHAVIOR_NOTE_TYPE_COUNT");
+    }
+    return std::string("INVALID_BEHAVIOR_NOTE");
+}
+#endif
+
+static inline std::string
+to_string(cudnnBackendNumericalNote_t note) {
+    switch(note) {
+        case CUDNN_NUMERICAL_NOTE_TENSOR_CORE:
+            return std::string("CUDNN_NUMERICAL_NOTE_TENSOR_CORE");
+        case CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS:
+            return std::string("CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS");
+        case CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION:
+            return std::string("CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION");
+        case CUDNN_NUMERICAL_NOTE_FFT:
+            return std::string("CUDNN_NUMERICAL_NOTE_FFT");
+        case CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC:
+            return std::string("CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC");
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD:
+            return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD");
+#if (CUDNN_VERSION >= 8300)
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_4x4:
+            return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_4x4");
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_6x6:
+            return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_6x6");
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13:
+            return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13");
+#endif
+        case CUDNN_NUMERICAL_NOTE_TYPE_COUNT:
+            return std::string("CUDNN_NUMERICAL_NOTE_TYPE_COUNT");
+    }
+    return std::string("INVALID_NUMERICAL_NOTE");
+}
+
 static inline std::string
 to_string(cudnnStatus_t status) {
     switch(status) {
