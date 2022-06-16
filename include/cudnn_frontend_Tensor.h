@@ -106,6 +106,21 @@ class Tensor_v8 : public BackendDescriptor {
         return static_cast<int64_t>(data_type);
     }
 
+    int64_t
+    getId() const {
+        return id;
+    }
+
+    int64_t
+    getAlignment() const {
+        return alignment;
+    }
+
+    bool
+    isVirtualTensor() const {
+        return isVirtual;
+    }
+
     Tensor_v8(Tensor_v8 &&from) = default;
     Tensor_v8 &
     operator=(Tensor_v8 &&) = default;
@@ -200,6 +215,25 @@ class TensorBuilder_v8 {
     }
 #endif
     /** @} */
+
+    // Clone parameters of another tensor. Make sure to still set the UID since UID of two tensors shouldn't be the same.
+    auto cloneFrom(Tensor_v8 const &from, int64_t newID) -> TensorBuilder_v8 & {
+        m_tensor.data_type = from.data_type;
+        m_tensor.nDims      = from.nDims;
+        m_tensor.id         = newID;
+        std::copy(from.getDimArray(), from.getDimArray() + m_tensor.nDims, m_tensor.btensor_dimA);
+        std::copy(from.getStrideArray(), from.getStrideArray() + m_tensor.nDims, m_tensor.btensor_strA);
+        m_tensor.alignment = from.alignment;
+        m_tensor.isVirtual = from.isVirtual;
+        m_tensor.isByValue = from.isByValue;
+        m_tensor.vectorCount = from.vectorCount;
+        m_tensor.vectorDimension = from.vectorDimension;
+
+#if (CUDNN_VERSION >= 8300)
+        m_tensor.reorder_type = from.reorder_type;
+#endif
+        return *this;
+    }
 
     //! constructs the Tensor_v8 by calling the cudnn API
     //! Throws the appropriate error message
