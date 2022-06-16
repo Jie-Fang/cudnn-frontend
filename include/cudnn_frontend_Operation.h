@@ -84,9 +84,7 @@ class Operation_v8 : public BackendDescriptor {
         ss << std::hex << " Y " << ydesc;
         ss << std::hex << " W " << wdesc;
         ss << std::hex << " B " << bdesc;
-#if (CUDNN_VERSION >= 8400)
         ss << std::hex << " T " << tdesc;
-#endif
         ss << std::hex << " DW " << dwdesc;
         ss << std::hex << " DY " << dydesc;
         ss << std::hex << " DX " << dxdesc;
@@ -137,9 +135,7 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor ydesc              = nullptr;
     ManagedOpaqueDescriptor wdesc              = nullptr;
     ManagedOpaqueDescriptor bdesc              = nullptr;
-#if (CUDNN_VERSION >= 8400)
     ManagedOpaqueDescriptor tdesc              = nullptr;
-#endif
     ManagedOpaqueDescriptor dydesc             = nullptr;
     ManagedOpaqueDescriptor dxdesc             = nullptr;
     ManagedOpaqueDescriptor dwdesc             = nullptr;
