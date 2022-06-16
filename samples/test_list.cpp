@@ -1716,3 +1716,132 @@ TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
     std::cout << "\n========================================================================================\n";
     
 }
+
+TEST_CASE("Tensor cloning", "[frontend][comparison][clone]") {
+    // Consider creation of a 2d Tensor
+    // n,c,h,w as 4,32,32,32
+    std::cout << "Tensor cloning comparison" << std::endl;
+    std::array<int64_t,4> tensor_dim = {4, 32, 32, 32};
+    std::array<int64_t,4> tensor_str = {32768, 1024, 32, 1}; // NCHW format
+    cudnnDataType_t data_type        = CUDNN_DATA_FLOAT;
+    int64_t alignment                = sizeof(float);
+    int64_t id                       = 0xD0D0CACA; // Some magic number
+    int64_t new_id = 4; // Some other magic number
+
+
+    SECTION("Clone tensor, all params the same besides UID") {
+        std::cout << "Clone tensor, all params the same besides UID" << std::endl;
+        try {
+            auto tensor =  cudnn_frontend::TensorBuilder()
+                                        .setDim(tensor_dim.size(), tensor_dim.data())
+                                        .setStrides(tensor_str.size(), tensor_str.data())
+                                        .setId(id)
+                                        .setAlignment(alignment)
+                                        .setDataType(data_type)
+                                        .build();
+
+            auto clone_tensor = cudnn_frontend::TensorBuilder()
+                                            .cloneFrom(tensor, new_id)
+                                            .build();
+
+            // Clone id should not be same as original
+            REQUIRE(tensor.getId() == id);
+            REQUIRE(clone_tensor.getId() == new_id);
+
+            // Checking if the clone is equal to the original
+            REQUIRE(tensor.getAlignment() == clone_tensor.getAlignment());
+            REQUIRE(tensor.getPackedElementCount() == clone_tensor.getPackedElementCount());
+            REQUIRE(tensor.getDimensionCount() == clone_tensor.getDimensionCount());
+            REQUIRE(tensor.isVirtualTensor() == clone_tensor.isVirtualTensor());
+
+            int numDimErrors = 0;
+
+            const int64_t *tensor_dim_ptr = tensor.getDimArray();
+            const int64_t *clone_tensor_dim_ptr = clone_tensor.getDimArray();
+
+            for (int i = 0; i < tensor_dim.size(); i++) {
+                if (tensor_dim_ptr[i] != clone_tensor_dim_ptr[i]) {
+                    numDimErrors++;
+                }
+            }
+            REQUIRE(numDimErrors == 0);
+
+            int numStrErrors = 0;
+            const int64_t *tensor_str_ptr = tensor.getStrideArray();
+            const int64_t *clone_tensor_str_ptr = clone_tensor.getStrideArray();
+
+            for (int i = 0; i < tensor_str.size(); i++) {
+                if (tensor_str_ptr[i] != clone_tensor_str_ptr[i]) {
+                    numStrErrors++;
+                }
+            }
+            REQUIRE(numStrErrors == 0);
+
+            REQUIRE(tensor.getDataType() == clone_tensor.getDataType());
+
+        } catch (cudnn_frontend::cudnnException &e) {
+            std::cout << "Exception in tensor creation " << e.what() << std::endl;
+        }
+    }
+
+    SECTION("Clone tensor, all params the same besides UID, virtualness, and data type") {
+        std::cout << "Clone tensor, all params the same besides UID, virtualness, and data type" << std::endl;
+        try {
+            auto tensor =  cudnn_frontend::TensorBuilder()
+                                        .setDim(tensor_dim.size(), tensor_dim.data())
+                                        .setStrides(tensor_str.size(), tensor_str.data())
+                                        .setId(id)
+                                        .setAlignment(alignment)
+                                        .setDataType(data_type)
+                                        .build();
+
+            // Clone the original tensor, but make this tensor HALF type as well as virutal
+            auto clone_tensor = cudnn_frontend::TensorBuilder()
+                                            .cloneFrom(tensor, new_id)
+                                            .setDataType(CUDNN_DATA_HALF)
+                                            .setVirtual()
+                                            .build();
+
+            // Clone id should not be same as original
+            REQUIRE(tensor.getId() == id);
+            REQUIRE(clone_tensor.getId() == new_id);
+
+            // Checking if the clone is equal to the original
+            REQUIRE(tensor.getAlignment() == clone_tensor.getAlignment());
+            REQUIRE(tensor.getPackedElementCount() == clone_tensor.getPackedElementCount());
+            REQUIRE(tensor.getDimensionCount() == clone_tensor.getDimensionCount());
+
+            // Original tensor should not be virtual, clone tensor should be virtual
+            REQUIRE(tensor.isVirtualTensor() != clone_tensor.isVirtualTensor());
+
+            int numDimErrors = 0;
+
+            const int64_t *tensor_dim_ptr = tensor.getDimArray();
+            const int64_t *clone_tensor_dim_ptr = clone_tensor.getDimArray();
+
+            for (int i = 0; i < tensor_dim.size(); i++) {
+                if (tensor_dim_ptr[i] != clone_tensor_dim_ptr[i]) {
+                    numDimErrors++;
+                }
+            }
+            REQUIRE(numDimErrors == 0);
+
+            int numStrErrors = 0;
+            const int64_t *tensor_str_ptr = tensor.getStrideArray();
+            const int64_t *clone_tensor_str_ptr = clone_tensor.getStrideArray();
+
+            for (int i = 0; i < tensor_str.size(); i++) {
+                if (tensor_str_ptr[i] != clone_tensor_str_ptr[i]) {
+                    numStrErrors++;
+                }
+            }
+            REQUIRE(numStrErrors == 0);
+
+            // Original tensor should be float, clone data type should be half
+            REQUIRE(tensor.getDataType() != clone_tensor.getDataType());
+
+        } catch (cudnn_frontend::cudnnException &e) {
+            std::cout << "Exception in tensor creation " << e.what() << std::endl;
+        }
+    }
+}
