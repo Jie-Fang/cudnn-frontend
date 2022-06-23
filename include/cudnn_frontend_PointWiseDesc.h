@@ -124,7 +124,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
 #if (CUDNN_VERSION >= 8500)
             case CUDNN_POINTWISE_ERF:
             case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
-            case CUDNN_POINTWISE_CONVERT:
+            case CUDNN_POINTWISE_IDENTITY:
 #endif
                 return 2;
 #if (CUDNN_VERSION >= 8400)

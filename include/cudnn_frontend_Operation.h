@@ -483,8 +483,8 @@ class OperationBuilder_v8 {
             case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
                 m_operation.operationTag = "GeluApproxTanhBwd";
                 break;
-            case CUDNN_POINTWISE_CONVERT:
-                m_operation.operationTag = "Convert";
+            case CUDNN_POINTWISE_IDENTITY:
+                m_operation.operationTag = "Identity";
                 break;
 #endif
         }
