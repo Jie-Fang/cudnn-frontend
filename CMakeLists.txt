@@ -27,6 +27,7 @@ endif()
 
 if(DEFINED ENV{CUDNN_PATH})
 link_directories($ENV{CUDNN_PATH}/lib64)
+link_directories($ENV{CUDNN_PATH}/lib)
 endif()
 
 add_executable(Samples samples/conv_sample.cpp 
