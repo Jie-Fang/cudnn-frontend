@@ -438,7 +438,7 @@ run_from_global_index(int64_t* x_dim,
     if (handle_) cudnnDestroy(handle_);
 }
 
-void
+cudnnStatus_t
 run_with_external_config(int64_t* x_dim,
                          int64_t* padA,
                          int64_t* convstrideA,
@@ -452,6 +452,7 @@ run_with_external_config(int64_t* x_dim,
                          float* devPtrY) {
     cudnnHandle_t handle_;
 
+    cudnnStatus_t status = CUDNN_STATUS_SUCCESS;
     try {
         checkCudnnErr(cudnnCreate(&handle_));
         common_conv_descriptors descriptors = create_common_descriptors(
@@ -468,10 +469,11 @@ run_with_external_config(int64_t* x_dim,
 
         cudnn_frontend::EngineConfigList filtered_configs;
         auto statuses = 
-            cudnn_frontend::get_heuristics_list<2>({"heuristics_instant" 
-            , "heuristics_fallback"
-            }, opGraph,::isNonDeterministic, filtered_configs);
-        
+            cudnn_frontend::get_heuristics_list<2>({
+                "heuristics_instant",
+                "heuristics_fallback" 
+            }, opGraph,::isNonDeterministic, filtered_configs); 
+
         std::cout << "get_heuristics_list Statuses: ";
         for (auto i = 0 ; i < statuses.size(); i++) {
             std::cout << cudnn_frontend::to_string(statuses[i]) << " ";
@@ -480,22 +482,45 @@ run_with_external_config(int64_t* x_dim,
 
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto plan =
-            cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
+        cudnn_frontend::ManagedOpaqueDescriptor plan_desc = nullptr;
+        auto workspace_size = 0;
+        for (auto &config: filtered_configs) {
+            try {
+                auto plan =
+                    cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(config, opGraph.getTag()).build();
+                std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
-        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+                workspace_size = plan.getWorkspaceSize();
+                std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+                plan_desc = plan.get_desc();
+            } catch (cudnn_frontend::cudnnException& e)  {
+                status = e.getCudnnStatus();
+                continue;
+            }
+        }
+        if (plan_desc == nullptr ) {
+            std::cout << "No plan found implementing the operation graph" << std::endl;
+            return status;
+        }
 
-        std::cout << plan.describe() << std::endl;
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+
         void* data_ptrs[]   = {devPtrX, devPtrY, devPtrW};
         int64_t uids[]      = {'x', 'y', 'w'};
         auto variantPack    = cudnn_frontend::VariantPackBuilder()
-                               .setWorkspacePointer(nullptr)
+                               .setWorkspacePointer(workspace_ptr)
                                .setDataPointers(3, data_ptrs)
                                .setUids(3, uids)
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
-        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        status = cudnnBackendExecute(handle_, plan_desc->get_backend_descriptor(), variantPack.get_raw_desc());
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
 
     } catch (cudnn_frontend::cudnnException &e) {
         std::cout << "[ERROR] Exception " << e.what() << " " << cudnn_frontend::to_string(e.getCudnnStatus()) << std::endl;
@@ -504,7 +529,7 @@ run_with_external_config(int64_t* x_dim,
 
     if (handle_) cudnnDestroy(handle_);
 
-    return;
+    return status;
 }
 
 // create_plan(std::vector<cudnnBackendDescriptor_t> &)
