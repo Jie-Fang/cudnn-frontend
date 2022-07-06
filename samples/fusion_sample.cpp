@@ -2496,12 +2496,27 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
         std::cout << std::endl;
         std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
 
-        auto plan =
-            cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
-        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+        cudnn_frontend::ManagedOpaqueDescriptor plan_desc = nullptr;
+        auto workspace_size = 0;
+        cudnnStatus_t st = CUDNN_STATUS_SUCCESS;
+        for (auto &config: filtered_configs) {
+            try {
+                auto plan =
+                    cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(config, opGraph.getTag()).build();
+                std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
-        auto workspace_size = plan.getWorkspaceSize();
-        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+                workspace_size = plan.getWorkspaceSize();
+                std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+                plan_desc = plan.get_desc();
+            } catch (cudnn_frontend::cudnnException& e)  {
+                st = e.getCudnnStatus();
+                continue;
+            }
+        }
+        if (plan_desc == nullptr ) {
+            std::cout << "No plan found implementing the operation graph" << std::endl;
+            return st;
+        }
 
         void* workspace_ptr = nullptr;
         if (workspace_size > 0) {
@@ -2516,7 +2531,7 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
                                .setUids(7, uids)
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
-        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan_desc->get_backend_descriptor(), variantPack.get_raw_desc());
 
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));

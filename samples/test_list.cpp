@@ -291,7 +291,7 @@ TEST_CASE("Use fallback for execution", "[frontend][global_index][dgrad]" ) {
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Xsize);
 
-    run_with_external_config(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
+    auto status = run_with_external_config(dimA, padA, convstrideA, dilationA, filterdimA, outdimA, CUDNN_DATA_FLOAT, mode, sm.devPtrX, sm.devPtrW, sm.devPtrY);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostX, sm.devPtrX, sizeof(sm.hostX[0]) * Xsize, cudaMemcpyDeviceToHost));
@@ -1485,6 +1485,7 @@ TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
 }
 
 TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
+    std::cout << "\n========================================================================================\n";
     std::cout << "Dual Scale Bias Act Relu wiht CPU" << std::endl;
     int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
     int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
@@ -1508,7 +1509,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
 
     if (status != CUDNN_STATUS_SUCCESS) {
         std::cout << "Error in Dual Scale Bias Act Relu with CPU" << std::endl;
-        exit(1);
+        return;
     }
 
     int numErrors = 0;
@@ -1547,6 +1548,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     
 
 TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstas][cpu]") {
+    std::cout << "\n========================================================================================\n";
     std::cout << "Scale Bias Conv BNGenstats" << std::endl;
     int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
     int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
@@ -1585,7 +1587,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstas]
 
     if (status != CUDNN_STATUS_SUCCESS) {
         std::cout << "BN Conv Gen Stat failed" << std::endl;
-        exit(1);
+        return;
     }
 
     int numErrors = 0;
@@ -1647,6 +1649,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstas]
 }
 
 TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
+    std::cout << "\n========================================================================================\n";
     std::cout << "BN Finalize" << std::endl;
     // This  example shows CUDNN_BN_FINALIZE_STATISTICS_TRAINING
     // For CUDNN_BN_FINALIZE_STATISTICS_INFERENCE,
