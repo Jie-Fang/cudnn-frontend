@@ -2690,7 +2690,7 @@ run_bn_finalize(
         void* data_ptrs[15] = {YSumdevPtr, YSqSumdevPtr, scaledevPtr, biasdevPtr, 
                                in_meandevPtr, in_vardevPtr, out_meandevPtr, out_vardevPtr,
                                saved_meandevPtr, saved_inv_vardevPtr, eq_scaledevPtr, eq_biasdevPtr,
-                               &epsilon_val, &exponential_decay_factor, &accumCountTensor};
+                               &epsilon_val, &exponential_decay_factor, &accumCnt_val};
         int64_t uids[15]    = {100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 200, 201, 300, 301, 302};
         auto variantPack  = cudnn_frontend::VariantPackBuilder()
                                .setWorkspacePointer(workspace_ptr)
@@ -2705,6 +2705,8 @@ run_bn_finalize(
         }
 
         cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+
+        std::cout << "BN Finalize run completed successfully" << std::endl;
         
     } catch (cudnn_frontend::cudnnException &e) {
         struct cudaDeviceProp prop;

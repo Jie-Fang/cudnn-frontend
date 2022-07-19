@@ -28,6 +28,7 @@
 #include "conv_sample.h"
 #include "fusion_sample.h"
 #include "mha_sample.h"
+#include "norm_sample.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -1703,7 +1704,7 @@ TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
 
     double epsilon_val = 0.05;
     double expAverageFactorVal = 0.9;
-    int64_t accumCntVal = 0;
+    int64_t accumCntVal = 25;
 
     // Just passing perChannelSum as proxy for all the 1,K,1,1 tensors
     run_bn_finalize(perChannelSum, epsilon,
@@ -1843,4 +1844,73 @@ TEST_CASE("Tensor cloning", "[frontend][comparison][clone]") {
             std::cout << "Exception in tensor creation " << e.what() << std::endl;
         }
     }
+}
+
+TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
+    std::cout << "\n========================================================================================\n";
+    std::cout << "Batch normalization" << std::endl;
+    // This  example shows CUDNN_BN_FINALIZE_STATISTICS_TRAINING
+    // For CUDNN_BN_FINALIZE_STATISTICS_INFERENCE,
+    // And output statistics like modified mean, Inv variance and AccumulationCount.
+
+    // Here Channel count is output channel.
+
+    int64_t tensorDims[]             = {8, 32, 16, 16};
+    int64_t peerDims[]               = {2, 128, 1, 1};
+    int64_t perChannelDims[]         = {1, 32, 1, 1}; // Per channel sum
+
+    int64_t accumCnt[]              = {1, 1, 1, 1};     
+    int64_t epsilon[]               = {1, 1, 1, 1};
+    int64_t expAverageFactor[]      = {1, 1, 1, 1};
+
+    auto size_calculator = 
+        [](int64_t *arr) {
+            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
+        };
+
+    Surface<half> input(size_calculator(tensorDims), false);
+    Surface<half> output(size_calculator(tensorDims), false);
+
+    Surface<float> scale(size_calculator(perChannelDims), false); 
+    Surface<float> bias(size_calculator(perChannelDims), false); 
+
+    Surface<float> in_mean(size_calculator(perChannelDims), false); 
+    Surface<float> in_var(size_calculator(perChannelDims), false); 
+    Surface<float> out_mean(size_calculator(perChannelDims), false); 
+    Surface<float> out_var(size_calculator(perChannelDims), false); 
+    Surface<float> saved_mean(size_calculator(perChannelDims), false); 
+    Surface<float> saved_inv_var(size_calculator(perChannelDims), false); 
+    Surface<float> peer_surface(size_calculator(peerDims), false); 
+
+    double epsilon_val = 0.000001;
+    double expAverageFactorVal = 0.3;
+    int64_t accumCntVal = tensorDims[0] * tensorDims[2] * tensorDims[3]; // N * H * W
+
+    SECTION("Run batch normalization forward") {
+        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION FORWARD" << std::endl;
+        run_batch_norm_forward(perChannelDims, epsilon, tensorDims, peerDims,
+                    input.devPtr, output.devPtr, scale.devPtr, bias.devPtr, 
+                    in_mean.devPtr, in_var.devPtr, out_mean.devPtr, out_var.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr, peer_surface.devPtr,
+                    epsilon_val, expAverageFactorVal);
+        std::cout << "\n========================================================================================\n";
+        
+    }
+
+    SECTION("Run batch normalization backward") {
+        Surface<float> dScale(size_calculator(perChannelDims), false); 
+        Surface<float> dBias(size_calculator(perChannelDims), false); 
+        Surface<half> dy(size_calculator(tensorDims), false);
+        Surface<half> dx(size_calculator(tensorDims), false);
+        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION BACKWARD" << std::endl;
+        run_batch_norm_backward(perChannelDims, epsilon, tensorDims, peerDims,
+                    input.devPtr, dy.devPtr, scale.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr,
+                    peer_surface.devPtr,
+                    dx.devPtr, dScale.devPtr, dBias.devPtr,
+                    epsilon_val);
+        std::cout << "\n========================================================================================\n";
+        
+    }                    
+    std::cout << "\n========================================================================================\n";
 }

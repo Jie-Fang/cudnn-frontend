@@ -485,7 +485,6 @@ class ExecutionPlanBuilder_v8 {
             return std::move(m_execution_plan);
         }
 
-        int64_t serializationSize;
         std::vector<char> serialization_buf;
         serialization_buf.assign(json_plan.begin(), json_plan.end());
         status = cudnnBackendSetAttribute(m_execution_plan.pointer->get_backend_descriptor(),
