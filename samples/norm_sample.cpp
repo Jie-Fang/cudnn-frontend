@@ -33,9 +33,9 @@ AllowAll(cudnnBackendDescriptor_t engine_config) {
 
 void
 run_batch_norm_forward(
+    int64_t *tensorDims,
     int64_t *perChannelSum, 
     int64_t *epsilon,
-    int64_t *tensorDims,
     int64_t *peerDims,
 
     void *xDevPtr, 
@@ -48,7 +48,8 @@ run_batch_norm_forward(
     void *out_vardevPtr,
     void *saved_meandevPtr, 
     void *saved_inv_vardevPtr, 
-    void *peer_devPtr, 
+    void *peer_devPtr1,
+    void *peer_devPtr2, 
 
     double epsilon_val,
     double exponential_decay_factor)
@@ -65,6 +66,7 @@ run_batch_norm_forward(
         int64_t stride[4];
         int64_t peer_stride[4];
 
+        // NHWC format. GenerateStrides() takes care of this. Howeever, tensor dims should still be NCHW
         generateStrides(tensorDims, tensor_stride, 4, CUDNN_TENSOR_NHWC);
         generateStrides(peerDims, peer_stride, 4, CUDNN_TENSOR_NHWC);
 
@@ -115,7 +117,9 @@ run_batch_norm_forward(
         auto savedMeanTensor     = per_channel_tensor_create(CUDNN_DATA_FLOAT, 108);
         auto savedInvVarTensor   = per_channel_tensor_create(CUDNN_DATA_FLOAT, 109);
 
-        auto peerStatTensor      = peer_tensor_create(CUDNN_DATA_FLOAT, 202);
+        // Create the two peer stat tensors. Jump IDs in case we need to add more tensors with UIDs
+        auto peerStatTensor1      = peer_tensor_create(CUDNN_DATA_FLOAT, 200);
+        auto peerStatTensor2      = peer_tensor_create(CUDNN_DATA_FLOAT, 201);
 
         int64_t epsilon_stride[4];
         generateStrides(epsilon, epsilon_stride, 4, CUDNN_TENSOR_NHWC);
@@ -152,7 +156,8 @@ run_batch_norm_forward(
                     .setSavedMeanAndInvVar(savedMeanTensor, savedInvVarTensor)
                     .setEpsilonTensor(epsilonTensor)
                     .setExpDecayFactorTensor(expDecayTensor)
-                    .addPeerStatTensor(peerStatTensor)
+                    .addPeerStatTensor(peerStatTensor1) // Add the two peer stat tensors for GBN with 2 GPUs
+                    .addPeerStatTensor(peerStatTensor2)
                     .setyDesc(yTensor)
                     .build();
 
@@ -197,15 +202,15 @@ run_batch_norm_forward(
             checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
         }
 
-        void* data_ptrs[13] = {xDevPtr, yDevPtr, scaledevPtr, biasdevPtr, 
+        void* data_ptrs[14] = {xDevPtr, yDevPtr, scaledevPtr, biasdevPtr, 
                                in_meandevPtr, in_vardevPtr, out_meandevPtr, out_vardevPtr,
-                               saved_meandevPtr, saved_inv_vardevPtr, peer_devPtr,
+                               saved_meandevPtr, saved_inv_vardevPtr, peer_devPtr1, peer_devPtr2,
                                &epsilon_val, &exponential_decay_factor};
-        int64_t uids[13]    = {100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 202, 300, 301};
+        int64_t uids[14]    = {100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 200, 201, 300, 301};
         auto variantPack  = cudnn_frontend::VariantPackBuilder()
                                .setWorkspacePointer(workspace_ptr)
-                               .setDataPointers(13, data_ptrs)
-                               .setUids(13, uids)
+                               .setDataPointers(14, data_ptrs)
+                               .setUids(14, uids)
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
@@ -233,9 +238,9 @@ run_batch_norm_forward(
 
 void
 run_batch_norm_backward(
+    int64_t *tensorDims,
     int64_t *perChannelSum, 
     int64_t *epsilon,
-    int64_t *tensorDims,
     int64_t *peerDims,
 
     void *xDevPtr, 
@@ -243,10 +248,11 @@ run_batch_norm_backward(
     void *scaledevPtr, 
     void *saved_meandevPtr, 
     void *saved_inv_vardevPtr, 
-    void *peer_devPtr, 
-    void *dxDevPtr, 
+    void *peer_devPtr1, 
+    void *peer_devPtr2, 
     void *dscaledevPtr, 
     void *dbiasdevPtr, 
+    void *dxDevPtr, 
 
     double epsilon_val)
 
@@ -262,6 +268,7 @@ run_batch_norm_backward(
         int64_t stride[4];
         int64_t peer_stride[4];
 
+        // NHWC format. GenerateStrides() takes care of this. Howeever, tensor dims should still be NCHW
         generateStrides(tensorDims, tensor_stride, 4, CUDNN_TENSOR_NHWC);
         generateStrides(peerDims, peer_stride, 4, CUDNN_TENSOR_NHWC);
 
@@ -305,7 +312,9 @@ run_batch_norm_backward(
         auto scaleTensor         = per_channel_tensor_create(CUDNN_DATA_FLOAT, 102);
         auto savedMeanTensor     = per_channel_tensor_create(CUDNN_DATA_FLOAT, 103);
         auto savedInvVarTensor   = per_channel_tensor_create(CUDNN_DATA_FLOAT, 104);
-        auto peerStatTensor      = peer_tensor_create(CUDNN_DATA_FLOAT, 105);
+        auto peerStatTensor1      = peer_tensor_create(CUDNN_DATA_FLOAT, 105); // Create 2 peer stat tensors for GBN with 2 GPUs
+        auto peerStatTensor2      = peer_tensor_create(CUDNN_DATA_FLOAT, 106);
+
         auto dxTensor            = tensor_create(CUDNN_DATA_HALF, 200);
         auto dScaleTensor        = per_channel_tensor_create(CUDNN_DATA_FLOAT, 201);
         auto dBiasTensor         = per_channel_tensor_create(CUDNN_DATA_FLOAT, 202);
@@ -341,7 +350,8 @@ run_batch_norm_backward(
                     .setEpsilonTensor(epsilonTensor)
                     .setDScaleAndDBias(dScaleTensor, dBiasTensor)
                     .setdxDesc(dxTensor)
-                    .addPeerStatTensor(peerStatTensor)
+                    .addPeerStatTensor(peerStatTensor1) // Add the 2 peer stat tensors for GBN with 2 GPUs
+                    .addPeerStatTensor(peerStatTensor2)
                     .build();
 
         std::array<cudnn_frontend::Operation const*, 1> ops = {&batch_norm_op};
@@ -385,12 +395,12 @@ run_batch_norm_backward(
             checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
         }
 
-        constexpr int var_pack_size = 10;
+        constexpr int var_pack_size = 11;
         void* data_ptrs[var_pack_size] = {xDevPtr, dyDevPtr, scaledevPtr,
-                               saved_meandevPtr, saved_inv_vardevPtr, peer_devPtr,
+                               saved_meandevPtr, saved_inv_vardevPtr, peer_devPtr1, peer_devPtr2,
                                &epsilon_val,
                                dxDevPtr, dscaledevPtr, dbiasdevPtr};
-        int64_t uids[var_pack_size]    = {100, 101, 102, 103, 104, 105, 300, 200, 201, 202};
+        int64_t uids[var_pack_size]    = {100, 101, 102, 103, 104, 105, 106, 300, 200, 201, 202};
         auto variantPack  = cudnn_frontend::VariantPackBuilder()
                                .setWorkspacePointer(workspace_ptr)
                                .setDataPointers(var_pack_size, data_ptrs)
