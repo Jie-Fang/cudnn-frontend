@@ -1917,3 +1917,57 @@ TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
     }                    
     std::cout << "\n========================================================================================\n";
 }
+
+#if (CUDNN_VERSION >= 8300)
+TEST_CASE("Conv two global scales", "[frontend][fusion][conv global scale]") {
+    std::cout << "Conv two global scales" << std::endl;
+    int64_t globalScaleDim[]          = { 1,  1, 1, 1};
+    int64_t xTensorDim[]              = { 32,  32, 7, 7};
+    int64_t wTensorDim[]              = {256,  32, 1, 1};
+    int64_t yTensorDim[]              = { 32, 256, 7, 7}; 
+
+    int64_t conv_padA[]       = {0, 0};
+    int64_t conv_dilationA[]  = {1, 1};
+    int64_t conv_strideA[]    = {1, 1};
+
+    int64_t XSize = xTensorDim[0] * xTensorDim[1] * xTensorDim[2] * xTensorDim[3];
+    int64_t WSize = wTensorDim[0] * wTensorDim[1] * wTensorDim[2] * wTensorDim[3];
+    int64_t YSize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    int64_t scaleSize = globalScaleDim[0] * globalScaleDim[1] * globalScaleDim[2] * globalScaleDim[3];
+
+    Surface<half> X(XSize, false);
+    Surface<half> W(WSize, false);
+    Surface<half> afterConv(YSize, false);
+    Surface<half> Y(YSize, false);
+
+    Surface<float> scale1(scaleSize, false);
+    Surface<float> scale2(scaleSize, false);
+
+    run_conv_two_global_scales(xTensorDim, wTensorDim, yTensorDim, globalScaleDim,  
+                    2, conv_padA, conv_dilationA, conv_strideA, 
+                    X.devPtr, W.devPtr, scale1.devPtr, scale2.devPtr, Y.devPtr, afterConv.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(X.hostPtr, X.devPtr, sizeof(X.devPtr[0]) * XSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(W.hostPtr, W.devPtr, sizeof(W.devPtr[0]) * WSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(afterConv.hostPtr, afterConv.devPtr, sizeof(afterConv.devPtr[0]) * YSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, sizeof(Y.devPtr[0]) * YSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(scale1.hostPtr, scale1.devPtr, sizeof(scale1.devPtr[0]) * scaleSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(scale2.hostPtr, scale2.devPtr, sizeof(scale2.devPtr[0]) * scaleSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    int numErrors = 0;
+    for (int i = 0; i < YSize; i++) {
+        half afterConvOutput = afterConv.hostPtr[i];
+        half finalOutput = Y.hostPtr[i];
+        half globalScaleOutput = afterConvOutput * scale1.hostPtr[0] * scale2.hostPtr[0];
+        float diff         = getError(finalOutput, globalScaleOutput);
+        if (diff < 0) diff = -diff;
+        if (diff > THRESHOLD) { numErrors++;}
+    }
+    
+    REQUIRE(numErrors == 0);
+
+    std::cout << "\n========================================================================================\n";
+}
+#endif
