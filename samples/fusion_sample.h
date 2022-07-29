@@ -252,3 +252,20 @@ cudnnStatus_t run_dsbar(int64_t *Y_dim,
                void *DP_scaleDevPtr,
                void *DP_biasDevPtr,
                void *YdevPtr);
+
+void
+run_conv_two_global_scales(int64_t* xTensorDim,
+                   int64_t* wTensorDim,
+                   int64_t* yTensorDim,
+                   int64_t* scaleTensorDim,
+                   int convDim,
+                   int64_t* conv_padA,
+                   int64_t* conv_dilationA,
+                   int64_t* conv_strideA,
+                   void* devPtrX,
+                   void* devPtrW,
+                   void* devPtrScale1,
+                   void* devPtrScale2,
+                   void* devPtrOutput,
+                   void* afterConv);
+
