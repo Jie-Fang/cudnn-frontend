@@ -187,6 +187,153 @@ to_string(cudnnStatus_t status) {
     return std::string("");
 }
 
+#if (CUDNN_VERSION >= 8500)
+static inline std::string
+to_string(cudnnResampleMode_t mode) {
+    switch(mode) {
+        case CUDNN_RESAMPLE_NEAREST:
+            return std::string("CUDNN_RESAMPLE_NEAREST");
+        case CUDNN_RESAMPLE_BILINEAR:
+            return std::string("CUDNN_RESAMPLE_BILINEAR");
+        case CUDNN_RESAMPLE_AVGPOOL:
+            return std::string("CUDNN_RESAMPLE_AVGPOOL");
+        case CUDNN_RESAMPLE_MAXPOOL:
+            return std::string("CUDNN_RESAMPLE_MAXPOOL");
+    }
+    return std::string("");
+}
+
+static inline std::string
+to_string(cudnnPaddingMode_t mode) {
+    switch(mode) {
+        case CUDNN_ZERO_PAD:
+            return std::string("CUDNN_ZERO_PAD");
+        case CUDNN_NEG_INF_PAD:
+            return std::string("CUDNN_NEG_INF_PAD");
+        case CUDNN_EDGE_VAL_PAD:
+            return std::string("CUDNN_EDGE_VAL_PAD");
+    }
+    return std::string("");
+}
+#endif
+
+static inline std::string
+to_string(cudnnPointwiseMode_t mode) {
+    switch(mode) {
+        case CUDNN_POINTWISE_ADD:
+            return std::string("CUDNN_POINTWISE_ADD");
+        case CUDNN_POINTWISE_MUL:
+            return std::string("CUDNN_POINTWISE_MUL");
+#if (CUDNN_VERSION >= 8300)
+        case CUDNN_POINTWISE_DIV:
+            return std::string("CUDNN_POINTWISE_DIV");
+        case CUDNN_POINTWISE_ADD_SQUARE:
+            return std::string("CUDNN_POINTWISE_ADD_SQUARE");
+        case CUDNN_POINTWISE_SUB:
+            return std::string("CUDNN_POINTWISE_SUB");
+        case CUDNN_POINTWISE_CMP_EQ:
+            return std::string("CUDNN_POINTWISE_CMP_EQ");
+        case CUDNN_POINTWISE_CMP_NEQ:
+            return std::string("CUDNN_POINTWISE_CMP_NEQ");
+        case CUDNN_POINTWISE_CMP_GT:
+            return std::string("CUDNN_POINTWISE_CMP_GT");
+        case CUDNN_POINTWISE_CMP_GE:
+            return std::string("CUDNN_POINTWISE_CMP_GE");
+        case CUDNN_POINTWISE_CMP_LT:
+            return std::string("CUDNN_POINTWISE_CMP_LT");
+        case CUDNN_POINTWISE_CMP_LE:
+            return std::string("CUDNN_POINTWISE_CMP_LE");
+        case CUDNN_POINTWISE_LOGICAL_AND:
+            return std::string("CUDNN_POINTWISE_LOGICAL_AND");
+        case CUDNN_POINTWISE_LOGICAL_OR:
+            return std::string("CUDNN_POINTWISE_LOGICAL_OR");
+#endif
+        case CUDNN_POINTWISE_MIN:
+            return std::string("CUDNN_POINTWISE_MIN");
+        case CUDNN_POINTWISE_MAX:
+            return std::string("CUDNN_POINTWISE_MAX");
+        case CUDNN_POINTWISE_RELU_BWD:
+            return std::string("CUDNN_POINTWISE_RELU_BWD");
+        case CUDNN_POINTWISE_TANH_BWD:
+            return std::string("CUDNN_POINTWISE_TANH_BWD");
+        case CUDNN_POINTWISE_SIGMOID_BWD:
+            return std::string("CUDNN_POINTWISE_SIGMOID_BWD");
+        case CUDNN_POINTWISE_ELU_BWD:
+            return std::string("CUDNN_POINTWISE_ELU_BWD");
+        case CUDNN_POINTWISE_GELU_BWD:
+            return std::string("CUDNN_POINTWISE_GELU_BWD");
+        case CUDNN_POINTWISE_SOFTPLUS_BWD:
+            return std::string("CUDNN_POINTWISE_SOFTPLUS_BWD");
+        case CUDNN_POINTWISE_SWISH_BWD:
+            return std::string("CUDNN_POINTWISE_SWISH_BWD");
+#if (CUDNN_VERSION >= 8500)
+        case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
+            return std::string("CUDNN_POINTWISE_GELU_APPROX_TANH_BWD");
+#endif
+        case CUDNN_POINTWISE_SQRT:
+            return std::string("CUDNN_POINTWISE_SQRT");
+        case CUDNN_POINTWISE_RELU_FWD:
+            return std::string("CUDNN_POINTWISE_RELU_FWD");
+        case CUDNN_POINTWISE_TANH_FWD:
+            return std::string("CUDNN_POINTWISE_TANH_FWD");
+        case CUDNN_POINTWISE_SIGMOID_FWD:
+            return std::string("CUDNN_POINTWISE_SIGMOID_FWD");
+        case CUDNN_POINTWISE_ELU_FWD:
+            return std::string("CUDNN_POINTWISE_ELU_FWD");
+        case CUDNN_POINTWISE_GELU_FWD:
+            return std::string("CUDNN_POINTWISE_GELU_FWD");
+        case CUDNN_POINTWISE_SOFTPLUS_FWD:
+            return std::string("CUDNN_POINTWISE_SOFTPLUS_FWD");
+        case CUDNN_POINTWISE_SWISH_FWD:
+            return std::string("CUDNN_POINTWISE_SWISH_FWD");
+#if (CUDNN_VERSION >= 8300)
+        case CUDNN_POINTWISE_EXP:
+            return std::string("CUDNN_POINTWISE_EXP");
+        case CUDNN_POINTWISE_LOG:
+            return std::string("CUDNN_POINTWISE_LOG");
+        case CUDNN_POINTWISE_NEG:
+            return std::string("CUDNN_POINTWISE_NEG");
+        case CUDNN_POINTWISE_MOD:
+            return std::string("CUDNN_POINTWISE_MOD");
+        case CUDNN_POINTWISE_POW:
+            return std::string("CUDNN_POINTWISE_POW");
+        case CUDNN_POINTWISE_ABS:
+            return std::string("CUDNN_POINTWISE_ABS");
+        case CUDNN_POINTWISE_CEIL:
+            return std::string("CUDNN_POINTWISE_CEIL");
+        case CUDNN_POINTWISE_FLOOR:
+            return std::string("CUDNN_POINTWISE_FLOOR");
+        case CUDNN_POINTWISE_COS:
+            return std::string("CUDNN_POINTWISE_COS");
+        case CUDNN_POINTWISE_TAN:
+            return std::string("CUDNN_POINTWISE_TAN");
+        case CUDNN_POINTWISE_SIN:
+            return std::string("CUDNN_POINTWISE_SIN");
+        case CUDNN_POINTWISE_RSQRT:
+            return std::string("CUDNN_POINTWISE_RSQRT");
+        case CUDNN_POINTWISE_LOGICAL_NOT:
+            return std::string("CUDNN_POINTWISE_LOGICAL_NOT");
+#endif
+#if (CUDNN_VERSION >= 8400)
+        case CUDNN_POINTWISE_GEN_INDEX:
+            return std::string("CUDNN_POINTWISE_GEN_INDEX");
+#endif
+#if (CUDNN_VERSION >= 8500)
+        case CUDNN_POINTWISE_ERF:
+            return std::string("CUDNN_POINTWISE_ERF");
+        case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
+            return std::string("CUDNN_POINTWISE_GELU_APPROX_TANH_FWD");
+        case CUDNN_POINTWISE_IDENTITY:
+            return std::string("CUDNN_POINTWISE_IDENTITY");
+#endif
+#if (CUDNN_VERSION >= 8400)
+        case CUDNN_POINTWISE_BINARY_SELECT:
+            return std::string("CUDNN_POINTWISE_BINARY_SELECT");
+#endif
+    }
+    return std::string("");
+}
+
 static inline void
 set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
     if (desc != nullptr) {

@@ -53,12 +53,10 @@ class ResampleDesc_v8 : public BackendDescriptor {
 #if (CUDNN_VERSION >= 8500)
         char sep = ',';
          ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR :"
-           << " Datatype: " << to_string(compType) << " Mode: " << mode_strings[mode]
+           << " Datatype: " << to_string(compType) << " Mode: " << to_string(mode)
            << " Num Dimensions: " << nbSpatialDims 
            << " NanOpt " << std::to_string(nanOpt)
-           << " PaddingMode " << padding_mode_strings[paddingMode]
-           << " alpha " << alpha
-           << " beta " << beta;
+           << " PaddingMode " << to_string(paddingMode);
         ss << " WindowDimA [ ";
         for (auto i = 0; i < nbSpatialDims; i++) {
             ss << '(' << windowDimA[i].numerator << sep << windowDimA[i].denominator << ')' << sep;
@@ -151,9 +149,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
     cudnnDataType_t compType = CUDNN_DATA_FLOAT;   
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
     
-    int32_t nbSpatialDims = 0;
-    double alpha = 1.0;
-    double beta = 0.0;
+    int64_t nbSpatialDims = 0;
 
 #if (CUDNN_VERSION >= 8500)
     cudnnResampleMode_t mode = CUDNN_RESAMPLE_AVGPOOL;
@@ -164,11 +160,6 @@ class ResampleDesc_v8 : public BackendDescriptor {
     cudnnFraction_t postPaddingA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
     cudnnFraction_t strideA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
 #endif
-
-    // string arrays for describing the enum operators
-    std::string mode_strings[4] = {"CUDNN_RESAMPLE_NEAREST","CUDNN_RESAMPLE_BILINEAR","CUDNN_RESAMPLE_AVGPOOL","CUDNN_RESAMPLE_MAXPOOL"};
-    std::string padding_mode_strings[3] = {"CUDNN_ZERO_PAD", "CUDNN_NEG_INF_PAD", "CUDNN_EDGE_VAL_PAD"};
-
     };
 
 ///
@@ -276,13 +267,6 @@ class ResampleDescBuilder_v8 {
     }
 
 #endif
-
-    //! Set beta value for the Resample Operation 
-    auto
-    setBeta(double beta_) -> ResampleDescBuilder_v8 & {
-        m_resampleDesc.alpha = beta_;
-        return *this;
-    }
     
     //! Set nan propagation mode for the Resample Operation
     auto
@@ -291,13 +275,6 @@ class ResampleDescBuilder_v8 {
         return *this;
     }
     
-    //! Set alpha value for the Resample Operation
-    auto
-    setAlpha(double alpha_) -> ResampleDescBuilder_v8 & {
-        m_resampleDesc.alpha = alpha_;
-        return *this;
-    }
-
     //! Set number of spatial dims value for the Resample Operation
     auto
     setNbSpatialDim(int32_t nbSpatialDims_) -> ResampleDescBuilder_v8 & {
@@ -324,12 +301,6 @@ class ResampleDescBuilder_v8 {
 
         // Create a descriptor. Memory allocation happens here.
         auto status = m_resampleDesc.initialize_managed_backend_pointer(CUDNN_BACKEND_RESAMPLE_DESCRIPTOR);
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                &m_resampleDesc, status, "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: Bad descriptor created");
-            return std::move(m_resampleDesc);
-        }
-
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc, status, "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: cudnnCreate Failed");

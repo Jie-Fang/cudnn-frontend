@@ -142,7 +142,7 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
                               cudnnNanPropagation_t nanOpt, 
                               cudnnPaddingMode_t paddingMode, 
 #endif
-                              int32_t nbSpatialDims,                         
+                              int64_t nbSpatialDims,                         
                               double alpha,                           
                               double beta,
                               int64_t* windowDimA,
