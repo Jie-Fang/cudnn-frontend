@@ -863,7 +863,7 @@ TEST_CASE("PoolScaleBiasAct_int8 sample", "[frontend][fusion][PoolScaleBiasAct_i
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
     cudnnPaddingMode_t paddingMode = CUDNN_ZERO_PAD;
 #endif
-    int32_t nbSpatialDims = 2;
+    int64_t nbSpatialDims = 2;
     double alpha = 1.0;
     double beta = 0.0;
 
