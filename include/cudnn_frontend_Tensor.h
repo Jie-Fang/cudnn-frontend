@@ -173,7 +173,7 @@ class TensorBuilder_v8 {
     }
     //! Set Strides of the tensor
     auto
-    setStrides(int64_t ndim, int64_t const *strides) -> TensorBuilder_v8 & {
+    setStride(int64_t ndim, int64_t const *strides) -> TensorBuilder_v8 & {
         std::copy(strides, strides + ndim, m_tensor.btensor_strA);
         return *this;
     }
@@ -215,6 +215,12 @@ class TensorBuilder_v8 {
     }
 #endif
     /** @} */
+
+    // TODO: Deprecate in v1.0
+    auto
+    setStrides(int64_t ndim, int64_t const *strides) -> TensorBuilder_v8 & {
+        return setStride(ndim, strides);
+    }
 
     // Clone parameters of another tensor. Make sure to still set the UID since UID of two tensors shouldn't be the same.
     auto cloneFrom(Tensor_v8 const &from, int64_t newID) -> TensorBuilder_v8 & {

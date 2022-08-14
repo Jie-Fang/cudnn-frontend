@@ -52,28 +52,32 @@ class ResampleDesc_v8 : public BackendDescriptor {
         std::stringstream ss;
 #if (CUDNN_VERSION >= 8500)
         char sep = ',';
-         ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR :"
-           << " Datatype: " << to_string(compType) << " Mode: " << to_string(mode)
-           << " Num Dimensions: " << nbSpatialDims 
-           << " NanOpt " << std::to_string(nanOpt)
-           << " PaddingMode " << to_string(paddingMode);
-        ss << " WindowDimA [ ";
-        for (auto i = 0; i < nbSpatialDims; i++) {
-            ss << '(' << windowDimA[i].numerator << sep << windowDimA[i].denominator << ')' << sep;
+        ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: "
+           << "Compute Type: " << to_string(computeType)
+           << ", Mode: " << to_string(mode)
+           << ", Spatial Dimensions: " << spatialDim 
+           << ", Nan Propagation: " << std::to_string(nanOpt)
+           << ", Padding Mode: " << to_string(paddingMode);
+        ss << ", WindowDim: [";
+        for (auto i = 0; i < spatialDim; i++) {
+            ss << '(' << windowDim[i].numerator << sep << windowDim[i].denominator << ')' << sep;
         }
-        ss << " ] prePaddingA [ ";
-        for (auto i = 0; i < nbSpatialDims; i++) {
-            ss << '(' << prePaddingA[i].numerator << sep << prePaddingA[i].denominator << ')' << sep;
+        ss << "]";
+        ss << ", prePadding: [";
+        for (auto i = 0; i < spatialDim; i++) {
+            ss << '(' << prePadding[i].numerator << sep << prePadding[i].denominator << ')' << sep;
         }
-        ss << " ] postPaddingA [ ";
-        for (auto i = 0; i < nbSpatialDims; i++) {
-            ss << '(' << postPaddingA[i].numerator << sep << postPaddingA[i].denominator << ')' << sep;
+        ss << "]";
+        ss << ", postPadding: [";
+        for (auto i = 0; i < spatialDim; i++) {
+            ss << '(' << postPadding[i].numerator << sep << postPadding[i].denominator << ')' << sep;
         }
-        ss << " ] strideA [ ";
-        for (auto i = 0; i < nbSpatialDims; i++) {
-            ss << '(' << strideA[i].numerator << sep << strideA[i].denominator << ')' << sep;
+        ss << "]";
+        ss << ", stride: [ ";
+        for (auto i = 0; i < spatialDim; i++) {
+            ss << '(' << stride[i].numerator << sep << stride[i].denominator << ')' << sep;
         }
-        ss << " ]";
+        ss << "]";
 #endif
         return ss.str();
     }
@@ -90,13 +94,13 @@ class ResampleDesc_v8 : public BackendDescriptor {
      */
     
     cudnnDataType_t
-    getCompType() const {
-        return compType;
+    getComputeType() const {
+        return computeType;
     }
     
     int64_t
-    getNbSpatialDims() const {
-        return nbSpatialDims;
+    getSpatialDim() const {
+        return spatialDim;
     }
 
 #if (CUDNN_VERSION >= 8500)
@@ -117,23 +121,23 @@ class ResampleDesc_v8 : public BackendDescriptor {
     }
 
     cudnnFraction_t const *
-    getStrideA() const {
-        return strideA;
+    getStride() const {
+        return stride;
     }
 
     cudnnFraction_t const *
-    getPrePaddingA() const {
-        return prePaddingA;
+    getPrePadding() const {
+        return prePadding;
     }
 
     cudnnFraction_t const *
-    getPostPaddingA() const {
-        return postPaddingA;
+    getPostPadding() const {
+        return postPadding;
     }
 
     cudnnFraction_t const *
-    getWindowDimA() const {
-        return windowDimA;
+    getWindowDim() const {
+        return windowDim;
     }
 #endif
     /** @} */
@@ -146,19 +150,19 @@ class ResampleDesc_v8 : public BackendDescriptor {
     operator=(ResampleDesc_v8 const &) = delete;
 
     // default values for attributes 
-    cudnnDataType_t compType = CUDNN_DATA_FLOAT;   
+    cudnnDataType_t computeType = CUDNN_DATA_FLOAT;   
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
     
-    int64_t nbSpatialDims = 0;
+    int64_t spatialDim = 0;
 
 #if (CUDNN_VERSION >= 8500)
     cudnnResampleMode_t mode = CUDNN_RESAMPLE_AVGPOOL;
     cudnnPaddingMode_t paddingMode = CUDNN_ZERO_PAD;
     // Shape attributes
-    cudnnFraction_t windowDimA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
-    cudnnFraction_t prePaddingA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
-    cudnnFraction_t postPaddingA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
-    cudnnFraction_t strideA[CUDNN_DIM_MAX] = {{0,1},{0,1}};
+    cudnnFraction_t windowDim[CUDNN_DIM_MAX] = {{0,1},{0,1}};
+    cudnnFraction_t prePadding[CUDNN_DIM_MAX] = {{0,1},{0,1}};
+    cudnnFraction_t postPadding[CUDNN_DIM_MAX] = {{0,1},{0,1}};
+    cudnnFraction_t stride[CUDNN_DIM_MAX] = {{0,1},{0,1}};
 #endif
     };
 
@@ -171,83 +175,78 @@ class ResampleDescBuilder_v8 {
      *  Set individual property of ResampleDesc_v8 class
      *  @{
      */
-    //! Set Datatype for the Resample Operation
+    //! Set compute type for the Resample Descriptor
     auto
-    setMathPrecision(cudnnDataType_t data_type_) -> ResampleDescBuilder_v8 & {
-        return setComputePrecision(data_type_);
-    }
-
-    auto
-    setComputePrecision(cudnnDataType_t data_type_) ->  ResampleDescBuilder_v8 & {
-        m_resampleDesc.compType = data_type_;
+    setComputeType(cudnnDataType_t data_type_) ->  ResampleDescBuilder_v8 & {
+        m_resampleDesc.computeType = data_type_;
         return *this;
     }
 
 #if (CUDNN_VERSION >= 8500)
     //! (Overloaded) Set post padding for the Resample Operation with cudnnFraction_t
     auto
-    setPostPaddingA(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
-        std::copy(arr, arr + m_resampleDesc.nbSpatialDims, m_resampleDesc.postPaddingA);
+    setPostPadding(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
+        std::copy(arr, arr + m_resampleDesc.spatialDim, m_resampleDesc.postPadding);
         return *this;
     }
  
     //! (Overloaded) Set post padding for the Resample Operation with int64_t
     auto
-    setPostPaddingA(int64_t *arr) -> ResampleDescBuilder_v8 & {
-        for (int i = 0; i < m_resampleDesc.nbSpatialDims; i++) {
-            m_resampleDesc.postPaddingA[i].numerator = arr[i];
-            m_resampleDesc.postPaddingA[i].denominator = 1;
+    setPostPadding(int64_t *arr) -> ResampleDescBuilder_v8 & {
+        for (int i = 0; i < m_resampleDesc.spatialDim; i++) {
+            m_resampleDesc.postPadding[i].numerator = arr[i];
+            m_resampleDesc.postPadding[i].denominator = 1;
         }
         return *this;
     }
 
     //! (Overloaded) Set pre padding for the Resample Operation with cudnnFraction_t
     auto
-    setPrePaddingA(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
-        std::copy(arr, arr + m_resampleDesc.nbSpatialDims, m_resampleDesc.prePaddingA);
+    setPrePadding(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
+        std::copy(arr, arr + m_resampleDesc.spatialDim, m_resampleDesc.prePadding);
         return *this;
     }
     
     //! (Overloaded) Set pre padding for the Resample Operation with int64_t
     auto
-    setPrePaddingA(int64_t *arr) -> ResampleDescBuilder_v8 & {
-        for (int i = 0; i < m_resampleDesc.nbSpatialDims; i++) {
-            m_resampleDesc.prePaddingA[i].numerator = arr[i];
-            m_resampleDesc.prePaddingA[i].denominator = 1;
+    setPrePadding(int64_t *arr) -> ResampleDescBuilder_v8 & {
+        for (int i = 0; i < m_resampleDesc.spatialDim; i++) {
+            m_resampleDesc.prePadding[i].numerator = arr[i];
+            m_resampleDesc.prePadding[i].denominator = 1;
         }
         return *this;
     }
 
     //! (Overloaded) Set stride for the Resample Operation with cudnnFraction_t
     auto
-    setStrideA(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
-        std::copy(arr, arr + m_resampleDesc.nbSpatialDims, m_resampleDesc.strideA);
+    setStride(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
+        std::copy(arr, arr + m_resampleDesc.spatialDim, m_resampleDesc.stride);
         return *this;
     }
     
     //! (Overloaded) Set stride for the Resample Operation with int64_t
     auto
-    setStrideA(int64_t *arr) -> ResampleDescBuilder_v8 & {
-        for (int i = 0; i < m_resampleDesc.nbSpatialDims; i++) {
-            m_resampleDesc.strideA[i].numerator = arr[i];
-            m_resampleDesc.strideA[i].denominator = 1;
+    setStride(int64_t *arr) -> ResampleDescBuilder_v8 & {
+        for (int i = 0; i < m_resampleDesc.spatialDim; i++) {
+            m_resampleDesc.stride[i].numerator = arr[i];
+            m_resampleDesc.stride[i].denominator = 1;
         }
         return *this;
     }
 
     //! (Overloaded) Set window dim for the Resample Operation with cudnnFraction_t
     auto
-    setWindowDimA(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
-        std::copy(arr, arr + m_resampleDesc.nbSpatialDims, m_resampleDesc.windowDimA);
+    setWindowDim(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
+        std::copy(arr, arr + m_resampleDesc.spatialDim, m_resampleDesc.windowDim);
         return *this;
     }
 
     //! (Overloaded) Set window dim for the Resample Operation with int64_t
     auto
-    setWindowDimA(int64_t *arr) -> ResampleDescBuilder_v8 & {
-        for (int i = 0; i < m_resampleDesc.nbSpatialDims; i++) {
-            m_resampleDesc.windowDimA[i].numerator = arr[i];
-            m_resampleDesc.windowDimA[i].denominator = 1;
+    setWindowDim(int64_t *arr) -> ResampleDescBuilder_v8 & {
+        for (int i = 0; i < m_resampleDesc.spatialDim; i++) {
+            m_resampleDesc.windowDim[i].numerator = arr[i];
+            m_resampleDesc.windowDim[i].denominator = 1;
         }
         return *this;
     }
@@ -277,8 +276,8 @@ class ResampleDescBuilder_v8 {
     
     //! Set number of spatial dims value for the Resample Operation
     auto
-    setNbSpatialDim(int32_t nbSpatialDims_) -> ResampleDescBuilder_v8 & {
-        m_resampleDesc.nbSpatialDims = nbSpatialDims_;
+    setSpatialDim(int64_t spatialDim_) -> ResampleDescBuilder_v8 & {
+        m_resampleDesc.spatialDim = spatialDim_;
         return *this;
     }
 
@@ -290,11 +289,11 @@ class ResampleDescBuilder_v8 {
     build() {
 #if (CUDNN_VERSION >= 8500)
         // Sanity check if non-default fields have been set correctly.
-        if (m_resampleDesc.nbSpatialDims < 0) {
+        if (m_resampleDesc.spatialDim < 0) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
                 CUDNN_STATUS_BAD_PARAM,
-                "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: Check and Set the nbSpatialDims field");
+                "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: Check and Set the spatialDim field");
             return std::move(m_resampleDesc);
         };
 
@@ -325,7 +324,7 @@ class ResampleDescBuilder_v8 {
                                           CUDNN_ATTR_RESAMPLE_COMP_TYPE, 
                                           CUDNN_TYPE_DATA_TYPE,    
                                           1, 
-                                          &(m_resampleDesc.compType));
+                                          &(m_resampleDesc.computeType));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
@@ -364,7 +363,7 @@ class ResampleDescBuilder_v8 {
                                           CUDNN_ATTR_RESAMPLE_SPATIAL_DIMS, 
                                           CUDNN_TYPE_INT64, 
                                           1, 
-                                          &(m_resampleDesc.nbSpatialDims));
+                                          &(m_resampleDesc.spatialDim));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
@@ -376,8 +375,8 @@ class ResampleDescBuilder_v8 {
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_RESAMPLE_WINDOW_DIMS,
                                             CUDNN_TYPE_FRACTION,
-                                            m_resampleDesc.nbSpatialDims,
-                                            m_resampleDesc.windowDimA);
+                                            m_resampleDesc.spatialDim,
+                                            m_resampleDesc.windowDim);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
@@ -389,8 +388,8 @@ class ResampleDescBuilder_v8 {
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_RESAMPLE_PRE_PADDINGS,
                                             CUDNN_TYPE_FRACTION,
-                                            m_resampleDesc.nbSpatialDims,
-                                            m_resampleDesc.prePaddingA);
+                                            m_resampleDesc.spatialDim,
+                                            m_resampleDesc.prePadding);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
@@ -403,8 +402,8 @@ class ResampleDescBuilder_v8 {
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_RESAMPLE_POST_PADDINGS,
                                             CUDNN_TYPE_FRACTION,
-                                            m_resampleDesc.nbSpatialDims,
-                                            m_resampleDesc.postPaddingA);
+                                            m_resampleDesc.spatialDim,
+                                            m_resampleDesc.postPadding);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
@@ -417,8 +416,8 @@ class ResampleDescBuilder_v8 {
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_RESAMPLE_STRIDES,
                                             CUDNN_TYPE_FRACTION,
-                                            m_resampleDesc.nbSpatialDims,
-                                            m_resampleDesc.strideA);
+                                            m_resampleDesc.spatialDim,
+                                            m_resampleDesc.stride);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
