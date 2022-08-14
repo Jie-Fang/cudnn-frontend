@@ -28,7 +28,6 @@
 #include "conv_sample.h"
 #include "fusion_sample.h"
 #include "mha_sample.h"
-#include "norm_sample.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -1844,78 +1843,6 @@ TEST_CASE("Tensor cloning", "[frontend][comparison][clone]") {
             std::cout << "Exception in tensor creation " << e.what() << std::endl;
         }
     }
-}
-
-TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
-    std::cout << "\n========================================================================================\n";
-    std::cout << "Batch normalization" << std::endl;
-    // This  example shows CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR and CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR
-
-    // Here Channel count is output channel.
-
-    // Tensor dims are always NCHW, but stride layout may be NCHW or NHWC depending on how you configure it. The strides take care of it
-    int64_t tensorDims[]             = {8, 32, 16, 16}; // Input tensor dims (NCHW)
-    int64_t peerDims[]               = {2, 128, 1, 1}; // Peer stat tensor dims -> (Num GPUS, 2 * channel, 1, 1)
-    int64_t perChannelDims[]         = {1, 32, 1, 1}; // Per channel sum (1, C, 1, 1)
-
-    int64_t accumCnt[]              = {1, 1, 1, 1}; // Scalar value -> (1, 1, 1, 1) dims    
-    int64_t epsilon[]               = {1, 1, 1, 1};
-    int64_t expAverageFactor[]      = {1, 1, 1, 1};
-
-    auto size_calculator = 
-        [](int64_t *arr) {
-            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
-        };
-
-    Surface<half> input(size_calculator(tensorDims), false);
-    Surface<half> output(size_calculator(tensorDims), false);
-
-    Surface<float> scale(size_calculator(perChannelDims), false); 
-    Surface<float> bias(size_calculator(perChannelDims), false); 
-
-    Surface<float> in_mean(size_calculator(perChannelDims), false); 
-    Surface<float> in_var(size_calculator(perChannelDims), false); 
-    Surface<float> out_mean(size_calculator(perChannelDims), false); 
-    Surface<float> out_var(size_calculator(perChannelDims), false); 
-    Surface<float> saved_mean(size_calculator(perChannelDims), false); 
-    Surface<float> saved_inv_var(size_calculator(perChannelDims), false); 
-
-    // Create two peer stat tensors for sample SGBN
-    Surface<float> peer_tensor1(size_calculator(peerDims), false, true);
-    Surface<float> peer_tensor2(size_calculator(peerDims), false, true);
-
-    // Example epsilon and decay values for batch normalization
-    double epsilon_val = 0.000001;
-    double expAverageFactorVal = 0.3;
-    int64_t accumCntVal = tensorDims[0] * tensorDims[2] * tensorDims[3]; // N * H * W
-
-    SECTION("Run batch normalization forward") {
-        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION FORWARD" << std::endl;
-        run_batch_norm_forward(tensorDims, perChannelDims, epsilon, peerDims,
-                    input.devPtr, output.devPtr, scale.devPtr, bias.devPtr, 
-                    in_mean.devPtr, in_var.devPtr, out_mean.devPtr, out_var.devPtr,
-                    saved_mean.devPtr, saved_inv_var.devPtr, peer_tensor1.devPtr, peer_tensor2.devPtr,
-                    epsilon_val, expAverageFactorVal);
-        std::cout << "\n========================================================================================\n";
-        
-    }
-
-    SECTION("Run batch normalization backward") {
-        Surface<float> dScale(size_calculator(perChannelDims), false); 
-        Surface<float> dBias(size_calculator(perChannelDims), false); 
-        Surface<half> dy(size_calculator(tensorDims), false);
-        Surface<half> dx(size_calculator(tensorDims), false);
-        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION BACKWARD" << std::endl;
-        run_batch_norm_backward(tensorDims, perChannelDims, epsilon, peerDims,
-                    input.devPtr, dy.devPtr, scale.devPtr,
-                    saved_mean.devPtr, saved_inv_var.devPtr,
-                    peer_tensor1.devPtr, peer_tensor2.devPtr,
-                    dx.devPtr, dScale.devPtr, dBias.devPtr,
-                    epsilon_val);
-        std::cout << "\n========================================================================================\n";
-        
-    }                    
-    std::cout << "\n========================================================================================\n";
 }
 
 #if (CUDNN_VERSION >= 8300)

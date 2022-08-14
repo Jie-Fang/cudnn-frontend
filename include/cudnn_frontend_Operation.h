@@ -1136,75 +1136,91 @@ class OperationBuilder_v8 {
             }
         };
 
+
+
         set_attribute(m_operation,
                       CUDNN_ATTR_OPERATION_NORM_FWD_MODE ,
                       "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_MODE Failed",
                       &m_operation.norm_mode,
                       CUDNN_TYPE_NORM_MODE);
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         set_attribute(m_operation,
                       CUDNN_ATTR_OPERATION_NORM_FWD_PHASE ,
                       "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_PHASE Failed",
                       &m_operation.norm_fwd_phase,
                       CUDNN_TYPE_NORM_FWD_PHASE);
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         set_attribute(m_operation, 
                       CUDNN_ATTR_OPERATION_NORM_FWD_XDESC, 
                       "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_XDESC Failed",
                       &m_operation.xdesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.savedMeandesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_MEAN_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_MEAN_DESC Failed",
                           &m_operation.savedMeandesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.savedInVardesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_INV_VARIANCE_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_INV_VARIANCE_DESC Failed",
                           &m_operation.savedInVardesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.scaledesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_SCALE_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_SCALE_DESC Failed",
                           &m_operation.scaledesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.biasdesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_BIAS_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_BIAS_DESC Failed",
                           &m_operation.biasdesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.epsilondesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_EPSILON_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_EPSILON Failed",
                           &m_operation.epsilondesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.expDecayFactordesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_EXP_AVG_FACTOR_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_EXP_AVG_FACTOR Failed",
                           &m_operation.expDecayFactordesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.prevMeandesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_INPUT_RUNNING_MEAN_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_INPUT_RUNNING_MEAN_DESC Failed",
                           &m_operation.prevMeandesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.prevVardesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_INPUT_RUNNING_VAR_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_INPUT_RUNNING_VAR_DESC Failed",
                           &m_operation.prevVardesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.nextMeandesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_OUTPUT_RUNNING_MEAN_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_OUTPUT_RUNNING_MEAN_DESC Failed",
                           &m_operation.nextMeandesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.nextVardesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_OUTPUT_RUNNING_VAR_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_OUTPUT_RUNNING_VAR_DESC Failed",
                           &m_operation.nextVardesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.ydesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_FWD_YDESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNCUDNN_ATTR_OPERATION_NORM_FWD_YDESC Failed",
                           &m_operation.ydesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.peerStatdescs.size()) {
             std::vector<cudnnBackendDescriptor_t> backend_peer_stat_descs;
             for (auto &desc : m_operation.peerStatdescs) {
@@ -1217,6 +1233,7 @@ class OperationBuilder_v8 {
                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                           backend_peer_stat_descs.size());
         }
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
         status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
         
@@ -1258,46 +1275,55 @@ class OperationBuilder_v8 {
                       "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_MODE Failed",
                       &m_operation.norm_mode,
                       CUDNN_TYPE_NORM_MODE);
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.xdesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_XDESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_XDESC Failed",
                           &m_operation.xdesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.savedMeandesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_MEAN_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_MEAN_DESC Failed",
                           &m_operation.savedMeandesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.savedInVardesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_INV_VARIANCE_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_INV_VARIANCE_DESC Failed",
                           &m_operation.savedInVardesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.dydesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_DYDESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_DYDESC Failed",
                           &m_operation.dydesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.scaledesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_SCALE_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_SCALE_DESC Failed",
                           &m_operation.scaledesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.dxdesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_DXDESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_DXDESC Failed",
                           &m_operation.dxdesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.dscaledesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_DSCALE_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_DSCALE_DESC Failed",
                           &m_operation.dscaledesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.dbiasdesc)
             set_attribute(m_operation, 
                           CUDNN_ATTR_OPERATION_NORM_BWD_DBIAS_DESC, 
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_DBIAS_DESC Failed",
                           &m_operation.dbiasdesc->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.peerStatdescs.size()) {
             std::vector<cudnnBackendDescriptor_t> backend_peer_stat_descs;
             for (auto &desc : m_operation.peerStatdescs) {
@@ -1310,12 +1336,14 @@ class OperationBuilder_v8 {
                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
                           backend_peer_stat_descs.size());
         }
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.epsilondesc) {
             set_attribute(m_operation, 
                       CUDNN_ATTR_OPERATION_NORM_BWD_EPSILON_DESC, 
                       "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_EPSILON Failed",
                       &m_operation.epsilondesc->get_backend_descriptor());
         }
+        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
         status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
         
@@ -1583,12 +1611,36 @@ class OperationBuilder_v8 {
 
     cudnnStatus_t
     validate_norm_op(Message_t &msg) {
+        cudnnStatus_t status = CUDNN_STATUS_SUCCESS;
         if (m_operation.xdesc == nullptr) {
             msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_NORM.*XDESC";
             return CUDNN_STATUS_BAD_PARAM;
         }
 
-        return CUDNN_STATUS_SUCCESS;
+#if (CUDNN_VERSION == 8500)
+        std::array<int64_t, 10> x_dimensions;
+        int64_t dim_count;
+        status = cudnnBackendGetAttribute(m_operation.xdesc->get_backend_descriptor(), 
+                                            CUDNN_ATTR_TENSOR_DIMENSIONS,
+                                            CUDNN_TYPE_INT64,
+                                            x_dimensions.size(),
+                                            &dim_count, 
+                                            x_dimensions.data());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            msg = "CUDNN_BACKEND_OPERATION: CUDNN_BACKEND_TENSOR has invalid CUDNN_ATTR_TENSOR_DIMENSIONS";
+            return status;
+        }
+
+        int64_t N = x_dimensions[0];
+        int64_t C = x_dimensions[1];
+
+        if ((N != 1) || ((C % 8) != 0)) {
+            msg = "CUDNN_BACKEND_OPERATION: CUDNN_BACKEND_TENSOR has bad CUDNN_ATTR_TENSOR_DIMENSIONS";
+            return CUDNN_STATUS_BAD_PARAM;
+        }
+#endif
+
+        return status;
     }
 
     cudnnStatus_t
