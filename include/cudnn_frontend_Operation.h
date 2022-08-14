@@ -170,7 +170,7 @@ class Operation_v8 : public BackendDescriptor {
     std::vector<ManagedOpaqueDescriptor> peerStatdescs;
 
     cudnnBackendAttributeType_t alphabetaType = CUDNN_TYPE_FLOAT;
-    cudnnDataType_t     math_precision   = CUDNN_DATA_FLOAT;
+    cudnnDataType_t     compute_type   = CUDNN_DATA_FLOAT;
     cudnnGenStatsMode_t genstats_mode    = CUDNN_GENSTATS_SUM_SQSUM;
     cudnnBnFinalizeStatsMode_t bn_stats_mode = CUDNN_BN_FINALIZE_STATISTICS_TRAINING;
 
@@ -771,7 +771,7 @@ class OperationBuilder_v8 {
         set_attribute(m_operation,
                 CUDNN_ATTR_OPERATION_BN_FINALIZE_MATH_PREC, 
                 "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_FINALIZE_MATH_PREC Failed",
-                &(m_operation.math_precision),
+                &(m_operation.compute_type),
                 CUDNN_TYPE_DATA_TYPE, 
                 1);
         if (status != CUDNN_STATUS_SUCCESS) {
@@ -997,7 +997,7 @@ class OperationBuilder_v8 {
                 CUDNN_ATTR_OPERATION_GENSTATS_MATH_PREC,
                 CUDNN_TYPE_DATA_TYPE,
                 1,
-                &(m_operation.math_precision));
+                &(m_operation.compute_type));
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                     &m_operation,
@@ -2146,9 +2146,14 @@ class OperationBuilder_v8 {
     }
 
     auto
-    setMathPrecision(cudnnDataType_t dtype) -> OperationBuilder_v8 & {
-        m_operation.math_precision = dtype;
+    setComputeType(cudnnDataType_t dtype) -> OperationBuilder_v8 & {
+        m_operation.compute_type = dtype;
         return *this;
+    }
+    
+    auto
+    setMathPrecision(cudnnDataType_t dtype) -> OperationBuilder_v8 & {
+        return setComputeType(dtype);
     }
 
     auto
