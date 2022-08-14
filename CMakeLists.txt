@@ -15,7 +15,7 @@ if (MSVC)
 else()
     # lots of warnings and all warnings as errors
     add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -Wno-unused-parameter
-	                -Wno-pessimizing-move -Wno-unused-variable -Wno-sign-compare)
+	    -Wno-pessimizing-move -Wno-unused-variable -Wno-sign-compare -Wnon-virtual-dtor)
 endif()
 
 
@@ -36,7 +36,6 @@ add_executable(Samples samples/conv_sample.cpp
                        samples/catch.cpp 
                        samples/helpers.cpp 
                        samples/fusion_sample.cpp 
-                       samples/norm_sample.cpp
                        samples/mha_sample.cpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
