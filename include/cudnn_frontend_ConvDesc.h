@@ -103,7 +103,7 @@ class ConvDesc_v8 : public BackendDescriptor {
     }
 
     int64_t
-    getDimensionCount() const {
+    getSpatialDimCount() const {
         return nDims;
     }
 
@@ -111,10 +111,12 @@ class ConvDesc_v8 : public BackendDescriptor {
     getPadding() const {
         return padLower;
     }
+
     int64_t const *
-    getStride() const {
+    getSpatialStride() const {
         return stride;
     }
+
     int64_t const *
     getDilation() const {
         return dilation;
@@ -125,7 +127,18 @@ class ConvDesc_v8 : public BackendDescriptor {
         return mode;
     }
 
+    // TODO: Deprecate in v1.0
+    int64_t
+    getDimensionCount() const {
+        return getSpatialDimCount();
+    }
 
+    // TODO: Deprecate in v1.0
+    int64_t const *
+    getStride() const {
+        return getSpatialStride();
+    }
+    
    private:
     ConvDesc_v8()                    = default;
     ConvDesc_v8(ConvDesc_v8 const &) = delete;
@@ -176,13 +189,13 @@ class ConvDescBuilder_v8 {
     }
     //! Set Strides of the convDesc
     auto
-    setStride(int64_t ndims, int64_t const *strides) -> ConvDescBuilder_v8 & {
+    setSpatialStride(int64_t ndims, int64_t const *strides) -> ConvDescBuilder_v8 & {
         std::copy(strides, strides + ndims, m_convDesc.stride);
         return *this;
     }
     //! Set Num Spatial Dimensions of the convolution Operation
     auto
-    setDim(int64_t nDims_) -> ConvDescBuilder_v8 & {
+    setSpatialDimCount(int64_t nDims_) -> ConvDescBuilder_v8 & {
         m_convDesc.nDims = nDims_;
         return *this;
     }
@@ -198,7 +211,7 @@ class ConvDescBuilder_v8 {
     // TODO: Deprecate in v1.0
     auto
     setNDims(int64_t nDims_) -> ConvDescBuilder_v8 & {
-        return setDim(nDims_);
+        return setSpatialDimCount(nDims_);
     }
     // TODO: Deprecate in v1.0
     auto
@@ -213,7 +226,7 @@ class ConvDescBuilder_v8 {
     // TODO: Deprecate in v1.0
     auto
     setStrides(int64_t ndims, int64_t const *strides) -> ConvDescBuilder_v8 & {
-        return setStride(ndims, strides);
+        return setSpatialStride(ndims, strides);
     }
     
     //! constructs the ConvDesc_v8 by calling the cudnn API

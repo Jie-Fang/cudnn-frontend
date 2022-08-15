@@ -99,7 +99,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
     }
     
     int64_t
-    getSpatialDim() const {
+    getSpatialDimCount() const {
         return spatialDim;
     }
 
@@ -121,7 +121,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
     }
 
     cudnnFraction_t const *
-    getStride() const {
+    getSpatialStride() const {
         return stride;
     }
 
@@ -136,7 +136,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
     }
 
     cudnnFraction_t const *
-    getWindowDim() const {
+    getSpatialDim() const {
         return windowDim;
     }
 #endif
@@ -219,14 +219,14 @@ class ResampleDescBuilder_v8 {
 
     //! (Overloaded) Set stride for the Resample Operation with cudnnFraction_t
     auto
-    setStride(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
+    setSpatialStride(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
         std::copy(arr, arr + m_resampleDesc.spatialDim, m_resampleDesc.stride);
         return *this;
     }
     
     //! (Overloaded) Set stride for the Resample Operation with int64_t
     auto
-    setStride(int64_t *arr) -> ResampleDescBuilder_v8 & {
+    setSpatialStride(int64_t *arr) -> ResampleDescBuilder_v8 & {
         for (int i = 0; i < m_resampleDesc.spatialDim; i++) {
             m_resampleDesc.stride[i].numerator = arr[i];
             m_resampleDesc.stride[i].denominator = 1;
@@ -236,14 +236,14 @@ class ResampleDescBuilder_v8 {
 
     //! (Overloaded) Set window dim for the Resample Operation with cudnnFraction_t
     auto
-    setWindowDim(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
+    setSpatialDim(cudnnFraction_t *arr) -> ResampleDescBuilder_v8 & {
         std::copy(arr, arr + m_resampleDesc.spatialDim, m_resampleDesc.windowDim);
         return *this;
     }
 
     //! (Overloaded) Set window dim for the Resample Operation with int64_t
     auto
-    setWindowDim(int64_t *arr) -> ResampleDescBuilder_v8 & {
+    setSpatialDim(int64_t *arr) -> ResampleDescBuilder_v8 & {
         for (int i = 0; i < m_resampleDesc.spatialDim; i++) {
             m_resampleDesc.windowDim[i].numerator = arr[i];
             m_resampleDesc.windowDim[i].denominator = 1;
@@ -276,7 +276,7 @@ class ResampleDescBuilder_v8 {
     
     //! Set number of spatial dims value for the Resample Operation
     auto
-    setSpatialDim(int64_t spatialDim_) -> ResampleDescBuilder_v8 & {
+    setSpatialDimCount(int64_t spatialDim_) -> ResampleDescBuilder_v8 & {
         m_resampleDesc.spatialDim = spatialDim_;
         return *this;
     }
