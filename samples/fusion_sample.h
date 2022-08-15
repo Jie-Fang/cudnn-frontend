@@ -160,7 +160,21 @@ run_matmul_bias_gelu(int64_t* a_dim,
                      void* devPtrA,
                      void* devPtrB,
                      void* devPtrC,
-                     void* devPtrZ);
+                     void* devPtrZ,
+                     void* devPtrAfterZ);
+
+                     
+void
+run_matmul_dgelu_dbias(const int64_t* a_dim,
+                       const int64_t* b_dim,
+                       const int64_t* c_dim,
+                       const int64_t* bias_dim,
+                       cudnnDataType_t dataType,
+                       void* devPtrDy,
+                       void* devPtrW,
+                       void* devPtrX,
+                       void* devPtrDX,
+                       void* devPtrDBias);
 
 void
 run_conv_drelu(int64_t* x,

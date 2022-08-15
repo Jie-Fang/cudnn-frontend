@@ -956,11 +956,13 @@ TEST_CASE("MatmulBiasAct sample", "[frontend][fusion][MatmulBiasAct]") {
     Surface<half> C(Csize, true);
 
     Surface<half> Z(zTensorDim[0] * zTensorDim[1] * zTensorDim[2], false);
+    Surface<half> AfterZ(Csize, false);
 
-    run_matmul_bias_gelu(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_HALF, A.devPtr, B.devPtr, C.devPtr, Z.devPtr);
+    run_matmul_bias_gelu(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_HALF, A.devPtr, B.devPtr, C.devPtr, Z.devPtr, AfterZ.devPtr);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(C.hostPtr, C.devPtr, sizeof(C.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(AfterZ.hostPtr, AfterZ.devPtr, sizeof(AfterZ.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 
     std::cout << "\n========================================================================================\n";
@@ -988,11 +990,48 @@ TEST_CASE("MatmulBiasAct sample_float", "[frontend][fusion][MatmulBiasAct]") {
     Surface<float> C(Csize, true);
 
     Surface<float> Z(zTensorDim[0] * zTensorDim[1] * zTensorDim[2], false);
+    Surface<half> AfterZ(Csize, false);
 
-    run_matmul_bias_gelu(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_FLOAT, A.devPtr, B.devPtr, C.devPtr, Z.devPtr);
+    run_matmul_bias_gelu(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_FLOAT, A.devPtr, B.devPtr, C.devPtr, Z.devPtr, AfterZ.devPtr);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(C.hostPtr, C.devPtr, sizeof(C.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(AfterZ.hostPtr, AfterZ.devPtr, sizeof(AfterZ.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+
+TEST_CASE("MatmulDGeluDBias sample", "[frontend][fusion][MatmulDGeluDBias]") {
+    std::cout << "TEST_CASE :: Sample matmul runtime fusion code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample matmul runtime fusion code with backend API");
+
+    int64_t aTensorDim[]      = {1, 2048, 1024}; //batch M K
+    int64_t bTensorDim[]      = {1, 1024, 4096}; //batch K N
+    int64_t cTensorDim[]      = {1, 2048, 4096}; //batch M N    
+
+    int64_t zTensorDim[]      = {1, 1, 4096};  //bias
+
+    printf("====DIMENSIONS====\n");
+    printf("a matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", aTensorDim[0], aTensorDim[1], aTensorDim[2]);
+    printf("b matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", bTensorDim[0], bTensorDim[1], bTensorDim[2]);
+    printf("c matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", cTensorDim[0], cTensorDim[1], cTensorDim[2]);
+    printf("z matrix dims are %" PRId64 ", %" PRId64 ", %" PRId64 "\n", zTensorDim[0], zTensorDim[1], zTensorDim[2]);
+
+    int Csize = cTensorDim[0] * cTensorDim[1] * cTensorDim[2];
+    int Zsize = zTensorDim[0] * zTensorDim[1] * zTensorDim[2];
+
+    Surface<half> A(aTensorDim[0] * aTensorDim[1] * aTensorDim[2], false);
+    Surface<half> B(bTensorDim[0] * bTensorDim[1] * bTensorDim[2], false);
+    Surface<half> C(Csize, false);
+    Surface<half> dC(Csize, true);
+    Surface<float> dZ(Zsize, true);
+
+    run_matmul_dgelu_dbias(aTensorDim, bTensorDim, cTensorDim, zTensorDim, CUDNN_DATA_HALF, A.devPtr, B.devPtr, C.devPtr, dC.devPtr, dZ.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(dC.hostPtr, dC.devPtr, sizeof(dC.hostPtr[0]) * Csize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaMemcpy(dZ.hostPtr, dZ.devPtr, sizeof(dZ.hostPtr[0]) * Zsize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 
     std::cout << "\n========================================================================================\n";

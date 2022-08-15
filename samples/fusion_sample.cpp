@@ -1649,7 +1649,8 @@ run_matmul_bias_gelu(int64_t* a_dim,
                      void* devPtrA,
                      void* devPtrB,
                      void* devPtrC,
-                     void* devPtrZ) {
+                     void* devPtrZ,
+                     void* devPtrAfterZ) {
     cudnnHandle_t handle_;
     try {
         // Create cudnn handle
@@ -1699,7 +1700,6 @@ run_matmul_bias_gelu(int64_t* a_dim,
                                    .setStride(3, stride)
                                    .setId('B')  // after bias
                                    .setAlignment(16)
-                                   .setVirtual()
                                    .setDataType(dataType)
                                    .build();
         auto outputTensor = cudnn_frontend::TensorBuilder()
@@ -1726,7 +1726,11 @@ run_matmul_bias_gelu(int64_t* a_dim,
 
         // Define the activation descriptor
         auto actDesc = cudnn_frontend::PointWiseDescBuilder()
+#if (CUDNN_VERSION >= 8500)
+                           .setMode(CUDNN_POINTWISE_GELU_APPROX_TANH_FWD)
+#else
                            .setMode(CUDNN_POINTWISE_GELU_FWD)
+#endif
                            .setComputeType(CUDNN_DATA_FLOAT)
                            .build();
         std::cout << actDesc.describe() << std::endl;
@@ -1780,12 +1784,12 @@ run_matmul_bias_gelu(int64_t* a_dim,
         if (workspace_size > 0) {
             checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
         }
-        void* data_ptrs[] = {devPtrA, devPtrB, devPtrC, devPtrZ};
-        int64_t uids[]    = {'a', 'b', 'c', 'z'};
+        void* data_ptrs[] = {devPtrA, devPtrB, devPtrC, devPtrZ, devPtrAfterZ};
+        int64_t uids[]    = {'a', 'b', 'c', 'z', 'B'};
         auto variantPack  = cudnn_frontend::VariantPackBuilder()
                                .setWorkspacePointer(workspace_ptr)
-                               .setDataPointers(4, data_ptrs)
-                               .setUids(4, uids)
+                               .setDataPointers(5, data_ptrs)
+                               .setUids(5, uids)
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
@@ -2128,6 +2132,198 @@ run_dgrad_drelu(int64_t* dx_dim,
     } catch (cudnn_frontend::cudnnException& e) {
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
+    }
+}
+
+
+void
+run_matmul_dgelu_dbias(const int64_t* dy_dim,
+                       const int64_t* w_dim,
+                       const int64_t* dx_dim,
+                       const int64_t* dbias_dim,
+                       cudnnDataType_t dataType,
+                       void* dev_ptr_dy,
+                       void* dev_ptr_w,
+                       void* dev_ptr_bwd_act_x,
+                       void* dev_ptr_dx,
+                       void* dev_ptr_dbias) {
+
+    cudnnHandle_t handle_;
+    try {
+        // Create cudnn handle
+        checkCudnnErr(cudnnCreate(&handle_));
+
+        // Creates the necessary tensor descriptors
+        int64_t stride[3];
+
+        // Use the following UIDs for tensors
+        int64_t dy_uid        = 101;
+        int64_t w_uid         = 102;
+        int64_t bwd_act_x_uid = 103;
+        int64_t dx_uid        = 104;
+        int64_t dbias_uid     = 105;
+
+        // Create tensor descriptor for DY matrix
+        generateStrides(dy_dim, stride, 3, CUDNN_TENSOR_NCHW);
+        auto dyMatrixTensor = cudnn_frontend::TensorBuilder()
+                                 .setDim(3, dy_dim)
+                                 .setStride(3, stride)
+                                 .setId(dy_uid)
+                                 .setAlignment(16)
+                                 .setDataType(dataType)
+                                 .build();
+        std::cout << dyMatrixTensor.describe() << std::endl;
+
+        // Create tensor descriptor for weight matrix
+        generateStrides(w_dim, stride, 3, CUDNN_TENSOR_NCHW);
+        auto wMatrixTensor = cudnn_frontend::TensorBuilder()
+                                 .setDim(3, w_dim)
+                                 .setStride(3, stride)
+                                 .setId(w_uid)
+                                 .setAlignment(16)
+                                 .setDataType(dataType)
+                                 .build();
+        std::cout << wMatrixTensor.describe() << std::endl;
+
+        // Create tensor descriptor for dx matrix
+        generateStrides(dx_dim, stride, 3, CUDNN_TENSOR_NCHW);
+        auto dataGrad1MatrixTensor = cudnn_frontend::TensorBuilder()
+                                 .setDim(3, dx_dim)
+                                 .setStride(3, stride)
+                                 .setId('X')
+                                 .setAlignment(16)
+                                 .setDataType(dataType)
+                                 .setVirtual(true)
+                                 .build();
+        std::cout << dataGrad1MatrixTensor.describe() << std::endl;
+        
+        // Create tensor descriptor for geluInput matrix
+        generateStrides(dx_dim, stride, 3, CUDNN_TENSOR_NCHW);
+        auto geluInputMatrixTensor = cudnn_frontend::TensorBuilder()
+                                 .setDim(3, dx_dim)
+                                 .setStride(3, stride)
+                                 .setId(bwd_act_x_uid)
+                                 .setAlignment(16)
+                                 .setDataType(dataType)
+                                 .build();
+        std::cout << geluInputMatrixTensor.describe() << std::endl;
+        
+        // Create tensor descriptor for output of backwardGelu matrix
+        generateStrides(dx_dim, stride, 3, CUDNN_TENSOR_NCHW);
+        auto backwardGeluMatrixTensor = cudnn_frontend::TensorBuilder()
+                                 .setDim(3, dx_dim)
+                                 .setStride(3, stride)
+                                 .setId(dx_uid)
+                                 .setAlignment(16)
+                                 .setDataType(dataType)
+                                 .build();
+        std::cout << backwardGeluMatrixTensor.describe() << std::endl;
+
+        // Create tensor descriptor for output of biasGrad(reduction) matrix
+        generateStrides(dbias_dim, stride, 3, CUDNN_TENSOR_NCHW);
+        auto backwardBiasMatrixTensor = cudnn_frontend::TensorBuilder()
+                                 .setDim(3, dbias_dim)
+                                 .setStride(3, stride)
+                                 .setId(dbias_uid)
+                                 .setAlignment(16)
+                                 .setDataType(CUDNN_DATA_FLOAT)
+                                 .build();
+        std::cout << backwardBiasMatrixTensor.describe() << std::endl;
+
+        auto matmulDesc = cudnn_frontend::MatMulDescBuilder()
+                              .setComputeType(CUDNN_DATA_FLOAT)
+                              .build();
+        std::cout << matmulDesc.describe() << std::endl;
+        
+        auto geluDesc = cudnn_frontend::PointWiseDescBuilder()
+#if (CUDNN_VERSION >= 8500)
+                           .setMode(CUDNN_POINTWISE_GELU_APPROX_TANH_BWD)
+#else
+                           .setMode(CUDNN_POINTWISE_GELU_BWD)
+#endif
+                           .setComputeType(CUDNN_DATA_FLOAT)
+                           .build();
+        std::cout << geluDesc.describe() << std::endl;
+
+        // Define the reduction descriptor
+        auto reductionDesc = cudnn_frontend::ReductionDescBuilder()
+                                  .setComputeType(CUDNN_DATA_FLOAT)
+                                  .setReductionOp(CUDNN_REDUCE_TENSOR_ADD)
+                                  .build();
+        std::cout << reductionDesc.describe() << std::endl;
+
+        // Create a matmul Node for Dgrad
+        auto matmulOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR)
+                            .setaMatDesc(dyMatrixTensor)
+                            .setbMatDesc(wMatrixTensor)
+                            .setcMatDesc(dataGrad1MatrixTensor)
+                            .setmatmulDesc(matmulDesc)
+                            .build();
+        std::cout << matmulOp.describe() << std::endl;
+
+        // Create a matmul Node for dGeLU
+        auto geluOp = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+                          .setdyDesc(matmulOp.getOutputTensor())
+                          .setxDesc(geluInputMatrixTensor)
+                          .setdxDesc(backwardGeluMatrixTensor)
+                          .setpwDesc(geluDesc)
+                          .build();
+        std::cout << geluOp.describe() << std::endl;
+
+        // Create a reduction add Node.
+        auto reduction_op = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR)
+                                .setxDesc(backwardGeluMatrixTensor)
+                                .setyDesc(backwardBiasMatrixTensor)
+                                .setreductionDesc(reductionDesc)
+                                .build();
+        std::cout << reduction_op.describe() << std::endl;
+
+        // Create an Operation Graph.
+        std::array<cudnn_frontend::Operation const*, 3> ops = {&matmulOp, &geluOp, &reduction_op};
+
+        auto opGraph = cudnn_frontend::OperationGraphBuilder()
+                           .setHandle(handle_)
+                           .setOperationGraph(ops.size(), ops.data())
+                           .build();
+
+        auto plan = get_execplan_from_heuristics_else_fall_back(std::move(opGraph), handle_);
+
+        std::cout << "Plan tag: " << plan.getTag() << std::endl;
+
+        auto workspace_size = plan.getWorkspaceSize();
+        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
+
+        void* workspace_ptr = nullptr;
+        if (workspace_size > 0) {
+            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+        }
+        void* data_ptrs[] = {dev_ptr_dy, dev_ptr_w, dev_ptr_dx, dev_ptr_bwd_act_x, dev_ptr_dbias};
+        int64_t uids[]    = {dy_uid, w_uid, dx_uid, bwd_act_x_uid, dbias_uid};
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setWorkspacePointer(workspace_ptr)
+                               .setDataPointers(5, data_ptrs)
+                               .setUids(5, uids)
+                               .build();
+        std::cout << "variantPack " << variantPack.describe() << std::endl;
+        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        if (workspace_size > 0) {
+            checkCudaErr(cudaFree(workspace_ptr));
+        }
+
+        checkCudnnErr(cudnnDestroy(handle_));
+
+        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
+
+    } catch (cudnn_frontend::cudnnException& e) {
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+
+        // this example is only for Ampere cards
+        if (prop.major < 8 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+            std::cout << "Fusion with float inputs is only supported on Ampere or later" << std::endl;
+        } else {
+            std::cout << "[ERROR] Exception " << e.what() << std::endl;
+        }
     }
 }
 
