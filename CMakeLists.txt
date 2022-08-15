@@ -14,8 +14,7 @@ if (MSVC)
     add_compile_options(/W4 /WX)
 else()
     # lots of warnings and all warnings as errors
-    add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -Wno-unused-parameter
-	    -Wno-pessimizing-move -Wno-unused-variable -Wno-sign-compare -Wnon-virtual-dtor)
+    add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -Wno-unused-parameter -Wno-pessimizing-move -Wno-unused-variable -Wno-sign-compare -Werror=strict-aliasing -Wnon-virtual-dtor)
 endif()
 
 
