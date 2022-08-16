@@ -1501,15 +1501,14 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
          // Define the resample descriptor
         auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
                             .setComputeType(compType)
-                            .setSpatialDimCount(nbSpatialDims)
 #if (CUDNN_VERSION >= 8500)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
                             .setPaddingMode(paddingMode)
-                            .setSpatialDim(windowDimA)
-                            .setSpatialStride(strideA)
-                            .setPrePadding(prePaddingA)
-                            .setPostPadding(postPaddingA)
+                            .setSpatialDim(nbSpatialDims, windowDimA)
+                            .setSpatialStride(nbSpatialDims, strideA)
+                            .setPrePadding(nbSpatialDims, prePaddingA)
+                            .setPostPadding(nbSpatialDims, postPaddingA)
 #endif
                             .build(); 
         std::cout << "Initialized Pool Desc" << std::endl;

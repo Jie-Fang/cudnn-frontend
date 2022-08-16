@@ -139,6 +139,6 @@ using VariantPack               = VariantPack_v8;
 using VariantPackBuilder        = VariantPackBuilder_v8;
 using EngineFallbackList        = EngineFallbackList_v8;
 using EngineFallbackListBuilder = EngineFallbackListBuilder_v8;
-using ResampleDesc   = ResampleDesc_v8;
-using ResampleDescBuilder   = ResampleDescBuilder_v8;
+using ResampleDesc              = ResampleDesc_v8;
+using ResampleDescBuilder       = ResampleDescBuilder_v8;
 }
