@@ -232,7 +232,7 @@ run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -465,7 +465,7 @@ run_conv_bias_scale_relu(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -689,7 +689,7 @@ run_serialization_conv_bias_scale_relu(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -981,7 +981,7 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -1278,7 +1278,7 @@ run_conv_scale_bias_relu_int8(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_INT32)
+                            .setComputeType(CUDNN_DATA_INT32)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -1898,7 +1898,7 @@ run_conv_drelu(int64_t* x_dim,
         std::cout << after_activation_tensor.describe() << std::endl;
 
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, convstride)
@@ -2056,7 +2056,7 @@ run_dgrad_drelu(int64_t* dx_dim,
         std::cout << after_bwd_activation_dx_tensor.describe() << std::endl;
 
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, convstride)
@@ -2398,7 +2398,7 @@ run_conv_reduction(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -2573,7 +2573,7 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
@@ -3275,7 +3275,7 @@ run_conv_two_global_scales(int64_t* xTensorDim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, conv_strideA)
