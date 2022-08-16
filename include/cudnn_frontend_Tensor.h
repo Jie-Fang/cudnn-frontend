@@ -87,7 +87,7 @@ class Tensor_v8 : public BackendDescriptor {
     };
 
     int64_t
-    getDimensionCount() const {
+    getDimCount() const {
         return nDims;
     }
 
@@ -119,6 +119,12 @@ class Tensor_v8 : public BackendDescriptor {
     bool
     isVirtualTensor() const {
         return isVirtual;
+    }
+
+    // TODO: Deprecate in v1.0
+    int64_t
+    getDimensionCount() const {
+        return getDimCount();
     }
 
     Tensor_v8(Tensor_v8 &&from) = default;

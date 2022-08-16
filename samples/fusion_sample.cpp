@@ -232,10 +232,10 @@ run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -465,10 +465,10 @@ run_conv_bias_scale_relu(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -689,10 +689,10 @@ run_serialization_conv_bias_scale_relu(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -981,10 +981,10 @@ run_conv_scale_bias_relu_gen_index_selection(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -1278,10 +1278,10 @@ run_conv_scale_bias_relu_int8(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_INT32)
+                            .setComputeType(CUDNN_DATA_INT32)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -1501,15 +1501,14 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
          // Define the resample descriptor
         auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
                             .setComputeType(compType)
-                            .setSpatialDim(nbSpatialDims)
 #if (CUDNN_VERSION >= 8500)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
                             .setPaddingMode(paddingMode)
-                            .setWindowDim(windowDimA)
-                            .setStride(strideA)
-                            .setPrePadding(prePaddingA)
-                            .setPostPadding(postPaddingA)
+                            .setSpatialDim(nbSpatialDims, windowDimA)
+                            .setSpatialStride(nbSpatialDims, strideA)
+                            .setPrePadding(nbSpatialDims, prePaddingA)
+                            .setPostPadding(nbSpatialDims, postPaddingA)
 #endif
                             .build(); 
         std::cout << "Initialized Pool Desc" << std::endl;
@@ -1898,10 +1897,10 @@ run_conv_drelu(int64_t* x_dim,
         std::cout << after_activation_tensor.describe() << std::endl;
 
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, convstride)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, convstride)
                             .setPrePadding(convDim, pad)
                             .setPostPadding(convDim, pad)
                             .setDilation(convDim, dilation)
@@ -2056,10 +2055,10 @@ run_dgrad_drelu(int64_t* dx_dim,
         std::cout << after_bwd_activation_dx_tensor.describe() << std::endl;
 
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, convstride)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, convstride)
                             .setPrePadding(convDim, pad)
                             .setPostPadding(convDim, pad)
                             .setDilation(convDim, dilation)
@@ -2398,10 +2397,10 @@ run_conv_reduction(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -2573,10 +2572,10 @@ run_bn_conv_gen_stat(int64_t* xTensorDim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
@@ -3275,10 +3274,10 @@ run_conv_two_global_scales(int64_t* xTensorDim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setDataType(CUDNN_DATA_FLOAT)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CROSS_CORRELATION)
-                            .setDim(convDim)
-                            .setStride(convDim, conv_strideA)
+                            .setSpatialDimCount(convDim)
+                            .setSpatialStride(convDim, conv_strideA)
                             .setPrePadding(convDim, conv_padA)
                             .setPostPadding(convDim, conv_padA)
                             .setDilation(convDim, conv_dilationA)
