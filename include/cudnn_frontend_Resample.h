@@ -136,7 +136,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
     }
 
     cudnnFraction_t const *
-    getSpatialDim() const {
+    getWindowDim() const {
         return windowDim;
     }
 #endif
