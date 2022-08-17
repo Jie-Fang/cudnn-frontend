@@ -92,13 +92,24 @@ class Tensor_v8 : public BackendDescriptor {
     }
 
     int64_t const *
-    getDimArray() const {
+    getDim() const {
         return btensor_dimA;
     }
 
     int64_t const *
-    getStrideArray() const {
+    getStride() const {
         return btensor_strA;
+    }
+
+
+    int64_t const *
+    getDimArray() const {
+        return getDim();
+    }
+
+    int64_t const *
+    getStrideArray() const {
+        return getStride();
     }
 
     int64_t
