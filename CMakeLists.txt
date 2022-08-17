@@ -39,6 +39,11 @@ add_executable(Samples samples/conv_sample.cpp
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
+if(DEFINED ENV{NO_DEFAULT_IN_SWITCH})
+    message("Default case in the switch is disabled")
+    add_compile_definitions(NO_DEFAULT_IN_SWITCH)
+endif()
+
 if(DEFINED ENV{CUDA_PATH})
     target_include_directories(Samples PUBLIC $ENV{CUDA_PATH}/include/)
     target_include_directories(Samples PUBLIC $ENV{CUDA_PATH}/targets/ppc64le-linux/include)

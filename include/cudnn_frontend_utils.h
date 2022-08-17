@@ -98,6 +98,10 @@ to_string(cudnnDataType_t type) {
         case CUDNN_DATA_BOOLEAN:
             return std::string("CUDNN_DATA_BOOLEAN");
 #endif
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN DATA_TYPE");
+#endif
     }
     return std::string("");
 }
@@ -116,6 +120,10 @@ to_string(cudnnBackendBehaviorNote_t note) {
 #endif
         case CUDNN_BEHAVIOR_NOTE_TYPE_COUNT:
             return std::string("CUDNN_BEHAVIOR_NOTE_TYPE_COUNT");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_BEHAVIOR_NOTE");
+#endif
     }
     return std::string("INVALID_BEHAVIOR_NOTE");
 }
@@ -146,6 +154,10 @@ to_string(cudnnBackendNumericalNote_t note) {
 #endif
         case CUDNN_NUMERICAL_NOTE_TYPE_COUNT:
             return std::string("CUDNN_NUMERICAL_NOTE_TYPE_COUNT");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_NUMERICAL_NOTE");
+#endif
     }
     return std::string("INVALID_NUMERICAL_NOTE");
 }
@@ -183,6 +195,10 @@ to_string(cudnnStatus_t status) {
             return std::string("CUDNN_STATUS_RUNTIME_FP_OVERFLOW");
         case CUDNN_STATUS_VERSION_MISMATCH:
             return std::string("CUDNN_STATUS_VERSION_MISMATCH");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_CUDNN_STATUS");
+#endif
     }
     return std::string("");
 }
@@ -199,6 +215,10 @@ to_string(cudnnResampleMode_t mode) {
             return std::string("CUDNN_RESAMPLE_AVGPOOL");
         case CUDNN_RESAMPLE_MAXPOOL:
             return std::string("CUDNN_RESAMPLE_MAXPOOL");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_CUDNN_RESAMPLE_MODE");
+#endif
     }
     return std::string("");
 }
@@ -212,6 +232,10 @@ to_string(cudnnPaddingMode_t mode) {
             return std::string("CUDNN_NEG_INF_PAD");
         case CUDNN_EDGE_VAL_PAD:
             return std::string("CUDNN_EDGE_VAL_PAD");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_CUDNN_PAD_MODE");
+#endif
     }
     return std::string("");
 }
@@ -329,6 +353,10 @@ to_string(cudnnPointwiseMode_t mode) {
 #if (CUDNN_VERSION >= 8400)
         case CUDNN_POINTWISE_BINARY_SELECT:
             return std::string("CUDNN_POINTWISE_BINARY_SELECT");
+#endif
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_CUDNN_POINTWISE_MODE");
 #endif
     }
     return std::string("");
