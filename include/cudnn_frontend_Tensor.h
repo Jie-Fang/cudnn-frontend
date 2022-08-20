@@ -102,11 +102,13 @@ class Tensor_v8 : public BackendDescriptor {
     }
 
 
+    // TODO: Deprecate in v1.0
     int64_t const *
     getDimArray() const {
         return getDim();
     }
 
+    // TODO: Deprecate in v1.0
     int64_t const *
     getStrideArray() const {
         return getStride();

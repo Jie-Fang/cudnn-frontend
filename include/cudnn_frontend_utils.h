@@ -341,6 +341,8 @@ to_string(cudnnPointwiseMode_t mode) {
 #if (CUDNN_VERSION >= 8400)
         case CUDNN_POINTWISE_GEN_INDEX:
             return std::string("CUDNN_POINTWISE_GEN_INDEX");
+        case CUDNN_POINTWISE_BINARY_SELECT:
+            return std::string("CUDNN_POINTWISE_BINARY_SELECT");
 #endif
 #if (CUDNN_VERSION >= 8500)
         case CUDNN_POINTWISE_ERF:
@@ -349,10 +351,6 @@ to_string(cudnnPointwiseMode_t mode) {
             return std::string("CUDNN_POINTWISE_GELU_APPROX_TANH_FWD");
         case CUDNN_POINTWISE_IDENTITY:
             return std::string("CUDNN_POINTWISE_IDENTITY");
-#endif
-#if (CUDNN_VERSION >= 8400)
-        case CUDNN_POINTWISE_BINARY_SELECT:
-            return std::string("CUDNN_POINTWISE_BINARY_SELECT");
 #endif
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
