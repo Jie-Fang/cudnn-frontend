@@ -60,7 +60,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_POINTWISE_DESCRIPTOR :"
-           << " Mode: " << to_string(mode) << " Math precision " << (compute_type);
+           << " Mode: " << to_string(mode) << " Math precision " << to_string(compute_type);
         return ss.str();
     }
 
