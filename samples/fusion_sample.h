@@ -267,6 +267,25 @@ cudnnStatus_t run_dsbar(int64_t *Y_dim,
                void *DP_biasDevPtr,
                void *YdevPtr);
 
+#if (CUDNN_VERSION >= 8600)
+void
+run_maxpool_with_idx(int64_t* x_dim,
+                    int64_t* y_dim,
+                    int64_t* idx_dim,
+                    void* devPtrdX,
+                    void* devPtrdY,
+                    void* devPtrIdx,
+                    cudnnDataType_t tensorType,
+                    cudnnResampleMode_t mode,
+                    cudnnNanPropagation_t nanOpt, 
+                    cudnnPaddingMode_t paddingMode,
+                    int32_t nbSpatialDims,                         
+                    int64_t* windowDimA,
+                    int64_t* prePaddingA,
+                    int64_t* postPaddingA,
+                    int64_t* strideA);
+#endif
+
 void
 run_conv_two_global_scales(int64_t* xTensorDim,
                    int64_t* wTensorDim,
@@ -282,4 +301,39 @@ run_conv_two_global_scales(int64_t* xTensorDim,
                    void* devPtrScale2,
                    void* devPtrOutput,
                    void* afterConv);
+
+#if (CUDNN_VERSION >= 8600)
+void
+run_backward_avgpool(int64_t* dx_dim,
+                    int64_t* dy_dim,
+                    void* devPtrdX,
+                    void* devPtrdY,
+                    cudnnDataType_t tensorType,
+                    cudnnResampleMode_t mode,
+                    cudnnNanPropagation_t nanOpt, 
+                    cudnnPaddingMode_t paddingMode,
+                    int32_t nbSpatialDims,                         
+                    int64_t* windowDimA,
+                    int64_t* prePaddingA,
+                    int64_t* postPaddingA,
+                    int64_t* strideA);
+
+void
+run_backward_maxpool(int64_t* dx_dim,
+                    int64_t* dy_dim,
+                    int64_t* idx_dim,
+                    void* devPtrdX,
+                    void* devPtrdY,
+                    void* devPtrIdx,
+                    cudnnDataType_t tensorType,
+                    cudnnResampleMode_t mode,
+                    cudnnNanPropagation_t nanOpt, 
+                    cudnnPaddingMode_t paddingMode,
+                    int32_t nbSpatialDims,                         
+                    int64_t* windowDimA,
+                    int64_t* prePaddingA,
+                    int64_t* postPaddingA,
+                    int64_t* strideA);
+#endif
+
 

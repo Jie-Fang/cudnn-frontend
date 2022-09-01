@@ -34,7 +34,8 @@ add_executable(Samples samples/conv_sample.cpp
                        samples/fp16_emu.cpp 
                        samples/catch.cpp 
                        samples/helpers.cpp 
-                       samples/fusion_sample.cpp 
+                       samples/fusion_sample.cpp
+                       samples/fp8_sample.cpp 
                        samples/mha_sample.cpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")

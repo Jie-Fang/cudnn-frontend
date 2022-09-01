@@ -98,6 +98,12 @@ to_string(cudnnDataType_t type) {
         case CUDNN_DATA_BOOLEAN:
             return std::string("CUDNN_DATA_BOOLEAN");
 #endif
+#if (CUDNN_VERSION >= 8600)
+        case CUDNN_DATA_FP8_E5M2:
+            return std::string("CUDNN_DATA_FP8_E5M2");
+        case CUDNN_DATA_FP8_E4M3:
+            return std::string("CUDNN_DATA_FP8_E4M3");
+#endif
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
             return std::string("UNKNOWN DATA_TYPE");

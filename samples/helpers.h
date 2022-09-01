@@ -43,6 +43,7 @@ int getFwdConvPaddedImageDim(int tensorDim, int pad);
 int getFwdConvOutputDim( int tensorDim, int pad, int filterDim, int stride, int dilation);
 
 void generateStrides(const int64_t* dimA, int64_t* strideA, int nbDims, cudnnTensorFormat_t filterFormat);
+void generate4dTransposeStrides(const int64_t* dimA, int64_t* strideA, int nbDims, cudnnTensorFormat_t filterFormat);
 
 int checkCudaError(cudaError_t code, const char* expr, const char* file, int line);
 int checkCudnnError(cudnnStatus_t code, const char* expr, const char* file, int line);
