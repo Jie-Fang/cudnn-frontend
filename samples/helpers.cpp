@@ -136,6 +136,27 @@ void generateStrides(const int64_t* dimA, int64_t* strideA, int nbDims, cudnnTen
     }
 }
 
+// Used for CHWN
+void generate4dTransposeStrides(const int64_t* dimA, int64_t* strideA, int nbDims, cudnnTensorFormat_t filterFormat) {
+    // For INT8x4 and INT8x32 we still compute standard strides here to input
+    // into the cuDNN functions. We will manually scale by resizeFactor in the cpu ref.
+    try {
+        if (filterFormat == CUDNN_TENSOR_NCHW) {
+            throw std::runtime_error("[ERROR] NCHW tranpose not supported");
+        } else if (nbDims != 4) {
+            throw std::runtime_error("[ERROR] Only 4 dims supported");
+        } else {
+            // Here we assume that the format is NWHC getting tranposed to CHWN
+            strideA[0] = 1; // N has stride 1
+            strideA[3] = strideA[0] * dimA[0]; // W has stride strideN * dimN
+            strideA[2] = strideA[3] * dimA[3]; // H has stride strideW * dimW
+            strideA[1] = strideA[2] * dimA[2]; // C has stride strideH * dimH
+        }
+    } catch (std::exception &e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+    }
+}
+
 // Convert a linear index
 // i = d_1 s_1 ... s_n + d_2 s_2 ... s_n + d_n-1 s_n + d_n
 // into a multidimensional index
