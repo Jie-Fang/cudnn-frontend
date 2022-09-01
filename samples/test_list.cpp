@@ -1003,7 +1003,6 @@ TEST_CASE("MatmulBiasAct sample_float", "[frontend][fusion][MatmulBiasAct]") {
     std::cout << "\n========================================================================================\n";
 }
 
-#if 0
 TEST_CASE("MatmulDGeluDBias sample", "[frontend][fusion][MatmulDGeluDBias]") {
     std::cout << "TEST_CASE :: Sample matmul runtime fusion code with backend API" << std::endl;
     INFO("TEST_CASE :: Sample matmul runtime fusion code with backend API");
@@ -1038,7 +1037,6 @@ TEST_CASE("MatmulDGeluDBias sample", "[frontend][fusion][MatmulDGeluDBias]") {
 
     std::cout << "\n========================================================================================\n";
 }
-#endif
 
 TEST_CASE("ConvDrelu sample", "[frontend][convDrelu][drelu]") {
     std::cout << "TEST_CASE :: Sample conv drelu" << std::endl;
