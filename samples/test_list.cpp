@@ -430,7 +430,7 @@ TEST_CASE("ConvBiasAct sample with cudnnFindPlan", "[frontend][cudnnFindPlan][co
 
     SurfaceManager<float> sm(Xsize, Wsize, Ysize, Bsize, true);
 
-    run_conv_add_bias_activation_with_cudnn_find(xTensorDim, padding, convstride, dilation, wTensorDim, yTensorDim, CUDNN_DATA_FLOAT, sm.devPtrX, sm.devPtrW, sm.devPtrY, sm.devPtrZ, sm.devPtrB);
+    run_conv_add_bias_activation_with_cudnn_find(xTensorDim, padding, convstride, dilation, wTensorDim, yTensorDim, CUDNN_DATA_HALF, sm.devPtrX, sm.devPtrW, sm.devPtrY, sm.devPtrZ, sm.devPtrB);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(sm.hostY, sm.devPtrY, sizeof(sm.hostY[0]) * Ysize, cudaMemcpyDeviceToHost));
@@ -493,8 +493,8 @@ TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
 
 
 TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]") {
-    std::cout << "TEST_CASE :: Sample runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    std::cout << "TEST_CASE :: ConvScaleBiasAddAct sample" << std::endl;
+    INFO("TEST_CASE :: ConvScaleBiasAddAct sample");
     int64_t xTensorDim[]      = { 4, 24, 31, 31};
     int64_t wTensorDim[]      = {32, 24,  9,  9};
     int64_t yTensorDim[]      = { 4, 32,  5,  5}; 
@@ -536,8 +536,8 @@ TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]
 }
 
 TEST_CASE("ConvScaleBiasAddAct sample_float", "[frontend][fusion][ConvScaleBiasAddAct]") {
-    std::cout << "TEST_CASE :: Sample runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    std::cout << "TEST_CASE :: ConvScaleBiasAddAct sample_float" << std::endl;
+    INFO("TEST_CASE :: ConvScaleBiasAddAct sample_float");
     int64_t xTensorDim[]      = { 4, 24, 31, 31};
     int64_t wTensorDim[]      = {32, 24,  9,  9};
     int64_t yTensorDim[]      = { 4, 32,  5,  5}; 
@@ -579,8 +579,8 @@ TEST_CASE("ConvScaleBiasAddAct sample_float", "[frontend][fusion][ConvScaleBiasA
 }
 
 TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
-    std::cout << "TEST_CASE ConvBiasScaleAct :: Sample runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    std::cout << "TEST_CASE ConvBiasScaleAct :: ConvBiasScaleAct sample" << std::endl;
+    INFO("TEST_CASE :: ConvBiasScaleAct sample");
     int64_t xTensorDim[] = {1, 16, 512, 512};
     int64_t wTensorDim[] = {64, 16, 3, 3};
     int64_t yTensorDim[] = {1, 64, 512, 512};
@@ -623,7 +623,7 @@ TEST_CASE("ConvBiasScaleAct sample", "[frontend][fusion][ConvBiasScaleAct]") {
                              yTensorDim,
                              bTensorDim,
                              sTensorDim,
-                             CUDNN_DATA_FLOAT,
+                             CUDNN_DATA_HALF,
                              2,
                              conv_padA,
                              conv_dilationA,
@@ -686,7 +686,7 @@ TEST_CASE("ConvBiasScaleActSerialization sample", "[frontend][fusion][serializat
                                            yTensorDim,
                                            bTensorDim,
                                            sTensorDim,
-                                           CUDNN_DATA_FLOAT,
+                                           CUDNN_DATA_HALF,
                                            2,
                                            conv_padA,
                                            conv_dilationA,
@@ -705,8 +705,8 @@ TEST_CASE("ConvBiasScaleActSerialization sample", "[frontend][fusion][serializat
 }
 
 TEST_CASE("ConvScaleBiasActGenIndexSelection sample", "[frontend][fusion][ConvScaleBiasActGenIndexSelection]") {
-    std::cout << "TEST_CASE ConvScaleBiasActGenIndexSelection :: Sample runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    std::cout << "TEST_CASE :: ConvScaleBiasActGenIndexSelection sample" << std::endl;
+    INFO("TEST_CASE :: ConvScaleBiasActGenIndexSelection sample");
     int64_t xTensorDim[] = {1, 64, 168, 200};
     int64_t wTensorDim[] = {64, 64, 3, 3};
     int64_t yTensorDim[] = {1, 64, 168, 200};
@@ -786,8 +786,8 @@ TEST_CASE("ConvScaleBiasActGenIndexSelection sample", "[frontend][fusion][ConvSc
 }
 
 TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_int8]") {
-    std::cout << "TEST_CASE ConvScaleBiasAct_int8 :: Sample runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample runtime fusion code with backend API");
+    std::cout << "TEST_CASE :: ConvScaleBiasAct_int8 sample" << std::endl;
+    INFO("TEST_CASE :: ConvScaleBiasAct_int8 sample");
     int64_t xTensorDim[] = {16, 128, 16, 16};
     int64_t wTensorDim[] = {256, 128, 1, 1};
     int64_t yTensorDim[] = {16, 256, 16, 16};
@@ -850,7 +850,7 @@ TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_i
 
 TEST_CASE("PoolScaleBiasAct_int8 sample", "[frontend][fusion][PoolScaleBiasAct_int8]") {
     std::cout << "TEST_CASE PoolScaleBiasAct_int8 :: Sample resample runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample resample runtime fusion code with backend API");    
+    INFO("TEST_CASE :: PoolScaleBiasAct_int8 sample");    
 
     int64_t xTensorDim[] = {16, 16, 32, 32};
     int64_t yTensorDim[] = {16, 16, 16, 16};

@@ -269,7 +269,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
         auto fp8OutputTensor = TensorBuilder()
                                    .cloneFrom(afterConvTensor, 'c')
                                    .setVirtual(false)
-                                   .setDataType(CUDNN_DATA_FLOAT)
+                                   .setDataType(dataType)
                                    .build();
 
         generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
@@ -396,6 +396,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
                                .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
         cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
+        checkCudaErr(cudaDeviceSynchronize());
         if (workspace_size > 0) {
             checkCudaErr(cudaFree(workspace_ptr));
         }

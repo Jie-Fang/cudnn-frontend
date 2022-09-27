@@ -92,7 +92,8 @@ create_conv_add_bias_act_descriptors(int64_t* x_dim,
                                      int64_t* dilationA,
                                      int64_t* w_dim,
                                      int64_t* y_dim,
-                                     cudnnDataType_t dataType) {
+                                     cudnnDataType_t dataType,
+                                     cudnnDataType_t computeType) {
     (void)padA;
     (void)convstrideA;
     (void)dilationA;
@@ -153,7 +154,7 @@ create_conv_add_bias_act_descriptors(int64_t* x_dim,
                                            .setVirtual()
                                            .setId('A')  // after add
                                            .setAlignment(4)
-                                           .setDataType(dataType)
+                                           .setDataType(computeType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
                                            .setDim(4, y_dim)
@@ -161,7 +162,7 @@ create_conv_add_bias_act_descriptors(int64_t* x_dim,
                                            .setVirtual()
                                            .setId('B')  // after bias
                                            .setAlignment(4)
-                                           .setDataType(dataType)
+                                           .setDataType(computeType)
                                            .build(),
                                        cudnn_frontend::TensorBuilder()
                                            .setDim(4, y_dim)
@@ -169,7 +170,7 @@ create_conv_add_bias_act_descriptors(int64_t* x_dim,
                                            .setId('C')  // after conv
                                            .setAlignment(4)
                                            .setVirtual()
-                                           .setDataType(dataType)
+                                           .setDataType(computeType)
                                            .build());
 }
 
@@ -554,7 +555,7 @@ run_conv_add_bias_activation(int64_t* x_dim,
 
         // Creates the necessary tensor descriptors
         common_convbias_descriptors tensors = create_conv_add_bias_act_descriptors(
-            x_dim, pad, convstride, dilation, w_dim, y_dim, dataType);
+            x_dim, pad, convstride, dilation, w_dim, y_dim, dataType, CUDNN_DATA_FLOAT);
         std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<W_TENSOR>(tensors).describe() << std::endl;
@@ -587,7 +588,7 @@ run_conv_add_bias_activation(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setComputeType(dataType)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CONVOLUTION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, convstride)
@@ -790,7 +791,7 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim,
 
         // Creates the necessary tensor descriptors
         common_convbias_descriptors tensors = create_conv_add_bias_act_descriptors(
-            x_dim, pad, convstride, dilation, w_dim, y_dim, dataType);
+            x_dim, pad, convstride, dilation, w_dim, y_dim, dataType, CUDNN_DATA_FLOAT);
         std::cout << std::get<X_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<Y_TENSOR>(tensors).describe() << std::endl;
         std::cout << std::get<W_TENSOR>(tensors).describe() << std::endl;
@@ -823,7 +824,7 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim,
 
         // Define the convolution problem
         auto convDesc = cudnn_frontend::ConvDescBuilder()
-                            .setComputeType(dataType)
+                            .setComputeType(CUDNN_DATA_FLOAT)
                             .setMathMode(CUDNN_CONVOLUTION)
                             .setSpatialDimCount(convDim)
                             .setSpatialStride(convDim, convstride)
