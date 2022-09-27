@@ -1722,7 +1722,7 @@ TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
 
     auto size_calculator = 
         [](int64_t *arr) {
-            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
+            return std::accumulate(arr, arr + 4, static_cast<int64_t>(1), std::multiplies<int64_t>());
         };
 
     Surface<float> YSum(size_calculator(perChannelSum), false);

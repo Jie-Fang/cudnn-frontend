@@ -192,7 +192,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                  numeric_notes_vec.data());
         auto end = std::min(elem_count, static_cast<int64_t>(CUDNN_NUMERICAL_NOTE_TYPE_COUNT));
         std::copy(numeric_notes_vec.begin(), numeric_notes_vec.begin() + end, numeric_notes.begin());
-        if (elem_count < numeric_notes.size())
+        if (static_cast<size_t>(elem_count) < numeric_notes.size())
             std::fill_n(numeric_notes.begin() + elem_count, numeric_notes.size() - elem_count, CUDNN_NUMERICAL_NOTE_TYPE_COUNT);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,
@@ -216,7 +216,7 @@ class ExecutionPlan_v8 : public BackendDescriptor {
                                  behavior_notes_vec.data());
         end = std::min(elem_count, static_cast<int64_t>(CUDNN_BEHAVIOR_NOTE_TYPE_COUNT));
         std::copy(behavior_notes_vec.begin(), behavior_notes_vec.begin() + end, behavior_notes.begin());
-        if (elem_count < behavior_notes.size())
+        if (static_cast<size_t>(elem_count) < behavior_notes.size())
             std::fill_n(behavior_notes.begin() + elem_count, behavior_notes.size() - elem_count, CUDNN_BEHAVIOR_NOTE_TYPE_COUNT);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(this,

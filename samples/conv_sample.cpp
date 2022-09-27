@@ -332,7 +332,7 @@ run_from_heuristics(int64_t* x_dim,
         } else { 
             REQUIRE(false == expect_in_cache);
             std::array<cudnn_frontend::GeneratorSource const, 1> sources = {heurgen_method};
-            cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
+            cudnn_frontend::EngineConfigGenerator generator(static_cast<int>(sources.size()), sources.data());
 
             auto workspace_size = 100 * 1024 * 1024; // 100 MB
             void* workspace_ptr = nullptr;
@@ -747,7 +747,7 @@ run_from_cudnn_find(int64_t* x_dim,
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
-        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
+        cudnn_frontend::EngineConfigGenerator generator(static_cast<int>(sources.size()), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, opGraph, variantPack, sample_predicate_function);
@@ -903,7 +903,7 @@ run_conv_add_bias_activation_with_cudnn_find(int64_t* x_dim,
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
-        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
+        cudnn_frontend::EngineConfigGenerator generator(static_cast<int>(sources.size()), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, opGraph, variantPack, sample_predicate_function);
@@ -959,7 +959,7 @@ run_from_cudnn_get(int64_t* x_dim,
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 1> sources = {heurgen_method};
-        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
+        cudnn_frontend::EngineConfigGenerator generator(static_cast<int>(sources.size()), sources.data());
 
         auto plans = generator.cudnnGetPlan(handle_, opGraph, sample_predicate_function);
 
@@ -1187,7 +1187,7 @@ run_dp4a(
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
-        cudnn_frontend::EngineConfigGenerator generator(sources.size(), sources.data());
+        cudnn_frontend::EngineConfigGenerator generator(static_cast<int>(sources.size()), sources.data());
 
         auto options = generator.cudnnFindPlan<cudnn_frontend::CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE>(
             handle_, opGraph, variantPack, sample_predicate_function);
@@ -1308,7 +1308,7 @@ run_imma(
                 options.emplace_back(cudnn_frontend::ExecutionPlanBuilder()
                                       .setHandle(handle_).setEngineConfig(cfg, opGraph.getTag())
                                       .build());
-            } catch (cudnn_frontend::cudnnException &e) {
+            } catch (cudnn_frontend::cudnnException &) {
                 continue;
             }
         }

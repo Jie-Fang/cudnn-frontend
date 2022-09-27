@@ -10,23 +10,31 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set (CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 
 if (MSVC)
-    # warning level 4 and all warnings as errors
+    # warning level 3 and all warnings as errors
     add_compile_options(/W4 /WX)
+    add_compile_options(/wd4100) # allow unused parameters
+    add_compile_options(/wd4458) # local hides class member (currently a problem for all inline setters)
+    add_compile_options(/wd4505) # unreferenced function with internal linkage has been removed
+    add_compile_options(/wd4244) # possible loss of data
+    add_compile_options(/wd4101 /wd4189) # unreferenced local
+    # due to: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead.
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS=1)
+    set(LIB_PATH lib/x64)
 else()
+    set(LIB_PATH lib64)
     # lots of warnings and all warnings as errors
     add_compile_options(-Wall -Wextra -Werror -Wno-unused-function -Wno-unused-parameter -Wno-pessimizing-move -Wno-unused-variable -Wno-sign-compare -Werror=strict-aliasing -Wnon-virtual-dtor)
 endif()
 
 
 if(DEFINED ENV{CUDA_PATH})
-link_directories($ENV{CUDA_PATH}/lib64)
+link_directories($ENV{CUDA_PATH}/${LIB_PATH})
 else()
-link_directories(/usr/local/cuda/lib64)
+link_directories(/usr/local/cuda//${LIB_PATH})
 endif()
 
 if(DEFINED ENV{CUDNN_PATH})
-link_directories($ENV{CUDNN_PATH}/lib64)
-link_directories($ENV{CUDNN_PATH}/lib)
+link_directories($ENV{CUDNN_PATH}/${LIB_PATH})
 endif()
 
 add_executable(Samples samples/conv_sample.cpp 
@@ -37,8 +45,11 @@ add_executable(Samples samples/conv_sample.cpp
                        samples/fusion_sample.cpp
                        samples/fp8_sample.cpp 
                        samples/mha_sample.cpp)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+if(UNIX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DEBUG")
+endif()
 
 if(DEFINED ENV{NO_DEFAULT_IN_SWITCH})
     message("Default case in the switch is disabled")
@@ -67,4 +78,6 @@ endif()
 
 target_link_libraries(Samples cudart)
 target_link_libraries(Samples cudnn)
-target_link_libraries(Samples m)
+if(UNIX)
+    target_link_libraries(Samples m)
+endif()
