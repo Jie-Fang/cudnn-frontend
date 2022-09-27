@@ -54,7 +54,7 @@ check_rule(const json &json_handle, const std::string & executionPlanTag,
     std::string operation = json_handle["operation"];
     int64_t engine        =  json_handle["engine"];
     uint64_t cudnn_start     =  0;
-    uint64_t cudnn_end       =  -1;
+    uint64_t cudnn_end       =  std::numeric_limits<uint64_t>::max();
     if (json_handle.contains("cudnn_version_start")) {
         cudnn_start   =  json_handle["cudnn_version_start"];
     }

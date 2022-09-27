@@ -2861,7 +2861,7 @@ run_bn_finalize(
                 try {
                     auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[i], opGraph.getTag()).build();
 		            return plan;
-                } catch (cudnn_frontend::cudnnException &e) {
+                } catch (cudnn_frontend::cudnnException &) {
                     continue;
                 }
             }
@@ -3353,7 +3353,7 @@ run_conv_two_global_scales(int64_t* xTensorDim,
                 workspace_size = plan.getWorkspaceSize();
                 std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
                 plan_desc = plan.get_desc();
-            } catch (cudnn_frontend::cudnnException& e)  {
+            } catch (cudnn_frontend::cudnnException&)  {
                 continue;
             }
         }

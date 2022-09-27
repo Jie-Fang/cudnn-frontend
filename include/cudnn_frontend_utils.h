@@ -28,6 +28,12 @@
 #include "cudnn_backend_base.h"
 #include "cudnn_frontend_Logging.h"
 
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+#ifdef _MSC_VER
+#pragma warning(disable:4702) // if exceptions are enabled there are unreachable return statements
+#endif
+#endif
+
 #define CUDNN_FRONTEND_UNUSED(X) ((void)X)
 namespace cudnn_frontend {
 

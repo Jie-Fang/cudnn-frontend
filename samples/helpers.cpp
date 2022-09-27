@@ -27,7 +27,7 @@ void initImage(float* image, int64_t imageSize) {
     static unsigned seed = 123456789;
     for (int index = 0; index < imageSize; index++) {
         seed         = (1103515245 * seed + 12345) & 0xffffffff;
-        image[index] = float(seed) * 2.3283064e-10;  // 2^-32
+        image[index] = float(seed) * 2.3283064e-10f;  // 2^-32
     }
 }
 
@@ -35,7 +35,7 @@ void initImage(half1* image, int64_t imageSize) {
     static unsigned seed = 123456789;
     for (int index = 0; index < imageSize; index++) {
         seed         = (1103515245 * seed + 12345) & 0xffffffff;
-        image[index] = cpu_float2half_rn(float(seed) * 2.3283064e-10);  // 2^-32
+        image[index] = cpu_float2half_rn(float(seed) * 2.3283064e-10f);  // 2^-32
     }
 }
 
@@ -45,7 +45,7 @@ void initImage(int8_t* image, int imageSize) {
     for (int64_t index = 0; index < imageSize; index++) {
         seed = (1103515245 * seed + 12345) & 0xffffffff;
         // Takes floats from [0, 1), scales and casts to ints from [0, 4], then subtracts from 2
-        image[index] = 2 - (int8_t)(5 * float(seed) * 2.3283064e-10);  // 2^-32
+        image[index] = 2 - (int8_t)(5 * float(seed) * 2.3283064e-10f);  // 2^-32
     }
 }
 
@@ -55,7 +55,7 @@ void initImage(int32_t* image, int imageSize) {
     for (int64_t index = 0; index < imageSize; index++) {
         seed = (1103515245 * seed + 12345) & 0xffffffff;
         // Takes floats from [0, 1), scales and casts to ints from [0, 4], then divides by 4
-        image[index] = ((int32_t)(5 * float(seed) * 2.3283064e-10))/4;  // 2^-32
+        image[index] = ((int32_t)(5.f * float(seed) * 2.3283064e-10f))/4;  // 2^-32
     }
 }
 
@@ -65,7 +65,7 @@ void initImage(int64_t* image, int imageSize) {
     for (int64_t index = 0; index < imageSize; index++) {
         seed = (1103515245 * seed + 12345) & 0xffffffff;
         // Takes floats from [0, 1), scales and casts to ints from [0, 4], then divides by 4
-        image[index] = ((int64_t)(5 * float(seed) * 2.3283064e-10))/4;  // 2^-32
+        image[index] = ((int64_t)(5.f * float(seed) * 2.3283064e-10f))/4;  // 2^-32
     }
 }
 
@@ -75,7 +75,7 @@ void initImage(bool* image, int imageSize) {
     for (int64_t index = 0; index < imageSize; index++) {
         seed = (1103515245 * seed + 12345) & 0xffffffff;
         // Takes floats from [0, 1), scales and casts to ints from [0, 4], then divides by 4
-        int val = ((int32_t)(5 * float(seed) * 2.3283064e-10))/4;  // 2^-32
+        int val = ((int32_t)(5.f * float(seed) * 2.3283064e-10f))/4;  // 2^-32
 
         // val is 0 or 1
         image[index] = (val == 1);
@@ -203,7 +203,7 @@ void doEpilog(int8_t* out, int idx, int32_t alphaAcc, float beta) {
     if (beta == 0.f) {
         val = alphaAcc;
     } else {
-        val = alphaAcc + out[idx] * beta;
+        val = alphaAcc + int(float(out[idx]) * beta);
     }
     // Properly handle overflow errors in the same way cuDNN does
     if (val > 127) {
