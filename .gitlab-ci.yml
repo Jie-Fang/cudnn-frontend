@@ -1,93 +1,172 @@
-variables:
-  DOCKER_HOST: tcp://localhost:2376
-  DOCKER_TLS_CERTDIR: ""
-
 stages:
-  - query_machines
-  - build
-  - test
+    - build
+    - test
 
-ping:ampere:
-    tags:
-    - cudnn-frontend-ga10x-runner
-    stage: query_machines
+.build:template:
+    script:
+        - mkdir build
+        - cd build
+        - cmake ../ 
+        - cmake --build . -j16 --verbose
+    # keep the build directory so that later jobs can use it
+    artifacts:
+        paths:
+            - build/
+        expire_in: 1 week
+
+.test:template:
     script:
         - nvidia-smi
+        - cd build
+        - bin/samples --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
+    # Upload test report to gitlab
+    artifacts:
+        when: always
+        reports:
+            junit: build/result-junit.xml
+        expire_in: 1 week
 
-ping:turing:
+build:cudnn_8.2:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
+    stage: build
     tags:
-    - cudnn-frontend-tu10x-runner
-    stage: query_machines
-    script:
-        - nvidia-smi
-
-.make:
-    stage: build
-    script: 
-        - "docker build -t cudnn_frontend  . "
-
-.make.clang:
-    stage: build
-    script: 
-        - "docker build -t cudnn_frontend.clang  -f Dockerfile.clang . "
-
-.make_v8.1:
-    stage: build
-    script: 
-        - "docker build -t cudnn_frontend_v8.1  -f Dockerfile.8.1 . "
+        - Ampere
+    extends: .build:template
     
-.make_v8.2:
-    tags:
-    - cudnn-frontend-runner
+build:cudnn_8.3:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.5.2_cudnn_8.3.3.40
     stage: build
-    script: 
-        - "docker build -t cudnn_frontend_v8.2  -f Dockerfile.8.2 . "
-
-.make_v8.3:
     tags:
-    - cudnn-frontend-runner
+        - Ampere
+    extends: .build:template
+
+build:cudnn_8.4:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
     stage: build
-    script: 
-        - "docker build -t cudnn_frontend_v8.3  -f Dockerfile.8.3 . "
+    parallel:
+        matrix:
+            - ARCH: ["Ampere", "GA10x"]
+    extends: .build:template
+    
+build:cudnn_8.5:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96
+    stage: build
+    tags:
+        - Ampere
+    extends: .build:template
 
-.run:
+build:cudnn_8.5_clang:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96_clang
+    stage: build
+    tags:
+        - Ampere
+    extends: .build:template
+    
+build:cudnn_8.6:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0.64_cudnn_8.6.0.169
+    stage: build
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere", "GA10x"]
+    tags:
+        - ${ARCH}
+    extends: .build:template
+
+build:cudnn_8.7:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0.64_cudnn_8.7.0.30
+    stage: build
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere", "GA10x"]
+    tags:
+        - ${ARCH}
+    extends: .build:template
+
+test:cudnn_8.2:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
     stage: test
-    script:
-        - nvidia-smi
-        - docker container prune -f
-        - docker run --gpus all -i --name=samples cudnn_frontend /build/Samples
-        - docker rm -v samples
+    tags:
+        - Ampere
+    needs:
+        - build:cudnn_8.2
+    extends: .test:template
 
-.run.clang:
+test:cudnn_8.3:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.5.2_cudnn_8.3.3.40
     stage: test
-    script:
-        - nvidia-smi
-        - docker container prune -f
-        - docker run --gpus all -i --name=samples cudnn_frontend.clang /build/Samples
-        - docker rm -v samples
-
-.run_v8.1:
+    tags:
+        - Ampere
+    needs:
+        - build:cudnn_8.3
+    extends: .test:template
+    
+test:cudnn_8.4:Ampere:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
     stage: test
-    script:
-        - nvidia-smi
-        - docker container prune -f
-        - docker run --gpus all -i --name=samples cudnn_frontend_v8.1 /build/Samples
-        - docker rm -v samples
+    tags:
+        - Ampere
+    dependencies: ["build:cudnn_8.4: [Ampere]"]
+    extends: .test:template
 
-.run_v8.2:
+test:cudnn_8.4:GA10x:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
     stage: test
-    script:
-        - nvidia-smi
-        - docker container prune -f
-        - docker run --gpus all -i --name=samples cudnn_frontend_v8.2 /build/Samples
-        - docker rm -v samples
+    tags:
+        - GA10x
+    dependencies: ["build:cudnn_8.4: [GA10x]"]
+    extends: .test:template
 
-.run_v8.3:
+test:cudnn_8.5:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96
     stage: test
-    script:
-        - nvidia-smi
-        - docker container prune -f
-        - docker run --gpus all -i --name=samples cudnn_frontend_v8.3 /build/Samples
-        - docker rm -v samples
+    tags:
+        - Ampere
+    needs:
+        - build:cudnn_8.5
+    extends: .test:template
+    
+.test:cudnn_8.6:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0.64_cudnn_8.6.0.169
+    stage: test
+    extends: .test:template
+    
+test:cudnn_8.6:Hopper:
+    extends: .test:cudnn_8.6
+    dependencies: ["build:cudnn_8.6: [Hopper]"]
+    tags:
+        - Hopper
 
-include: '.gitlab-ci-machines.yml'
+test:cudnn_8.6:Ampere:
+    extends: .test:cudnn_8.6
+    dependencies: ["build:cudnn_8.6: [Ampere]"]
+    tags:
+        - Ampere
+
+test:cudnn_8.6:GA10x:
+    extends: .test:cudnn_8.6
+    dependencies: ["build:cudnn_8.6: [GA10x]"]
+    tags:
+        - GA10x
+
+.test:cudnn_8.7:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0.64_cudnn_8.7.0.30
+    stage: test
+    extends: .test:template
+    
+test:cudnn_8.7:Hopper:
+    extends: .test:cudnn_8.7
+    dependencies: ["build:cudnn_8.7: [Hopper]"]
+    tags:
+        - Hopper
+
+test:cudnn_8.7:Ampere:
+    extends: .test:cudnn_8.7
+    dependencies: ["build:cudnn_8.7: [Ampere]"]
+    tags:
+        - Ampere
+
+test:cudnn_8.7:GA10x:
+    extends: .test:cudnn_8.7
+    dependencies: ["build:cudnn_8.7: [GA10x]"]
+    tags:
+        - GA10x

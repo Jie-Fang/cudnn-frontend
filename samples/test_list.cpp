@@ -21,7 +21,7 @@
  */ 
 
 #include <inttypes.h>
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include <cudnn.h>
 
 #include "cpu_references.h"

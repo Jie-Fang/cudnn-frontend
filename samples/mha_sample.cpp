@@ -918,7 +918,9 @@ multiHeadAttention(const int64_t inputSize,
             std::cout << "Example is only supported for Ampere GPUs" << std::endl; 
         }  else {
             std::cout << "[ERROR] Exception " << e.what() << std::endl;
+#if (CUDNN_VERSION >= 8400)
             CHECK(false);
+#endif
         }
     }
 #endif
