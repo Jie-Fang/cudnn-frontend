@@ -46,6 +46,8 @@ build:cudnn_8.4:
     parallel:
         matrix:
             - ARCH: ["Ampere", "GA10x"]
+    tags:
+        - ${ARCH}
     extends: .build:template
     
 build:cudnn_8.5:
