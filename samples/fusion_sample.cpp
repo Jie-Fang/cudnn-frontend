@@ -2904,7 +2904,7 @@ run_bn_finalize(
     } catch (cudnn_frontend::cudnnException &e) {
         struct cudaDeviceProp prop;
         checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
-#if (CUDNN_VERSION >= 8303)
+#if (CUDNN_VERSION >= 8400)
             std::cout << "[ERROR] Exception " << e.what() << std::endl;
             CHECK(false);
 #endif   

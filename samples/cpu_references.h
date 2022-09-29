@@ -23,6 +23,7 @@
 #pragma once
 
 #include "helpers.h"
+#include <cmath>
 
 template <typename T_ELEM>
 void weightGrad_cpu_ref(
