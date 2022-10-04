@@ -63,7 +63,9 @@ target_link_libraries(
     samples
     cudnn_frontend
     Catch2::Catch2WithMain
+
     CUDA::cudart
+    CUDA::cublas
     CUDA::nvrtc
     
     CUDNN::cudnn_all
