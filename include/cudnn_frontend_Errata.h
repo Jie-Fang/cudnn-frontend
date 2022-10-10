@@ -38,7 +38,7 @@ namespace cudnn_frontend {
 // is not set the value set in the API is considered.
 static bool
 load_from_config(json &json_handle, const std::string & errata_json) {
-    const char * err_json = std::getenv("CUDNN_ERRATA_JSON_FILE");
+    const char * err_json = get_environment("CUDNN_ERRATA_JSON_FILE");
     if (err_json == NULL && errata_json == "") {return false;}
     if (err_json == NULL) { err_json = errata_json.c_str();}
     std::ifstream ifs(err_json, std::ifstream::in);

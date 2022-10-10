@@ -39,9 +39,7 @@ if (MSVC)
         /wd4100 # allow unused parameters
         /wd4458 # local hides class member (currently a problem for all inline setters)
         /wd4505 # unreferenced function with internal linkage has been removed
-        /wd4244 # possible loss of data
         /wd4101 /wd4189 # unreferenced local
-        _CRT_SECURE_NO_WARNINGS=1 # due to: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead.
     )
 else()
     target_compile_options(
@@ -50,12 +48,6 @@ else()
         -Wextra
         -Werror
         -Wno-unused-function
-        -Wno-unused-parameter
-        -Wno-pessimizing-move
-        -Wno-unused-variable
-        -Wno-sign-compare
-        -Werror=strict-aliasing
-        -Wnon-virtual-dtor
     )
 endif()
 

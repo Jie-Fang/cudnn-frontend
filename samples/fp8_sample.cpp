@@ -32,7 +32,7 @@ get_exec_plan_from_heuristics(OperationGraph_v8 &&opGraph, cudnnHandle_t handle)
                    .build();
     };
 
-    return std::move(plan_builder());
+    return plan_builder();
 }
 
 #if (CUDNN_VERSION >= 8600)
@@ -54,7 +54,12 @@ run_fp8_conv_scale(int64_t* x_dim,
     try {
         // Create cudnn handle
         checkCudnnErr(cudnnCreate(&handle_));
-
+        if (check_device_arch_newer_than("hopper") == false) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_ARCH_MISMATCH,
+                    "run_fp8_conv_scale: Sample requires Ampere or above GPU");
+        }
         // Creates the necessary tensor descriptors
         int64_t stride[4];
         generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
@@ -162,7 +167,7 @@ run_fp8_conv_scale(int64_t* x_dim,
 
         void* workspace_ptr = nullptr;
         if (workspace_size > 0) {
-            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+            checkCudaErr(cudaMalloc(&workspace_ptr, (size_t)workspace_size));
         }
         void* data_ptrs[] = {devPtrX, devPtrW, devPtrY, devPtrScale};
         int64_t uids[]    = {'x', 'w', 'a', 's'};
@@ -186,7 +191,7 @@ run_fp8_conv_scale(int64_t* x_dim,
         // this example is only for Hopper cards
         struct cudaDeviceProp prop;
         checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
-        if (prop.major < 9 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+        if (prop.major < 9 && (e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED  || e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH)) {
             std::cout << "Fusion with fp8 inputs is only supported on Hopper or later" << std::endl;
             return;
         }
@@ -219,7 +224,12 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
     try {
         // Create cudnn handle
         checkCudnnErr(cudnnCreate(&handle_));
-
+        if (check_device_arch_newer_than("hopper") == false) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_ARCH_MISMATCH,
+                    "run_fp8_conv_descale_descale_amax_scale: Sample requires Ampere or above GPU");
+        }
         // Creates the necessary tensor descriptors
         int64_t stride[4];
         generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
@@ -385,7 +395,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
 
         void* workspace_ptr = nullptr;
         if (workspace_size > 0) {
-            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+            checkCudaErr(cudaMalloc(&workspace_ptr, (size_t)workspace_size));
         }
         void* data_ptrs[] = {devPtrX, devPtrW, devPtrR, devPtrDescale1, devPtrDescale2, devPtrScale, devPtrOutput};
         int64_t uids[]    = {'x', 'w', 'r', 's', 't', 'u', 'c'};
@@ -410,7 +420,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
         // this example is only for Hopper cards
         struct cudaDeviceProp prop;
         checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
-        if (prop.major < 9 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+        if (prop.major < 9 && (e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED  || e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH)) {
             std::cout << "Fusion with fp8 inputs is only supported on Hopper or later" << std::endl;
             return;
         }
@@ -435,6 +445,12 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
     try {
         // Create cudnn handle
         checkCudnnErr(cudnnCreate(&handle_));
+        if (check_device_arch_newer_than("hopper") == false) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_ARCH_MISMATCH,
+                    "run_tranpose_scale_convert_fp16_fp8_amax: Sample requires Ampere or above GPU");
+        }
 
         // Creates the necessary tensor descriptors
         int64_t stride[4];
@@ -553,7 +569,7 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
 
         void* workspace_ptr = nullptr;
         if (workspace_size > 0) {
-            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+            checkCudaErr(cudaMalloc(&workspace_ptr, (size_t)workspace_size));
         }
         void* data_ptrs[] = {devPtrX, devPtrR, devPtrScale, devPtrOutput};
         int64_t uids[]    = {'x', 'r', 's', 'y'};
@@ -568,12 +584,19 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
             checkCudaErr(cudaFree(workspace_ptr));
         }
 
-    checkCudaErr(cudaDeviceSynchronize());
+        checkCudaErr(cudaDeviceSynchronize());
         checkCudnnErr(cudnnDestroy(handle_));
 
         throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnnException& e) {
+        // this example is only for Hopper cards
+        struct cudaDeviceProp prop;
+        checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+        if (prop.major < 9 && (e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED  || e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH)) {
+            std::cout << "Fusion with fp8 inputs is only supported on Hopper or later" << std::endl;
+            return;
+        }
         std::cout << "[ERROR] Exception " << e.what() << std::endl;
         CHECK(false);
     }
@@ -602,7 +625,12 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
     try {
         // Create cudnn handle
         checkCudnnErr(cudnnCreate(&handle_));
-
+        if (check_device_arch_newer_than("hopper") == false) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_ARCH_MISMATCH,
+                    "run_fp8_dgrad_descale_descale_amax_scale: Sample requires Ampere or above GPU");
+        }
         // Creates the necessary tensor descriptors
         int64_t stride[4];
 
@@ -770,7 +798,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
 
         void* workspace_ptr = nullptr;
         if (workspace_size > 0) {
-            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
+            checkCudaErr(cudaMalloc(&workspace_ptr, (size_t)workspace_size));
         }
         void* data_ptrs[] = {devPtrdX, devPtrW, devPtrR, devPtrDescale1, devPtrDescale2, devPtrScale, devPtrdY};
         int64_t uids[]    = {'c', 'w', 'r', 's', 't', 'u', 'y'};
@@ -794,7 +822,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
         // this example is only for Hopper cards
         struct cudaDeviceProp prop;
         checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
-        if (prop.major < 9 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
+        if (prop.major < 9 && (e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED  || e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH)) {
             std::cout << "Fusion with fp8 inputs is only supported on Hopper or later" << std::endl;
             return;
         }
