@@ -258,7 +258,6 @@ run_bn_finalize(
 
 cudnnStatus_t run_dsbar(int64_t *Y_dim,
                int64_t *scaleTensorDim,
-               int64_t *biasTensorDim,
                void *RP_YdevPtr,
                void *RP_scaleDevPtr,
                void *RP_biasDevPtr,
@@ -286,7 +285,7 @@ run_maxpool_with_idx(int64_t* x_dim,
                     int64_t* strideA);
 #endif
 
-void
+cudnnStatus_t
 run_conv_two_global_scales(int64_t* xTensorDim,
                    int64_t* wTensorDim,
                    int64_t* yTensorDim,
