@@ -475,4 +475,7 @@ class TensorBuilder_v8 {
     Tensor_v8 m_tensor;  //! Tensor built by the TensorBuilder class.
 };
 
+using Tensor                    = Tensor_v8;
+using TensorBuilder             = TensorBuilder_v8;
+
 }

@@ -122,8 +122,6 @@
 #define CUDNN_FRONTEND_VERSION ((CUDNN_FRONTEND_MAJOR_VERSION * 10000) + (CUDNN_FRONTEND_MINOR_VERSION * 100) + CUDNN_FRONTEND_PATCH_VERSION)
 
 namespace cudnn_frontend {
-using Tensor                    = Tensor_v8;
-using TensorBuilder             = TensorBuilder_v8;
 using ConvDesc                  = ConvDesc_v8;
 using ConvDescBuilder           = ConvDescBuilder_v8;
 using PointWiseDescBuilder      = PointWiseDescBuilder_v8;
