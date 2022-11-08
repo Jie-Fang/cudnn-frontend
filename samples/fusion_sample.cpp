@@ -335,9 +335,9 @@ run_conv_scale_bias_add_leaky_relu(int64_t* x_dim,
         if (prop.major < 8 && e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED) {
             std::cout << "Fusion with float inputs is only supported on Ampere or later" << std::endl;
         } else {
-#if (CUDNN_VERSION == 8600)
+#if (CUDNN_VERSION == 8600) || (CUDNN_VERSION == 8700)
             if (prop.major == 9) {
-                std::cout << "Hopper GPUs does not have int8 fused operations support yet\n";
+                std::cout << "Hopper GPUs does not have float fused operations support yet\n";
                 return;
             }
 #endif
