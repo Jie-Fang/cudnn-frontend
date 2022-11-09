@@ -35,11 +35,31 @@
 
 #include "fp16_dev.h"
 #include "fp16_emu.h"
-
 #include "error_util.h"
+
+#define CUDNN_FRONTEND_UNUSED(X) ((void)X)
 
 #define THRESHOLD 2.0e-2
 
+enum class MHA_Layout {
+    NOT_INTERLEAVED = 0,
+    QKV_INTERLEAVED = 1,
+    KV_INTERLEAVED = 2
+};
+
+enum class MHA_Matrix {
+    Q_Matrix = 0, // queries
+    K_Matrix = 1, // keys
+    V_Matrix = 2, // values
+    S_Matrix = 3, // output of GEMM1
+    O_Matrix = 4, // final output
+};
+
+enum class MHA_Bias_Type {
+    NO_BIAS = 0,
+    PRE_SCALE_BIAS = 1,
+    POST_SCALE_BIAS = 2
+};
 
 bool check_device_arch_newer_than(std::string const arch);
 
@@ -49,6 +69,7 @@ int64_t getFwdConvOutputDim( int64_t tensorDim, int64_t pad, int64_t filterDim, 
 
 void generateStrides(const int64_t* dimA, int64_t* strideA, int64_t nbDims, cudnnTensorFormat_t filterFormat);
 void generate4dTransposeStrides(const int64_t* dimA, int64_t* strideA, int64_t nbDims, cudnnTensorFormat_t filterFormat);
+void generateMHAStrides(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t d, int64_t* strideA, MHA_Layout layout, MHA_Matrix matrix);
 
 int64_t checkCudaError(cudaError_t code, const char* expr, const char* file, int line);
 int64_t checkCudnnError(cudnnStatus_t code, const char* expr, const char* file, int line);

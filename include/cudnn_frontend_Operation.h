@@ -38,6 +38,7 @@
 #include "cudnn_frontend_MatMulDesc.h"
 #include "cudnn_frontend_ReductionDesc.h"
 #include "cudnn_frontend_Resample.h"
+#include "cudnn_frontend_Rng.h"
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_utils.h"
 
@@ -57,6 +58,9 @@ namespace cudnn_frontend {
 ///    - amatdesc
 ///    - bmatdesc
 ///    - cmatdesc
+///    - moverridedesc
+///    - noverridedesc
+///    - koverridedesc
 ///    - pwdesc
 ///    - matmuldesc
 ///    - reductiondesc
@@ -143,9 +147,13 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor dwdesc             = nullptr;
     ManagedOpaqueDescriptor cdesc              = nullptr;
     ManagedOpaqueDescriptor resampledesc       = nullptr;
+    ManagedOpaqueDescriptor rngdesc            = nullptr;
     ManagedOpaqueDescriptor amatdesc           = nullptr;
     ManagedOpaqueDescriptor bmatdesc           = nullptr;
     ManagedOpaqueDescriptor cmatdesc           = nullptr;
+    ManagedOpaqueDescriptor moverridedesc      = nullptr;
+    ManagedOpaqueDescriptor noverridedesc      = nullptr;
+    ManagedOpaqueDescriptor koverridedesc      = nullptr;
     ManagedOpaqueDescriptor pwdesc             = nullptr;
     ManagedOpaqueDescriptor matmuldesc         = nullptr;
     ManagedOpaqueDescriptor reductiondesc      = nullptr;
@@ -190,6 +198,7 @@ class Operation_v8 : public BackendDescriptor {
     bool is_pointwise_math_op           = false;
     std::string operationTag;
     feature_vector_t feature_vector;
+    int64_t seed = 0;
 };
 
 ///
@@ -209,6 +218,7 @@ class OperationBuilder_v8 {
     bool is_resample_bwd_op  = false;
     bool is_norm_forward_op  = false;
     bool is_norm_backward_op = false;
+    bool is_rng_op           = false;
 
     using Message_t = const char *;
 
@@ -327,6 +337,50 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_CDESC Failed");
             return std::move(m_operation);
         }
+#if (CUDNN_VERSION >= 8700)
+        if (m_operation.moverridedesc != nullptr) {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                    CUDNN_ATTR_OPERATION_MATMUL_GEMM_M_OVERRIDE_DESC,
+                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                    1,
+                    &(m_operation.moverridedesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_GEMM_M_OVERRIDE_DESC Failed");
+                return std::move(m_operation);
+            }
+        }
+        if (m_operation.noverridedesc != nullptr) {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                    CUDNN_ATTR_OPERATION_MATMUL_GEMM_N_OVERRIDE_DESC,
+                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                    1,
+                    &(m_operation.noverridedesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_GEMM_N_OVERRIDE_DESC Failed");
+                return std::move(m_operation);
+            }
+        }
+        if (m_operation.koverridedesc != nullptr) {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                    CUDNN_ATTR_OPERATION_MATMUL_GEMM_K_OVERRIDE_DESC,
+                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                    1,
+                    &(m_operation.koverridedesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_MATMUL_GEMM_K_OVERRIDE_DESC Failed");
+                return std::move(m_operation);
+            }
+        }
+#endif
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_MATMUL_DESC,
                 CUDNN_TYPE_BACKEND_DESCRIPTOR,
@@ -1554,6 +1608,61 @@ Operation_v8 &&
     }
 
     Operation_v8 && 
+    build_rng_operation() {
+#if (CUDNN_VERSION >= 8700)
+        m_operation.operationTag = "Rng";
+        auto status = CUDNN_STATUS_SUCCESS;
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RNG_YDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.ydesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_YDESC Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RNG_SEED,
+                CUDNN_TYPE_INT64,
+                1,
+                &(m_operation.seed));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_SEED Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RNG_DESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.rngdesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_DESC Failed");
+            return std::move(m_operation);
+        }
+
+        status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
+            return std::move(m_operation);
+        }
+#else
+        set_error_and_throw_exception(&m_operation,
+                                      CUDNN_STATUS_NOT_SUPPORTED,
+                                      "CUDNN_BACKEND_OPERATION: Rng operation Not supported in this version");
+#endif
+        return std::move(m_operation);
+    }
+
+    Operation_v8 && 
     build_conv_forward() {
         m_operation.operationTag = "ConvFwd";
 
@@ -1792,6 +1901,21 @@ Operation_v8 &&
         return CUDNN_STATUS_SUCCESS;
     }
 #endif
+
+    cudnnStatus_t
+    validate_rng_op(Message_t &msg) {
+        if (m_operation.ydesc == nullptr) {
+            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_REDUCTION_YDESC";
+            return CUDNN_STATUS_BAD_PARAM;
+        }
+
+        if (m_operation.rngdesc == nullptr) {
+            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_RNG_DESC";
+            return CUDNN_STATUS_BAD_PARAM;
+        }
+
+        return CUDNN_STATUS_SUCCESS;
+    }
 
     cudnnStatus_t
     validate_reduction_op(Message_t &msg) {
@@ -2041,6 +2165,18 @@ Operation_v8 &&
     }
 
     auto
+    setRngDesc(RngDesc_v8 const &rngDesc) -> OperationBuilder_v8 & {
+        if (is_rng_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "RNG_DESC: Non Rng operation does not need Rng DESCRIPTOR");
+        }
+        m_operation.rngdesc = rngDesc.get_desc();
+        return *this;
+    }
+
+    auto
     setidxDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.idxdesc = tensor.get_desc();
         copy_dims_and_strides(tensor.getDimArray(), idxTensor_dimA);
@@ -2221,6 +2357,39 @@ Operation_v8 &&
         return *this;
     }
     auto
+    setmOverrideDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need mOverride Tensor");
+        }
+        m_operation.moverridedesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setnOverrideDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need nOverride Tensor");
+        }
+        m_operation.noverridedesc = tensor.get_desc();
+        return *this;
+    }
+    auto
+    setkOverrideDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        if (is_matmul_op == false) {
+            set_error_and_throw_exception(
+                &m_operation,
+                CUDNN_STATUS_BAD_PARAM,
+                "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Matmul operation does not need kOverride Tensor");
+        }
+        m_operation.koverridedesc = tensor.get_desc();
+        return *this;
+    }
+    auto
     setmatmulDesc(MatMulDesc_v8 const &matmulDesc) -> OperationBuilder_v8 & {
         if (is_matmul_op == false) {
             set_error_and_throw_exception(
@@ -2361,6 +2530,12 @@ Operation_v8 &&
     }
 
     auto
+    setSeed(int64_t seed) -> OperationBuilder_v8 & {
+        m_operation.seed       = seed;
+        return *this;
+    }
+
+    auto
     setComputeType(cudnnDataType_t dtype) -> OperationBuilder_v8 & {
         m_operation.compute_type = dtype;
         return *this;
@@ -2396,6 +2571,9 @@ Operation_v8 &&
 #if (CUDNN_VERSION >= 8600)
         is_resample_bwd_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR);
 #endif
+#if (CUDNN_VERSION >= 8700)
+        is_rng_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR);
+#endif
     }
     /** @} */
 
@@ -2430,6 +2608,8 @@ Operation_v8 &&
         } else if (is_resample_bwd_op) {
             status_ = validate_resample_op(msg);
         #endif
+        } else if (is_rng_op) {
+            status_ = validate_rng_op(msg);
         } else if (is_norm_forward_op || is_norm_backward_op) {
             status_ = validate_norm_op(msg);
         } else {
@@ -2475,6 +2655,10 @@ Operation_v8 &&
 #if (CUDNN_VERSION >= 8600)
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR) {
             return build_resample_bwd_operation();
+#endif
+#if (CUDNN_VERSION >= 8700)
+        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR) {
+            return build_rng_operation();
 #endif
         }
         getLogger() << "[cudnn_frontend] " << m_operation << std::endl;

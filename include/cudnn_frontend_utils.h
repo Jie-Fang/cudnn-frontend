@@ -372,6 +372,25 @@ to_string(cudnnPointwiseMode_t mode) {
     return std::string("");
 }
 
+#if (CUDNN_VERSION >= 8700)
+static inline std::string
+to_string(cudnnRngDistribution_t distribution) {
+    switch(distribution) {
+        case CUDNN_RNG_DISTRIBUTION_BERNOULLI:
+            return std::string("CUDNN_RNG_DISTRIBUTION_BERNOULLI");
+        case CUDNN_RNG_DISTRIBUTION_UNIFORM:
+            return std::string("CUDNN_RNG_DISTRIBUTION_UNIFORM");
+        case CUDNN_RNG_DISTRIBUTION_NORMAL:
+            return std::string("CUDNN_RNG_DISTRIBUTION_NORMAL");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_CUDNN_DISTRIBUTION");
+#endif
+    }
+    return std::string("");
+}
+#endif
+
 static inline void
 set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
     if (desc != nullptr) {

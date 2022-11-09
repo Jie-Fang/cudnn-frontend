@@ -29,6 +29,7 @@
 #include "fusion_sample.h"
 #include "fp8_sample.h"
 #include "mha_sample.h"
+#include "fused_mha_sample.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2371,3 +2372,174 @@ TEST_CASE("Dgrad Descale Descale Amax Scale sample", "[frontend][fusion][ConvSca
 }
 #endif
 
+#if (CUDNN_VERSION >= 8700)
+TEST_CASE("Back2Back Batch GEMM sample", "[frontend][fusion][back2backBatchGemm]") {
+    std::cout << "TEST_CASE :: Sample back2back batch gemm code with backend API" << std::endl;
+    INFO("TEST_CASE :: Sample back2back batch gemm code with backend API");
+
+    int64_t qTensorDim[] = {32, 16, 512, 64};
+    int64_t kTensorDim[] = {32, 16, 64, 512};
+    int64_t sTensorDim[] = {32, 16, 512, 512};
+    int64_t vTensorDim[] = {32, 16, 512, 64};
+    int64_t oTensorDim[] = {32, 16, 512, 64};
+
+    int64_t qTensorStride[] = {524288, 64, 1024, 1};
+    int64_t kTensorStride[] = {524288, 64, 1, 1024};
+    int64_t sTensorStride[] = {4194304, 262144, 512, 1};
+    int64_t vTensorStride[] = {524288, 64, 1024, 1};
+    int64_t oTensorStride[] = {524288, 64, 1024, 1};
+
+    printf("====DIMENSIONS====\n");
+    printf("q dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", qTensorDim[0], qTensorDim[1], qTensorDim[2], qTensorDim[3]);
+    printf("k dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", kTensorDim[0], kTensorDim[1], kTensorDim[2], kTensorDim[3]);
+    printf("s dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", sTensorDim[0], sTensorDim[1], sTensorDim[2], sTensorDim[3]);
+    printf("v dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", vTensorDim[0], vTensorDim[1], vTensorDim[2], vTensorDim[3]);
+    printf("o dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", oTensorDim[0], oTensorDim[1], oTensorDim[2], oTensorDim[3]);
+
+    int qSize = qTensorDim[0] * qTensorDim[1] * qTensorDim[2] * qTensorDim[3];
+    int kSize = kTensorDim[0] * kTensorDim[1] * kTensorDim[2] * kTensorDim[3];
+    int vSize = vTensorDim[0] * vTensorDim[1] * vTensorDim[2] * vTensorDim[3];
+    int oSize = oTensorDim[0] * oTensorDim[1] * oTensorDim[2] * oTensorDim[3];
+
+    // passing half just to make sure that we have a data type of same size as bf16
+    Surface<half> qTensor(qSize, false);
+    Surface<half> kTensor(kSize, false);
+    Surface<half> vTensor(vSize, false);
+    Surface<half> oTensor(oSize, false);
+
+    run_b2b_batch_gemm(qTensorDim, 
+                kTensorDim, 
+                sTensorDim,
+                vTensorDim,
+                oTensorDim, 
+                qTensor.devPtr,
+                kTensor.devPtr,
+                vTensor.devPtr,
+                oTensor.devPtr,
+                CUDNN_DATA_HALF, 
+                4, 
+                qTensorStride,
+                kTensorStride,
+                sTensorStride,
+                vTensorStride,
+                oTensorStride);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(oTensor.hostPtr, oTensor.devPtr, sizeof(oTensor.hostPtr[0]) * oSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+
+TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
+    std::cout << "TEST_CASE :: MHA Fprop with backend API" << std::endl;
+    INFO("TEST_CASE ::  MHA Fprop with backend API");
+
+    int64_t b = 32;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+
+    int64_t seed = 123456; // seed for generating the dropout mask
+
+    MHA_Layout layout = MHA_Layout::QKV_INTERLEAVED; // layout of the tensors Q,K and V
+
+    // this scaling factor needs to be bfloat16 for data type bfloat16
+    half1 scaling_factor = cpu_float2half_rn(0.8); // scale value before softmax
+    
+    double dropout_probability = 0.2f; // probability of dropout
+
+    MHA_Bias_Type bias_type = MHA_Bias_Type::NO_BIAS; // set which bias is required
+
+    bool is_causal_masking = false; // specify if we need causal masking
+
+    printf("====PARAMETERS====\n");
+    printf("batch is %" PRId64 ", head dim is %" PRId64 ", q sequence length is %" PRId64 ", kv sequence length is %" PRId64 ", hidden dim is %" PRId64 "\n", b, h, s_q, s_kv, d);
+
+    void* devPtrQ = nullptr; // queries
+    void* devPtrK = nullptr; // keys
+    void* devPtrV = nullptr; // values
+    void* devPtrS = nullptr; // after softmax output
+    void* devPtrO = nullptr; // final output
+    void* devPtrBias = nullptr; // bias tensor
+
+    int* devActualSeqlenQ = nullptr; // actual seqlen Q
+    int* devActualSeqlenK = nullptr; // actual seqlen K
+
+    int* hostActualSeqlenQ = nullptr;
+    int* hostActualSeqlenK = nullptr;
+
+    // the setup is for the qkv interleaved layout (qkv interleaved assumes s_q = s_kv)
+    int64_t qkvTensorDim[] = {b, s_q, 3, h, d};
+    CUDNN_FRONTEND_UNUSED(qkvTensorDim);
+
+    int64_t qkvSize = b * s_q * 3 * h * d;
+    Surface<half> qkvTensor(qkvSize, false);
+    devPtrQ = (void *)qkvTensor.devPtr; // q points to the top of qkv
+    devPtrK = (void *)(qkvTensor.devPtr + h * d); // k is at an offset of h * d
+    devPtrV = (void *)(qkvTensor.devPtr + 2 * h * d); // v is at an offset of 2 * h * d
+
+    // optionally setup S and bias
+    Surface<half> sTensor(b * h * s_q * s_kv, false);
+    devPtrS = (void *)sTensor.devPtr;
+
+    // setup of actual seqlen Q and seqlen K
+    checkCudaErr(cudaMalloc((void**)&(devActualSeqlenQ), (b) * sizeof(devActualSeqlenQ[0])));
+    hostActualSeqlenQ = (int*) calloc(b, sizeof(hostActualSeqlenQ[0]));
+
+    for (int i = 0; i < b; i++) {
+        hostActualSeqlenQ[i] = 128;
+    }
+    
+    checkCudaErr(cudaMemcpy(devActualSeqlenQ, hostActualSeqlenQ, sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMalloc((void**)&(devActualSeqlenK), (b) * sizeof(devActualSeqlenK[0])));
+    hostActualSeqlenK = (int*) calloc(b, sizeof(hostActualSeqlenK[0]));
+
+    for (int i = 0; i < b; i++) {
+        hostActualSeqlenK[i] = 128;
+    }
+    
+    checkCudaErr(cudaMemcpy(devActualSeqlenK, hostActualSeqlenK, sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    int64_t oSize   = b * s_q * h * d;
+    Surface<half> oTensor(oSize, false);
+    devPtrO = (void *)oTensor.devPtr;
+
+    run_mha_fprop(b, 
+                h, 
+                s_q,
+                s_kv,
+                d,
+                seed,
+                layout,
+                scaling_factor,
+                dropout_probability,
+                bias_type,
+                is_causal_masking,
+                devPtrQ, 
+                devPtrK,   
+                devPtrV,   
+                devPtrS,
+                devPtrO,
+                devPtrBias,
+                devActualSeqlenQ,
+                devActualSeqlenK,
+                CUDNN_DATA_HALF);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(oTensor.hostPtr, oTensor.devPtr, sizeof(oTensor.hostPtr[0]) * oSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    if (devActualSeqlenQ) cudaFree(devActualSeqlenQ);
+    if (hostActualSeqlenQ) free(hostActualSeqlenQ);
+
+    if (devActualSeqlenK) cudaFree(devActualSeqlenK);
+    if (hostActualSeqlenK) free(hostActualSeqlenK);
+
+    std::cout << "\n========================================================================================\n";
+}
+#endif
