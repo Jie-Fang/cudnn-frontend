@@ -25,6 +25,7 @@ add_executable(
     fusion_sample.cpp 
     fp8_sample.cpp 
     mha_sample.cpp
+    fused_mha_sample.cpp
 )
 
 if(DEFINED ENV{NO_DEFAULT_IN_SWITCH})

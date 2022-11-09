@@ -334,5 +334,3 @@ run_backward_maxpool(int64_t* dx_dim,
                     int64_t* postPaddingA,
                     int64_t* strideA);
 #endif
-
-
