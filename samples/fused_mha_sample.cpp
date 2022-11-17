@@ -24,13 +24,13 @@
 #include <cudnn_frontend.h>
 #include "error_util.h"
 
-bool
+static bool
 allowAllConfig(cudnnBackendDescriptor_t engine_config) {
     (void)engine_config;
     return false;
 }
 
-cudnn_frontend::ExecutionPlan
+static cudnn_frontend::ExecutionPlan
 get_execplan_from_heuristics(cudnn_frontend::OperationGraph&& opGraph, cudnnHandle_t handle_) {
 #if (CUDNN_VERSION >= 8200)
     {
@@ -224,14 +224,15 @@ run_b2b_batch_gemm(int64_t* q_dim,
     }
 }
 
-void createScale(int64_t b, 
-                int64_t h, 
-                int64_t s_q,
-                int64_t s_kv,
-                int64_t d,
-                MHA_Layout layout, 
-                cudnnDataType_t tensorType,
-                std::vector<cudnn_frontend::Operation>& ops) {
+static void 
+createScale(int64_t b, 
+            int64_t h, 
+            int64_t s_q,
+            int64_t s_kv,
+            int64_t d,
+            MHA_Layout layout, 
+            cudnnDataType_t tensorType,
+            std::vector<cudnn_frontend::Operation>& ops) {
     int nbDims = 4;
 
     // scale
@@ -289,14 +290,15 @@ void createScale(int64_t b,
     ops.push_back(std::move(scale_op));
 }
 
-void createBMM1(int64_t b, 
-              int64_t h, 
-              int64_t s_q,
-              int64_t s_kv,
-              int64_t d,
-              MHA_Layout layout,
-              cudnnDataType_t tensorType,
-              std::vector<cudnn_frontend::Operation>& ops) {
+static void
+createBMM1(int64_t b, 
+           int64_t h, 
+           int64_t s_q,
+           int64_t s_kv,
+           int64_t d,
+           MHA_Layout layout,
+           cudnnDataType_t tensorType,
+           std::vector<cudnn_frontend::Operation>& ops) {
     int nbDims = 4;
 
     // Creates the necessary tensor descriptors
@@ -380,14 +382,15 @@ void createBMM1(int64_t b,
     ops.push_back(std::move(matmul_op1));
 }
 
-void createBias(int64_t b, 
-              int64_t h, 
-              int64_t s_q,
-              int64_t s_kv,
-              int64_t d,
-              MHA_Layout layout,
-              cudnnDataType_t tensorType,
-              std::vector<cudnn_frontend::Operation>& ops) {
+static void
+createBias(int64_t b, 
+           int64_t h, 
+           int64_t s_q,
+           int64_t s_kv,
+           int64_t d,
+           MHA_Layout layout,
+           cudnnDataType_t tensorType,
+           std::vector<cudnn_frontend::Operation>& ops) {
     int nbDims = 4;
 
     cudnn_frontend::throw_if(ops.size() == 0, "Bias op constructed incorrectly as the first one", CUDNN_STATUS_BAD_PARAM);
@@ -439,15 +442,16 @@ void createBias(int64_t b,
     ops.push_back(std::move(bias_op));
 }
 
-void createMask(int64_t b, 
-              int64_t h, 
-              int64_t s_q,
-              int64_t s_kv,
-              int64_t d,
-              MHA_Layout layout,
-              bool is_causal_masking,
-              cudnnDataType_t tensorType,
-              std::vector<cudnn_frontend::Operation>& ops) {
+static void
+createMask(int64_t b, 
+           int64_t h, 
+           int64_t s_q,
+           int64_t s_kv,
+           int64_t d,
+           MHA_Layout layout,
+           bool is_causal_masking,
+           cudnnDataType_t tensorType,
+           std::vector<cudnn_frontend::Operation>& ops) {
 
     CUDNN_FRONTEND_UNUSED(d);
     CUDNN_FRONTEND_UNUSED(layout);
@@ -694,15 +698,16 @@ void createMask(int64_t b,
     ops.push_back(std::move(mask_op));
 }
 
-void createSoftmaxForward(int64_t b, 
-              int64_t h, 
-              int64_t s_q,
-              int64_t s_kv,
-              int64_t d,
-              MHA_Layout layout,
-              bool enable_dropout,
-              cudnnDataType_t tensorType,
-              std::vector<cudnn_frontend::Operation>& ops) {
+static void
+createSoftmaxForward(int64_t b, 
+                     int64_t h, 
+                     int64_t s_q,
+                     int64_t s_kv,
+                     int64_t d,
+                     MHA_Layout layout,
+                     bool enable_dropout,
+                     cudnnDataType_t tensorType,
+                     std::vector<cudnn_frontend::Operation>& ops) {
     CUDNN_FRONTEND_UNUSED(d);
     CUDNN_FRONTEND_UNUSED(layout);
     int nbDims = 4;
@@ -839,7 +844,8 @@ void createSoftmaxForward(int64_t b,
     ops.push_back(std::move(division_op));
 }
 
-void createDropout(int64_t b, 
+static void
+createDropout(int64_t b, 
               int64_t h, 
               int64_t s_q,
               int64_t s_kv,
@@ -959,14 +965,15 @@ void createDropout(int64_t b,
     
 }
 
-void createBMM2(int64_t b, 
-              int64_t h, 
-              int64_t s_q,
-              int64_t s_kv,
-              int64_t d,
-              MHA_Layout layout,
-              cudnnDataType_t tensorType,
-              std::vector<cudnn_frontend::Operation>& ops) {
+static void
+createBMM2(int64_t b, 
+           int64_t h, 
+           int64_t s_q,
+           int64_t s_kv,
+           int64_t d,
+           MHA_Layout layout,
+           cudnnDataType_t tensorType,
+           std::vector<cudnn_frontend::Operation>& ops) {
     int nbDims = 4;
 
     cudnn_frontend::throw_if(ops.size() == 0, "BMM2 op constructed incorrectly as the first one", CUDNN_STATUS_BAD_PARAM);
