@@ -18,6 +18,9 @@ include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
 add_executable(
     samples
+    
+    blocks/convolutions.cpp
+    
     conv_sample.cpp 
     test_list.cpp 
     fp16_emu.cpp 

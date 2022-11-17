@@ -30,6 +30,7 @@
 #include "fp8_sample.h"
 #include "mha_sample.h"
 #include "fused_mha_sample.h"
+#include "blocks/convolutions.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2720,3 +2721,9 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     std::cout << "\n========================================================================================\n";
 }
 #endif
+
+TEST_CASE("Conv Block", "[frontend][fusion][block]") {
+
+    run_convolution_block();
+
+}

@@ -33,8 +33,9 @@
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include "cudnn_frontend_Engine.h"
-#include "cudnn_frontend_utils.h"
+#include <cudnn_frontend_EngineConfig.h>
+#include <cudnn_frontend_Engine.h>
+#include <cudnn_frontend_utils.h>
 
 namespace cudnn_frontend {
 ///
@@ -603,4 +604,5 @@ class ExecutionPlanBuilder_v8 {
 
 using ExecutionPlan             = ExecutionPlan_v8;
 using ExecutionPlanBuilder      = ExecutionPlanBuilder_v8;
+
 }

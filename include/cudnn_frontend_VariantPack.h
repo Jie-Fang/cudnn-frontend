@@ -199,4 +199,8 @@ class VariantPackBuilder_v8 {
    private:
     VariantPack_v8 m_variant_pack;
 };
+
+using VariantPack               = VariantPack_v8;
+using VariantPackBuilder        = VariantPackBuilder_v8;
+
 }

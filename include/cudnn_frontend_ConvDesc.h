@@ -377,4 +377,8 @@ class ConvDescBuilder_v8 {
    private:
     ConvDesc_v8 m_convDesc;
 };
+
+using ConvDesc                  = ConvDesc_v8;
+using ConvDescBuilder           = ConvDescBuilder_v8;
+
 }
