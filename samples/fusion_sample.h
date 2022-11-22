@@ -334,3 +334,26 @@ run_backward_maxpool(int64_t* dx_dim,
                     int64_t* postPaddingA,
                     int64_t* strideA);
 #endif
+
+#if (CUDNN_VERSION >= 8400)
+void
+run_bn_bwd_weight(
+    int64_t * xDim,
+    int64_t * dyDim,
+    int64_t * wDim,
+    int64_t * scaleDim,
+    void *x_bn_fwd,
+    void *w_fwd,
+    void *dy,
+    void *dy_bn,
+    void *mean,
+    void *inv_var,
+    void *scale, 
+    void *bias, 
+    void *d_scale, 
+    void *d_bias,
+    void * A,
+    void * B,
+    void * c
+);
+#endif

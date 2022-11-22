@@ -493,7 +493,6 @@ TEST_CASE("Use cudnnGetPlan for execution", "[frontend][cudnnGetPlan][conv]" ) {
     std::cout << "\n========================================================================================\n";
 }
 
-
 TEST_CASE("ConvScaleBiasAddAct sample", "[frontend][fusion][ConvScaleBiasAddAct]") {
     std::cout << "TEST_CASE :: ConvScaleBiasAddAct sample" << std::endl;
     INFO("TEST_CASE :: ConvScaleBiasAddAct sample");
@@ -849,7 +848,6 @@ TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_i
     std::cout << "\n========================================================================================\n";
 }
 
-
 TEST_CASE("PoolScaleBiasAct_int8 sample", "[frontend][fusion][PoolScaleBiasAct_int8]") {
     std::cout << "TEST_CASE PoolScaleBiasAct_int8 :: Sample PoolScaleBiasAct_int8 fusion code with backend API" << std::endl;
     INFO("TEST_CASE :: PoolScaleBiasAct_int8 sample");    
@@ -935,7 +933,6 @@ TEST_CASE("PoolScaleBiasAct_int8 sample", "[frontend][fusion][PoolScaleBiasAct_i
     checkCudaErr(cudaDeviceSynchronize());
     std::cout << "\n========================================================================================\n";
 }
-
 
 TEST_CASE("MatmulBiasAct sample", "[frontend][fusion][MatmulBiasAct]") {
     std::cout << "TEST_CASE :: Sample matmul bias runtime fusion code with backend API" << std::endl;
@@ -1502,7 +1499,6 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
     std::cout << "\n========================================================================================\n";
 }
 
-
 TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
     std::cout << "Dual Scale Bias Act Relu" << std::endl;
     int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
@@ -1583,7 +1579,6 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
 #endif
     REQUIRE(numErrors == 0);
 }
-    
 
 TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstats][cpu]") {
     std::cout << "\n========================================================================================\n";
@@ -1881,7 +1876,6 @@ TEST_CASE("Tensor cloning", "[frontend][comparison][clone]") {
     }
 }
 
-
 #if (CUDNN_VERSION >= 8600)
 TEST_CASE("Max pooling idx tensor dump", "[frontend][max pooling]") {
     std::cout << "TEST_CASE Max pooling :: Sample max pooling with idx tensor" << std::endl;
@@ -2144,7 +2138,6 @@ TEST_CASE("Conv two global scales", "[frontend][fusion][conv global scale]") {
 }
 #endif
 
-
 #if (CUDNN_VERSION >= 8600)
 TEST_CASE("Conv Scale", "[frontend][fusion][ConvScaleReduction]") {
     std::cout << "TEST_CASE :: Sample conv scale code with backend API" << std::endl;
@@ -2258,7 +2251,9 @@ TEST_CASE("Conv Descale Descale Amax Scale sample", "[frontend][fusion][ConvScal
 
     std::cout << "\n========================================================================================\n";
 }
+#endif
 
+#if (CUDNN_VERSION >= 8600)
 TEST_CASE("Scale transpose convert amax sample", "[frontend][fusion][Transpose]") {
     std::cout << "TEST_CASE :: Sample scale transpose convert amax code with backend API" << std::endl;
     INFO("TEST_CASE :: Sample scale transpose convert amax code with backend API");
@@ -2301,11 +2296,12 @@ TEST_CASE("Scale transpose convert amax sample", "[frontend][fusion][Transpose]"
 
     std::cout << "\n========================================================================================\n";
 }
+#endif
 
+#if (CUDNN_VERSION >= 8700)
 TEST_CASE("Dgrad Descale Descale Amax Scale sample", "[frontend][fusion][ConvScaleReduction]") {
     std::cout << "TEST_CASE :: Sample Dgrad scale global reduction code with backend API" << std::endl;
     INFO("TEST_CASE :: Sample Dgrad scale global reduction code with backend API");
-#if (CUDNN_VERSION > 8700)
     int64_t dxTensorDim[]      = {64, 256, 14, 14};
     int64_t wTensorDim[]      = {256, 256, 3, 3};
     int64_t dyTensorDim[]      = {0, 0, 0, 0}; // Computed below
@@ -2365,9 +2361,66 @@ TEST_CASE("Dgrad Descale Descale Amax Scale sample", "[frontend][fusion][ConvSca
     checkCudaErr(cudaMemcpy(dX.hostPtr, dX.devPtr, (size_t)(sizeof(dX.hostPtr[0]) * dxSize), cudaMemcpyDeviceToHost));
     checkCudaErr(cudaMemcpy(Reduced.hostPtr, Reduced.devPtr, (size_t)1, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
-#else
-    std::cout << "Skipped as minimum cuDNN Version Not Met\n" << std::endl;
+    std::cout << "\n========================================================================================\n";
+}
 #endif
+
+#if (CUDNN_VERSION >= 8400)
+TEST_CASE("BN BWD Weights sample", "[frontend][fusion][BnBwdWeight]") {
+    std::cout << "TEST_CASE :: BN BWD Weights sample" << std::endl;
+    INFO("TEST_CASE :: Sample BN BWD Weights sample");
+    
+    constexpr int64_t C = 8;
+    constexpr int64_t N = 2;
+    constexpr int64_t H = 56;
+    constexpr int64_t W = 56;
+    constexpr int64_t K = 16;
+    constexpr int64_t R = 3;
+    constexpr int64_t S = 3;
+
+    int64_t scaleDim[]        = {1, C, 1, 1};
+
+    int64_t xDim[]      = {N, C, H, W};
+    int64_t wDim[]      = {K, C, R, S};
+    int64_t dyDim[]     = {N, K, 1, 1}; // Computed below
+
+    int64_t conv_padA[]       = {1, 1};
+    int64_t conv_dilationA[]  = {1, 1};
+    int64_t conv_strideA[]    = {1, 1};
+
+    dyDim[0] = dyDim[0];
+    dyDim[1] =  wDim[0];
+    for (int dim = 0; dim < 2; dim++) {
+        dyDim[dim + 2] =
+            getFwdConvOutputDim(xDim[dim + 2], conv_padA[dim], wDim[dim + 2], conv_strideA[dim], conv_dilationA[dim]);
+    }
+
+    int64_t xSize        = xDim[0] * xDim[1] * xDim[2] * xDim[3];
+    int64_t wSize        = wDim[0] * wDim[1] * wDim[2] * wDim[3];
+    int64_t ySize        = dyDim[0] * dyDim[1] * dyDim[2] * dyDim[3];
+    int64_t perScaleSize = C;
+
+    Surface<half> x_bn_forward(xSize, false);
+    Surface<half> dy_bn(xSize, false);
+    Surface<half> w_forward(wSize, false);
+    Surface<half> dy(ySize, false);
+
+    Surface<float> scale(perScaleSize, false);
+    Surface<float> bias(perScaleSize, false);
+    Surface<float> mean(perScaleSize, false);
+    Surface<float> inv_var(perScaleSize, false);
+
+    Surface<float> d_scale(perScaleSize, false);
+    Surface<float> d_bias(perScaleSize, false);
+
+    Surface<float> eqscale_dy(perScaleSize, false);
+    Surface<float> eqscale_x(perScaleSize, false);
+    Surface<float> eqbias(perScaleSize, false);
+
+    run_bn_bwd_weight(xDim, dyDim, wDim, scaleDim, x_bn_forward.devPtr, w_forward.devPtr, dy.devPtr, dy_bn.devPtr, mean.devPtr, inv_var.devPtr, 
+                      scale.devPtr, bias.devPtr, d_scale.devPtr, d_bias.devPtr, eqscale_dy.devPtr, eqscale_x.devPtr, eqbias.devPtr);
+
+    checkCudaErr(cudaDeviceSynchronize());
     std::cout << "\n========================================================================================\n";
 }
 #endif
