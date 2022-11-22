@@ -347,7 +347,7 @@ class TensorBuilder_v8 {
                 &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_UNIQUE_ID Failed");
             return std::move(m_tensor);
         }
-        cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+        status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                  CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT,
                                  CUDNN_TYPE_INT64,
                                  1,
@@ -360,7 +360,7 @@ class TensorBuilder_v8 {
             return std::move(m_tensor);
         }
         if (m_tensor.isVirtual) {
-            cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+            status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                      CUDNN_ATTR_TENSOR_IS_VIRTUAL,
                                      CUDNN_TYPE_BOOLEAN,
                                      1,
@@ -374,7 +374,7 @@ class TensorBuilder_v8 {
             }
         }
         if (m_tensor.isByValue) {
-            cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+            status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                      CUDNN_ATTR_TENSOR_IS_BY_VALUE,
                                      CUDNN_TYPE_BOOLEAN,
                                      1,
@@ -389,7 +389,7 @@ class TensorBuilder_v8 {
         }
 
         if (m_tensor.vectorCount > 1) {
-            cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+            status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                      CUDNN_ATTR_TENSOR_VECTOR_COUNT,
                                      CUDNN_TYPE_INT64,
                                      1,
@@ -403,7 +403,7 @@ class TensorBuilder_v8 {
             }
         }
         if (m_tensor.vectorDimension >= 0) {
-            cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+            status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                      CUDNN_ATTR_TENSOR_VECTORIZED_DIMENSION,
                                      CUDNN_TYPE_INT64,
                                      1,
@@ -420,7 +420,7 @@ class TensorBuilder_v8 {
         // Set the reorder_type
 #if (CUDNN_VERSION >= 8300)
         if (m_tensor.reorder_type != CUDNN_TENSOR_REORDERING_NONE) {
-            cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
+            status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                      CUDNN_ATTR_TENSOR_REORDERING_MODE,
                                      CUDNN_TYPE_TENSOR_REORDERING_MODE,
                                      1,
