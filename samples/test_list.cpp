@@ -1522,7 +1522,7 @@ TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
 
 TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     std::cout << "\n========================================================================================\n";
-    std::cout << "Dual Scale Bias Act Relu wiht CPU" << std::endl;
+    std::cout << "Dual Scale Bias Act Relu on CPU" << std::endl;
     int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
     int64_t yTensorDim[]              = { 32, 32, 7, 7}; 
 
@@ -1631,7 +1631,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstats
     checkCudaErr(cudaMemcpy(Y.hostPtr, Y.devPtr, (size_t)(sizeof(Y.devPtr[0]) * Ysize), cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 
-    Surface<float> afterScaleBiasTensor(Xsize, true);
+    Surface<float> afterScaleBiasTensor(Ysize, true);
     Surface<half> afterConvTensor(Ysize, true);
     Surface<half> afterReluTensor(Ysize, true);
     Surface<half> afterBNTensor(Ysize, true);
