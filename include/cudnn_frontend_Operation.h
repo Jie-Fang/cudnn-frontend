@@ -221,6 +221,7 @@ class OperationBuilder_v8 {
     bool is_norm_backward_op = false;
     bool is_bn_bwd_weight    = false;
     bool is_rng_op           = false;
+    bool is_reshape_op       = false;
 
     using Message_t = const char *;
 
@@ -1664,6 +1665,48 @@ class OperationBuilder_v8 {
     }
 
     Operation_v8 && 
+    build_reshape_operation() {
+#if (CUDNN_VERSION >= 8700)
+        m_operation.operationTag = "Reshape";
+        auto status = CUDNN_STATUS_SUCCESS;
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESHAPE_XDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.xdesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESHAPE_XDESC Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RESHAPE_YDESC,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.ydesc->get_backend_descriptor()));
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RESHAPE_YDESC Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
+            return std::move(m_operation);
+        }
+#else
+        set_error_and_throw_exception(&m_operation,
+                                      CUDNN_STATUS_NOT_SUPPORTED,
+                                      "CUDNN_BACKEND_OPERATION: Reshape operation Not supported in this version");
+#endif
+        return std::move(m_operation);
+    }
+
+    Operation_v8 && 
     build_bn_bwd_weight_op() {
 #if (CUDNN_VERSION >= 8400)
         m_operation.operationTag = "Dgrad_Drelu_BN_Bwd";
@@ -2020,6 +2063,7 @@ class OperationBuilder_v8 {
     }
 #endif
 
+#if (CUDNN_VERSION >= 8700)
     cudnnStatus_t
     validate_rng_op(Message_t &msg) {
         if (m_operation.ydesc == nullptr) {
@@ -2034,6 +2078,22 @@ class OperationBuilder_v8 {
 
         return CUDNN_STATUS_SUCCESS;
     }
+
+    cudnnStatus_t
+    validate_reshape_op(Message_t &msg) {
+        if (m_operation.xdesc == nullptr) {
+            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_RESHAPE_XDESC";
+            return CUDNN_STATUS_BAD_PARAM;
+        }
+
+        if (m_operation.ydesc == nullptr) {
+            msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_RESHAPE_YDESC";
+            return CUDNN_STATUS_BAD_PARAM;
+        }
+
+        return CUDNN_STATUS_SUCCESS;
+    }
+#endif
 
     cudnnStatus_t
     validate_bn_bwd_weight_op(Message_t &msg) {
@@ -2726,7 +2786,10 @@ class OperationBuilder_v8 {
         is_resample_bwd_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR);
 #endif
 #if (CUDNN_VERSION >= 8700)
-        is_rng_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR);
+        is_rng_op      = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR);
+        is_reshape_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR);
+#else
+        (void)is_reshape_op;
 #endif
     }
     /** @} */
@@ -2762,11 +2825,15 @@ class OperationBuilder_v8 {
             status_ = validate_resample_op(msg);
         } else if (is_resample_bwd_op) {
             status_ = validate_resample_op(msg);
-        #endif
+#endif
+#if (CUDNN_VERSION >= 8700)
         } else if (is_rng_op) {
             status_ = validate_rng_op(msg);
         } else if (is_norm_forward_op || is_norm_backward_op) {
             status_ = validate_norm_op(msg);
+        } else if (is_reshape_op) {
+            status_ = validate_reshape_op(msg);
+#endif
         } else {
             status_ = CUDNN_STATUS_BAD_PARAM;
             msg = "CUDNN_BACKEND_OPERATION_DESCRIPTOR: Unsupported cudnn backend descriptor type. Check and set CUDNN_BACKEND_OPERATION_*_DESCRIPTOR";
@@ -2818,7 +2885,11 @@ class OperationBuilder_v8 {
 #if (CUDNN_VERSION >= 8700)
         } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR) {
             return build_rng_operation();
+        } else if (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR) {
+            return build_reshape_operation();
 #endif
+        } else {
+            set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: unimplemented operation in frontend");
         }
         getLogger() << "[cudnn_frontend] " << m_operation << std::endl;
         return std::move(m_operation);

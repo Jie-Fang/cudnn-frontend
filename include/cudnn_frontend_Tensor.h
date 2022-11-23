@@ -28,6 +28,7 @@
 #include <memory>
 #include <sstream>
 #include <utility>
+#include <vector>
 
 #include "cudnn_frontend_utils.h"
 
@@ -55,22 +56,26 @@ class Tensor_v8 : public BackendDescriptor {
     std::string
     describe() const override {
         std::stringstream ss;
-        char sep = ' ';
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
            << " Datatype: " << to_string(data_type) << " Id: " << std::to_string(id) << " Alignment: " << alignment
            << " nDims " << nDims << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
-        ss << " Dim [";
+        ss << " Dim [ ";
         for (auto i = 0; i < nDims; i++) {
-            ss << sep << btensor_dimA[i];
-            sep = ',';
+            if (i != 0) {
+                ss << ',';
+            }
+            ss << btensor_dimA[i];
         }
-        ss << " ] Str [";
+        ss << " ] Str [ ";
         for (auto i = 0; i < nDims; i++) {
-            ss << sep << btensor_strA[i];
-            sep = ',';
+            if (i != 0) {
+                ss << ',';
+            }
+            ss << btensor_strA[i];
         }
-        ss << "]";
-        ss << " isVirtual: " << std::to_string(isVirtual) << " isByValue: " << std::to_string(isByValue);
+        ss << " ]";
+        ss << " isVirtual: " << std::to_string(isVirtual);
+        ss << " isByValue: " << std::to_string(isByValue);
 #if (CUDNN_VERSION >= 8300)
         ss << " reorder_type: " << reorder_type;
 #endif
@@ -208,12 +213,13 @@ class TensorBuilder_v8 {
         m_tensor.alignment = alignment_;
         return *this;
     }
-    //! Set Alignment of the tensor
+    //! Set isVirtual of the tensor
     auto
     setVirtual(bool virtual_ = true) -> TensorBuilder_v8 & {
         m_tensor.isVirtual = virtual_;
         return *this;
     }
+    //! Set isByValue of the tensor
     auto
     setByValue(bool isByValue_ = true) -> TensorBuilder_v8 & {
         m_tensor.isByValue = isByValue_;
@@ -348,10 +354,10 @@ class TensorBuilder_v8 {
             return std::move(m_tensor);
         }
         status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
-                                 CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT,
-                                 CUDNN_TYPE_INT64,
-                                 1,
-                                 &m_tensor.alignment);
+                                          CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT,
+                                          CUDNN_TYPE_INT64,
+                                          1,
+                                          &m_tensor.alignment);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_tensor,
@@ -361,10 +367,10 @@ class TensorBuilder_v8 {
         }
         if (m_tensor.isVirtual) {
             status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
-                                     CUDNN_ATTR_TENSOR_IS_VIRTUAL,
-                                     CUDNN_TYPE_BOOLEAN,
-                                     1,
-                                     &m_tensor.isVirtual);
+                                              CUDNN_ATTR_TENSOR_IS_VIRTUAL,
+                                              CUDNN_TYPE_BOOLEAN,
+                                              1,
+                                              &m_tensor.isVirtual);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_tensor,
@@ -375,10 +381,10 @@ class TensorBuilder_v8 {
         }
         if (m_tensor.isByValue) {
             status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
-                                     CUDNN_ATTR_TENSOR_IS_BY_VALUE,
-                                     CUDNN_TYPE_BOOLEAN,
-                                     1,
-                                     &m_tensor.isByValue);
+                                              CUDNN_ATTR_TENSOR_IS_BY_VALUE,
+                                              CUDNN_TYPE_BOOLEAN,
+                                              1,
+                                              &m_tensor.isByValue);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_tensor,
@@ -390,10 +396,10 @@ class TensorBuilder_v8 {
 
         if (m_tensor.vectorCount > 1) {
             status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
-                                     CUDNN_ATTR_TENSOR_VECTOR_COUNT,
-                                     CUDNN_TYPE_INT64,
-                                     1,
-                                     &m_tensor.vectorCount);
+                                              CUDNN_ATTR_TENSOR_VECTOR_COUNT,
+                                              CUDNN_TYPE_INT64,
+                                              1,
+                                              &m_tensor.vectorCount);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_tensor,
@@ -404,10 +410,10 @@ class TensorBuilder_v8 {
         }
         if (m_tensor.vectorDimension >= 0) {
             status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
-                                     CUDNN_ATTR_TENSOR_VECTORIZED_DIMENSION,
-                                     CUDNN_TYPE_INT64,
-                                     1,
-                                     &m_tensor.vectorDimension);
+                                              CUDNN_ATTR_TENSOR_VECTORIZED_DIMENSION,
+                                              CUDNN_TYPE_INT64,
+                                              1,
+                                              &m_tensor.vectorDimension);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_tensor,
@@ -421,10 +427,10 @@ class TensorBuilder_v8 {
 #if (CUDNN_VERSION >= 8300)
         if (m_tensor.reorder_type != CUDNN_TENSOR_REORDERING_NONE) {
             status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
-                                     CUDNN_ATTR_TENSOR_REORDERING_MODE,
-                                     CUDNN_TYPE_TENSOR_REORDERING_MODE,
-                                     1,
-                                     &m_tensor.reorder_type);
+                                              CUDNN_ATTR_TENSOR_REORDERING_MODE,
+                                              CUDNN_TYPE_TENSOR_REORDERING_MODE,
+                                              1,
+                                              &m_tensor.reorder_type);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(
                     &m_tensor,
