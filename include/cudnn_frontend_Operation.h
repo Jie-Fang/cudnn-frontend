@@ -2063,7 +2063,6 @@ class OperationBuilder_v8 {
     }
 #endif
 
-#if (CUDNN_VERSION >= 8700)
     cudnnStatus_t
     validate_rng_op(Message_t &msg) {
         if (m_operation.ydesc == nullptr) {
@@ -2093,7 +2092,6 @@ class OperationBuilder_v8 {
 
         return CUDNN_STATUS_SUCCESS;
     }
-#endif
 
     cudnnStatus_t
     validate_bn_bwd_weight_op(Message_t &msg) {
@@ -2788,8 +2786,6 @@ class OperationBuilder_v8 {
 #if (CUDNN_VERSION >= 8700)
         is_rng_op      = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR);
         is_reshape_op  = (m_operation.op_mode == CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR);
-#else
-        (void)is_reshape_op;
 #endif
     }
     /** @} */
@@ -2826,14 +2822,12 @@ class OperationBuilder_v8 {
         } else if (is_resample_bwd_op) {
             status_ = validate_resample_op(msg);
 #endif
-#if (CUDNN_VERSION >= 8700)
         } else if (is_rng_op) {
             status_ = validate_rng_op(msg);
         } else if (is_norm_forward_op || is_norm_backward_op) {
             status_ = validate_norm_op(msg);
         } else if (is_reshape_op) {
             status_ = validate_reshape_op(msg);
-#endif
         } else {
             status_ = CUDNN_STATUS_BAD_PARAM;
             msg = "CUDNN_BACKEND_OPERATION_DESCRIPTOR: Unsupported cudnn backend descriptor type. Check and set CUDNN_BACKEND_OPERATION_*_DESCRIPTOR";
