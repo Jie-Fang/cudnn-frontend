@@ -16,11 +16,6 @@ class IBlock {
 private:
 
 protected:
-
-    // Tensors belonging to each block.
-    // Connecting blocks can modify and delete tensors in this container.
-    std::unordered_map<std::string, tensor_properties> tensor_props;
-
     std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
     std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> operations;
     std::unordered_map<std::string, std::shared_ptr<OperationGraph>> operation_graphs;
@@ -54,6 +49,9 @@ protected:
     virtual int createExecutionPlan(cudnnHandle_t& handle) = 0;
 
 public:
+    // Tensors belonging to each block.
+    // Connecting blocks can modify and delete tensors in this container.
+    std::unordered_map<std::string, tensor_properties> tensor_props;
     
     virtual int build(cudnnHandle_t& handle) = 0;
     

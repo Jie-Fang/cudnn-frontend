@@ -24,50 +24,42 @@ generateStrides(int64_t const* const dimA, int64_t* const strideA, int const nbD
 
 class tensor_properties {
 public:
+    int64_t uid;
+
     int64_t dim_count;
     int64_t dim[CUDNN_DIM_MAX];
     int64_t stride[CUDNN_DIM_MAX];
 
     cudnnDataType_t data_type;
 
-    enum UIDs {
-        TENSOR_UID = 0,
+    bool is_virtual;
 
-        UID_COUNT
-    };
-    int64_t uids_with_offset[static_cast<size_t>(UIDs::UID_COUNT)];
+    bool is_pass_by_value;
 };
 
 class convolution_properties {
 public:
     int64_t dim_count;
-    int64_t input_dim[CUDNN_DIM_MAX];
-    int64_t weight_dim[CUDNN_DIM_MAX];
-    int64_t output_dim[CUDNN_DIM_MAX];
-
-    int64_t input_stride[CUDNN_DIM_MAX];
-    int64_t weight_stride[CUDNN_DIM_MAX];
-    int64_t output_stride[CUDNN_DIM_MAX];
 
     int64_t padding[CUDNN_DIM_MAX];
     int64_t stride[CUDNN_DIM_MAX];
     int64_t dilation[CUDNN_DIM_MAX];
 
     cudnnDataType_t tensor_data_type;
-    cudnnDataType_t compute_type;
+    cudnnDataType_t compute_data_type;
 
     enum UIDs {
-        INPUT_UID = 0,
-        WEIGHT_UID,
-        OUTPUT_UID,
+        X_UID = 0,
+        W_UID,
+        Y_UID,
 
         UID_COUNT
     };
-    int64_t uids_with_offset[static_cast<size_t>(UIDs::UID_COUNT)];
+    int64_t uids[static_cast<size_t>(UIDs::UID_COUNT)];
 
     void update_uids(int64_t offset) {
         for(size_t i = 0; i < static_cast<size_t>(UIDs::UID_COUNT); ++i) {
-            uids_with_offset[i] = i + offset;
+            uids[i] = i + offset;
         }
     }
 };
@@ -75,30 +67,24 @@ public:
 class pointwise_properties {
 public:
     int64_t dim_count;
-    int64_t input_dim[CUDNN_DIM_MAX];
-    int64_t weight_dim[CUDNN_DIM_MAX];
-    int64_t output_dim[CUDNN_DIM_MAX];
-
-    int64_t input_stride[CUDNN_DIM_MAX];
-    int64_t weight_stride[CUDNN_DIM_MAX];
-    int64_t output_stride[CUDNN_DIM_MAX];
 
     cudnnPointwiseMode_t mode;
+
     cudnnDataType_t tensor_data_type;
-    cudnnDataType_t compute_type;
+    cudnnDataType_t compute_data_type;
 
     enum UIDs {
-        INPUT_UID = 0,
-        WEIGHT_UID,
-        OUTPUT_UID,
+        X_UID = 0,
+        B_UID,
+        Y_UID,
 
         UID_COUNT
     };
-    int64_t uids_with_offset[static_cast<size_t>(UIDs::UID_COUNT)];
+    int64_t uids[static_cast<size_t>(UIDs::UID_COUNT)];
 
     void update_uids(int64_t offset) {
         for(size_t i = 0; i < static_cast<size_t>(UIDs::UID_COUNT); ++i) {
-            uids_with_offset[i] = i + offset;
+            uids[i] = i + offset;
         }
     }
 };
