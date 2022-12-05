@@ -4,7 +4,7 @@
 #include <cudnn_frontend_Logging.h>
 
 #include <cudnn_frontend/blocks/helpers.h>
-#include <cudnn_frontend/blocks/iblock.h>
+#include <cudnn_frontend/blocks/Iblock.h>
 #include <cudnn_frontend/blocks/convolution_blocks.h>
 #include <cudnn_frontend/blocks/pointwise_block.h>
 

@@ -5,7 +5,7 @@
 #include <cudnn_frontend_Logging.h>
 
 #include <cudnn_frontend/blocks/helpers.h>
-#include <cudnn_frontend/blocks/iblock.h>
+#include <cudnn_frontend/blocks/Iblock.h>
 
 namespace cudnn_frontend {
 
