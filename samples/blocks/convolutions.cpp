@@ -110,7 +110,7 @@ run_convolution_pointwise_block() {
 
     cudnn_frontend::ConvolutionPointwiseBlock convolution_pointwise_block;
 
-    auto convolution_block = convolution_pointwise_block.conv_block;
+    std::shared_ptr<cudnn_frontend::ConvolutionBlock> convolution_block = std::dynamic_pointer_cast<cudnn_frontend::ConvolutionBlock>(convolution_pointwise_block.sub_blocks["conv_block"]);
     
     cudnn_frontend::convolution_properties props;
     props.dim_count = 2;
@@ -141,8 +141,8 @@ run_convolution_pointwise_block() {
     convolution_block->tensor_props["Y"].dim[1] = 64;
     convolution_block->tensor_props["Y"].dim[2] = 16;
     convolution_block->tensor_props["Y"].dim[3] = 16;
-    
-    auto pointwise_block = convolution_pointwise_block.pointwise_block;
+
+    std::shared_ptr<cudnn_frontend::PointwiseBlock> pointwise_block = std::dynamic_pointer_cast<cudnn_frontend::PointwiseBlock>(convolution_pointwise_block.sub_blocks["pointwise_block"]);
 
     cudnn_frontend::pointwise_properties pointwise_props;
     pointwise_props.dim_count = 4;

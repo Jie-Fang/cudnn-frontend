@@ -13,14 +13,17 @@ namespace cudnn_frontend {
 
 // Interface for all blocks to follow.
 class IBlock {
+
+    friend class ConvolutionPointwiseBlock;
+
 private:
 
 protected:
-    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
+    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Tensor>> tensors;    
+    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> operations;
     std::unordered_map<std::string, std::shared_ptr<OperationGraph>> operation_graphs;
     std::unordered_map<std::string, std::shared_ptr<ExecutionPlan>> execution_plans;
     std::unordered_map<std::string, std::shared_ptr<VariantPack>> variant_packs;
-
 
     // Type of each block. Blocks can either be a composite (value BLOCK) or
     // one of the other primitive types. Primitives types are nothing but 
@@ -51,9 +54,9 @@ public:
     // Tensors belonging to each block.
     // Connecting blocks can modify and delete tensors in this container.
     std::unordered_map<std::string, tensor_properties> tensor_props;
-    
-    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> operations;
-    
+
+    std::unordered_map <std::string, std::shared_ptr<IBlock>> sub_blocks;
+
     virtual int build(cudnnHandle_t& handle) = 0;
     
     virtual int execute(cudnnHandle_t& handle) = 0;
