@@ -2726,5 +2726,6 @@ TEST_CASE("Conv Block", "[frontend][fusion][block]") {
 
     run_convolution_block();
     run_pointwise_block();
+    run_convolution_pointwise_block();
 
 }

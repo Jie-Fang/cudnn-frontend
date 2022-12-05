@@ -22,6 +22,7 @@
 
 #include <cudnn_frontend/blocks/convolution_blocks.h>
 #include <cudnn_frontend/blocks/pointwise_block.h>
+#include <cudnn_frontend/blocks/convolution_pointwise_block.h>
 
 #include "convolutions.h"
 
@@ -100,4 +101,74 @@ run_pointwise_block() {
 
     pointwise_block.build(handle);
     pointwise_block.execute(handle);
+}
+
+void
+run_convolution_pointwise_block() {
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+
+    cudnn_frontend::ConvolutionPointwiseBlock convolution_pointwise_block;
+
+    auto convolution_block = convolution_pointwise_block.conv_block;
+    
+    cudnn_frontend::convolution_properties props;
+    props.dim_count = 2;
+    props.padding[0] = 1;
+    props.padding[1] = 1;
+    props.stride[0] = 1;
+    props.stride[1] = 1;
+    props.dilation[0] = 1;
+    props.dilation[1] = 1;
+    props.tensor_data_type = CUDNN_DATA_HALF;
+    props.compute_data_type = CUDNN_DATA_FLOAT;
+    convolution_block->props = props;
+
+    convolution_block->tensor_props["X"].dim_count = 4;
+    convolution_block->tensor_props["X"].dim[0] = 4;
+    convolution_block->tensor_props["X"].dim[1] = 32;
+    convolution_block->tensor_props["X"].dim[2] = 16;
+    convolution_block->tensor_props["X"].dim[3] = 16;
+
+    convolution_block->tensor_props["W"].dim_count = 4;
+    convolution_block->tensor_props["W"].dim[0] = 64;
+    convolution_block->tensor_props["W"].dim[1] = 32;
+    convolution_block->tensor_props["W"].dim[2] = 3;
+    convolution_block->tensor_props["W"].dim[3] = 3;
+
+    convolution_block->tensor_props["Y"].dim_count = 4;
+    convolution_block->tensor_props["Y"].dim[0] = 4;
+    convolution_block->tensor_props["Y"].dim[1] = 64;
+    convolution_block->tensor_props["Y"].dim[2] = 16;
+    convolution_block->tensor_props["Y"].dim[3] = 16;
+    
+    auto pointwise_block = convolution_pointwise_block.pointwise_block;
+
+    cudnn_frontend::pointwise_properties pointwise_props;
+    pointwise_props.dim_count = 4;
+    pointwise_props.mode = CUDNN_POINTWISE_ADD;
+    pointwise_props.tensor_data_type = CUDNN_DATA_HALF;
+    pointwise_props.compute_data_type = CUDNN_DATA_FLOAT;
+    pointwise_block->props = pointwise_props;
+
+    pointwise_block->tensor_props["X"].dim_count = 4;
+    pointwise_block->tensor_props["X"].dim[0] = 4;
+    pointwise_block->tensor_props["X"].dim[1] = 64;
+    pointwise_block->tensor_props["X"].dim[2] = 16;
+    pointwise_block->tensor_props["X"].dim[3] = 16;
+
+    pointwise_block->tensor_props["B"].dim_count = 4;
+    pointwise_block->tensor_props["B"].dim[0] = 1;
+    pointwise_block->tensor_props["B"].dim[1] = 64;
+    pointwise_block->tensor_props["B"].dim[2] = 1;
+    pointwise_block->tensor_props["B"].dim[3] = 1;
+
+    pointwise_block->tensor_props["Y"].dim_count = 4;
+    pointwise_block->tensor_props["Y"].dim[0] = 4;
+    pointwise_block->tensor_props["Y"].dim[1] = 64;
+    pointwise_block->tensor_props["Y"].dim[2] = 16;
+    pointwise_block->tensor_props["Y"].dim[3] = 16;
+
+    convolution_pointwise_block.build(handle);
+    convolution_pointwise_block.execute(handle);
 }

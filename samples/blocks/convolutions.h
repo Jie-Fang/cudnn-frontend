@@ -25,3 +25,6 @@ run_convolution_block();
 
 void
 run_pointwise_block();
+
+void
+run_convolution_pointwise_block();

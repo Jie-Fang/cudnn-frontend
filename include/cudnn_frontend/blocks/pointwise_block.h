@@ -63,20 +63,20 @@ public:
                         .setId(x_tensor.uid)
                         .setAlignment(16)
                         .setDataType(x_tensor.data_type)
-                        .setVirtual(false)
-                        .setByValue(false)
+                        .setVirtual(x_tensor.is_virtual)
+                        .setByValue(x_tensor.is_pass_by_value)
                         .build();
         tensors.emplace("X", std::make_shared<Tensor>(std::move(input)));
 
-        auto& w_tensor = tensor_props["B"];
+        auto& b_tensor = tensor_props["B"];
         auto weight = cudnn_frontend::TensorBuilder()
-                        .setDim(w_tensor.dim_count, w_tensor.dim)
-                        .setStrides(w_tensor.dim_count, w_tensor.stride)
-                        .setId(w_tensor.uid)
+                        .setDim(b_tensor.dim_count, b_tensor.dim)
+                        .setStrides(b_tensor.dim_count, b_tensor.stride)
+                        .setId(b_tensor.uid)
                         .setAlignment(16)
-                        .setDataType(w_tensor.data_type)
-                        .setVirtual(false)
-                        .setByValue(false)
+                        .setDataType(b_tensor.data_type)
+                        .setVirtual(b_tensor.is_virtual)
+                        .setByValue(b_tensor.is_pass_by_value)
                         .build();
         tensors.emplace("B", std::make_shared<Tensor>(std::move(weight)));
 
@@ -87,8 +87,8 @@ public:
                         .setId(y_tensor.uid)
                         .setAlignment(16)
                         .setDataType(y_tensor.data_type)
-                        .setVirtual(false)
-                        .setByValue(false)
+                        .setVirtual(y_tensor.is_virtual)
+                        .setByValue(y_tensor.is_pass_by_value)
                         .build();
         tensors.emplace("Y", std::make_shared<Tensor>(std::move(output)));
 
@@ -180,7 +180,7 @@ public:
             getLogger() << "[cudnn_frontend] INFO: " << "Config " << i << " succeeded! Plan has built!" << std::endl;
             getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
             
-            execution_plans.emplace("conv_plan", std::make_shared<ExecutionPlan>(std::move(plan)));
+            execution_plans.emplace("pointwise_plan", std::make_shared<ExecutionPlan>(std::move(plan)));
             return 0;
 
             #ifndef NV_CUDNN_DISABLE_EXCEPTION

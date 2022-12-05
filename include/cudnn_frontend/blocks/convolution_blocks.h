@@ -63,8 +63,8 @@ public:
                         .setId(x_tensor.uid)
                         .setAlignment(16)
                         .setDataType(x_tensor.data_type)
-                        .setVirtual(false)
-                        .setByValue(false)
+                        .setVirtual(x_tensor.is_virtual)
+                        .setByValue(x_tensor.is_pass_by_value)
                         .build();
         tensors.emplace("X", std::make_shared<Tensor>(std::move(input)));
 
@@ -75,8 +75,8 @@ public:
                         .setId(w_tensor.uid)
                         .setAlignment(16)
                         .setDataType(w_tensor.data_type)
-                        .setVirtual(false)
-                        .setByValue(false)
+                        .setVirtual(w_tensor.is_virtual)
+                        .setByValue(w_tensor.is_pass_by_value)
                         .build();
         tensors.emplace("W", std::make_shared<Tensor>(std::move(weight)));
 
@@ -87,8 +87,8 @@ public:
                         .setId(y_tensor.uid)
                         .setAlignment(16)
                         .setDataType(y_tensor.data_type)
-                        .setVirtual(false)
-                        .setByValue(false)
+                        .setVirtual(y_tensor.is_virtual)
+                        .setByValue(y_tensor.is_pass_by_value)
                         .build();
         tensors.emplace("Y", std::make_shared<Tensor>(std::move(output)));
 
