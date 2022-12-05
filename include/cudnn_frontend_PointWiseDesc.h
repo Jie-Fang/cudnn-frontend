@@ -438,4 +438,8 @@ class PointWiseDescBuilder_v8 {
    private:
     PointWiseDesc_v8 m_pointWiseDesc;
 };
+
+using PointwiseDescBuilder      = PointWiseDescBuilder_v8;
+using PointwiseDesc             = PointWiseDesc_v8;
+
 }

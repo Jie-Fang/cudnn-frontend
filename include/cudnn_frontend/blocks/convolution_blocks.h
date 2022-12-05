@@ -149,8 +149,9 @@ public:
         
         getLogger() << "[cudnn_frontend] INFO: " << "get_heuristics_list statuses: ";
         for (size_t i = 0 ; i < statuses.size(); i++) {
-            getLogger() << "[cudnn_frontend] INFO: " << cudnn_frontend::to_string(statuses[i]) << " ";
+            getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
         }
+        getLogger() << std::endl;
 
         getLogger() << "[cudnn_frontend] INFO: " << "Filter config list has " << filtered_configs.size() << " configurations." << std::endl;
 

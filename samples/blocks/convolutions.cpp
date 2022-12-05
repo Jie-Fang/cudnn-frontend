@@ -21,6 +21,7 @@
  */
 
 #include <cudnn_frontend/blocks/convolution_blocks.h>
+#include <cudnn_frontend/blocks/pointwise_block.h>
 
 #include "convolutions.h"
 
@@ -64,4 +65,39 @@ run_convolution_block() {
     cudnn_frontend::ConvolutionBlock convolution_block(props);
     convolution_block.build(handle);
     convolution_block.execute(handle);
+}
+
+void
+run_pointwise_block() {
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+    
+    cudnn_frontend::pointwise_properties props;
+    props.dim_count = 4;
+
+    props.input_dim[0] = 4;
+    props.input_dim[1] = 32;
+    props.input_dim[2] = 16;
+    props.input_dim[3] = 16;
+
+    props.weight_dim[0] = 1;
+    props.weight_dim[1] = 32;
+    props.weight_dim[2] = 1;
+    props.weight_dim[3] = 1;
+
+    props.output_dim[0] = 4;
+    props.output_dim[1] = 32;
+    props.output_dim[2] = 16;
+    props.output_dim[3] = 16;
+
+    props.mode = CUDNN_POINTWISE_ADD;
+
+    props.tensor_data_type = CUDNN_DATA_HALF;
+    props.compute_type = CUDNN_DATA_FLOAT;
+
+    props.update_uids(1);
+
+    cudnn_frontend::PointwiseBlock pointwise_block(props);
+    pointwise_block.build(handle);
+    pointwise_block.execute(handle);
 }

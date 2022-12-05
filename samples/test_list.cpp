@@ -2725,5 +2725,6 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 TEST_CASE("Conv Block", "[frontend][fusion][block]") {
 
     run_convolution_block();
+    run_pointwise_block();
 
 }
