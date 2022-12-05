@@ -58,6 +58,7 @@ public:
     
     virtual int execute(cudnnHandle_t& handle) = 0;
 
+    virtual ~IBlock() {};
 };
 
 } // namespace cudnn_frontend
