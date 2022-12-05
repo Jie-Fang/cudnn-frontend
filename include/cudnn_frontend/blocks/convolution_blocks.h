@@ -153,62 +153,10 @@ public:
 
         std::vector<Operation const*> operation_graph = {operations["conv"].get()};
         auto convolution_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
-        operation_graphs.emplace("conv_graph", std::make_shared<OperationGraph>(std::move(convolution_graph)));
+        operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(convolution_graph)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Partitioned ConvolutionBlock." << std::endl;
         return 0;
-    }
-
-    int createExecutionPlan(cudnnHandle_t& handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "ConvolutionBlock getting plan from heuristics..." << std::endl;
-
-        cudnn_frontend::EngineConfigList filtered_configs;
-        auto statuses = 
-            cudnn_frontend::get_heuristics_list<2>({"heuristics_instant", "heuristics_fallback"}, *(operation_graphs["conv_graph"]), allowAllConfig, filtered_configs, true);
-        
-        getLogger() << "[cudnn_frontend] INFO: " << "get_heuristics_list statuses: ";
-        for (size_t i = 0 ; i < statuses.size(); i++) {
-            getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
-        }
-        getLogger() << std::endl;
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Filter config list has " << filtered_configs.size() << " configurations." << std::endl;
-
-        for (size_t i = 0; i < filtered_configs.size(); i++) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Trying config: " << i << std::endl;
-
-            #ifndef NV_CUDNN_DISABLE_EXCEPTION
-            try {
-            #endif
-
-            auto plan = cudnn_frontend::ExecutionPlanBuilder()
-                            .setHandle(handle)
-                            .setEngineConfig(filtered_configs[i], operation_graphs["conv_graph"]->getTag())
-                            .build();
-
-            if (plan.get_status() != CUDNN_STATUS_SUCCESS) {
-                getLogger() << "[cudnn_frontend] ERROR: " << "Config " << i << " failed with " << plan.get_error() << std::endl;
-                continue; 
-            }
-
-            getLogger() << "[cudnn_frontend] INFO: " << "Config " << i << " succeeded! Plan has built!" << std::endl;
-            getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
-            
-            execution_plans.emplace("conv_plan", std::make_shared<ExecutionPlan>(std::move(plan)));
-            return 0;
-
-            #ifndef NV_CUDNN_DISABLE_EXCEPTION
-            } catch (cudnn_frontend::cudnnException &e) {
-                // The last config didn't work (E.g. all configs didn't work)
-                if (i == filtered_configs.size() - 1) {
-                    throw cudnnException(e.what(), e.getCudnnStatus());
-                }
-                continue;
-            }
-            #endif
-        }
-
-        return 1;
     }
 
     int build(cudnnHandle_t& handle) override final {
