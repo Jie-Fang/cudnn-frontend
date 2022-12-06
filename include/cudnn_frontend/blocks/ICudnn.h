@@ -19,7 +19,7 @@ class ICudnn {
 private:
 
 protected:
-    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Tensor>> tensors;    
+    std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;    
     std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> operations;
 
     std::vector<std::shared_ptr<OperationGraph>> operation_graphs;

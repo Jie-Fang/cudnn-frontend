@@ -18,8 +18,12 @@ protected:
 public:
 
     ConvolutionPointwiseBlock(int64_t const& offset = 1) {
-        sub_blocks.emplace("conv_block", std::make_shared<ConvolutionBlock>(offset));
-        sub_blocks.emplace("pointwise_block", std::make_shared<PointwiseBlock>(offset + 200));
+        auto conv_block = std::make_shared<ConvolutionBlock>(offset);
+        auto pointwise_block = std::make_shared<PointwiseBlock>(offset + 200);
+        pointwise_block->props.uids[pointwise_properties::PORTS::X] = conv_block->props.uids[convolution_properties::PORTS::Y];
+
+        sub_blocks.emplace("conv_block", conv_block);
+        sub_blocks.emplace("pointwise_block", pointwise_block);
     }
 
     Type getType() override final {
@@ -32,8 +36,8 @@ public:
             sub_block.second->validate();
         }
 
-        sub_blocks["conv_block"]->tensor_props["Y"].is_virtual = true;
-        sub_blocks["pointwise_block"]->tensor_props["X"] = sub_blocks["conv_block"]->tensor_props["Y"];
+        sub_blocks["conv_block"]->tensor_props[convolution_properties::PORTS::Y].is_virtual = true;
+        sub_blocks["pointwise_block"]->tensor_props[pointwise_properties::PORTS::X] = sub_blocks["conv_block"]->tensor_props[convolution_properties::PORTS::Y];
 
         return 0;
     }

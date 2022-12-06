@@ -65,7 +65,7 @@ protected:
 public:
     // Tensors belonging to each block.
     // Connecting blocks can modify and delete tensors in this container.
-    std::unordered_map<std::string, tensor_properties> tensor_props;
+    std::unordered_map<int64_t, tensor_properties> tensor_props;
 
     std::unordered_map <std::string, std::shared_ptr<IBlock>> sub_blocks;
 
