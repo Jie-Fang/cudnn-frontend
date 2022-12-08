@@ -27,4 +27,10 @@ void
 run_pointwise_block();
 
 void
+run_reduction_block();
+
+void
+run_convolution_fp8_block();
+
+void
 run_convolution_pointwise_block();

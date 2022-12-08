@@ -77,7 +77,7 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_inputs",            &Node::get_inputs);
 
 
-  py::enum_<pointwise_node::PORTS>(m, "convolution_ports")
+  py::enum_<pointwise_node::PORTS>(m, "pointwise_ports")
         .value("X", pointwise_node::X)
         .value("B", pointwise_node::B)
         .value("Y", pointwise_node::Y)
@@ -94,4 +94,18 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .value("OK", cudnn_frontend_error_t::OK)
     .value("TENSOR_DIMENSIONS_NOT_SET", cudnn_frontend_error_t::TENSOR_DIMENSIONS_NOT_SET)
     .value("POINTWISE_MODE_NOT_SET", cudnn_frontend_error_t::POINTWISE_MODE_NOT_SET);
+  py::class_<reduction_node>(m, "reduction_node")
+    .def(py::init<std::string const &>())
+    .def("get_mode", &reduction_node::get_mode)
+    .def("set_mode", &reduction_node::set_mode)
+    .def("get_tensor_data_type",  &reduction_node::get_tensor_data_type)
+    .def("set_tensor_data_type",  &reduction_node::set_tensor_data_type)
+    .def("get_compute_data_type", &reduction_node::get_compute_data_type)
+    .def("set_compute_data_type", &reduction_node::set_compute_data_type);
+
+
+  py::enum_<reduction_node::PORTS>(m, "reduction_ports")
+        .value("X", reduction_node::X)
+        .value("Y", reduction_node::Y)
+        .export_values();
 }

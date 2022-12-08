@@ -162,4 +162,8 @@ class ReductionDescBuilder_v8 {
    private:
     ReductionDesc_v8 m_reductionDesc;
 };
+
+using ReductionDesc             = ReductionDesc_v8;
+using ReductionDescBuilder      = ReductionDescBuilder_v8;
+
 }

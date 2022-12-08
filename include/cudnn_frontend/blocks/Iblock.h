@@ -17,6 +17,7 @@ namespace cudnn_frontend {
 // Interface for all blocks to follow.
 class IBlock: public ICudnn {
 
+    friend class ConvolutionFP8Block;
     friend class ConvolutionPointwiseBlock;
 
 private:

@@ -61,7 +61,6 @@ target_link_libraries(
     Catch2::Catch2WithMain
 
     CUDA::cudart
-    CUDA::cublas
     CUDA::nvrtc
     
     CUDNN::cudnn_all

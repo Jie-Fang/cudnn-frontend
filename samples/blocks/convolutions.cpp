@@ -22,6 +22,8 @@
 
 #include <cudnn_frontend/blocks/convolution_blocks.h>
 #include <cudnn_frontend/blocks/pointwise_block.h>
+#include <cudnn_frontend/blocks/reduction_block.h>
+#include <cudnn_frontend/blocks/convolution_fp8_block.h>
 #include <cudnn_frontend/blocks/convolution_pointwise_block.h>
 
 #include "convolutions.h"
@@ -56,7 +58,7 @@ run_pointwise_block() {
 
     cudnn_frontend::PointwiseBlock pointwise_block;
 
-    cudnn_frontend::pointwise_node props {""};
+    cudnn_frontend::pointwise_node props{""};
     props.set_mode(CUDNN_POINTWISE_ADD);
     props.set_tensor_data_type(CUDNN_DATA_HALF);
     props.set_compute_type(CUDNN_DATA_FLOAT);
@@ -68,6 +70,100 @@ run_pointwise_block() {
 
     pointwise_block.build(handle);
     pointwise_block.execute(handle);
+}
+
+void
+run_reduction_block() {
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+
+    cudnn_frontend::ReductionBlock reduction_block;
+
+    cudnn_frontend::reduction_node props{""};
+    props.set_mode(CUDNN_REDUCE_TENSOR_ADD);
+    props.set_tensor_data_type(CUDNN_DATA_HALF);
+    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    reduction_block.props = props;
+
+    reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
+    reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_dim({1, 32, 1, 1});
+
+    reduction_block.build(handle);
+    reduction_block.execute(handle);
+}
+
+void
+run_convolution_fp8_block() {
+#if (CUDNN_VERSION >= 8700)
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+
+    cudnn_frontend::ConvolutionFP8Block convolution_fp8_block;
+
+    std::shared_ptr<cudnn_frontend::ConvolutionBlock> convolution_block = std::dynamic_pointer_cast<cudnn_frontend::ConvolutionBlock>(convolution_fp8_block.sub_blocks["conv_block"]);
+    
+    cudnn_frontend::convolution_node props{""};
+    props.set_padding({1, 1});
+    props.set_stride({1, 1});
+    props.set_dilation({1, 1});
+    props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    convolution_block->props = props;
+
+    convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
+    convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).set_dim({64, 32, 3, 3});
+    convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).set_dim({4, 64, 16, 16});
+
+    std::shared_ptr<cudnn_frontend::PointwiseBlock> X_DQ_block = std::dynamic_pointer_cast<cudnn_frontend::PointwiseBlock>(convolution_fp8_block.sub_blocks["X_DQ_block"]);
+
+    cudnn_frontend::pointwise_node X_DQ_props{""};
+    X_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
+    X_DQ_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    X_DQ_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    X_DQ_block->props = X_DQ_props;
+
+    X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
+    X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 1, 1, 1});
+    X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
+
+    std::shared_ptr<cudnn_frontend::PointwiseBlock> W_DQ_block = std::dynamic_pointer_cast<cudnn_frontend::PointwiseBlock>(convolution_fp8_block.sub_blocks["W_DQ_block"]);
+
+    cudnn_frontend::pointwise_node W_DQ_props{""};
+    W_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
+    W_DQ_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    W_DQ_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    W_DQ_block->props = W_DQ_props;
+
+    W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
+    W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 1, 1, 1});
+    W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
+
+    std::shared_ptr<cudnn_frontend::PointwiseBlock> Y_Q_block = std::dynamic_pointer_cast<cudnn_frontend::PointwiseBlock>(convolution_fp8_block.sub_blocks["Y_Q_block"]);
+
+    cudnn_frontend::pointwise_node Y_Q_props{""};
+    Y_Q_props.set_mode(CUDNN_POINTWISE_MUL);
+    Y_Q_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    Y_Q_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    Y_Q_block->props = Y_Q_props;
+
+    Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
+    Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 1, 1, 1});
+    Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
+
+    std::shared_ptr<cudnn_frontend::ReductionBlock> amax_block = std::dynamic_pointer_cast<cudnn_frontend::ReductionBlock>(convolution_fp8_block.sub_blocks["amax_block"]);
+
+    cudnn_frontend::reduction_node amax_props{""};
+    amax_props.set_mode(CUDNN_REDUCE_TENSOR_AMAX);
+    amax_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
+    amax_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    amax_block->props = amax_props;
+
+    amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
+    amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_dim({1, 1, 1, 1});
+
+    convolution_fp8_block.build(handle);
+    convolution_fp8_block.execute(handle);
+#endif
 }
 
 void

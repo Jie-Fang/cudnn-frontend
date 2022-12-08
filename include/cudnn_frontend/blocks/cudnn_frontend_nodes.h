@@ -268,8 +268,6 @@ public:
 
 private:
     cudnnPointwiseMode_t mode;
-
-public:
     bool is_mode_set;
 
     std::unordered_map<PORTS, std::string> port_to_name;
@@ -296,6 +294,48 @@ public:
 
     int
     set_mode(cudnnPointwiseMode_t value) {
+        mode = value;
+        is_mode_set = true;
+        return 0;
+    }
+};
+
+class reduction_node : public Node {
+public:
+    enum PORTS {
+        X = 0,
+        Y,
+
+        COUNT
+    };
+
+private:
+    cudnnReduceTensorOp_t mode;
+    bool is_mode_set;
+
+public:
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+
+    reduction_node(const std::string name) : Node(name) {
+        port_to_name[PORTS::X] = "X";
+        port_to_name[PORTS::Y] = "Y";
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    cudnnReduceTensorOp_t const &
+    get_mode() const {
+        return mode;
+    }
+
+    int
+    set_mode(cudnnReduceTensorOp_t value) {
         mode = value;
         is_mode_set = true;
         return 0;
