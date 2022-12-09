@@ -116,7 +116,8 @@
 #include "cudnn_frontend_ExecutionPlanCache.h"
 #include "cudnn_frontend_Resample.h"
 
-#include <cudnn_frontend/blocks/convolution_blocks.h>
+#include "cudnn_frontend/blocks/convolution_blocks.h"
+#include "cudnn_frontend/blocks/cudnn_frontend_context.h"
 
 #define CUDNN_FRONTEND_MAJOR_VERSION 0
 #define CUDNN_FRONTEND_MINOR_VERSION 7

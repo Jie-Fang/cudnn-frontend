@@ -15,7 +15,7 @@ private:
 protected:
 
 public:
-    convolution_properties props;
+    convolution_node props{""};
 
     ConvolutionBlock(int64_t const offset = 1) {
         update_uids(offset);
@@ -24,9 +24,9 @@ public:
     int update_uids(int64_t const& offset) {
         props.update_uids(offset);
 
-        for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
-            tensor_props[i].name = props.port_to_name[static_cast<convolution_properties::PORTS>(i)];
-            tensor_props[i].uid = props.uids[i];
+        for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
+            tensor_props.insert(std::make_pair<int64_t, tensor_properties> (static_cast<convolution_node::PORTS>(i), tensor_properties(props.port_to_name[static_cast<convolution_node::PORTS>(i)])));
+            tensor_props.at(i).set_uid(props.uids[i]);
         }
 
         return 0;
@@ -38,9 +38,9 @@ public:
 
     int validate() override final {
 
-        for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
-            cudnn_frontend::generateStrides(tensor_props[i].dim, tensor_props[i].stride, CUDNN_TENSOR_NHWC);
-            tensor_props[i].data_type = props.tensor_data_type;
+        for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
+            tensor_props.at(i).generateStrides(CUDNN_TENSOR_NHWC);
+            tensor_props.at(i).set_data_type(props.get_tensor_data_type());
         }
 
         return 0;
@@ -50,42 +50,42 @@ public:
         
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock tensors..." << std::endl;
 
-        auto& x_tensor = tensor_props[convolution_properties::PORTS::X];
-        size_t const dim_count = x_tensor.stride.size();
+        auto& x_tensor = tensor_props.at(convolution_node::PORTS::X);
+        size_t const dim_count = x_tensor.get_stride().size();
         auto input  = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, x_tensor.dim.data())
-                        .setStrides(dim_count, x_tensor.stride.data())
-                        .setId(x_tensor.uid)
+                        .setDim(dim_count, x_tensor.get_dim().data())
+                        .setStrides(dim_count, x_tensor.get_stride().data())
+                        .setId(x_tensor.get_uid())
                         .setAlignment(16)
-                        .setDataType(x_tensor.data_type)
-                        .setVirtual(x_tensor.is_virtual)
-                        .setByValue(x_tensor.is_pass_by_value)
+                        .setDataType(x_tensor.get_data_type())
+                        .setVirtual(x_tensor.get_is_virtual())
+                        .setByValue(x_tensor.get_is_pass_by_value())
                         .build();
-        tensors.emplace(convolution_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
+        tensors.emplace(convolution_node::PORTS::X, std::make_shared<Tensor>(std::move(input)));
 
-        auto& w_tensor = tensor_props[convolution_properties::PORTS::W];
+        auto& w_tensor = tensor_props.at(convolution_node::PORTS::W);
         auto weight = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, w_tensor.dim.data())
-                        .setStrides(dim_count, w_tensor.stride.data())
-                        .setId(w_tensor.uid)
+                        .setDim(dim_count, w_tensor.get_dim().data())
+                        .setStrides(dim_count, w_tensor.get_stride().data())
+                        .setId(w_tensor.get_uid())
                         .setAlignment(16)
-                        .setDataType(w_tensor.data_type)
-                        .setVirtual(w_tensor.is_virtual)
-                        .setByValue(w_tensor.is_pass_by_value)
+                        .setDataType(w_tensor.get_data_type())
+                        .setVirtual(w_tensor.get_is_virtual())
+                        .setByValue(w_tensor.get_is_pass_by_value())
                         .build();
-        tensors.emplace(convolution_properties::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
+        tensors.emplace(convolution_node::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
 
-        auto& y_tensor = tensor_props[convolution_properties::PORTS::Y];
+        auto& y_tensor = tensor_props.at(convolution_node::PORTS::Y);
         auto output = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, y_tensor.dim.data())
-                        .setStrides(dim_count, y_tensor.stride.data())
-                        .setId(y_tensor.uid)
+                        .setDim(dim_count, y_tensor.get_dim().data())
+                        .setStrides(dim_count, y_tensor.get_stride().data())
+                        .setId(y_tensor.get_uid())
                         .setAlignment(16)
-                        .setDataType(y_tensor.data_type)
-                        .setVirtual(y_tensor.is_virtual)
-                        .setByValue(y_tensor.is_pass_by_value)
+                        .setDataType(y_tensor.get_data_type())
+                        .setVirtual(y_tensor.get_is_virtual())
+                        .setByValue(y_tensor.get_is_pass_by_value())
                         .build();
-        tensors.emplace(convolution_properties::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
+        tensors.emplace(convolution_node::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionBlock tensors." << std::endl;
 
@@ -105,22 +105,22 @@ public:
         #endif
 
         // convolution descriptor
-        int64_t const spatial_dim_count = props.padding.size();
+        int64_t const spatial_dim_count = props.get_padding().size();
         auto convolution_descriptor = cudnn_frontend::ConvDescBuilder()
-                                                        .setComputeType(props.compute_data_type)
+                                                        .setComputeType(props.get_compute_data_type())
                                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                                         .setSpatialDimCount(spatial_dim_count)
-                                                        .setSpatialStride(spatial_dim_count, props.stride.data())
-                                                        .setPrePadding(spatial_dim_count, props.padding.data())
-                                                        .setPostPadding(spatial_dim_count, props.padding.data())
-                                                        .setDilation(spatial_dim_count, props.dilation.data())
+                                                        .setSpatialStride(spatial_dim_count, props.get_stride().data())
+                                                        .setPrePadding(spatial_dim_count, props.get_padding().data())
+                                                        .setPostPadding(spatial_dim_count, props.get_padding().data())
+                                                        .setDilation(spatial_dim_count, props.get_dilation().data())
                                                         .build();
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(convolution_properties::PORTS::X)))
-                                        .setwDesc(*(tensors.at(convolution_properties::PORTS::W)))
-                                        .setyDesc(*(tensors.at(convolution_properties::PORTS::Y)))
+                                        .setxDesc(*(tensors.at(convolution_node::PORTS::X)))
+                                        .setwDesc(*(tensors.at(convolution_node::PORTS::W)))
+                                        .setyDesc(*(tensors.at(convolution_node::PORTS::Y)))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)

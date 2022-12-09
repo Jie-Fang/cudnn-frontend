@@ -9,12 +9,73 @@ namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace cudnn_frontend;
 
-std::vector<int64_t>
-default_vector(void) {
-    return {};
-}
-
-PYBIND11_MODULE(cudnn_frontend_block, m)
+PYBIND11_MODULE(cudnn_frontend_blocks, m)
 {
+  
   // define all classes
+  py::class_<tensor_properties>(m, "tensor_properties")
+    .def(py::init<std::string const &>())
+    .def("get_data_type", &tensor_properties::get_data_type)
+    .def("set_data_type", &tensor_properties::set_data_type)
+    .def("get_dim", &tensor_properties::get_dim)
+    .def("set_dim", &tensor_properties::set_dim)
+    .def("get_stride", &tensor_properties::get_stride)
+    .def("set_stride", &tensor_properties::set_stride)
+    .def("get_is_virtual", &tensor_properties::get_is_virtual)
+    .def("set_is_virtual", &tensor_properties::set_is_virtual)
+    .def("get_is_pass_by_value", &tensor_properties::get_is_pass_by_value)
+    .def("set_is_pass_by_value", &tensor_properties::set_is_pass_by_value)
+    .def("get_uid", &tensor_properties::get_uid)
+    .def("set_uid", &tensor_properties::set_uid);
+
+  py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
+    .def(py::init<>())
+    .def("set_intermediate_data_type", &cuDNNFEContext::set_intermediate_data_type)
+    .def("get_intermediate_data_type", &cuDNNFEContext::get_intermediate_data_type)
+    .def("set_tensor_data_type", &cuDNNFEContext::set_tensor_data_type)
+    .def("get_tensor_data_type", &cuDNNFEContext::get_tensor_data_type)
+    .def("set_compute_type", &cuDNNFEContext::set_compute_type)
+    .def("get_compute_type", &cuDNNFEContext::get_compute_type)
+    .def("set_tensor_dims", &cuDNNFEContext::set_tensor_dims)
+    .def("get_tensor_dims", &cuDNNFEContext::get_tensor_dims)
+    .def("set_layout", &cuDNNFEContext::set_layout)
+    .def("get_layout", &cuDNNFEContext::get_layout)
+    .def("set_spatial_dims", &cuDNNFEContext::set_spatial_dims)
+    .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims)
+    .def("__repr__",      &cuDNNFEContext::describe);
+
+  py::class_<convolution_node>(m, "convolution_node")
+    .def(py::init<std::string const &>())
+    .def("get_padding", &convolution_node::get_padding)
+    .def("set_padding", &convolution_node::set_padding)
+    .def("get_stride", &convolution_node::get_stride)
+    .def("set_stride", &convolution_node::set_stride)
+    .def("get_dilation", &convolution_node::get_dilation)
+    .def("set_dilation", &convolution_node::set_dilation)
+    .def("get_tensor_data_type", &convolution_node::get_tensor_data_type)
+    .def("set_tensor_data_type", &convolution_node::set_tensor_data_type)
+    .def("get_compute_data_type", &convolution_node::get_compute_data_type)
+    .def("set_compute_data_type", &convolution_node::set_compute_data_type);
+
+  py::enum_<convolution_node::PORTS>(m, "convolution_ports")
+        .value("X", convolution_node::X)
+        .value("W", convolution_node::W)
+        .value("Y", convolution_node::Y)
+        .export_values();
+
+  py::class_<pointwise_node>(m, "pointwise_node")
+    .def(py::init<std::string const &>())
+    .def("get_mode", &pointwise_node::get_mode)
+    .def("set_mode", &pointwise_node::set_mode)
+    .def("get_tensor_data_type",  &pointwise_node::get_tensor_data_type)
+    .def("set_tensor_data_type",  &pointwise_node::set_tensor_data_type)
+    .def("get_compute_data_type", &pointwise_node::get_compute_data_type)
+    .def("set_compute_data_type", &pointwise_node::set_compute_data_type);
+
+
+  py::enum_<pointwise_node::PORTS>(m, "convolution_ports")
+        .value("X", pointwise_node::X)
+        .value("B", pointwise_node::B)
+        .value("Y", pointwise_node::Y)
+        .export_values();
 }

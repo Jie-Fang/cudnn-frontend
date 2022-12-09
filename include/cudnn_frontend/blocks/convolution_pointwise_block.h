@@ -20,7 +20,7 @@ public:
     ConvolutionPointwiseBlock(int64_t const& offset = 1) {
         auto conv_block = std::make_shared<ConvolutionBlock>(offset);
         auto pointwise_block = std::make_shared<PointwiseBlock>(offset + 200);
-        pointwise_block->props.uids[pointwise_properties::PORTS::X] = conv_block->props.uids[convolution_properties::PORTS::Y];
+        pointwise_block->props.uids[pointwise_node::PORTS::X] = conv_block->props.uids[convolution_node::PORTS::Y];
 
         sub_blocks.emplace("conv_block", conv_block);
         sub_blocks.emplace("pointwise_block", pointwise_block);
@@ -36,8 +36,8 @@ public:
             sub_block.second->validate();
         }
 
-        sub_blocks["conv_block"]->tensor_props[convolution_properties::PORTS::Y].is_virtual = true;
-        sub_blocks["pointwise_block"]->tensor_props[pointwise_properties::PORTS::X] = sub_blocks["conv_block"]->tensor_props[convolution_properties::PORTS::Y];
+        sub_blocks["conv_block"]->tensor_props.at(convolution_node::PORTS::Y).set_is_virtual(true);
+        sub_blocks["pointwise_block"]->tensor_props.at(pointwise_node::PORTS::X) = sub_blocks["conv_block"]->tensor_props.at(convolution_node::PORTS::Y);
 
         return 0;
     }
