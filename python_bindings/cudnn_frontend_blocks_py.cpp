@@ -31,15 +31,15 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
   py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
     .def(py::init<>())
     .def("set_intermediate_data_type", &cuDNNFEContext::set_intermediate_data_type)
-    .def("get_intermediate_data_type", &cuDNNFEContext::get_intermediate_data_type)
+    .def("get_intermediate_data_type", &cuDNNFEContext::get_intermediate_data_type_string)
     .def("set_tensor_data_type", &cuDNNFEContext::set_tensor_data_type)
-    .def("get_tensor_data_type", &cuDNNFEContext::get_tensor_data_type)
+    .def("get_tensor_data_type", &cuDNNFEContext::get_tensor_data_type_string)
     .def("set_compute_type", &cuDNNFEContext::set_compute_type)
-    .def("get_compute_type", &cuDNNFEContext::get_compute_type)
+    .def("get_compute_type", &cuDNNFEContext::get_compute_type_string)
     .def("set_tensor_dims", &cuDNNFEContext::set_tensor_dims)
     .def("get_tensor_dims", &cuDNNFEContext::get_tensor_dims)
     .def("set_layout", &cuDNNFEContext::set_layout)
-    .def("get_layout", &cuDNNFEContext::get_layout)
+    .def("get_layout", &cuDNNFEContext::get_layout_string)
     .def("set_spatial_dims", &cuDNNFEContext::set_spatial_dims)
     .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims)
     .def("__repr__",      &cuDNNFEContext::describe);
@@ -54,8 +54,8 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_dilation", &convolution_node::set_dilation)
     .def("get_tensor_data_type", &convolution_node::get_tensor_data_type)
     .def("set_tensor_data_type", &convolution_node::set_tensor_data_type)
-    .def("get_compute_data_type", &convolution_node::get_compute_data_type)
-    .def("set_compute_data_type", &convolution_node::set_compute_data_type);
+    .def("get_compute_type", &convolution_node::get_compute_type)
+    .def("set_compute_type", &convolution_node::set_compute_type);
 
   py::enum_<convolution_node::PORTS>(m, "convolution_ports")
         .value("X", convolution_node::X)
@@ -69,8 +69,8 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_mode", &pointwise_node::set_mode)
     .def("get_tensor_data_type",  &pointwise_node::get_tensor_data_type)
     .def("set_tensor_data_type",  &pointwise_node::set_tensor_data_type)
-    .def("get_compute_data_type", &pointwise_node::get_compute_data_type)
-    .def("set_compute_data_type", &pointwise_node::set_compute_data_type);
+    .def("get_compute_type", &pointwise_node::get_compute_type)
+    .def("set_compute_type", &pointwise_node::set_compute_type);
 
 
   py::enum_<pointwise_node::PORTS>(m, "convolution_ports")
@@ -78,4 +78,16 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
         .value("B", pointwise_node::B)
         .value("Y", pointwise_node::Y)
         .export_values();
+
+  
+  py::class_<Graph>(m, "Graph")
+    .def(py::init<std::string const &>())
+    .def("add_tensor", &Graph::add_tensor)
+    .def("add_node", &static_cast<cudnn_frontend_error_t (Graph::*)(convolution_node const &)>(&Graph::add_node))
+    .def("add_node", &static_cast<cudnn_frontend_error_t (Graph::*)(pointwise_node const &)>(&Graph::add_node));
+
+  py::enum_<cudnn_frontend_error_t>(m, "cudnn_frontend_error")
+    .value("OK", cudnn_frontend_error_t::OK)
+    .value("TENSOR_DIMENSIONS_NOT_SET", cudnn_frontend_error_t::TENSOR_DIMENSIONS_NOT_SET)
+    .value("POINTWISE_MODE_NOT_SET", cudnn_frontend_error_t::POINTWISE_MODE_NOT_SET);
 }

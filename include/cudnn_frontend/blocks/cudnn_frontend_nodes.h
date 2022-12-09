@@ -12,7 +12,7 @@ protected:
 public:
     graph_properties(const std::string &name) : name(name) {}
 
-    std::string const &
+    std::string
     get_name() const {
         return name;
     }
@@ -20,13 +20,14 @@ public:
 
 class tensor_properties : public graph_properties {
 protected:
-    cudnnDataType_t data_type;
-    std::vector<int64_t> dim;
-    std::vector<int64_t> stride;
-    bool is_virtual;
-    bool is_pass_by_value;
+    cudnnDataType_t data_type = CUDNN_DATA_FLOAT;
+    std::vector<int64_t> dim = {};
+    std::vector<int64_t> stride = {};
+    bool is_virtual = false;
+    bool is_pass_by_value = false;
     int64_t uid;
 
+public:
     bool is_data_type_set = false;
     bool is_dim_set = false;
     bool is_stride_set = false;
@@ -34,8 +35,6 @@ protected:
     bool is_pass_by_value_set = false;
     bool is_uid_set = false;
 
-
-public:
     int
     generateStrides(cudnnTensorFormat_t const filterFormat) {
         size_t const dim_count = dim.size();
@@ -54,6 +53,7 @@ public:
             }
             stride[0] = stride[2] * dim[2];
         }
+        is_stride_set = true;
         return 0;
     }
 
@@ -137,12 +137,12 @@ class Node : public graph_properties {
 protected:
 
     cudnnDataType_t tensor_data_type;
-    cudnnDataType_t compute_data_type;
-
-    bool is_tensor_data_type_set = false;
-    bool is_compute_data_type_set = false;
+    cudnnDataType_t compute_type;
 
 public:
+    bool is_tensor_data_type_set = false;
+    bool is_compute_type_set = false;
+
     Node(const std::string name) : graph_properties(name){}
 
     cudnnDataType_t
@@ -158,14 +158,14 @@ public:
     }
 
     cudnnDataType_t
-    get_compute_data_type() const {
-        return compute_data_type;
+    get_compute_type() const {
+        return compute_type;
     }
 
     int
-    set_compute_data_type(cudnnDataType_t value) {
-        compute_data_type = value;
-        is_compute_data_type_set = true;
+    set_compute_type(cudnnDataType_t value) {
+        compute_type = value;
+        is_compute_type_set = true;
         return 0;
     } 
 };
@@ -180,14 +180,15 @@ public:
         COUNT
     };
 private:
-    std::vector<int64_t> padding;
-    std::vector<int64_t> stride;
-    std::vector<int64_t> dilation;
+    std::vector<int64_t> padding  = {};
+    std::vector<int64_t> stride   = {};
+    std::vector<int64_t> dilation = {};
 
+public:
     bool is_padding_set = false;
     bool is_stride_set = false;
     bool is_dilation_set = false;
-public:
+
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
     convolution_node(const std::string name) : Node(name){
@@ -254,9 +255,9 @@ public:
 private:
     cudnnPointwiseMode_t mode;
 
+public:
     bool is_mode_set;
 
-public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 

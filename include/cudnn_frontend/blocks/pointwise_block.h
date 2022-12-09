@@ -105,7 +105,7 @@ public:
         #endif
 
         auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
-                                                        .setComputeType(props.get_compute_data_type())
+                                                        .setComputeType(props.get_compute_type())
                                                         .setMode(props.get_mode())
                                                         .build();
 

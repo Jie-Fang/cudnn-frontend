@@ -38,7 +38,7 @@ run_convolution_block() {
     props.set_stride({1, 1});
     props.set_dilation({1, 1});
     props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    props.set_compute_type(CUDNN_DATA_FLOAT);
     convolution_block.props = props;
 
     convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
@@ -59,7 +59,7 @@ run_pointwise_block() {
     cudnn_frontend::pointwise_node props {""};
     props.set_mode(CUDNN_POINTWISE_ADD);
     props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    props.set_compute_type(CUDNN_DATA_FLOAT);
     pointwise_block.props = props;
 
     pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 32, 16, 16});
@@ -84,7 +84,7 @@ run_convolution_pointwise_block() {
     props.set_stride({1, 1});
     props.set_dilation({1, 1});
     props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    props.set_compute_type(CUDNN_DATA_FLOAT);
     convolution_block->props = props;
 
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
@@ -96,7 +96,7 @@ run_convolution_pointwise_block() {
     cudnn_frontend::pointwise_node pointwise_props {""};
     pointwise_props.set_mode(CUDNN_POINTWISE_ADD);
     pointwise_props.set_tensor_data_type(CUDNN_DATA_HALF);
-    pointwise_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    pointwise_props.set_compute_type(CUDNN_DATA_FLOAT);
     pointwise_block->props = pointwise_props;
 
     pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});

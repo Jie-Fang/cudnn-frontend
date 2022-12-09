@@ -118,6 +118,7 @@
 
 #include "cudnn_frontend/blocks/convolution_blocks.h"
 #include "cudnn_frontend/blocks/cudnn_frontend_context.h"
+#include "cudnn_frontend/blocks/IGraph.h"
 
 #define CUDNN_FRONTEND_MAJOR_VERSION 0
 #define CUDNN_FRONTEND_MINOR_VERSION 7

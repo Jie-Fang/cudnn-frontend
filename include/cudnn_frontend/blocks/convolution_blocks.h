@@ -107,7 +107,7 @@ public:
         // convolution descriptor
         int64_t const spatial_dim_count = props.get_padding().size();
         auto convolution_descriptor = cudnn_frontend::ConvDescBuilder()
-                                                        .setComputeType(props.get_compute_data_type())
+                                                        .setComputeType(props.get_compute_type())
                                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                                         .setSpatialDimCount(spatial_dim_count)
                                                         .setSpatialStride(spatial_dim_count, props.get_stride().data())

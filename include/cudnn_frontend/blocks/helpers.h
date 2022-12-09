@@ -7,6 +7,12 @@
 
 namespace cudnn_frontend {
 
+enum class cudnn_frontend_error_t {
+    OK,
+    TENSOR_DIMENSIONS_NOT_SET,
+    POINTWISE_MODE_NOT_SET,
+};
+
 static cudnnDataType_t
 string_to_data_type(std::string data_type) {
     if (data_type == "float") {
