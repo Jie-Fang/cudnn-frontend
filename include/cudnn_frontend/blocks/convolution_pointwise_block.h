@@ -65,10 +65,38 @@ public:
         return 0;
     }
     
-    int execute(cudnnHandle_t& handle) override final {
-        (void)handle;
+    int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) override final {
+        getLogger() << "[cudnn_frontend] INFO: ConvolutionPointwiseBlock starting execution..." << std::endl;
+
+        for(auto const& execution_plan: execution_plans) {
+            getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
+        
+            std::vector<int64_t> uids;
+            std::vector<void*> device_ptrs;
+
+            uids.reserve(tensor_uid_to_pointer_map.size());
+            device_ptrs.reserve(tensor_uid_to_pointer_map.size());
+
+            for (auto const& p : tensor_uid_to_pointer_map) {
+                uids.push_back(p.first);
+                device_ptrs.push_back(p.second);
+            }
+
+            auto variant_pack = VariantPackBuilder()
+                                .setDataPointers(device_ptrs.size(), device_ptrs.data())
+                                .setUids(uids.size(), uids.data())
+                                .build();
+
+            auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
+            if (status != CUDNN_STATUS_SUCCESS) {
+                return 1;
+            }
+            getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
+        }
+        
+        getLogger() << "[cudnn_frontend] INFO: ConvolutionPointwiseBlock executed successfully." << std::endl;
         return 0;
-    } 
+    }
 };
 
 } // namespace cudnn_frontend

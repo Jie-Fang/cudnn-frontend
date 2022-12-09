@@ -13,9 +13,6 @@
 namespace cudnn_frontend {
 
 class ICudnn {
-
-    friend class ConvolutionPointwiseBlock;
-
 private:
 
 protected:

@@ -72,7 +72,7 @@ public:
 
     virtual int build(cudnnHandle_t& handle) = 0;
     
-    virtual int execute(cudnnHandle_t& handle) = 0;
+    virtual int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) = 0;
 
     virtual ~IBlock() {};
 };

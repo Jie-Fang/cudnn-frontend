@@ -147,7 +147,13 @@ public:
         auto convolution_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
         operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(convolution_graph)));
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioned ConvolutionBlock." << std::endl;
+        int status = createExecutionPlan(handle);
+        if(status) {
+            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
+            return status;
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: Partitioned ConvolutionBlock." << std::endl;
         return 0;
     }
 
@@ -158,15 +164,42 @@ public:
         createDescritpors();
         createOperations();
         partition(handle);
-        createExecutionPlan(handle);
 
         return 0;
     }
     
-    int execute(cudnnHandle_t& handle) override final {
-        (void)handle;
+    int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) override final {
+        getLogger() << "[cudnn_frontend] INFO: ConvolutionBlock starting execution..." << std::endl;
+
+        for(auto const& execution_plan: execution_plans) {
+            getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
+        
+            std::vector<int64_t> uids;
+            std::vector<void*> device_ptrs;
+
+            uids.reserve(tensor_uid_to_pointer_map.size());
+            device_ptrs.reserve(tensor_uid_to_pointer_map.size());
+
+            for (auto const& p : tensor_uid_to_pointer_map) {
+                uids.push_back(p.first);
+                device_ptrs.push_back(p.second);
+            }
+
+            auto variant_pack = VariantPackBuilder()
+                                .setDataPointers(device_ptrs.size(), device_ptrs.data())
+                                .setUids(uids.size(), uids.data())
+                                .build();
+
+            auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
+            if (status != CUDNN_STATUS_SUCCESS) {
+                return 1;
+            }
+            getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
+        }
+        
+        getLogger() << "[cudnn_frontend] INFO: ConvolutionBlock executed successfully." << std::endl;
         return 0;
-    } 
+    }
 };
 
 } // namespace cudnn_frontend

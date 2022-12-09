@@ -28,6 +28,8 @@
 
 #include "convolutions.h"
 
+#include "../helpers.h"
+
 void
 run_convolution_block() {
     cudnnHandle_t handle;
@@ -48,7 +50,17 @@ run_convolution_block() {
     convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).set_dim({4, 64, 16, 16});
 
     convolution_block.build(handle);
-    convolution_block.execute(handle);
+
+    Surface<half> x_tensor(convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).get_tensor_size(), false);
+    Surface<half> w_tensor(convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).get_tensor_size(), false);
+    Surface<half> y_tensor(convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).get_tensor_size(), false);
+
+    std::unordered_map<int64_t, void*> variant_pack = {
+        {convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).get_uid(), x_tensor.devPtr}
+        , {convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).get_uid(), w_tensor.devPtr}
+        , {convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).get_uid(), y_tensor.devPtr}
+    };
+    convolution_block.execute(handle, variant_pack);
 }
 
 void
@@ -69,7 +81,17 @@ run_pointwise_block() {
     pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 32, 16, 16});
 
     pointwise_block.build(handle);
-    pointwise_block.execute(handle);
+
+    Surface<half> x_tensor(pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).get_tensor_size(), false);
+    Surface<half> b_tensor(pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_tensor_size(), false);
+    Surface<half> y_tensor(pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).get_tensor_size(), false);
+
+    std::unordered_map<int64_t, void*> variant_pack = {
+        {pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).get_uid(), x_tensor.devPtr}
+        , {pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_uid(), b_tensor.devPtr}
+        , {pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).get_uid(), y_tensor.devPtr}
+    };
+    pointwise_block.execute(handle, variant_pack);
 }
 
 void
@@ -87,9 +109,18 @@ run_reduction_block() {
 
     reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
     reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_dim({1, 32, 1, 1});
+    reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_data_type(CUDNN_DATA_FLOAT);
 
     reduction_block.build(handle);
-    reduction_block.execute(handle);
+
+    Surface<half> x_tensor(reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).get_tensor_size(), false);
+    Surface<float> y_tensor(reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).get_tensor_size(), false);
+
+    std::unordered_map<int64_t, void*> variant_pack = {
+        {reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).get_uid(), x_tensor.devPtr}
+        , {reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).get_uid(), y_tensor.devPtr}
+    };
+    reduction_block.execute(handle, variant_pack);
 }
 
 void
@@ -162,7 +193,25 @@ run_convolution_fp8_block() {
     amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_dim({1, 1, 1, 1});
 
     convolution_fp8_block.build(handle);
-    convolution_fp8_block.execute(handle);
+    
+    Surface<float> x_dq_tensor(X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_tensor_size(), false);
+    Surface<float> w_dq_tensor(W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_tensor_size(), false);
+    Surface<int8_t> x_tensor(convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).get_tensor_size(), false);
+    Surface<int8_t> w_tensor(convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).get_tensor_size(), false);
+    Surface<int8_t> y_tensor(Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).get_tensor_size(), false);
+    Surface<float> y_q_tensor(Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_tensor_size(), false);
+    Surface<float> amax_tensor(amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).get_tensor_size(), false);
+    
+    std::unordered_map<int64_t, void*> variant_pack = {
+        {X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_uid(), x_dq_tensor.devPtr}
+        , {W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_uid(), w_dq_tensor.devPtr}
+        , {convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).get_uid(), x_tensor.devPtr}
+        , {convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).get_uid(), w_tensor.devPtr}
+        , {Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).get_uid(), y_tensor.devPtr}
+        , {Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_uid(), y_q_tensor.devPtr}
+        , {amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).get_uid(), amax_tensor.devPtr}
+    };
+    convolution_fp8_block.execute(handle, variant_pack);
 #endif
 }
 
@@ -200,5 +249,16 @@ run_convolution_pointwise_block() {
     pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
 
     convolution_pointwise_block.build(handle);
-    convolution_pointwise_block.execute(handle);
+    
+    Surface<half> x_tensor(convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).get_tensor_size(), false);
+    Surface<half> w_tensor(convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).get_tensor_size(), false);
+    Surface<half> b_tensor(pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_tensor_size(), false);
+    Surface<half> y_tensor(pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).get_tensor_size(), false);
+    std::unordered_map<int64_t, void*> variant_pack = {
+        {convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).get_uid(), x_tensor.devPtr}
+        , {convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).get_uid(), w_tensor.devPtr}
+        , {pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).get_uid(), b_tensor.devPtr}
+        , {pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).get_uid(), y_tensor.devPtr}
+    };
+    convolution_pointwise_block.execute(handle, variant_pack);
 }

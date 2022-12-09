@@ -1,5 +1,6 @@
 #pragma once
 
+#include <numeric>
 #include <unordered_map>
 #include <vector>
 
@@ -56,6 +57,13 @@ public:
         is_stride_set = true;
         return 0;
     }
+    
+    size_t 
+    get_tensor_size()
+    {
+        size_t initialProduct = 1;
+        return std::accumulate(dim.begin(), dim.end(), initialProduct, std::multiplies<int64_t>());
+    }
 
     tensor_properties(const std::string &name) : graph_properties(name) {}
 
@@ -69,6 +77,10 @@ public:
         data_type = value;
         is_data_type_set = true;
         return 0;
+    }
+
+    bool check_if_data_type_set() const {
+        return is_data_type_set;
     }
 
     std::vector<int64_t> const &
