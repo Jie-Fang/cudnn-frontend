@@ -139,9 +139,11 @@ protected:
     cudnnDataType_t tensor_data_type;
     cudnnDataType_t compute_type;
 
+    std::vector<std::string> inputs = {};
 public:
     bool is_tensor_data_type_set = false;
     bool is_compute_type_set = false;
+    bool is_input_set = false;
 
     Node(const std::string name) : graph_properties(name){}
 
@@ -167,6 +169,18 @@ public:
         compute_type = value;
         is_compute_type_set = true;
         return 0;
+    }
+
+    int
+    set_inputs(std::vector<std::string> const & value) {
+        inputs = value;
+        is_input_set = true;
+        return 0;
+    } 
+
+    std::vector<std::string> const &
+    get_inputs() const {
+        return inputs;
     } 
 };
 

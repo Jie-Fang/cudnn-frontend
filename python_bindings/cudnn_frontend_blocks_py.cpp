@@ -46,16 +46,18 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
 
   py::class_<convolution_node>(m, "convolution_node")
     .def(py::init<std::string const &>())
-    .def("get_padding", &convolution_node::get_padding)
-    .def("set_padding", &convolution_node::set_padding)
-    .def("get_stride", &convolution_node::get_stride)
-    .def("set_stride", &convolution_node::set_stride)
+    .def("get_padding",  &convolution_node::get_padding)
+    .def("set_padding",  &convolution_node::set_padding)
+    .def("get_stride",   &convolution_node::get_stride)
+    .def("set_stride",   &convolution_node::set_stride)
     .def("get_dilation", &convolution_node::get_dilation)
     .def("set_dilation", &convolution_node::set_dilation)
-    .def("get_tensor_data_type", &convolution_node::get_tensor_data_type)
-    .def("set_tensor_data_type", &convolution_node::set_tensor_data_type)
-    .def("get_compute_type", &convolution_node::get_compute_type)
-    .def("set_compute_type", &convolution_node::set_compute_type);
+    .def("get_tensor_data_type", &Node::get_tensor_data_type)
+    .def("set_tensor_data_type", &Node::set_tensor_data_type)
+    .def("get_compute_type",     &Node::get_compute_type)
+    .def("set_compute_type",     &Node::set_compute_type)
+    .def("get_inputs",           &Node::set_inputs)
+    .def("set_inputs",           &Node::get_inputs);
 
   py::enum_<convolution_node::PORTS>(m, "convolution_ports")
         .value("X", convolution_node::X)
@@ -67,10 +69,12 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def(py::init<std::string const &>())
     .def("get_mode", &pointwise_node::get_mode)
     .def("set_mode", &pointwise_node::set_mode)
-    .def("get_tensor_data_type",  &pointwise_node::get_tensor_data_type)
-    .def("set_tensor_data_type",  &pointwise_node::set_tensor_data_type)
-    .def("get_compute_type", &pointwise_node::get_compute_type)
-    .def("set_compute_type", &pointwise_node::set_compute_type);
+    .def("get_tensor_data_type",  &Node::get_tensor_data_type)
+    .def("set_tensor_data_type",  &Node::set_tensor_data_type)
+    .def("get_compute_type",      &Node::get_compute_type)
+    .def("set_compute_type",      &Node::set_compute_type)
+    .def("get_inputs",            &Node::set_inputs)
+    .def("set_inputs",            &Node::get_inputs);
 
 
   py::enum_<pointwise_node::PORTS>(m, "convolution_ports")
@@ -81,10 +85,10 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
 
   
   py::class_<Graph>(m, "Graph")
-    .def(py::init<std::string const &>())
+    .def(py::init<cuDNNFEContext const &>())
     .def("add_tensor", &Graph::add_tensor)
-    .def("add_node", &static_cast<cudnn_frontend_error_t (Graph::*)(convolution_node const &)>(&Graph::add_node))
-    .def("add_node", &static_cast<cudnn_frontend_error_t (Graph::*)(pointwise_node const &)>(&Graph::add_node));
+    .def("add_node", static_cast<cudnn_frontend_error_t (Graph::*)(convolution_node const &)>(&Graph::add_node))
+    .def("add_node", static_cast<cudnn_frontend_error_t (Graph::*)(pointwise_node const &)>(&Graph::add_node));
 
   py::enum_<cudnn_frontend_error_t>(m, "cudnn_frontend_error")
     .value("OK", cudnn_frontend_error_t::OK)

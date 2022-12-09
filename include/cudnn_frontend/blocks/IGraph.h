@@ -59,6 +59,14 @@ public:
             return cudnn_frontend_error_t::POINTWISE_MODE_NOT_SET;
         }
 
+        if (node.is_compute_type_set == false)  {
+            node.set_compute_type(ctx.get_compute_type());
+        }
+
+        if (node.is_tensor_data_type_set == false)  {
+            node.set_tensor_data_type(ctx.get_intermediate_data_type());
+        }
+
         return cudnn_frontend_error_t::OK;
     }
 
@@ -84,6 +92,42 @@ public:
 
         if (node.is_stride_set == false) {
             node.set_stride(ctx.get_spatial_dims() == 2 ? std::vector<int64_t>{1, 1} : std::vector<int64_t>{1, 1, 1});
+        }
+
+        return cudnn_frontend_error_t::OK;
+    }
+
+    cudnn_frontend_error_t
+    infer_shapes() {
+        std::unordered_map<std::string, bool>   visited_nodes;
+        std::unordered_map<std::string, Node *> all_nodes;
+        std::unordered_map<std::string, Node *> entrance_nodes;
+
+        for (auto &node : conv_nodes) {
+            visited_nodes[node.first] = false;
+            all_nodes[node.first] = &node.second;
+            bool is_entrance_node = 
+                std::all_of(std::begin(node.second.get_inputs()),
+                            std::end(node.second.get_inputs()),
+                            [] (auto input) {
+                                return input.find("::") == std::string::npos;
+                            } );
+            if (is_entrance_node) {
+                entrance_nodes[node.first] = &node.second;
+            }
+        }
+        for (auto &node : pointwise_nodes) {
+            visited_nodes[node.first] = false;
+            all_nodes[node.first] = &node.second;
+            bool is_entrance_node = 
+                std::all_of(std::begin(node.second.get_inputs()),
+                            std::end(node.second.get_inputs()),
+                            [] (auto input) {
+                                return input.find("::") == std::string::npos;
+                            } );
+            if (is_entrance_node) {
+                entrance_nodes[node.first] = &node.second;
+            }
         }
 
         return cudnn_frontend_error_t::OK;
