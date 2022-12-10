@@ -100,8 +100,8 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_mode", &reduction_node::set_mode)
     .def("get_tensor_data_type",  &reduction_node::get_tensor_data_type)
     .def("set_tensor_data_type",  &reduction_node::set_tensor_data_type)
-    .def("get_compute_data_type", &reduction_node::get_compute_data_type)
-    .def("set_compute_data_type", &reduction_node::set_compute_data_type);
+    .def("get_compute_type", &reduction_node::get_compute_type)
+    .def("set_compute_type", &reduction_node::set_compute_type);
 
 
   py::enum_<reduction_node::PORTS>(m, "reduction_ports")

@@ -280,6 +280,7 @@ public:
 
 private:
     cudnnPointwiseMode_t mode;
+public:
     bool is_mode_set;
 
     std::unordered_map<PORTS, std::string> port_to_name;

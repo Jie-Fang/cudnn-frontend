@@ -95,7 +95,7 @@ public:
         #endif
 
         auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
-                                                        .setComputeType(props.get_compute_data_type())
+                                                        .setComputeType(props.get_compute_type())
                                                         .setReductionOp(props.get_mode())
                                                         .build();
 

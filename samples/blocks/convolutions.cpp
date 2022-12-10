@@ -104,7 +104,7 @@ run_reduction_block() {
     cudnn_frontend::reduction_node props{""};
     props.set_mode(CUDNN_REDUCE_TENSOR_ADD);
     props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    props.set_compute_type(CUDNN_DATA_FLOAT);
     reduction_block.props = props;
 
     reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
@@ -138,7 +138,7 @@ run_convolution_fp8_block() {
     props.set_stride({1, 1});
     props.set_dilation({1, 1});
     props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
-    props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    props.set_compute_type(CUDNN_DATA_FLOAT);
     convolution_block->props = props;
 
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
@@ -150,7 +150,7 @@ run_convolution_fp8_block() {
     cudnn_frontend::pointwise_node X_DQ_props{""};
     X_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
     X_DQ_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
-    X_DQ_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    X_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
     X_DQ_block->props = X_DQ_props;
 
     X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
@@ -162,7 +162,7 @@ run_convolution_fp8_block() {
     cudnn_frontend::pointwise_node W_DQ_props{""};
     W_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
     W_DQ_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
-    W_DQ_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    W_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
     W_DQ_block->props = W_DQ_props;
 
     W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
@@ -174,7 +174,7 @@ run_convolution_fp8_block() {
     cudnn_frontend::pointwise_node Y_Q_props{""};
     Y_Q_props.set_mode(CUDNN_POINTWISE_MUL);
     Y_Q_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
-    Y_Q_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    Y_Q_props.set_compute_type(CUDNN_DATA_FLOAT);
     Y_Q_block->props = Y_Q_props;
 
     Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
@@ -186,7 +186,7 @@ run_convolution_fp8_block() {
     cudnn_frontend::reduction_node amax_props{""};
     amax_props.set_mode(CUDNN_REDUCE_TENSOR_AMAX);
     amax_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
-    amax_props.set_compute_data_type(CUDNN_DATA_FLOAT);
+    amax_props.set_compute_type(CUDNN_DATA_FLOAT);
     amax_block->props = amax_props;
 
     amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
