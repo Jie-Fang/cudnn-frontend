@@ -10,7 +10,7 @@
 #include "cudnn_frontend_ExecutionPlan.h"
 #include "cudnn_frontend_VariantPack.h"
 
-#include "cudnn_frontend/blocks/ICudnn.h"
+#include "cudnn_frontend_ICudnn.h"
 
 namespace cudnn_frontend {
 

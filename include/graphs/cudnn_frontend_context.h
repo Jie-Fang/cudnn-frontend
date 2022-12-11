@@ -3,7 +3,7 @@
 #include <cudnn.h>
 
 #include "cudnn_frontend_utils.h"
-#include "cudnn_frontend/blocks/helpers.h"
+#include "cudnn_frontend_graph_helpers.h"
 
 namespace cudnn_frontend {
 

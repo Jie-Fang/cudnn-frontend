@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "cudnn_frontend/blocks/cudnn_frontend_nodes.h"
+#include "cudnn_frontend_nodes.h"
 
 namespace cudnn_frontend {
 

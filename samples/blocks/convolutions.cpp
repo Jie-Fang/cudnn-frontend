@@ -20,11 +20,12 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <cudnn_frontend/blocks/convolution_blocks.h>
-#include <cudnn_frontend/blocks/pointwise_block.h>
-#include <cudnn_frontend/blocks/reduction_block.h>
-#include <cudnn_frontend/blocks/convolution_fp8_block.h>
-#include <cudnn_frontend/blocks/convolution_pointwise_block.h>
+#include <graphs/cudnn_frontend_convolution_block.h>
+#include <graphs/cudnn_frontend_pointwise_block.h>
+#include <graphs/cudnn_frontend_reduction_block.h>
+
+#include "convolution_fp8_block.h"
+#include "convolution_pointwise_block.h"
 
 #include "convolutions.h"
 

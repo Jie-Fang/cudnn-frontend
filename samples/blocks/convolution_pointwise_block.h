@@ -3,10 +3,10 @@
 #include <cudnn_frontend_Heuristics.h>
 #include <cudnn_frontend_Logging.h>
 
-#include <cudnn_frontend/blocks/helpers.h>
-#include <cudnn_frontend/blocks/Iblock.h>
-#include <cudnn_frontend/blocks/convolution_blocks.h>
-#include <cudnn_frontend/blocks/pointwise_block.h>
+#include <graphs/cudnn_frontend_graph_helpers.h>
+#include <graphs/cudnn_frontend_IBlock.h>
+#include <graphs/cudnn_frontend_convolution_block.h>
+#include <graphs/cudnn_frontend_pointwise_block.h>
 
 namespace cudnn_frontend {
 

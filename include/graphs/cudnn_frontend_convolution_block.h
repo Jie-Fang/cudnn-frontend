@@ -4,8 +4,8 @@
 #include <cudnn_frontend_Heuristics.h>
 #include <cudnn_frontend_Logging.h>
 
-#include <cudnn_frontend/blocks/helpers.h>
-#include <cudnn_frontend/blocks/Iblock.h>
+#include "cudnn_frontend_graph_helpers.h"
+#include "cudnn_frontend_IBlock.h"
 
 namespace cudnn_frontend {
 

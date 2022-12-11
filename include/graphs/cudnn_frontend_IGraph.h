@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cudnn_frontend/blocks/cudnn_frontend_context.h"
+#include "cudnn_frontend_context.h"
 
 namespace cudnn_frontend {
 
