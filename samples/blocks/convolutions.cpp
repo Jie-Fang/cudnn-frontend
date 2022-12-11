@@ -46,6 +46,8 @@ run_convolution_block() {
     props.set_compute_type(CUDNN_DATA_FLOAT);
     convolution_block.props = props;
 
+    convolution_block.update_uids();
+
     convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
     convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).set_dim({64, 32, 3, 3});
     convolution_block.tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).set_dim({4, 64, 16, 16});
@@ -77,6 +79,7 @@ run_pointwise_block() {
     props.set_compute_type(CUDNN_DATA_FLOAT);
     pointwise_block.props = props;
 
+    pointwise_block.update_uids();
     pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 32, 16, 16});
     pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 32, 1, 1});
     pointwise_block.tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 32, 16, 16});
@@ -108,6 +111,7 @@ run_reduction_block() {
     props.set_compute_type(CUDNN_DATA_FLOAT);
     reduction_block.props = props;
 
+    reduction_block.update_uids();
     reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
     reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_dim({1, 32, 1, 1});
     reduction_block.tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_data_type(CUDNN_DATA_FLOAT);
@@ -142,6 +146,7 @@ run_convolution_fp8_block() {
     props.set_compute_type(CUDNN_DATA_FLOAT);
     convolution_block->props = props;
 
+    convolution_block->update_uids();
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).set_dim({64, 32, 3, 3});
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).set_dim({4, 64, 16, 16});
@@ -154,6 +159,7 @@ run_convolution_fp8_block() {
     X_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
     X_DQ_block->props = X_DQ_props;
 
+    X_DQ_block->update_uids();
     X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
     X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 1, 1, 1});
     X_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
@@ -166,6 +172,7 @@ run_convolution_fp8_block() {
     W_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
     W_DQ_block->props = W_DQ_props;
 
+    W_DQ_block->update_uids();
     W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
     W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 1, 1, 1});
     W_DQ_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
@@ -178,6 +185,7 @@ run_convolution_fp8_block() {
     Y_Q_props.set_compute_type(CUDNN_DATA_FLOAT);
     Y_Q_block->props = Y_Q_props;
 
+    Y_Q_block->update_uids();
     Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
     Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 1, 1, 1});
     Y_Q_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});
@@ -190,6 +198,7 @@ run_convolution_fp8_block() {
     amax_props.set_compute_type(CUDNN_DATA_FLOAT);
     amax_block->props = amax_props;
 
+    amax_block->update_uids();
     amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::X).set_dim({4, 32, 16, 16});
     amax_block->tensor_props.at(cudnn_frontend::reduction_node::PORTS::Y).set_dim({1, 1, 1, 1});
 
@@ -233,6 +242,7 @@ run_convolution_pointwise_block() {
     props.set_compute_type(CUDNN_DATA_FLOAT);
     convolution_block->props = props;
 
+    convolution_block->update_uids();
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::X).set_dim({4, 32, 16, 16});
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::W).set_dim({64, 32, 3, 3});
     convolution_block->tensor_props.at(cudnn_frontend::convolution_node::PORTS::Y).set_dim({4, 64, 16, 16});
@@ -245,6 +255,7 @@ run_convolution_pointwise_block() {
     pointwise_props.set_compute_type(CUDNN_DATA_FLOAT);
     pointwise_block->props = pointwise_props;
 
+    pointwise_block->update_uids();
     pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::X).set_dim({4, 64, 16, 16});
     pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::B).set_dim({1, 64, 1, 1});
     pointwise_block->tensor_props.at(cudnn_frontend::pointwise_node::PORTS::Y).set_dim({4, 64, 16, 16});

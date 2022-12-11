@@ -20,7 +20,7 @@ public:
     ConvolutionBlock(int64_t offset_ = 1)  : IBlock (offset_) {
     }
 
-    int update_uids(int64_t const& offset) {
+    int update_uids() {
         props.update_uids(offset);
 
         for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
@@ -36,7 +36,6 @@ public:
     }
 
     int validate() override final {
-        update_uids(offset);
 
         for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
             tensor_props.at(i).generateStrides(CUDNN_TENSOR_NHWC);

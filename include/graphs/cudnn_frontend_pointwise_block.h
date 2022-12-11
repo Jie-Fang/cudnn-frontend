@@ -19,7 +19,7 @@ public:
 
     PointwiseBlock(int64_t const offset_ = 1)  : IBlock (offset_) {}
 
-    int update_uids(int64_t const& offset) {
+    int update_uids() {
         props.update_uids(offset);
         
         for(size_t i = 0; i < pointwise_node::PORTS::COUNT; ++i) {
@@ -35,8 +35,6 @@ public:
     }
 
     int validate() override final {
-        update_uids(offset);
-
         for(size_t i = 0; i < pointwise_node::PORTS::COUNT; ++i) {
             tensor_props.at(i).generateStrides(CUDNN_TENSOR_NHWC);
             tensor_props.at(i).set_data_type(props.get_tensor_data_type());
