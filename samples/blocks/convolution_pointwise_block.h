@@ -17,7 +17,7 @@ protected:
 
 public:
 
-    ConvolutionPointwiseBlock(int64_t const& offset = 1) {
+    ConvolutionPointwiseBlock(int64_t offset_ = 1)  : IBlock (offset_) {
         auto conv_block = std::make_shared<ConvolutionBlock>(offset);
         auto pointwise_block = std::make_shared<PointwiseBlock>(offset + 200);
         pointwise_block->props.uids[pointwise_node::PORTS::X] = conv_block->props.uids[convolution_node::PORTS::Y];

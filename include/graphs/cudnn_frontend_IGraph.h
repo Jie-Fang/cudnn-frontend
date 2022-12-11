@@ -6,13 +6,14 @@ namespace cudnn_frontend {
 
 
 
-class IGraph {
+class IGraph : public graph_properties {
 protected:
     std::unordered_map<std::string, tensor_properties> all_tensors;
     std::unordered_map<std::string, convolution_node>  conv_nodes;
     std::unordered_map<std::string, pointwise_node>    pointwise_nodes;
     
 public:
+    IGraph(std::string const &name ) : graph_properties(name) {}
     virtual cudnn_frontend_error_t add_tensor(tensor_properties const &props) = 0;
 
     virtual cudnn_frontend_error_t add_node(convolution_node const &props) = 0;
@@ -20,9 +21,26 @@ public:
 };
 
 class Graph : public IGraph {
+protected:
     cuDNNFEContext ctx;
+    int64_t uid_offset = 1;
+
 public:
-    Graph(cuDNNFEContext const &ctx_) : ctx(ctx_) {}
+
+    Graph(std::string const &name, cuDNNFEContext const &ctx_) : IGraph(name), ctx(ctx_) {}
+
+    cudnn_frontend_error_t
+    is_valid_tensor(std::string const& name) {
+        if (all_tensors.find(name) == all_tensors.end()) {
+            return cudnn_frontend_error_t::UNKNOWN_TENSOR_NAME;
+        } 
+        return cudnn_frontend_error_t::OK;
+    }
+
+    tensor_properties &
+    tensor_at(std::string const& name) {
+        return all_tensors.at(name);
+    }
 
     cudnn_frontend_error_t
     add_tensor(tensor_properties const &props) {
@@ -67,6 +85,8 @@ public:
             node.set_tensor_data_type(ctx.get_intermediate_data_type());
         }
 
+        all_tensors.insert(std::make_pair(name + "::Y", tensor_properties{name + "::Y"}));
+
         return cudnn_frontend_error_t::OK;
     }
 
@@ -94,44 +114,113 @@ public:
             node.set_stride(ctx.get_spatial_dims() == 2 ? std::vector<int64_t>{1, 1} : std::vector<int64_t>{1, 1, 1});
         }
 
+        all_tensors.insert(std::make_pair(name + "::Y", tensor_properties{name + "::Y"}));
+
         return cudnn_frontend_error_t::OK;
     }
 
     cudnn_frontend_error_t
     infer_shapes() {
         std::unordered_map<std::string, bool>   visited_nodes;
-        std::unordered_map<std::string, Node *> all_nodes;
-        std::unordered_map<std::string, Node *> entrance_nodes;
+        std::unordered_map<std::string, bool>   visited_tensors;
+        std::unordered_map<std::string, Node const*> all_nodes;
+        std::unordered_map<std::string, Node const*> entrance_nodes;
+
+        getLogger() << "Available tensors are [";
+        for (auto &tensor : all_tensors) {
+            getLogger() << tensor.first << ", ";
+            if (tensor.first.find("::") == std::string::npos) {
+                visited_tensors[tensor.first] = true;
+            } else {
+                visited_tensors[tensor.first] = false;
+            }
+        }
+        getLogger() << "]" << std::endl;
+
 
         for (auto &node : conv_nodes) {
             visited_nodes[node.first] = false;
             all_nodes[node.first] = &node.second;
-            bool is_entrance_node = 
-                std::all_of(std::begin(node.second.get_inputs()),
-                            std::end(node.second.get_inputs()),
-                            [] (auto input) {
-                                return input.find("::") == std::string::npos;
-                            } );
-            if (is_entrance_node) {
-                entrance_nodes[node.first] = &node.second;
-            }
         }
         for (auto &node : pointwise_nodes) {
             visited_nodes[node.first] = false;
             all_nodes[node.first] = &node.second;
-            bool is_entrance_node = 
-                std::all_of(std::begin(node.second.get_inputs()),
-                            std::end(node.second.get_inputs()),
-                            [] (auto input) {
-                                return input.find("::") == std::string::npos;
-                            } );
-            if (is_entrance_node) {
-                entrance_nodes[node.first] = &node.second;
+        }
+
+        auto find_entrance_nodes = [&all_nodes, &entrance_nodes, &visited_tensors, &visited_nodes] () {
+            for (auto &node : all_nodes) {
+                if (visited_nodes.at(node.first) == false) {
+                    bool is_entrance_node = 
+                        std::all_of(std::begin(node.second->get_inputs()),
+                                    std::end(node.second->get_inputs()),
+                                    [&visited_tensors] (auto input) {
+                                        return visited_tensors.at(input) == true;
+                                    } );
+                    if (is_entrance_node) {
+                        entrance_nodes[node.first] = node.second;
+                        getLogger() << "Added " << node.first << " to entrance nodes." << std::endl;
+                    }
+                }
             }
+        };
+
+        find_entrance_nodes();
+
+        while (entrance_nodes.size()) {
+            Node const *node = entrance_nodes.begin()->second;
+            visited_nodes.at(node->get_name()) = true;
+
+            switch (node->get_node_type()) {
+                case Node::Type::Pointwise: 
+                case Node::Type::Convolution: {
+                    auto &tensor = all_tensors.at(node->get_name() + "::Y");
+                    auto &inputs = node->get_inputs();
+                    // TODO: Compute output size correctly. Right now just
+                    // Copying the input tensor sizes
+                    tensor.set_data_type(all_tensors.at(inputs[0]).get_data_type());
+                    tensor.set_dim(all_tensors.at(inputs[0]).get_dim());
+                    tensor.set_stride(all_tensors.at(inputs[0]).get_stride());
+                    visited_tensors[tensor.get_name()] = true;
+                    find_entrance_nodes();
+                    entrance_nodes.erase(entrance_nodes.begin());
+                    continue;
+                }
+                break;
+                case Node::Type::Reduction: {
+                }
+                break;
+            }
+        }
+
+        if (std::any_of(std::begin(visited_nodes), std::end(visited_nodes),
+                        [](auto node){return node.second == false;})) {
+            return cudnn_frontend_error_t::SHAPE_DEDUCTION_FAILED;
         }
 
         return cudnn_frontend_error_t::OK;
     }
+
+    cudnn_frontend_error_t
+    build() {
+        // for (auto &node : conv_nodes) {
+            // getLogger() << "Adding the conv block" << node.first << std::endl;
+            // auto conv_block = std::make_shared<ConvolutionBlock>(uid_offset);
+            // // sub_blocks[conv_block->props.name_] = conv_block;
+
+            // conv_block->props = node.second;
+
+            // conv_block->tensor_props[convolution_node::PORTS::X] = 
+            //                 all_tensors[conv_block->props.port_to_name[convolution_node::PORTS::X]];
+            // conv_block->tensor_props[convolution_node::PORTS::W] = 
+            //                 all_tensors[conv_block->props.port_to_name[convolution_node::PORTS::W]];
+            // conv_block->tensor_props[convolution_node::PORTS::Y] = 
+            //                 all_tensors[conv_block->props.port_to_name[convolution_node::PORTS::Y]];                     
+            // uid_offset += 100;
+        // }
+
+        return cudnn_frontend_error_t::OK;
+    }
+
 
     ~Graph() = default;
 };

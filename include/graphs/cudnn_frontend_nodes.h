@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "graphs/cudnn_frontend_graph_helpers.h"
+
 namespace cudnn_frontend {
 
 class graph_properties {
@@ -13,7 +15,7 @@ protected:
 public:
     graph_properties(const std::string &name) : name(name) {}
 
-    std::string
+    std::string const
     get_name() const {
         return name;
     }
@@ -79,10 +81,6 @@ public:
         return 0;
     }
 
-    bool check_if_data_type_set() const {
-        return is_data_type_set;
-    }
-
     std::vector<int64_t> const &
     get_dim() const {
         return dim;
@@ -146,18 +144,34 @@ public:
 };
 
 class Node : public graph_properties {
+public:
+    enum class Type {
+        Convolution,
+        Pointwise,
+        Reduction
+    };
+
+    using parent_class = Node;
 protected:
 
     cudnnDataType_t tensor_data_type;
     cudnnDataType_t compute_type;
 
     std::vector<std::string> inputs = {};
+    Type node_type;
+    size_t input_port_count = 1;
 public:
+
     bool is_tensor_data_type_set = false;
     bool is_compute_type_set = false;
     bool is_input_set = false;
 
-    Node(const std::string name) : graph_properties(name){}
+    Node(const std::string name, Type t, int port_count) : graph_properties(name), node_type(t), input_port_count(port_count) {}
+
+    Type
+    get_node_type() const {
+        return node_type;
+    }
 
     cudnnDataType_t
     get_tensor_data_type() const {
@@ -183,11 +197,14 @@ public:
         return 0;
     }
 
-    int
+    virtual cudnn_frontend_error_t
     set_inputs(std::vector<std::string> const & value) {
+        if (value.size() != input_port_count) {
+            return cudnn_frontend_error_t::INPUT_PORT_COUNT_MISMATCH;
+        }
         inputs = value;
         is_input_set = true;
-        return 0;
+        return cudnn_frontend_error_t::OK;
     } 
 
     std::vector<std::string> const &
@@ -217,10 +234,23 @@ public:
 
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    convolution_node(const std::string name) : Node(name){
-        port_to_name[PORTS::X] = "X";
-        port_to_name[PORTS::W] = "W";
-        port_to_name[PORTS::Y] = "Y";
+    convolution_node(const std::string name) : Node(name, Type::Convolution , 2) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::W] = name + "::W";
+        port_to_name[PORTS::Y] = name + "::Y";
+    }
+
+    cudnn_frontend_error_t
+    set_inputs(std::vector<std::string> const & value) override final {
+        auto return_value = parent_class::set_inputs(value);
+        if (return_value != cudnn_frontend_error_t::OK) {
+            return return_value;
+        }
+        for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
+            port_to_name[static_cast<PORTS>(i)] = inputs[i];
+        }
+        return cudnn_frontend_error_t::OK;
+
     }
 
     int update_uids(int64_t offset) {
@@ -286,10 +316,10 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    pointwise_node(const std::string name) : Node(name) {
-        port_to_name[PORTS::X] = "X";
-        port_to_name[PORTS::B] = "B";
-        port_to_name[PORTS::Y] = "Y";
+    pointwise_node(const std::string name) : Node(name, Type::Pointwise, 2) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::B] = name + "::B";
+        port_to_name[PORTS::Y] = name + "::Y";
     }
 
     int 
@@ -310,6 +340,18 @@ public:
         mode = value;
         is_mode_set = true;
         return 0;
+    }   
+
+    cudnn_frontend_error_t
+    set_inputs(std::vector<std::string> const & value) override final {
+        auto return_value = parent_class::set_inputs(value);
+        if (return_value != cudnn_frontend_error_t::OK) {
+            return return_value;
+        }
+        for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
+            port_to_name[static_cast<PORTS>(i)] = inputs[i];
+        }
+        return cudnn_frontend_error_t::OK;
     }
 };
 
@@ -324,15 +366,16 @@ public:
 
 private:
     cudnnReduceTensorOp_t mode;
-    bool is_mode_set;
 
 public:
+    bool is_mode_set;
+
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    reduction_node(const std::string name) : Node(name) {
-        port_to_name[PORTS::X] = "X";
-        port_to_name[PORTS::Y] = "Y";
+    reduction_node(const std::string name) : Node(name, Type::Reduction, 1) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::Y] = name + "::Y";
     }
 
     int update_uids(int64_t offset) {
@@ -352,6 +395,18 @@ public:
         mode = value;
         is_mode_set = true;
         return 0;
+    }
+
+    cudnn_frontend_error_t
+    set_inputs(std::vector<std::string> const & value) override final {
+        auto return_value = parent_class::set_inputs(value);
+        if (return_value != cudnn_frontend_error_t::OK) {
+            return return_value;
+        }
+        for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
+            port_to_name[static_cast<PORTS>(i)] = inputs[i];
+        }
+        return cudnn_frontend_error_t::OK;
     }
 };
 

@@ -16,8 +16,7 @@ protected:
 public:
     reduction_node props{""};
 
-    ReductionBlock(int64_t const offset = 1) {
-        update_uids(offset);
+    ReductionBlock(int64_t const offset_ = 1)  : IBlock (offset_) {
     }
 
     int update_uids(int64_t const& offset) {
@@ -37,10 +36,11 @@ public:
 
     int validate() override final {
 
+        update_uids(offset);
         for(size_t i = 0; i < reduction_node::PORTS::COUNT; ++i) {            
             tensor_props.at(i).generateStrides(CUDNN_TENSOR_NHWC);
             // Only override property not set already
-            if(!(tensor_props.at(i).check_if_data_type_set())) {
+            if(tensor_props.at(i).is_data_type_set == false) {
                 tensor_props.at(i).set_data_type(props.get_tensor_data_type());
             }
         }

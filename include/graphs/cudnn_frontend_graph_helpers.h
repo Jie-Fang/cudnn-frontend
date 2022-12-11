@@ -3,7 +3,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "cudnn_frontend_nodes.h"
 
 namespace cudnn_frontend {
 
@@ -11,6 +10,10 @@ enum class cudnn_frontend_error_t {
     OK,
     TENSOR_DIMENSIONS_NOT_SET,
     POINTWISE_MODE_NOT_SET,
+    SHAPE_DEDUCTION_FAILED,
+    OUTPUT_TENSOR_NODE_NOT_FOUND,
+    UNKNOWN_TENSOR_NAME,
+    INPUT_PORT_COUNT_MISMATCH
 };
 
 static cudnnDataType_t

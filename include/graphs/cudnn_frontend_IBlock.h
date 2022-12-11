@@ -10,7 +10,11 @@
 #include "cudnn_frontend_ExecutionPlan.h"
 #include "cudnn_frontend_VariantPack.h"
 
-#include "cudnn_frontend_ICudnn.h"
+#include "graphs/cudnn_frontend_ICudnn.h"
+
+
+#include "graphs/cudnn_frontend_nodes.h"
+
 
 namespace cudnn_frontend {
 
@@ -64,6 +68,8 @@ protected:
     }
     
 public:
+    int offset = 1;
+
     // Tensors belonging to each block.
     // Connecting blocks can modify and delete tensors in this container.
     std::unordered_map<int64_t, tensor_properties> tensor_props;
@@ -73,6 +79,8 @@ public:
     virtual int build(cudnnHandle_t& handle) = 0;
     
     virtual int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) = 0;
+
+    IBlock(int64_t off) : offset(off) {}
 
     virtual ~IBlock() {};
 };

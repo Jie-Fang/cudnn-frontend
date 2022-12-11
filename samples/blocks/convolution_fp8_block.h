@@ -17,7 +17,7 @@ protected:
 
 public:
 
-    ConvolutionFP8Block(int64_t const& offset = 1) {
+    ConvolutionFP8Block(int64_t offset_ = 1)  : IBlock (offset_) {
         auto conv_block = std::make_shared<ConvolutionBlock>(offset);
         auto X_DQ_block = std::make_shared<PointwiseBlock>(offset + 100);
         auto W_DQ_block = std::make_shared<PointwiseBlock>(offset + 200);
