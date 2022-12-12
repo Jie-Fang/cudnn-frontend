@@ -38,6 +38,22 @@ public:
     bool is_pass_by_value_set = false;
     bool is_uid_set = false;
 
+    // TODO: Currently this structure takes in unrolled list of properties to set.
+    // But later, it will take in the context and derive properties to set from it.
+    int set_properties_from_context(cudnnTensorFormat_t const filter_format, cudnnDataType_t const data_type, int64_t const uid) {
+        if(!is_stride_set) {
+            generateStrides(filter_format);
+        }
+        if(!is_data_type_set) {
+            set_data_type(data_type);
+        }
+        if(!is_uid_set) {
+            set_uid(uid);
+        }
+
+        return 0;
+    }
+
     int
     generateStrides(cudnnTensorFormat_t const filterFormat) {
         size_t const dim_count = dim.size();
@@ -154,6 +170,9 @@ public:
     using parent_class = Node;
 protected:
 
+    // TODO: remove setting tensor data type in operation properties.
+    // The operation only has to know of the compute type. cudnn operation
+    // will convert any tensor type to compute type internally.
     cudnnDataType_t tensor_data_type;
     cudnnDataType_t compute_type;
 

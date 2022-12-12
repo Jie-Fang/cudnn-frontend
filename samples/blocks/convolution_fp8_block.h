@@ -93,17 +93,14 @@ public:
         auto const& conv_block_ptr = std::dynamic_pointer_cast<ConvolutionBlock>(sub_blocks.at("conv_block"));
         auto conv_output_tensor = get_tensor_props(conv_block_ptr->props.port_to_name.at(convolution_node::PORTS::Y));
         conv_output_tensor->set_is_virtual(true);
-        conv_output_tensor->set_data_type(CUDNN_DATA_FLOAT);
         
         auto const& x_dq_block_ptr = std::dynamic_pointer_cast<PointwiseBlock>(sub_blocks.at("X_DQ_block"));
         auto x_dq_tensor = get_tensor_props(x_dq_block_ptr->props.port_to_name.at(pointwise_node::PORTS::Y));
         x_dq_tensor->set_is_virtual(true);
-        x_dq_tensor->set_data_type(CUDNN_DATA_FLOAT);
         
         auto const& w_dq_block_ptr = std::dynamic_pointer_cast<PointwiseBlock>(sub_blocks.at("W_DQ_block"));
         auto w_dq_tensor = get_tensor_props(w_dq_block_ptr->props.port_to_name.at(pointwise_node::PORTS::Y));
         w_dq_tensor->set_is_virtual(true);
-        w_dq_tensor->set_data_type(CUDNN_DATA_FLOAT);
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionFP8Block." << std::endl;
         return 0;

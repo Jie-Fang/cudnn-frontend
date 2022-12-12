@@ -170,6 +170,7 @@ run_convolution_fp8_block() {
     props.set_padding({1, 1});
     props.set_stride({1, 1});
     props.set_dilation({1, 1});
+    // TODO: remove setting tensor data type in operation properties.
     props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
     props.set_compute_type(CUDNN_DATA_FLOAT);
     props.set_port_names({
@@ -189,11 +190,13 @@ run_convolution_fp8_block() {
 
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
+    tensor2.set_data_type(CUDNN_DATA_FLOAT);
     convolution_fp8_block.add_tensor("tensor2", tensor2);
 
     cudnn_frontend::pointwise_node X_DQ_props{"x_dq_prop"};
     X_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
-    X_DQ_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    // TODO: remove setting tensor data type in operation properties.
+    X_DQ_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
     X_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
     X_DQ_props.set_port_names({
         {cudnn_frontend::pointwise_node::PORTS::X, "tensor2"} 
@@ -212,7 +215,7 @@ run_convolution_fp8_block() {
 
     cudnn_frontend::pointwise_node W_DQ_props{"w_dq_props"};
     W_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
-    W_DQ_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    W_DQ_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
     W_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
     W_DQ_props.set_port_names({
         {cudnn_frontend::pointwise_node::PORTS::X, "tensor4"} 
@@ -231,7 +234,8 @@ run_convolution_fp8_block() {
 
     cudnn_frontend::pointwise_node Y_Q_props{"y_q_prop"};
     Y_Q_props.set_mode(CUDNN_POINTWISE_MUL);
-    Y_Q_props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    // TODO: remove setting tensor data type in operation properties.
+    Y_Q_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
     Y_Q_props.set_compute_type(CUDNN_DATA_FLOAT);
     Y_Q_props.set_port_names({
         {cudnn_frontend::pointwise_node::PORTS::X, "tensor6"} 
@@ -246,10 +250,12 @@ run_convolution_fp8_block() {
 
     cudnn_frontend::tensor_properties tensor8{"tensor8"};
     tensor8.set_dim({4, 64, 16, 16});
+    tensor8.set_data_type(CUDNN_DATA_FP8_E4M3);
     convolution_fp8_block.add_tensor("tensor8", tensor8);
 
     cudnn_frontend::reduction_node amax_props{"amax_prop"};
     amax_props.set_mode(CUDNN_REDUCE_TENSOR_AMAX);
+    // TODO: remove setting tensor data type in operation properties.
     amax_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
     amax_props.set_compute_type(CUDNN_DATA_FLOAT);
     amax_props.set_port_names({
@@ -296,6 +302,7 @@ run_convolution_pointwise_block() {
     conv_props.set_padding({1, 1});
     conv_props.set_stride({1, 1});
     conv_props.set_dilation({1, 1});
+    // TODO: remove setting tensor data type in operation properties.
     conv_props.set_tensor_data_type(CUDNN_DATA_HALF);
     conv_props.set_compute_type(CUDNN_DATA_FLOAT);
     conv_props.set_port_names({

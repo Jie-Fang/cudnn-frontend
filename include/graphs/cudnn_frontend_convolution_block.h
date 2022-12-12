@@ -43,9 +43,7 @@ public:
 
         for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<convolution_node::PORTS>(i)));
-            tensor_prop->generateStrides(CUDNN_TENSOR_NHWC);
-            tensor_prop->set_data_type(props.get_tensor_data_type());
-            tensor_prop->set_uid(props.uids[i]);
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
         }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionBlock." << std::endl;
