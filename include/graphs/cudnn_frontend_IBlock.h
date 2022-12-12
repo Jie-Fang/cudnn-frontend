@@ -68,21 +68,39 @@ protected:
     }
     
 public:
+    std::string name;
     int offset = 1;
 
     // Tensors belonging to each block.
     // Connecting blocks can modify and delete tensors in this container.
-    std::unordered_map<int64_t, tensor_properties> tensor_props;
+    std::unordered_map<std::string, std::shared_ptr<tensor_properties>> tensor_props;
 
+    IBlock* parent_block;
     std::unordered_map <std::string, std::shared_ptr<IBlock>> sub_blocks;
 
     virtual int build(cudnnHandle_t& handle) = 0;
     
-    virtual int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) = 0;
+    virtual int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
 
-    IBlock(int64_t off) : offset(off) {}
+    IBlock(std::string const& name, int64_t const offset) : name(name), offset(offset) {}
 
     virtual ~IBlock() {};
+
+    int add_tensor(std::string const& name, tensor_properties& properties) {
+        tensor_props.emplace(name, std::make_shared<tensor_properties>(properties));
+        return 0;
+    }
+    
+    std::shared_ptr<tensor_properties> get_tensor_props(std::string const& name) {
+        if(tensor_props.count(name)) {
+            return tensor_props.at(name);
+        }
+        if(parent_block == nullptr) {
+            return nullptr;
+        }
+        tensor_props[name] = parent_block->get_tensor_props(name);
+        return tensor_props.at(name);
+    }
 };
 
 } // namespace cudnn_frontend

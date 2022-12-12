@@ -17,35 +17,67 @@ protected:
 
 public:
 
-    ConvolutionPointwiseBlock(int64_t offset_ = 1)  : IBlock (offset_) {
-        auto conv_block = std::make_shared<ConvolutionBlock>(offset);
-        auto pointwise_block = std::make_shared<PointwiseBlock>(offset + 200);
-        pointwise_block->props.uids[pointwise_node::PORTS::X] = conv_block->props.uids[convolution_node::PORTS::Y];
+    ConvolutionPointwiseBlock(std::string const& name, int64_t const offset = 1)  : IBlock (name, offset) {
+        auto conv_block = std::make_shared<ConvolutionBlock>("conv_block", offset);
+        auto pointwise_block = std::make_shared<PointwiseBlock>("pointwise_block", offset + 200);
 
         sub_blocks.emplace("conv_block", conv_block);
         sub_blocks.emplace("pointwise_block", pointwise_block);
+
+        conv_block->parent_block = this;
+        pointwise_block->parent_block = this;
     }
 
     Type getType() override final {
         return Type::BLOCK;
     }
 
+    int set_properties(std::string const& IBlock_name, convolution_node const& properties) {
+        if(sub_blocks.count(IBlock_name) == 0) {
+            return 1;
+        }
+
+        auto convolution_block_ptr = std::dynamic_pointer_cast<ConvolutionBlock>(sub_blocks.at(IBlock_name));
+        if(convolution_block_ptr == nullptr) {
+            return 1;
+        }
+
+        convolution_block_ptr->set_properties(IBlock_name, properties);
+        return 0;
+    }
+
+    int set_properties(std::string const& IBlock_name, pointwise_node const& properties) {
+        if(sub_blocks.count(IBlock_name) == 0) {
+            return 1;
+        }
+
+        auto pointwise_block_ptr = std::dynamic_pointer_cast<PointwiseBlock>(sub_blocks.at(IBlock_name));
+        if(pointwise_block_ptr == nullptr) {
+            return 1;
+        }
+
+        pointwise_block_ptr->set_properties(IBlock_name, properties);
+        return 0;
+    }
+
     int validate() override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionPointwiseBlock..." << std::endl;
 
         for(auto const& sub_block: sub_blocks) {
             sub_block.second->validate();
         }
 
-        sub_blocks["conv_block"]->tensor_props.at(convolution_node::PORTS::Y).set_is_virtual(true);
-        sub_blocks["pointwise_block"]->tensor_props.at(pointwise_node::PORTS::X) = sub_blocks["conv_block"]->tensor_props.at(convolution_node::PORTS::Y);
+        auto const& conv_block_ptr = std::dynamic_pointer_cast<ConvolutionBlock>(sub_blocks.at("conv_block"));
+        tensor_props.at(conv_block_ptr->props.port_to_name.at(convolution_node::PORTS::Y))->set_is_virtual(true);
 
+        getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionPointwiseBlock." << std::endl;
         return 0;
     }
 
     int partition(cudnnHandle_t& handle) override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Partioning ConvolutionPointwiseBlock..." << std::endl;
 
-        std::vector<Operation const*> operation_graph = {sub_blocks["conv_block"]->operations["conv"].get(), sub_blocks["pointwise_block"]->operations["pointwise"].get()};
+        std::vector<Operation const*> operation_graph = {sub_blocks.at("conv_block")->operations.at("conv").get(), sub_blocks.at("pointwise_block")->operations.at("pointwise").get()};
         auto conv_pointwise_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
         operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(conv_pointwise_graph)));
 
@@ -65,7 +97,7 @@ public:
         return 0;
     }
     
-    int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) override final {
+    int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
         getLogger() << "[cudnn_frontend] INFO: ConvolutionPointwiseBlock starting execution..." << std::endl;
 
         for(auto const& execution_plan: execution_plans) {
@@ -78,7 +110,7 @@ public:
             device_ptrs.reserve(tensor_uid_to_pointer_map.size());
 
             for (auto const& p : tensor_uid_to_pointer_map) {
-                uids.push_back(p.first);
+                uids.push_back(get_tensor_props(p.first)->get_uid());
                 device_ptrs.push_back(p.second);
             }
 

@@ -15,33 +15,40 @@ private:
 protected:
 
 public:
-    convolution_node props{""};
+    convolution_node props;
 
-    ConvolutionBlock(int64_t offset_ = 1)  : IBlock (offset_) {
-    }
-
-    int update_uids() {
-        props.update_uids(offset);
-
-        for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
-            tensor_props.insert(std::make_pair<int64_t, tensor_properties> (static_cast<convolution_node::PORTS>(i), tensor_properties(props.port_to_name[static_cast<convolution_node::PORTS>(i)])));
-            tensor_props.at(i).set_uid(props.uids[i]);
-        }
-
-        return 0;
+    ConvolutionBlock(std::string const& name, int64_t offset = 1)  : IBlock (name, offset), props(name) {
     }
 
     Type getType() override final {
         return Type::CONVOLUTION;
     }
 
+    int set_properties(std::string const& IBlock_name, convolution_node const& properties) {
+        if(sub_blocks.size() != 0) {
+            return 1;
+        }
+        if(IBlock_name != name) {
+            return 1;
+        }
+        
+        props = properties;
+        return 0;
+    }
+
     int validate() override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionBlock..." << std::endl;
+
+        props.update_uids(offset);
 
         for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
-            tensor_props.at(i).generateStrides(CUDNN_TENSOR_NHWC);
-            tensor_props.at(i).set_data_type(props.get_tensor_data_type());
+            auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<convolution_node::PORTS>(i)));
+            tensor_prop->generateStrides(CUDNN_TENSOR_NHWC);
+            tensor_prop->set_data_type(props.get_tensor_data_type());
+            tensor_prop->set_uid(props.uids[i]);
         }
 
+        getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionBlock." << std::endl;
         return 0;
     }
 
@@ -49,40 +56,40 @@ public:
         
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock tensors..." << std::endl;
 
-        auto& x_tensor = tensor_props.at(convolution_node::PORTS::X);
-        size_t const dim_count = x_tensor.get_stride().size();
+        auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::X));
+        size_t const dim_count = x_tensor->get_stride().size();
         auto input  = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, x_tensor.get_dim().data())
-                        .setStrides(dim_count, x_tensor.get_stride().data())
-                        .setId(x_tensor.get_uid())
+                        .setDim(dim_count, x_tensor->get_dim().data())
+                        .setStrides(dim_count, x_tensor->get_stride().data())
+                        .setId(x_tensor->get_uid())
                         .setAlignment(16)
-                        .setDataType(x_tensor.get_data_type())
-                        .setVirtual(x_tensor.get_is_virtual())
-                        .setByValue(x_tensor.get_is_pass_by_value())
+                        .setDataType(x_tensor->get_data_type())
+                        .setVirtual(x_tensor->get_is_virtual())
+                        .setByValue(x_tensor->get_is_pass_by_value())
                         .build();
         tensors.emplace(convolution_node::PORTS::X, std::make_shared<Tensor>(std::move(input)));
 
-        auto& w_tensor = tensor_props.at(convolution_node::PORTS::W);
+        auto w_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::W));
         auto weight = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, w_tensor.get_dim().data())
-                        .setStrides(dim_count, w_tensor.get_stride().data())
-                        .setId(w_tensor.get_uid())
+                        .setDim(dim_count, w_tensor->get_dim().data())
+                        .setStrides(dim_count, w_tensor->get_stride().data())
+                        .setId(w_tensor->get_uid())
                         .setAlignment(16)
-                        .setDataType(w_tensor.get_data_type())
-                        .setVirtual(w_tensor.get_is_virtual())
-                        .setByValue(w_tensor.get_is_pass_by_value())
+                        .setDataType(w_tensor->get_data_type())
+                        .setVirtual(w_tensor->get_is_virtual())
+                        .setByValue(w_tensor->get_is_pass_by_value())
                         .build();
         tensors.emplace(convolution_node::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
 
-        auto& y_tensor = tensor_props.at(convolution_node::PORTS::Y);
+        auto y_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::Y));
         auto output = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, y_tensor.get_dim().data())
-                        .setStrides(dim_count, y_tensor.get_stride().data())
-                        .setId(y_tensor.get_uid())
+                        .setDim(dim_count, y_tensor->get_dim().data())
+                        .setStrides(dim_count, y_tensor->get_stride().data())
+                        .setId(y_tensor->get_uid())
                         .setAlignment(16)
-                        .setDataType(y_tensor.get_data_type())
-                        .setVirtual(y_tensor.get_is_virtual())
-                        .setByValue(y_tensor.get_is_pass_by_value())
+                        .setDataType(y_tensor->get_data_type())
+                        .setVirtual(y_tensor->get_is_virtual())
+                        .setByValue(y_tensor->get_is_pass_by_value())
                         .build();
         tensors.emplace(convolution_node::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
 
@@ -142,7 +149,7 @@ public:
     int partition(cudnnHandle_t& handle) override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Partioning ConvolutionBlock..." << std::endl;
 
-        std::vector<Operation const*> operation_graph = {operations["conv"].get()};
+        std::vector<Operation const*> operation_graph = {operations.at("conv").get()};
         auto convolution_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
         operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(convolution_graph)));
 
@@ -167,7 +174,7 @@ public:
         return 0;
     }
     
-    int execute(cudnnHandle_t& handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) override final {
+    int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
         getLogger() << "[cudnn_frontend] INFO: ConvolutionBlock starting execution..." << std::endl;
 
         for(auto const& execution_plan: execution_plans) {
@@ -180,7 +187,7 @@ public:
             device_ptrs.reserve(tensor_uid_to_pointer_map.size());
 
             for (auto const& p : tensor_uid_to_pointer_map) {
-                uids.push_back(p.first);
+                uids.push_back(get_tensor_props(p.first)->get_uid());
                 device_ptrs.push_back(p.second);
             }
 

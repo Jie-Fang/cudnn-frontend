@@ -87,7 +87,7 @@ public:
     }
 
     int
-    set_dim(std::vector<int64_t> value) {
+    set_dim(std::vector<int64_t> const& value) {
         dim = value;
         is_dim_set = true;
         return 0;
@@ -99,7 +99,7 @@ public:
     }
 
     int
-    set_stride(std::vector<int64_t> value) {
+    set_stride(std::vector<int64_t> const& value) {
         stride = value;
         is_stride_set = true;
         return 0;
@@ -253,6 +253,14 @@ public:
 
     }
 
+    cudnn_frontend_error_t
+    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+        for(auto const& p: names) {
+            port_to_name[static_cast<PORTS>(p.first)] = p.second;
+        }
+        return cudnn_frontend_error_t::OK;
+    }
+
     int update_uids(int64_t offset) {
         for(size_t i = 0; i < PORTS::COUNT; ++i) {
             uids[i] = i + offset;
@@ -353,6 +361,14 @@ public:
         }
         return cudnn_frontend_error_t::OK;
     }
+
+    cudnn_frontend_error_t
+    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+        for(auto const& p: names) {
+            port_to_name[static_cast<PORTS>(p.first)] = p.second;
+        }
+        return cudnn_frontend_error_t::OK;
+    }
 };
 
 class reduction_node : public Node {
@@ -405,6 +421,14 @@ public:
         }
         for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
             port_to_name[static_cast<PORTS>(i)] = inputs[i];
+        }
+        return cudnn_frontend_error_t::OK;
+    }
+
+    cudnn_frontend_error_t
+    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+        for(auto const& p: names) {
+            port_to_name[static_cast<PORTS>(p.first)] = p.second;
         }
         return cudnn_frontend_error_t::OK;
     }
