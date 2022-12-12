@@ -36,9 +36,7 @@ public:
         return 0;
     }
 
-    int validate() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionBlock..." << std::endl;
-
+    int infer_properties() override final {
         props.update_uids(offset);
 
         for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
@@ -46,12 +44,21 @@ public:
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
         }
 
+        return 0;
+    }
+    
+    int validate() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionBlock..." << std::endl;
+
+        // TODO: check all properties of this operation and its tensor are correct
+        // Like do dim count match dim/stride
+        // Do dim and corresponding stride match
+
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionBlock." << std::endl;
         return 0;
     }
 
     int createTensors() override final {
-        
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock tensors..." << std::endl;
 
         auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::X));
@@ -163,6 +170,7 @@ public:
 
     int build(cudnnHandle_t& handle) override final {
 
+        infer_properties();
         validate();
         createTensors();
         createDescritpors();

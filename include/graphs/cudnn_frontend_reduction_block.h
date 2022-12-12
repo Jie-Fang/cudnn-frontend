@@ -35,15 +35,18 @@ public:
         return 0;
     }
 
-    int validate() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ReductionBlock..." << std::endl;
-
+    int infer_properties() override final {
         props.update_uids(offset);
         
         for(size_t i = 0; i < reduction_node::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<reduction_node::PORTS>(i)));
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
         }
+        return 0;
+    }
+
+    int validate() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ReductionBlock..." << std::endl;
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ReductionBlock." << std::endl;
         return 0;
@@ -131,6 +134,7 @@ public:
 
     int build(cudnnHandle_t& handle) override final {
 
+        infer_properties();
         validate();
         createTensors();
         createDescritpors();

@@ -83,13 +83,7 @@ public:
         return 0;
     }
 
-    int validate() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionFP8Block..." << std::endl;
-
-        for(auto const& sub_block: sub_blocks) {
-            sub_block.second->validate();
-        }
-        
+    int infer_properties() override final {        
         auto const& conv_block_ptr = std::dynamic_pointer_cast<ConvolutionBlock>(sub_blocks.at("conv_block"));
         auto conv_output_tensor = get_tensor_props(conv_block_ptr->props.port_to_name.at(convolution_node::PORTS::Y));
         conv_output_tensor->set_is_virtual(true);
@@ -101,6 +95,19 @@ public:
         auto const& w_dq_block_ptr = std::dynamic_pointer_cast<PointwiseBlock>(sub_blocks.at("W_DQ_block"));
         auto w_dq_tensor = get_tensor_props(w_dq_block_ptr->props.port_to_name.at(pointwise_node::PORTS::Y));
         w_dq_tensor->set_is_virtual(true);
+
+        for(auto const& sub_block: sub_blocks) {
+            sub_block.second->infer_properties();
+        }
+        return 0;
+    }
+
+    int validate() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionFP8Block..." << std::endl;
+
+        for(auto const& sub_block: sub_blocks) {
+            sub_block.second->validate();
+        }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionFP8Block." << std::endl;
         return 0;
@@ -123,6 +130,7 @@ public:
 
     int build(cudnnHandle_t& handle) override final {
 
+        infer_properties();
         validate();
         createTensors();
         createDescritpors();

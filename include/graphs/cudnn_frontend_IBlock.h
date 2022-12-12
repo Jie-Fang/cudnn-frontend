@@ -41,8 +41,6 @@ protected:
     Type tag;
     
     virtual Type getType() = 0;
-    
-    virtual int validate() = 0;
 
     virtual int partition(cudnnHandle_t& handle) = 0;
 
@@ -77,6 +75,10 @@ public:
 
     IBlock* parent_block;
     std::unordered_map <std::string, std::shared_ptr<IBlock>> sub_blocks;
+    
+    virtual int infer_properties() = 0;
+    
+    virtual int validate() const = 0;
 
     virtual int build(cudnnHandle_t& handle) = 0;
     

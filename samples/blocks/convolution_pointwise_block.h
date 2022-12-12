@@ -59,16 +59,23 @@ public:
         pointwise_block_ptr->set_properties(IBlock_name, properties);
         return 0;
     }
+    
+    int infer_properties() override final {        
+        auto const& conv_block_ptr = std::dynamic_pointer_cast<ConvolutionBlock>(sub_blocks.at("conv_block"));
+        tensor_props.at(conv_block_ptr->props.port_to_name.at(convolution_node::PORTS::Y))->set_is_virtual(true);
 
-    int validate() override final {
+        for(auto const& sub_block: sub_blocks) {
+            sub_block.second->infer_properties();
+        }
+        return 0;
+    }
+
+    int validate() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionPointwiseBlock..." << std::endl;
 
         for(auto const& sub_block: sub_blocks) {
             sub_block.second->validate();
         }
-
-        auto const& conv_block_ptr = std::dynamic_pointer_cast<ConvolutionBlock>(sub_blocks.at("conv_block"));
-        tensor_props.at(conv_block_ptr->props.port_to_name.at(convolution_node::PORTS::Y))->set_is_virtual(true);
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionPointwiseBlock." << std::endl;
         return 0;
@@ -86,7 +93,8 @@ public:
     }
 
     int build(cudnnHandle_t& handle) override final {
-
+        
+        infer_properties();
         validate();
         createTensors();
         createDescritpors();
