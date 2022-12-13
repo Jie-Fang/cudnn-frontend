@@ -14,8 +14,7 @@ target_compile_features(cudnn_frontend INTERFACE cxx_std_11)
 
 add_subdirectory(samples)
 
-# if ( NOT SKIP_EXPORT_PYTHON_BINDINGS )
-if ( EXPORT_PYTHON_BINDINGS )
+if ( NOT SKIP_EXPORT_PYTHON_BINDINGS )
     add_subdirectory(pybind11)
     add_subdirectory(python_bindings)
 endif()
