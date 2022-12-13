@@ -117,7 +117,7 @@ class OperationGraph_v8 : public BackendDescriptor {
     operator=(OperationGraph_v8 const &) = delete;
 
     cudnnHandle_t handle = nullptr;
-    std::array<ManagedOpaqueDescriptor, 20> ops{};
+    std::array<ManagedOpaqueDescriptor, 50> ops{};
     int64_t numOps         = -1;
     std::string opGraphTag = "";
     std::vector<feature_vector_t> feature_vectors;
@@ -186,7 +186,7 @@ class OperationGraphBuilder_v8 {
             return std::move(m_operationGraph);
         }
 
-        std::array<cudnnBackendDescriptor_t, 20> ops_raw{nullptr};
+        std::array<cudnnBackendDescriptor_t, 50> ops_raw{nullptr};
         for (auto i = 0u; i < m_operationGraph.numOps; i++) {
             ops_raw[i] = m_operationGraph.ops[i]->get_backend_descriptor();
         }

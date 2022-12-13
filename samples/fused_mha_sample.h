@@ -78,4 +78,26 @@ run_mha_fprop(int64_t b,
               void* devActualSeqlenK,
               cudnnDataType_t tensorType);
 
+void 
+run_mha_bprop(int64_t b, 
+              int64_t h, 
+              int64_t s_q,
+              int64_t s_kv,
+              int64_t d,
+              MHA_Layout layout,
+              float scaling_factor,
+              float dropout_probability,
+              bool is_causal_masking,
+              void* devPtrQ, 
+              void* devPtrK,   
+              void* devPtrV,   
+              void* devPtrS,
+              void* devPtrdQ, 
+              void* devPtrdK,   
+              void* devPtrdV,   
+              void* devPtrdO,
+              void* devActualSeqlenQ,
+              void* devActualSeqlenK,
+              cudnnDataType_t tensorType);
+
 #endif

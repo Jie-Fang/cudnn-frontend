@@ -2595,4 +2595,120 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
 
     std::cout << "\n========================================================================================\n";
 }
+
+TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
+    std::cout << "TEST_CASE :: MHA Bprop with backend API" << std::endl;
+    INFO("TEST_CASE ::  MHA Bprop with backend API");
+
+    int64_t b = 32;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+
+    MHA_Layout layout = MHA_Layout::QKV_INTERLEAVED; // layout of the tensors Q,K and V
+
+    float scaling_factor = 0.8; // scale value before softmax
+    float dropout_probability = 0.2f; // probability of dropout
+
+    bool is_causal_masking = false; // specify if we need causal masking
+
+    printf("====PARAMETERS====\n");
+    printf("batch is %" PRId64 ", head dim is %" PRId64 ", q sequence length is %" PRId64 ", kv sequence length is %" PRId64 ", hidden dim is %" PRId64 "\n", b, h, s_q, s_kv, d);
+
+    void* devPtrQ = nullptr; // queries
+    void* devPtrK = nullptr; // keys
+    void* devPtrV = nullptr; // values
+
+    void* devPtrdQ = nullptr; // derivative of queries
+    void* devPtrdK = nullptr; // derivative of keys
+    void* devPtrdV = nullptr; // derivative of values
+
+    void* devPtrS = nullptr; // after softmax output from fprop kernel
+    void* devPtrdO = nullptr; // input to the bprop, derivative of output
+
+    int* devActualSeqlenQ = nullptr; // actual seqlen Q
+    int* devActualSeqlenK = nullptr; // actual seqlen K
+
+    int* hostActualSeqlenQ = nullptr;
+    int* hostActualSeqlenK = nullptr;
+
+    // the setup is for the qkv interleaved layout (qkv interleaved assumes s_q = s_kv)
+    int64_t qkvTensorDim[] = {b, s_q, 3, h, d};
+    CUDNN_FRONTEND_UNUSED(qkvTensorDim);
+
+    int64_t qkvSize = b * s_q * 3 * h * d;
+    Surface<half> qkvTensor(qkvSize, false);
+    devPtrQ = (void *)qkvTensor.devPtr; // q points to the top of qkv
+    devPtrK = (void *)(qkvTensor.devPtr + h * d); // k is at an offset of h * d
+    devPtrV = (void *)(qkvTensor.devPtr + 2 * h * d); // v is at an offset of 2 * h * d
+
+    int64_t dqkvSize = b * s_q * 3 * h * d;
+    Surface<half> dqkvTensor(dqkvSize, false);
+    devPtrdQ = (void *)dqkvTensor.devPtr; // dq points to the top of dqkv
+    devPtrdK = (void *)(dqkvTensor.devPtr + h * d); // dk is at an offset of h * d
+    devPtrdV = (void *)(dqkvTensor.devPtr + 2 * h * d); // dv is at an offset of 2 * h * d
+
+    // setup S (should be taken from fprop kernel)
+    Surface<half> sTensor(b * h * s_q * s_kv, false);
+    devPtrS = (void *)sTensor.devPtr;
+
+    // setup of actual seqlen Q and seqlen K
+    checkCudaErr(cudaMalloc((void**)&(devActualSeqlenQ), (b) * sizeof(devActualSeqlenQ[0])));
+    hostActualSeqlenQ = (int*) calloc(b, sizeof(hostActualSeqlenQ[0]));
+
+    for (int i = 0; i < b; i++) {
+        hostActualSeqlenQ[i] = 128;
+    }
+    
+    checkCudaErr(cudaMemcpy(devActualSeqlenQ, hostActualSeqlenQ, sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMalloc((void**)&(devActualSeqlenK), (b) * sizeof(devActualSeqlenK[0])));
+    hostActualSeqlenK = (int*) calloc(b, sizeof(hostActualSeqlenK[0]));
+
+    for (int i = 0; i < b; i++) {
+        hostActualSeqlenK[i] = 128;
+    }
+    
+    checkCudaErr(cudaMemcpy(devActualSeqlenK, hostActualSeqlenK, sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    int64_t doSize   = b * s_q * h * d;
+    Surface<half> doTensor(doSize, false);
+    devPtrdO = (void *)doTensor.devPtr;
+
+    run_mha_bprop(b, 
+                h, 
+                s_q,
+                s_kv,
+                d,
+                layout,
+                scaling_factor,
+                dropout_probability,
+                is_causal_masking,
+                devPtrQ, 
+                devPtrK,   
+                devPtrV,   
+                devPtrS,
+                devPtrdQ, 
+                devPtrdK,   
+                devPtrdV,   
+                devPtrdO,
+                devActualSeqlenQ,
+                devActualSeqlenK,
+                CUDNN_DATA_HALF);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(dqkvTensor.hostPtr, dqkvTensor.devPtr, sizeof(dqkvTensor.hostPtr[0]) * dqkvSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    if (devActualSeqlenQ) cudaFree(devActualSeqlenQ);
+    if (hostActualSeqlenQ) free(hostActualSeqlenQ);
+
+    if (devActualSeqlenK) cudaFree(devActualSeqlenK);
+    if (hostActualSeqlenK) free(hostActualSeqlenK);
+
+    std::cout << "\n========================================================================================\n";
+}
 #endif
