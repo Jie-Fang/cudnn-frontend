@@ -347,7 +347,7 @@ createBMM1(int64_t b,
 
     ops.push_back(std::move(matmul_op1));
 
-    return std::move(pTensor);
+    return pTensor;
 }
 
 static cudnn_frontend::Tensor
@@ -383,7 +383,7 @@ createBias(int64_t b,
 
     ops.push_back(std::move(bias_op));
 
-    return std::move(afterBiasTensor);
+    return afterBiasTensor;
 }
 
 static cudnn_frontend::Tensor
@@ -508,7 +508,7 @@ createMask(int64_t b,
     if (is_causal_masking) ops.push_back(std::move(causalMaskAnd_op));
     ops.push_back(std::move(mask_op));
 
-    return std::move(maskOutputTensor);
+    return maskOutputTensor;
 }
 
 static cudnn_frontend::Tensor
@@ -601,7 +601,7 @@ createSoftmaxForward(int64_t b,
     ops.push_back(std::move(reductionAdd_op));
     ops.push_back(std::move(division_op));
 
-    return std::move(afterDivisionTensor);
+    return afterDivisionTensor;
 }
 
 static cudnn_frontend::Tensor
@@ -668,7 +668,7 @@ createDropout(int64_t b,
     ops.push_back(std::move(maskMul_op));
     ops.push_back(std::move(scaleMul_op));
 
-    return std::move(afterScaleTensor);
+    return afterScaleTensor;
 }
 
 static void
@@ -797,7 +797,7 @@ createSoftmaxBackward(int64_t b,
     ops.push_back(std::move(mul_2_op));
     ops.push_back(std::move(mul_3_op));
 
-    return std::move(dxTensor);
+    return dxTensor;
 }
 
 void 
