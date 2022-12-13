@@ -55,11 +55,11 @@ public:
         }
 
         if (tensor.is_stride_set == false) {
-            tensor.generateStrides(ctx.get_layout() == cuDNNFEContext::Layout::ChannelFirst ? CUDNN_TENSOR_NHWC : CUDNN_TENSOR_NCHW);
+            tensor.generateStrides(ctx.get_layout() == cuDNNFEContext::Layout::ChannelFirst ? CUDNN_TENSOR_NCHW : CUDNN_TENSOR_NHWC);
         }
 
         if (tensor.is_data_type_set == false) {
-            tensor.set_data_type(tensor.get_is_virtual() ? ctx.get_tensor_data_type() : ctx.get_intermediate_data_type());
+            tensor.set_data_type(tensor.get_is_virtual() ? ctx.get_intermediate_data_type() :  ctx.get_tensor_data_type());
         }
 
         return cudnn_frontend_error_t::OK;
@@ -202,21 +202,23 @@ public:
 
     cudnn_frontend_error_t
     build() {
-        // for (auto &node : conv_nodes) {
-            // getLogger() << "Adding the conv block" << node.first << std::endl;
-            // auto conv_block = std::make_shared<ConvolutionBlock>(uid_offset);
-            // // sub_blocks[conv_block->props.name_] = conv_block;
+        cudnnHandle_t handle_;
+        cudnnCreate(&handle_);
+        for (auto &node : conv_nodes) {
+            getLogger() << "Adding the conv block" << node.first << std::endl;
+            auto conv_block = std::make_shared<ConvolutionBlock>(node.first, uid_offset);
+            conv_block->props = node.second;
+            conv_block->add_tensor(node.second.port_to_name.at(convolution_node::PORTS::X), all_tensors.at(node.second.port_to_name.at(convolution_node::PORTS::X)));
+            conv_block->add_tensor(node.second.port_to_name.at(convolution_node::PORTS::W), all_tensors.at(node.second.port_to_name.at(convolution_node::PORTS::W)));
+            conv_block->add_tensor(node.second.port_to_name.at(convolution_node::PORTS::Y), all_tensors.at(node.second.port_to_name.at(convolution_node::PORTS::Y)));
+            getLogger() << "Conv block has " << conv_block->tensor_props.size() << " tensors [" ;
+            getLogger() << node.second.port_to_name.at(convolution_node::PORTS::X) << ",";
+            getLogger() << node.second.port_to_name.at(convolution_node::PORTS::W) << ",";
+            getLogger() << node.second.port_to_name.at(convolution_node::PORTS::Y) << "]" << std::endl;
 
-            // conv_block->props = node.second;
-
-            // conv_block->tensor_props[convolution_node::PORTS::X] = 
-            //                 all_tensors[conv_block->props.port_to_name[convolution_node::PORTS::X]];
-            // conv_block->tensor_props[convolution_node::PORTS::W] = 
-            //                 all_tensors[conv_block->props.port_to_name[convolution_node::PORTS::W]];
-            // conv_block->tensor_props[convolution_node::PORTS::Y] = 
-            //                 all_tensors[conv_block->props.port_to_name[convolution_node::PORTS::Y]];                     
-            // uid_offset += 100;
-        // }
+            conv_block->build(handle_);
+            uid_offset += 100;
+        }
 
         return cudnn_frontend_error_t::OK;
     }

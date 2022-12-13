@@ -19,7 +19,8 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("add_node", static_cast<cudnn_frontend_error_t (Graph::*)(pointwise_node const &)>(&Graph::add_node))
     .def("infer_shapes", &Graph::infer_shapes)
     .def("is_valid_tensor", &Graph::is_valid_tensor)
-    .def("tensor_at", &Graph::tensor_at)
+    .def("tensor_at", &Graph::tensor_at, py::return_value_policy::reference)
+    .def("build", &Graph::build)
     ;  
   // define all classes
   py::class_<tensor_properties>(m, "tensor_properties")
@@ -78,7 +79,7 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
   py::class_<pointwise_node> pointwise_node(m, "pointwise_node");
   pointwise_node.def(py::init<std::string const &>())
     .def("get_mode", &pointwise_node::get_mode)
-    .def("set_mode", &pointwise_node::set_mode)
+    .def("set_mode", static_cast<int (pointwise_node::*)(std::string)>(&pointwise_node::set_mode))
     .def("get_tensor_data_type",  &Node::get_tensor_data_type)
     .def("set_tensor_data_type",  &Node::set_tensor_data_type)
     .def("get_compute_type",      &Node::get_compute_type)

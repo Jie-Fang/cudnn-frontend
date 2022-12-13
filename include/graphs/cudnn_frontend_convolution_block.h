@@ -59,6 +59,7 @@ public:
     }
 
     int createTensors() override final {
+
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock tensors..." << std::endl;
 
         auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::X));
@@ -136,8 +137,6 @@ public:
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
                                         .build();
-        
-    
         operations.emplace("conv", std::make_shared<Operation>(std::move(convolution_operation)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionBlock operation." << std::endl;
@@ -171,6 +170,7 @@ public:
     int build(cudnnHandle_t& handle) override final {
 
         infer_properties();
+        // props.update_uids(offset);
         validate();
         createTensors();
         createDescritpors();

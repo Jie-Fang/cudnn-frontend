@@ -265,9 +265,12 @@ public:
         if (return_value != cudnn_frontend_error_t::OK) {
             return return_value;
         }
+        getLogger() << "conv node " << name << " has inputs: [";
         for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
             port_to_name[static_cast<PORTS>(i)] = inputs[i];
+            getLogger() << port_to_name[static_cast<PORTS>(i)] << ",";
         }
+        getLogger() << "]" << std::endl;
         return cudnn_frontend_error_t::OK;
 
     }
@@ -362,12 +365,20 @@ public:
         return mode;
     }
 
+
     int
     set_mode(cudnnPointwiseMode_t value) {
         mode = value;
         is_mode_set = true;
         return 0;
-    }   
+    }
+
+    int
+    set_mode(std::string value) {
+        mode = string_to_pointwise_mode(value);
+        is_mode_set = true;
+        return 0;
+    }
 
     cudnn_frontend_error_t
     set_inputs(std::vector<std::string> const & value) override final {
