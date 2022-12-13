@@ -65,7 +65,7 @@ build:cudnn_8.5_clang:
     extends: .build:template
     
 build:cudnn_8.6:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0.64_cudnn_8.6.0.169
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.6.0.163
     stage: build
     parallel:
         matrix:
@@ -128,7 +128,7 @@ test:cudnn_8.5:
     extends: .test:template
     
 .test:cudnn_8.6:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0.64_cudnn_8.6.0.169
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.6.0.163
     stage: test
     extends: .test:template
     
