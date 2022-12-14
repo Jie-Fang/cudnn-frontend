@@ -62,6 +62,8 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock tensors..." << std::endl;
 
+        getLogger() << "X: " << props.port_to_name.at(convolution_node::PORTS::X);
+
         auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::X));
         size_t const dim_count = x_tensor->get_stride().size();
         auto input  = cudnn_frontend::TensorBuilder()
@@ -170,7 +172,6 @@ public:
     int build(cudnnHandle_t& handle) override final {
 
         infer_properties();
-        // props.update_uids(offset);
         validate();
         createTensors();
         createDescritpors();

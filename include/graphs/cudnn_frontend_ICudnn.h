@@ -85,6 +85,12 @@ protected:
 
         return 0; 
     }
+
+    public:
+    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> const &
+    get_operations() {
+        return operations;
+    }
 };
 
 } // namespace cudnn_frontend

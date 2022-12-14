@@ -105,4 +105,69 @@ public:
     }
 };
 
+class CompositeBlock : public IBlock {
+
+protected:
+    Type
+    getType() override {
+        return Type::BLOCK;
+    }
+
+    int partition(cudnnHandle_t& handle) override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Partioning CompositeBlock..." << std::endl;
+
+        std::vector<Operation const*> operation_graph{};
+
+        for (auto block : sub_blocks) {
+            getLogger() << "Getting the operation from " << block.first << std::endl;
+            for (auto &operation : block.second->get_operations()) {
+                operation_graph.push_back(operation.second.get());
+            }
+        }
+
+        getLogger() << "Operation Graph has " << operation_graph.size() << " operations." << std::endl;
+
+        auto composite_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
+        operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(composite_graph)));
+
+        int status = createExecutionPlan(handle);
+        if(status) {
+            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
+            return status;
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeBlock." << std::endl;
+        return 0;
+    }
+
+public:
+    int infer_properties() override {
+        for(auto const& sub_block: sub_blocks) {
+            sub_block.second->infer_properties();
+        }
+        return 0;
+    }
+
+    int validate() const override {return 0;}
+
+    int build(cudnnHandle_t& handle) override {
+        infer_properties();
+        createTensors();
+        createDescritpors();
+        createOperations();
+        partition(handle);
+        return 0;
+    }
+
+    int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override {
+        (void)handle;
+        (void)tensor_uid_to_pointer_map;
+        return 0;
+    }
+
+    CompositeBlock(std::string const& name, int64_t const offset) : IBlock(name, offset) {}
+
+    ~CompositeBlock() {};
+};
+
 } // namespace cudnn_frontend

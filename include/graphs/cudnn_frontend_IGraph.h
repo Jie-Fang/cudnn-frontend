@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cudnn_frontend_context.h"
+#include "graphs/cudnn_frontend_pointwise_block.h"
 
 namespace cudnn_frontend {
 
@@ -8,7 +9,7 @@ namespace cudnn_frontend {
 
 class IGraph : public graph_properties {
 protected:
-    std::unordered_map<std::string, tensor_properties> all_tensors;
+    std::unordered_map<std::string, std::shared_ptr<tensor_properties>> all_tensors;
     std::unordered_map<std::string, convolution_node>  conv_nodes;
     std::unordered_map<std::string, pointwise_node>    pointwise_nodes;
     
@@ -25,6 +26,8 @@ protected:
     cuDNNFEContext ctx;
     int64_t uid_offset = 1;
 
+    CompositeBlock block{"composite_block", 1};
+
 public:
 
     Graph(std::string const &name, cuDNNFEContext const &ctx_) : IGraph(name), ctx(ctx_) {}
@@ -39,27 +42,27 @@ public:
 
     tensor_properties &
     tensor_at(std::string const& name) {
-        return all_tensors.at(name);
+        return *(all_tensors.at(name));
     }
 
     cudnn_frontend_error_t
     add_tensor(tensor_properties const &props) {
         
         std::string name = props.get_name();
-        all_tensors.insert(std::pair<std::string, tensor_properties>(name, props));
+        all_tensors.emplace(name, std::make_shared<tensor_properties>(props));
 
         auto &tensor = all_tensors.at(name);
 
-        if (tensor.is_dim_set == false) {
+        if (tensor->is_dim_set == false) {
             return cudnn_frontend_error_t::TENSOR_DIMENSIONS_NOT_SET;
         }
 
-        if (tensor.is_stride_set == false) {
-            tensor.generateStrides(ctx.get_layout() == cuDNNFEContext::Layout::ChannelFirst ? CUDNN_TENSOR_NCHW : CUDNN_TENSOR_NHWC);
+        if (tensor->is_stride_set == false) {
+            tensor->generateStrides(ctx.get_layout() == cuDNNFEContext::Layout::ChannelFirst ? CUDNN_TENSOR_NCHW : CUDNN_TENSOR_NHWC);
         }
 
-        if (tensor.is_data_type_set == false) {
-            tensor.set_data_type(tensor.get_is_virtual() ? ctx.get_intermediate_data_type() :  ctx.get_tensor_data_type());
+        if (tensor->is_data_type_set == false) {
+            tensor->set_data_type(tensor->get_is_virtual() ? ctx.get_intermediate_data_type() :  ctx.get_tensor_data_type());
         }
 
         return cudnn_frontend_error_t::OK;
@@ -85,7 +88,7 @@ public:
             node.set_tensor_data_type(ctx.get_intermediate_data_type());
         }
 
-        all_tensors.insert(std::make_pair(name + "::Y", tensor_properties{name + "::Y"}));
+        all_tensors.emplace(name + "::Y", std::make_shared<tensor_properties>(tensor_properties{name + "::Y"}));
 
         return cudnn_frontend_error_t::OK;
     }
@@ -114,7 +117,7 @@ public:
             node.set_stride(ctx.get_spatial_dims() == 2 ? std::vector<int64_t>{1, 1} : std::vector<int64_t>{1, 1, 1});
         }
 
-        all_tensors.insert(std::make_pair(name + "::Y", tensor_properties{name + "::Y"}));
+        all_tensors.emplace(name + "::Y", std::make_shared<tensor_properties>(tensor_properties{name + "::Y"}));
 
         return cudnn_frontend_error_t::OK;
     }
@@ -124,7 +127,7 @@ public:
         std::unordered_map<std::string, bool>   visited_nodes;
         std::unordered_map<std::string, bool>   visited_tensors;
         std::unordered_map<std::string, Node const*> all_nodes;
-        std::unordered_map<std::string, Node const*> entrance_nodes;
+        std::vector<std::pair<std::string, Node const*>> entrance_nodes;
 
         getLogger() << "Available tensors are [";
         for (auto &tensor : all_tensors) {
@@ -148,7 +151,7 @@ public:
         }
 
         auto find_entrance_nodes = [&all_nodes, &entrance_nodes, &visited_tensors, &visited_nodes] () {
-            for (auto &node : all_nodes) {
+            for (auto node : all_nodes) {
                 if (visited_nodes.at(node.first) == false) {
                     bool is_entrance_node = 
                         std::all_of(std::begin(node.second->get_inputs()),
@@ -157,8 +160,8 @@ public:
                                         return visited_tensors.at(input) == true;
                                     } );
                     if (is_entrance_node) {
-                        entrance_nodes[node.first] = node.second;
                         getLogger() << "Added " << node.first << " to entrance nodes." << std::endl;
+                        entrance_nodes.push_back(std::pair<std::string, Node const*>(node.first, node.second));
                     }
                 }
             }
@@ -167,7 +170,8 @@ public:
         find_entrance_nodes();
 
         while (entrance_nodes.size()) {
-            Node const *node = entrance_nodes.begin()->second;
+            auto it = entrance_nodes.begin();
+            Node const *node = it->second;
             visited_nodes.at(node->get_name()) = true;
 
             switch (node->get_node_type()) {
@@ -177,10 +181,10 @@ public:
                     auto &inputs = node->get_inputs();
                     // TODO: Compute output size correctly. Right now just
                     // Copying the input tensor sizes
-                    tensor.set_data_type(all_tensors.at(inputs[0]).get_data_type());
-                    tensor.set_dim(all_tensors.at(inputs[0]).get_dim());
-                    tensor.set_stride(all_tensors.at(inputs[0]).get_stride());
-                    visited_tensors[tensor.get_name()] = true;
+                    tensor->set_data_type(all_tensors.at(inputs[0])->get_data_type());
+                    tensor->set_dim(all_tensors.at(inputs[0])->get_dim());
+                    tensor->set_stride(all_tensors.at(inputs[0])->get_stride());
+                    visited_tensors[tensor->get_name()] = true;
                     find_entrance_nodes();
                     entrance_nodes.erase(entrance_nodes.begin());
                     continue;
@@ -204,25 +208,30 @@ public:
     build() {
         cudnnHandle_t handle_;
         cudnnCreate(&handle_);
+
+        block.tensor_props = all_tensors;
         for (auto &node : conv_nodes) {
             getLogger() << "Adding the conv block" << node.first << std::endl;
             auto conv_block = std::make_shared<ConvolutionBlock>(node.first, uid_offset);
             conv_block->props = node.second;
-            conv_block->add_tensor(node.second.port_to_name.at(convolution_node::PORTS::X), all_tensors.at(node.second.port_to_name.at(convolution_node::PORTS::X)));
-            conv_block->add_tensor(node.second.port_to_name.at(convolution_node::PORTS::W), all_tensors.at(node.second.port_to_name.at(convolution_node::PORTS::W)));
-            conv_block->add_tensor(node.second.port_to_name.at(convolution_node::PORTS::Y), all_tensors.at(node.second.port_to_name.at(convolution_node::PORTS::Y)));
-            getLogger() << "Conv block has " << conv_block->tensor_props.size() << " tensors [" ;
-            getLogger() << node.second.port_to_name.at(convolution_node::PORTS::X) << ",";
-            getLogger() << node.second.port_to_name.at(convolution_node::PORTS::W) << ",";
-            getLogger() << node.second.port_to_name.at(convolution_node::PORTS::Y) << "]" << std::endl;
-
-            conv_block->build(handle_);
+            conv_block->parent_block = &block;
+            block.sub_blocks[node.first] = conv_block;
             uid_offset += 100;
         }
 
+        for (auto &node : pointwise_nodes) {
+            getLogger() << "Adding the pointwise block" << node.first << std::endl;
+            auto pointwise_block = std::make_shared<PointwiseBlock>(node.first, uid_offset);
+            pointwise_block->props = node.second;
+            pointwise_block->parent_block = &block;
+            block.sub_blocks[node.first] = pointwise_block;
+            uid_offset += 100;
+        }
+
+        block.build(handle_);
+
         return cudnn_frontend_error_t::OK;
     }
-
 
     ~Graph() = default;
 };

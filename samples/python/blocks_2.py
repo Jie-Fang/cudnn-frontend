@@ -32,6 +32,8 @@ pw0= fe.pointwise_node("pw0")
 pw0.set_inputs(["conv0::Y", "tensor2"])
 pw0.set_mode("Add")
 
+graph.add_node(pw0)
+
 graph.tensor_at("conv0::Y").set_is_virtual(True)
 
 graph.infer_shapes()
