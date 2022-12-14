@@ -176,16 +176,14 @@ protected:
     cudnnDataType_t tensor_data_type;
     cudnnDataType_t compute_type;
 
-    std::vector<std::string> inputs = {};
     Type node_type;
-    size_t input_port_count = 1;
 public:
 
     bool is_tensor_data_type_set = false;
     bool is_compute_type_set = false;
     bool is_input_set = false;
 
-    Node(const std::string name, Type t, int port_count) : graph_properties(name), node_type(t), input_port_count(port_count) {}
+    Node(const std::string name, Type t) : graph_properties(name), node_type(t) {}
 
     Type
     get_node_type() const {
@@ -216,20 +214,9 @@ public:
         return 0;
     }
 
-    virtual cudnn_frontend_error_t
-    set_inputs(std::vector<std::string> const & value) {
-        if (value.size() != input_port_count) {
-            return cudnn_frontend_error_t::INPUT_PORT_COUNT_MISMATCH;
-        }
-        inputs = value;
-        is_input_set = true;
-        return cudnn_frontend_error_t::OK;
-    } 
+    virtual std::vector<std::string>
+    get_inputs() const = 0;
 
-    std::vector<std::string> const &
-    get_inputs() const {
-        return inputs;
-    } 
 };
 
 class convolution_node : public Node {
@@ -253,34 +240,23 @@ public:
 
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    convolution_node(const std::string name) : Node(name, Type::Convolution , 2) {
+    convolution_node(const std::string name) : Node(name, Type::Convolution) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
     cudnn_frontend_error_t
-    set_inputs(std::vector<std::string> const & value) override final {
-        auto return_value = parent_class::set_inputs(value);
-        if (return_value != cudnn_frontend_error_t::OK) {
-            return return_value;
-        }
-        getLogger() << "conv node " << name << " has inputs: [";
-        for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
-            port_to_name[static_cast<PORTS>(i)] = inputs[i];
-            getLogger() << port_to_name[static_cast<PORTS>(i)] << ",";
-        }
-        getLogger() << "]" << std::endl;
-        return cudnn_frontend_error_t::OK;
-
-    }
-
-    cudnn_frontend_error_t
     set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
-            port_to_name[static_cast<PORTS>(p.first)] = p.second;
+            port_to_name[p.first] = p.second;
         }
         return cudnn_frontend_error_t::OK;
+    }
+
+    std::string
+    get_port_name(PORTS port) const {
+        return port_to_name.at(port);
     }
 
     int update_uids(int64_t offset) {
@@ -325,7 +301,12 @@ public:
         is_dilation_set = true;
         return 0;
     }
- 
+
+    std::vector<std::string>
+    get_inputs() const override {
+        return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
+    }
+
 };
 
 class pointwise_node : public Node {
@@ -346,7 +327,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    pointwise_node(const std::string name) : Node(name, Type::Pointwise, 2) {
+    pointwise_node(const std::string name) : Node(name, Type::Pointwise) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::B] = name + "::B";
         port_to_name[PORTS::Y] = name + "::Y";
@@ -381,23 +362,21 @@ public:
     }
 
     cudnn_frontend_error_t
-    set_inputs(std::vector<std::string> const & value) override final {
-        auto return_value = parent_class::set_inputs(value);
-        if (return_value != cudnn_frontend_error_t::OK) {
-            return return_value;
-        }
-        for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
-            port_to_name[static_cast<PORTS>(i)] = inputs[i];
+    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
         }
         return cudnn_frontend_error_t::OK;
     }
 
-    cudnn_frontend_error_t
-    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
-        for(auto const& p: names) {
-            port_to_name[static_cast<PORTS>(p.first)] = p.second;
-        }
-        return cudnn_frontend_error_t::OK;
+    std::string
+    get_port_name(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    std::vector<std::string>
+    get_inputs() const override {
+        return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::B)};
     }
 };
 
@@ -419,7 +398,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    reduction_node(const std::string name) : Node(name, Type::Reduction, 1) {
+    reduction_node(const std::string name) : Node(name, Type::Reduction) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Y] = name + "::Y";
     }
@@ -443,24 +422,22 @@ public:
         return 0;
     }
 
-    cudnn_frontend_error_t
-    set_inputs(std::vector<std::string> const & value) override final {
-        auto return_value = parent_class::set_inputs(value);
-        if (return_value != cudnn_frontend_error_t::OK) {
-            return return_value;
-        }
-        for (size_t i = PORTS::X; i < parent_class::input_port_count; i++) {
-            port_to_name[static_cast<PORTS>(i)] = inputs[i];
-        }
-        return cudnn_frontend_error_t::OK;
+    std::vector<std::string>
+    get_inputs() const override {
+        return{port_to_name.at(PORTS::X)};
     }
 
     cudnn_frontend_error_t
     set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
-            port_to_name[static_cast<PORTS>(p.first)] = p.second;
+            port_to_name[p.first] = p.second;
         }
         return cudnn_frontend_error_t::OK;
+    }
+
+    std::string
+    get_port_name(PORTS port) const {
+        return port_to_name.at(port);
     }
 };
 

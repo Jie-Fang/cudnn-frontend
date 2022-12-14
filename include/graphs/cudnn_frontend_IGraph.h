@@ -153,12 +153,12 @@ public:
         auto find_entrance_nodes = [&all_nodes, &entrance_nodes, &visited_tensors, &visited_nodes] () {
             for (auto node : all_nodes) {
                 if (visited_nodes.at(node.first) == false) {
+                    auto is_visited = [&visited_tensors](std::string input) -> bool {return visited_tensors.at(input) == true;};
+                    auto inputs = node.second->get_inputs();
                     bool is_entrance_node = 
-                        std::all_of(std::begin(node.second->get_inputs()),
-                                    std::end(node.second->get_inputs()),
-                                    [&visited_tensors] (auto input) {
-                                        return visited_tensors.at(input) == true;
-                                    } );
+                        std::all_of(std::begin(inputs),
+                                    std::end(inputs),
+                                    is_visited );
                     if (is_entrance_node) {
                         getLogger() << "Added " << node.first << " to entrance nodes." << std::endl;
                         entrance_nodes.push_back(std::pair<std::string, Node const*>(node.first, node.second));
@@ -175,15 +175,30 @@ public:
             visited_nodes.at(node->get_name()) = true;
 
             switch (node->get_node_type()) {
-                case Node::Type::Pointwise: 
-                case Node::Type::Convolution: {
-                    auto &tensor = all_tensors.at(node->get_name() + "::Y");
-                    auto &inputs = node->get_inputs();
+                case Node::Type::Pointwise:{
+                    pointwise_node const *pw_node = dynamic_cast<pointwise_node const *>(node);
+                    auto &tensor = all_tensors.at(pw_node->get_port_name(pointwise_node::PORTS::Y));
+                    auto &input_x_tensor = all_tensors.at(pw_node->get_port_name(pointwise_node::PORTS::X));
                     // TODO: Compute output size correctly. Right now just
                     // Copying the input tensor sizes
-                    tensor->set_data_type(all_tensors.at(inputs[0])->get_data_type());
-                    tensor->set_dim(all_tensors.at(inputs[0])->get_dim());
-                    tensor->set_stride(all_tensors.at(inputs[0])->get_stride());
+                    tensor->set_data_type(input_x_tensor->get_data_type());
+                    tensor->set_dim(input_x_tensor->get_dim());
+                    tensor->set_stride(input_x_tensor->get_stride());
+                    visited_tensors[tensor->get_name()] = true;
+                    find_entrance_nodes();
+                    entrance_nodes.erase(entrance_nodes.begin());
+                    continue;
+                }
+                break;
+                case Node::Type::Convolution: {
+                    convolution_node const *conv_node = dynamic_cast<convolution_node const *>(node);
+                    auto &tensor = all_tensors.at(conv_node->get_port_name(convolution_node::PORTS::Y));
+                    auto &input_x_tensor = all_tensors.at(conv_node->get_port_name(convolution_node::PORTS::X));
+                    // TODO: Compute output size correctly. Right now just
+                    // Copying the input tensor sizes
+                    tensor->set_data_type(input_x_tensor->get_data_type());
+                    tensor->set_dim(input_x_tensor->get_dim());
+                    tensor->set_stride(input_x_tensor->get_stride());
                     visited_tensors[tensor->get_name()] = true;
                     find_entrance_nodes();
                     entrance_nodes.erase(entrance_nodes.begin());
@@ -211,7 +226,7 @@ public:
 
         block.tensor_props = all_tensors;
         for (auto &node : conv_nodes) {
-            getLogger() << "Adding the conv block" << node.first << std::endl;
+            getLogger() << "Adding the conv block " << node.first << std::endl;
             auto conv_block = std::make_shared<ConvolutionBlock>(node.first, uid_offset);
             conv_block->props = node.second;
             conv_block->parent_block = &block;

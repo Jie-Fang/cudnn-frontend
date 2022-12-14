@@ -66,8 +66,9 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_tensor_data_type", &Node::set_tensor_data_type)
     .def("get_compute_type",     &Node::get_compute_type)
     .def("set_compute_type",     &Node::set_compute_type)
-    .def("get_inputs",           &Node::get_inputs)
-    .def("set_inputs",           &convolution_node::set_inputs);
+    .def("get_port_name",       &convolution_node::get_port_name)
+    .def("set_port_names",       &convolution_node::set_port_names)
+    ;
 
   py::enum_<convolution_node::PORTS>(m, "convolution_ports")
         .value("X", convolution_node::PORTS::X)
@@ -84,8 +85,9 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_tensor_data_type",  &Node::set_tensor_data_type)
     .def("get_compute_type",      &Node::get_compute_type)
     .def("set_compute_type",      &Node::set_compute_type)
-    .def("get_inputs",            &Node::get_inputs)
-    .def("set_inputs",            &pointwise_node::set_inputs);
+    .def("get_port_name",       &pointwise_node::get_port_name)
+    .def("set_port_names",       &pointwise_node::set_port_names)
+    ;
 
 
   py::enum_<pointwise_node::PORTS>(m, "pointwise_ports")
@@ -112,8 +114,9 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("set_mode", &reduction_node::set_mode)
     .def("get_tensor_data_type",  &reduction_node::get_tensor_data_type)
     .def("set_tensor_data_type",  &reduction_node::set_tensor_data_type)
-    .def("get_compute_type", &reduction_node::get_compute_type)
-    .def("set_compute_type", &reduction_node::set_compute_type);
+    .def("get_port_name",       &reduction_node::get_port_name)
+    .def("set_port_names",       &reduction_node::set_port_names)
+    ;
 
 
   py::enum_<reduction_node::PORTS>(m, "reduction_ports")
