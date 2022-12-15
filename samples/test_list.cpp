@@ -2595,7 +2595,9 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
 
     std::cout << "\n========================================================================================\n";
 }
+#endif
 
+#if (CUDNN_VERSION >= 8800)
 TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     std::cout << "TEST_CASE :: MHA Bprop with backend API" << std::endl;
     INFO("TEST_CASE ::  MHA Bprop with backend API");
