@@ -23,6 +23,7 @@
 #include <graphs/cudnn_frontend_convolution_block.h>
 #include <graphs/cudnn_frontend_pointwise_block.h>
 #include <graphs/cudnn_frontend_reduction_block.h>
+#include <graphs/cudnn_frontend_matmul_block.h>
 
 #include "convolution_fp8_block.h"
 #include "convolution_pointwise_block.h"
@@ -30,6 +31,50 @@
 #include "convolutions.h"
 
 #include "../helpers.h"
+
+void
+run_matmul_block() {
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+
+    cudnn_frontend::MatMulBlock matmul_block{"matmul_block"};
+    
+    cudnn_frontend::matmul_node props{"matmul_prop"};
+    props.set_tensor_data_type(CUDNN_DATA_HALF);
+    props.set_compute_type(CUDNN_DATA_FLOAT);
+    props.set_port_names({
+        {cudnn_frontend::matmul_node::PORTS::X, "tensor0"} 
+        , {cudnn_frontend::matmul_node::PORTS::W, "tensor1"}
+        , {cudnn_frontend::matmul_node::PORTS::Y, "tensor2"}
+    });
+    matmul_block.set_properties("matmul_block", props);
+
+    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    tensor0.set_dim({32, 32, 16});
+    matmul_block.add_tensor("tensor0", tensor0);
+
+    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    tensor1.set_dim({32, 16, 32});
+    matmul_block.add_tensor("tensor1", tensor1);
+
+    cudnn_frontend::tensor_properties tensor2{"tensor2"};
+    tensor2.set_dim({32, 32, 32});
+    matmul_block.add_tensor("tensor2", tensor2);
+
+    matmul_block.build(handle);
+
+    Surface<half> x_tensor(matmul_block.tensor_props.at("tensor0")->get_tensor_size(), false);
+    Surface<half> w_tensor(matmul_block.tensor_props.at("tensor1")->get_tensor_size(), false);
+    Surface<half> y_tensor(matmul_block.tensor_props.at("tensor2")->get_tensor_size(), false);
+
+    std::unordered_map<std::string, void*> variant_pack = {
+        {"tensor0", x_tensor.devPtr}
+        , {"tensor1", w_tensor.devPtr}
+        , {"tensor2", y_tensor.devPtr}
+    };
+    matmul_block.execute(handle, variant_pack);
+}
+
 
 void
 run_convolution_block() {

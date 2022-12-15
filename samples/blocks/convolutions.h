@@ -30,6 +30,9 @@ void
 run_reduction_block();
 
 void
+run_matmul_block();
+
+void
 run_convolution_fp8_block();
 
 void

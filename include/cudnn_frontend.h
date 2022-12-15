@@ -117,6 +117,9 @@
 #include "cudnn_frontend_Resample.h"
 
 #include "graphs/cudnn_frontend_convolution_block.h"
+#include "graphs/cudnn_frontend_matmul_block.h"
+#include "graphs/cudnn_frontend_pointwise_block.h"
+#include "graphs/cudnn_frontend_reduction_block.h"
 #include "graphs/cudnn_frontend_context.h"
 #include "graphs/cudnn_frontend_IGraph.h"
 
@@ -128,8 +131,6 @@
 namespace cudnn_frontend {
 using PointWiseDescBuilder      = PointWiseDescBuilder_v8;
 using PointWiseDesc             = PointWiseDesc_v8;
-using MatMulDesc                = MatMulDesc_v8;
-using MatMulDescBuilder         = MatMulDescBuilder_v8;
 using EngineHeuristicsBuilder   = EngineHeuristicsBuilder_v8;
 using EngineHeuristics          = EngineHeuristics_v8;
 using EngineBuilder             = EngineBuilder_v8;

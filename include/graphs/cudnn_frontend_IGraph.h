@@ -207,6 +207,8 @@ public:
                 break;
                 case Node::Type::Reduction: {
                 }
+                case Node::Type::Matmul: {
+                }
                 break;
             }
         }

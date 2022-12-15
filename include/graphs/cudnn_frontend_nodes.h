@@ -163,6 +163,7 @@ class Node : public graph_properties {
 public:
     enum class Type {
         Convolution,
+        Matmul,
         Pointwise,
         Reduction
     };
@@ -307,6 +308,53 @@ public:
         return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
     }
 
+};
+
+class matmul_node : public Node {
+public:
+    enum PORTS {
+        X = 0,
+        W,
+        Y,
+
+        COUNT
+    };
+private:
+    
+public:
+    
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+    matmul_node(const std::string name) : Node(name, Type::Matmul) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::W] = name + "::W";
+        port_to_name[PORTS::Y] = name + "::Y";
+    }
+
+    cudnn_frontend_error_t
+    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
+        }
+        return cudnn_frontend_error_t::OK;
+    }
+
+    std::string
+    get_port_name(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    std::vector<std::string>
+    get_inputs() const override {
+        return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
+    }
 };
 
 class pointwise_node : public Node {

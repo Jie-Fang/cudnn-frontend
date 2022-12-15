@@ -2726,6 +2726,7 @@ TEST_CASE("Primitive Blocks", "[primitive][block]") {
     run_convolution_block();
     run_pointwise_block();
     run_reduction_block();
+    run_matmul_block();
 }
 
 TEST_CASE("FP8 Composite Blocks", "[fp8][composite][block]") {
