@@ -159,9 +159,15 @@ public:
         return 0;
     }
 
-    int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override {
-        (void)handle;
-        (void)tensor_uid_to_pointer_map;
+    int
+    execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_to_pointer_map) override {
+        std::vector<int64_t> uids;
+        std::vector<void *> device_ptrs;
+        for (auto & item : tensor_to_pointer_map) {
+            device_ptrs.push_back(item.second);
+            uids.push_back(tensor_props.at(item.first)->get_uid());
+        }
+        run_execution_plans(handle, device_ptrs, uids);
         return 0;
     }
 

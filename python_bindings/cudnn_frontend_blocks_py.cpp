@@ -1,3 +1,4 @@
+#include <utility>
 
 #include "pybind11/pybind11.h"
 #include "pybind11/cast.h"
@@ -12,6 +13,15 @@ using namespace cudnn_frontend;
 PYBIND11_MODULE(cudnn_frontend_blocks, m)
 {
   
+  auto execute_wrapper = [](Graph * graph, std::unordered_map<std::string, int64_t> var_pack) -> cudnn_frontend_error_t {
+      std::unordered_map<std::string, void *> var_pack_;
+      for (auto item : var_pack) {
+          var_pack_.insert(std::make_pair(item.first, (void *)item.second));
+      }
+      graph->execute(var_pack_);
+      return cudnn_frontend_error_t::OK;
+  };
+
   py::class_<Graph>(m, "Graph")
     .def(py::init<std::string const &, cuDNNFEContext const &>())
     .def("add_tensor", &Graph::add_tensor)
@@ -21,6 +31,7 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("is_valid_tensor", &Graph::is_valid_tensor)
     .def("tensor_at", &Graph::tensor_at, py::return_value_policy::reference)
     .def("build", &Graph::build)
+    .def("execute", execute_wrapper)
     ;  
   // define all classes
   py::class_<tensor_properties>(m, "tensor_properties")
@@ -36,7 +47,8 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("get_is_pass_by_value", &tensor_properties::get_is_pass_by_value)
     .def("set_is_pass_by_value", &tensor_properties::set_is_pass_by_value)
     .def("get_uid", &tensor_properties::get_uid)
-    .def("set_uid", &tensor_properties::set_uid);
+    .def("set_uid", &tensor_properties::set_uid)
+    .def("get_size", &tensor_properties::get_size);
 
   py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
     .def(py::init<>())

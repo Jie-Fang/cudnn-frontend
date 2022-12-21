@@ -250,6 +250,14 @@ public:
         return cudnn_frontend_error_t::OK;
     }
 
+    cudnn_frontend_error_t
+    execute(std::unordered_map<std::string, void *> var_pack) {
+        cudnnHandle_t handle;
+        cudnnCreate(&handle);
+        block.execute(handle, var_pack);
+        return cudnn_frontend_error_t::OK;
+    }
+
     ~Graph() = default;
 };
 

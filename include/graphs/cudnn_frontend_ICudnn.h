@@ -86,11 +86,24 @@ protected:
         return 0; 
     }
 
-    public:
-    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> const &
+public:
+    std::unordered_map<std::string, std::shared_ptr<Operation>> const &
     get_operations() {
         return operations;
     }
+
+    int64_t
+    run_execution_plans(cudnnHandle_t handle, std::vector<void *> device_ptrs, std::vector<int64_t> &uids) {
+        
+        auto variant_pack = VariantPackBuilder()
+                            .setDataPointers(device_ptrs.size(), device_ptrs.data())
+                            .setUids(uids.size(), uids.data())
+                            .build();
+
+        cudnnBackendExecute(handle, execution_plans[0]->get_raw_desc(), variant_pack.get_raw_desc());
+        return 0;
+    }
+
 };
 
 } // namespace cudnn_frontend

@@ -145,7 +145,7 @@ public:
         return 0;
     }
 
-    int64_t const &
+    int64_t
     get_uid() const {
         return uid;
     }
@@ -155,6 +155,13 @@ public:
         uid = value;
         is_uid_set = true;
         return 0;
+    }
+
+    // TODO: put coorect size
+    int64_t
+    get_size() const {
+        auto size = std::accumulate(begin(dim), end(dim), 2 /*sizeof(half)*/, std::multiplies<double>());
+        return size;
     }
 
 };
