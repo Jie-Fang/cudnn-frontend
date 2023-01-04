@@ -1360,7 +1360,7 @@ TEST_CASE("Use Plan cache for rerunning the same convolution", "[frontend][dnn_h
     int64_t filterdimA[]  = {32, 32, 1, 1};
     int64_t outdimA[]     = {0, 0, 0, 0}; // Computed Below
     int64_t padA[]        = {0, 0};
-    int64_t dilationA[] = {1, 1};
+    int64_t dilationA[]   = {1, 1};
     int64_t convstrideA[] = {1, 1};
 
     int numErrors = 0;

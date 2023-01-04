@@ -1934,7 +1934,7 @@ class OperationBuilder_v8 {
 
         /// Padding
         for (auto i = 0; i < max_spatial_dim; i++) {
-            if (i == 0 && is2D) {
+            if (i == max_spatial_dim - 1 && is2D) {
                 m_operation.feature_vector.push_back(0);
             } else {
                 m_operation.feature_vector.push_back(conv_padding[i]);
@@ -1942,7 +1942,7 @@ class OperationBuilder_v8 {
         }
         /// Dilation
         for (auto i = 0; i < max_spatial_dim; i++) {
-            if (i == 0 && is2D) {
+            if (i == max_spatial_dim - 1 && is2D) {
                 m_operation.feature_vector.push_back(0);
             } else {
                 m_operation.feature_vector.push_back(conv_dilation[i]);
@@ -1950,7 +1950,7 @@ class OperationBuilder_v8 {
         }
         /// Strides
         for (auto i = 0; i < max_spatial_dim; i++) {
-            if (i == 0 && is2D) {
+            if (i == max_spatial_dim - 1 && is2D) {
                 m_operation.feature_vector.push_back(0);
             } else {
                 m_operation.feature_vector.push_back(conv_stride[i]);
