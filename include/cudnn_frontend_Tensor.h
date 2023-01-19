@@ -239,6 +239,20 @@ class TensorBuilder_v8 {
         return *this;
     }
 #endif
+
+    auto 
+    setReorderType(std::string type_) -> TensorBuilder_v8 & {
+#if CUDNN_VERSION < 8300
+    CUDNN_FRONTEND_UNUSED(type_);
+    set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_NOT_SUPPORTED, "CUDNN_BACKEND_TENSOR_DESCRIPTOR setReorderType failed");
+    return *this;
+#else
+    cudnnBackendTensorReordering_t reorder_type = CUDNN_TENSOR_REORDERING_NONE;
+    convert_string_to_enum<cudnnBackendTensorReordering_t>(type_, reorder_type);
+    return setReorderType(reorder_type);
+#endif
+    }
+
     /** @} */
 
     // TODO: Deprecate in v1.0

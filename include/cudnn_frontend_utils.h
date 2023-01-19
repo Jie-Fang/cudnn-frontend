@@ -391,6 +391,26 @@ to_string(cudnnRngDistribution_t distribution) {
 }
 #endif
 
+template< typename enum_type>
+static inline void
+convert_string_to_enum(std::string val, enum_type& enum_value);
+
+#if (CUDNN_VERSION >= 8300)
+template <>
+inline void
+convert_string_to_enum(std::string val, cudnnBackendTensorReordering_t& enum_value) {
+    if (val == "CUDNN_TENSOR_REORDERING_NONE") {
+        enum_value = CUDNN_TENSOR_REORDERING_NONE;
+    }  else if (val == "CUDNN_TENSOR_REORDERING_INT8x32") {
+        enum_value = CUDNN_TENSOR_REORDERING_INT8x32;
+#if (CUDNN_VERSION >= 8800)
+    }  else if (val == "CUDNN_TENSOR_REORDERING_F16x16") {
+        enum_value = CUDNN_TENSOR_REORDERING_F16x16;
+#endif
+    }
+}
+#endif
+
 static inline void
 set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
     if (desc != nullptr) {

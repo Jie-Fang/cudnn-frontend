@@ -96,6 +96,7 @@ run_mha_bprop(int64_t b,
               void* devPtrdK,   
               void* devPtrdV,   
               void* devPtrdO,
+              void* devPtrdS,
               void* devActualSeqlenQ,
               void* devActualSeqlenK,
               cudnnDataType_t tensorType);

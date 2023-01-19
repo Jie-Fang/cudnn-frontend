@@ -176,6 +176,8 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor epsilondesc        = nullptr;
     ManagedOpaqueDescriptor expDecayFactordesc = nullptr;
     ManagedOpaqueDescriptor idxdesc            = nullptr;
+    ManagedOpaqueDescriptor offsetdesc         = nullptr;
+    ManagedOpaqueDescriptor seeddesc           = nullptr;
     std::vector<ManagedOpaqueDescriptor> peerStatdescs;
 
     cudnnBackendAttributeType_t alphabetaType = CUDNN_TYPE_FLOAT;
@@ -1626,17 +1628,38 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_YDESC Failed");
             return std::move(m_operation);
         }
-        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+
+#if (CUDNN_VERSION >= 8800)
+        // seed can be a tensor or an int64
+        // if tensor is defined we give it precedence
+        if (m_operation.seeddesc) {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                CUDNN_ATTR_OPERATION_RNG_SEED,
+                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                1,
+                &(m_operation.seeddesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_SEED Failed");
+                return std::move(m_operation);
+            }
+        } else
+#endif
+        {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_RNG_SEED,
                 CUDNN_TYPE_INT64,
                 1,
                 &(m_operation.seed));
-        if (status != CUDNN_STATUS_SUCCESS) {
-            set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_SEED Failed");
-            return std::move(m_operation);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_SEED Failed");
+                return std::move(m_operation);
+            }   
         }
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_RNG_DESC,
@@ -1650,6 +1673,23 @@ class OperationBuilder_v8 {
                     "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_DESC Failed");
             return std::move(m_operation);
         }
+
+#if (CUDNN_VERSION >= 8800)
+        if (m_operation.offsetdesc) {
+            status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
+                    CUDNN_ATTR_OPERATION_RNG_OFFSET_DESC,
+                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                    1,
+                    &(m_operation.offsetdesc->get_backend_descriptor()));
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                        &m_operation,
+                        status,
+                        "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_OFFSET_DESC Failed");
+                return std::move(m_operation);
+            }
+        }
+#endif
 
         status = cudnnBackendFinalize(m_operation.pointer->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {
@@ -2383,6 +2423,18 @@ class OperationBuilder_v8 {
         copy_dims_and_strides(tensor.getDimArray(), idxTensor_dimA);
         copy_dims_and_strides(tensor.getStrideArray(), idxTensor_strA);
         idxType = tensor.getDataType();
+        return *this;
+    }
+
+    auto
+    setSeedDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.seeddesc = tensor.get_desc();
+        return *this;
+    }
+
+    auto
+    setOffsetDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.offsetdesc = tensor.get_desc();
         return *this;
     }
 

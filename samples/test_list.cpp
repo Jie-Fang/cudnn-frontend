@@ -2627,6 +2627,7 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     void* devPtrdV = nullptr; // derivative of values
 
     void* devPtrS = nullptr; // after softmax output from fprop kernel
+    void* devPtrdS = nullptr; // bprop kernel emits this tensor
     void* devPtrdO = nullptr; // input to the bprop, derivative of output
 
     int* devActualSeqlenQ = nullptr; // actual seqlen Q
@@ -2654,6 +2655,10 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     // setup S (should be taken from fprop kernel)
     Surface<half> sTensor(b * h * s_q * s_kv, false);
     devPtrS = (void *)sTensor.devPtr;
+
+    // setup dS (output from bprop kernel)
+    Surface<half> dsTensor(b * h * s_q * s_kv, false);
+    devPtrdS = (void *)dsTensor.devPtr;
 
     // setup of actual seqlen Q and seqlen K
     checkCudaErr(cudaMalloc((void**)&(devActualSeqlenQ), (b) * sizeof(devActualSeqlenQ[0])));
@@ -2697,12 +2702,17 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
                 devPtrdK,   
                 devPtrdV,   
                 devPtrdO,
+                devPtrdS,
                 devActualSeqlenQ,
                 devActualSeqlenK,
                 CUDNN_DATA_HALF);
 
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(dqkvTensor.hostPtr, dqkvTensor.devPtr, sizeof(dqkvTensor.hostPtr[0]) * dqkvSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(dsTensor.hostPtr, dsTensor.devPtr, sizeof(dsTensor.hostPtr[0]) * b * h * s_q * s_kv, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
 
     if (devActualSeqlenQ) cudaFree(devActualSeqlenQ);

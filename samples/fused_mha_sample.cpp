@@ -39,6 +39,7 @@
 #define dV_ID 13
 #define dO_ID 14
 #define MASK_VAL_ID 15
+#define dS_ID 16
 
 #define VIRTUAL_ID 20
 
@@ -46,51 +47,6 @@ static bool
 allowAllConfig(cudnnBackendDescriptor_t engine_config) {
     (void)engine_config;
     return false;
-}
-
-static cudnn_frontend::ExecutionPlan
-get_execplan_from_heuristics(cudnn_frontend::OperationGraph&& opGraph, cudnnHandle_t handle_) {
-#if (CUDNN_VERSION >= 8200)
-    {
-        auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
-                              .setOperationGraph(opGraph)
-                              .setHeurMode(CUDNN_HEUR_MODE_INSTANT)
-                              .build();
-
-        std::cout << "Heuristic has " << heuristics.getEngineConfigCount() << " configurations " << std::endl;
-        auto& engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
-
-        // Try engine configs returned by the heuristics and pick up the first one that works.
-        for (auto& ecfg : engine_config) {
-            try {
-                auto plan = cudnn_frontend::ExecutionPlanBuilder()
-                                .setHandle(handle_)
-                                .setEngineConfig(ecfg, opGraph.getTag())
-                                .build();
-                return plan;
-            } catch (cudnn_frontend::cudnnException& e) {
-                continue;
-            }
-        }
-    }
-#endif
-
-    {
-        cudnn_frontend::EngineConfigList filtered_configs;
-        auto statuses = 
-            cudnn_frontend::get_heuristics_list<1>({
-            "heuristics_fallback"
-            }, opGraph,::allowAllConfig, filtered_configs, true);
-        
-        std::cout << "get_heuristics_list Statuses: ";
-        for (auto status : statuses) {
-            std::cout << cudnn_frontend::to_string(status) << " ";
-        }
-        std::cout << std::endl;
-        std::cout << "Filter config list has " << filtered_configs.size() << " configurations " << std::endl;
-
-        return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
-    }
 }
 
 static cudnn_frontend::Tensor tensor_create(cudnnDataType_t type, int64_t id, int64_t const * dim, 
@@ -223,7 +179,17 @@ run_b2b_batch_gemm(int64_t* q_dim,
                            .setOperationGraph(ops.size(), ops.data())
                            .build();
 
-        auto plan = get_execplan_from_heuristics(std::move(opGraph), handle_);
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = cudnn_frontend::get_heuristics_list<1>({"heuristics_instant"}, opGraph, ::allowAllConfig, filtered_configs, true);
+
+        if (filtered_configs.size() == 0) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_NOT_SUPPORTED,
+                    "run_b2b_batch_gemm: No config returned by the heuristics");
+        }   
+
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -396,11 +362,13 @@ createMask(int64_t b,
            bool is_causal_masking,
            cudnnDataType_t tensorType,
            std::vector<cudnn_frontend::Operation>& ops,
-           cudnn_frontend::Tensor& prevBlockOutputTensor) {
+           cudnn_frontend::Tensor& prevBlockOutputTensor,
+           bool is_bprop) {
 
     CUDNN_FRONTEND_UNUSED(d);
     CUDNN_FRONTEND_UNUSED(layout);
     CUDNN_FRONTEND_UNUSED(tensorType);
+    CUDNN_FRONTEND_UNUSED(is_bprop);
 
     cudnn_frontend::throw_if(ops.size() == 0, "Padding Mask constructed incorrectly as the first one", CUDNN_STATUS_BAD_PARAM);
 
@@ -433,8 +401,32 @@ createMask(int64_t b,
     auto rowGreaterColTensor = tensor_create(CUDNN_DATA_BOOLEAN, VIRTUAL_ID + 105, afterBMM1_dim, afterBMM1_stride, true, false); // is virtual
     // create causal mask (padding && row >= col)
     auto causalMaskTensor = tensor_create(CUDNN_DATA_BOOLEAN, VIRTUAL_ID + 106, afterBMM1_dim, afterBMM1_stride, true, false); // is virtual
+    
     // output after masking
-    auto maskOutputTensor = tensor_create(CUDNN_DATA_FLOAT, VIRTUAL_ID + 107, afterBMM1_dim, afterBMM1_stride, true, false); // is virtual
+    int64_t maskOutputTensor_id = VIRTUAL_ID + 107;
+    int64_t maskOutputTensor_virtual = true;
+    cudnnDataType_t maskOutputTensor_dataType = CUDNN_DATA_FLOAT;
+    std::string maskOutputTensor_reorderType = "CUDNN_TENSOR_REORDERING_NONE";
+
+    if (is_bprop) {
+        maskOutputTensor_id = dS_ID;
+        maskOutputTensor_virtual = false;
+        maskOutputTensor_dataType = tensorType;
+#if (CUDNN_VERSION >= 8800)
+        maskOutputTensor_reorderType = "CUDNN_TENSOR_REORDERING_F16x16";
+#endif
+    }
+
+    auto maskOutputTensor = cudnn_frontend::TensorBuilder()
+            .setDim(4, afterBMM1_dim)
+            .setStride(4, afterBMM1_stride)
+            .setAlignment(16) // 16B alignment is needed to run a tensor core engine
+            .setByValue(false)
+            .setDataType(maskOutputTensor_dataType)
+            .setVirtual(maskOutputTensor_virtual)
+            .setId(maskOutputTensor_id) 
+            .setReorderType(maskOutputTensor_reorderType)
+            .build();
 
     // Define the gen index for row descriptor
     auto genIndexRowDesc = cudnn_frontend::PointWiseDescBuilder()
@@ -544,7 +536,19 @@ createSoftmaxForward(int64_t b,
     // sum (e^(x - max(x)))
     auto afterAddReductionTensor = tensor_create(CUDNN_DATA_FLOAT, VIRTUAL_ID + 153, afterReduction_dim, afterReduction_stride, true, false); // is virtual
     // divide (e/ sum(e))
-    auto afterDivisionTensor = tensor_create(softmaxOutputType, softmaxOutputName, afterBMM1_dim, afterBMM1_stride, softmax_output_virtual, false);
+
+    auto afterDivisionTensor = cudnn_frontend::TensorBuilder()
+            .setDim(4, afterBMM1_dim)
+            .setStride(4, afterBMM1_stride)
+            .setId(softmaxOutputName) 
+            .setAlignment(16) // 16B alignment is needed to run a tensor core engine
+            .setDataType(softmaxOutputType)
+            .setVirtual(softmax_output_virtual)
+            .setByValue(false)
+#if (CUDNN_VERSION >= 8800)
+            .setReorderType("CUDNN_TENSOR_REORDERING_F16x16")
+#endif
+            .build();
 
     // Define the reduction descriptor
     auto reductionMaxDesc = cudnn_frontend::ReductionDescBuilder()
@@ -629,7 +633,18 @@ createDropout(int64_t b,
     // mask for the dropout
     auto dropoutMaskTensor = tensor_create(CUDNN_DATA_FLOAT, VIRTUAL_ID + 200, afterBMM1_dim, afterBMM1_stride, true, false); // is virtual
     // after dropout tensor
-    auto afterDropoutTensor = tensor_create(tensorType, S_ID, afterBMM1_dim, afterBMM1_stride, false, false);
+    auto afterDropoutTensor = cudnn_frontend::TensorBuilder()
+            .setDim(4, afterBMM1_dim)
+            .setStride(4, afterBMM1_stride)
+            .setId(S_ID) 
+            .setAlignment(16) // 16B alignment is needed to run a tensor core engine
+            .setDataType(tensorType)
+            .setVirtual(false)
+            .setByValue(false)
+#if (CUDNN_VERSION >= 8800)
+            .setReorderType("CUDNN_TENSOR_REORDERING_F16x16")
+#endif
+            .build();
     // scale after dropout
     auto scaleDropoutTensor = tensor_create(tensorType, D_CONST_ID, scale_dim, scale_stride, false, true); // is by value
     // after Scale
@@ -840,7 +855,7 @@ run_mha_fprop(int64_t b,
         }
 
         float negInfinity = -1.0E+20; // change this if you have access to float_min
-        auto mask_output = createMask(b, h, s_q, s_kv, d, layout, is_causal_masking, tensorType, ops, bmm1_output);
+        auto mask_output = createMask(b, h, s_q, s_kv, d, layout, is_causal_masking, tensorType, ops, bmm1_output, false);
 
         bool enable_dropout = (dropout_probability != 0.0f);
         cudnn_frontend::throw_if(dropout_probability == 1.0f, "Dropout probability cannot be 1.0", CUDNN_STATUS_BAD_PARAM);
@@ -871,7 +886,17 @@ run_mha_fprop(int64_t b,
                            .build();
 
 
-        auto plan = get_execplan_from_heuristics(std::move(opGraph), handle_);
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = cudnn_frontend::get_heuristics_list<1>({"heuristics_instant"}, opGraph, ::allowAllConfig, filtered_configs, true);
+
+        if (filtered_configs.size() == 0) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_NOT_SUPPORTED,
+                    "run_mha_fprop: No config returned by the heuristics");
+        }   
+
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -951,6 +976,7 @@ run_mha_bprop(int64_t b,
               void* devPtrdK,   
               void* devPtrdV,   
               void* devPtrdO,
+              void* devPtrdS,
               void* devActualSeqlenQ,
               void* devActualSeqlenK,
               cudnnDataType_t tensorType) {
@@ -1009,7 +1035,18 @@ run_mha_bprop(int64_t b,
         auto doTensor = tensor_create(tensorType, dO_ID, o_dim, o_stride, false, false);
          
         // activation from fprop
-        auto pTensor = tensor_create(tensorType, S_ID, p_dim, p_stride, false, false); 
+        auto pTensor = cudnn_frontend::TensorBuilder()
+            .setDim(4, p_dim)
+            .setStride(4, p_stride)
+            .setId(S_ID) 
+            .setAlignment(16) // 16B alignment is needed to run a tensor core engine
+            .setDataType(tensorType)
+            .setVirtual(false)
+            .setByValue(false)
+#if (CUDNN_VERSION >= 8800)
+            .setReorderType("CUDNN_TENSOR_REORDERING_F16x16")
+#endif
+            .build();
 
         // outputs from bprop
         auto dqTensor = tensor_create(tensorType, dQ_ID, q_dim, q_stride, false, false);
@@ -1113,7 +1150,7 @@ run_mha_bprop(int64_t b,
         auto dsTensor = createSoftmaxBackward(b, h, s_q, s_kv, d, layout, tensorType, ops, pAbsTensor, dpAfterDropoutTensor);
 
         // mask
-        auto dsAfterMaskTensor = createMask(b, h, s_q, s_kv, d, layout, is_causal_masking, tensorType, ops, dsTensor);
+        auto dsAfterMaskTensor = createMask(b, h, s_q, s_kv, d, layout, is_causal_masking, tensorType, ops, dsTensor, true);
 
         // matmul to calculate dqTensor
         auto matmul_2_Desc = cudnn_frontend::MatMulDescBuilder().setComputeType(CUDNN_DATA_FLOAT).build();
@@ -1175,7 +1212,17 @@ run_mha_bprop(int64_t b,
                            .build();
 
 
-        auto plan = get_execplan_from_heuristics(std::move(opGraph), handle_);
+        cudnn_frontend::EngineConfigList filtered_configs;
+        auto statuses = cudnn_frontend::get_heuristics_list<1>({"heuristics_instant"}, opGraph, ::allowAllConfig, filtered_configs, true);
+
+        if (filtered_configs.size() == 0) {
+            cudnn_frontend::set_error_and_throw_exception(
+                    nullptr,
+                    CUDNN_STATUS_NOT_SUPPORTED,
+                    "run_mha_bprop: No config returned by the heuristics");
+        }   
+
+        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
 
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 
@@ -1197,6 +1244,7 @@ run_mha_bprop(int64_t b,
         data_ptrs.insert(std::pair<uint64_t, void*>(vTensor.getId(), devPtrV));
         data_ptrs.insert(std::pair<uint64_t, void*>(pTensor.getId(), devPtrS));
         data_ptrs.insert(std::pair<uint64_t, void*>(doTensor.getId(), devPtrdO));
+        data_ptrs.insert(std::pair<uint64_t, void*>(dsAfterMaskTensor.getId(), devPtrdS));
         data_ptrs.insert(std::pair<uint64_t, void*>(seqlenQTensor.getId(), devActualSeqlenQ));
         data_ptrs.insert(std::pair<uint64_t, void*>(seqlenKTensor.getId(), devActualSeqlenK));
 
