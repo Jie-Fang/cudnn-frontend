@@ -393,12 +393,12 @@ to_string(cudnnRngDistribution_t distribution) {
 
 template< typename enum_type>
 static inline void
-convert_string_to_enum(std::string val, enum_type& enum_value);
+convert_string_to_enum(std::string const& val, enum_type& enum_value);
 
 #if (CUDNN_VERSION >= 8300)
 template <>
 inline void
-convert_string_to_enum(std::string val, cudnnBackendTensorReordering_t& enum_value) {
+convert_string_to_enum(std::string const& val, cudnnBackendTensorReordering_t& enum_value) {
     if (val == "CUDNN_TENSOR_REORDERING_NONE") {
         enum_value = CUDNN_TENSOR_REORDERING_NONE;
     }  else if (val == "CUDNN_TENSOR_REORDERING_INT8x32") {
@@ -408,6 +408,58 @@ convert_string_to_enum(std::string val, cudnnBackendTensorReordering_t& enum_val
         enum_value = CUDNN_TENSOR_REORDERING_F16x16;
 #endif
     }
+}
+#endif
+
+// Padding modes were introduced cudnn 8.5 onwards 
+#if (CUDNN_VERSION >= 8500)
+template <>
+inline void
+convert_string_to_enum(std::string const& val, cudnnPaddingMode_t& enum_value) {
+    if (val == "CUDNN_ZERO_PAD") {
+        enum_value = CUDNN_ZERO_PAD;
+    }  else if (val == "CUDNN_NEG_INF_PAD") {
+        enum_value = CUDNN_NEG_INF_PAD;
+    }  else if (val == "CUDNN_EDGE_VAL_PAD") {
+        enum_value = CUDNN_EDGE_VAL_PAD;
+    }
+}
+#endif
+
+// Nan propagation were introduced cudnn 8.5 onwards 
+#if (CUDNN_VERSION >= 8500)
+template <>
+inline void
+convert_string_to_enum(std::string const& val, cudnnNanPropagation_t& enum_value) {
+    if (val == "CUDNN_NOT_PROPAGATE_NAN") {
+        enum_value = CUDNN_NOT_PROPAGATE_NAN;
+    }  else if (val == "CUDNN_PROPAGATE_NAN") {
+        enum_value = CUDNN_PROPAGATE_NAN;
+    }
+}
+#endif
+
+// Resample modes were introduced cudnn 8.5 onwards 
+#if (CUDNN_VERSION >= 8500)
+template <>
+inline void
+convert_string_to_enum(std::string const& val, cudnnResampleMode_t& enum_value) {
+    if (val == "CUDNN_RESAMPLE_NEAREST") {
+        enum_value = CUDNN_RESAMPLE_NEAREST;
+    }  else if (val == "CUDNN_RESAMPLE_BILINEAR") {
+        enum_value = CUDNN_RESAMPLE_BILINEAR;
+    }  else if (val == "CUDNN_RESAMPLE_AVGPOOL") {
+        enum_value = CUDNN_RESAMPLE_AVGPOOL;
+    }  else if (val == "CUDNN_RESAMPLE_MAXPOOL") {
+        enum_value = CUDNN_RESAMPLE_MAXPOOL;
+    } 
+#if (CUDNN_VERSION >= 8600)
+    else if (val == "CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING") {
+        enum_value = CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
+    }  else if (val == "CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING") {
+        enum_value = CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING;
+    }
+#endif
 }
 #endif
 

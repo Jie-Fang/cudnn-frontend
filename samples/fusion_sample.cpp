@@ -1451,11 +1451,9 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
                               void* devPtrS,
                               void* devPtrB, 
                               cudnnDataType_t tensorType,
-#if (CUDNN_VERSION >= 8500)
-                              cudnnResampleMode_t mode,
-                              cudnnNanPropagation_t nanOpt, 
-                              cudnnPaddingMode_t paddingMode,
-#endif       
+                              std::string const& mode,
+                              std::string const& nanOpt, 
+                              std::string const& paddingMode,
                               int64_t nbSpatialDims,                         
                               double alpha,                           
                               double beta,
@@ -1547,7 +1545,6 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
          // Define the resample descriptor
         auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
                             .setComputeType(CUDNN_DATA_FLOAT)
-#if (CUDNN_VERSION >= 8500)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
                             .setPaddingMode(paddingMode)
@@ -1555,7 +1552,6 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
                             .setSpatialStride(nbSpatialDims, strideA)
                             .setPrePadding(nbSpatialDims, prePaddingA)
                             .setPostPadding(nbSpatialDims, postPaddingA)
-#endif
                             .build(); 
         std::cout << "Initialized Pool Desc" << std::endl;
         std::cout << poolDesc.describe() << std::endl;
@@ -3493,9 +3489,9 @@ run_maxpool_with_idx(int64_t* x_dim,
                     void* devPtrdY,
                     void* devPtrIdx,
                     cudnnDataType_t tensorType,
-                    cudnnResampleMode_t mode,
-                    cudnnNanPropagation_t nanOpt, 
-                    cudnnPaddingMode_t paddingMode,
+                    std::string const& mode,
+                    std::string const& nanOpt, 
+                    std::string const& paddingMode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
                     int64_t* prePaddingA,
@@ -3636,9 +3632,9 @@ run_backward_avgpool(int64_t* dx_dim,
                     void* devPtrdX,
                     void* devPtrdY,
                     cudnnDataType_t tensorType,
-                    cudnnResampleMode_t mode,
-                    cudnnNanPropagation_t nanOpt, 
-                    cudnnPaddingMode_t paddingMode,
+                    std::string const& mode,
+                    std::string const& nanOpt, 
+                    std::string const& paddingMode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
                     int64_t* prePaddingA,
@@ -3769,9 +3765,9 @@ run_backward_maxpool(int64_t* dx_dim,
                     void* devPtrdY,
                     void* devPtrIdx,
                     cudnnDataType_t tensorType,
-                    cudnnResampleMode_t mode,
-                    cudnnNanPropagation_t nanOpt, 
-                    cudnnPaddingMode_t paddingMode,
+                    std::string const& mode,
+                    std::string const& nanOpt, 
+                    std::string const& paddingMode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
                     int64_t* prePaddingA,
