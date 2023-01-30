@@ -18,7 +18,9 @@ include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
 add_executable(
     samples
-    conv_sample.cpp 
+    conv_sample.cpp
+    resnet_test_list.cpp
+    resnet_sample.cpp
     test_list.cpp 
     fp16_emu.cpp 
     helpers.cpp 
@@ -51,6 +53,7 @@ else()
         -Wno-unused-function
     )
 endif()
+target_include_directories(samples PRIVATE "resnet_block/include")
 
 target_link_libraries(
     samples

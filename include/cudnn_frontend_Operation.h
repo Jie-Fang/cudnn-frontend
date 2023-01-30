@@ -1659,7 +1659,7 @@ class OperationBuilder_v8 {
                         status,
                         "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_RNG_SEED Failed");
                 return std::move(m_operation);
-            }   
+            }
         }
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_RNG_DESC,
@@ -1746,7 +1746,7 @@ class OperationBuilder_v8 {
         return std::move(m_operation);
     }
 
-    Operation_v8 && 
+    Operation_v8 &&
     build_bn_bwd_weight_op() {
 #if (CUDNN_VERSION >= 8400)
         m_operation.operationTag = "Dgrad_Drelu_BN_Bwd";
@@ -1781,72 +1781,72 @@ class OperationBuilder_v8 {
         };
 
         if (m_operation.xdesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_X_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_X_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_X_DESC Failed",
                           &m_operation.xdesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
         if (m_operation.savedMeandesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_MEAN_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_MEAN_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_MEAN_DESC Failed",
                           &m_operation.savedMeandesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
         if (m_operation.savedInVardesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_INVSTD_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_INVSTD_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_INVSTD_DESC Failed",
                           &m_operation.savedInVardesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
         if (m_operation.scaledesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_BN_SCALE_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_BN_SCALE_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_BN_SCALE_DESC Failed",
                           &m_operation.scaledesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
-        
+
         if (m_operation.dydesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DY_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DY_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DY_DESC Failed",
                           &m_operation.dydesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
-                
+
         if (m_operation.dscaledesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_SCALE_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_SCALE_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_SCALE_DESC Failed",
                           &m_operation.dscaledesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
-                
+
         if (m_operation.dbiasdesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_BIAS_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_BIAS_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_DBN_BIAS_DESC Failed",
                           &m_operation.dbiasdesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
         if (m_operation.eqscaledesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_DY_SCALE_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_DY_SCALE_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_DY_SCALE_DESC Failed",
                           &m_operation.eqscaledesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
-        
+
         if (m_operation.eqscaledesc1)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_X_SCALE_DESC, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_X_SCALE_DESC,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_X_SCALE_DESC Failed",
                           &m_operation.eqscaledesc1->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
 
-                
+
         if (m_operation.eqbiasdesc)
-            set_attribute(m_operation, 
-                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_BIAS, 
+            set_attribute(m_operation,
+                          CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_BIAS,
                           "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_BN_BWD_WEIGHTS_EQ_BIAS Failed",
                           &m_operation.eqbiasdesc->get_backend_descriptor());
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
@@ -1863,7 +1863,7 @@ class OperationBuilder_v8 {
         return std::move(m_operation);
     }
 
-    Operation_v8 && 
+    Operation_v8 &&
     build_conv_forward() {
         m_operation.operationTag = "ConvFwd";
 
@@ -2721,9 +2721,9 @@ class OperationBuilder_v8 {
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_SQRT));
- #if (CUDNN_VERSION >= 8500)
+#if (CUDNN_VERSION >= 8500)
         m_operation.is_pointwise_identity_op = (m_operation.pointwise_mode == CUDNN_POINTWISE_IDENTITY);
-#endif                                           
+#endif      
 
         m_operation.is_pointwise_activation_fwd_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_RELU_FWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_TANH_FWD) ||
@@ -2941,4 +2941,7 @@ class OperationBuilder_v8 {
         return std::move(m_operation);
     }
 };
+
+using Operation                 = Operation_v8;
+using OperationBuilder          = OperationBuilder_v8;
 }

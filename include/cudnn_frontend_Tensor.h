@@ -292,7 +292,7 @@ class TensorBuilder_v8 {
                 "CUDNN_BACKEND_TENSOR_DESCRIPTOR: Check and Set the CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT field");
             return std::move(m_tensor);
         }
-        if (m_tensor.id <= 0) {
+        if (m_tensor.id < 0) {
             set_error_and_throw_exception(
                 &m_tensor,
                 CUDNN_STATUS_BAD_PARAM,
@@ -474,5 +474,4 @@ class TensorBuilder_v8 {
    private:
     Tensor_v8 m_tensor;  //! Tensor built by the TensorBuilder class.
 };
-
 }

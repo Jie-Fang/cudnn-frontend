@@ -53,6 +53,17 @@ void initImage(float* image, int64_t imageSize) {
     }
 }
 
+void testinitImage(half1* image, int64_t imageSize, int test) {
+    static unsigned seed = 123456789;
+    for (int64_t index = 0; index < imageSize; index++) {
+        seed         = (1103515245 * seed + 12345) & 0xffffffff;
+        // image[index] = cpu_float2half_rn(float(seed) * 2.3283064e-10f);  // 2^-32
+        if (test) image[index] = cpu_float2half_rn((index+1) * 2);  // 2^-32
+        else image[index] = cpu_float2half_rn(index + 1);  // 2^-32
+
+    }
+}
+
 void initImage(half1* image, int64_t imageSize) {
     static unsigned seed = 123456789;
     for (int64_t index = 0; index < imageSize; index++) {

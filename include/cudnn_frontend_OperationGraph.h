@@ -150,6 +150,19 @@ class OperationGraphBuilder_v8 {
         }
         return *this;
     }
+
+    //! Set numoperations and the operations
+    auto
+    setOperationGraph(std::vector<Operation> const & ops_) -> OperationGraphBuilder_v8 & {
+        m_operationGraph.numOps = ops_.size();
+        m_operationGraph.feature_vectors.resize(ops_.size());
+        for (auto i = 0u; i < ops_.size(); i++) {
+            m_operationGraph.ops[i] = ops_[i].get_desc();
+            m_operationGraph.opGraphTag += ops_[i].getTag() + '_';
+            m_operationGraph.feature_vectors[i] = ops_[i].getFeatureVector();
+        }
+        return *this;
+    }
     /** @} */
 
     //! constructs the OperationGraph_v8 by calling the cudnn API

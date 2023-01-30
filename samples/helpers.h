@@ -80,6 +80,7 @@ int64_t dim2lin(const int64_t* ids, const int64_t* strides, int64_t length);
 
 void initImage(float* image, int64_t imageSize);
 void initImage(half1* image, int64_t imageSize);
+void testinitImage(half1* image, int64_t imageSize, int test);
 void initImage(int8_t* image, int64_t imageSize);
 void initImage(int32_t* image, int64_t imageSize);
 void initImage(int64_t* image, int64_t imageSize);
@@ -256,14 +257,14 @@ explicit SurfaceManager(int64_t Xsize, int64_t Wsize, int64_t Ysize, int64_t Bsi
 };
 
 
-
 template <typename T_ELEM>
 struct Surface {
     T_ELEM* devPtr = NULL;
     T_ELEM* hostPtr = NULL;
     T_ELEM* hostRefPtr = NULL;
+    int64_t n_elems = 0;
 
-    explicit Surface(int64_t n_elems, bool hasRef) {
+    explicit Surface(int64_t n_elems, bool hasRef) : n_elems(n_elems) {
         checkCudaErr(cudaMalloc((void**)&(devPtr), (size_t)((n_elems) * sizeof(devPtr[0]))));
         hostPtr = (T_ELEM*) calloc((size_t)n_elems, sizeof(hostPtr[0]));
         if(hasRef) {
@@ -283,17 +284,39 @@ struct Surface {
         }
         initImage(hostPtr, n_elems);
         uint32_t *temp = (uint32_t *)hostPtr;
-        for (int64_t i = 0; i < n_elems; i = i+2) {
+        for (size_t i = 0; i < n_elems; i = i+2) {
             temp[i + 1] = 1u;
         }
-            checkCudaErr(cudaMemcpy(devPtr, hostPtr, size_t(sizeof(hostPtr[0]) * n_elems), cudaMemcpyHostToDevice));
-            checkCudaErr(cudaDeviceSynchronize());
-        }
 
-    ~Surface() {
-        if (devPtr) cudaFree(devPtr);
-        if (hostPtr) free(hostPtr);
-        if (hostRefPtr) free(hostRefPtr);
+        checkCudaErr(cudaMemcpy(devPtr, hostPtr, size_t(sizeof(hostPtr[0]) * n_elems), cudaMemcpyHostToDevice));
+        checkCudaErr(cudaDeviceSynchronize());
     }
 
+    explicit Surface(int64_t size, bool hasRef, T_ELEM fillValue) : n_elems(size) {
+        checkCudaErr(cudaMalloc((void**)&(devPtr), (size) * sizeof(devPtr[0])));
+        hostPtr = (T_ELEM*) calloc(size, sizeof(hostPtr[0]));
+        if(hasRef) {
+            hostRefPtr = (T_ELEM*) calloc(n_elems, sizeof(hostRefPtr[0]));
+        }
+        for (int i = 0; i < size; i++) {
+            hostPtr[i] = fillValue;
+        }
+        checkCudaErr(cudaMemcpy(devPtr, hostPtr, sizeof(hostPtr[0]) * n_elems, cudaMemcpyHostToDevice));
+        checkCudaErr(cudaDeviceSynchronize());
+    }
+
+    ~Surface() {
+        if (devPtr) {
+            cudaFree(devPtr);
+            devPtr = nullptr;
+        }
+        if (hostPtr) {
+            free(hostPtr);
+            hostPtr = nullptr;
+        }
+        if (hostRefPtr) {
+            free(hostRefPtr);
+            hostRefPtr = nullptr;
+        }
+    }
 };

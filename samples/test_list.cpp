@@ -850,7 +850,7 @@ TEST_CASE("ConvScaleBiasAct_int8 sample", "[frontend][fusion][ConvScaleBiasAct_i
 
 TEST_CASE("PoolScaleBiasAct_int8 sample", "[pooling][forward][avgerage_pooling]") {
     std::cout << "TEST_CASE PoolScaleBiasAct_int8 :: Sample PoolScaleBiasAct_int8 fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: PoolScaleBiasAct_int8 sample");    
+    INFO("TEST_CASE :: PoolScaleBiasAct_int8 sample");
 
     int64_t xTensorDim[] = {16, 16, 32, 32};
     int64_t yTensorDim[] = {16, 16, 16, 16};
@@ -2020,7 +2020,7 @@ TEST_CASE("Backward pooling", "[pooling][backward][max_pooling]") {
                         mode,
                         nanOpt, 
                         paddingMode, 
-                        nbSpatialDims, 
+                        nbSpatialDims,
                         windowDimA,
                         prePaddingA,
                         postPaddingA,
@@ -2456,17 +2456,17 @@ TEST_CASE("Back2Back Batch GEMM sample", "[frontend][fusion][back2backBatchGemm]
     Surface<half> vTensor(vSize, false);
     Surface<half> oTensor(oSize, false);
 
-    run_b2b_batch_gemm(qTensorDim, 
-                kTensorDim, 
+    run_b2b_batch_gemm(qTensorDim,
+                kTensorDim,
                 sTensorDim,
                 vTensorDim,
-                oTensorDim, 
+                oTensorDim,
                 qTensor.devPtr,
                 kTensor.devPtr,
                 vTensor.devPtr,
                 oTensor.devPtr,
-                CUDNN_DATA_HALF, 
-                4, 
+                CUDNN_DATA_HALF,
+                4,
                 qTensorStride,
                 kTensorStride,
                 sTensorStride,
@@ -2496,7 +2496,7 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
 
     // this scaling factor needs to be bfloat16 for data type bfloat16
     half1 scaling_factor = cpu_float2half_rn(0.8); // scale value before softmax
-    
+
     double dropout_probability = 0.2f; // probability of dropout
 
     MHA_Bias_Type bias_type = MHA_Bias_Type::NO_BIAS; // set which bias is required
@@ -2540,7 +2540,7 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
     for (int i = 0; i < b; i++) {
         hostActualSeqlenQ[i] = 128;
     }
-    
+
     checkCudaErr(cudaMemcpy(devActualSeqlenQ, hostActualSeqlenQ, sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -2550,7 +2550,7 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
     for (int i = 0; i < b; i++) {
         hostActualSeqlenK[i] = 128;
     }
-    
+
     checkCudaErr(cudaMemcpy(devActualSeqlenK, hostActualSeqlenK, sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -2558,8 +2558,8 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
     Surface<half> oTensor(oSize, false);
     devPtrO = (void *)oTensor.devPtr;
 
-    run_mha_fprop(b, 
-                h, 
+    run_mha_fprop(b,
+                h,
                 s_q,
                 s_kv,
                 d,
@@ -2569,9 +2569,9 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
                 dropout_probability,
                 bias_type,
                 is_causal_masking,
-                devPtrQ, 
-                devPtrK,   
-                devPtrV,   
+                devPtrQ,
+                devPtrK,
+                devPtrV,
                 devPtrS,
                 devPtrO,
                 devPtrBias,
@@ -2663,7 +2663,7 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     for (int i = 0; i < b; i++) {
         hostActualSeqlenQ[i] = 128;
     }
-    
+
     checkCudaErr(cudaMemcpy(devActualSeqlenQ, hostActualSeqlenQ, sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -2673,7 +2673,7 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     for (int i = 0; i < b; i++) {
         hostActualSeqlenK[i] = 128;
     }
-    
+
     checkCudaErr(cudaMemcpy(devActualSeqlenK, hostActualSeqlenK, sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -2681,8 +2681,8 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     Surface<half> doTensor(doSize, false);
     devPtrdO = (void *)doTensor.devPtr;
 
-    run_mha_bprop(b, 
-                h, 
+    run_mha_bprop(b,
+                h,
                 s_q,
                 s_kv,
                 d,
@@ -2690,13 +2690,13 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
                 scaling_factor,
                 dropout_probability,
                 is_causal_masking,
-                devPtrQ, 
-                devPtrK,   
-                devPtrV,   
+                devPtrQ,
+                devPtrK,
+                devPtrV,
                 devPtrS,
-                devPtrdQ, 
-                devPtrdK,   
-                devPtrdV,   
+                devPtrdQ,
+                devPtrdK,
+                devPtrdV,
                 devPtrdO,
                 devPtrdS,
                 devActualSeqlenQ,

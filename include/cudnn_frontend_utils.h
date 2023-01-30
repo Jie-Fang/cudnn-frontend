@@ -58,6 +58,12 @@ class cudnnException : public std::runtime_error {
 };
 #endif
 
+static inline bool
+AllowAll(cudnnBackendDescriptor_t engine_config) {
+    (void)engine_config;
+    return false;
+}
+
 static inline void
 throw_if(std::function<bool()> expr, const char *message, cudnnStatus_t status) {
     if (expr()) {
@@ -476,3 +482,4 @@ set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t statu
 }
 
 }
+

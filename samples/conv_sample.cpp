@@ -1373,4 +1373,3 @@ run_imma(
     } 
     if (handle_) cudnnDestroy(handle_);
 }
-

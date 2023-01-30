@@ -3540,6 +3540,7 @@ run_maxpool_with_idx(int64_t* x_dim,
          // Define the resample descriptor
         auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
                             .setComputeType(CUDNN_DATA_FLOAT)
+
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
                             .setPaddingMode(paddingMode)
@@ -3633,7 +3634,7 @@ run_backward_avgpool(int64_t* dx_dim,
                     void* devPtrdY,
                     cudnnDataType_t tensorType,
                     std::string const& mode,
-                    std::string const& nanOpt, 
+                    std::string const& nanOpt,
                     std::string const& paddingMode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
@@ -3811,9 +3812,10 @@ run_backward_maxpool(int64_t* dx_dim,
         std::cout << dyTensor.describe() << std::endl;
         std::cout << dxTensor.describe() << std::endl;
 
-         // Define the resample descriptor
+        // Define the resample descriptor
         auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
                             .setComputeType(CUDNN_DATA_FLOAT)
+                            .setSpatialDim(nbSpatialDims, windowDimA)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
                             .setPaddingMode(paddingMode)
