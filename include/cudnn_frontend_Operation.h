@@ -2012,6 +2012,15 @@ class OperationBuilder_v8 {
         for (auto i = 0; i < tensor_dims; i++) {
             m_operation.feature_vector.push_back(yTensor_strA[i]); // n, c, (g), d, h , w 
         }
+
+        int64_t alpha_as_int = *((m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? reinterpret_cast<int64_t *>(&m_operation.alpha_s)
+                : reinterpret_cast<int64_t *>(&m_operation.alpha_d)));
+        int64_t  beta_as_int = *((m_operation.alphabetaType == CUDNN_TYPE_FLOAT ? reinterpret_cast<int64_t *>(&m_operation.beta_s)
+                : reinterpret_cast<int64_t *>(&m_operation.beta_d)));
+
+        m_operation.feature_vector.push_back(alpha_as_int);
+        m_operation.feature_vector.push_back(beta_as_int);
+
     }
 
     cudnnStatus_t
