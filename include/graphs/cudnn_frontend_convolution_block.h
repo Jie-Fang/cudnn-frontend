@@ -152,7 +152,7 @@ public:
         return 0;
     }
 
-    int partition(cudnnHandle_t& handle) override final {
+    cudnn_frontend_error_t partition(cudnnHandle_t& handle) override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Partioning ConvolutionBlock..." << std::endl;
 
         std::vector<Operation const*> operation_graph = {operations.at("conv").get()};
@@ -162,23 +162,21 @@ public:
         int status = createExecutionPlan(handle);
         if(status) {
             getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
-            return status;
+            return cudnn_frontend_error_t::GRAPH_PARTITION_EXECUTION_PLAN_CREATION_FAILED;
         }
 
         getLogger() << "[cudnn_frontend] INFO: Partitioned ConvolutionBlock." << std::endl;
-        return 0;
+        return cudnn_frontend_error_t::OK;
     }
 
-    int build(cudnnHandle_t& handle) override final {
+    cudnn_frontend_error_t build(cudnnHandle_t& handle) override final {
 
         infer_properties();
         validate();
         createTensors();
         createDescritpors();
         createOperations();
-        partition(handle);
-
-        return 0;
+        return partition(handle);
     }
     
     int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {

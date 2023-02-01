@@ -61,7 +61,7 @@ run_matmul_block() {
     tensor2.set_dim({32, 32, 32});
     matmul_block.add_tensor("tensor2", tensor2);
 
-    matmul_block.build(handle);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == matmul_block.build(handle));
 
     Surface<half> x_tensor(matmul_block.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> w_tensor(matmul_block.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -108,7 +108,7 @@ run_convolution_block() {
     tensor2.set_dim({4, 64, 16, 16});
     convolution_block.add_tensor("tensor2", tensor2);
 
-    convolution_block.build(handle);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_block.build(handle));
 
     Surface<half> x_tensor(convolution_block.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> w_tensor(convolution_block.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -152,7 +152,7 @@ run_pointwise_block() {
     tensor2.set_dim({4, 32, 16, 16});
     pointwise_block.add_tensor("tensor2", tensor2);
 
-    pointwise_block.build(handle);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == pointwise_block.build(handle));
 
     Surface<half> x_tensor(pointwise_block.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> b_tensor(pointwise_block.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -192,7 +192,7 @@ run_reduction_block() {
     tensor1.set_data_type(CUDNN_DATA_FLOAT);
     reduction_block.add_tensor("tensor1", tensor1);
 
-    reduction_block.build(handle);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == reduction_block.build(handle));
 
     Surface<half> x_tensor(reduction_block.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<float> y_tensor(reduction_block.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -313,7 +313,7 @@ run_convolution_fp8_block() {
     tensor9.set_dim({1, 1, 1, 1});
     convolution_fp8_block.add_tensor("tensor9", tensor9);
 
-    convolution_fp8_block.build(handle);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_fp8_block.build(handle));
     
     Surface<float> x_dq_tensor(convolution_fp8_block.tensor_props.at("tensor3")->get_tensor_size(), false);
     Surface<float> w_dq_tensor(convolution_fp8_block.tensor_props.at("tensor5")->get_tensor_size(), false);
@@ -388,7 +388,7 @@ run_convolution_pointwise_block() {
     tensor4.set_dim({4, 64, 16, 16});
     convolution_pointwise_block.add_tensor("tensor4", tensor4);
 
-    convolution_pointwise_block.build(handle);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_pointwise_block.build(handle));
     
     Surface<half> x_tensor(convolution_pointwise_block.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> w_tensor(convolution_pointwise_block.tensor_props.at("tensor1")->get_tensor_size(), false);

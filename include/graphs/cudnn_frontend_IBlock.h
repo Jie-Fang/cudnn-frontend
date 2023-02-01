@@ -42,7 +42,7 @@ protected:
     
     virtual Type getType() = 0;
 
-    virtual int partition(cudnnHandle_t& handle) = 0;
+    virtual cudnn_frontend_error_t partition(cudnnHandle_t& handle) = 0;
 
     virtual int createTensors() {
         for(auto const& sub_block: sub_blocks) {
@@ -80,7 +80,7 @@ public:
     
     virtual int validate() const = 0;
 
-    virtual int build(cudnnHandle_t& handle) = 0;
+    virtual cudnn_frontend_error_t build(cudnnHandle_t& handle) = 0;
     
     virtual int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
 
@@ -113,7 +113,7 @@ protected:
         return Type::BLOCK;
     }
 
-    int partition(cudnnHandle_t& handle) override final {
+    cudnn_frontend_error_t partition(cudnnHandle_t& handle) override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Partioning CompositeBlock..." << std::endl;
 
         std::vector<Operation const*> operation_graph{};
@@ -133,11 +133,11 @@ protected:
         int status = createExecutionPlan(handle);
         if(status) {
             getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
-            return status;
+            return cudnn_frontend_error_t::GRAPH_PARTITION_EXECUTION_PLAN_CREATION_FAILED;
         }
 
         getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeBlock." << std::endl;
-        return 0;
+        return cudnn_frontend_error_t::OK;
     }
 
 public:
@@ -150,13 +150,13 @@ public:
 
     int validate() const override {return 0;}
 
-    int build(cudnnHandle_t& handle) override {
+    cudnn_frontend_error_t build(cudnnHandle_t& handle) override {
         infer_properties();
         createTensors();
         createDescritpors();
         createOperations();
         partition(handle);
-        return 0;
+        return cudnn_frontend_error_t::OK;
     }
 
     int

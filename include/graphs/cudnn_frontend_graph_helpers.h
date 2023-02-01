@@ -11,13 +11,14 @@
 namespace cudnn_frontend {
 
 enum class cudnn_frontend_error_t {
-    OK,
+    OK = 0,
     TENSOR_DIMENSIONS_NOT_SET,
     POINTWISE_MODE_NOT_SET,
     SHAPE_DEDUCTION_FAILED,
     OUTPUT_TENSOR_NODE_NOT_FOUND,
     UNKNOWN_TENSOR_NAME,
-    INPUT_PORT_COUNT_MISMATCH
+    INPUT_PORT_COUNT_MISMATCH,
+    GRAPH_PARTITION_EXECUTION_PLAN_CREATION_FAILED
 };
 
 static cudnnDataType_t

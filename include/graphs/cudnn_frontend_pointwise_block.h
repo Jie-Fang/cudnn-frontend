@@ -135,28 +135,31 @@ public:
         return 0;
     }
 
-    int partition(cudnnHandle_t& handle) override final {
+    cudnn_frontend_error_t partition(cudnnHandle_t& handle) override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Partioning PointwiseBlock..." << std::endl;
 
         std::vector<Operation const*> operation_graph = {operations.at("pointwise").get()};
         auto pointwise_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
         operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(pointwise_graph)));
+        
+        int status = createExecutionPlan(handle);
+        if(status) {
+            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in PointwiseBlock." << std::endl;
+            return cudnn_frontend_error_t::GRAPH_PARTITION_EXECUTION_PLAN_CREATION_FAILED;
+        }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Partitioned PointwiseBlock." << std::endl;
-        return 0;
+        return cudnn_frontend_error_t::OK;
     }
 
-    int build(cudnnHandle_t& handle) override final {
+    cudnn_frontend_error_t build(cudnnHandle_t& handle) override final {
 
         infer_properties();
         validate();
         createTensors();
         createDescritpors();
         createOperations();
-        partition(handle);
-        createExecutionPlan(handle);
-
-        return 0;
+        return partition(handle);
     }
     
     int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
