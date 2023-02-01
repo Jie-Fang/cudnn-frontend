@@ -72,7 +72,7 @@ run_matmul_block() {
         , {"tensor1", w_tensor.devPtr}
         , {"tensor2", y_tensor.devPtr}
     };
-    matmul_block.execute(handle, variant_pack);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == matmul_block.execute(handle, variant_pack));
 }
 
 
@@ -119,7 +119,7 @@ run_convolution_block() {
         , {"tensor1", w_tensor.devPtr}
         , {"tensor2", y_tensor.devPtr}
     };
-    convolution_block.execute(handle, variant_pack);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_block.execute(handle, variant_pack));
 }
 
 void
@@ -163,7 +163,7 @@ run_pointwise_block() {
         , {"tensor1", b_tensor.devPtr}
         , {"tensor2", y_tensor.devPtr}
     };
-    pointwise_block.execute(handle, variant_pack);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == pointwise_block.execute(handle, variant_pack));
 }
 
 void
@@ -200,7 +200,7 @@ run_reduction_block() {
         {"tensor0", x_tensor.devPtr}
         , {"tensor1", y_tensor.devPtr}
     };
-    reduction_block.execute(handle, variant_pack);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == reduction_block.execute(handle, variant_pack));
 }
 
 void
@@ -313,8 +313,13 @@ run_convolution_fp8_block() {
     tensor9.set_dim({1, 1, 1, 1});
     convolution_fp8_block.add_tensor("tensor9", tensor9);
 
-    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_fp8_block.build(handle));
-    
+    if (check_device_arch_newer_than("hopper")) {
+        REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_fp8_block.build(handle));
+    }
+    else {
+        SKIP("Architextures below hopper do not support fp8.");
+    }
+
     Surface<float> x_dq_tensor(convolution_fp8_block.tensor_props.at("tensor3")->get_tensor_size(), false);
     Surface<float> w_dq_tensor(convolution_fp8_block.tensor_props.at("tensor5")->get_tensor_size(), false);
     Surface<int8_t> x_tensor(convolution_fp8_block.tensor_props.at("tensor0")->get_tensor_size(), false);
@@ -325,14 +330,14 @@ run_convolution_fp8_block() {
     
     std::unordered_map<std::string, void*> variant_pack = {
         {"tensor3", x_dq_tensor.devPtr}
-        , {"tensor4", w_dq_tensor.devPtr}
+        , {"tensor5", w_dq_tensor.devPtr}
         , {"tensor0", x_tensor.devPtr}
         , {"tensor1", w_tensor.devPtr}
         , {"tensor8", y_tensor.devPtr}
         , {"tensor7", y_q_tensor.devPtr}
         , {"tensor9", amax_tensor.devPtr}
     };
-    convolution_fp8_block.execute(handle, variant_pack);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_fp8_block.execute(handle, variant_pack));
 #endif
 }
 
@@ -400,5 +405,5 @@ run_convolution_pointwise_block() {
         , {"tensor3", b_tensor.devPtr}
         , {"tensor4", y_tensor.devPtr}
     };
-    convolution_pointwise_block.execute(handle, variant_pack);
+    REQUIRE(cudnn_frontend::cudnn_frontend_error_t::OK == convolution_pointwise_block.execute(handle, variant_pack));
 }

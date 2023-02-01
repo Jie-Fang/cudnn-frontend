@@ -82,7 +82,7 @@ public:
 
     virtual cudnn_frontend_error_t build(cudnnHandle_t& handle) = 0;
     
-    virtual int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
+    virtual cudnn_frontend_error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
 
     IBlock(std::string const& name, int64_t const offset) : name(name), offset(offset) {}
 
@@ -159,7 +159,7 @@ public:
         return cudnn_frontend_error_t::OK;
     }
 
-    int
+    cudnn_frontend_error_t
     execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_to_pointer_map) override {
         std::vector<int64_t> uids;
         std::vector<void *> device_ptrs;
@@ -168,7 +168,7 @@ public:
             uids.push_back(tensor_props.at(item.first)->get_uid());
         }
         run_execution_plans(handle, device_ptrs, uids);
-        return 0;
+        return cudnn_frontend_error_t::OK;
     }
 
     CompositeBlock(std::string const& name, int64_t const offset) : IBlock(name, offset) {}

@@ -148,7 +148,7 @@ public:
         return partition(handle);
     }
     
-    int execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
+    cudnn_frontend_error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
         getLogger() << "[cudnn_frontend] INFO: ReductionBlock starting execution..." << std::endl;
 
         for(auto const& execution_plan: execution_plans) {
@@ -172,13 +172,13 @@ public:
 
             auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
             if (status != CUDNN_STATUS_SUCCESS) {
-                return 1;
+                return cudnn_frontend_error_t::GRAPH_EXECUTION_FAILED;
             }
             getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
         }
         
         getLogger() << "[cudnn_frontend] INFO: ReductionBlock executed successfully." << std::endl;
-        return 0;
+        return cudnn_frontend_error_t::OK;
     }
 };
 
