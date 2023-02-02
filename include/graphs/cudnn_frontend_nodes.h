@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <numeric>
 #include <unordered_map>
 #include <vector>
@@ -21,8 +22,11 @@ public:
     }
 };
 
+// simple structure to hold all properties of a tensor.
+// Each property has a getter setter.
 class tensor_properties : public graph_properties {
 protected:
+    // TODO: use custom FE data type string/enum.
     cudnnDataType_t data_type = CUDNN_DATA_FLOAT;
     std::vector<int64_t> dim = {};
     std::vector<int64_t> stride = {};
@@ -164,7 +168,27 @@ public:
         return size;
     }
 
+    friend std::ostream& operator<<(std::ostream& os, const tensor_properties& props);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const tensor_properties& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " dim: [";
+    for(size_t i = 0; i < props.get_dim().size(); ++i) {
+        os << props.get_dim()[i] << ",";
+    }
+    os << "],"
+    << " stride: [";
+    for(size_t i = 0; i < props.get_stride().size(); ++i) {
+        os << props.get_stride()[i] << ",";
+    }
+    os << "],"
+    << " is_virtual: " << props.get_is_virtual() << ","
+    << " is_pass_by_value: " << props.get_is_pass_by_value() << ","
+    << "}";
+    return os;
+}
 
 class Node : public graph_properties {
 public:

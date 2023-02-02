@@ -21,7 +21,13 @@ endif()
 # install cuda-python PyPI Python package using pip
 execute_process(COMMAND ${Python_EXECUTABLE} -m pip install ${_pip_args} cuda-python)
 
-pybind11_add_module(cudnn_frontend_blocks cudnn_frontend_blocks_py.cpp)
+pybind11_add_module(
+    cudnn_frontend_blocks
+    
+    cudnn_frontend_blocks_py.cpp
+    cudnn_frontend_pygraph.cpp
+    cudnn_frontend_properties.cpp
+)
 
 target_link_libraries(
     cudnn_frontend_blocks

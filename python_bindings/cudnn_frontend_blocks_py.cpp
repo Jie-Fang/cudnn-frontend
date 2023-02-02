@@ -10,9 +10,17 @@ namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace cudnn_frontend;
 
+// pybinds for pygraph class
+void init_pygraph_submodule(py::module_ &);
+
+// pybinds for all properties and helpers
+void init_properties(py::module_ &);
+
 PYBIND11_MODULE(cudnn_frontend_blocks, m)
 {
-  
+  init_pygraph_submodule(m);
+  init_properties(m);
+
   auto execute_wrapper = [](Graph * graph, std::unordered_map<std::string, int64_t> var_pack) -> cudnn_frontend_error_t {
       std::unordered_map<std::string, void *> var_pack_;
       for (auto item : var_pack) {
@@ -24,7 +32,7 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
 
   py::class_<Graph>(m, "Graph")
     .def(py::init<std::string const &, cuDNNFEContext const &>())
-    .def("add_tensor", &Graph::add_tensor)
+    .def("add_tensor", static_cast<cudnn_frontend_error_t (Graph::*)(tensor_properties const &)>(&Graph::add_tensor))
     .def("add_node", static_cast<cudnn_frontend_error_t (Graph::*)(convolution_node const &)>(&Graph::add_node))
     .def("add_node", static_cast<cudnn_frontend_error_t (Graph::*)(pointwise_node const &)>(&Graph::add_node))
     .def("infer_shapes", &Graph::infer_shapes)
@@ -32,23 +40,7 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("tensor_at", &Graph::tensor_at, py::return_value_policy::reference)
     .def("build", &Graph::build)
     .def("execute", execute_wrapper)
-    ;  
-  // define all classes
-  py::class_<tensor_properties>(m, "tensor_properties")
-    .def(py::init<std::string const &>())
-    .def("get_data_type", &tensor_properties::get_data_type)
-    .def("set_data_type", &tensor_properties::set_data_type)
-    .def("get_dim", &tensor_properties::get_dim)
-    .def("set_dim", &tensor_properties::set_dim)
-    .def("get_stride", &tensor_properties::get_stride)
-    .def("set_stride", &tensor_properties::set_stride)
-    .def("get_is_virtual", &tensor_properties::get_is_virtual)
-    .def("set_is_virtual", &tensor_properties::set_is_virtual)
-    .def("get_is_pass_by_value", &tensor_properties::get_is_pass_by_value)
-    .def("set_is_pass_by_value", &tensor_properties::set_is_pass_by_value)
-    .def("get_uid", &tensor_properties::get_uid)
-    .def("set_uid", &tensor_properties::set_uid)
-    .def("get_size", &tensor_properties::get_size);
+    ;
 
   py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
     .def(py::init<>())

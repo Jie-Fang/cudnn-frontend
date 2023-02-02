@@ -45,6 +45,9 @@ public:
         return *(all_tensors.at(name));
     }
 
+    // Add a tensor to the graph.
+    // This function takes in reference to tensor properties and copies the resource.
+    // So the lifetime of tensor properties is independent from its replica in graph.
     cudnn_frontend_error_t
     add_tensor(tensor_properties const &props) {
         
@@ -65,6 +68,13 @@ public:
             tensor->set_data_type(tensor->get_is_virtual() ? ctx.get_intermediate_data_type() :  ctx.get_tensor_data_type());
         }
 
+        return cudnn_frontend_error_t::OK;
+    }
+
+    // Add a tensor properties object with shared ownership.
+    // A shared pointer is taken by value, which makes the graph an owner too.
+    cudnn_frontend_error_t add_tensor(std::shared_ptr<tensor_properties> pointer_to_props) {
+        all_tensors.emplace(name, pointer_to_props);
         return cudnn_frontend_error_t::OK;
     }
 
