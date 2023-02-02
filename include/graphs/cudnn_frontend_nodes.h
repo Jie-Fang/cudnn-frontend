@@ -336,10 +336,37 @@ public:
 
     std::vector<std::string>
     get_inputs() const override {
-        return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
+        return {port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
     }
 
+    friend std::ostream& operator<<(std::ostream& os, const convolution_node& props);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const convolution_node& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " dilation: [";
+    for(size_t i = 0; i < props.get_dilation().size(); ++i) {
+        os << props.get_dilation()[i] << ",";
+    }
+    os << "],"
+    << " stride: [";
+    for(size_t i = 0; i < props.get_stride().size(); ++i) {
+        os << props.get_stride()[i] << ",";
+    }
+    os << "],"
+    << " padding: [";
+    for(size_t i = 0; i < props.get_padding().size(); ++i) {
+        os << props.get_padding()[i] << ",";
+    }
+    os << "],"
+    << " ports: [";
+    for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<convolution_node::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
 
 class matmul_node : public Node {
 public:

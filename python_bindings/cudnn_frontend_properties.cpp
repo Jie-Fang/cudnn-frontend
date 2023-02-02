@@ -44,7 +44,12 @@ void init_properties(py::module_ &m) {
         .def("get_compute_type",     &cudnn_frontend::Node::get_compute_type)
         .def("set_compute_type",     &cudnn_frontend::Node::set_compute_type)
         .def("get_port_name",       &cudnn_frontend::convolution_node::get_port_name)
-        .def("set_port_names",       &cudnn_frontend::convolution_node::set_port_names);
+        .def("set_port_names",       &cudnn_frontend::convolution_node::set_port_names)
+        .def("__repr__", [](cudnn_frontend::convolution_node const& props){
+            std::ostringstream out;
+            out << props;
+            return out.str();
+        });;
 
     py::enum_<cudnn_frontend::convolution_node::PORTS>(convolution_node, "ports")
         .value("X", cudnn_frontend::convolution_node::PORTS::X)

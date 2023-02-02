@@ -19,7 +19,25 @@ public:
 
     virtual cudnn_frontend_error_t add_node(convolution_node const &props) = 0;
     virtual cudnn_frontend_error_t add_node(pointwise_node   const &props) = 0;
+    
+    friend std::ostream& operator<<(std::ostream& os, const IGraph& props);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const IGraph& graph) {
+    os << "{"
+    << "\ntensors: [\n";
+    for(auto const& tensor: graph.all_tensors) {
+        os << *(tensor.second) << ",";
+    }
+    os << "],"
+    << "\nconv: [\n";
+    for(auto const& node: graph.conv_nodes) {
+        os << (node.second) << ",";
+    }
+    os << "],";
+    os << "}";
+    return os;
+}
 
 class Graph : public IGraph {
 protected:
@@ -214,7 +232,6 @@ public:
                     // Copying the input tensor sizes
                     tensor->set_data_type(input_x_tensor->get_data_type());
                     tensor->set_dim(input_x_tensor->get_dim());
-                    tensor->set_stride(input_x_tensor->get_stride());
                     visited_tensors[tensor->get_name()] = true;
                     find_entrance_nodes();
                     entrance_nodes.erase(entrance_nodes.begin());

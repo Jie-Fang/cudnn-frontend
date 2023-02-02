@@ -33,9 +33,13 @@ public:
         auto props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(name);
         props_ptr->set_data_type(CUDNN_DATA_HALF);
         props_ptr->set_dim(dim);
-        props_ptr->set_stride(stride);
         props_ptr->set_is_virtual(isVirtual);
         props_ptr->set_is_pass_by_value(isByValue);
+
+        // Will be deduced later if passed empty
+        // TODO: This empty check can be part of conv node. User setting empty strides means they want to deduce it.
+        if(!stride.empty())
+            props_ptr->set_stride(stride);
 
         // TODO: Figure out how to pass status to python caller.
         auto status = graph.add_tensor(props_ptr);
@@ -62,15 +66,28 @@ public:
         props.set_stride(stride);
         props.set_dilation(dilation);
 
+        // TODO: Check whether image and weight already exist.
+        props.set_port_names({{cudnn_frontend::convolution_node::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_node::PORTS::W, weight_props_ptr->get_name()}});
+
         // TODO: Figure out how to pass status to python caller.
         auto status = graph.add_node(props);
-
-        // TODO: Check whether image and weight already exist.
 
         return graph.get_tensor(props.get_port_name(cudnn_frontend::convolution_node::PORTS::Y));
     }
 
+    void build() {
+        // TODO: Figure out how to pass status to python caller.
+        auto status = graph.infer_shapes();
+        status = graph.build();
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const PyGraph& props);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const PyGraph& props) {
+    os << props.graph;
+    return os;
+}
 
 std::vector<int64_t>
 default_vector(void) {
@@ -96,5 +113,11 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
-        );
+        )
+        .def("build", &PyGraph::build)
+        .def("__repr__", [](PyGraph const& graph){
+            std::ostringstream out;
+            out << graph;
+            return out.str();
+        });
 }
