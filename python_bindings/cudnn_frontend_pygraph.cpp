@@ -75,6 +75,30 @@ public:
         return graph.get_tensor(props.get_port_name(cudnn_frontend::convolution_node::PORTS::Y));
     }
 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes input properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    add_bias(
+        std::string const& name
+        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::tensor_properties>& bias_props_ptr
+        , std::string const& compute_type
+    ) {
+        cudnn_frontend::pointwise_node props(name);
+        props.set_compute_type(CUDNN_DATA_FLOAT);
+        props.set_mode("Add");
+
+        // TODO: Check whether image and weight already exist.
+        props.set_port_names({{cudnn_frontend::pointwise_node::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_node::PORTS::B, bias_props_ptr->get_name()}});
+
+        // TODO: Figure out how to pass status to python caller.
+        auto status = graph.add_node(props);
+
+        return graph.get_tensor(props.get_port_name(cudnn_frontend::pointwise_node::PORTS::Y));
+    }
+
     void build() {
         // TODO: Figure out how to pass status to python caller.
         auto status = graph.infer_shapes();
@@ -113,6 +137,12 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
+        )
+        .def("add_bias", &PyGraph::add_bias, 
+             py::arg_v("name", "test_tensor_name"),
+             py::arg("input"),
+             py::arg("bias"),
+             py::arg_v("compute_type", "float")
         )
         .def("build", &PyGraph::build)
         .def("__repr__", [](PyGraph const& graph){

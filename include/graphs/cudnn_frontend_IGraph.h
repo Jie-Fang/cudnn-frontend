@@ -34,6 +34,11 @@ inline std::ostream& operator<<(std::ostream& os, const IGraph& graph) {
     for(auto const& node: graph.conv_nodes) {
         os << (node.second) << ",";
     }
+    os << "],"
+    << "\npointwise: [\n";
+    for(auto const& node: graph.pointwise_nodes) {
+        os << (node.second) << ",";
+    }
     os << "],";
     os << "}";
     return os;
@@ -121,7 +126,8 @@ public:
             node.set_tensor_data_type(ctx.get_intermediate_data_type());
         }
 
-        all_tensors.emplace(name + "::Y", std::make_shared<tensor_properties>(tensor_properties{name + "::Y"}));
+        auto const& output_port_name = props.get_port_name(pointwise_node::PORTS::Y);
+        all_tensors.emplace(output_port_name, std::make_shared<tensor_properties>(output_port_name));
 
         return cudnn_frontend_error_t::OK;
     }
@@ -217,7 +223,6 @@ public:
                     // Copying the input tensor sizes
                     tensor->set_data_type(input_x_tensor->get_data_type());
                     tensor->set_dim(input_x_tensor->get_dim());
-                    tensor->set_stride(input_x_tensor->get_stride());
                     visited_tensors[tensor->get_name()] = true;
                     find_entrance_nodes();
                     entrance_nodes.erase(entrance_nodes.begin());

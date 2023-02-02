@@ -58,28 +58,6 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims)
     .def("__repr__",      &cuDNNFEContext::describe);
 
-
-  py::class_<pointwise_node> pointwise_node(m, "pointwise_node");
-  pointwise_node.def(py::init<std::string const &>())
-    .def("get_mode", &pointwise_node::get_mode)
-    .def("set_mode", static_cast<int (pointwise_node::*)(std::string)>(&pointwise_node::set_mode))
-    .def("get_tensor_data_type",  &Node::get_tensor_data_type)
-    .def("set_tensor_data_type",  &Node::set_tensor_data_type)
-    .def("get_compute_type",      &Node::get_compute_type)
-    .def("set_compute_type",      &Node::set_compute_type)
-    .def("get_port_name",       &pointwise_node::get_port_name)
-    .def("set_port_names",       &pointwise_node::set_port_names)
-    ;
-
-
-  py::enum_<pointwise_node::PORTS>(m, "pointwise_ports")
-        .value("X", pointwise_node::PORTS::X)
-        .value("B", pointwise_node::PORTS::B)
-        .value("Y", pointwise_node::PORTS::Y)
-        .export_values();
-
-
-
   py::enum_<cudnn_frontend_error_t>(m, "cudnn_frontend_error")
     .value("OK", cudnn_frontend_error_t::OK)
     .value("TENSOR_DIMENSIONS_NOT_SET", cudnn_frontend_error_t::TENSOR_DIMENSIONS_NOT_SET)

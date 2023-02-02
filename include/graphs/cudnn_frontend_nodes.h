@@ -484,7 +484,20 @@ public:
     get_inputs() const override {
         return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::B)};
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const pointwise_node& props);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const pointwise_node& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " ports: [";
+    for(size_t i = 0; i < pointwise_node::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<pointwise_node::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
 
 class reduction_node : public Node {
 public:
