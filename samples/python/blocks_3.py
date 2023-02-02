@@ -1,13 +1,40 @@
+from cuda import cuda, cudart
 import cudnn_frontend_blocks as fe
+import numpy as np
 
 graph = fe.pygraph("nvfuser")
 
-image = graph.add_tensor(name = "image", dim = [4,32,56,56])
-weight = graph.add_tensor(name = "weight", dim = [32,32,3,3])
-bias = graph.add_tensor(name = "bias", dim = [1,32,1,1])
+image = graph.add_tensor(name = "image", dim = [4,16,56,56])
+weight = graph.add_tensor(name = "weight", dim = [16,16,3,3])
+bias = graph.add_tensor(name = "bias", dim = [1,16,1,1])
 
 response = graph.add_conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
+response.set_is_virtual(True)
 
 output = graph.add_bias(name = "relu", input = response, bias = bias)
 
 graph.build()
+
+h_X = np.full(image.get_size(), 1).astype(dtype=np.half)
+h_W = np.full(weight.get_size(), 1).astype(dtype=np.half)
+h_B = np.full(bias.get_size(), 2).astype(dtype=np.half)
+h_Y = np.full(output.get_size(), 0).astype(dtype=np.half)
+
+err, x_dptr = cudart.cudaMalloc(image.get_size())
+err, w_dptr = cudart.cudaMalloc(weight.get_size())
+err, b_dptr = cudart.cudaMalloc(bias.get_size())
+err, y_dptr = cudart.cudaMalloc(output.get_size())
+
+cuda.cuMemcpyHtoD(x_dptr, h_X, image.get_size())
+cuda.cuMemcpyHtoD(w_dptr, h_W, weight.get_size())
+cuda.cuMemcpyHtoD(b_dptr, h_B, bias.get_size())
+cuda.cuMemcpyHtoD(y_dptr, h_Y, output.get_size())
+
+graph.execute({image.get_name() :x_dptr, weight.get_name() : w_dptr, bias.get_name() : b_dptr, output.get_name() : y_dptr})
+
+cuda.cuMemcpyDtoH(h_Y, y_dptr, output.get_size())
+
+cudart.cudaFree(x_dptr)
+cudart.cudaFree(w_dptr)
+cudart.cudaFree(b_dptr)
+cudart.cudaFree(y_dptr)

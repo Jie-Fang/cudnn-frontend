@@ -1,4 +1,5 @@
 #include <utility>
+#include <unordered_map>
 
 #include "pybind11/pybind11.h"
 #include "pybind11/cast.h"
@@ -101,6 +102,14 @@ public:
         status = graph.build();
     }
 
+    void execute(std::unordered_map<std::string, int64_t> var_pack) {
+        std::unordered_map<std::string, void *> var_pack_;
+        for (auto item : var_pack) {
+            var_pack_.insert(std::make_pair(item.first, (void *)item.second));
+        }
+        auto status = graph.execute(var_pack_);
+    }
+
     friend std::ostream& operator<<(std::ostream& os, const PyGraph& props);
 };
 
@@ -141,6 +150,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("compute_type", "float")
         )
         .def("build", &PyGraph::build)
+        .def("execute", &PyGraph::execute)
         .def("__repr__", [](PyGraph const& graph){
             std::ostringstream out;
             out << graph;

@@ -12,6 +12,7 @@ using namespace pybind11::literals;
 void init_properties(py::module_ &m) {
     py::class_<cudnn_frontend::tensor_properties, std::shared_ptr<cudnn_frontend::tensor_properties>>(m, "tensor_properties")
         .def(py::init<std::string const &>())
+        .def("get_name", &cudnn_frontend::tensor_properties::get_name)
         .def("get_data_type", &cudnn_frontend::tensor_properties::get_data_type)
         .def("set_data_type", &cudnn_frontend::tensor_properties::set_data_type)
         .def("get_dim", &cudnn_frontend::tensor_properties::get_dim)
