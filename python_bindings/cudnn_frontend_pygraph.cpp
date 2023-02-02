@@ -33,13 +33,9 @@ public:
         auto props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(name);
         props_ptr->set_data_type(CUDNN_DATA_HALF);
         props_ptr->set_dim(dim);
+        props_ptr->set_stride(stride);
         props_ptr->set_is_virtual(isVirtual);
         props_ptr->set_is_pass_by_value(isByValue);
-
-        // Will be deduced later if passed empty
-        // TODO: This empty check can be part of conv node. User setting empty strides means they want to deduce it.
-        if(!stride.empty())
-            props_ptr->set_stride(stride);
 
         // TODO: Figure out how to pass status to python caller.
         auto status = graph.add_tensor(props_ptr);

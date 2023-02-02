@@ -120,6 +120,10 @@ public:
 
     int
     set_stride(std::vector<int64_t> const& value) {
+        // empty object implies caller wants cudnn to infer strides.
+        if(value.empty()) {
+            return 0;
+        }
         stride = value;
         is_stride_set = true;
         return 0;
