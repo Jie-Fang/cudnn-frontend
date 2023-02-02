@@ -58,28 +58,6 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims)
     .def("__repr__",      &cuDNNFEContext::describe);
 
-  py::class_<convolution_node> convolution_node(m, "convolution_node");
-  convolution_node.def(py::init<std::string const &>())
-    .def("get_padding",  &convolution_node::get_padding)
-    .def("set_padding",  &convolution_node::set_padding)
-    .def("get_stride",   &convolution_node::get_stride)
-    .def("set_stride",   &convolution_node::set_stride)
-    .def("get_dilation", &convolution_node::get_dilation)
-    .def("set_dilation", &convolution_node::set_dilation)
-    .def("get_tensor_data_type", &Node::get_tensor_data_type)
-    .def("set_tensor_data_type", &Node::set_tensor_data_type)
-    .def("get_compute_type",     &Node::get_compute_type)
-    .def("set_compute_type",     &Node::set_compute_type)
-    .def("get_port_name",       &convolution_node::get_port_name)
-    .def("set_port_names",       &convolution_node::set_port_names)
-    ;
-
-  py::enum_<convolution_node::PORTS>(m, "convolution_ports")
-        .value("X", convolution_node::PORTS::X)
-        .value("W", convolution_node::PORTS::W)
-        .value("Y", convolution_node::PORTS::Y)
-        .export_values();
-
 
   py::class_<pointwise_node> pointwise_node(m, "pointwise_node");
   pointwise_node.def(py::init<std::string const &>())

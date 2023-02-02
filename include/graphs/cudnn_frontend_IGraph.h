@@ -73,9 +73,14 @@ public:
 
     // Add a tensor properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    cudnn_frontend_error_t add_tensor(std::shared_ptr<tensor_properties> pointer_to_props) {
-        all_tensors.emplace(name, pointer_to_props);
+    cudnn_frontend_error_t add_tensor(std::shared_ptr<tensor_properties> props_ptr) {
+        all_tensors.emplace(props_ptr->get_name(), props_ptr);
         return cudnn_frontend_error_t::OK;
+    }
+
+    // Returns a shared pointer by value, so the caller is also an owner.
+    std::shared_ptr<tensor_properties> get_tensor(std::string const& tensor_name) {
+        return all_tensors.at(tensor_name);
     }
 
     cudnn_frontend_error_t
@@ -107,7 +112,7 @@ public:
     add_node(convolution_node const &props) {
                 
         std::string name = props.get_name();
-        conv_nodes.insert(std::pair<std::string, convolution_node>(name, props));
+        conv_nodes.emplace(name, props);
 
         auto &node = conv_nodes.at(name);
 
@@ -127,7 +132,8 @@ public:
             node.set_stride(ctx.get_spatial_dims() == 2 ? std::vector<int64_t>{1, 1} : std::vector<int64_t>{1, 1, 1});
         }
 
-        all_tensors.emplace(name + "::Y", std::make_shared<tensor_properties>(tensor_properties{name + "::Y"}));
+        auto const& output_port_name = props.get_port_name(convolution_node::PORTS::Y);
+        all_tensors.emplace(output_port_name, std::make_shared<tensor_properties>(output_port_name));
 
         return cudnn_frontend_error_t::OK;
     }
