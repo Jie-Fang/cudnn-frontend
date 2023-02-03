@@ -4,16 +4,15 @@ import numpy as np
 
 graph = fe.pygraph("nvfuser")
 
-image = graph.add_tensor(name = "image", dim = [4,16,56])
-weight = graph.add_tensor(name = "weight", dim = [4,56,16])
-bias = graph.add_tensor(name = "bias", dim = [4,16,16])
+image = graph.add_tensor(name = "image", dim = [4,16,56,56])
+weight = graph.add_tensor(name = "weight", dim = [16,16,3,3])
+bias = graph.add_tensor(name = "bias", dim = [1,16,1,1])
 
-response = graph.add_matmul(name = "matmul", image = image, weight = weight)
+response = graph.add_conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
 response.set_is_virtual(True)
 
 output = graph.add_bias(name = "bias", input = response, bias = bias)
 
-print(graph)
 graph.build()
 
 h_X = np.full(image.get_size(), 1).astype(dtype=np.half)
@@ -31,7 +30,7 @@ cuda.cuMemcpyHtoD(w_dptr, h_W, weight.get_size())
 cuda.cuMemcpyHtoD(b_dptr, h_B, bias.get_size())
 cuda.cuMemcpyHtoD(y_dptr, h_Y, output.get_size())
 
-graph.execute({image.get_name() :x_dptr, weight.get_name() : w_dptr, bias.get_name() : b_dptr, output.get_name() : y_dptr})
+graph.execute({image :x_dptr, weight : w_dptr, bias : b_dptr, output : y_dptr})
 
 cuda.cuMemcpyDtoH(h_Y, y_dptr, output.get_size())
 

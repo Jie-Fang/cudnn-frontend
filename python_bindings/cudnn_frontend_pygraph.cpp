@@ -152,10 +152,10 @@ public:
         throw_if(status != cudnn_frontend::cudnn_frontend_error_t::OK, status, "Backend graph building failed.");
     }
 
-    void execute(std::unordered_map<std::string, int64_t> var_pack) {
+    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::tensor_properties>, int64_t> var_pack) {
         std::unordered_map<std::string, void *> var_pack_;
         for (auto item : var_pack) {
-            var_pack_.insert(std::make_pair(item.first, (void *)item.second));
+            var_pack_.insert(std::make_pair(item.first->get_name(), (void *)item.second));
         }
         // TODO: Probably concatenate in a macro?
         auto status = graph.execute(var_pack_);
