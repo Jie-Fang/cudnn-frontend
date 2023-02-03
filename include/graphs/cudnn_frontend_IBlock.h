@@ -133,7 +133,7 @@ protected:
         int status = createExecutionPlan(handle);
         if(status) {
             getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
-            return cudnn_frontend_error_t::GRAPH_PARTITION_EXECUTION_PLAN_CREATION_FAILED;
+            return cudnn_frontend_error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
         }
 
         getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeBlock." << std::endl;
@@ -167,8 +167,8 @@ public:
             device_ptrs.push_back(item.second);
             uids.push_back(tensor_props.at(item.first)->get_uid());
         }
-        run_execution_plans(handle, device_ptrs, uids);
-        return cudnn_frontend_error_t::OK;
+        auto status = run_execution_plans(handle, device_ptrs, uids);
+        return status;
     }
 
     CompositeBlock(std::string const& name, int64_t const offset) : IBlock(name, offset) {}

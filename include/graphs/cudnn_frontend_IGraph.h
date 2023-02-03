@@ -58,7 +58,7 @@ public:
     cudnn_frontend_error_t
     is_valid_tensor(std::string const& name) {
         if (all_tensors.find(name) == all_tensors.end()) {
-            return cudnn_frontend_error_t::UNKNOWN_TENSOR_NAME;
+            return cudnn_frontend_error_t::INVALID_TENSOR_NAME;
         } 
         return cudnn_frontend_error_t::OK;
     }
@@ -80,7 +80,7 @@ public:
         auto &tensor = all_tensors.at(name);
 
         if (tensor->is_dim_set == false) {
-            return cudnn_frontend_error_t::TENSOR_DIMENSIONS_NOT_SET;
+            return cudnn_frontend_error_t::ATTRIBUTE_NOT_SET;
         }
 
         if (tensor->is_stride_set == false) {
@@ -115,7 +115,7 @@ public:
         auto &node = pointwise_nodes.at(name);
 
         if (node.is_mode_set == false) {
-            return cudnn_frontend_error_t::POINTWISE_MODE_NOT_SET;
+            return cudnn_frontend_error_t::ATTRIBUTE_NOT_SET;
         }
 
         if (node.is_compute_type_set == false)  {
@@ -292,8 +292,9 @@ public:
     execute(std::unordered_map<std::string, void *> var_pack) {
         cudnnHandle_t handle;
         cudnnCreate(&handle);
-        block.execute(handle, var_pack);
-        return cudnn_frontend_error_t::OK;
+        
+        auto status = block.execute(handle, var_pack);
+        return status;
     }
 
     ~Graph() = default;

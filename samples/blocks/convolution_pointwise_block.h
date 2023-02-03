@@ -91,7 +91,7 @@ public:
         int status = createExecutionPlan(handle);
         if(status) {
             getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionPointwiseBlock." << std::endl;
-            return cudnn_frontend_error_t::GRAPH_PARTITION_EXECUTION_PLAN_CREATION_FAILED;
+            return cudnn_frontend_error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
         }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Partitioned ConvolutionPointwiseBlock." << std::endl;

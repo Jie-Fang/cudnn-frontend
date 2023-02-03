@@ -92,16 +92,25 @@ public:
         return operations;
     }
 
-    int64_t
+    cudnn_frontend_error_t
     run_execution_plans(cudnnHandle_t handle, std::vector<void *> device_ptrs, std::vector<int64_t> &uids) {
         
         auto variant_pack = VariantPackBuilder()
                             .setDataPointers(device_ptrs.size(), device_ptrs.data())
                             .setUids(uids.size(), uids.data())
                             .build();
+        if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
+            getLogger() << "[cudnn_frontend] ERROR: Variant pack creation failed with " << variant_pack.get_error() << std::endl;
+            return cudnn_frontend_error_t::INVALID_VARIANT_PACK; 
+        }
 
-        cudnnBackendExecute(handle, execution_plans[0]->get_raw_desc(), variant_pack.get_raw_desc());
-        return 0;
+        auto status = cudnnBackendExecute(handle, execution_plans[0]->get_raw_desc(), variant_pack.get_raw_desc());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            getLogger() << "[cudnn_frontend] ERROR: Graph execution failed." << std::endl;
+            return cudnn_frontend_error_t::GRAPH_EXECUTION_FAILED; 
+        }
+
+        return cudnn_frontend_error_t::OK;
     }
 
 };

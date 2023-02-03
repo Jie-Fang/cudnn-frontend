@@ -58,16 +58,6 @@ PYBIND11_MODULE(cudnn_frontend_blocks, m)
     .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims)
     .def("__repr__",      &cuDNNFEContext::describe);
 
-  py::enum_<cudnn_frontend_error_t>(m, "cudnn_frontend_error")
-    .value("OK", cudnn_frontend_error_t::OK)
-    .value("TENSOR_DIMENSIONS_NOT_SET", cudnn_frontend_error_t::TENSOR_DIMENSIONS_NOT_SET)
-    .value("POINTWISE_MODE_NOT_SET", cudnn_frontend_error_t::POINTWISE_MODE_NOT_SET)
-    .value("SHAPE_DEDUCTION_FAILED", cudnn_frontend_error_t::SHAPE_DEDUCTION_FAILED)
-    .value("OUTPUT_TENSOR_NODE_NOT_FOUND", cudnn_frontend_error_t::OUTPUT_TENSOR_NODE_NOT_FOUND)
-    .value("UNKNOWN_TENSOR_NAME", cudnn_frontend_error_t::UNKNOWN_TENSOR_NAME)
-    .value("INPUT_PORT_COUNT_MISMATCH", cudnn_frontend_error_t::INPUT_PORT_COUNT_MISMATCH)
-    ;
-
   py::class_<reduction_node> reduction_node(m, "reduction_node");
   reduction_node.def(py::init<std::string const &>())
     .def("get_mode", &reduction_node::get_mode)
