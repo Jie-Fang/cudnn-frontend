@@ -10,28 +10,28 @@
 #include "cudnn_frontend_ExecutionPlan.h"
 #include "cudnn_frontend_VariantPack.h"
 
-#include "graphs/cudnn_frontend_ICudnn.h"
+#include "graphs/cudnn_frontend_cudnn_interface.h"
 
 
-#include "graphs/cudnn_frontend_nodes.h"
+#include "graphs/cudnn_frontend_graph_properties.h"
 
 
 namespace cudnn_frontend {
 
-// Interface for all blocks to follow.
-class IBlock: public ICudnn {
+// Interface for all nodes to follow.
+class INode: public ICudnn {
 
-    friend class ConvolutionFP8Block;
-    friend class ConvolutionPointwiseBlock;
+    friend class ConvolutionFP8Node;
+    friend class ConvolutionPointwiseNode;
 
 private:
 
 protected:
-    // Type of each block. Blocks can either be a composite (value BLOCK) or
+    // Type of each node. Nodes can either be a composite (value COMPOSITE) or
     // one of the other primitive types. Primitives types are nothing but 
     // cudnn operations.
     enum class Type {
-        BLOCK
+        COMPOSITE
         , CONVOLUTION
         , MATMUL
         , POINTWISE
@@ -42,25 +42,25 @@ protected:
     
     virtual Type getType() = 0;
 
-    virtual cudnn_frontend_error_t partition(cudnnHandle_t& handle) = 0;
+    virtual error_t partition(cudnnHandle_t& handle) = 0;
 
     virtual int createTensors() {
-        for(auto const& sub_block: sub_blocks) {
-            sub_block.second->createTensors();
+        for(auto const& sub_node: sub_nodes) {
+            sub_node.second->createTensors();
         }
         return 0;
     }
     
     virtual int createDescritpors() {
-        for(auto const& sub_block: sub_blocks) {
-            sub_block.second->createDescritpors();
+        for(auto const& sub_node: sub_nodes) {
+            sub_node.second->createDescritpors();
         }
         return 0;
     }
 
     virtual int createOperations() {
-        for(auto const& sub_block: sub_blocks) {
-            sub_block.second->createOperations();
+        for(auto const& sub_node: sub_nodes) {
+            sub_node.second->createOperations();
         }
         return 0;
     }
@@ -69,24 +69,24 @@ public:
     std::string name;
     int offset = 1;
 
-    // Tensors belonging to each block.
-    // Connecting blocks can modify and delete tensors in this container.
+    // Tensors belonging to each node.
+    // Connecting nodes can modify and delete tensors in this container.
     std::unordered_map<std::string, std::shared_ptr<tensor_properties>> tensor_props;
 
-    IBlock* parent_block;
-    std::unordered_map <std::string, std::shared_ptr<IBlock>> sub_blocks;
+    INode* parent_node;
+    std::unordered_map <std::string, std::shared_ptr<INode>> sub_nodes;
     
     virtual int infer_properties() = 0;
     
     virtual int validate() const = 0;
 
-    virtual cudnn_frontend_error_t build(cudnnHandle_t& handle) = 0;
+    virtual error_t build(cudnnHandle_t& handle) = 0;
     
-    virtual cudnn_frontend_error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
+    virtual error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
 
-    IBlock(std::string const& name, int64_t const offset) : name(name), offset(offset) {}
+    INode(std::string const& name, int64_t const offset) : name(name), offset(offset) {}
 
-    virtual ~IBlock() {};
+    virtual ~INode() {};
 
     int add_tensor(std::string const& name, tensor_properties& properties) {
         tensor_props.emplace(name, std::make_shared<tensor_properties>(properties));
@@ -97,30 +97,30 @@ public:
         if(tensor_props.count(name)) {
             return tensor_props.at(name);
         }
-        if(parent_block == nullptr) {
+        if(parent_node == nullptr) {
             return nullptr;
         }
-        tensor_props[name] = parent_block->get_tensor_props(name);
+        tensor_props[name] = parent_node->get_tensor_props(name);
         return tensor_props.at(name);
     }
 };
 
-class CompositeBlock : public IBlock {
+class CompositeNode : public INode {
 
 protected:
     Type
     getType() override {
-        return Type::BLOCK;
+        return Type::COMPOSITE;
     }
 
-    cudnn_frontend_error_t partition(cudnnHandle_t& handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partioning CompositeBlock..." << std::endl;
+    error_t partition(cudnnHandle_t& handle) override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Partioning CompositeNode..." << std::endl;
 
         std::vector<Operation const*> operation_graph{};
 
-        for (auto block : sub_blocks) {
-            getLogger() << "Getting the operation from " << block.first << std::endl;
-            for (auto &operation : block.second->get_operations()) {
+        for (auto node : sub_nodes) {
+            getLogger() << "Getting the operation from " << node.first << std::endl;
+            for (auto &operation : node.second->get_operations()) {
                 operation_graph.push_back(operation.second.get());
             }
         }
@@ -132,34 +132,34 @@ protected:
 
         int status = createExecutionPlan(handle);
         if(status) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
-            return cudnn_frontend_error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionNode." << std::endl;
+            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
         }
 
-        getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeBlock." << std::endl;
-        return cudnn_frontend_error_t::OK;
+        getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeNode." << std::endl;
+        return error_t::OK;
     }
 
 public:
     int infer_properties() override {
-        for(auto const& sub_block: sub_blocks) {
-            sub_block.second->infer_properties();
+        for(auto const& sub_node: sub_nodes) {
+            sub_node.second->infer_properties();
         }
         return 0;
     }
 
     int validate() const override {return 0;}
 
-    cudnn_frontend_error_t build(cudnnHandle_t& handle) override {
+    error_t build(cudnnHandle_t& handle) override {
         infer_properties();
         createTensors();
         createDescritpors();
         createOperations();
         partition(handle);
-        return cudnn_frontend_error_t::OK;
+        return error_t::OK;
     }
 
-    cudnn_frontend_error_t
+    error_t
     execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_to_pointer_map) override {
         std::vector<int64_t> uids;
         std::vector<void *> device_ptrs;
@@ -171,9 +171,9 @@ public:
         return status;
     }
 
-    CompositeBlock(std::string const& name, int64_t const offset) : IBlock(name, offset) {}
+    CompositeNode(std::string const& name, int64_t const offset) : INode(name, offset) {}
 
-    ~CompositeBlock() {};
+    ~CompositeNode() {};
 };
 
 } // namespace cudnn_frontend

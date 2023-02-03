@@ -22,15 +22,15 @@ endif()
 execute_process(COMMAND ${Python_EXECUTABLE} -m pip install ${_pip_args} cuda-python)
 
 pybind11_add_module(
-    cudnn_frontend_blocks
+    pycudnn
     
-    cudnn_frontend_blocks_py.cpp
+    cudnn_frontend_bindings.cpp
     cudnn_frontend_pygraph.cpp
     cudnn_frontend_properties.cpp
 )
 
 target_link_libraries(
-    cudnn_frontend_blocks
+    pycudnn
     PRIVATE cudnn_frontend
 
     PRIVATE CUDA::cudart
@@ -40,7 +40,7 @@ target_link_libraries(
 )
 
 set_target_properties(
-    cudnn_frontend_blocks
+    pycudnn
     PROPERTIES
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib64

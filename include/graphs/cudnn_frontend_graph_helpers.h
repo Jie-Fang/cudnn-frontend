@@ -10,7 +10,7 @@
 
 namespace cudnn_frontend {
 
-enum class cudnn_frontend_error_t {
+enum class error_t {
     OK
     , ATTRIBUTE_NOT_SET
     , SHAPE_DEDUCTION_FAILED

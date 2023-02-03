@@ -1,8 +1,8 @@
 from cuda import cuda, cudart
-import cudnn_frontend_blocks as fe
+import pycudnn
 import numpy as np
 
-graph = fe.pygraph("nvfuser")
+graph = pycudnn.pygraph("nvfuser")
 
 image = graph.add_tensor(name = "image", dim = [4,16,56])
 weight = graph.add_tensor(name = "weight", dim = [4,56,16])

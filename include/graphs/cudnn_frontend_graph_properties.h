@@ -9,23 +9,12 @@
 
 namespace cudnn_frontend {
 
-class graph_properties {
-protected:
-    std::string name;
-
-public:
-    graph_properties(const std::string &name) : name(name) {}
-
-    std::string const
-    get_name() const {
-        return name;
-    }
-};
-
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
-class tensor_properties : public graph_properties {
+class tensor_properties {
 protected:
+
+    std::string name;
     // TODO: use custom FE data type string/enum.
     cudnnDataType_t data_type = CUDNN_DATA_FLOAT;
     std::vector<int64_t> dim = {};
@@ -41,6 +30,11 @@ public:
     bool is_virtual_set = false;
     bool is_pass_by_value_set = false;
     bool is_uid_set = false;
+
+    std::string const
+    get_name() const {
+        return name;
+    }
 
     // TODO: Currently this structure takes in unrolled list of properties to set.
     // But later, it will take in the context and derive properties to set from it.
@@ -87,7 +81,7 @@ public:
         return std::accumulate(dim.begin(), dim.end(), initialProduct, std::multiplies<int64_t>());
     }
 
-    tensor_properties(const std::string &name) : graph_properties(name) {}
+    tensor_properties(const std::string &name) : name(name) {}
 
     cudnnDataType_t const &
     get_data_type() const {
@@ -194,36 +188,41 @@ inline std::ostream& operator<<(std::ostream& os, const tensor_properties& props
     return os;
 }
 
-class Node : public graph_properties {
+class operation_properties {
 public:
-    enum class Type {
+    enum class Tag {
         Convolution,
-        Matmul,
+        MatMul,
         Pointwise,
         Reduction
     };
 
-    using parent_class = Node;
+    using parent_class = operation_properties;
 protected:
 
+    std::string name;
     // TODO: remove setting tensor data type in operation properties.
     // The operation only has to know of the compute type. cudnn operation
     // will convert any tensor type to compute type internally.
     cudnnDataType_t tensor_data_type;
     cudnnDataType_t compute_type;
 
-    Type node_type;
+    Tag tag;
 public:
 
     bool is_tensor_data_type_set = false;
     bool is_compute_type_set = false;
-    bool is_input_set = false;
 
-    Node(const std::string name, Type t) : graph_properties(name), node_type(t) {}
+    operation_properties(const std::string name, Tag t) : name(name), tag(t) {}
 
-    Type
-    get_node_type() const {
-        return node_type;
+    std::string const
+    get_name() const {
+        return name;
+    }
+
+    Tag
+    get_tag() const {
+        return tag;
     }
 
     cudnnDataType_t
@@ -255,7 +254,7 @@ public:
 
 };
 
-class convolution_node : public Node {
+class convolution_properties : public operation_properties {
 public:
     enum PORTS {
         X = 0,
@@ -276,18 +275,18 @@ public:
 
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    convolution_node(const std::string name) : Node(name, Type::Convolution) {
+    convolution_properties(const std::string name) : operation_properties(name, Tag::Convolution) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    cudnn_frontend_error_t
+    error_t
     set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return cudnn_frontend_error_t::OK;
+        return error_t::OK;
     }
 
     std::string
@@ -343,10 +342,10 @@ public:
         return {port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const convolution_node& props);
+    friend std::ostream& operator<<(std::ostream& os, const convolution_properties& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const convolution_node& props) {
+inline std::ostream& operator<<(std::ostream& os, const convolution_properties& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " dilation: [";
@@ -365,14 +364,14 @@ inline std::ostream& operator<<(std::ostream& os, const convolution_node& props)
     }
     os << "],"
     << " ports: [";
-    for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<convolution_node::PORTS>(i)) << ",";
+    for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<convolution_properties::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class matmul_node : public Node {
+class matmul_properties : public operation_properties {
 public:
     enum PORTS {
         X = 0,
@@ -387,18 +386,18 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    matmul_node(const std::string name) : Node(name, Type::Matmul) {
+    matmul_properties(const std::string name) : operation_properties(name, Tag::MatMul) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    cudnn_frontend_error_t
+    error_t
     set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return cudnn_frontend_error_t::OK;
+        return error_t::OK;
     }
 
     std::string
@@ -418,21 +417,21 @@ public:
         return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const matmul_node& props);
+    friend std::ostream& operator<<(std::ostream& os, const matmul_properties& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const matmul_node& props) {
+inline std::ostream& operator<<(std::ostream& os, const matmul_properties& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " ports: [";
-    for(size_t i = 0; i < matmul_node::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<matmul_node::PORTS>(i)) << ",";
+    for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<matmul_properties::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class pointwise_node : public Node {
+class pointwise_properties : public operation_properties {
 public:
     enum PORTS {
         X = 0,
@@ -450,7 +449,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    pointwise_node(const std::string name) : Node(name, Type::Pointwise) {
+    pointwise_properties(const std::string name) : operation_properties(name, Tag::Pointwise) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::B] = name + "::B";
         port_to_name[PORTS::Y] = name + "::Y";
@@ -484,12 +483,12 @@ public:
         return 0;
     }
 
-    cudnn_frontend_error_t
+    error_t
     set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return cudnn_frontend_error_t::OK;
+        return error_t::OK;
     }
 
     std::string
@@ -502,21 +501,21 @@ public:
         return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::B)};
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const pointwise_node& props);
+    friend std::ostream& operator<<(std::ostream& os, const pointwise_properties& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const pointwise_node& props) {
+inline std::ostream& operator<<(std::ostream& os, const pointwise_properties& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " ports: [";
-    for(size_t i = 0; i < pointwise_node::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<pointwise_node::PORTS>(i)) << ",";
+    for(size_t i = 0; i < pointwise_properties::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<pointwise_properties::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class reduction_node : public Node {
+class reduction_properties : public operation_properties {
 public:
     enum PORTS {
         X = 0,
@@ -534,7 +533,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    reduction_node(const std::string name) : Node(name, Type::Reduction) {
+    reduction_properties(const std::string name) : operation_properties(name, Tag::Reduction) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Y] = name + "::Y";
     }
@@ -563,12 +562,12 @@ public:
         return{port_to_name.at(PORTS::X)};
     }
 
-    cudnn_frontend_error_t
+    error_t
     set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return cudnn_frontend_error_t::OK;
+        return error_t::OK;
     }
 
     std::string

@@ -1,13 +1,13 @@
 # Sample that builds a Convolution Operatio
 
-import cudnn_frontend_blocks as fe
+import pycudnn as fe
 
 ctx = fe.cuDNNFEContext()
 print(ctx)
 
 graph = fe.Graph("conv_graph", ctx)
 
-conv0 = fe.convolution_node("conv0")
+conv0 = fe.convolution_properties("conv0")
 # conv0.set_inputs(["tensor0", "tensor1"])
 conv0.set_port_names([(fe.convolution_ports.X,"tensor0"), (fe.convolution_ports.W,"tensor1")])
 conv0.set_padding([1,1])

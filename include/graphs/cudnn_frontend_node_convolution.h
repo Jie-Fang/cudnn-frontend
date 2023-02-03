@@ -5,30 +5,30 @@
 #include <cudnn_frontend_Logging.h>
 
 #include "cudnn_frontend_graph_helpers.h"
-#include "cudnn_frontend_IBlock.h"
+#include "cudnn_frontend_node_interface.h"
 
 namespace cudnn_frontend {
 
-class ConvolutionBlock : public IBlock {
+class ConvolutionNode : public INode {
 private:
 
 protected:
 
 public:
-    convolution_node props;
+    convolution_properties props;
 
-    ConvolutionBlock(std::string const& name, int64_t offset = 1)  : IBlock (name, offset), props(name) {
+    ConvolutionNode(std::string const& name, int64_t offset = 1)  : INode (name, offset), props(name) {
     }
 
     Type getType() override final {
         return Type::CONVOLUTION;
     }
 
-    int set_properties(std::string const& IBlock_name, convolution_node const& properties) {
-        if(sub_blocks.size() != 0) {
+    int set_properties(std::string const& INode_name, convolution_properties const& properties) {
+        if(sub_nodes.size() != 0) {
             return 1;
         }
-        if(IBlock_name != name) {
+        if(INode_name != name) {
             return 1;
         }
         
@@ -39,8 +39,8 @@ public:
     int infer_properties() override final {
         props.update_uids(offset);
 
-        for(size_t i = 0; i < convolution_node::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<convolution_node::PORTS>(i)));
+        for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<convolution_properties::PORTS>(i)));
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
         }
 
@@ -48,23 +48,23 @@ public:
     }
     
     int validate() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionBlock..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionNode..." << std::endl;
 
         // TODO: check all properties of this operation and its tensor are correct
         // Like do dim count match dim/stride
         // Do dim and corresponding stride match
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionBlock." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionNode." << std::endl;
         return 0;
     }
 
     int createTensors() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        getLogger() << "X: " << props.port_to_name.at(convolution_node::PORTS::X);
+        getLogger() << "X: " << props.port_to_name.at(convolution_properties::PORTS::X);
 
-        auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::X));
+        auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_properties::PORTS::X));
         size_t const dim_count = x_tensor->get_stride().size();
         auto input  = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, x_tensor->get_dim().data())
@@ -75,9 +75,9 @@ public:
                         .setVirtual(x_tensor->get_is_virtual())
                         .setByValue(x_tensor->get_is_pass_by_value())
                         .build();
-        tensors.emplace(convolution_node::PORTS::X, std::make_shared<Tensor>(std::move(input)));
+        tensors.emplace(convolution_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
 
-        auto w_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::W));
+        auto w_tensor = get_tensor_props(props.port_to_name.at(convolution_properties::PORTS::W));
         auto weight = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, w_tensor->get_dim().data())
                         .setStrides(dim_count, w_tensor->get_stride().data())
@@ -87,9 +87,9 @@ public:
                         .setVirtual(w_tensor->get_is_virtual())
                         .setByValue(w_tensor->get_is_pass_by_value())
                         .build();
-        tensors.emplace(convolution_node::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
+        tensors.emplace(convolution_properties::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
 
-        auto y_tensor = get_tensor_props(props.port_to_name.at(convolution_node::PORTS::Y));
+        auto y_tensor = get_tensor_props(props.port_to_name.at(convolution_properties::PORTS::Y));
         auto output = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, y_tensor->get_dim().data())
                         .setStrides(dim_count, y_tensor->get_stride().data())
@@ -99,9 +99,9 @@ public:
                         .setVirtual(y_tensor->get_is_virtual())
                         .setByValue(y_tensor->get_is_pass_by_value())
                         .build();
-        tensors.emplace(convolution_node::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
+        tensors.emplace(convolution_properties::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionBlock tensors." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
         return 0;
     }
@@ -112,7 +112,7 @@ public:
 
     int createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionBlock operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode operations..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -132,16 +132,16 @@ public:
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(convolution_node::PORTS::X)))
-                                        .setwDesc(*(tensors.at(convolution_node::PORTS::W)))
-                                        .setyDesc(*(tensors.at(convolution_node::PORTS::Y)))
+                                        .setxDesc(*(tensors.at(convolution_properties::PORTS::X)))
+                                        .setwDesc(*(tensors.at(convolution_properties::PORTS::W)))
+                                        .setyDesc(*(tensors.at(convolution_properties::PORTS::Y)))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
                                         .build();
         operations.emplace("conv", std::make_shared<Operation>(std::move(convolution_operation)));
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionBlock operation." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {
@@ -152,8 +152,8 @@ public:
         return 0;
     }
 
-    cudnn_frontend_error_t partition(cudnnHandle_t& handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partioning ConvolutionBlock..." << std::endl;
+    error_t partition(cudnnHandle_t& handle) override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Partioning ConvolutionNode..." << std::endl;
 
         std::vector<Operation const*> operation_graph = {operations.at("conv").get()};
         auto convolution_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
@@ -161,15 +161,15 @@ public:
 
         int status = createExecutionPlan(handle);
         if(status) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionBlock." << std::endl;
-            return cudnn_frontend_error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionNode." << std::endl;
+            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
         }
 
-        getLogger() << "[cudnn_frontend] INFO: Partitioned ConvolutionBlock." << std::endl;
-        return cudnn_frontend_error_t::OK;
+        getLogger() << "[cudnn_frontend] INFO: Partitioned ConvolutionNode." << std::endl;
+        return error_t::OK;
     }
 
-    cudnn_frontend_error_t build(cudnnHandle_t& handle) override final {
+    error_t build(cudnnHandle_t& handle) override final {
 
         infer_properties();
         validate();
@@ -179,8 +179,8 @@ public:
         return partition(handle);
     }
     
-    cudnn_frontend_error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
-        getLogger() << "[cudnn_frontend] INFO: ConvolutionBlock starting execution..." << std::endl;
+    error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
+        getLogger() << "[cudnn_frontend] INFO: ConvolutionNode starting execution..." << std::endl;
 
         for(auto const& execution_plan: execution_plans) {
             getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
@@ -203,13 +203,13 @@ public:
 
             auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
             if (status != CUDNN_STATUS_SUCCESS) {
-                return cudnn_frontend_error_t::GRAPH_EXECUTION_FAILED;
+                return error_t::GRAPH_EXECUTION_FAILED;
             }
             getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
         }
         
-        getLogger() << "[cudnn_frontend] INFO: ConvolutionBlock executed successfully." << std::endl;
-        return cudnn_frontend_error_t::OK;
+        getLogger() << "[cudnn_frontend] INFO: ConvolutionNode executed successfully." << std::endl;
+        return error_t::OK;
     }
 };
 

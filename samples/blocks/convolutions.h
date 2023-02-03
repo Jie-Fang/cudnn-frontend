@@ -21,19 +21,19 @@
  */
 
 void
-run_convolution_block();
+run_convolution_node();
 
 void
-run_pointwise_block();
+run_pointwise_node();
 
 void
-run_reduction_block();
+run_reduction_node();
 
 void
-run_matmul_block();
+run_matmul_node();
 
 void
-run_convolution_fp8_block();
+run_convolution_fp8_node();
 
 void
-run_convolution_pointwise_block();
+run_convolution_pointwise_node();

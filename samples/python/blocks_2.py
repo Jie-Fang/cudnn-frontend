@@ -1,6 +1,6 @@
 # Sample that builds a Convolution Operatio
 
-import cudnn_frontend_blocks as fe
+import pycudnn as fe
 from cuda import cuda, cudart
 
 import numpy as np
@@ -13,7 +13,7 @@ print(ctx)
 
 graph = fe.Graph("conv_graph", ctx)
 
-conv0 = fe.convolution_node("conv0")
+conv0 = fe.convolution_properties("conv0")
 conv0.set_port_names([(fe.convolution_ports.X,"tensor0"), (fe.convolution_ports.W,"tensor1")])
 conv0.set_padding([1,1])
 conv0.set_stride([1,1])
@@ -34,7 +34,7 @@ tensor2 = fe.tensor_properties("tensor2")
 tensor2.set_dim(x_dim)
 graph.add_tensor(tensor2)
 
-pw0= fe.pointwise_node("pw0")
+pw0= fe.pointwise_properties("pw0")
 # pw0.set_inputs(["conv0::Y", "tensor2"])
 pw0.set_port_names([(fe.pointwise_ports.X,"conv0::Y"), (fe.pointwise_ports.B,"tensor2")])
 pw0.set_mode("Add")

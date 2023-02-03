@@ -2722,17 +2722,17 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 }
 #endif
 
-TEST_CASE("Primitive Blocks", "[primitive][block]") {
-    run_convolution_block();
-    run_pointwise_block();
-    run_reduction_block();
-    run_matmul_block();
+TEST_CASE("Primitive Nodes", "[primitive][node]") {
+    run_convolution_node();
+    run_pointwise_node();
+    run_reduction_node();
+    run_matmul_node();
 }
 
-TEST_CASE("FP8 Composite Blocks", "[fp8][composite][block]") {
-    run_convolution_fp8_block();
+TEST_CASE("FP8 Composite Nodes", "[fp8][composite][node]") {
+    run_convolution_fp8_node();
 }
 
-TEST_CASE("Composite Blocks", "[composite][block]") {
-    run_convolution_pointwise_block();
+TEST_CASE("Composite Nodes", "[composite][node]") {
+    run_convolution_pointwise_node();
 }

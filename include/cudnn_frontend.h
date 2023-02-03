@@ -116,12 +116,12 @@
 #include "cudnn_frontend_ExecutionPlanCache.h"
 #include "cudnn_frontend_Resample.h"
 
-#include "graphs/cudnn_frontend_convolution_block.h"
-#include "graphs/cudnn_frontend_matmul_block.h"
-#include "graphs/cudnn_frontend_pointwise_block.h"
-#include "graphs/cudnn_frontend_reduction_block.h"
+#include "graphs/cudnn_frontend_node_convolution.h"
+#include "graphs/cudnn_frontend_node_matmul.h"
+#include "graphs/cudnn_frontend_node_pointwise.h"
+#include "graphs/cudnn_frontend_node_reduction.h"
 #include "graphs/cudnn_frontend_context.h"
-#include "graphs/cudnn_frontend_IGraph.h"
+#include "graphs/cudnn_frontend_graph_interface.h"
 
 #define CUDNN_FRONTEND_MAJOR_VERSION 0
 #define CUDNN_FRONTEND_MINOR_VERSION 7
