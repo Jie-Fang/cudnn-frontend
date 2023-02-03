@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "cudnn_frontend_context.h"
 #include "graphs/cudnn_frontend_pointwise_block.h"
 
@@ -11,6 +13,7 @@ class IGraph : public graph_properties {
 protected:
     std::unordered_map<std::string, std::shared_ptr<tensor_properties>> all_tensors;
     std::unordered_map<std::string, convolution_node>  conv_nodes;
+    std::unordered_map<std::string, matmul_node>  matmul_nodes;
     std::unordered_map<std::string, pointwise_node>    pointwise_nodes;
     
 public:
@@ -18,6 +21,7 @@ public:
     virtual cudnn_frontend_error_t add_tensor(tensor_properties const &props) = 0;
 
     virtual cudnn_frontend_error_t add_node(convolution_node const &props) = 0;
+    virtual cudnn_frontend_error_t add_node(matmul_node   const &props) = 0;
     virtual cudnn_frontend_error_t add_node(pointwise_node   const &props) = 0;
     
     friend std::ostream& operator<<(std::ostream& os, const IGraph& props);
@@ -37,6 +41,11 @@ inline std::ostream& operator<<(std::ostream& os, const IGraph& graph) {
     os << "],"
     << "\npointwise: [\n";
     for(auto const& node: graph.pointwise_nodes) {
+        os << (node.second) << ",";
+    }
+    os << "],"
+    << "\nmatmul: [\n";
+    for(auto const& node: graph.matmul_nodes) {
         os << (node.second) << ",";
     }
     os << "],";
@@ -163,6 +172,28 @@ public:
     }
 
     cudnn_frontend_error_t
+    add_node(matmul_node const &props) {
+                
+        std::string name = props.get_name();
+        matmul_nodes.emplace(name, props);
+
+        auto &node = matmul_nodes.at(name);
+
+        if (node.is_compute_type_set == false)  {
+            node.set_compute_type(ctx.get_compute_type());
+        }
+
+        if (node.is_tensor_data_type_set == false)  {
+            node.set_tensor_data_type(ctx.get_intermediate_data_type());
+        }
+
+        auto const& output_port_name = props.get_port_name(matmul_node::PORTS::Y);
+        all_tensors.emplace(output_port_name, std::make_shared<tensor_properties>(output_port_name));
+
+        return cudnn_frontend_error_t::OK;
+    }
+
+    cudnn_frontend_error_t
     infer_shapes() {
         std::unordered_map<std::string, bool>   visited_nodes;
         std::unordered_map<std::string, bool>   visited_tensors;
@@ -182,6 +213,10 @@ public:
 
 
         for (auto &node : conv_nodes) {
+            visited_nodes[node.first] = false;
+            all_nodes[node.first] = &node.second;
+        }
+        for (auto &node : matmul_nodes) {
             visited_nodes[node.first] = false;
             all_nodes[node.first] = &node.second;
         }
@@ -246,6 +281,20 @@ public:
                 case Node::Type::Reduction: {
                 }
                 case Node::Type::Matmul: {
+                    matmul_node const *mm_node = dynamic_cast<matmul_node const *>(node);
+                    auto &tensor = all_tensors.at(mm_node->get_port_name(matmul_node::PORTS::Y));
+                    auto &input_x_tensor = all_tensors.at(mm_node->get_port_name(matmul_node::PORTS::X));
+                    auto &input_w_tensor = all_tensors.at(mm_node->get_port_name(matmul_node::PORTS::W));
+                    // TODO: Compute output size correctly. Right now just
+                    // Copying the input tensor sizes
+                    tensor->set_data_type(input_x_tensor->get_data_type());
+                    auto x_dim = input_x_tensor->get_dim();
+                    auto w_dim = input_w_tensor->get_dim();
+                    tensor->set_dim({x_dim[0], x_dim[1], w_dim[2]});
+                    visited_tensors[tensor->get_name()] = true;
+                    find_entrance_nodes();
+                    entrance_nodes.erase(entrance_nodes.begin());
+                    continue;
                 }
                 break;
             }
@@ -265,12 +314,22 @@ public:
         cudnnCreate(&handle_);
 
         block.tensor_props = all_tensors;
+        
         for (auto &node : conv_nodes) {
             getLogger() << "Adding the conv block " << node.first << std::endl;
             auto conv_block = std::make_shared<ConvolutionBlock>(node.first, uid_offset);
             conv_block->props = node.second;
             conv_block->parent_block = &block;
             block.sub_blocks[node.first] = conv_block;
+            uid_offset += 100;
+        }
+
+        for (auto &node : matmul_nodes) {
+            getLogger() << "Adding the matmul block " << node.first << std::endl;
+            auto matmul_block = std::make_shared<MatMulBlock>(node.first, uid_offset);
+            matmul_block->props = node.second;
+            matmul_block->parent_block = &block;
+            block.sub_blocks[node.first] = matmul_block;
             uid_offset += 100;
         }
 

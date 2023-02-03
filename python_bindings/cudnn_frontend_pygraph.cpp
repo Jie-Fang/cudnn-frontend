@@ -99,6 +99,29 @@ public:
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
+    // Takes image and weight properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    add_matmul(
+        std::string const& name
+        , std::shared_ptr<cudnn_frontend::tensor_properties>& image_props_ptr
+        , std::shared_ptr<cudnn_frontend::tensor_properties>& weight_props_ptr
+        , std::string const& compute_type
+    ) {
+        cudnn_frontend::matmul_node props(name);
+        props.set_compute_type(CUDNN_DATA_FLOAT);
+        
+        // TODO: Check whether image and weight already exist.
+        props.set_port_names({{cudnn_frontend::matmul_node::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_node::PORTS::W, weight_props_ptr->get_name()}});
+
+        auto status = graph.add_node(props);
+        throw_if(status != cudnn_frontend::cudnn_frontend_error_t::OK, status, "Adding node " + name + " failed.");
+
+        return graph.get_tensor(props.get_port_name(cudnn_frontend::matmul_node::PORTS::Y));
+    }
+
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::tensor_properties> 
@@ -172,6 +195,12 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
+        )
+        .def("add_matmul", &PyGraph::add_matmul, 
+             py::arg_v("name", "test_tensor_name"),
+             py::arg("image"),
+             py::arg("weight"),
+             py::arg_v("compute_type", "float")
         )
         .def("add_bias", &PyGraph::add_bias, 
              py::arg_v("name", "test_tensor_name"),

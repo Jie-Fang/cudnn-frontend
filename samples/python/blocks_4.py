@@ -4,15 +4,16 @@ import numpy as np
 
 graph = fe.pygraph("nvfuser")
 
-image = graph.add_tensor(name = "image", dim = [4,16,56,56])
-weight = graph.add_tensor(name = "weight", dim = [16,16,3,3])
-bias = graph.add_tensor(name = "bias", dim = [1,16,1,1])
+image = graph.add_tensor(name = "image", dim = [4,16,56])
+weight = graph.add_tensor(name = "weight", dim = [4,56,16])
+bias = graph.add_tensor(name = "bias", dim = [4,16,16])
 
-response = graph.add_conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
+response = graph.add_matmul(name = "matmul", image = image, weight = weight)
 response.set_is_virtual(True)
 
 output = graph.add_bias(name = "bias", input = response, bias = bias)
 
+print(graph)
 graph.build()
 
 h_X = np.full(image.get_size(), 1).astype(dtype=np.half)

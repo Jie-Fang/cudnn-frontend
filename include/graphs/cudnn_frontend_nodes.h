@@ -417,7 +417,20 @@ public:
     get_inputs() const override {
         return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const matmul_node& props);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const matmul_node& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " ports: [";
+    for(size_t i = 0; i < matmul_node::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<matmul_node::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
 
 class pointwise_node : public Node {
 public:

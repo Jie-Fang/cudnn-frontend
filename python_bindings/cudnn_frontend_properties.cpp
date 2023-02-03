@@ -57,6 +57,26 @@ void init_properties(py::module_ &m) {
         .value("W", cudnn_frontend::convolution_node::PORTS::W)
         .value("Y", cudnn_frontend::convolution_node::PORTS::Y)
         .export_values();
+    
+    py::class_<cudnn_frontend::matmul_node> matmul_node(m, "matmul_node");
+    matmul_node.def(py::init<std::string const &>())
+        .def("get_tensor_data_type", &cudnn_frontend::Node::get_tensor_data_type)
+        .def("set_tensor_data_type", &cudnn_frontend::Node::set_tensor_data_type)
+        .def("get_compute_type",     &cudnn_frontend::Node::get_compute_type)
+        .def("set_compute_type",     &cudnn_frontend::Node::set_compute_type)
+        .def("get_port_name",       &cudnn_frontend::matmul_node::get_port_name)
+        .def("set_port_names",       &cudnn_frontend::matmul_node::set_port_names)
+        .def("__repr__", [](cudnn_frontend::matmul_node const& props){
+            std::ostringstream out;
+            out << props;
+            return out.str();
+        });;
+
+    py::enum_<cudnn_frontend::matmul_node::PORTS>(matmul_node, "ports")
+        .value("X", cudnn_frontend::matmul_node::PORTS::X)
+        .value("W", cudnn_frontend::matmul_node::PORTS::W)
+        .value("Y", cudnn_frontend::matmul_node::PORTS::Y)
+        .export_values();
 
     py::class_<cudnn_frontend::pointwise_node> pointwise_node(m, "pointwise_node");
     pointwise_node.def(py::init<std::string const &>())
