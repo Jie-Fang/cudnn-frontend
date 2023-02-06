@@ -91,15 +91,13 @@ class ProblemDescBuilder {
             int64_t nSpatialDims = poolingParams.nbSpatialDims;
             return ResampleDescBuilder_v8()
                             .setComputeType(mathPrec_)
-                            #if (CUDNN_VERSION >= 8500)
                             .setSpatialDim(nSpatialDims, poolingParams.windowDim)
                             .setNanPropagation(poolingParams.nanOpt)
                             .setResampleMode(poolingParams.mode)
-                            .setPaddingMode(poolingParams.paddingMode)
+                            .setPaddingMode(poolingParams.padding_mode)
                             .setSpatialStride(nSpatialDims, poolingParams.stride)
                             .setPrePadding(nSpatialDims, poolingParams.prePadding)
                             .setPostPadding(nSpatialDims, poolingParams.postPadding)
-                            #endif
                             .build();
         };
 

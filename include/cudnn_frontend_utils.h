@@ -82,6 +82,59 @@ throw_if(bool expr, const char *message, cudnnStatus_t status) {
 }
 
 static inline std::string
+to_string(cudnnStatus_t status) {
+    switch(status) {
+        case CUDNN_STATUS_SUCCESS:
+            return std::string("CUDNN_STATUS_SUCCESS");
+        case CUDNN_STATUS_NOT_INITIALIZED:
+            return std::string("CUDNN_STATUS_NOT_INITIALIZED");
+        case CUDNN_STATUS_ALLOC_FAILED:
+            return std::string("CUDNN_STATUS_ALLOC_FAILED");
+        case CUDNN_STATUS_BAD_PARAM:
+            return std::string("CUDNN_STATUS_BAD_PARAM");
+        case CUDNN_STATUS_INTERNAL_ERROR:
+            return std::string("CUDNN_STATUS_INTERNAL_ERROR");
+        case CUDNN_STATUS_INVALID_VALUE:
+            return std::string("CUDNN_STATUS_INVALID_VALUE");
+        case CUDNN_STATUS_ARCH_MISMATCH:
+            return std::string("CUDNN_STATUS_ARCH_MISMATCH");
+        case CUDNN_STATUS_MAPPING_ERROR:
+            return std::string("CUDNN_STATUS_MAPPING_ERROR");
+        case CUDNN_STATUS_EXECUTION_FAILED:
+            return std::string("CUDNN_STATUS_EXECUTION_FAILED");
+        case CUDNN_STATUS_NOT_SUPPORTED:
+            return std::string("CUDNN_STATUS_NOT_SUPPORTED");
+        case CUDNN_STATUS_LICENSE_ERROR:
+            return std::string("CUDNN_STATUS_LICENSE_ERROR");
+        case CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING:
+            return std::string("CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING");
+        case CUDNN_STATUS_RUNTIME_IN_PROGRESS:
+            return std::string("CUDNN_STATUS_RUNTIME_IN_PROGRESS");
+        case CUDNN_STATUS_RUNTIME_FP_OVERFLOW:
+            return std::string("CUDNN_STATUS_RUNTIME_FP_OVERFLOW");
+        case CUDNN_STATUS_VERSION_MISMATCH:
+            return std::string("CUDNN_STATUS_VERSION_MISMATCH");
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return std::string("UNKNOWN_CUDNN_STATUS");
+#endif
+    }
+    return std::string("");
+}
+
+static inline void
+set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
+    if (desc != nullptr) {
+        desc->set_status(status);
+        desc->set_error(message);
+    }
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    throw cudnnException(
+        std::string(std::string(message) + std::string(" cudnn_status: ") + to_string(status)).c_str(), status);
+#endif
+}
+
+static inline std::string
 to_string(cudnnDataType_t type) {
     switch(type) {
         case CUDNN_DATA_FLOAT:
@@ -179,85 +232,6 @@ to_string(cudnnBackendNumericalNote_t note) {
     }
     return std::string("INVALID_NUMERICAL_NOTE");
 }
-
-static inline std::string
-to_string(cudnnStatus_t status) {
-    switch(status) {
-        case CUDNN_STATUS_SUCCESS:
-            return std::string("CUDNN_STATUS_SUCCESS");
-        case CUDNN_STATUS_NOT_INITIALIZED:
-            return std::string("CUDNN_STATUS_NOT_INITIALIZED");
-        case CUDNN_STATUS_ALLOC_FAILED:
-            return std::string("CUDNN_STATUS_ALLOC_FAILED");
-        case CUDNN_STATUS_BAD_PARAM:
-            return std::string("CUDNN_STATUS_BAD_PARAM");
-        case CUDNN_STATUS_INTERNAL_ERROR:
-            return std::string("CUDNN_STATUS_INTERNAL_ERROR");
-        case CUDNN_STATUS_INVALID_VALUE:
-            return std::string("CUDNN_STATUS_INVALID_VALUE");
-        case CUDNN_STATUS_ARCH_MISMATCH:
-            return std::string("CUDNN_STATUS_ARCH_MISMATCH");
-        case CUDNN_STATUS_MAPPING_ERROR:
-            return std::string("CUDNN_STATUS_MAPPING_ERROR");
-        case CUDNN_STATUS_EXECUTION_FAILED:
-            return std::string("CUDNN_STATUS_EXECUTION_FAILED");
-        case CUDNN_STATUS_NOT_SUPPORTED:
-            return std::string("CUDNN_STATUS_NOT_SUPPORTED");
-        case CUDNN_STATUS_LICENSE_ERROR:
-            return std::string("CUDNN_STATUS_LICENSE_ERROR");
-        case CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING:
-            return std::string("CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING");
-        case CUDNN_STATUS_RUNTIME_IN_PROGRESS:
-            return std::string("CUDNN_STATUS_RUNTIME_IN_PROGRESS");
-        case CUDNN_STATUS_RUNTIME_FP_OVERFLOW:
-            return std::string("CUDNN_STATUS_RUNTIME_FP_OVERFLOW");
-        case CUDNN_STATUS_VERSION_MISMATCH:
-            return std::string("CUDNN_STATUS_VERSION_MISMATCH");
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            return std::string("UNKNOWN_CUDNN_STATUS");
-#endif
-    }
-    return std::string("");
-}
-
-#if (CUDNN_VERSION >= 8500)
-static inline std::string
-to_string(cudnnResampleMode_t mode) {
-    switch(mode) {
-        case CUDNN_RESAMPLE_NEAREST:
-            return std::string("CUDNN_RESAMPLE_NEAREST");
-        case CUDNN_RESAMPLE_BILINEAR:
-            return std::string("CUDNN_RESAMPLE_BILINEAR");
-        case CUDNN_RESAMPLE_AVGPOOL:
-            return std::string("CUDNN_RESAMPLE_AVGPOOL");
-        case CUDNN_RESAMPLE_MAXPOOL:
-            return std::string("CUDNN_RESAMPLE_MAXPOOL");
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            return std::string("UNKNOWN_CUDNN_RESAMPLE_MODE");
-#endif
-    }
-    return std::string("");
-}
-
-static inline std::string
-to_string(cudnnPaddingMode_t mode) {
-    switch(mode) {
-        case CUDNN_ZERO_PAD:
-            return std::string("CUDNN_ZERO_PAD");
-        case CUDNN_NEG_INF_PAD:
-            return std::string("CUDNN_NEG_INF_PAD");
-        case CUDNN_EDGE_VAL_PAD:
-            return std::string("CUDNN_EDGE_VAL_PAD");
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            return std::string("UNKNOWN_CUDNN_PAD_MODE");
-#endif
-    }
-    return std::string("");
-}
-#endif
 
 static inline std::string
 to_string(cudnnPointwiseMode_t mode) {
@@ -417,56 +391,178 @@ convert_string_to_enum(std::string const& val, cudnnBackendTensorReordering_t& e
 }
 #endif
 
-// Padding modes were introduced cudnn 8.5 onwards 
-#if (CUDNN_VERSION >= 8500)
-template <>
-inline void
-convert_string_to_enum(std::string const& val, cudnnPaddingMode_t& enum_value) {
-    if (val == "CUDNN_ZERO_PAD") {
-        enum_value = CUDNN_ZERO_PAD;
-    }  else if (val == "CUDNN_NEG_INF_PAD") {
-        enum_value = CUDNN_NEG_INF_PAD;
-    }  else if (val == "CUDNN_EDGE_VAL_PAD") {
-        enum_value = CUDNN_EDGE_VAL_PAD;
-    }
-}
-#endif
+enum class cudnnResampleMode_t{
+    NOT_SET,
 
-// Resample modes were introduced cudnn 8.5 onwards 
+    CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING,
+    CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING,
+    CUDNN_RESAMPLE_BILINEAR,
+    CUDNN_RESAMPLE_NEAREST,
+    CUDNN_RESAMPLE_MAXPOOL,
+};
+
+enum class cudnnPaddingMode_t{
+    NOT_SET,
+
+    CUDNN_EDGE_VAL_PAD,
+    CUDNN_NEG_INF_PAD,
+    CUDNN_ZERO_PAD
+};
+
+static inline std::ostream& operator<<(std::ostream& os, const cudnnResampleMode_t& mode) {
+    switch (mode)
+    {
+        case cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING:
+            os << "CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING";
+            break;
+        case cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING:
+            os << "CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING";
+            break;
+        case cudnnResampleMode_t::CUDNN_RESAMPLE_BILINEAR:
+            os << "CUDNN_RESAMPLE_BILINEAR";
+            break; 
+        case cudnnResampleMode_t::CUDNN_RESAMPLE_NEAREST:
+            os << "CUDNN_RESAMPLE_NEAREST";
+            break; 
+        case cudnnResampleMode_t::CUDNN_RESAMPLE_MAXPOOL:
+            os << "CUDNN_RESAMPLE_MAXPOOL";
+            break; 
+        case cudnnResampleMode_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+} 
+
+static inline std::ostream& operator<<(std::ostream& os, const cudnnPaddingMode_t& mode) {
+    switch (mode)
+    {
+        case cudnnPaddingMode_t::CUDNN_ZERO_PAD:
+            os << "CUDNN_ZERO_PAD";
+            break;
+        case cudnnPaddingMode_t::CUDNN_NEG_INF_PAD:
+            os << "CUDNN_NEG_INF_PAD";
+            break;
+        case cudnnPaddingMode_t::CUDNN_EDGE_VAL_PAD:
+            os << "CUDNN_EDGE_VAL_PAD";
+            break; 
+        case cudnnPaddingMode_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+} 
+
+namespace detail {
 #if (CUDNN_VERSION >= 8500)
-template <>
-inline void
-convert_string_to_enum(std::string const& val, cudnnResampleMode_t& enum_value) {
-    if (val == "CUDNN_RESAMPLE_NEAREST") {
-        enum_value = CUDNN_RESAMPLE_NEAREST;
-    }  else if (val == "CUDNN_RESAMPLE_BILINEAR") {
-        enum_value = CUDNN_RESAMPLE_BILINEAR;
-    }  else if (val == "CUDNN_RESAMPLE_AVGPOOL") {
-        enum_value = CUDNN_RESAMPLE_AVGPOOL;
-    }  else if (val == "CUDNN_RESAMPLE_MAXPOOL") {
-        enum_value = CUDNN_RESAMPLE_MAXPOOL;
-    } 
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnResampleMode_t const mode, ::cudnnResampleMode_t& cudnn_mode) {
+        switch (mode)
+        {
 #if (CUDNN_VERSION >= 8600)
-    else if (val == "CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING") {
-        enum_value = CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
-    }  else if (val == "CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING") {
-        enum_value = CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING;
+            case cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING:
+                cudnn_mode = CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING:
+                cudnn_mode = CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            case cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING:
+                cudnn_mode = CUDNN_RESAMPLE_AVGPOOL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#endif
+            case cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_BILINEAR:
+                cudnn_mode = CUDNN_RESAMPLE_BILINEAR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_NEAREST:
+                cudnn_mode = CUDNN_RESAMPLE_NEAREST;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_MAXPOOL:
+                cudnn_mode = CUDNN_RESAMPLE_MAXPOOL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
     }
-#endif
-}
-#endif
 
-static inline void
-set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t status, const char *message) {
-    if (desc != nullptr) {
-        desc->set_status(status);
-        desc->set_error(message);
-    }
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-    throw cudnnException(
-        std::string(std::string(message) + std::string(" cudnn_status: ") + to_string(status)).c_str(), status);
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnPaddingMode_t const mode, ::cudnnPaddingMode_t& cudnn_mode) {
+        switch (mode)
+        {
+            case cudnn_frontend::cudnnPaddingMode_t::CUDNN_ZERO_PAD:
+                cudnn_mode = CUDNN_ZERO_PAD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnPaddingMode_t::CUDNN_NEG_INF_PAD:
+                cudnn_mode = CUDNN_NEG_INF_PAD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnPaddingMode_t::CUDNN_EDGE_VAL_PAD:
+                cudnn_mode = CUDNN_EDGE_VAL_PAD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
-}
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
+    // To be deprecated. Only exists as setResampleMode(cudnnPaddingMode_t) requires it.
+    static inline void convert_from_cudnn_type(::cudnnPaddingMode_t const cudnn_mode, cudnn_frontend::cudnnPaddingMode_t& mode) {
+        mode = cudnn_frontend::cudnnPaddingMode_t::NOT_SET;
+        switch (cudnn_mode)
+        {
+            case CUDNN_EDGE_VAL_PAD:
+                mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_EDGE_VAL_PAD;
+                break; 
+            case CUDNN_NEG_INF_PAD:
+                mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_NEG_INF_PAD;
+                break; 
+            case CUDNN_ZERO_PAD:
+                mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_ZERO_PAD;
+                break;
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                break;
+    #endif
+        }
+    }
+
+    // To be deprecated. Only exists as setResampleMode(cudnnResampleMode_t) requires it.
+    static inline void convert_from_cudnn_type(::cudnnResampleMode_t const cudnn_mode, cudnn_frontend::cudnnResampleMode_t& mode) {
+        mode = cudnn_frontend::cudnnResampleMode_t::NOT_SET;
+        switch (cudnn_mode)
+        {
+#if (CUDNN_VERSION >= 8600)
+            case CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING:
+                mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_EXCLUDE_PADDING;
+                break;
+            case CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING:
+                mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
+                break;
+#else
+            case CUDNN_RESAMPLE_AVGPOOL:
+                mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
+                break;
+#endif
+            case CUDNN_RESAMPLE_BILINEAR:
+                mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_BILINEAR;
+                break; 
+            case CUDNN_RESAMPLE_NEAREST:
+                mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_NEAREST;
+                break; 
+            case CUDNN_RESAMPLE_MAXPOOL:
+                mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_MAXPOOL;
+                break;
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                break;
+    #endif
+        }
+    }
+
+#endif
+} // namespace detail
 
 }
 

@@ -54,10 +54,10 @@ class ResampleDesc_v8 : public BackendDescriptor {
         char sep = ',';
         ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: "
            << "Compute Type: " << to_string(computeType)
-           << ", Mode: " << to_string(mode)
+           << ", Resample Mode: " << resample_mode
            << ", Spatial Dimensions: " << spatialDim 
            << ", Nan Propagation: " << std::to_string(nanOpt)
-           << ", Padding Mode: " << to_string(paddingMode);
+           << ", Padding Mode: " << padding_mode;
         ss << ", WindowDim: [";
         for (auto i = 0; i < spatialDim; i++) {
             ss << '(' << windowDim[i].numerator << sep << windowDim[i].denominator << ')' << sep;
@@ -108,17 +108,17 @@ class ResampleDesc_v8 : public BackendDescriptor {
         return nanOpt;
     }
 
-#if (CUDNN_VERSION >= 8500)
-
     cudnnResampleMode_t
     getMode() const {
-        return mode;
+        return resample_mode;
     }
 
     cudnnPaddingMode_t
     getPaddingMode() const {
-        return paddingMode;
+        return padding_mode;
     }
+
+#if (CUDNN_VERSION >= 8500)
 
     cudnnFraction_t const *
     getSpatialStride() const {
@@ -152,12 +152,12 @@ class ResampleDesc_v8 : public BackendDescriptor {
     // default values for attributes 
     cudnnDataType_t computeType = CUDNN_DATA_FLOAT;   
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
+    cudnnResampleMode_t resample_mode = cudnnResampleMode_t::NOT_SET;
+    cudnnPaddingMode_t padding_mode = cudnnPaddingMode_t::NOT_SET;
     
     int64_t spatialDim = 0;
 
 #if (CUDNN_VERSION >= 8500)
-    cudnnResampleMode_t mode = CUDNN_RESAMPLE_AVGPOOL;
-    cudnnPaddingMode_t paddingMode = CUDNN_ZERO_PAD;
     // Shape attributes
     cudnnFraction_t windowDim[CUDNN_DIM_MAX] = {{0,1},{0,1}};
     cudnnFraction_t prePadding[CUDNN_DIM_MAX] = {{0,1},{0,1}};
@@ -215,9 +215,10 @@ class ResampleDescBuilder_v8 {
     }
     
     //! Set resample mode for the Resample Operation
+    // To be deprecated. Please use setResampleMode(cudnn_frontend::cudnnResampleMode_t).
     auto
-    setResampleMode(cudnnResampleMode_t mode_) -> ResampleDescBuilder_v8 & {
-        m_resampleDesc.mode = mode_;
+    setResampleMode(::cudnnResampleMode_t const mode_) -> ResampleDescBuilder_v8 & {
+        detail::convert_from_cudnn_type(mode_, m_resampleDesc.resample_mode);
         return *this;
     }
     
@@ -229,13 +230,28 @@ class ResampleDescBuilder_v8 {
         return *this;
     }
     
-     //! Set padding mode for the Resample Operation
+    //! Set padding mode for the Resample Operation
+    // To be deprecated. Please use setPaddingMode(cudnn_frontend::cudnnPaddingMode_t).
     auto
-    setPaddingMode(cudnnPaddingMode_t paddingMode_) -> ResampleDescBuilder_v8 & {
-        m_resampleDesc.paddingMode = paddingMode_;
+    setPaddingMode(::cudnnPaddingMode_t const padding_mode) -> ResampleDescBuilder_v8 & {
+        detail::convert_from_cudnn_type(padding_mode, m_resampleDesc.padding_mode);
         return *this;
     }
 #endif
+
+    //! Set padding mode for the Resample Operation
+    auto
+    setPaddingMode(cudnnPaddingMode_t const padding_mode) -> ResampleDescBuilder_v8 & {
+        m_resampleDesc.padding_mode = padding_mode;
+        return *this;
+    }
+
+    //! Set resample mode for the Resample Operation
+    auto
+    setResampleMode(cudnnResampleMode_t const mode) -> ResampleDescBuilder_v8 & {
+        m_resampleDesc.resample_mode = mode;
+        return *this;
+    }
  
     //! (Overloaded) Set post padding for the Resample Operation with int64_t
     auto
@@ -306,28 +322,6 @@ class ResampleDescBuilder_v8 {
         return *this;
     }
 
-    auto
-    setPaddingMode(std::string const& str) -> ResampleDescBuilder_v8 & {
-#if CUDNN_VERSION < 8500
-        CUDNN_FRONTEND_UNUSED(str);
-        set_error_and_throw_exception(&m_resampleDesc, CUDNN_STATUS_NOT_SUPPORTED, "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR setPaddingMode failed");
-#else
-    convert_string_to_enum<cudnnPaddingMode_t>(str, m_resampleDesc.paddingMode);
-#endif
-        return *this;
-    }
-
-    auto
-    setResampleMode(std::string const& str) -> ResampleDescBuilder_v8 & {
-#if CUDNN_VERSION < 8500
-        CUDNN_FRONTEND_UNUSED(str);
-        set_error_and_throw_exception(&m_resampleDesc, CUDNN_STATUS_NOT_SUPPORTED, "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR setResampleMode failed");
-#else
-    convert_string_to_enum<cudnnResampleMode_t>(str, m_resampleDesc.mode);
-#endif
-        return *this;
-    }
-
     /** @} */
 
     //! constructs the ResampleDesc_v8 by calling the cudnn API
@@ -354,11 +348,20 @@ class ResampleDescBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
+        ::cudnnResampleMode_t cudnn_resample_mode;
+        status = detail::convert_to_cudnn_type(m_resampleDesc.resample_mode, cudnn_resample_mode);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_resampleDesc,
+                status,
+                "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: SetAttribute CUDNN_ATTR_RESAMPLE_MODE Failed");
+            return std::move(m_resampleDesc);
+        }
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(), 
                                           CUDNN_ATTR_RESAMPLE_MODE, 
                                           CUDNN_TYPE_RESAMPLE_MODE, 
                                           1,
-                                          &(m_resampleDesc.mode));
+                                          &cudnn_resample_mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,
@@ -393,11 +396,20 @@ class ResampleDescBuilder_v8 {
             return std::move(m_resampleDesc);
         }
 
+        ::cudnnPaddingMode_t cudnn_padding_mode;
+        status = detail::convert_to_cudnn_type(m_resampleDesc.padding_mode, cudnn_padding_mode);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_resampleDesc,
+                status,
+                "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: SetAttribute CUDNN_ATTR_RESAMPLE_PADDING_MODE Failed");
+            return std::move(m_resampleDesc);
+        }
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(),
                                            CUDNN_ATTR_RESAMPLE_PADDING_MODE, 
                                            CUDNN_TYPE_PADDING_MODE, 
                                            1, 
-                                           &(m_resampleDesc.paddingMode));
+                                           &cudnn_padding_mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,

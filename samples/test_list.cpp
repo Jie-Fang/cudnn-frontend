@@ -859,8 +859,8 @@ TEST_CASE("PoolScaleBiasAct_int8 sample", "[pooling][forward][avgerage_pooling]"
 
     cudnnDataType_t compType = CUDNN_DATA_FLOAT;
     auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
-    std::string const  mode = "CUDNN_RESAMPLE_AVGPOOL";
-    std::string const  paddingMode = "CUDNN_ZERO_PAD";
+    cudnn_frontend::cudnnResampleMode_t const mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
+    cudnn_frontend::cudnnPaddingMode_t const padding_mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_ZERO_PAD;
 
     int64_t nbSpatialDims = 2;
     double alpha = 1.0;
@@ -913,9 +913,9 @@ TEST_CASE("PoolScaleBiasAct_int8 sample", "[pooling][forward][avgerage_pooling]"
                                   B.devPtr,
                                   S.devPtr, 
                                   compType,
-                                  mode ,
                                   nanOpt, 
-                                  paddingMode,
+                                  mode,
+                                  padding_mode,
                                   nbSpatialDims, 
                                   alpha,                           
                                   beta, 
@@ -1921,9 +1921,9 @@ TEST_CASE("Max pooling idx tensor dump", "[pooling][forward][max_pooling]") {
     Surface<int8_t> idx(Ysize, false);
 
     // Sampling params
-    std::string const mode = "CUDNN_RESAMPLE_MAXPOOL";
     auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
-    std::string const paddingMode = "CUDNN_NEG_INF_PAD";
+    cudnn_frontend::cudnnResampleMode_t const mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_MAXPOOL;
+    cudnn_frontend::cudnnPaddingMode_t const padding_mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_NEG_INF_PAD;
     
     run_maxpool_with_idx(xTensorDim,
                     yTensorDim,
@@ -1932,9 +1932,9 @@ TEST_CASE("Max pooling idx tensor dump", "[pooling][forward][max_pooling]") {
                     Y.devPtr,
                     idx.devPtr,
                     tensorType,
-                    mode,
                     nanOpt, 
-                    paddingMode, 
+                    mode,
+                    padding_mode, 
                     nbSpatialDims, 
                     windowDimA,
                     prePaddingA,
@@ -2008,18 +2008,18 @@ TEST_CASE("Backward pooling", "[pooling][backward][max_pooling]") {
         std::cout << "BACKWARD AVERAGE POOLING" << std::endl;
 
         // Sampling params
-        std::string const mode = "CUDNN_RESAMPLE_AVGPOOL";
         auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
-        std::string const paddingMode = "CUDNN_ZERO_PAD";
+        cudnn_frontend::cudnnResampleMode_t const mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
+        cudnn_frontend::cudnnPaddingMode_t const padding_mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_ZERO_PAD;
         
         run_backward_avgpool(dxTensorDim,
                         dyTensorDim,
                         dX.devPtr,
                         dY.devPtr,
                         tensorType,
-                        mode,
                         nanOpt, 
-                        paddingMode, 
+                        mode,
+                        padding_mode, 
                         nbSpatialDims,
                         windowDimA,
                         prePaddingA,
@@ -2048,9 +2048,9 @@ TEST_CASE("Backward pooling", "[pooling][backward][max_pooling]") {
         checkCudaErr(cudaDeviceSynchronize());
 
         // Sampling params
-        std::string const mode = "CUDNN_RESAMPLE_MAXPOOL";
         auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
-        std::string const paddingMode = "CUDNN_NEG_INF_PAD";
+        cudnn_frontend::cudnnResampleMode_t const mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_MAXPOOL;
+        cudnn_frontend::cudnnPaddingMode_t const padding_mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_NEG_INF_PAD;
         
         run_backward_maxpool(dxTensorDim,
                         dyTensorDim,
@@ -2059,9 +2059,9 @@ TEST_CASE("Backward pooling", "[pooling][backward][max_pooling]") {
                         dY.devPtr,
                         idx.devPtr,
                         tensorType,
-                        mode,
                         nanOpt, 
-                        paddingMode, 
+                        mode,
+                        padding_mode, 
                         nbSpatialDims, 
                         windowDimA,
                         prePaddingA,
