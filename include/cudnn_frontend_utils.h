@@ -432,19 +432,6 @@ convert_string_to_enum(std::string const& val, cudnnPaddingMode_t& enum_value) {
 }
 #endif
 
-// Nan propagation were introduced cudnn 8.5 onwards 
-#if (CUDNN_VERSION >= 8500)
-template <>
-inline void
-convert_string_to_enum(std::string const& val, cudnnNanPropagation_t& enum_value) {
-    if (val == "CUDNN_NOT_PROPAGATE_NAN") {
-        enum_value = CUDNN_NOT_PROPAGATE_NAN;
-    }  else if (val == "CUDNN_PROPAGATE_NAN") {
-        enum_value = CUDNN_PROPAGATE_NAN;
-    }
-}
-#endif
-
 // Resample modes were introduced cudnn 8.5 onwards 
 #if (CUDNN_VERSION >= 8500)
 template <>

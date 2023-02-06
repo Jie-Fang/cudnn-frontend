@@ -103,16 +103,16 @@ class ResampleDesc_v8 : public BackendDescriptor {
         return spatialDim;
     }
 
+    cudnnNanPropagation_t
+    getNanOpt() const {
+        return nanOpt;
+    }
+
 #if (CUDNN_VERSION >= 8500)
 
     cudnnResampleMode_t
     getMode() const {
         return mode;
-    }
-
-    cudnnNanPropagation_t
-    getNanOpt() const {
-        return nanOpt;
     }
 
     cudnnPaddingMode_t
@@ -182,6 +182,13 @@ class ResampleDescBuilder_v8 {
         return *this;
     }
 
+    //! Set nan propagation mode for the Resample Operation
+    auto
+    setNanPropagation(cudnnNanPropagation_t nanOpt_) -> ResampleDescBuilder_v8 & {
+        m_resampleDesc.nanOpt = nanOpt_;
+        return *this;
+    }
+
 #if CUDNN_VERSION >= 8500
     //! (Overloaded) Set post padding for the Resample Operation with cudnnFraction_t
     auto
@@ -214,13 +221,6 @@ class ResampleDescBuilder_v8 {
         return *this;
     }
     
-    //! Set nan propagation mode for the Resample Operation
-    auto
-    setNanPropagation(cudnnNanPropagation_t nanOpt_) -> ResampleDescBuilder_v8 & {
-        m_resampleDesc.nanOpt = nanOpt_;
-        return *this;
-    }
-
     //! (Overloaded) Set window dim for the Resample Operation with cudnnFraction_t
     auto
     setSpatialDim(int64_t count, cudnnFraction_t const * arr) -> ResampleDescBuilder_v8 & {
@@ -324,17 +324,6 @@ class ResampleDescBuilder_v8 {
         set_error_and_throw_exception(&m_resampleDesc, CUDNN_STATUS_NOT_SUPPORTED, "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR setResampleMode failed");
 #else
     convert_string_to_enum<cudnnResampleMode_t>(str, m_resampleDesc.mode);
-#endif
-        return *this;
-    }
-
-    auto
-    setNanPropagation(std::string const& str) -> ResampleDescBuilder_v8 & {
-#if CUDNN_VERSION < 8500
-        CUDNN_FRONTEND_UNUSED(str);
-        set_error_and_throw_exception(&m_resampleDesc, CUDNN_STATUS_NOT_SUPPORTED, "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR setNanPropagation failed");
-#else
-    convert_string_to_enum<cudnnNanPropagation_t>(str, m_resampleDesc.nanOpt);
 #endif
         return *this;
     }

@@ -858,7 +858,7 @@ TEST_CASE("PoolScaleBiasAct_int8 sample", "[pooling][forward][avgerage_pooling]"
     int64_t sTensorDim[] = {1, 16, 1, 1};  // scale
 
     cudnnDataType_t compType = CUDNN_DATA_FLOAT;
-    std::string const nanOpt = "CUDNN_NOT_PROPAGATE_NAN";
+    auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
     std::string const  mode = "CUDNN_RESAMPLE_AVGPOOL";
     std::string const  paddingMode = "CUDNN_ZERO_PAD";
 
@@ -1922,7 +1922,7 @@ TEST_CASE("Max pooling idx tensor dump", "[pooling][forward][max_pooling]") {
 
     // Sampling params
     std::string const mode = "CUDNN_RESAMPLE_MAXPOOL";
-    std::string const nanOpt = "CUDNN_NOT_PROPAGATE_NAN";
+    auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
     std::string const paddingMode = "CUDNN_NEG_INF_PAD";
     
     run_maxpool_with_idx(xTensorDim,
@@ -2009,7 +2009,7 @@ TEST_CASE("Backward pooling", "[pooling][backward][max_pooling]") {
 
         // Sampling params
         std::string const mode = "CUDNN_RESAMPLE_AVGPOOL";
-        std::string const nanOpt = "CUDNN_NOT_PROPAGATE_NAN";
+        auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
         std::string const paddingMode = "CUDNN_ZERO_PAD";
         
         run_backward_avgpool(dxTensorDim,
@@ -2049,7 +2049,7 @@ TEST_CASE("Backward pooling", "[pooling][backward][max_pooling]") {
 
         // Sampling params
         std::string const mode = "CUDNN_RESAMPLE_MAXPOOL";
-        std::string const nanOpt = "CUDNN_NOT_PROPAGATE_NAN";
+        auto const nanOpt = CUDNN_NOT_PROPAGATE_NAN;
         std::string const paddingMode = "CUDNN_NEG_INF_PAD";
         
         run_backward_maxpool(dxTensorDim,

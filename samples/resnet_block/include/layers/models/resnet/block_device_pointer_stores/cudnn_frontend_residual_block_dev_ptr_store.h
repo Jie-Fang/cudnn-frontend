@@ -290,67 +290,6 @@ class ResidualBlockDevPtrStore {
 
         void * zDescale;
 
-        ///////////////////////////////////////////////////////////////////////////////////////////////
-        // Backward pass
-        ///////////////////////////////////////////////////////////////////////////////////////////////
-        
-        //////////////////////////////
-        // DY
-        //////////////////////////////
-        void * DYDevPtr;
-        
-        //////////////////////////////
-        // DRelu
-        //////////////////////////////
-        std::vector<void *> DReluDescaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DReluDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DReluScaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DReluAmaxDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        
-        //////////////////////////////
-        // DGrad
-        //////////////////////////////
-        std::vector<void *> DBNYDescaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DBNDScaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DBNDBiasDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DBNDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DBN_FP16_DevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DBNScaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DBNAmaxDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-            
-        //////////////////////////////
-        // Common
-        //////////////////////////////
-        std::vector<void *> DBNDescaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-
-        //////////////////////////////
-        // Dgrad
-        //////////////////////////////
-        std::vector<void *> weight_chwn_device_pointers = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> weight_nhwc_fp16_device_pointers = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DXDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DXScaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DXAmaxDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        
-        //////////////////////////////
-        // Wgrad
-        //////////////////////////////
-        std::vector<void *> dbn_chwn_device_pointers = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> x_chwn_device_pointers = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> x_nhwc_fp16_device_pointers = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DWDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DWScaleDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-        std::vector<void *> DWAmaxDevPtrs = std::vector<void *>(NUM_CONV_NODES, nullptr);
-
-        ///////////////////////////////
-        // Add
-        ///////////////////////////////
-        void * add_descale_residual_device_pointer;
-        void * add_descale_0_device_pointer;
-        void * dx_device_pointer;
-        void * dx_scale_device_pointer;
-        void * dx_amax_device_pointer;
-
         ///////////////////////////////
         // Workspaces
         ///////////////////////////////

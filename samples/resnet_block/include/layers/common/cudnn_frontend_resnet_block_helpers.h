@@ -79,7 +79,7 @@ struct ConvParams {
     cudnnDataType_t dataType = CUDNN_DATA_HALF;  
 };
 
-typedef struct {
+typedef struct convolution_params_ {
     // Main convolution
     int64_t dim_count;
     int64_t input_dim[CUDNN_DIM_MAX];
@@ -172,7 +172,7 @@ make_convolution_params(convolution_params::uids_t const uid_offset, int64_t con
     };
 }
 
-typedef struct {
+typedef struct bn_fusion_params_ {
     int64_t dim_count;
     int64_t input_dim[CUDNN_DIM_MAX];
     int64_t per_channel_dim[CUDNN_DIM_MAX];
@@ -298,7 +298,7 @@ make_bn_fusion_params(bn_fusion_params::uids_t uid_offset, int64_t const N, int6
     };
 } 
 
-typedef struct {
+typedef struct pointwise_parameters_ {
     int64_t dim_count;
 
     int64_t input_dim[CUDNN_DIM_MAX];
