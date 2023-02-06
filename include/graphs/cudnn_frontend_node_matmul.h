@@ -41,7 +41,7 @@ public:
 
         for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<matmul_properties::PORTS>(i)));
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NCHW, props.get_tensor_data_type(), props.uids[i]);
         }
 
         return 0;

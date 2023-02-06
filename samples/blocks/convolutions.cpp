@@ -50,15 +50,15 @@ run_matmul_node() {
     matmul_node.set_properties("matmul_node", props);
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
-    tensor0.set_dim({32, 32, 16});
+    tensor0.set_dim({1, 32, 16});
     matmul_node.add_tensor("tensor0", tensor0);
 
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
-    tensor1.set_dim({32, 16, 32});
+    tensor1.set_dim({1, 16, 32});
     matmul_node.add_tensor("tensor1", tensor1);
 
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
-    tensor2.set_dim({32, 32, 32});
+    tensor2.set_dim({1, 32, 32});
     matmul_node.add_tensor("tensor2", tensor2);
 
     REQUIRE(cudnn_frontend::error_t::OK == matmul_node.build(handle));

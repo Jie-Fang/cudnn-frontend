@@ -60,7 +60,11 @@ protected:
 
                 if (plan.get_status() != CUDNN_STATUS_SUCCESS) {
                     getLogger() << "[cudnn_frontend] ERROR: " << "Config " << i << " failed with " << plan.get_error() << std::endl;
-                    return 1; 
+                    if (i == filtered_configs.size() - 1) {
+                        return 1;
+                    } else {
+                        continue;
+		    }
                 }
 
                 getLogger() << "[cudnn_frontend] INFO: " << "Config " << i << " succeeded! Plan has built!" << std::endl;
@@ -75,7 +79,7 @@ protected:
                     if (i == filtered_configs.size() - 1) {
                         throw cudnnException(e.what(), e.getCudnnStatus());
                     }
-                    return 1;
+                    continue;
                 }
                 #endif
             }
@@ -83,7 +87,8 @@ protected:
             getLogger() << "[cudnn_frontend] INFO: " << " Failed to build plan." << std::endl;
         }
 
-        return 0; 
+	return 0; 
+
     }
 
 public:
