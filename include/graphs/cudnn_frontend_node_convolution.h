@@ -15,16 +15,15 @@ private:
 protected:
 
 public:
-    convolution_properties props;
+    std::shared_ptr<convolution_properties> props;
 
-    ConvolutionNode(std::string const& name, int64_t offset = 1)  : INode (name, offset), props(name) {
-    }
+    ConvolutionNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
 
     Type getType() override final {
         return Type::CONVOLUTION;
     }
 
-    int set_properties(std::string const& INode_name, convolution_properties const& properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<convolution_properties> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -37,11 +36,11 @@ public:
     }
 
     int infer_properties() override final {
-        props.update_uids(offset);
+        props->update_uids(offset);
 
         for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<convolution_properties::PORTS>(i)));
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
+            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<convolution_properties::PORTS>(i)));
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
         }
 
         return 0;
@@ -62,9 +61,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        getLogger() << "X: " << props.port_to_name.at(convolution_properties::PORTS::X);
+        getLogger() << "X: " << props->get_port_name(convolution_properties::PORTS::X);
 
-        auto x_tensor = get_tensor_props(props.port_to_name.at(convolution_properties::PORTS::X));
+        auto x_tensor = get_tensor_props(props->get_port_name(convolution_properties::PORTS::X));
         size_t const dim_count = x_tensor->get_stride().size();
         auto input  = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, x_tensor->get_dim().data())
@@ -77,7 +76,7 @@ public:
                         .build();
         tensors.emplace(convolution_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
 
-        auto w_tensor = get_tensor_props(props.port_to_name.at(convolution_properties::PORTS::W));
+        auto w_tensor = get_tensor_props(props->get_port_name(convolution_properties::PORTS::W));
         auto weight = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, w_tensor->get_dim().data())
                         .setStrides(dim_count, w_tensor->get_stride().data())
@@ -89,7 +88,7 @@ public:
                         .build();
         tensors.emplace(convolution_properties::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
 
-        auto y_tensor = get_tensor_props(props.port_to_name.at(convolution_properties::PORTS::Y));
+        auto y_tensor = get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y));
         auto output = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, y_tensor->get_dim().data())
                         .setStrides(dim_count, y_tensor->get_stride().data())
@@ -119,15 +118,15 @@ public:
         #endif
 
         // convolution descriptor
-        int64_t const spatial_dim_count = props.get_padding().size();
+        int64_t const spatial_dim_count = props->get_padding().size();
         auto convolution_descriptor = cudnn_frontend::ConvDescBuilder()
-                                                        .setComputeType(props.get_compute_type())
+                                                        .setComputeType(props->get_compute_type())
                                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                                         .setSpatialDimCount(spatial_dim_count)
-                                                        .setSpatialStride(spatial_dim_count, props.get_stride().data())
-                                                        .setPrePadding(spatial_dim_count, props.get_padding().data())
-                                                        .setPostPadding(spatial_dim_count, props.get_padding().data())
-                                                        .setDilation(spatial_dim_count, props.get_dilation().data())
+                                                        .setSpatialStride(spatial_dim_count, props->get_stride().data())
+                                                        .setPrePadding(spatial_dim_count, props->get_padding().data())
+                                                        .setPostPadding(spatial_dim_count, props->get_padding().data())
+                                                        .setDilation(spatial_dim_count, props->get_dilation().data())
                                                         .build();
 
         // Create the convolution operation.

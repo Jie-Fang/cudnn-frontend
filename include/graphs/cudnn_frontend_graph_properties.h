@@ -197,7 +197,6 @@ public:
         Reduction
     };
 
-    using parent_class = operation_properties;
 protected:
 
     std::string name;
@@ -252,6 +251,7 @@ public:
     virtual std::vector<std::string>
     get_inputs() const = 0;
 
+    virtual ~operation_properties() = default;
 };
 
 class convolution_properties : public operation_properties {

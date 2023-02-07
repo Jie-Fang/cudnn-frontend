@@ -82,19 +82,26 @@ public:
         , std::vector<int64_t> const& stride
         , std::vector<int64_t> const& dilation
     ) {
-        cudnn_frontend::convolution_properties props(name);
-        props.set_compute_type(CUDNN_DATA_FLOAT);
-        props.set_padding(padding);
-        props.set_stride(stride);
-        props.set_dilation(dilation);
+        auto props_ptr = std::make_shared<cudnn_frontend::convolution_properties>(name);
+        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_padding(padding);
+        props_ptr->set_stride(stride);
+        props_ptr->set_dilation(dilation);
 
         // TODO: Check whether image and weight already exist.
-        props.set_port_names({{cudnn_frontend::convolution_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_properties::PORTS::W, weight_props_ptr->get_name()}});
+        props_ptr->set_port_names({{cudnn_frontend::convolution_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_properties::PORTS::W, weight_props_ptr->get_name()}});
+        
+        // Add output tensor to graph
+        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
+        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        auto status = graph.add_tensor(output_props_ptr);
+        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
-        auto status = graph.add_node(props);
+        // Add conv node to graph
+        status = graph.add_node(props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
 
-        return graph.get_tensor(props.get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
+        return output_props_ptr;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -108,16 +115,23 @@ public:
         , std::shared_ptr<cudnn_frontend::tensor_properties>& weight_props_ptr
         , std::string const& compute_type
     ) {
-        cudnn_frontend::matmul_properties props(name);
-        props.set_compute_type(CUDNN_DATA_FLOAT);
+        auto props_ptr = std::make_shared<cudnn_frontend::matmul_properties>(name);
+        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
         
         // TODO: Check whether image and weight already exist.
-        props.set_port_names({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
+        props_ptr->set_port_names({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
 
-        auto status = graph.add_node(props);
+        // Add output tensor to graph
+        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
+        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        auto status = graph.add_tensor(output_props_ptr);
+        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+
+        // Add matmul node to graph
+        status = graph.add_node(props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
 
-        return graph.get_tensor(props.get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
+        return output_props_ptr;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -131,17 +145,24 @@ public:
         , std::shared_ptr<cudnn_frontend::tensor_properties>& bias_props_ptr
         , std::string const& compute_type
     ) {
-        cudnn_frontend::pointwise_properties props(name);
-        props.set_compute_type(CUDNN_DATA_FLOAT);
-        props.set_mode("Add");
+        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_mode("Add");
 
         // TODO: Check whether image and weight already exist.
-        props.set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});
+        props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});
 
-        auto status = graph.add_node(props);
+        // Add output tensor to graph
+        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        auto status = graph.add_tensor(output_props_ptr);
+        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+
+        // Add pointwise node to graph
+        status = graph.add_node(props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
 
-        return graph.get_tensor(props.get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        return output_props_ptr;
     }
 
     void build() {

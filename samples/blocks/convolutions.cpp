@@ -39,10 +39,10 @@ run_matmul_node() {
 
     cudnn_frontend::MatMulNode matmul_node{"matmul_node"};
     
-    cudnn_frontend::matmul_properties props{"matmul_prop"};
-    props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_type(CUDNN_DATA_FLOAT);
-    props.set_port_names({
+    auto props = std::make_shared<cudnn_frontend::matmul_properties>("matmul_prop");
+    props->set_tensor_data_type(CUDNN_DATA_HALF);
+    props->set_compute_type(CUDNN_DATA_FLOAT);
+    props->set_port_names({
         {cudnn_frontend::matmul_properties::PORTS::X, "tensor0"} 
         , {cudnn_frontend::matmul_properties::PORTS::W, "tensor1"}
         , {cudnn_frontend::matmul_properties::PORTS::Y, "tensor2"}
@@ -83,13 +83,13 @@ run_convolution_node() {
 
     cudnn_frontend::ConvolutionNode convolution_node{"conv_node"};
     
-    cudnn_frontend::convolution_properties props{"conv_prop"};
-    props.set_padding({1, 1});
-    props.set_stride({1, 1});
-    props.set_dilation({1, 1});
-    props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_type(CUDNN_DATA_FLOAT);
-    props.set_port_names({
+    auto props = std::make_shared<cudnn_frontend::convolution_properties>("conv_prop");
+    props->set_padding({1, 1});
+    props->set_stride({1, 1});
+    props->set_dilation({1, 1});
+    props->set_tensor_data_type(CUDNN_DATA_HALF);
+    props->set_compute_type(CUDNN_DATA_FLOAT);
+    props->set_port_names({
         {cudnn_frontend::convolution_properties::PORTS::X, "tensor0"} 
         , {cudnn_frontend::convolution_properties::PORTS::W, "tensor1"}
         , {cudnn_frontend::convolution_properties::PORTS::Y, "tensor2"}
@@ -129,11 +129,11 @@ run_pointwise_node() {
 
     cudnn_frontend::PointwiseNode pointwise_node{"pointwise_node"};
 
-    cudnn_frontend::pointwise_properties props{"pointwise_prop"};
-    props.set_mode(CUDNN_POINTWISE_ADD);
-    props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_type(CUDNN_DATA_FLOAT);
-    props.set_port_names({
+    auto props = std::make_shared<cudnn_frontend::pointwise_properties>("pointwise_prop");
+    props->set_mode(CUDNN_POINTWISE_ADD);
+    props->set_tensor_data_type(CUDNN_DATA_HALF);
+    props->set_compute_type(CUDNN_DATA_FLOAT);
+    props->set_port_names({
         {cudnn_frontend::pointwise_properties::PORTS::X, "tensor0"} 
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor1"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor2"}
@@ -173,11 +173,11 @@ run_reduction_node() {
 
     cudnn_frontend::ReductionNode reduction_node{"reduction_node"};
 
-    cudnn_frontend::reduction_properties props{"reduction_prop"};
-    props.set_mode(CUDNN_REDUCE_TENSOR_ADD);
-    props.set_tensor_data_type(CUDNN_DATA_HALF);
-    props.set_compute_type(CUDNN_DATA_FLOAT);
-    props.set_port_names({
+    auto props = std::make_shared<cudnn_frontend::reduction_properties>("reduction_prop");
+    props->set_mode(CUDNN_REDUCE_TENSOR_ADD);
+    props->set_tensor_data_type(CUDNN_DATA_HALF);
+    props->set_compute_type(CUDNN_DATA_FLOAT);
+    props->set_port_names({
         {cudnn_frontend::reduction_properties::PORTS::X, "tensor0"}
         , {cudnn_frontend::reduction_properties::PORTS::Y, "tensor1"}
     });
@@ -211,14 +211,14 @@ run_convolution_fp8_node() {
 
     cudnn_frontend::ConvolutionFP8Node convolution_fp8_node{"conv_fp8_node"};
     
-    cudnn_frontend::convolution_properties props{"conv_prop"};
-    props.set_padding({1, 1});
-    props.set_stride({1, 1});
-    props.set_dilation({1, 1});
+    auto props = std::make_shared<cudnn_frontend::convolution_properties>("conv_prop");
+    props->set_padding({1, 1});
+    props->set_stride({1, 1});
+    props->set_dilation({1, 1});
     // TODO: remove setting tensor data type in operation properties.
-    props.set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
-    props.set_compute_type(CUDNN_DATA_FLOAT);
-    props.set_port_names({
+    props->set_tensor_data_type(CUDNN_DATA_FP8_E4M3);
+    props->set_compute_type(CUDNN_DATA_FLOAT);
+    props->set_port_names({
         {cudnn_frontend::convolution_properties::PORTS::X, "tensor0"} 
         , {cudnn_frontend::convolution_properties::PORTS::W, "tensor1"}
         , {cudnn_frontend::convolution_properties::PORTS::Y, "tensor2"}
@@ -238,12 +238,12 @@ run_convolution_fp8_node() {
     tensor2.set_data_type(CUDNN_DATA_FLOAT);
     convolution_fp8_node.add_tensor("tensor2", tensor2);
 
-    cudnn_frontend::pointwise_properties X_DQ_props{"x_dq_prop"};
-    X_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
+    auto X_DQ_props = std::make_shared<cudnn_frontend::pointwise_properties>("x_dq_prop");
+    X_DQ_props->set_mode(CUDNN_POINTWISE_MUL);
     // TODO: remove setting tensor data type in operation properties.
-    X_DQ_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
-    X_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
-    X_DQ_props.set_port_names({
+    X_DQ_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
+    X_DQ_props->set_compute_type(CUDNN_DATA_FLOAT);
+    X_DQ_props->set_port_names({
         {cudnn_frontend::pointwise_properties::PORTS::X, "tensor2"} 
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor3"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor4"}
@@ -258,11 +258,11 @@ run_convolution_fp8_node() {
     tensor4.set_dim({4, 64, 16, 16});
     convolution_fp8_node.add_tensor("tensor4", tensor4);
 
-    cudnn_frontend::pointwise_properties W_DQ_props{"w_dq_props"};
-    W_DQ_props.set_mode(CUDNN_POINTWISE_MUL);
-    W_DQ_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
-    W_DQ_props.set_compute_type(CUDNN_DATA_FLOAT);
-    W_DQ_props.set_port_names({
+    auto W_DQ_props = std::make_shared<cudnn_frontend::pointwise_properties>("w_dq_props");
+    W_DQ_props->set_mode(CUDNN_POINTWISE_MUL);
+    W_DQ_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
+    W_DQ_props->set_compute_type(CUDNN_DATA_FLOAT);
+    W_DQ_props->set_port_names({
         {cudnn_frontend::pointwise_properties::PORTS::X, "tensor4"} 
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor5"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor6"}
@@ -277,12 +277,12 @@ run_convolution_fp8_node() {
     tensor6.set_dim({4, 64, 16, 16});
     convolution_fp8_node.add_tensor("tensor6", tensor6);
 
-    cudnn_frontend::pointwise_properties Y_Q_props{"y_q_prop"};
-    Y_Q_props.set_mode(CUDNN_POINTWISE_MUL);
+    auto Y_Q_props = std::make_shared<cudnn_frontend::pointwise_properties>("y_q_prop");
+    Y_Q_props->set_mode(CUDNN_POINTWISE_MUL);
     // TODO: remove setting tensor data type in operation properties.
-    Y_Q_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
-    Y_Q_props.set_compute_type(CUDNN_DATA_FLOAT);
-    Y_Q_props.set_port_names({
+    Y_Q_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
+    Y_Q_props->set_compute_type(CUDNN_DATA_FLOAT);
+    Y_Q_props->set_port_names({
         {cudnn_frontend::pointwise_properties::PORTS::X, "tensor6"} 
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor7"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor8"}
@@ -298,12 +298,12 @@ run_convolution_fp8_node() {
     tensor8.set_data_type(CUDNN_DATA_FP8_E4M3);
     convolution_fp8_node.add_tensor("tensor8", tensor8);
 
-    cudnn_frontend::reduction_properties amax_props{"amax_prop"};
-    amax_props.set_mode(CUDNN_REDUCE_TENSOR_AMAX);
+    auto amax_props = std::make_shared<cudnn_frontend::reduction_properties>("amax_prop");
+    amax_props->set_mode(CUDNN_REDUCE_TENSOR_AMAX);
     // TODO: remove setting tensor data type in operation properties.
-    amax_props.set_tensor_data_type(CUDNN_DATA_FLOAT);
-    amax_props.set_compute_type(CUDNN_DATA_FLOAT);
-    amax_props.set_port_names({
+    amax_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
+    amax_props->set_compute_type(CUDNN_DATA_FLOAT);
+    amax_props->set_port_names({
         {cudnn_frontend::reduction_properties::PORTS::X, "tensor6"} 
         , {cudnn_frontend::reduction_properties::PORTS::Y, "tensor9"}
     });
@@ -348,14 +348,14 @@ run_convolution_pointwise_node() {
 
     cudnn_frontend::ConvolutionPointwiseNode convolution_pointwise_node{"convolution_pointwise_node"};
 
-    cudnn_frontend::convolution_properties conv_props{"conv_prop"};
-    conv_props.set_padding({1, 1});
-    conv_props.set_stride({1, 1});
-    conv_props.set_dilation({1, 1});
+    auto conv_props = std::make_shared<cudnn_frontend::convolution_properties>("conv_prop");
+    conv_props->set_padding({1, 1});
+    conv_props->set_stride({1, 1});
+    conv_props->set_dilation({1, 1});
     // TODO: remove setting tensor data type in operation properties.
-    conv_props.set_tensor_data_type(CUDNN_DATA_HALF);
-    conv_props.set_compute_type(CUDNN_DATA_FLOAT);
-    conv_props.set_port_names({
+    conv_props->set_tensor_data_type(CUDNN_DATA_HALF);
+    conv_props->set_compute_type(CUDNN_DATA_FLOAT);
+    conv_props->set_port_names({
         {cudnn_frontend::convolution_properties::PORTS::X, "tensor0"} 
         , {cudnn_frontend::convolution_properties::PORTS::W, "tensor1"}
         , {cudnn_frontend::convolution_properties::PORTS::Y, "tensor2"}
@@ -374,11 +374,11 @@ run_convolution_pointwise_node() {
     tensor2.set_dim({4, 64, 16, 16});
     convolution_pointwise_node.add_tensor("tensor2", tensor2);
     
-    cudnn_frontend::pointwise_properties pointwise_props {"pointwise_prop"};
-    pointwise_props.set_mode(CUDNN_POINTWISE_ADD);
-    pointwise_props.set_tensor_data_type(CUDNN_DATA_HALF);
-    pointwise_props.set_compute_type(CUDNN_DATA_FLOAT);
-    pointwise_props.set_port_names({
+    auto pointwise_props = std::make_shared<cudnn_frontend::pointwise_properties>("pointwise_prop");
+    pointwise_props->set_mode(CUDNN_POINTWISE_ADD);
+    pointwise_props->set_tensor_data_type(CUDNN_DATA_HALF);
+    pointwise_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pointwise_props->set_port_names({
         {cudnn_frontend::pointwise_properties::PORTS::X, "tensor2"} 
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor3"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor4"}

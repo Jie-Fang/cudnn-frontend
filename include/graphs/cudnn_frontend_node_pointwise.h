@@ -15,15 +15,15 @@ private:
 protected:
 
 public:
-    pointwise_properties props;
+    std::shared_ptr<pointwise_properties> props;
 
-    PointwiseNode(std::string const& name, int64_t const offset = 1)  : INode (name, offset), props(name) {}
+    PointwiseNode(std::string const& name, int64_t const offset = 1)  : INode (name, offset) {}
 
     Type getType() override final {
         return Type::POINTWISE;
     }
 
-    int set_properties(std::string const& INode_name, pointwise_properties const& properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<pointwise_properties> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -36,11 +36,11 @@ public:
     }
 
     int infer_properties() override final {
-        props.update_uids(offset);
+        props->update_uids(offset);
 
         for(size_t i = 0; i < pointwise_properties::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props.port_to_name.at(static_cast<pointwise_properties::PORTS>(i)));
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props.get_tensor_data_type(), props.uids[i]);
+            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<pointwise_properties::PORTS>(i)));
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
         }
         return 0;
     }
@@ -56,7 +56,7 @@ public:
         
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode tensors..." << std::endl;
 
-        auto x_tensor = get_tensor_props(props.port_to_name.at(pointwise_properties::PORTS::X));
+        auto x_tensor = get_tensor_props(props->get_port_name(pointwise_properties::PORTS::X));
         size_t const dim_count = x_tensor->get_stride().size();
         auto input  = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, x_tensor->get_dim().data())
@@ -69,7 +69,7 @@ public:
                         .build();
         tensors.emplace(pointwise_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
 
-        auto b_tensor = get_tensor_props(props.port_to_name.at(pointwise_properties::PORTS::B));
+        auto b_tensor = get_tensor_props(props->get_port_name(pointwise_properties::PORTS::B));
         auto weight = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, b_tensor->get_dim().data())
                         .setStrides(dim_count, b_tensor->get_stride().data())
@@ -81,7 +81,7 @@ public:
                         .build();
         tensors.emplace(pointwise_properties::PORTS::B, std::make_shared<Tensor>(std::move(weight)));
 
-        auto y_tensor = get_tensor_props(props.port_to_name.at(pointwise_properties::PORTS::Y));
+        auto y_tensor = get_tensor_props(props->get_port_name(pointwise_properties::PORTS::Y));
         auto output = cudnn_frontend::TensorBuilder()
                         .setDim(dim_count, y_tensor->get_dim().data())
                         .setStrides(dim_count, y_tensor->get_stride().data())
@@ -111,8 +111,8 @@ public:
         #endif
 
         auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
-                                                        .setComputeType(props.get_compute_type())
-                                                        .setMode(props.get_mode())
+                                                        .setComputeType(props->get_compute_type())
+                                                        .setMode(props->get_mode())
                                                         .build();
 
         auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
