@@ -21,27 +21,6 @@ PYBIND11_MODULE(pycudnn, m)
   init_pygraph_submodule(m);
   init_properties(m);
 
-  auto execute_wrapper = [](Graph * graph, std::unordered_map<std::string, int64_t> var_pack) -> cudnn_frontend::error_t {
-      std::unordered_map<std::string, void *> var_pack_;
-      for (auto item : var_pack) {
-          var_pack_.insert(std::make_pair(item.first, (void *)item.second));
-      }
-      graph->execute(var_pack_);
-      return cudnn_frontend::error_t::OK;
-  };
-
-  py::class_<Graph>(m, "Graph")
-    .def(py::init<std::string const &, cuDNNFEContext const &>())
-    .def("add_tensor", static_cast<cudnn_frontend::error_t (Graph::*)(std::shared_ptr<tensor_properties>)>(&Graph::add_tensor))
-    .def("add_node", static_cast<cudnn_frontend::error_t (Graph::*)(std::shared_ptr<convolution_properties>)>(&Graph::add_node))
-    .def("add_node", static_cast<cudnn_frontend::error_t (Graph::*)(std::shared_ptr<pointwise_properties>)>(&Graph::add_node))
-    .def("infer_shapes", &Graph::infer_shapes)
-    .def("is_valid_tensor", &Graph::is_valid_tensor)
-    .def("tensor_at", &Graph::tensor_at, py::return_value_policy::reference)
-    .def("build", &Graph::build)
-    .def("execute", execute_wrapper)
-    ;
-
   py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
     .def(py::init<>())
     .def("set_intermediate_data_type", &cuDNNFEContext::set_intermediate_data_type)
