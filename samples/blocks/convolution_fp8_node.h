@@ -46,7 +46,7 @@ public:
             return 1;
         }
 
-        auto convolution_node_ptr = std::dynamic_pointer_cast<ConvolutionNode>(sub_nodes.at(INode_name));
+        auto convolution_node_ptr = std::static_pointer_cast<ConvolutionNode>(sub_nodes.at(INode_name));
         if(convolution_node_ptr == nullptr) {
             return 1;
         }
@@ -60,7 +60,7 @@ public:
             return 1;
         }
 
-        auto pointwise_node_ptr = std::dynamic_pointer_cast<PointwiseNode>(sub_nodes.at(INode_name));
+        auto pointwise_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at(INode_name));
         if(pointwise_node_ptr == nullptr) {
             return 1;
         }
@@ -74,7 +74,7 @@ public:
             return 1;
         }
 
-        auto reduction_node_ptr = std::dynamic_pointer_cast<ReductionNode>(sub_nodes.at(INode_name));
+        auto reduction_node_ptr = std::static_pointer_cast<ReductionNode>(sub_nodes.at(INode_name));
         if(reduction_node_ptr == nullptr) {
             return 1;
         }
@@ -84,16 +84,19 @@ public:
     }
 
     int infer_properties() override final {        
-        auto const& conv_node_ptr = std::dynamic_pointer_cast<ConvolutionNode>(sub_nodes.at("conv_node"));
+        auto const& conv_node_ptr = std::static_pointer_cast<ConvolutionNode>(sub_nodes.at("conv_node"));
         auto conv_output_tensor = get_tensor_props(conv_node_ptr->props->get_port_name(convolution_properties::PORTS::Y));
+        conv_node_ptr->props->uids[convolution_properties::PORTS::Y] = conv_output_tensor->get_uid();
         conv_output_tensor->set_is_virtual(true);
         
-        auto const& x_dq_node_ptr = std::dynamic_pointer_cast<PointwiseNode>(sub_nodes.at("X_DQ_node"));
+        auto const& x_dq_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at("X_DQ_node"));
         auto x_dq_tensor = get_tensor_props(x_dq_node_ptr->props->get_port_name(pointwise_properties::PORTS::Y));
+        x_dq_node_ptr->props->uids[pointwise_properties::PORTS::Y] = x_dq_tensor->get_uid();
         x_dq_tensor->set_is_virtual(true);
         
-        auto const& w_dq_node_ptr = std::dynamic_pointer_cast<PointwiseNode>(sub_nodes.at("W_DQ_node"));
+        auto const& w_dq_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at("W_DQ_node"));
         auto w_dq_tensor = get_tensor_props(w_dq_node_ptr->props->get_port_name(pointwise_properties::PORTS::Y));
+        w_dq_node_ptr->props->uids[pointwise_properties::PORTS::Y] = w_dq_tensor->get_uid();
         w_dq_tensor->set_is_virtual(true);
 
         for(auto const& sub_node: sub_nodes) {

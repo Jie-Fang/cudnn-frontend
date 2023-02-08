@@ -10,6 +10,8 @@
 #include "cudnn_frontend_ExecutionPlan.h"
 #include "cudnn_frontend_VariantPack.h"
 
+#include "graphs/cudnn_frontend_graph_properties.h"
+
 namespace cudnn_frontend {
 
 class ICudnn {
@@ -23,7 +25,20 @@ protected:
     std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
     std::unordered_map<std::string, std::shared_ptr<VariantPack>> variant_packs;
 
-    virtual int createTensors() = 0;
+    error_t create_cudnn_tensor(std::shared_ptr<tensor_properties const> const& props) {
+        auto tensor = cudnn_frontend::TensorBuilder()
+                        .setDim(props->get_stride().size(), props->get_dim().data())
+                        .setStrides(props->get_stride().size(), props->get_stride().data())
+                        .setId(props->get_uid())
+                        .setAlignment(16)
+                        .setDataType(props->get_data_type())
+                        .setVirtual(props->get_is_virtual())
+                        .setByValue(props->get_is_pass_by_value())
+                        .build();
+        tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+        
+        return error_t::OK;
+    }
     
     virtual int createDescritpors() = 0;
 

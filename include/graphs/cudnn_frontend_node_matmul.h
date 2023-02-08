@@ -40,6 +40,8 @@ public:
 
         for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<matmul_properties::PORTS>(i)));
+            if(tensor_prop->is_uid_set)
+                props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NCHW, props->get_tensor_data_type(), props->uids[i]);
         }
 
@@ -61,44 +63,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors..." << std::endl;
 
-        getLogger() << "X: " << props->get_port_name(matmul_properties::PORTS::X);
-
-        auto x_tensor = get_tensor_props(props->get_port_name(matmul_properties::PORTS::X));
-        size_t const dim_count = x_tensor->get_stride().size();
-        auto input  = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, x_tensor->get_dim().data())
-                        .setStrides(dim_count, x_tensor->get_stride().data())
-                        .setId(x_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(x_tensor->get_data_type())
-                        .setVirtual(x_tensor->get_is_virtual())
-                        .setByValue(x_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(matmul_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
-
-        auto w_tensor = get_tensor_props(props->get_port_name(matmul_properties::PORTS::W));
-        auto weight = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, w_tensor->get_dim().data())
-                        .setStrides(dim_count, w_tensor->get_stride().data())
-                        .setId(w_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(w_tensor->get_data_type())
-                        .setVirtual(w_tensor->get_is_virtual())
-                        .setByValue(w_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(matmul_properties::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
-
-        auto y_tensor = get_tensor_props(props->get_port_name(matmul_properties::PORTS::Y));
-        auto output = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, y_tensor->get_dim().data())
-                        .setStrides(dim_count, y_tensor->get_stride().data())
-                        .setId(y_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(y_tensor->get_data_type())
-                        .setVirtual(y_tensor->get_is_virtual())
-                        .setByValue(y_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(matmul_properties::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul_properties::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul_properties::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul_properties::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors." << std::endl;
 
@@ -124,9 +91,9 @@ public:
 
         // Create the matmul operation.
         auto matmul_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR)
-                                        .setaMatDesc(*(tensors.at(matmul_properties::PORTS::X)))
-                                        .setbMatDesc(*(tensors.at(matmul_properties::PORTS::W)))
-                                        .setcMatDesc(*(tensors.at(matmul_properties::PORTS::Y)))
+                                        .setaMatDesc(*(tensors.at(props->uids[matmul_properties::PORTS::X])))
+                                        .setbMatDesc(*(tensors.at(props->uids[matmul_properties::PORTS::W])))
+                                        .setcMatDesc(*(tensors.at(props->uids[matmul_properties::PORTS::Y])))
                                         .setmatmulDesc(matmul_descriptor)
                                         .build();
         operations.emplace("matmul", std::make_shared<Operation>(std::move(matmul_operation)));

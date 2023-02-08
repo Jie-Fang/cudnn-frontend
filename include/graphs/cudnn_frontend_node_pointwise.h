@@ -40,6 +40,8 @@ public:
 
         for(size_t i = 0; i < pointwise_properties::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<pointwise_properties::PORTS>(i)));
+            if(tensor_prop->is_uid_set)
+                props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
         }
         return 0;
@@ -56,42 +58,9 @@ public:
         
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode tensors..." << std::endl;
 
-        auto x_tensor = get_tensor_props(props->get_port_name(pointwise_properties::PORTS::X));
-        size_t const dim_count = x_tensor->get_stride().size();
-        auto input  = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, x_tensor->get_dim().data())
-                        .setStrides(dim_count, x_tensor->get_stride().data())
-                        .setId(x_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(x_tensor->get_data_type())
-                        .setVirtual(x_tensor->get_is_virtual())
-                        .setByValue(x_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(pointwise_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
-
-        auto b_tensor = get_tensor_props(props->get_port_name(pointwise_properties::PORTS::B));
-        auto weight = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, b_tensor->get_dim().data())
-                        .setStrides(dim_count, b_tensor->get_stride().data())
-                        .setId(b_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(b_tensor->get_data_type())
-                        .setVirtual(b_tensor->get_is_virtual())
-                        .setByValue(b_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(pointwise_properties::PORTS::B, std::make_shared<Tensor>(std::move(weight)));
-
-        auto y_tensor = get_tensor_props(props->get_port_name(pointwise_properties::PORTS::Y));
-        auto output = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, y_tensor->get_dim().data())
-                        .setStrides(dim_count, y_tensor->get_stride().data())
-                        .setId(y_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(y_tensor->get_data_type())
-                        .setVirtual(y_tensor->get_is_virtual())
-                        .setByValue(y_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(pointwise_properties::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise_properties::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise_properties::PORTS::B)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise_properties::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built PointwiseNode tensors." << std::endl;
 
@@ -116,9 +85,9 @@ public:
                                                         .build();
 
         auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(pointwise_properties::PORTS::X)))
-                                        .setbDesc(*(tensors.at(pointwise_properties::PORTS::B)))
-                                        .setyDesc(*(tensors.at(pointwise_properties::PORTS::Y)))
+                                        .setxDesc(*(tensors.at(props->uids[pointwise_properties::PORTS::X])))
+                                        .setbDesc(*(tensors.at(props->uids[pointwise_properties::PORTS::B])))
+                                        .setyDesc(*(tensors.at(props->uids[pointwise_properties::PORTS::Y])))
                                         .setpwDesc(pointwise_descriptor)
                                         .build();
         

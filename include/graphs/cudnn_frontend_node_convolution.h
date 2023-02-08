@@ -40,6 +40,8 @@ public:
 
         for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<convolution_properties::PORTS>(i)));
+            if(tensor_prop->is_uid_set)
+                props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
         }
 
@@ -61,44 +63,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        getLogger() << "X: " << props->get_port_name(convolution_properties::PORTS::X);
-
-        auto x_tensor = get_tensor_props(props->get_port_name(convolution_properties::PORTS::X));
-        size_t const dim_count = x_tensor->get_stride().size();
-        auto input  = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, x_tensor->get_dim().data())
-                        .setStrides(dim_count, x_tensor->get_stride().data())
-                        .setId(x_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(x_tensor->get_data_type())
-                        .setVirtual(x_tensor->get_is_virtual())
-                        .setByValue(x_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(convolution_properties::PORTS::X, std::make_shared<Tensor>(std::move(input)));
-
-        auto w_tensor = get_tensor_props(props->get_port_name(convolution_properties::PORTS::W));
-        auto weight = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, w_tensor->get_dim().data())
-                        .setStrides(dim_count, w_tensor->get_stride().data())
-                        .setId(w_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(w_tensor->get_data_type())
-                        .setVirtual(w_tensor->get_is_virtual())
-                        .setByValue(w_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(convolution_properties::PORTS::W, std::make_shared<Tensor>(std::move(weight)));
-
-        auto y_tensor = get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y));
-        auto output = cudnn_frontend::TensorBuilder()
-                        .setDim(dim_count, y_tensor->get_dim().data())
-                        .setStrides(dim_count, y_tensor->get_stride().data())
-                        .setId(y_tensor->get_uid())
-                        .setAlignment(16)
-                        .setDataType(y_tensor->get_data_type())
-                        .setVirtual(y_tensor->get_is_virtual())
-                        .setByValue(y_tensor->get_is_pass_by_value())
-                        .build();
-        tensors.emplace(convolution_properties::PORTS::Y, std::make_shared<Tensor>(std::move(output)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution_properties::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution_properties::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
@@ -131,9 +98,9 @@ public:
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(convolution_properties::PORTS::X)))
-                                        .setwDesc(*(tensors.at(convolution_properties::PORTS::W)))
-                                        .setyDesc(*(tensors.at(convolution_properties::PORTS::Y)))
+                                        .setxDesc(*(tensors.at(props->uids[convolution_properties::PORTS::X])))
+                                        .setwDesc(*(tensors.at(props->uids[convolution_properties::PORTS::W])))
+                                        .setyDesc(*(tensors.at(props->uids[convolution_properties::PORTS::Y])))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
