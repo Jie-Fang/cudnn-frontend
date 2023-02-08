@@ -112,8 +112,8 @@ TEST_CASE("Residual block without residual conv", "[Resnet][Residual]") {
     Surface<float> BN_bias1(K[1], false);
     Surface<float> BN_bias2(K[2], false);
 
-    std::vector<float> epsilons = {0.05, 0.05, 0.05};
-    std::vector<float> exp_avg_factors = {0.9, 0.9, 0.9};
+    std::vector<float> epsilons = {0.05f, 0.05f, 0.05f};
+    std::vector<float> exp_avg_factors = {0.9f, 0.9f, 0.9f};
 
     /* End of device Pointer Creation */
 
@@ -332,8 +332,8 @@ TEST_CASE("Residual block with residual conv", "[Resnet][Residual]") {
     Surface<float> BN_bias2(K[2], false);
     Surface<float> BN_bias3(K[3], false);
     
-    std::vector<float> epsilons = {0.05, 0.05, 0.05, 0.05};
-    std::vector<float> exp_avg_factors = {0.9, 0.9, 0.9, 0.9};
+    std::vector<float> epsilons = {0.05f, 0.05f, 0.05f, 0.05f};
+    std::vector<float> exp_avg_factors = {0.9f, 0.9f, 0.9f, 0.9f};
 
     //////////////////////////////////////////////////////////////////////////////////
 

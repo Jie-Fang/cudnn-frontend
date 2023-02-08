@@ -5,6 +5,10 @@
 #include <string>
 #include "layers/common/include/cudnn_frontend_blocks.h"
 
+#ifdef WIN32
+#define strncasecmp strnicmp
+#endif
+
 namespace cudnn_frontend {
 
 /**
@@ -71,3 +75,5 @@ static inline cudnnStatus_t runBlock(cudnnHandle_t &handle,
 }
 
 }
+
+#undef strncasecmp

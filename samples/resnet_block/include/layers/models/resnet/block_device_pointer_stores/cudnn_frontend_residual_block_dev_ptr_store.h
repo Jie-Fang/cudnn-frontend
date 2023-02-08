@@ -17,6 +17,10 @@
 
 #include "layers/common/cudnn_frontend_resnet_block_helpers.h"
 
+#ifdef WIN32
+#define strncasecmp strnicmp
+#endif
+
 namespace cudnn_frontend {
 
 /**
@@ -324,3 +328,5 @@ class ResidualBlockDevPtrStore {
 };
 
 }
+
+#undef strncasecmp

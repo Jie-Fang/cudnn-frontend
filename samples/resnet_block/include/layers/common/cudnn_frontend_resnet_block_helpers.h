@@ -20,10 +20,10 @@ class ResidualBlockParamsBuilder;
 class ResidualBlockDevPtrStore;
 
 static size_t 
-compute_tensor_size(int64_t const * const arr, int const n)
+compute_tensor_size(int64_t const * const arr, int64_t const n)
 {
     size_t initialProduct = 1;
-    return accumulate(arr, arr + n, initialProduct, std::multiplies<int>());
+    return accumulate(arr, arr + n, initialProduct, std::multiplies<int64_t>());
 }
 
 static void 

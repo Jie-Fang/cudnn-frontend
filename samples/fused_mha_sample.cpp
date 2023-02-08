@@ -854,14 +854,14 @@ run_mha_fprop(int64_t b,
             createBias(b, h, s_q, s_kv, d, layout, tensorType, ops, bmm1_output);
         }
 
-        float negInfinity = -1.0E+20; // change this if you have access to float_min
+        float negInfinity = -1.0E+20f; // change this if you have access to float_min
         auto mask_output = createMask(b, h, s_q, s_kv, d, layout, is_causal_masking, tensorType, ops, bmm1_output, false);
 
         bool enable_dropout = (dropout_probability != 0.0f);
         cudnn_frontend::throw_if(dropout_probability == 1.0f, "Dropout probability cannot be 1.0", CUDNN_STATUS_BAD_PARAM);
 
         // needs to be bf16 (Please change)
-        half1 scale_dropout = cpu_float2half_rn(1/(1 - dropout_probability));
+        half1 scale_dropout = cpu_float2half_rn(static_cast<float>(1/(1 - dropout_probability)));
 
         bool softmax_output_virtual = enable_dropout || devPtrS == nullptr;
         auto softmax_output = createSoftmaxForward(b, h, s_q, s_kv, d, layout, enable_dropout, softmax_output_virtual, tensorType, ops, mask_output);

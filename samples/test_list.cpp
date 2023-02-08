@@ -2445,10 +2445,10 @@ TEST_CASE("Back2Back Batch GEMM sample", "[frontend][fusion][back2backBatchGemm]
     printf("v dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", vTensorDim[0], vTensorDim[1], vTensorDim[2], vTensorDim[3]);
     printf("o dims are %" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "\n", oTensorDim[0], oTensorDim[1], oTensorDim[2], oTensorDim[3]);
 
-    int qSize = qTensorDim[0] * qTensorDim[1] * qTensorDim[2] * qTensorDim[3];
-    int kSize = kTensorDim[0] * kTensorDim[1] * kTensorDim[2] * kTensorDim[3];
-    int vSize = vTensorDim[0] * vTensorDim[1] * vTensorDim[2] * vTensorDim[3];
-    int oSize = oTensorDim[0] * oTensorDim[1] * oTensorDim[2] * oTensorDim[3];
+    int64_t qSize = qTensorDim[0] * qTensorDim[1] * qTensorDim[2] * qTensorDim[3];
+    int64_t kSize = kTensorDim[0] * kTensorDim[1] * kTensorDim[2] * kTensorDim[3];
+    int64_t vSize = vTensorDim[0] * vTensorDim[1] * vTensorDim[2] * vTensorDim[3];
+    int64_t oSize = oTensorDim[0] * oTensorDim[1] * oTensorDim[2] * oTensorDim[3];
 
     // passing half just to make sure that we have a data type of same size as bf16
     Surface<half> qTensor(qSize, false);
@@ -2495,7 +2495,7 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
     MHA_Layout layout = MHA_Layout::QKV_INTERLEAVED; // layout of the tensors Q,K and V
 
     // this scaling factor needs to be bfloat16 for data type bfloat16
-    half1 scaling_factor = cpu_float2half_rn(0.8); // scale value before softmax
+    half1 scaling_factor = cpu_float2half_rn(0.8f); // scale value before softmax
 
     double dropout_probability = 0.2f; // probability of dropout
 
@@ -2606,7 +2606,7 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 
     MHA_Layout layout = MHA_Layout::QKV_INTERLEAVED; // layout of the tensors Q,K and V
 
-    float scaling_factor = 0.8; // scale value before softmax
+    float scaling_factor = 0.8f; // scale value before softmax
     float dropout_probability = 0.2f; // probability of dropout
 
     bool is_causal_masking = false; // specify if we need causal masking

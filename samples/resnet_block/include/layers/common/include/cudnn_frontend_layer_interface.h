@@ -550,7 +550,7 @@ public:
      */
     cudnnStatus_t executePlanAndLogTime(cudnnHandle_t handle, ExecutionPlan_v8 &plan, const VariantPack_v8 &variantPack, const std::string &planName) {
         (void) planName;
-        const int maxIterCount = 100; // Run till stable
+        int maxIterCount = 100; // Run till stable
 
         const float threshhold = 0.95f;
         cudaEvent_t start, stop;
