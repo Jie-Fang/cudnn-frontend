@@ -168,9 +168,7 @@ class Tensor_v8 : public BackendDescriptor {
     int64_t vectorCount     = 1;      //! What is the vectorization count (4 or 32)
     bool isVirtual          = false;  //! Whether it is an intermediate tensor of an op graph
     bool isByValue          = false;  //! Whether the tensor is in host memory that needs to be passed to the kernel by value
-#if (CUDNN_VERSION >= 8300)
-    cudnnBackendTensorReordering_t reorder_type = CUDNN_TENSOR_REORDERING_NONE; //! Type of reordering in the tensor
-#endif
+    cudnn_frontend::cudnnBackendTensorReordering_t reorder_type = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE; //! Type of reordering in the tensor
 };
 
 ///
@@ -232,26 +230,20 @@ class TensorBuilder_v8 {
         return *this;
     }
 
+    auto 
+    setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t reordering_type) -> TensorBuilder_v8 & {
+        m_tensor.reorder_type = reordering_type;
+        return *this;
+    }
+
 #if (CUDNN_VERSION >= 8300)
+    // To be deprecated. Please use setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t).
     auto
-    setReorderType(cudnnBackendTensorReordering_t type_) -> TensorBuilder_v8 & {
-        m_tensor.reorder_type = type_;
+    setReorderType(::cudnnBackendTensorReordering_t reordering_type) -> TensorBuilder_v8 & {
+        detail::convert_from_cudnn_type(reordering_type, m_tensor.reorder_type);
         return *this;
     }
 #endif
-
-    auto 
-    setReorderType(std::string type_) -> TensorBuilder_v8 & {
-#if CUDNN_VERSION < 8300
-    CUDNN_FRONTEND_UNUSED(type_);
-    set_error_and_throw_exception(&m_tensor, CUDNN_STATUS_NOT_SUPPORTED, "CUDNN_BACKEND_TENSOR_DESCRIPTOR setReorderType failed");
-    return *this;
-#else
-    cudnnBackendTensorReordering_t reorder_type = CUDNN_TENSOR_REORDERING_NONE;
-    convert_string_to_enum<cudnnBackendTensorReordering_t>(type_, reorder_type);
-    return setReorderType(reorder_type);
-#endif
-    }
 
     /** @} */
 
@@ -273,10 +265,7 @@ class TensorBuilder_v8 {
         m_tensor.isByValue = from.isByValue;
         m_tensor.vectorCount = from.vectorCount;
         m_tensor.vectorDimension = from.vectorDimension;
-
-#if (CUDNN_VERSION >= 8300)
         m_tensor.reorder_type = from.reorder_type;
-#endif
         return *this;
     }
 
@@ -439,7 +428,16 @@ class TensorBuilder_v8 {
 
         // Set the reorder_type
 #if (CUDNN_VERSION >= 8300)
-        if (m_tensor.reorder_type != CUDNN_TENSOR_REORDERING_NONE) {
+        if (m_tensor.reorder_type != cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE) {
+            ::cudnnBackendTensorReordering_t cudnn_reordering_type;
+            status = detail::convert_to_cudnn_type(m_tensor.reorder_type, cudnn_reordering_type);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_tensor,
+                    status,
+                    "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_REORDERING_MODE Failed");
+                return std::move(m_tensor);
+            }
             status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_TENSOR_REORDERING_MODE,
                                               CUDNN_TYPE_TENSOR_REORDERING_MODE,

@@ -371,25 +371,12 @@ to_string(cudnnRngDistribution_t distribution) {
 }
 #endif
 
-template< typename enum_type>
-static inline void
-convert_string_to_enum(std::string const& val, enum_type& enum_value);
 
-#if (CUDNN_VERSION >= 8300)
-template <>
-inline void
-convert_string_to_enum(std::string const& val, cudnnBackendTensorReordering_t& enum_value) {
-    if (val == "CUDNN_TENSOR_REORDERING_NONE") {
-        enum_value = CUDNN_TENSOR_REORDERING_NONE;
-    }  else if (val == "CUDNN_TENSOR_REORDERING_INT8x32") {
-        enum_value = CUDNN_TENSOR_REORDERING_INT8x32;
-#if (CUDNN_VERSION >= 8800)
-    }  else if (val == "CUDNN_TENSOR_REORDERING_F16x16") {
-        enum_value = CUDNN_TENSOR_REORDERING_F16x16;
-#endif
-    }
-}
-#endif
+enum class cudnnBackendTensorReordering_t {
+    CUDNN_TENSOR_REORDERING_NONE,
+    CUDNN_TENSOR_REORDERING_INT8x32,
+    CUDNN_TENSOR_REORDERING_F16x16,
+};
 
 enum class cudnnResampleMode_t{
     NOT_SET,
@@ -408,6 +395,22 @@ enum class cudnnPaddingMode_t{
     CUDNN_NEG_INF_PAD,
     CUDNN_ZERO_PAD
 };
+
+static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendTensorReordering_t& mode) {
+    switch (mode)
+    {
+        case cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_INT8x32:
+            os << "CUDNN_TENSOR_REORDERING_INT8x32";
+            break;
+        case cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16:
+            os << "CUDNN_TENSOR_REORDERING_F16x16";
+            break;
+        case cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE:
+            os << "CUDNN_TENSOR_REORDERING_NONE";
+            break;
+    }
+    return os;
+} 
 
 static inline std::ostream& operator<<(std::ostream& os, const cudnnResampleMode_t& mode) {
     switch (mode)
@@ -486,7 +489,7 @@ namespace detail {
         }
         return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
     }
-
+     
     static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnPaddingMode_t const mode, ::cudnnPaddingMode_t& cudnn_mode) {
         switch (mode)
         {
@@ -562,6 +565,57 @@ namespace detail {
     }
 
 #endif
+
+#if (CUDNN_VERSION >= 8300)
+static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnBackendTensorReordering_t const mode, ::cudnnBackendTensorReordering_t& cudnn_mode) {
+        switch (mode)
+        {
+            case cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE:
+                cudnn_mode = CUDNN_TENSOR_REORDERING_NONE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_INT8x32:
+                cudnn_mode = CUDNN_TENSOR_REORDERING_INT8x32;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16:
+    #if CUDNN_VERSION >= 8800
+                cudnn_mode = CUDNN_TENSOR_REORDERING_F16x16;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+    #elif CUDNN_VERSION >= 8700
+                cudnn_mode = CUDNN_TENSOR_REORDERING_NONE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+    #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    #endif
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
+    // To be deprecated. Only exists as setReorderType(cudnnBackendTensorReordering_t) requires it.
+    static inline void convert_from_cudnn_type(::cudnnBackendTensorReordering_t const cudnn_mode, cudnn_frontend::cudnnBackendTensorReordering_t& mode) {
+        mode = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE;
+        switch (cudnn_mode)
+        {
+            case CUDNN_TENSOR_REORDERING_INT8x32:
+                mode = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_INT8x32;
+                break;
+    #if CUDNN_VERSION >= 8800
+            case CUDNN_TENSOR_REORDERING_F16x16:
+                mode = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16;
+                break;
+    #endif
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                break;
+    #endif
+        }
+    }
+
+#endif
+
 } // namespace detail
 
 }
