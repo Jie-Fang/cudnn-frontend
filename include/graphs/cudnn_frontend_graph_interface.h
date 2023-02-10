@@ -234,9 +234,6 @@ public:
 
     error_t
     build() {
-        cudnnHandle_t handle_;
-        cudnnCreate(&handle_);
-
         node.tensor_props = all_tensors;
         
         for (auto const &prop : conv_properties) {
@@ -266,17 +263,13 @@ public:
             uid_offset += 100;
         }
 
-        node.build(handle_);
+        node.build();
 
         return error_t::OK;
     }
 
-    error_t
-    execute(std::unordered_map<std::string, void *> var_pack) {
-        cudnnHandle_t handle;
-        cudnnCreate(&handle);
-        
-        auto status = node.execute(handle, var_pack);
+    error_t execute(std::unordered_map<std::string, void *> var_pack) {
+        auto status = node.execute(var_pack);
         return status;
     }
 

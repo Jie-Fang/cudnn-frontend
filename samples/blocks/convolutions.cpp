@@ -61,7 +61,7 @@ run_matmul_node() {
     tensor2.set_dim({1, 32, 32});
     matmul_node.add_tensor("tensor2", tensor2);
 
-    REQUIRE(cudnn_frontend::error_t::OK == matmul_node.build(handle));
+    REQUIRE(cudnn_frontend::error_t::OK == matmul_node.build());
 
     Surface<half> x_tensor(matmul_node.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> w_tensor(matmul_node.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -72,7 +72,7 @@ run_matmul_node() {
         , {"tensor1", w_tensor.devPtr}
         , {"tensor2", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == matmul_node.execute(handle, variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == matmul_node.execute(variant_pack));
 }
 
 
@@ -108,7 +108,7 @@ run_convolution_node() {
     tensor2.set_dim({4, 64, 16, 16});
     convolution_node.add_tensor("tensor2", tensor2);
 
-    REQUIRE(cudnn_frontend::error_t::OK == convolution_node.build(handle));
+    REQUIRE(cudnn_frontend::error_t::OK == convolution_node.build());
 
     Surface<half> x_tensor(convolution_node.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> w_tensor(convolution_node.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -119,7 +119,7 @@ run_convolution_node() {
         , {"tensor1", w_tensor.devPtr}
         , {"tensor2", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == convolution_node.execute(handle, variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == convolution_node.execute(variant_pack));
 }
 
 void
@@ -152,7 +152,7 @@ run_pointwise_node() {
     tensor2.set_dim({4, 32, 16, 16});
     pointwise_node.add_tensor("tensor2", tensor2);
 
-    REQUIRE(cudnn_frontend::error_t::OK == pointwise_node.build(handle));
+    REQUIRE(cudnn_frontend::error_t::OK == pointwise_node.build());
 
     Surface<half> x_tensor(pointwise_node.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> b_tensor(pointwise_node.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -163,7 +163,7 @@ run_pointwise_node() {
         , {"tensor1", b_tensor.devPtr}
         , {"tensor2", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == pointwise_node.execute(handle, variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == pointwise_node.execute(variant_pack));
 }
 
 void
@@ -192,7 +192,7 @@ run_reduction_node() {
     tensor1.set_data_type(CUDNN_DATA_FLOAT);
     reduction_node.add_tensor("tensor1", tensor1);
 
-    REQUIRE(cudnn_frontend::error_t::OK == reduction_node.build(handle));
+    REQUIRE(cudnn_frontend::error_t::OK == reduction_node.build());
 
     Surface<half> x_tensor(reduction_node.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<float> y_tensor(reduction_node.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -200,7 +200,7 @@ run_reduction_node() {
         {"tensor0", x_tensor.devPtr}
         , {"tensor1", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == reduction_node.execute(handle, variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == reduction_node.execute(variant_pack));
 }
 
 void
@@ -209,7 +209,7 @@ run_convolution_fp8_node() {
     cudnnHandle_t handle;
     cudnnCreate(&handle);
 
-    cudnn_frontend::ConvolutionFP8Node convolution_fp8_node{"conv_fp8_node"};
+    cudnn_frontend::ConvolutionFP8Node convolution_fp8_node{"conv_fp8"};
     
     auto props = std::make_shared<cudnn_frontend::convolution_properties>("conv_prop");
     props->set_padding({1, 1});
@@ -223,7 +223,7 @@ run_convolution_fp8_node() {
         , {cudnn_frontend::convolution_properties::PORTS::W, "tensor1"}
         , {cudnn_frontend::convolution_properties::PORTS::Y, "tensor2"}
     });
-    convolution_fp8_node.set_properties("conv_node", props);
+    convolution_fp8_node.set_properties("conv", props);
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
@@ -248,7 +248,7 @@ run_convolution_fp8_node() {
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor3"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor4"}
     });
-    convolution_fp8_node.set_properties("X_DQ_node", X_DQ_props);
+    convolution_fp8_node.set_properties("X_DQ", X_DQ_props);
 
     cudnn_frontend::tensor_properties tensor3{"tensor3"};
     tensor3.set_dim({1, 1, 1, 1});
@@ -267,7 +267,7 @@ run_convolution_fp8_node() {
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor5"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor6"}
     });
-    convolution_fp8_node.set_properties("W_DQ_node", W_DQ_props);
+    convolution_fp8_node.set_properties("W_DQ", W_DQ_props);
 
     cudnn_frontend::tensor_properties tensor5{"tensor5"};
     tensor5.set_dim({1, 1, 1, 1});
@@ -287,7 +287,7 @@ run_convolution_fp8_node() {
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor7"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor8"}
     });
-    convolution_fp8_node.set_properties("Y_Q_node", Y_Q_props);
+    convolution_fp8_node.set_properties("Y_Q", Y_Q_props);
 
     cudnn_frontend::tensor_properties tensor7{"tensor7"};
     tensor7.set_dim({1, 1, 1, 1});
@@ -307,14 +307,14 @@ run_convolution_fp8_node() {
         {cudnn_frontend::reduction_properties::PORTS::X, "tensor6"} 
         , {cudnn_frontend::reduction_properties::PORTS::Y, "tensor9"}
     });
-    convolution_fp8_node.set_properties("amax_node", amax_props);
+    convolution_fp8_node.set_properties("amax", amax_props);
 
     cudnn_frontend::tensor_properties tensor9{"tensor9"};
     tensor9.set_dim({1, 1, 1, 1});
     convolution_fp8_node.add_tensor("tensor9", tensor9);
 
     if (check_device_arch_newer_than("hopper")) {
-        REQUIRE(cudnn_frontend::error_t::OK == convolution_fp8_node.build(handle));
+        REQUIRE(cudnn_frontend::error_t::OK == convolution_fp8_node.build());
     }
     else {
         SKIP("Architextures below hopper do not support fp8.");
@@ -337,7 +337,7 @@ run_convolution_fp8_node() {
         , {"tensor7", y_q_tensor.devPtr}
         , {"tensor9", amax_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == convolution_fp8_node.execute(handle, variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == convolution_fp8_node.execute(variant_pack));
 #endif
 }
 
@@ -346,7 +346,7 @@ run_convolution_pointwise_node() {
     cudnnHandle_t handle;
     cudnnCreate(&handle);
 
-    cudnn_frontend::ConvolutionPointwiseNode convolution_pointwise_node{"convolution_pointwise_node"};
+    cudnn_frontend::ConvolutionPointwiseNode convolution_pointwise_node{"convolution_pointwise"};
 
     auto conv_props = std::make_shared<cudnn_frontend::convolution_properties>("conv_prop");
     conv_props->set_padding({1, 1});
@@ -360,7 +360,7 @@ run_convolution_pointwise_node() {
         , {cudnn_frontend::convolution_properties::PORTS::W, "tensor1"}
         , {cudnn_frontend::convolution_properties::PORTS::Y, "tensor2"}
     });
-    convolution_pointwise_node.set_properties("conv_node", conv_props);
+    convolution_pointwise_node.set_properties("conv", conv_props);
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
@@ -383,7 +383,7 @@ run_convolution_pointwise_node() {
         , {cudnn_frontend::pointwise_properties::PORTS::B, "tensor3"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "tensor4"}
     });
-    convolution_pointwise_node.set_properties("pointwise_node", pointwise_props);
+    convolution_pointwise_node.set_properties("pointwise", pointwise_props);
 
     cudnn_frontend::tensor_properties tensor3{"tensor3"};
     tensor3.set_dim({1, 64, 1, 1});
@@ -393,7 +393,7 @@ run_convolution_pointwise_node() {
     tensor4.set_dim({4, 64, 16, 16});
     convolution_pointwise_node.add_tensor("tensor4", tensor4);
 
-    REQUIRE(cudnn_frontend::error_t::OK == convolution_pointwise_node.build(handle));
+    REQUIRE(cudnn_frontend::error_t::OK == convolution_pointwise_node.build());
     
     Surface<half> x_tensor(convolution_pointwise_node.tensor_props.at("tensor0")->get_tensor_size(), false);
     Surface<half> w_tensor(convolution_pointwise_node.tensor_props.at("tensor1")->get_tensor_size(), false);
@@ -405,5 +405,5 @@ run_convolution_pointwise_node() {
         , {"tensor3", b_tensor.devPtr}
         , {"tensor4", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == convolution_pointwise_node.execute(handle, variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == convolution_pointwise_node.execute(variant_pack));
 }

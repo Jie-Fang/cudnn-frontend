@@ -18,11 +18,11 @@ protected:
 public:
 
     ConvolutionPointwiseNode(std::string const& name, int64_t const offset = 1)  : INode (name, offset) {
-        auto conv_node = std::make_shared<ConvolutionNode>("conv_node", offset);
-        auto pointwise_node = std::make_shared<PointwiseNode>("pointwise_node", offset + 200);
+        auto conv_node = std::make_shared<ConvolutionNode>("conv", offset);
+        auto pointwise_node = std::make_shared<PointwiseNode>("pointwise", offset + 200);
 
-        sub_nodes.emplace("conv_node", conv_node);
-        sub_nodes.emplace("pointwise_node", pointwise_node);
+        sub_nodes.emplace("conv", conv_node);
+        sub_nodes.emplace("pointwise", pointwise_node);
 
         conv_node->parent_node = this;
         pointwise_node->parent_node = this;
@@ -60,17 +60,17 @@ public:
         return 0;
     }
     
-    int infer_properties() override final {        
-        auto const& conv_node_ptr = std::dynamic_pointer_cast<ConvolutionNode>(sub_nodes.at("conv_node"));
+    error_t infer_properties() override final {        
+        auto const& conv_node_ptr = std::dynamic_pointer_cast<ConvolutionNode>(sub_nodes.at("conv"));
         tensor_props.at(conv_node_ptr->props->get_port_name(convolution_properties::PORTS::Y))->set_is_virtual(true);
 
         for(auto const& sub_node: sub_nodes) {
             sub_node.second->infer_properties();
         }
-        return 0;
+        return error_t::OK;
     }
 
-    int validate() const override final {
+    error_t validate() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionPointwiseNode..." << std::endl;
 
         for(auto const& sub_node: sub_nodes) {
@@ -78,66 +78,29 @@ public:
         }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionPointwiseNode." << std::endl;
-        return 0;
-    }
-
-    error_t partition(cudnnHandle_t& handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partioning ConvolutionPointwiseNode..." << std::endl;
-
-        std::vector<Operation const*> operation_graph = {sub_nodes.at("conv_node")->operations.at("conv").get(), sub_nodes.at("pointwise_node")->operations.at("pointwise").get()};
-        auto conv_pointwise_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
-        operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(conv_pointwise_graph)));
-
-        int status = createExecutionPlan(handle);
-        if(status) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionPointwiseNode." << std::endl;
-            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioned ConvolutionPointwiseNode." << std::endl;
         return error_t::OK;
     }
 
-    error_t build(cudnnHandle_t& handle) override final {
-        
-        infer_properties();
-        validate();
-        createTensors();
-        createDescritpors();
-        createOperations();
-        return partition(handle);
-    }
-    
-    error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) override final {
-        getLogger() << "[cudnn_frontend] INFO: ConvolutionPointwiseNode starting execution..." << std::endl;
+    error_t partition() override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning ConvolutionPointwiseNode..." << std::endl;
 
-        for(auto const& execution_plan: execution_plans) {
-            getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
-        
-            std::vector<int64_t> uids;
-            std::vector<void*> device_ptrs;
-
-            uids.reserve(tensor_uid_to_pointer_map.size());
-            device_ptrs.reserve(tensor_uid_to_pointer_map.size());
-
-            for (auto const& p : tensor_uid_to_pointer_map) {
-                uids.push_back(get_tensor_props(p.first)->get_uid());
-                device_ptrs.push_back(p.second);
+        std::vector<std::string> operation_names;
+        for (auto node : sub_nodes) {
+            getLogger() << "Getting the operation from " << node.first << std::endl;
+            for (auto &operation : node.second->get_operations()) {
+                operation_names.push_back(operation.first);
             }
-
-            auto variant_pack = VariantPackBuilder()
-                                .setDataPointers(device_ptrs.size(), device_ptrs.data())
-                                .setUids(uids.size(), uids.data())
-                                .build();
-
-            auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
-            if (status != CUDNN_STATUS_SUCCESS) {
-                return error_t::GRAPH_EXECUTION_FAILED;
-            }
-            getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
         }
-        
-        getLogger() << "[cudnn_frontend] INFO: ConvolutionPointwiseNode executed successfully." << std::endl;
+
+        getLogger() << "Operation Graph has " << operation_names.size() << " operations." << std::endl;
+
+        auto status = create_cudnn_execution_plan({operation_names});
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in ConvolutionPointwiseNode." << std::endl;
+            return status;
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Partitioned ConvolutionPointwiseNode." << std::endl;
         return error_t::OK;
     }
 };

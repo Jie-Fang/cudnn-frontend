@@ -20,6 +20,34 @@ enum class error_t {
     , GRAPH_EXECUTION_FAILED
 };
 
+static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
+    switch (mode)
+    {
+        case error_t::OK:
+            os << "OK";
+            break;
+        case error_t::ATTRIBUTE_NOT_SET:
+            os << "ATTRIBUTE_NOT_SET";
+            break;
+        case error_t::SHAPE_DEDUCTION_FAILED:
+            os << "SHAPE_DEDUCTION_FAILED";
+            break;
+        case error_t::INVALID_TENSOR_NAME:
+            os << "INVALID_TENSOR_NAME";
+            break;
+        case error_t::INVALID_VARIANT_PACK:
+            os << "INVALID_VARIANT_PACK";
+            break;
+        case error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
+            os << "GRAPH_EXECUTION_PLAN_CREATION_FAILED";
+            break;
+        case error_t::GRAPH_EXECUTION_FAILED:
+            os << "GRAPH_EXECUTION_FAILED";
+            break;
+    }
+    return os;
+} 
+
 static cudnnDataType_t
 string_to_data_type(std::string data_type) {
     if (data_type == "float") {

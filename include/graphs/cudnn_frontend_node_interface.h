@@ -42,27 +42,36 @@ protected:
     
     virtual Type getType() = 0;
 
-    virtual error_t partition(cudnnHandle_t& handle) = 0;
+    virtual error_t partition() = 0;
 
-    virtual int createTensors() {
+    virtual error_t createTensors() {
         for(auto const& sub_node: sub_nodes) {
-            sub_node.second->createTensors();
+            auto status = sub_node.second->createTensors();
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create tensors in " << name << std::endl;
+                return status;
+            }
         }
-        return 0;
-    }
-    
-    virtual int createDescritpors() {
-        for(auto const& sub_node: sub_nodes) {
-            sub_node.second->createDescritpors();
-        }
-        return 0;
+        return error_t::OK;
     }
 
-    virtual int createOperations() {
+    virtual error_t createOperations() {
         for(auto const& sub_node: sub_nodes) {
-            sub_node.second->createOperations();
+            auto status = sub_node.second->createOperations();
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create operation for " << sub_node.first << " in " << name << std::endl;
+                return status;
+            }
+
+            // Roll up operations to parent node, so that parent can too partition operation graphs.
+            for (auto const &item : sub_node.second->get_operations()) {
+                operations.emplace(item.first, item.second);
+            }
+            for (auto const &item : sub_node.second->tensors_in_operations) {
+                tensors_in_operations.emplace(item.first, item.second);
+            }
         }
-        return 0;
+        return error_t::OK;
     }
     
 public:
@@ -76,14 +85,71 @@ public:
     INode* parent_node;
     std::unordered_map <std::string, std::shared_ptr<INode>> sub_nodes;
     
-    virtual int infer_properties() = 0;
+    virtual error_t infer_properties() {
+        for(auto const& sub_node: sub_nodes) {
+            auto status = sub_node.second->infer_properties();
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer properties in " << name << std::endl;
+                return status;
+            }
+        }
+        return error_t::OK;
+    }
     
-    virtual int validate() const = 0;
+    virtual error_t validate() const {
+        for(auto const& sub_node: sub_nodes) {
+            auto status = sub_node.second->validate();
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to validate in " << name << std::endl;
+                return status;
+            }
+        }
+        return error_t::OK;
+    }
 
-    virtual error_t build(cudnnHandle_t& handle) = 0;
+    error_t build() {
+        auto status = infer_properties();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        status = validate();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        status = createTensors();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        status = createOperations();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        status = partition();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        return error_t::OK;
+    }
+
+    error_t execute(std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
+        std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
+        for (auto const &item : tensor_name_to_pointer_map) {
+            tensor_uid_to_pointer_map.emplace(get_tensor_props(item.first)->get_uid(), item.second);
+        }
+        auto status = execute_cudnn_plans(tensor_uid_to_pointer_map);
+        return status;
+    }
     
-    virtual error_t execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_uid_to_pointer_map) = 0;
-
     INode(std::string const& name, int64_t const offset) : name(name), offset(offset) {}
 
     virtual ~INode() {};
@@ -113,27 +179,24 @@ protected:
         return Type::COMPOSITE;
     }
 
-    error_t partition(cudnnHandle_t& handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partioning CompositeNode..." << std::endl;
+    error_t partition() override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning CompositeNode..." << std::endl;
 
-        std::vector<Operation const*> operation_graph{};
-
+        // Currently just make one large graph of operations from all sub nodes.
+        std::vector<std::string> operation_names;
         for (auto node : sub_nodes) {
             getLogger() << "Getting the operation from " << node.first << std::endl;
             for (auto &operation : node.second->get_operations()) {
-                operation_graph.push_back(operation.second.get());
+                operation_names.push_back(operation.first);
             }
         }
 
-        getLogger() << "Operation Graph has " << operation_graph.size() << " operations." << std::endl;
+        getLogger() << "Operation Graph has " << operation_names.size() << " operations." << std::endl;
 
-        auto composite_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(operation_graph.size(), operation_graph.data()).build();
-        operation_graphs.push_back(std::make_shared<OperationGraph>(std::move(composite_graph)));
-
-        int status = createExecutionPlan(handle);
-        if(status) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Failed to create execution plans for graph partitioning in ConvolutionNode." << std::endl;
-            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+        auto status = create_cudnn_execution_plan({operation_names});
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in CompositeNode." << std::endl;
+            return status;
         }
 
         getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeNode." << std::endl;
@@ -141,36 +204,6 @@ protected:
     }
 
 public:
-    int infer_properties() override {
-        for(auto const& sub_node: sub_nodes) {
-            sub_node.second->infer_properties();
-        }
-        return 0;
-    }
-
-    int validate() const override {return 0;}
-
-    error_t build(cudnnHandle_t& handle) override {
-        infer_properties();
-        createTensors();
-        createDescritpors();
-        createOperations();
-        partition(handle);
-        return error_t::OK;
-    }
-
-    error_t
-    execute(cudnnHandle_t& handle, std::unordered_map<std::string, void*> const& tensor_to_pointer_map) override {
-        std::vector<int64_t> uids;
-        std::vector<void *> device_ptrs;
-        for (auto & item : tensor_to_pointer_map) {
-            device_ptrs.push_back(item.second);
-            uids.push_back(tensor_props.at(item.first)->get_uid());
-        }
-        auto status = run_execution_plans(handle, device_ptrs, uids);
-        return status;
-    }
-
     CompositeNode(std::string const& name, int64_t const offset) : INode(name, offset) {}
 
     ~CompositeNode() {};
