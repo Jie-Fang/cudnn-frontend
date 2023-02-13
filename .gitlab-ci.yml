@@ -6,7 +6,7 @@ stages:
     script:
         - mkdir build
         - cd build
-        - cmake ../ 
+        - cmake ../
         - cmake --build . -j16 --verbose
     # keep the build directory so that later jobs can use it
     artifacts:
@@ -32,7 +32,7 @@ build:cudnn_8.2:
     tags:
         - Ampere
     extends: .build:template
-    
+
 build:cudnn_8.3:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.5.2_cudnn_8.3.3.40
     stage: build
@@ -49,7 +49,7 @@ build:cudnn_8.4:
     tags:
         - ${ARCH}
     extends: .build:template
-    
+
 build:cudnn_8.5:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96
     stage: build
@@ -63,7 +63,7 @@ build:cudnn_8.5_clang:
     tags:
         - Ampere
     extends: .build:template
-    
+
 build:cudnn_8.6:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.6.0.163
     stage: build
@@ -84,6 +84,23 @@ build:cudnn_8.7:
         - ${ARCH}
     extends: .build:template
 
+build:cudnn_8.8:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0.1_cudnn_8.8.0.121
+    stage: build
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends: .build:template
+
+build:cudnn_8.8_clang:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0.1_cudnn_8.8.0.121_clang
+    stage: build
+    tags:
+        - Hopper
+    extends: .build:template
+
 test:cudnn_8.2:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
     stage: test
@@ -101,7 +118,7 @@ test:cudnn_8.3:
     needs:
         - build:cudnn_8.3
     extends: .test:template
-    
+
 test:cudnn_8.4:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
     stage: test
@@ -109,6 +126,8 @@ test:cudnn_8.4:Ampere:
         - Ampere
     dependencies: ["build:cudnn_8.4: [Ampere]"]
     extends: .test:template
+    needs:
+        - ["build:cudnn_8.4: [Ampere]"]
 
 test:cudnn_8.4:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
@@ -117,6 +136,8 @@ test:cudnn_8.4:GA10x:
         - GA10x
     dependencies: ["build:cudnn_8.4: [GA10x]"]
     extends: .test:template
+    needs:
+        - ["build:cudnn_8.4: [GA10x]"]
 
 test:cudnn_8.5:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96
@@ -126,49 +147,82 @@ test:cudnn_8.5:
     needs:
         - build:cudnn_8.5
     extends: .test:template
-    
+
 .test:cudnn_8.6:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.6.0.163
     stage: test
     extends: .test:template
-    
+
 test:cudnn_8.6:Hopper:
     extends: .test:cudnn_8.6
     dependencies: ["build:cudnn_8.6: [Hopper]"]
     tags:
         - Hopper
+    needs:
+        - ["build:cudnn_8.6: [Hopper]"]
 
 test:cudnn_8.6:Ampere:
     extends: .test:cudnn_8.6
     dependencies: ["build:cudnn_8.6: [Ampere]"]
     tags:
         - Ampere
+    needs:
+        - ["build:cudnn_8.6: [Ampere]"]
 
 test:cudnn_8.6:GA10x:
     extends: .test:cudnn_8.6
     dependencies: ["build:cudnn_8.6: [GA10x]"]
     tags:
         - GA10x
+    needs:
+        - ["build:cudnn_8.6: [GA10x]"]
 
 .test:cudnn_8.7:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.7.0.84
     stage: test
     extends: .test:template
-    
+
 test:cudnn_8.7:Hopper:
     extends: .test:cudnn_8.7
     dependencies: ["build:cudnn_8.7: [Hopper]"]
     tags:
         - Hopper
+    needs:
+        - ["build:cudnn_8.7: [Hopper]"]
 
 test:cudnn_8.7:Ampere:
     extends: .test:cudnn_8.7
     dependencies: ["build:cudnn_8.7: [Ampere]"]
     tags:
         - Ampere
+    needs:
+        - ["build:cudnn_8.7: [Ampere]"]
 
 test:cudnn_8.7:GA10x:
     extends: .test:cudnn_8.7
     dependencies: ["build:cudnn_8.7: [GA10x]"]
     tags:
         - GA10x
+    needs:
+        - ["build:cudnn_8.7: [GA10x]"]
+
+.test:cudnn_8.8:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0.1_cudnn_8.8.0.121
+    stage: test
+    extends: .test:template
+
+test:cudnn_8.8:Hopper:
+    extends: .test:cudnn_8.8
+    dependencies: ["build:cudnn_8.8: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.8: [Hopper]"]
+
+test:cudnn_8.8:Ampere:
+    extends: .test:cudnn_8.8
+    dependencies: ["build:cudnn_8.8: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.8: [Ampere]"]
