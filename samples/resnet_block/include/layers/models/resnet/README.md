@@ -11,21 +11,13 @@ To use any of these blocks, first, ensure `cudnn_frontend.h` has been included i
 
 In the [original ResNet Paper](https://arxiv.org/abs/1512.03385?context=cs), a ResNet contains a stem block, a stack of building/bottleneck blocks, and a classifier block. A stem block contains a 7x7 convolution on the input, followed by a batch normalization, and followed by a maxpooling layer. Each bottleneck block contains 3, 3x3 convolutions followed by a batch normalization and a ReLu. There is also the residual path, with one flavor of the network containing a 1x1 convolution and the second being a direct connection from input to output. Finally, the classifier block is a fully connected layer that outputs probabilities for classes.
 
-This repo can be used to easilly build mixed-precision ResNets and networks using ResNet backbones by stacking these blocks with our API. There are currently 6 blocks implemented:
-* Stem forward block, found in `cudnn_frontend_stem_forward_block.h`
+This repo can be used to easilly build mixed-precision ResNets and networks using ResNet backbones by stacking these blocks with our API
 * Residual forward block, found in `cudnn_frontend_residual_forward_block.h`
-* Classifier forward block, found in `cudnn_frontend_classifier_forward_block.h`
-* Stem backward block, found in `cudnn_frontend_stem_backward_block.h`
-* Residual backward block, found in `cudnn_frontend_residual_backward_block.h`
-* Classifier backward block, found in `cudnn_frontend_classifier_backward_block.h`
 
-Note that we've separated the forward pass and backward for encapsulation and readibilty. However, both types of blocks communicate to each other via a shared `Block Params` object and a `Block Device Pointer Store` object. These objects house the parameters for the block and the GPU device pointers for outputs.
+Note that we've separated the forward pass and backward for encapsulation and readibilty. However, both types of blocks communicate to each other via a shared `Block Params` object and a `Block Device Pointer Store` object. These objects house the parameters for the block and the GPU device pointers for outputs. Backward blocks will be part of future cudnn_frontend release.
 
 ## Parent block: `IBlock`
 All of these blocks inherit from a parent block called `IBlock` found in `layers/common/include/cudnn_frontend_layer_interface.h`. In the future, we may want to create different types of blocks for different networks, so a parent block is created. `IBlock` contains methods such as `buildOperationGraph()`, `execute()`, etc. for children blocks to implement. We handle operation graph building and execution internally, so you as the user will not have to worry about that.
-
-## Blocks using backend API vs legacy API
-Due to some internal cuDNN limitations, some operations are not supported in the block with the current backend/graph API. This is primarily seen in the backward blocks, where operations like pooling backward and batch normalization backward isn't fully supported yet in the backend API. Thus, we've opted to use the legacy API until these operations are supported in the current backend API. Once we get support for these operations, we will create blocks that are fully supported in the backend API, but we will also keep the legacy API blocks for legacy reasons. These blocks can be found in the header files with the suffix `_with_legacy` at the end (e.g. `cudnn_frontend_stem_backward_block_with_legacy.h`). The implementation and functionality are the same between legacy and backend API blocks, it is just that one block uses a different internal API. The user side code will remain very similar. 
 
 ## IMPORTANT
 You should look at the samples in `resnet_sample.cpp` alongside `resnet_test_list.cpp` to see sample usage of these blocks!
@@ -115,15 +107,6 @@ As you can see, a user has the ability to set specific parameters for the block.
 ## IMPORTANT: The params you need to set as the user
 Internally, for parameters like convolution output and pooling output sizes, we calculate the expected output sizes internally and compare against yours. If you do not set convolution or pooling output sizes, we will set it for you. These params are common among the three blocks that you may want to set and their default values
 - **Data type of the block and math precision of the block**. Defaults to mixed-precision FP16 and FP32 respectively (denoted as `CUDNN_DATA_HALF` and `CUDNN_DATA_FLOAT` respectively). For FP8 blocks, use `CUDNN_DATA_E4M3` or `CUDNN_DATA_E5M2.`
-- **Flags for legacy versions of the block and FP8 versions of the block**. Defaults to non legacy versions of the block wherever possible. FP16 blocks are default. To enable legacy for block, use the functions `use_legacy_forward()` and/or `use_legacy_backward()` in the builder to enable legacy version. To use FP8, use `use_fp8()` and make sure the `CUDNN_DATA` type is correct from above.
-
-### Stem block
-These are the params you may want to (and should for transparency as a user) set specifically for the stem block:
-
-- **Convolution input size, filter size, padding size, stride size, dilation size, and output size**. Note that if you just provide the initial input size and all the filters, paddings, stride, etc. for the convolution, the block will calculate the output sizes for you. However, for transparency, you probably want to set them yourself to ensure everything is the way you want it. Use `setInputSizes(), setFilterSizes()`, etc. to these parameters.
-- **Per channel dimensions**. This is used for per channel scaling/biasing in batch normalization, as well as the `GEN STATS` node in the current implementation. Use `setBiasAndScaleDims()` to set. It defaults to the output channels of the convolution filter.
-- **Accumulation count for batch normalization.** This is calculated as  `N * H * W`  from the dims of the input to the batch normalization node. Use `setAccumCnt)` to set accumulation count. If not set, it does the calculation internally and sets it for each of the batch normalization nodes.
-- **Pooling parameters**. Since the stem block contains a maxpooling node, you need to configure this. You should set the pooling mode to `CUDNN_RESAMPLE_MAXPOOL` via `setPoolingMode()` in the params builder. You should also set the padding, stride and window dimensions of the pooling. You should set the padding mode to `CUDNN_NEG_INF_PAD` via `setPoolingPaddingMode()`. You alos need to set the output size, otherwise, it will calculate it for you based on the pooling parameters you passed in.
 
 ### Residual block
 These are the params you may want to (and should for transparency as a user) set specifically for the residual block:
@@ -132,14 +115,6 @@ These are the params you may want to (and should for transparency as a user) set
 - **Per channel dimensions**. This is used for per channel scaling/biasing in batch normalization, as well as the `GEN STATS` node in the current implementation. Use `setBiasAndScaleDims()` to set. NOTE: If you set only the first node's per channel scale and bias dims, it will set the rest for you depending on the channels at that node. 
 - **Flag to use a 1x1 convolution in the residual path.** Defaults to `true`. To not use, call `use_1x1_conv(false)` in the params builder.
 - **Accumulation count for batch normalization.** This is calculated as  `N * H * W`  from the dims of the input to the batch normalization node. Use `setAccumCnt)` to set accumulation count. If not set, it does the calculation internally and sets it for each of the batch normalization nodes.
-
-### Classifier block
-These are the params you may want to (and should for transparency as a user) set specifically for the classifier block:
-
-- **Input and output size to the block.** Input size should be the same as the output size of the final residual block. Ouput dim should have dims `[batch_index, number of classes, batch size]` Use `setInputSize()` and `setOutputSize()` to set input and output sizes respectively.
-- **Matrix multiplication parameters.** Use `setWeightMatrixSize()` to set the weight matrix dimensions. 
-- **Per channel dimensions**. This is used for the final bias after the matrix multplication. Use `setBiasDims()` to set.
-- **Pooling parameters**. Since the classifier block contains a average pooling node, you need to configure this. You should set the pooling mode to `CUDNN_RESAMPLE_AVGPOOL` via `setPoolingMode()` in the params builder. You should also set the padding, stride and window dimensions of the pooling. You should set the padding mode to `CUDNN_ZERO_PAD` via `setPoolingPaddingMode()`. You also need to set the output size, otherwise, it will calculate it for you based on the pooling parameters you passed in.
 
 ## Device Pointer Store
 Each block also has a corresponding device pointer store to store GPU device pointers for the forward and backward pass to operate with. These device pointers are going to contain the actual numerical inputs and outputs for the block. you is expected to provide device pointers for inputs and outputs for each of the blocks and operations within the blocks (e.g. convolution, batch normalization). Setting up the device pointers is easy with our API, you just needs to provide the necessary device pointers and call the corresponding setters. This object is also SHARED between the forward and backward blocks of the same type. This is how the two passes communicate with each other. Here's an example with the same FP16 residual bottlneck block. Note that all necessary device pointers aren't seen for brevity:
@@ -181,18 +156,6 @@ X0.devPtr = nullptr;
 What's important is that the GPU device pointers you provide match, in total size, the datatype of the block. If you wanted mixed-precision FP16, you should be providing device pointers that have a total size of: (size of tensor) * sizeof(half). For example, suppose I have a 3x3 convolution filter with 1 input channel and 1 output channel. The dimensions might be [1, 1, 3, 3]. I'd have to allocate a device pointer of size 1 * 1 * 3 * 3 * sizeof(half) = 18 bytes. This is extremely important to ensure no page faults within the block, as internally, the block assumes that the configured block datatype matches the sizes of your provided device pointers.
 
 ## IMPORTANT: The device pointers you as the user need to set
-### Stem block
-These are the device pointers you need to set specifically for the stem block:
-
-- **Convolution input, filter, and output device pointers**. Use `setXDevPtr(), setWDevPtr(), setYDevPtr()` to these parameters.
-- **Scale and bias device pointers**. This is used for per channel scaling/biasing in batch normalization. Use `setScaleDevPtr(), setBiasDevPtr()` to set.
-- **Gen stats + Batch normalization device pointers**. Need `sum, sqSum, inScale, inBias, eqScale, eqBias, inMean, inVar, outMean, outInvVar, savedMean, savedInvVar` device pointers. There is a correspondeing setter for each of these. See sample for example.
-- **After batch normalization device pointer ONLY FOR LEGACY**. After batch normalization device pointer for legacy API. Use `setAfterBNDevPtr()` to set. 
-- **Maxpooling index device pointer.** Device pointer for index tensor for maxpooling. Should have same size as output size of maxpooling. Use `setMaxpoolIdxDevPtr()` to use. 
-- **After relu device pointer.** Since we can't fuse relu + pooling, we need an after relu device pointer. Set using `setAfterReLuDevPtr()`. 
-- **Final output device pointer.** Final output device pointer after pooling. Use `setFinalOutputDevPtr()`.
-- **Backward pass device pointers**. You need to set the following backward pass device pointers: `setdAfterReluGradDevPtr(), setdAfterMaxpoolGradDevPtr(), setdAfterBNGradDevPtr(), setdAfterConvDataGradDevPtr(), setdAfterConvWGrad(), setdBNScaleGradDevPtr(), setdBNBiasGradDevPtr(), setFinalOutputGradDevPtr()` 
-
 ### Residual block
 These are the device pointers you need to set specifically for the residual block:
 
@@ -201,16 +164,6 @@ These are the device pointers you need to set specifically for the residual bloc
 - **Gen stats + Batch normalization device pointers**. Need `sum, sqSum, inScale, inBias, eqScale, eqBias, inMean, inVar, outMean, outInvVar, savedMean, savedInvVar` device pointers. There is a correspondeing setter for each of these. See sample for example.
 - **Final output device pointer.** Final output device pointer after pooling. Use `setFinalOutputDevPtr()`.
 - **Backward pass device pointers**. You need to set the following backward pass device pointers: `setdAfterReluGradDevPtr(), setdAfterMaxpoolGradDevPtr(), setdAfterBNGradDevPtr(), setdAfterConvDataGradDevPtr(), setdAfterConvWGrad(), setdBNScaleGradDevPtr(), setdBNBiasGradDevPtr(), setFinalOutputGradDevPtr()` 
-
-### Classifier block
-These are the device pointers you need to set specifically for the classifier block:
-
-- **Input and weight matrix device pointer**. Use `setInputDevPtr(), setWDevPtr()` to these parameters.
-- **Bias device pointers**. This is used for bias after matrix multiplication. Use `setBiasDevPtr()` to set.
-- **After average pool device pointer.** Since pooling is standalone, we need an after pooling device pointer. Set using `setAfterAvgPoolDevPtr()`. 
-- **Final output device pointer.** Final output device pointer after pooling. Use `setFinalOutputDevPtr()`.
-- **Input loss device pointer**. The input loss device pointer from loss function. Use `setInputLossGradDevPtr()` to set.
-- **Backward pass device pointers**. You need to set the following backward pass device pointers: `setAfterBiasGradDevPtr(), setAfterFCdGradDevPtr(), setAfterFCwGradDevPtr(), setFinalOutputGradDevPtr()` 
 
 ## Building a block
 Building a block is simple with our API, assuming you have configured the appropriate `params` structure. Building a block internally builds all the tensors, descriptors, operation graphs, and exeuction plans needed for the block. This is done for you. To build a block, depending on the block type (stem, residual, or classifier), you can call `createStemBlock()` or `createResidualBlock()` or `createClassifierBlock()` respectively with an initialzied `cudnnHandle_t`, a `string` of `"forward"` or `"backward"` (denoting if you want a forward block or backward block), a `std::shared_ptr` of type `IBlock`, and the corresponding `params`. Depending on the flags you set for the block, the `create...Block()` function will store into the pointer you passed in a built block with legacy API (if legacy flag was set in params), with FP8 (if FP8 flag was set in params), and in the case with the residual block, with 1x1 convolution in the residual path (if use_1x1_conv flag was set in params for residual block) and vice versa. Building the block returns a `cudnnStatus_t` denoting whether or not the build succeeded. If so, it returns `CUDNN_STATUS_SUCCESS`. If not, it will return the type of failure followed by a logged error message. You should check for the status for each block being built. Here's an example using our API to construct that same FP16 forward residual bottleneck block:
@@ -314,31 +267,6 @@ for (int block = 0; layer < NUM_BLOCKS; block++) {
     }
 }
 
-// Creates Classifier Block with params
-std::shared_ptr<IBlock> classifierBlock;
-
-status = createClassifierBlock(handle, "forward", classifierBlock, classifierBlockParams);
-
-if (status != CUDNN_STATUS_SUCCESS) {
-    if (classifierBlock == nullptr && status == CUDNN_STATUS_NOT_SUPPORTED) {
-        std::cout << "[ERROR]: Block type not supported" << std::endl;
-        CHECK(false);
-        return;
-    }
-    std::cout << classifierBlock->getErrorMessage() << std::endl;
-    CHECK(false);
-    return;
-}
-
-// Creates variant packs based on devPtrStore and executes
-status = runBlock(handle, classifierBlock, classifierBlockDevPtrStore);
-
-if (status != CUDNN_STATUS_SUCCESS) {
-    std::cout << classifierBlock->getErrorMessage() << std::endl;
-    CHECK(false);
-}
-
-checkCudnnErr(cudnnDestroy(handle));
 ```
 
 ## Debugging
@@ -346,8 +274,3 @@ Internally, the block checks the statuses for all tensor, descriptor, operation 
 
 ### Running with NV_CUDNN_DISABLE_EXCEPTION
 If you're running with the flag `#NV_CUDNN_DISABLE_EXCEPTION`, then no exceptions will be thrown in the block if an error happens. Instead, if an error is caught within the block, the block will return a status that is not `CUDNN_STATUS_SUCCESS` and store the error message internally. You can use `block->getErrorMessage()` like above to get the message.
-
-
-
-
-
