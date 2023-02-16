@@ -125,7 +125,7 @@ public:
         return operations;
     }
 
-    error_t execute_cudnn_plans(std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map) {
+    error_t execute_cudnn_plans(std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {
         cudnnHandle_t handle;
         cudnnCreate(&handle);
 
@@ -142,6 +142,7 @@ public:
             auto variant_pack = VariantPackBuilder()
                                 .setDataPointers(device_ptrs.size(), device_ptrs.data())
                                 .setUids(variant_pack_uid.size(), variant_pack_uid.data())
+                                .setWorkspacePointer(workspace_ptr)
                                 .build();
             if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
                 getLogger() << "[cudnn_frontend] ERROR: Variant pack creation failed with " << variant_pack.get_error() << std::endl;

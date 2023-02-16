@@ -146,7 +146,11 @@ public:
         for (auto const &item : tensor_name_to_pointer_map) {
             tensor_uid_to_pointer_map.emplace(get_tensor_props(item.first)->get_uid(), item.second);
         }
-        auto status = execute_cudnn_plans(tensor_uid_to_pointer_map);
+        void* workspace_ptr = nullptr;
+        if(tensor_name_to_pointer_map.count("workspace")) {
+            workspace_ptr = tensor_name_to_pointer_map.at("workspace");
+        }
+        auto status = execute_cudnn_plans(tensor_uid_to_pointer_map, workspace_ptr);
         return status;
     }
     
