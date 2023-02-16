@@ -1451,9 +1451,9 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
                               void* devPtrS,
                               void* devPtrB, 
                               cudnnDataType_t tensorType,
-                              std::string const& mode,
-                              std::string const& nanOpt, 
-                              std::string const& paddingMode,
+                              cudnnNanPropagation_t const nanOpt, 
+                              cudnn_frontend::cudnnResampleMode_t const mode,
+                              cudnn_frontend::cudnnPaddingMode_t const padding_mode,
                               int64_t nbSpatialDims,                         
                               double alpha,                           
                               double beta,
@@ -1547,7 +1547,7 @@ run_pool_scale_bias_relu_int8(int64_t* x_dim,
                             .setComputeType(CUDNN_DATA_FLOAT)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
-                            .setPaddingMode(paddingMode)
+                            .setPaddingMode(padding_mode)
                             .setSpatialDim(nbSpatialDims, windowDimA)
                             .setSpatialStride(nbSpatialDims, strideA)
                             .setPrePadding(nbSpatialDims, prePaddingA)
@@ -3489,9 +3489,9 @@ run_maxpool_with_idx(int64_t* x_dim,
                     void* devPtrdY,
                     void* devPtrIdx,
                     cudnnDataType_t tensorType,
-                    std::string const& mode,
-                    std::string const& nanOpt, 
-                    std::string const& paddingMode,
+                    cudnnNanPropagation_t const nanOpt, 
+                    cudnn_frontend::cudnnResampleMode_t mode,
+                    cudnn_frontend::cudnnPaddingMode_t const padding_mode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
                     int64_t* prePaddingA,
@@ -3542,7 +3542,7 @@ run_maxpool_with_idx(int64_t* x_dim,
                             .setComputeType(CUDNN_DATA_FLOAT)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
-                            .setPaddingMode(paddingMode)
+                            .setPaddingMode(padding_mode)
                             .setSpatialDim(nbSpatialDims, windowDimA)
                             .setSpatialStride(nbSpatialDims, strideA)
                             .setPrePadding(nbSpatialDims, prePaddingA)
@@ -3632,9 +3632,9 @@ run_backward_avgpool(int64_t* dx_dim,
                     void* devPtrdX,
                     void* devPtrdY,
                     cudnnDataType_t tensorType,
-                    std::string const& mode,
-                    std::string const& nanOpt, 
-                    std::string const& paddingMode,
+                    cudnnNanPropagation_t const nanOpt,
+                    cudnn_frontend::cudnnResampleMode_t mode,
+                    cudnn_frontend::cudnnPaddingMode_t const padding_mode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
                     int64_t* prePaddingA,
@@ -3674,7 +3674,7 @@ run_backward_avgpool(int64_t* dx_dim,
                             .setComputeType(CUDNN_DATA_FLOAT)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
-                            .setPaddingMode(paddingMode)
+                            .setPaddingMode(padding_mode)
                             .setSpatialDim(nbSpatialDims, windowDimA)
                             .setSpatialStride(nbSpatialDims, strideA)
                             .setPrePadding(nbSpatialDims, prePaddingA)
@@ -3765,9 +3765,9 @@ run_backward_maxpool(int64_t* dx_dim,
                     void* devPtrdY,
                     void* devPtrIdx,
                     cudnnDataType_t tensorType,
-                    std::string const& mode,
-                    std::string const& nanOpt, 
-                    std::string const& paddingMode,
+                    cudnnNanPropagation_t const nanOpt, 
+                    cudnn_frontend::cudnnResampleMode_t mode,
+                    cudnn_frontend::cudnnPaddingMode_t const padding_mode,
                     int32_t nbSpatialDims,                         
                     int64_t* windowDimA,
                     int64_t* prePaddingA,
@@ -3811,12 +3811,13 @@ run_backward_maxpool(int64_t* dx_dim,
         std::cout << dyTensor.describe() << std::endl;
         std::cout << dxTensor.describe() << std::endl;
 
-         // Define the resample descriptor
+        // Define the resample descriptor
         auto poolDesc = cudnn_frontend::ResampleDescBuilder_v8()
                             .setComputeType(CUDNN_DATA_FLOAT)
+                            .setSpatialDim(nbSpatialDims, windowDimA)
                             .setNanPropagation(nanOpt)
                             .setResampleMode(mode)
-                            .setPaddingMode(paddingMode)
+                            .setPaddingMode(padding_mode)
                             .setSpatialDim(nbSpatialDims, windowDimA)
                             .setSpatialStride(nbSpatialDims, strideA)
                             .setPrePadding(nbSpatialDims, prePaddingA)

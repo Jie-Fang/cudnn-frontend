@@ -62,7 +62,7 @@ run_fp8_conv_scale(int64_t* x_dim,
         }
         // Creates the necessary tensor descriptors
         int64_t stride[4];
-        generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto xTensor = TensorBuilder()
                            .setDim(4, x_dim)
                            .setStrides(4, stride)
@@ -70,7 +70,7 @@ run_fp8_conv_scale(int64_t* x_dim,
                            .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
                            .setDataType(dataType)
                            .build();
-        generateStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto wTensor = TensorBuilder()
                            .setDim(4, w_dim)
                            .setStrides(4, stride)
@@ -79,7 +79,7 @@ run_fp8_conv_scale(int64_t* x_dim,
                            .setDataType(dataType)
                            .build();
 
-        generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto afterConvTensor = TensorBuilder()
                                    .setDim(4, y_dim)
                                    .setStrides(4, stride)
@@ -95,7 +95,7 @@ run_fp8_conv_scale(int64_t* x_dim,
                                    .setDataType(dataType)
                                    .build();
 
-        generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto scaleTensor = TensorBuilder()
                                    .setDim(4, scale_dim)
                                    .setStrides(4, stride)
@@ -232,7 +232,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
         }
         // Creates the necessary tensor descriptors
         int64_t stride[4];
-        generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto xTensor = TensorBuilder()
                            .setDim(4, x_dim)
                            .setStrides(4, stride)
@@ -240,7 +240,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
                            .setAlignment(16)  // 16B alignment is needed to run a tensor core engine
                            .setDataType(dataType)
                            .build();
-        generateStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto wTensor = TensorBuilder()
                            .setDim(4, w_dim)
                            .setStrides(4, stride)
@@ -249,7 +249,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
                            .setDataType(dataType)
                            .build();
 
-        generateStrides(r_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(r_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto amaxTensor = TensorBuilder()
                            .setDim(4, r_dim)
                            .setStrides(4, stride)
@@ -258,7 +258,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
                            .setDataType(CUDNN_DATA_FLOAT)
                            .build();
 
-        generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto afterConvTensor = TensorBuilder()
                                    .setDim(4, y_dim)
                                    .setStrides(4, stride)
@@ -282,7 +282,7 @@ run_fp8_conv_descale_descale_amax_scale(int64_t* x_dim,
                                    .setDataType(dataType)
                                    .build();
 
-        generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto descaleTensor1 = TensorBuilder()
                                    .setDim(4, scale_dim)
                                    .setStrides(4, stride)
@@ -454,7 +454,7 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
 
         // Creates the necessary tensor descriptors
         int64_t stride[4];
-        generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(x_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto xTensor = TensorBuilder()
                            .setDim(4, x_dim)
                            .setStrides(4, stride)
@@ -463,7 +463,7 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
                            .setDataType(CUDNN_DATA_HALF) // Half as input
                            .build();
 
-        generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto scaleTensor = TensorBuilder()
                             .setDim(4, scale_dim)
                             .setStrides(4, stride)
@@ -472,7 +472,7 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
                             .setDataType(CUDNN_DATA_FLOAT)
                             .build();
 
-        generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto afterScaleTensor = TensorBuilder()
                                 .setDim(4, y_dim)
                                 .setStrides(4, stride)
@@ -484,7 +484,7 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
 
         
         // Tranposed from NWHC to CHWN
-        generate4dTransposeStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generate4dTransposeStrides(y_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto afterConvertTensor = TensorBuilder()
                                    .setDim(4, y_dim)
                                    .setStrides(4, stride)
@@ -493,7 +493,7 @@ run_tranpose_scale_convert_fp16_fp8_amax(int64_t* x_dim,
                                    .setDataType(dataType) // Transpose + convert to FP8
                                    .build();
 
-        generateStrides(r_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(r_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto amaxTensor = TensorBuilder()
                            .setDim(4, r_dim)
                            .setStrides(4, stride)
@@ -634,7 +634,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
         // Creates the necessary tensor descriptors
         int64_t stride[4];
 
-        generateStrides(dy_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(dy_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto dyTensor = TensorBuilder()
                         .setDim(4, dy_dim)
                         .setStrides(4, stride)
@@ -643,7 +643,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
                         .setDataType(dataType)
                         .build();
 
-        generate4dTransposeStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generate4dTransposeStrides(w_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto wTensor = TensorBuilder()
                         .setDim(4, w_dim)
                         .setStrides(4, stride)
@@ -652,7 +652,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
                         .setDataType(dataType)
                         .build();
 
-        generateStrides(dx_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(dx_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto dxTensor = TensorBuilder()
                         .setDim(4, dx_dim)
                         .setStrides(4, stride)
@@ -662,7 +662,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
                         .setDataType(CUDNN_DATA_FLOAT)
                         .build();
         
-        generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(scale_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto dyDescaleTensor = TensorBuilder()
                                 .setDim(4, scale_dim)
                                 .setStrides(4, stride)
@@ -693,7 +693,7 @@ run_fp8_dgrad_descale_descale_amax_scale(int64_t* dx_dim,
                                 .setDataType(dataType)
                                 .build();
 
-        generateStrides(r_dim, stride, 4, CUDNN_TENSOR_NHWC);
+        ::generateStrides(r_dim, stride, 4, CUDNN_TENSOR_NHWC);
         auto amaxTensor = TensorBuilder()
                           .setDim(4, r_dim)
                           .setStrides(4, stride)

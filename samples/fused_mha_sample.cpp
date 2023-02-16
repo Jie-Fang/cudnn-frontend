@@ -406,15 +406,13 @@ createMask(int64_t b,
     int64_t maskOutputTensor_id = VIRTUAL_ID + 107;
     int64_t maskOutputTensor_virtual = true;
     cudnnDataType_t maskOutputTensor_dataType = CUDNN_DATA_FLOAT;
-    std::string maskOutputTensor_reorderType = "CUDNN_TENSOR_REORDERING_NONE";
+    auto maskOutputTensor_reorderType = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE;
 
     if (is_bprop) {
         maskOutputTensor_id = dS_ID;
         maskOutputTensor_virtual = false;
         maskOutputTensor_dataType = tensorType;
-#if (CUDNN_VERSION >= 8800)
-        maskOutputTensor_reorderType = "CUDNN_TENSOR_REORDERING_F16x16";
-#endif
+        maskOutputTensor_reorderType = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16;
     }
 
     auto maskOutputTensor = cudnn_frontend::TensorBuilder()
@@ -545,9 +543,7 @@ createSoftmaxForward(int64_t b,
             .setDataType(softmaxOutputType)
             .setVirtual(softmax_output_virtual)
             .setByValue(false)
-#if (CUDNN_VERSION >= 8800)
-            .setReorderType("CUDNN_TENSOR_REORDERING_F16x16")
-#endif
+            .setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16)
             .build();
 
     // Define the reduction descriptor
@@ -641,9 +637,7 @@ createDropout(int64_t b,
             .setDataType(tensorType)
             .setVirtual(false)
             .setByValue(false)
-#if (CUDNN_VERSION >= 8800)
-            .setReorderType("CUDNN_TENSOR_REORDERING_F16x16")
-#endif
+            .setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16)
             .build();
     // scale after dropout
     auto scaleDropoutTensor = tensor_create(tensorType, D_CONST_ID, scale_dim, scale_stride, false, true); // is by value
@@ -854,14 +848,14 @@ run_mha_fprop(int64_t b,
             createBias(b, h, s_q, s_kv, d, layout, tensorType, ops, bmm1_output);
         }
 
-        float negInfinity = -1.0E+20; // change this if you have access to float_min
+        float negInfinity = -1.0E+20f; // change this if you have access to float_min
         auto mask_output = createMask(b, h, s_q, s_kv, d, layout, is_causal_masking, tensorType, ops, bmm1_output, false);
 
         bool enable_dropout = (dropout_probability != 0.0f);
         cudnn_frontend::throw_if(dropout_probability == 1.0f, "Dropout probability cannot be 1.0", CUDNN_STATUS_BAD_PARAM);
 
         // needs to be bf16 (Please change)
-        half1 scale_dropout = cpu_float2half_rn(1/(1 - dropout_probability));
+        half1 scale_dropout = cpu_float2half_rn(static_cast<float>(1/(1 - dropout_probability)));
 
         bool softmax_output_virtual = enable_dropout || devPtrS == nullptr;
         auto softmax_output = createSoftmaxForward(b, h, s_q, s_kv, d, layout, enable_dropout, softmax_output_virtual, tensorType, ops, mask_output);
@@ -1043,9 +1037,7 @@ run_mha_bprop(int64_t b,
             .setDataType(tensorType)
             .setVirtual(false)
             .setByValue(false)
-#if (CUDNN_VERSION >= 8800)
-            .setReorderType("CUDNN_TENSOR_REORDERING_F16x16")
-#endif
+            .setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_F16x16)
             .build();
 
         // outputs from bprop

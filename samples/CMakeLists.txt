@@ -22,6 +22,8 @@ add_executable(
     blocks/convolutions.cpp
     
     conv_sample.cpp 
+    resnet_test_list.cpp
+    resnet_sample.cpp
     test_list.cpp 
     fp16_emu.cpp 
     helpers.cpp 
@@ -54,6 +56,7 @@ else()
         -Wno-unused-function
     )
 endif()
+target_include_directories(samples PRIVATE "resnet_block/include")
 
 target_link_libraries(
     samples
