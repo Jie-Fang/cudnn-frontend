@@ -20,6 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <graphs/cudnn_frontend_node_batchnorm.h>
 #include <graphs/cudnn_frontend_node_convolution.h>
 #include <graphs/cudnn_frontend_node_pointwise.h>
 #include <graphs/cudnn_frontend_node_reduction.h>
@@ -201,6 +202,134 @@ run_reduction_node() {
         , {"tensor1", y_tensor.devPtr}
     };
     REQUIRE(cudnn_frontend::error_t::OK == reduction_node.execute(variant_pack));
+}
+
+void run_batchnorm_node() {
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+
+    cudnn_frontend::BatchNormNode batchnorm_node{"batchnorm_node"};
+
+    auto props = std::make_shared<cudnn_frontend::batchnorm_properties>("batchnorm_prop");
+    props->set_tensor_data_type(CUDNN_DATA_HALF);
+    props->set_compute_type(CUDNN_DATA_FLOAT);
+    props->set_port_names({
+        {cudnn_frontend::batchnorm_properties::PORTS::X, "input"} 
+        , {cudnn_frontend::batchnorm_properties::PORTS::Mean, "mean"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Var, "variance"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Scale, "scale"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Bias, "bias"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Previous_running_mean, "in_running_mean"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Previous_running_var, "in_running_variance"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Next_running_mean, "out_running_mean"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Next_running_var, "out_running_variance"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::Y, "output"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::EPS, "epsilon"}
+        , {cudnn_frontend::batchnorm_properties::PORTS::EXP_AVG, "exp_avg"}
+    });
+    batchnorm_node.set_properties("batchnorm_node", props);
+    
+    cudnn_frontend::tensor_properties input{"input"};
+    input.set_dim({4, 32, 16, 16});
+    batchnorm_node.add_tensor("input", input);
+
+    cudnn_frontend::tensor_properties mean{"mean"};
+    mean.set_dim({1, 32, 1, 1});
+    mean.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("mean", mean);
+    
+    cudnn_frontend::tensor_properties variance{"variance"};
+    variance.set_dim({1, 32, 1, 1});
+    variance.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("variance", variance);
+
+    cudnn_frontend::tensor_properties in_running_mean{"in_running_mean"};
+    in_running_mean.set_dim({1, 32, 1, 1});
+    in_running_mean.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("in_running_mean", in_running_mean);
+    
+    cudnn_frontend::tensor_properties in_running_variance{"in_running_variance"};
+    in_running_variance.set_dim({1, 32, 1, 1});
+    in_running_variance.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("in_running_variance", in_running_variance);
+
+    cudnn_frontend::tensor_properties out_running_mean{"out_running_mean"};
+    out_running_mean.set_dim({1, 32, 1, 1});
+    out_running_mean.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("out_running_mean", out_running_mean);
+    
+    cudnn_frontend::tensor_properties out_running_variance{"out_running_variance"};
+    out_running_variance.set_dim({1, 32, 1, 1});
+    out_running_variance.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("out_running_variance", out_running_variance);
+    
+    cudnn_frontend::tensor_properties scale{"scale"};
+    scale.set_dim({1, 32, 1, 1});
+    scale.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("scale", scale);
+    
+    cudnn_frontend::tensor_properties bias{"bias"};
+    bias.set_dim({1, 32, 1, 1});
+    bias.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("bias", bias);
+
+    cudnn_frontend::tensor_properties epsilon{"epsilon"};
+    epsilon.set_dim({1, 1, 1, 1});
+    epsilon.set_is_pass_by_value(true);
+    epsilon.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("epsilon", epsilon);
+    
+    cudnn_frontend::tensor_properties exp_avg{"exp_avg"};
+    exp_avg.set_dim({1, 1, 1, 1});
+    exp_avg.set_is_pass_by_value(true);
+    exp_avg.set_data_type(CUDNN_DATA_FLOAT);
+    batchnorm_node.add_tensor("exp_avg", exp_avg);
+    
+    cudnn_frontend::tensor_properties output{"output"};
+    output.set_dim({4, 32, 16, 16});
+    batchnorm_node.add_tensor("output", output);
+
+    #if (CUDNN_VERSION >= 8700)
+        REQUIRE(cudnn_frontend::error_t::OK == batchnorm_node.build());
+    #elif (CUDNN_VERSION >= 8500)
+        SKIP("Only multi-GPU batch norm is supported in cudnn versions prior to 8.7 and above 8.5.");
+    #else
+        SKIP("Batch Norm is not supported in cudnn versions prior to 8.5.");
+    #endif
+
+    int64_t workspace_size = 0;
+    batchnorm_node.get_workspace_size(workspace_size);
+    Surface<int8_t> workspace(workspace_size, false);
+
+    Surface<half> x_tensor(batchnorm_node.tensor_props.at("input")->get_tensor_size(), false);
+    Surface<float> b_tensor(batchnorm_node.tensor_props.at("bias")->get_tensor_size(), false);
+    Surface<float> s_tensor(batchnorm_node.tensor_props.at("scale")->get_tensor_size(), false);
+    Surface<float> m_tensor(batchnorm_node.tensor_props.at("mean")->get_tensor_size(), false);
+    Surface<float> v_tensor(batchnorm_node.tensor_props.at("variance")->get_tensor_size(), false);
+    Surface<float> eps_tensor(batchnorm_node.tensor_props.at("epsilon")->get_tensor_size(), false);
+    Surface<float> exp_avg_tensor(batchnorm_node.tensor_props.at("exp_avg")->get_tensor_size(), false);
+    Surface<float> prm_tensor(batchnorm_node.tensor_props.at("in_running_mean")->get_tensor_size(), false);
+    Surface<float> prv_tensor(batchnorm_node.tensor_props.at("in_running_variance")->get_tensor_size(), false);
+    Surface<float> nrm_tensor(batchnorm_node.tensor_props.at("out_running_mean")->get_tensor_size(), false);
+    Surface<float> nrv_tensor(batchnorm_node.tensor_props.at("out_running_variance")->get_tensor_size(), false);
+    Surface<half> y_tensor(batchnorm_node.tensor_props.at("output")->get_tensor_size(), false);
+
+    std::unordered_map<std::string, void*> variant_pack = {
+        {"input", x_tensor.devPtr}
+        , {"bias", b_tensor.devPtr}
+        , {"scale", s_tensor.devPtr}
+        , {"mean", m_tensor.devPtr}
+        , {"variance", v_tensor.devPtr}
+        , {"epsilon", &(eps_tensor.devPtr)}
+        , {"exp_avg", &(exp_avg_tensor.devPtr)}
+        , {"in_running_mean", prm_tensor.devPtr}
+        , {"in_running_variance", prv_tensor.devPtr}
+        , {"out_running_mean", nrm_tensor.devPtr}
+        , {"out_running_variance", nrv_tensor.devPtr}
+        , {"output", y_tensor.devPtr}
+        , {"workspace", workspace.devPtr}
+    };
+    REQUIRE(cudnn_frontend::error_t::OK == batchnorm_node.execute(variant_pack));
 }
 
 void

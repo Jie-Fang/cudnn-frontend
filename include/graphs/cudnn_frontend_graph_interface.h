@@ -202,8 +202,12 @@ public:
                     continue;
                 }
                 break;
+                case operation_properties::Tag::BatchNorm: {
+                }
+                break;
                 case operation_properties::Tag::Reduction: {
                 }
+                break;
                 case operation_properties::Tag::MatMul: {
                     auto mm_node = std::static_pointer_cast<matmul_properties const>(node);
                     auto &tensor = all_tensors.at(mm_node->get_port_name(matmul_properties::PORTS::Y));

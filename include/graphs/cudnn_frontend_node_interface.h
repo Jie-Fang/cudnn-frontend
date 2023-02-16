@@ -32,6 +32,7 @@ protected:
     // cudnn operations.
     enum class Type {
         COMPOSITE
+        , BATCHNORM
         , CONVOLUTION
         , MATMUL
         , POINTWISE
@@ -143,13 +144,17 @@ public:
 
     error_t execute(std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
-        for (auto const &item : tensor_name_to_pointer_map) {
-            tensor_uid_to_pointer_map.emplace(get_tensor_props(item.first)->get_uid(), item.second);
-        }
         void* workspace_ptr = nullptr;
-        if(tensor_name_to_pointer_map.count("workspace")) {
-            workspace_ptr = tensor_name_to_pointer_map.at("workspace");
+
+        for (auto const &item : tensor_name_to_pointer_map) {
+            if(item.first == "workspace") {
+                workspace_ptr = item.second;
+            }
+            else {
+                tensor_uid_to_pointer_map.emplace(get_tensor_props(item.first)->get_uid(), item.second);
+            }
         }
+        
         auto status = execute_cudnn_plans(tensor_uid_to_pointer_map, workspace_ptr);
         return status;
     }

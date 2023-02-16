@@ -2723,6 +2723,7 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 #endif
 
 TEST_CASE("Primitive Nodes", "[primitive][node]") {
+    run_batchnorm_node();
     run_convolution_node();
     run_pointwise_node();
     run_reduction_node();

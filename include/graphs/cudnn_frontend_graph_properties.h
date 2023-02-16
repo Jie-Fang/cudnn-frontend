@@ -191,6 +191,7 @@ inline std::ostream& operator<<(std::ostream& os, const tensor_properties& props
 class operation_properties {
 public:
     enum class Tag {
+        BatchNorm,
         Convolution,
         MatMul,
         Pointwise,
@@ -514,6 +515,72 @@ inline std::ostream& operator<<(std::ostream& os, const pointwise_properties& pr
     os << "],";
     return os;
 }
+
+
+class batchnorm_properties : public operation_properties {
+public:
+    enum PORTS {
+        X = 0,
+        Mean,
+        Var,
+        EPS,
+        Scale,
+        Bias,
+        Previous_running_mean,
+        Previous_running_var,
+        Next_running_mean,
+        Next_running_var,
+        Y,
+        EXP_AVG,
+
+        COUNT
+    };
+private:
+    
+public:
+    
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+    batchnorm_properties(const std::string name) : operation_properties(name, Tag::BatchNorm) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::Mean] = name + "::Mean";
+        port_to_name[PORTS::Var] = name + "::Var";
+        port_to_name[PORTS::EPS] = name + "::EPS";
+        port_to_name[PORTS::EXP_AVG] = name + "::EXP_AVG";
+        port_to_name[PORTS::Scale] = name + "::Scale";
+        port_to_name[PORTS::Bias] = name + "::Bias";
+        port_to_name[PORTS::Previous_running_mean] = name + "::Previous_running_mean";
+        port_to_name[PORTS::Previous_running_var] = name + "::Previous_running_var";
+        port_to_name[PORTS::Next_running_mean] = name + "::Next_running_mean";
+        port_to_name[PORTS::Next_running_var] = name + "::Next_running_var";
+        port_to_name[PORTS::Y] = name + "::Y";
+    }
+
+    error_t
+    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
+        }
+        return error_t::OK;
+    }
+
+    std::string
+    get_port_name(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    std::vector<std::string>
+    get_inputs() const override {
+        return {};
+    }
+};
 
 class reduction_properties : public operation_properties {
 public:

@@ -21,6 +21,9 @@
  */
 
 void
+run_batchnorm_node();
+
+void
 run_convolution_node();
 
 void

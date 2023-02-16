@@ -396,6 +396,29 @@ enum class cudnnPaddingMode_t{
     CUDNN_ZERO_PAD
 };
 
+enum class cudnnBackendNormFwdPhase_t {
+    NOT_SET,
+
+    CUDNN_NORM_FWD_INFERENCE,
+    CUDNN_NORM_FWD_TRAINING
+};
+
+static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendNormFwdPhase_t& mode) {
+    switch (mode)
+    {
+        case cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_INFERENCE:
+            os << "CUDNN_NORM_FWD_INFERENCE";
+            break;
+        case cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_TRAINING:
+            os << "CUDNN_NORM_FWD_TRAINING";
+            break;
+        case cudnnBackendNormFwdPhase_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+} 
+
 static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendTensorReordering_t& mode) {
     switch (mode)
     {
@@ -502,10 +525,30 @@ namespace detail {
             case cudnn_frontend::cudnnPaddingMode_t::CUDNN_EDGE_VAL_PAD:
                 cudnn_mode = CUDNN_EDGE_VAL_PAD;
                 return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#ifndef NO_DEFAULT_IN_SWITCH
+            #ifndef NO_DEFAULT_IN_SWITCH
             default:
                 return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnnBackendNormFwdPhase_t const mode, ::cudnnBackendNormFwdPhase_t& cudnn_mode) {
+        switch (mode)
+        {
+            #if (CUDNN_VERSION >= 8500)
+            case cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_INFERENCE:
+                cudnn_mode = CUDNN_NORM_FWD_INFERENCE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_TRAINING:
+                cudnn_mode = CUDNN_NORM_FWD_TRAINING;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #endif
+
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
         }
         return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
     }
@@ -561,6 +604,27 @@ namespace detail {
             default:
                 break;
     #endif
+        }
+    }
+
+    // To be deprecated. Only exists as setNormFwdPhase(cudnnBackendNormFwdPhase_t) requires it.
+    static inline void convert_from_cudnn_type(::cudnnBackendNormFwdPhase_t const cudnn_mode, cudnnBackendNormFwdPhase_t& mode) {
+        mode = cudnnBackendNormFwdPhase_t::NOT_SET;
+        switch (cudnn_mode)
+        {
+        #if (CUDNN_VERSION >= 8500)
+            case CUDNN_NORM_FWD_INFERENCE:
+                mode = cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_INFERENCE;
+                break; 
+            case CUDNN_NORM_FWD_TRAINING:
+                mode = cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_TRAINING;
+                break;
+        #endif
+    
+        #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                break;
+        #endif
         }
     }
 
