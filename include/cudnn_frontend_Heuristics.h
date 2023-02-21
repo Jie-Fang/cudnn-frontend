@@ -357,12 +357,12 @@ get_heuristics_list(std::array<std::string, SIZE> modes,
             auto status_l = get_heuristics_list_impl(CUDNN_HEUR_MODE_FALLBACK, opGraph, filter_fn, filtered_configs);
             NV_CUDNN_SET_STATUS_BREAK_OR_CONTINUE(status_l, true);
 #else
-            cudnnBackendDescriptorType_t op_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR;
+            cudnnBackendDescriptorType_t op_type = cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR;
             std::string tag_ = opGraph.getTag();
             if (tag_.find("ConvFwd") != std::string::npos) {
-                op_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
+                op_type = cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
             } else if (tag_.find("ConvBwdFilter") != std::string::npos) {
-                op_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR;
+                op_type = cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR;
             }
             auto heuristics = cudnn_frontend::EngineFallbackListBuilder_v8()
                                 .setOperationGraph(opGraph)

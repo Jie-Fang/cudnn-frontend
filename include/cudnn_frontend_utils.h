@@ -403,6 +403,156 @@ enum class cudnnBackendNormFwdPhase_t {
     CUDNN_NORM_FWD_TRAINING
 };
 
+enum class cudnnBackendDescriptorType_t {
+    NOT_SET,
+
+    CUDNN_BACKEND_POINTWISE_DESCRIPTOR,
+    CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR,
+    CUDNN_BACKEND_ENGINE_DESCRIPTOR,
+    CUDNN_BACKEND_ENGINECFG_DESCRIPTOR,
+    CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR,
+    CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR,
+    CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR,
+    CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR,
+    CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR,
+    CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR,
+    CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR,
+    CUDNN_BACKEND_TENSOR_DESCRIPTOR,
+    CUDNN_BACKEND_MATMUL_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR,
+    CUDNN_BACKEND_REDUCTION_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR,
+    CUDNN_BACKEND_RESAMPLE_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR,
+    CUDNN_BACKEND_RNG_DESCRIPTOR,
+    CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR
+};
+
+static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendDescriptorType_t& mode) {
+    switch (mode) {
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_POINTWISE_DESCRIPTOR:
+            os << "CUDNN_BACKEND_POINTWISE_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR:
+            os << "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINE_DESCRIPTOR:
+            os << "CUDNN_BACKEND_ENGINE_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINECFG_DESCRIPTOR:
+            os << "CUDNN_BACKEND_ENGINECFG_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR:
+            os << "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR:
+            os << "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR:
+            os << "CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR:
+            os << "CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR:
+            os << "CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR:
+            os << "CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR:
+            os << "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_TENSOR_DESCRIPTOR:
+            os << "CUDNN_BACKEND_TENSOR_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_MATMUL_DESCRIPTOR:
+            os << "CUDNN_BACKEND_MATMUL_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_REDUCTION_DESCRIPTOR:
+            os << "CUDNN_BACKEND_REDUCTION_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_RESAMPLE_DESCRIPTOR:
+            os << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_RNG_DESCRIPTOR:
+            os << "CUDNN_BACKEND_RNG_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR:
+            os << "CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR";
+            break;
+        case cudnnBackendDescriptorType_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+} 
+
 static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendNormFwdPhase_t& mode) {
     switch (mode)
     {
@@ -480,6 +630,174 @@ static inline std::ostream& operator<<(std::ostream& os, const cudnnPaddingMode_
 } 
 
 namespace detail {
+         
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnBackendDescriptorType_t const mode, ::cudnnBackendDescriptorType_t& cudnn_mode) {
+        switch (mode) {
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_POINTWISE_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_POINTWISE_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINE_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_ENGINE_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINECFG_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_ENGINECFG_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_TENSOR_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_TENSOR_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_MATMUL_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_MATMUL_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_REDUCTION_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_REDUCTION_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR:
+                cudnn_mode = CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8400)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_RESAMPLE_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_BACKEND_RESAMPLE_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8600)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+            
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8700)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+        
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_RNG_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8700)
+                cudnn_mode = CUDNN_BACKEND_RNG_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+        
+            case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR:
+        #if (CUDNN_VERSION >= 8700)
+                cudnn_mode = CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+        #endif
+        
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
 #if (CUDNN_VERSION >= 8500)
     static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnResampleMode_t const mode, ::cudnnResampleMode_t& cudnn_mode) {
         switch (mode)
@@ -679,6 +997,100 @@ static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::cudnnBackendTe
     }
 
 #endif
+
+    // To be deprecated. Only exists as OperationBuilder_v8(::cudnnBackendDescriptorType_t mode) requires it.
+    static inline cudnn_frontend::cudnnBackendDescriptorType_t convert_from_cudnn_type(::cudnnBackendDescriptorType_t const cudnn_mode) {
+        switch (cudnn_mode)
+        {
+            case CUDNN_BACKEND_POINTWISE_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_POINTWISE_DESCRIPTOR;
+            case CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR;
+            case CUDNN_BACKEND_ENGINE_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINE_DESCRIPTOR;
+            case CUDNN_BACKEND_ENGINECFG_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINECFG_DESCRIPTOR;
+            case CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR;
+            case CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR;
+            case CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR;
+            case CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR;
+            case CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR;
+            case CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR;
+            case CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR;
+            case CUDNN_BACKEND_TENSOR_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_TENSOR_DESCRIPTOR;
+            case CUDNN_BACKEND_MATMUL_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_MATMUL_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR;
+            case CUDNN_BACKEND_REDUCTION_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_REDUCTION_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR;
+
+        #if (CUDNN_VERSION >= 8400)
+            case CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR;
+        #endif
+        
+        #if (CUDNN_VERSION >= 8500)
+            case CUDNN_BACKEND_RESAMPLE_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_RESAMPLE_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR;
+            case CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR;
+        #endif
+
+        #if (CUDNN_VERSION >= 8600)
+            case CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR;
+        #endif
+
+        #if (CUDNN_VERSION >= 8700)
+            case CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR;
+            case CUDNN_BACKEND_RNG_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_RNG_DESCRIPTOR;        
+            case CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR:
+                return cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR;
+        #endif
+        
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnn_frontend::cudnnBackendDescriptorType_t::NOT_SET;
+                break;
+    #endif
+        }
+        return cudnn_frontend::cudnnBackendDescriptorType_t::NOT_SET;
+    }
 
 } // namespace detail
 

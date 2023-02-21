@@ -38,7 +38,7 @@ auto static get_fallback_engine_list(cudnnBackendDescriptorType_t mode, const st
             /// the conv*bias* operation graph. We are not strictly checking the order of 
             /// the operations in the graph. We propose this as a temporary workaround until
             /// the backend API supports querying the fallback list directly from cudnn
-            if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+            if (mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
                 if (opGraphTag.find("bias") == std::string::npos) {
                     std::vector<int> engine_list(50);
                     std::iota(engine_list.begin(), engine_list.end(), 0);
@@ -46,25 +46,25 @@ auto static get_fallback_engine_list(cudnnBackendDescriptorType_t mode, const st
                 } else {
                     return {11,0};
                 }
-            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+            } else if (mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
                 std::vector<int> engine_list(61);
                 std::iota(engine_list.begin(), engine_list.end(), 0);
                 return engine_list;
-            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+            } else if (mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
                 return {0, 1, 20};
             } else {
                 return {};
             }
         } else {
-            if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+            if (mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
                 if (opGraphTag.find("bias") == std::string::npos) {
                     return {0, 1, 28};
                 } else {
                     return {};
                 }
-            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+            } else if (mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
                 return {0, 1, 25};
-            } else if (mode == CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+            } else if (mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
                 return {0, 1, 20};
             } else {
                 return {};
@@ -132,9 +132,16 @@ class EngineFallbackListBuilder_v8 {
         m_fallback_list.num_ops    = opGraph_.getOpCount();
         return *this;
     }
+
     auto
     setOperation(cudnnBackendDescriptorType_t mode) -> EngineFallbackListBuilder_v8 & {
         m_fallback_list.mode = mode;
+        return *this;
+    }
+    
+    auto
+    setOperation(::cudnnBackendDescriptorType_t mode) -> EngineFallbackListBuilder_v8 & {
+        m_fallback_list.mode = detail::convert_from_cudnn_type(mode);
         return *this;
     }
     /** @} */

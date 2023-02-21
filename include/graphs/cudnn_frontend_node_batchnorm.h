@@ -89,7 +89,7 @@ public:
         #endif
 
         // Create the batchnorm operation.
-        auto batchnorm_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR)
+        auto batchnorm_operation = cudnn_frontend::OperationBuilder(cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR)
                                         .setNormalizationMode(CUDNN_BATCH_NORM)
                                         .setNormFwdPhase(cudnnBackendNormFwdPhase_t::CUDNN_NORM_FWD_TRAINING)
                                         .setxDesc(*(tensors.at(props->uids[batchnorm_properties::PORTS::X])))

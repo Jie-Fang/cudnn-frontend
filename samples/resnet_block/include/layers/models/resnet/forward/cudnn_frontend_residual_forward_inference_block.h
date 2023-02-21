@@ -599,7 +599,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                 SubGraph convolution_subgraph = {
                     {
                         "conv"  + std::to_string(i)
-                        , CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR
+                        , cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR
                         , "conv" + std::to_string(i)
                         , {
                             "CONV::X" + std::to_string(i)
@@ -609,7 +609,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                     }
                     , {
                         "conv_input_descale" + std::to_string(i)
-                        , CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR
+                        , cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR
                         , "scale"
                         , {
                             "CONV::AfterConv" + std::to_string(i)
@@ -619,7 +619,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                     }
                     , {
                         "conv_weight_descale" + std::to_string(i)
-                        , CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR
+                        , cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR
                         , "scale"
                         , {
                             "CONV::AfterXDescale" + std::to_string(i)
@@ -629,7 +629,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                     }
                     , {
                         "conv_output_scale" + std::to_string(i)
-                        , CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR
+                        , cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR
                         , "scale"
                         , {
                             "CONV::AfterWDescale" + std::to_string(i)
@@ -639,7 +639,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                     }
                     , {
                         "amax" + std::to_string(i)
-                        , CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR
+                        , cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR
                         , "amax"
                         , {
                             "CONV::AfterWDescale" + std::to_string(i)
@@ -652,34 +652,34 @@ class ResidualForwardInferenceBlock : public IBlock {
                 
                 if (i == ResidualBlockParams::ForwardLocation::ZERO || i== ResidualBlockParams::ForwardLocation::ONE) {
                     SubGraph bn_subgraph = {
-                        {"BN_input_descale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_input_descale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::X_" + std::to_string(i), "BN::X_DESCALE_" + std::to_string(i),"BN::X_HP_"   + std::to_string(i)}
                         },
-                        {"BN_sub_mean" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "sub",
+                        {"BN_sub_mean" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "sub",
                            {"BN::X_HP_" + std::to_string(i), "BN::MeanTensor_" + std::to_string(i),"BN::X_SUB_MeanTensor_"   + std::to_string(i)}
                         },
-                        {"BN_eps_add" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_eps_add" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::VarTensor_" + std::to_string(i), "BN::EPSILON_" + std::to_string(i),"BN::VAR_ADD_EPS_"   + std::to_string(i)}
                         },
-                        {"BN_rsqrt_var" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "rsqrt",
+                        {"BN_rsqrt_var" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "rsqrt",
                            {"BN::VAR_ADD_EPS_" + std::to_string(i), "BN::RSQRT_VAR_"   + std::to_string(i)}
                         },
-                        {"BN_N_X" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_N_X" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::X_SUB_MeanTensor_" + std::to_string(i), "BN::RSQRT_VAR_" + std::to_string(i), "BN::N_X_"   + std::to_string(i)}
                         },
-                        {"BN_MUL_S" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_MUL_S" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::N_X_" + std::to_string(i), "BN::scaleTensor_" + std::to_string(i), "BN::N_X_MUL_S_"   + std::to_string(i)}
                         },
-                        {"BN_ADD_B" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_ADD_B" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::N_X_MUL_S_" + std::to_string(i), "BN::biasTensor_" + std::to_string(i), "BN::Y_HP_"   + std::to_string(i)}
                         },
-                        {"BN_op_relu" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "ReLU",
+                        {"BN_op_relu" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "ReLU",
                            {"BN::Y_HP_" + std::to_string(i), "BN::afterRelu_"   + std::to_string(i)}
                         },
-                        {"BN_op_scale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_op_scale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::afterRelu_" + std::to_string(i), "BN::Y_SCALE_" + std::to_string(i),"BN::Y_"   + std::to_string(i)}
                         },
-                        {"BN_amax" + std::to_string(i), CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR, "amax", 
+                        {"BN_amax" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR, "amax", 
                            {"BN::afterRelu_" + std::to_string(i), "BN::Y_AMAX_"   + std::to_string(i)}
                         }
                     };
@@ -687,40 +687,40 @@ class ResidualForwardInferenceBlock : public IBlock {
 
                 } else if (i == ResidualBlockParams::ForwardLocation::TWO) {
                     SubGraph bn_subgraph = {
-                        {"BN_input_descale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_input_descale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::X_" + std::to_string(i), "BN::X_DESCALE_" + std::to_string(i),"BN::X_HP_"   + std::to_string(i)}
                         },
-                        {"BN_sub_mean" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "sub",
+                        {"BN_sub_mean" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "sub",
                            {"BN::X_HP_" + std::to_string(i), "BN::MeanTensor_" + std::to_string(i),"BN::X_SUB_MeanTensor_"   + std::to_string(i)}
                         },
-                        {"BN_eps_add" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_eps_add" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::VarTensor_" + std::to_string(i), "BN::EPSILON_" + std::to_string(i),"BN::VAR_ADD_EPS_"   + std::to_string(i)}
                         },
-                        {"BN_rsqrt_var" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "rsqrt",
+                        {"BN_rsqrt_var" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "rsqrt",
                            {"BN::VAR_ADD_EPS_" + std::to_string(i), "BN::RSQRT_VAR_"   + std::to_string(i)}
                         },
-                        {"BN_N_X" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_N_X" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::X_SUB_MeanTensor_" + std::to_string(i), "BN::RSQRT_VAR_" + std::to_string(i), "BN::N_X_"   + std::to_string(i)}
                         },
-                        {"BN_MUL_S" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_MUL_S" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::N_X_" + std::to_string(i), "BN::scaleTensor_" + std::to_string(i), "BN::N_X_MUL_S_"   + std::to_string(i)}
                         },
-                        {"BN_ADD_B" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_ADD_B" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::N_X_MUL_S_" + std::to_string(i), "BN::biasTensor_" + std::to_string(i), "BN::Y_HP_"   + std::to_string(i)}
                         },
-                        {"BN_op_descale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_op_descale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::Z_" + std::to_string(i), "BN::Z_DESCALE_" + std::to_string(i),"BN::Z_HP_"   + std::to_string(i)}
                         },
-                        {"BN_op_add" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_op_add" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::Y_HP_" + std::to_string(i), "BN::Z_HP_" + std::to_string(i),"BN::SUM_HP_"   + std::to_string(i)}
                         },
-                        {"BN_op_relu" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "ReLU",
+                        {"BN_op_relu" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "ReLU",
                            {"BN::SUM_HP_" + std::to_string(i), "BN::afterRelu_"   + std::to_string(i)}
                         },
-                        {"BN_op_scale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_op_scale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::afterRelu_" + std::to_string(i), "BN::Y_SCALE_" + std::to_string(i),"BN::Y_"   + std::to_string(i)}
                         },
-                        {"BN_amax" + std::to_string(i), CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR, "amax", 
+                        {"BN_amax" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR, "amax", 
                            {"BN::afterRelu_" + std::to_string(i), "BN::Y_AMAX_"   + std::to_string(i)}
                         }
                     };
@@ -728,31 +728,31 @@ class ResidualForwardInferenceBlock : public IBlock {
 
                 } else if (i == ResidualBlockParams::ForwardLocation::RESIDUAL) {
                     SubGraph bn_subgraph = {
-                        {"BN_input_descale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_input_descale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::X_" + std::to_string(i), "BN::X_DESCALE_" + std::to_string(i),"BN::X_HP_"   + std::to_string(i)}
                         },
-                        {"BN_sub_mean" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "sub",
+                        {"BN_sub_mean" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "sub",
                            {"BN::X_HP_" + std::to_string(i), "BN::MeanTensor_" + std::to_string(i),"BN::X_SUB_MeanTensor_"   + std::to_string(i)}
                         },
-                        {"BN_eps_add" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_eps_add" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::VarTensor_" + std::to_string(i), "BN::EPSILON_" + std::to_string(i),"BN::VAR_ADD_EPS_"   + std::to_string(i)}
                         },
-                        {"BN_rsqrt_var" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "rsqrt",
+                        {"BN_rsqrt_var" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "rsqrt",
                            {"BN::VAR_ADD_EPS_" + std::to_string(i), "BN::RSQRT_VAR_"   + std::to_string(i)}
                         },
-                        {"BN_N_X" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_N_X" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::X_SUB_MeanTensor_" + std::to_string(i), "BN::RSQRT_VAR_" + std::to_string(i), "BN::N_X_"   + std::to_string(i)}
                         },
-                        {"BN_MUL_S" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_MUL_S" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::N_X_" + std::to_string(i), "BN::scaleTensor_" + std::to_string(i), "BN::N_X_MUL_S_"   + std::to_string(i)}
                         },
-                        {"BN_ADD_B" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
+                        {"BN_ADD_B" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "Add",
                            {"BN::N_X_MUL_S_" + std::to_string(i), "BN::biasTensor_" + std::to_string(i), "BN::Y_HP_"   + std::to_string(i)}
                         },
-                        {"BN_op_scale" + std::to_string(i), CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
+                        {"BN_op_scale" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR, "scale",
                            {"BN::Y_HP_" + std::to_string(i), "BN::Y_SCALE_" + std::to_string(i),"BN::Y_"   + std::to_string(i)}
                         },
-                        {"BN_amax" + std::to_string(i), CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR, "amax", 
+                        {"BN_amax" + std::to_string(i), cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR, "amax", 
                            {"BN::Y_HP_" + std::to_string(i), "BN::Y_AMAX_"   + std::to_string(i)}
                         }
                     };
@@ -801,7 +801,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                 switch (node.type) {
 
                     // If the node is a forward convolutional node, we create a convolution operation.
-                    case CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR: {
+                    case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR: {
                         float alpha = 1.0f;
                         float beta  = 0.0f;
 
@@ -843,7 +843,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                     break;
 
                     // A pointwise descriptor can be a scale, a bias, or an activation (ReLu) operation.
-                    case CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR: {
+                    case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR: {
 
                         // Check if the problem name exists in the problem map
                         if (pointwise_problems.find(node.problem_name) == pointwise_problems.end()) {
@@ -894,7 +894,7 @@ class ResidualForwardInferenceBlock : public IBlock {
                     break;
                 
                     // A reduction descriptor can be a scale, a bias, or an activation (ReLu) operation.
-                    case CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR: {
+                    case cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR: {
 
                         // Check if the problem name exists in the problem map
                         if (reduction_problems.find(node.problem_name) == reduction_problems.end()) {
