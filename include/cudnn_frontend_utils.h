@@ -442,6 +442,36 @@ enum class cudnnBackendDescriptorType_t {
     CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR
 };
 
+enum class cudnnBackendNormMode_t {
+    NOT_SET,
+
+    CUDNN_LAYER_NORM,
+    CUDNN_INSTANCE_NORM,
+    CUDNN_BATCH_NORM,
+    CUDNN_GROUP_NORM,
+};
+
+static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendNormMode_t& mode) {
+    switch (mode) {
+        case cudnnBackendNormMode_t::CUDNN_LAYER_NORM:
+            os << "CUDNN_LAYER_NORM";
+            break;
+        case cudnnBackendNormMode_t::CUDNN_INSTANCE_NORM:
+            os << "CUDNN_INSTANCE_NORM";
+            break;
+        case cudnnBackendNormMode_t::CUDNN_BATCH_NORM:
+            os << "CUDNN_BATCH_NORM";
+            break;
+        case cudnnBackendNormMode_t::CUDNN_GROUP_NORM:
+            os << "CUDNN_GROUP_NORM";
+            break;
+        case cudnnBackendNormMode_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+} 
+
 static inline std::ostream& operator<<(std::ostream& os, const cudnnBackendDescriptorType_t& mode) {
     switch (mode) {
         case cudnnBackendDescriptorType_t::CUDNN_BACKEND_POINTWISE_DESCRIPTOR:
@@ -851,6 +881,32 @@ namespace detail {
         return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
     }
 
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnnBackendNormMode_t const mode, ::cudnnBackendNormMode_t& cudnn_mode) {
+        switch (mode)
+        {
+            #if (CUDNN_VERSION >= 8500)
+            case cudnnBackendNormMode_t::CUDNN_LAYER_NORM:
+                cudnn_mode = CUDNN_LAYER_NORM;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendNormMode_t::CUDNN_INSTANCE_NORM:
+                cudnn_mode = CUDNN_INSTANCE_NORM;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendNormMode_t::CUDNN_BATCH_NORM:
+                cudnn_mode = CUDNN_BATCH_NORM;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case cudnnBackendNormMode_t::CUDNN_GROUP_NORM:
+                cudnn_mode = CUDNN_GROUP_NORM;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #endif
+
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
     static inline cudnnStatus_t convert_to_cudnn_type(cudnnBackendNormFwdPhase_t const mode, ::cudnnBackendNormFwdPhase_t& cudnn_mode) {
         switch (mode)
         {
@@ -922,6 +978,33 @@ namespace detail {
             default:
                 break;
     #endif
+        }
+    }
+
+    // To be deprecated. Only exists as setNormalizationMode(cudnnBackendNormMode_t) requires it.
+    static inline void convert_from_cudnn_type(::cudnnBackendNormMode_t const cudnn_mode, cudnnBackendNormMode_t& mode) {
+        mode = cudnnBackendNormMode_t::NOT_SET;
+        switch (cudnn_mode)
+        {
+        #if (CUDNN_VERSION >= 8500)
+            case CUDNN_LAYER_NORM:
+                mode = cudnnBackendNormMode_t::CUDNN_LAYER_NORM;
+                break; 
+            case CUDNN_INSTANCE_NORM:
+                mode = cudnnBackendNormMode_t::CUDNN_INSTANCE_NORM;
+                break; 
+            case CUDNN_BATCH_NORM:
+                mode = cudnnBackendNormMode_t::CUDNN_BATCH_NORM;
+                break; 
+            case CUDNN_GROUP_NORM:
+                mode = cudnnBackendNormMode_t::CUDNN_GROUP_NORM;
+                break;
+        #endif
+    
+        #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                break;
+        #endif
         }
     }
 

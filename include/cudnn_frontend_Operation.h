@@ -187,9 +187,7 @@ class Operation_v8 : public BackendDescriptor {
 
 
     cudnnBackendNormFwdPhase_t norm_fwd_phase;
-#if (CUDNN_VERSION >= 8500)
     cudnnBackendNormMode_t norm_mode;
-#endif
 
     float alpha_s = 1.0f, beta_s = .0f, alpha2_s = 1.0f;
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
@@ -1198,13 +1196,27 @@ class OperationBuilder_v8 {
             }
         };
 
-
-        set_attribute(m_operation,
-                      CUDNN_ATTR_OPERATION_NORM_FWD_MODE ,
-                      "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_MODE Failed",
-                      &m_operation.norm_mode,
-                      CUDNN_TYPE_NORM_MODE);
-        if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
+        ::cudnnBackendNormMode_t cudnn_norm_mode;
+        status = detail::convert_to_cudnn_type(m_operation.norm_mode, cudnn_norm_mode);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_operation,
+                status,
+                "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_MODE Failed");
+            return std::move(m_operation);
+        }
+        status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(), 
+                                          CUDNN_ATTR_OPERATION_NORM_FWD_MODE, 
+                                          CUDNN_TYPE_NORM_MODE, 
+                                          1,
+                                          &cudnn_norm_mode);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_operation,
+                status,
+                "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_FWD_MODE Failed");
+            return std::move(m_operation);
+        }
 
         ::cudnnBackendNormFwdPhase_t cudnn_norm_fwd_phase;
         status = detail::convert_to_cudnn_type(m_operation.norm_fwd_phase, cudnn_norm_fwd_phase);
@@ -2488,15 +2500,20 @@ class OperationBuilder_v8 {
         return *this;
     }
 
-#if (CUDNN_VERSION >= 8500)
-    auto
-    setNormalizationMode (cudnnBackendNormMode_t mode) -> OperationBuilder_v8 & {
+    auto setNormalizationMode(cudnnBackendNormMode_t mode) -> OperationBuilder_v8 & {
         m_operation.norm_mode = mode;
         return *this;
     }
 
-    auto
-    setNormFwdPhase (::cudnnBackendNormFwdPhase_t mode) -> OperationBuilder_v8 & {
+#if (CUDNN_VERSION >= 8500)
+    // To be deprecated. Please use setNormalizationMode(cudnn_frontend::cudnnBackendNormMode_t mode) instead.
+    auto setNormalizationMode (::cudnnBackendNormMode_t mode) -> OperationBuilder_v8 & {
+        detail::convert_from_cudnn_type(mode, m_operation.norm_mode);
+        return *this;
+    }
+
+    // To be deprecated. Please use setNormFwdPhase(cudnn_frontend::cudnnBackendNormFwdPhase_t mode) instead.
+    auto setNormFwdPhase (::cudnnBackendNormFwdPhase_t mode) -> OperationBuilder_v8 & {
         detail::convert_from_cudnn_type(mode, m_operation.norm_fwd_phase);
         return *this;
     }
