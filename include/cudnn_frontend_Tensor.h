@@ -168,7 +168,7 @@ class Tensor_v8 : public BackendDescriptor {
     int64_t vectorCount     = 1;      //! What is the vectorization count (4 or 32)
     bool isVirtual          = false;  //! Whether it is an intermediate tensor of an op graph
     bool isByValue          = false;  //! Whether the tensor is in host memory that needs to be passed to the kernel by value
-    cudnn_frontend::cudnnBackendTensorReordering_t reorder_type = cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE; //! Type of reordering in the tensor
+    cudnn_frontend::TensorReordering_t reorder_type = cudnn_frontend::TensorReordering_t::NONE; //! Type of reordering in the tensor
 };
 
 ///
@@ -231,7 +231,7 @@ class TensorBuilder_v8 {
     }
 
     auto 
-    setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t reordering_type) -> TensorBuilder_v8 & {
+    setReorderType(cudnn_frontend::TensorReordering_t reordering_type) -> TensorBuilder_v8 & {
         m_tensor.reorder_type = reordering_type;
         return *this;
     }
@@ -239,7 +239,7 @@ class TensorBuilder_v8 {
 #if (CUDNN_VERSION >= 8300)
     // To be deprecated. Please use setReorderType(cudnn_frontend::cudnnBackendTensorReordering_t).
     auto
-    setReorderType(::cudnnBackendTensorReordering_t reordering_type) -> TensorBuilder_v8 & {
+    setReorderType(cudnnBackendTensorReordering_t reordering_type) -> TensorBuilder_v8 & {
         detail::convert_from_cudnn_type(reordering_type, m_tensor.reorder_type);
         return *this;
     }
@@ -428,8 +428,8 @@ class TensorBuilder_v8 {
 
         // Set the reorder_type
 #if (CUDNN_VERSION >= 8300)
-        if (m_tensor.reorder_type != cudnn_frontend::cudnnBackendTensorReordering_t::CUDNN_TENSOR_REORDERING_NONE) {
-            ::cudnnBackendTensorReordering_t cudnn_reordering_type;
+        if (m_tensor.reorder_type != cudnn_frontend::TensorReordering_t::NONE) {
+            cudnnBackendTensorReordering_t cudnn_reordering_type;
             status = detail::convert_to_cudnn_type(m_tensor.reorder_type, cudnn_reordering_type);
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(

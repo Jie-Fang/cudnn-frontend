@@ -108,12 +108,12 @@ class ResampleDesc_v8 : public BackendDescriptor {
         return nanOpt;
     }
 
-    cudnnResampleMode_t
+    ResampleMode_t
     getMode() const {
         return resample_mode;
     }
 
-    cudnnPaddingMode_t
+    PaddingMode_t
     getPaddingMode() const {
         return padding_mode;
     }
@@ -152,8 +152,8 @@ class ResampleDesc_v8 : public BackendDescriptor {
     // default values for attributes 
     cudnnDataType_t computeType = CUDNN_DATA_FLOAT;   
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
-    cudnnResampleMode_t resample_mode = cudnnResampleMode_t::NOT_SET;
-    cudnnPaddingMode_t padding_mode = cudnnPaddingMode_t::NOT_SET;
+    ResampleMode_t resample_mode = ResampleMode_t::NOT_SET;
+    PaddingMode_t padding_mode = PaddingMode_t::NOT_SET;
     
     int64_t spatialDim = 0;
 
@@ -215,9 +215,9 @@ class ResampleDescBuilder_v8 {
     }
     
     //! Set resample mode for the Resample Operation
-    // To be deprecated. Please use setResampleMode(cudnn_frontend::cudnnResampleMode_t).
+    // To be deprecated. Please use setResampleMode(cudnn_frontend::ResampleMode_t).
     auto
-    setResampleMode(::cudnnResampleMode_t const mode_) -> ResampleDescBuilder_v8 & {
+    setResampleMode(cudnnResampleMode_t const mode_) -> ResampleDescBuilder_v8 & {
         detail::convert_from_cudnn_type(mode_, m_resampleDesc.resample_mode);
         return *this;
     }
@@ -231,9 +231,9 @@ class ResampleDescBuilder_v8 {
     }
     
     //! Set padding mode for the Resample Operation
-    // To be deprecated. Please use setPaddingMode(cudnn_frontend::cudnnPaddingMode_t).
+    // To be deprecated. Please use setPaddingMode(cudnn_frontend::PaddingMode_t).
     auto
-    setPaddingMode(::cudnnPaddingMode_t const padding_mode) -> ResampleDescBuilder_v8 & {
+    setPaddingMode(cudnnPaddingMode_t const padding_mode) -> ResampleDescBuilder_v8 & {
         detail::convert_from_cudnn_type(padding_mode, m_resampleDesc.padding_mode);
         return *this;
     }
@@ -241,14 +241,14 @@ class ResampleDescBuilder_v8 {
 
     //! Set padding mode for the Resample Operation
     auto
-    setPaddingMode(cudnnPaddingMode_t const padding_mode) -> ResampleDescBuilder_v8 & {
+    setPaddingMode(PaddingMode_t const padding_mode) -> ResampleDescBuilder_v8 & {
         m_resampleDesc.padding_mode = padding_mode;
         return *this;
     }
 
     //! Set resample mode for the Resample Operation
     auto
-    setResampleMode(cudnnResampleMode_t const mode) -> ResampleDescBuilder_v8 & {
+    setResampleMode(ResampleMode_t const mode) -> ResampleDescBuilder_v8 & {
         m_resampleDesc.resample_mode = mode;
         return *this;
     }
@@ -396,7 +396,7 @@ class ResampleDescBuilder_v8 {
             return std::move(m_resampleDesc);
         }
 
-        ::cudnnPaddingMode_t cudnn_padding_mode;
+        cudnnPaddingMode_t cudnn_padding_mode;
         status = detail::convert_to_cudnn_type(m_resampleDesc.padding_mode, cudnn_padding_mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(

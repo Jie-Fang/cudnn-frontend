@@ -114,7 +114,7 @@ class Operation_v8 : public BackendDescriptor {
     // Will be deprecated. Do Not use
     ManagedOpaqueDescriptor
     getOutputTensor() {
-        return (op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR) ? cmatdesc : ydesc;
+        return (op_mode == DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR) ? cmatdesc : ydesc;
     }
 
     std::string const &
@@ -135,7 +135,7 @@ class Operation_v8 : public BackendDescriptor {
     Operation_v8 &
     operator=(Operation_v8 const &) = delete;
 
-    cudnnBackendDescriptorType_t op_mode = cudnnBackendDescriptorType_t::NOT_SET;
+    DescriptorType_t op_mode = DescriptorType_t::NOT_SET;
 
     ManagedOpaqueDescriptor xdesc              = nullptr;
     ManagedOpaqueDescriptor ydesc              = nullptr;
@@ -186,8 +186,8 @@ class Operation_v8 : public BackendDescriptor {
     cudnnBnFinalizeStatsMode_t bn_stats_mode = CUDNN_BN_FINALIZE_STATISTICS_TRAINING;
 
 
-    cudnnBackendNormFwdPhase_t norm_fwd_phase;
-    cudnnBackendNormMode_t norm_mode;
+    NormFwdPhase_t norm_fwd_phase;
+    NormMode_t norm_mode;
 
     float alpha_s = 1.0f, beta_s = .0f, alpha2_s = 1.0f;
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
@@ -795,7 +795,7 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
         getLogger() << "Extracting the feature vector" << std::endl;
-        extract_feature_vector(cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR);
+        extract_feature_vector(DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR);
         return std::move(m_operation);
     }
 
@@ -1171,7 +1171,7 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
         getLogger() << "Extracting the feature vector" << std::endl;
-        extract_feature_vector(cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR);
+        extract_feature_vector(DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR);
         return std::move(m_operation);
     }
 
@@ -1196,7 +1196,7 @@ class OperationBuilder_v8 {
             }
         };
 
-        ::cudnnBackendNormMode_t cudnn_norm_mode;
+        cudnnBackendNormMode_t cudnn_norm_mode;
         status = detail::convert_to_cudnn_type(m_operation.norm_mode, cudnn_norm_mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
@@ -1218,7 +1218,7 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
 
-        ::cudnnBackendNormFwdPhase_t cudnn_norm_fwd_phase;
+        cudnnBackendNormFwdPhase_t cudnn_norm_fwd_phase;
         status = detail::convert_to_cudnn_type(m_operation.norm_fwd_phase, cudnn_norm_fwd_phase);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
@@ -1980,11 +1980,11 @@ class OperationBuilder_v8 {
         }
 
         getLogger() << "Extracting the feature vector" << std::endl;
-        extract_feature_vector(cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR);
+        extract_feature_vector(DescriptorType_t::OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR);
         return std::move(m_operation);
     }
 
-    void extract_feature_vector(cudnnBackendDescriptorType_t op_type) {
+    void extract_feature_vector(DescriptorType_t op_type) {
         /// Build the feature vector of this operation now.
         m_operation.feature_vector.reserve(50);
         
@@ -2107,7 +2107,7 @@ class OperationBuilder_v8 {
 #if (CUDNN_VERSION >= 8500)
     cudnnStatus_t
     validate_resample_op(Message_t &msg) {
-        if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR) {
+        if (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_FWD_DESCRIPTOR) {
             if (m_operation.xdesc == nullptr) {
                 msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_RESAMPLE.*XDESC";
                 return CUDNN_STATUS_BAD_PARAM;
@@ -2117,7 +2117,7 @@ class OperationBuilder_v8 {
                 return CUDNN_STATUS_BAD_PARAM;
             }
 #if (CUDNN_VERSION >= 8600)
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR) {
             if (m_operation.dxdesc == nullptr) {
                 msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_RESAMPLE.*DXDESC";
                 return CUDNN_STATUS_BAD_PARAM;
@@ -2252,7 +2252,7 @@ class OperationBuilder_v8 {
             msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_CONV_DESC";
             return CUDNN_STATUS_BAD_PARAM;
         }
-        if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+        if (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
             if (m_operation.xdesc == nullptr) {
                 msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_CONVOLUTION_*_X";
                 return CUDNN_STATUS_BAD_PARAM;
@@ -2266,7 +2266,7 @@ class OperationBuilder_v8 {
                 return CUDNN_STATUS_BAD_PARAM;
             }
 
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
             if (m_operation.ydesc != nullptr && m_operation.dydesc != nullptr) {
                 msg = "CUDNN_BACKEND_OPERATION: Ambiguous specification. Choose and Set only one of setyDesc() or setdyDesc()";
                 return CUDNN_STATUS_BAD_PARAM;
@@ -2287,7 +2287,7 @@ class OperationBuilder_v8 {
                 msg = "CUDNN_BACKEND_OPERATION: Choose and Set one of setwDesc() or setdwDesc()";
                 return CUDNN_STATUS_BAD_PARAM;
             }
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
             if (m_operation.ydesc != nullptr && m_operation.dydesc != nullptr) {
                 msg = "CUDNN_BACKEND_OPERATION: Ambiguous specification. Choose and Set only one of setyDesc() or setdyDesc()";
                 return CUDNN_STATUS_BAD_PARAM;
@@ -2495,25 +2495,25 @@ class OperationBuilder_v8 {
     }
 
     auto
-    setNormFwdPhase(cudnnBackendNormFwdPhase_t mode) -> OperationBuilder_v8 & {
+    setNormFwdPhase(NormFwdPhase_t mode) -> OperationBuilder_v8 & {
         m_operation.norm_fwd_phase = mode;
         return *this;
     }
 
-    auto setNormalizationMode(cudnnBackendNormMode_t mode) -> OperationBuilder_v8 & {
+    auto setNormalizationMode(NormMode_t mode) -> OperationBuilder_v8 & {
         m_operation.norm_mode = mode;
         return *this;
     }
 
 #if (CUDNN_VERSION >= 8500)
-    // To be deprecated. Please use setNormalizationMode(cudnn_frontend::cudnnBackendNormMode_t mode) instead.
-    auto setNormalizationMode (::cudnnBackendNormMode_t mode) -> OperationBuilder_v8 & {
+    // To be deprecated. Please use setNormalizationMode(cudnn_frontend::NormMode_t mode) instead.
+    auto setNormalizationMode (cudnnBackendNormMode_t mode) -> OperationBuilder_v8 & {
         detail::convert_from_cudnn_type(mode, m_operation.norm_mode);
         return *this;
     }
 
-    // To be deprecated. Please use setNormFwdPhase(cudnn_frontend::cudnnBackendNormFwdPhase_t mode) instead.
-    auto setNormFwdPhase (::cudnnBackendNormFwdPhase_t mode) -> OperationBuilder_v8 & {
+    // To be deprecated. Please use setNormFwdPhase(cudnn_frontend::NormFwdPhase_t mode) instead.
+    auto setNormFwdPhase (cudnnBackendNormFwdPhase_t mode) -> OperationBuilder_v8 & {
         detail::convert_from_cudnn_type(mode, m_operation.norm_fwd_phase);
         return *this;
     }
@@ -2859,29 +2859,29 @@ class OperationBuilder_v8 {
         return *this;
     }
 
-    OperationBuilder_v8(cudnnBackendDescriptorType_t mode) {
+    OperationBuilder_v8(DescriptorType_t mode) {
         m_operation.op_mode = mode;
-        is_convolution_op   = ((m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
-                             (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
-                             (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR));
+        is_convolution_op   = ((m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) ||
+                             (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
+                             (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR));
 
-        is_pointwise_op   = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR);
-        is_matmul_op      = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR);
-        is_reduction_op   = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
-        is_genstats_op    = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR);
-        is_bn_finalize_op = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR);
-        is_bn_bwd_weight  = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR);
-        is_resample_fwd_op  = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR);
-        is_norm_forward_op  = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR);
-        is_norm_backward_op = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR);
-        is_resample_bwd_op  = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR);
-        is_rng_op      = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR);
-        is_reshape_op  = (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR);
+        is_pointwise_op   = (m_operation.op_mode == DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR);
+        is_matmul_op      = (m_operation.op_mode == DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR);
+        is_reduction_op   = (m_operation.op_mode == DescriptorType_t::OPERATION_REDUCTION_DESCRIPTOR);
+        is_genstats_op    = (m_operation.op_mode == DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR);
+        is_bn_finalize_op = (m_operation.op_mode == DescriptorType_t::OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR);
+        is_bn_bwd_weight  = (m_operation.op_mode == DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR);
+        is_resample_fwd_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_FWD_DESCRIPTOR);
+        is_norm_forward_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
+        is_norm_backward_op = (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR);
+        is_resample_bwd_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR);
+        is_rng_op      = (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
+        is_reshape_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR);
     }
     
     // This constructor which takes in cudnn C backend enum for cudnnBackendDescriptorType_t will be deprecated,
-    // in favour of OperationBuilder_v8(cudnn_frontend::cudnnBackendDescriptorType_t)
-    OperationBuilder_v8(::cudnnBackendDescriptorType_t mode) : OperationBuilder_v8(detail::convert_from_cudnn_type(mode)) {}
+    // in favour of OperationBuilder_v8(cudnn_frontend::DescriptorType_t)
+    OperationBuilder_v8(cudnnBackendDescriptorType_t mode) : OperationBuilder_v8(detail::convert_from_cudnn_type(mode)) {}
 
     /** @} */
 
@@ -2933,7 +2933,7 @@ class OperationBuilder_v8 {
         }
 
         // Create the descriptor.
-        ::cudnnBackendDescriptorType_t cudnn_backend_descritpor_type;
+        cudnnBackendDescriptorType_t cudnn_backend_descritpor_type;
         auto status = detail::convert_to_cudnn_type(m_operation.op_mode, cudnn_backend_descritpor_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnCreate Failed with Invalid backend descriptor type.");
@@ -2945,42 +2945,42 @@ class OperationBuilder_v8 {
             return std::move(m_operation);
         }
 
-        if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
+        if (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR) {
             return build_conv_forward();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) {
             return build_conv_backward_filter();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR) {
             return build_conv_backward_data();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR) {
             return build_pointwise_op();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR) {
             return build_matmul_op();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_REDUCTION_DESCRIPTOR) {
             return build_reduction_op();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR) {
             return build_genstats_op();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR) {
             return build_bn_finalize_op();
 #if (CUDNN_VERSION >= 8400)
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR) {
             return build_bn_bwd_weight_op();
 #endif
 #if (CUDNN_VERSION >= 8500)
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_FWD_DESCRIPTOR) {
             return build_resample_fwd_operation();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR) {
             return build_norm_forward();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR) {
             return build_norm_backward();
 #endif
 #if (CUDNN_VERSION >= 8600)
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR) {
             return build_resample_bwd_operation();
 #endif
 #if (CUDNN_VERSION >= 8700)
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR) {
             return build_rng_operation();
-        } else if (m_operation.op_mode == cudnnBackendDescriptorType_t::CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR) {
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR) {
             return build_reshape_operation();
 #endif
         } else {

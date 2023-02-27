@@ -378,8 +378,8 @@ struct StatsParams {
 };
 
 struct PoolingParams {
-    cudnn_frontend::cudnnResampleMode_t mode = cudnn_frontend::cudnnResampleMode_t::CUDNN_RESAMPLE_AVGPOOL_INCLUDE_PADDING;
-    cudnn_frontend::cudnnPaddingMode_t padding_mode = cudnn_frontend::cudnnPaddingMode_t::CUDNN_ZERO_PAD;
+    cudnn_frontend::ResampleMode_t mode = cudnn_frontend::ResampleMode_t::AVGPOOL_INCLUDE_PADDING;
+    cudnn_frontend::PaddingMode_t padding_mode = cudnn_frontend::PaddingMode_t::ZERO_PAD;
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
 
     int32_t nbSpatialDims = 2;
