@@ -1469,8 +1469,8 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
     int64_t xTensorDim[]              = { 32,  32, 7, 7};
     int64_t wTensorDim[]              = {256,  32, 1, 1};
     int64_t yTensorDim[]              = { 32, 256, 7, 7}; 
-    int64_t sumTensorDim[]            = { 1,  32, 1, 1};
-    int64_t sqSumTensorDim[]          = { 1,  32, 1, 1};
+    int64_t sumTensorDim[]            = { 1,  256, 1, 1};
+    int64_t sqSumTensorDim[]          = { 1,  256, 1, 1};
 
     int64_t conv_padA[]       = {0, 0};
     int64_t conv_dilationA[]  = {1, 1};
@@ -1576,16 +1576,16 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     REQUIRE(numErrors == 0);
 }
 
-TEST_CASE("Scale Bias Conv BNGenstats with CPU", "[frontend][fusion][bn_genstats][cpu]") {
+TEST_CASE("Scale Bias Conv BNGenstats with CPU Reference", "[frontend][fusion][bn_genstats][cpu]") {
     std::cout << "\n========================================================================================\n";
-    std::cout << "Scale Bias Conv BNGenstats" << std::endl;
+    std::cout << "Scale Bias Conv BNGenstats with CPU Reference" << std::endl;
     int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
     int64_t perChannelBiasDim[]       = { 1,  32, 1, 1};
     int64_t xTensorDim[]              = { 32,  32, 7, 7};
     int64_t wTensorDim[]              = {256,  32, 1, 1};
     int64_t yTensorDim[]              = { 32, 256, 7, 7}; 
-    int64_t sumTensorDim[]            = { 1,  32, 1, 1};
-    int64_t sqSumTensorDim[]          = { 1,  32, 1, 1};
+    int64_t sumTensorDim[]            = { 1,  256, 1, 1};
+    int64_t sqSumTensorDim[]          = { 1,  256, 1, 1};
 
     int64_t conv_padA[]       = {0, 0};
     int64_t conv_dilationA[]  = {1, 1};
