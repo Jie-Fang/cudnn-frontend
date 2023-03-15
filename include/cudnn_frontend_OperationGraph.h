@@ -100,14 +100,19 @@ class OperationGraph_v8 : public BackendDescriptor {
         return opGraphTag;
     }
 
+    bool
+    setFeatureVector(feature_vector_t fv) {
+        feature_vectors.push_back(fv);
+        return true;
+    }
+
     feature_vector_t
     getFeatureVector() const {
-        if (numOps != 1) {
-            return {}; /// We do not support multiop opGraph at this point of time.
-        } else {
+        if(feature_vectors.size() != 0) {
             return feature_vectors[0];
+        } else {
+            return {};
         }
-
     }
 
    private:
