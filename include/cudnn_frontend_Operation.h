@@ -562,6 +562,11 @@ class OperationBuilder_v8 {
                 m_operation.operationTag = "Identity";
                 break;
 #endif
+#if (CUDNN_VERSION >= 8900)
+            case CUDNN_POINTWISE_RECIPROCAL:
+                m_operation.operationTag = "Reciprocal";
+                break;
+#endif
         }
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
@@ -2041,8 +2046,11 @@ class OperationBuilder_v8 {
             m_operation.feature_vector.push_back(yTensor_strA[i]); // n, c, (g), d, h , w 
         }
 
-        int64_t alpha_as_int = *reinterpret_cast<int64_t *>(&m_operation.alpha_d);
-        int64_t  beta_as_int = *reinterpret_cast<int64_t *>(&m_operation.beta_d);
+        int64_t alpha_as_int;
+        int64_t  beta_as_int;
+        std::memcpy((void *)&alpha_as_int, (void *)(&m_operation.alpha_s), sizeof(int64_t));
+        std::memcpy((void *)&beta_as_int, (void *)(&m_operation.beta_s), sizeof(int64_t));
+
 
         m_operation.feature_vector.push_back(alpha_as_int);
         m_operation.feature_vector.push_back(beta_as_int);
