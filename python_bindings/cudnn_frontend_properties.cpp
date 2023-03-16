@@ -81,7 +81,7 @@ void init_properties(py::module_ &m) {
     py::class_<cudnn_frontend::pointwise_properties> pointwise_properties(m, "pointwise_properties");
     pointwise_properties.def(py::init<std::string const &>())
         .def("get_mode", &cudnn_frontend::pointwise_properties::get_mode)
-        .def("set_mode", static_cast<int (cudnn_frontend::pointwise_properties::*)(std::string)>(&cudnn_frontend::pointwise_properties::set_mode))
+        .def("set_mode", &cudnn_frontend::pointwise_properties::set_mode)
         .def("get_tensor_data_type",  &cudnn_frontend::convolution_properties::get_tensor_data_type)
         .def("set_tensor_data_type",  &cudnn_frontend::convolution_properties::set_tensor_data_type)
         .def("get_compute_type",      &cudnn_frontend::convolution_properties::get_compute_type)

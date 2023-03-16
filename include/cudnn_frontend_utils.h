@@ -233,125 +233,6 @@ to_string(cudnnBackendNumericalNote_t note) {
     return std::string("INVALID_NUMERICAL_NOTE");
 }
 
-static inline std::string
-to_string(cudnnPointwiseMode_t mode) {
-    switch(mode) {
-        case CUDNN_POINTWISE_ADD:
-            return std::string("CUDNN_POINTWISE_ADD");
-        case CUDNN_POINTWISE_MUL:
-            return std::string("CUDNN_POINTWISE_MUL");
-#if (CUDNN_VERSION >= 8300)
-        case CUDNN_POINTWISE_DIV:
-            return std::string("CUDNN_POINTWISE_DIV");
-        case CUDNN_POINTWISE_ADD_SQUARE:
-            return std::string("CUDNN_POINTWISE_ADD_SQUARE");
-        case CUDNN_POINTWISE_SUB:
-            return std::string("CUDNN_POINTWISE_SUB");
-        case CUDNN_POINTWISE_CMP_EQ:
-            return std::string("CUDNN_POINTWISE_CMP_EQ");
-        case CUDNN_POINTWISE_CMP_NEQ:
-            return std::string("CUDNN_POINTWISE_CMP_NEQ");
-        case CUDNN_POINTWISE_CMP_GT:
-            return std::string("CUDNN_POINTWISE_CMP_GT");
-        case CUDNN_POINTWISE_CMP_GE:
-            return std::string("CUDNN_POINTWISE_CMP_GE");
-        case CUDNN_POINTWISE_CMP_LT:
-            return std::string("CUDNN_POINTWISE_CMP_LT");
-        case CUDNN_POINTWISE_CMP_LE:
-            return std::string("CUDNN_POINTWISE_CMP_LE");
-        case CUDNN_POINTWISE_LOGICAL_AND:
-            return std::string("CUDNN_POINTWISE_LOGICAL_AND");
-        case CUDNN_POINTWISE_LOGICAL_OR:
-            return std::string("CUDNN_POINTWISE_LOGICAL_OR");
-#endif
-        case CUDNN_POINTWISE_MIN:
-            return std::string("CUDNN_POINTWISE_MIN");
-        case CUDNN_POINTWISE_MAX:
-            return std::string("CUDNN_POINTWISE_MAX");
-        case CUDNN_POINTWISE_RELU_BWD:
-            return std::string("CUDNN_POINTWISE_RELU_BWD");
-        case CUDNN_POINTWISE_TANH_BWD:
-            return std::string("CUDNN_POINTWISE_TANH_BWD");
-        case CUDNN_POINTWISE_SIGMOID_BWD:
-            return std::string("CUDNN_POINTWISE_SIGMOID_BWD");
-        case CUDNN_POINTWISE_ELU_BWD:
-            return std::string("CUDNN_POINTWISE_ELU_BWD");
-        case CUDNN_POINTWISE_GELU_BWD:
-            return std::string("CUDNN_POINTWISE_GELU_BWD");
-        case CUDNN_POINTWISE_SOFTPLUS_BWD:
-            return std::string("CUDNN_POINTWISE_SOFTPLUS_BWD");
-        case CUDNN_POINTWISE_SWISH_BWD:
-            return std::string("CUDNN_POINTWISE_SWISH_BWD");
-#if (CUDNN_VERSION >= 8500)
-        case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
-            return std::string("CUDNN_POINTWISE_GELU_APPROX_TANH_BWD");
-#endif
-        case CUDNN_POINTWISE_SQRT:
-            return std::string("CUDNN_POINTWISE_SQRT");
-        case CUDNN_POINTWISE_RELU_FWD:
-            return std::string("CUDNN_POINTWISE_RELU_FWD");
-        case CUDNN_POINTWISE_TANH_FWD:
-            return std::string("CUDNN_POINTWISE_TANH_FWD");
-        case CUDNN_POINTWISE_SIGMOID_FWD:
-            return std::string("CUDNN_POINTWISE_SIGMOID_FWD");
-        case CUDNN_POINTWISE_ELU_FWD:
-            return std::string("CUDNN_POINTWISE_ELU_FWD");
-        case CUDNN_POINTWISE_GELU_FWD:
-            return std::string("CUDNN_POINTWISE_GELU_FWD");
-        case CUDNN_POINTWISE_SOFTPLUS_FWD:
-            return std::string("CUDNN_POINTWISE_SOFTPLUS_FWD");
-        case CUDNN_POINTWISE_SWISH_FWD:
-            return std::string("CUDNN_POINTWISE_SWISH_FWD");
-#if (CUDNN_VERSION >= 8300)
-        case CUDNN_POINTWISE_EXP:
-            return std::string("CUDNN_POINTWISE_EXP");
-        case CUDNN_POINTWISE_LOG:
-            return std::string("CUDNN_POINTWISE_LOG");
-        case CUDNN_POINTWISE_NEG:
-            return std::string("CUDNN_POINTWISE_NEG");
-        case CUDNN_POINTWISE_MOD:
-            return std::string("CUDNN_POINTWISE_MOD");
-        case CUDNN_POINTWISE_POW:
-            return std::string("CUDNN_POINTWISE_POW");
-        case CUDNN_POINTWISE_ABS:
-            return std::string("CUDNN_POINTWISE_ABS");
-        case CUDNN_POINTWISE_CEIL:
-            return std::string("CUDNN_POINTWISE_CEIL");
-        case CUDNN_POINTWISE_FLOOR:
-            return std::string("CUDNN_POINTWISE_FLOOR");
-        case CUDNN_POINTWISE_COS:
-            return std::string("CUDNN_POINTWISE_COS");
-        case CUDNN_POINTWISE_TAN:
-            return std::string("CUDNN_POINTWISE_TAN");
-        case CUDNN_POINTWISE_SIN:
-            return std::string("CUDNN_POINTWISE_SIN");
-        case CUDNN_POINTWISE_RSQRT:
-            return std::string("CUDNN_POINTWISE_RSQRT");
-        case CUDNN_POINTWISE_LOGICAL_NOT:
-            return std::string("CUDNN_POINTWISE_LOGICAL_NOT");
-#endif
-#if (CUDNN_VERSION >= 8400)
-        case CUDNN_POINTWISE_GEN_INDEX:
-            return std::string("CUDNN_POINTWISE_GEN_INDEX");
-        case CUDNN_POINTWISE_BINARY_SELECT:
-            return std::string("CUDNN_POINTWISE_BINARY_SELECT");
-#endif
-#if (CUDNN_VERSION >= 8500)
-        case CUDNN_POINTWISE_ERF:
-            return std::string("CUDNN_POINTWISE_ERF");
-        case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
-            return std::string("CUDNN_POINTWISE_GELU_APPROX_TANH_FWD");
-        case CUDNN_POINTWISE_IDENTITY:
-            return std::string("CUDNN_POINTWISE_IDENTITY");
-#endif
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            return std::string("UNKNOWN_CUDNN_POINTWISE_MODE");
-#endif
-    }
-    return std::string("");
-}
-
 #if (CUDNN_VERSION >= 8700)
 static inline std::string
 to_string(cudnnRngDistribution_t distribution) {
@@ -451,6 +332,220 @@ enum class NormMode_t {
     GROUP_NORM,
 };
 
+enum class PointwiseMode_t {
+    NOT_SET,
+
+    ADD,
+    MUL,
+    SQRT,
+    MAX,
+    MIN,
+    RELU_FWD,
+    TANH_FWD,
+    SIGMOID_FWD,
+    ELU_FWD,
+    GELU_FWD,
+    SOFTPLUS_FWD,
+    SWISH_FWD,
+    RELU_BWD,
+    TANH_BWD,
+    SIGMOID_BWD,
+    ELU_BWD,
+    GELU_BWD,
+    SOFTPLUS_BWD,
+    SWISH_BWD,
+    ERF,
+    IDENTITY,
+    GELU_APPROX_TANH_BWD,
+    GELU_APPROX_TANH_FWD,
+    GEN_INDEX,
+    BINARY_SELECT,
+    EXP,
+    LOG,
+    NEG,
+    MOD,
+    POW,
+    ABS,
+    CEIL,
+    COS,
+    FLOOR,
+    RSQRT,
+    SIN,
+    LOGICAL_NOT,
+    TAN,
+    SUB,
+    ADD_SQUARE,
+    DIV,
+    CMP_EQ,
+    CMP_NEQ,
+    CMP_GT,
+    CMP_GE,
+    CMP_LT,
+    CMP_LE,
+    LOGICAL_AND,
+    LOGICAL_OR,
+    RECIPROCAL,
+};
+
+static inline std::ostream& operator<<(std::ostream& os, const PointwiseMode_t& mode) {
+    switch (mode) {
+        case PointwiseMode_t::ADD:
+            os << "ADD";
+            break;
+        case PointwiseMode_t::MUL:
+            os << "MUL";
+            break;
+        case PointwiseMode_t::SQRT:
+            os << "SQRT";
+            break;
+        case PointwiseMode_t::MAX:
+            os << "MAX";
+            break;
+        case PointwiseMode_t::MIN:
+            os << "MIN";
+            break;
+        case PointwiseMode_t::RELU_FWD:
+            os << "RELU_FWD";
+            break;
+        case PointwiseMode_t::TANH_FWD:
+            os << "TANH_FWD";
+            break;
+        case PointwiseMode_t::SIGMOID_FWD:
+            os << "SIGMOID_FWD";
+            break;
+        case PointwiseMode_t::ELU_FWD:
+            os << "ELU_FWD";
+            break;
+        case PointwiseMode_t::GELU_FWD:
+            os << "GELU_FWD";
+            break;
+        case PointwiseMode_t::SOFTPLUS_FWD:
+            os << "SOFTPLUS_FWD";
+            break;
+        case PointwiseMode_t::SWISH_FWD:
+            os << "SWISH_FWD";
+            break;
+        case PointwiseMode_t::RELU_BWD:
+            os << "RELU_BWD";
+            break;
+        case PointwiseMode_t::TANH_BWD:
+            os << "TANH_BWD";
+            break;
+        case PointwiseMode_t::SIGMOID_BWD:
+            os << "SIGMOID_BWD";
+            break;
+        case PointwiseMode_t::ELU_BWD:
+            os << "ELU_BWD";
+            break;
+        case PointwiseMode_t::GELU_BWD:
+            os << "GELU_BWD";
+            break;
+        case PointwiseMode_t::SOFTPLUS_BWD:
+            os << "SOFTPLUS_BWD";
+            break;
+        case PointwiseMode_t::SWISH_BWD:
+            os << "SWISH_BWD";
+            break;
+        case PointwiseMode_t::ERF:
+            os << "ERF";
+            break;
+        case PointwiseMode_t::IDENTITY:
+            os << "IDENTITY";
+            break;
+        case PointwiseMode_t::GELU_APPROX_TANH_BWD:
+            os << "GELU_APPROX_TANH_BWD";
+            break;
+        case PointwiseMode_t::GELU_APPROX_TANH_FWD:
+            os << "GELU_APPROX_TANH_FWD";
+            break;
+        case PointwiseMode_t::GEN_INDEX:
+            os << "GEN_INDEX";
+            break;
+        case PointwiseMode_t::BINARY_SELECT:
+            os << "BINARY_SELECT";
+            break;
+        case PointwiseMode_t::EXP:
+            os << "EXP";
+            break;
+        case PointwiseMode_t::LOG:
+            os << "LOG";
+            break;
+        case PointwiseMode_t::NEG:
+            os << "NEG";
+            break;
+        case PointwiseMode_t::MOD:
+            os << "MOD";
+            break;
+        case PointwiseMode_t::POW:
+            os << "POW";
+            break;
+        case PointwiseMode_t::ABS:
+            os << "ABS";
+            break;
+        case PointwiseMode_t::CEIL:
+            os << "CEIL";
+            break;
+        case PointwiseMode_t::COS:
+            os << "COS";
+            break;
+        case PointwiseMode_t::FLOOR:
+            os << "FLOOR";
+            break;
+        case PointwiseMode_t::RSQRT:
+            os << "RSQRT";
+            break;
+        case PointwiseMode_t::SIN:
+            os << "SIN";
+            break;
+        case PointwiseMode_t::LOGICAL_NOT:
+            os << "LOGICAL_NOT";
+            break;
+        case PointwiseMode_t::TAN:
+            os << "TAN";
+            break;
+        case PointwiseMode_t::SUB:
+            os << "SUB";
+            break;
+        case PointwiseMode_t::ADD_SQUARE:
+            os << "ADD_SQUARE";
+            break;
+        case PointwiseMode_t::DIV:
+            os << "DIV";
+            break;
+        case PointwiseMode_t::CMP_EQ:
+            os << "CMP_EQ";
+            break;
+        case PointwiseMode_t::CMP_NEQ:
+            os << "CMP_NEQ";
+            break;
+        case PointwiseMode_t::CMP_GT:
+            os << "CMP_GT";
+            break;
+        case PointwiseMode_t::CMP_GE:
+            os << "CMP_GE";
+            break;
+        case PointwiseMode_t::CMP_LT:
+            os << "CMP_LT";
+            break;
+        case PointwiseMode_t::CMP_LE:
+            os << "CMP_LE";
+            break;
+        case PointwiseMode_t::LOGICAL_AND:
+            os << "LOGICAL_AND";
+            break;
+        case PointwiseMode_t::LOGICAL_OR:
+            os << "LOGICAL_OR";
+            break;
+        case PointwiseMode_t::RECIPROCAL:
+            os << "RECIPROCAL";
+            break;
+        case PointwiseMode_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+}
+
 static inline std::ostream& operator<<(std::ostream& os, const NormMode_t& mode) {
     switch (mode) {
         case NormMode_t::LAYER_NORM:
@@ -470,7 +565,7 @@ static inline std::ostream& operator<<(std::ostream& os, const NormMode_t& mode)
             break;
     }
     return os;
-} 
+}
 
 static inline std::ostream& operator<<(std::ostream& os, const DescriptorType_t& mode) {
     switch (mode) {
@@ -660,7 +755,297 @@ static inline std::ostream& operator<<(std::ostream& os, const PaddingMode_t& mo
 } 
 
 namespace detail {
-         
+
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::PointwiseMode_t const mode, cudnnPointwiseMode_t& cudnn_mode) {
+        switch (mode) {
+            case PointwiseMode_t::ADD:
+                cudnn_mode = CUDNN_POINTWISE_ADD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::MUL:
+                cudnn_mode = CUDNN_POINTWISE_MUL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SQRT:
+                cudnn_mode = CUDNN_POINTWISE_SQRT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::MAX:
+                cudnn_mode = CUDNN_POINTWISE_MAX;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::MIN:
+                cudnn_mode = CUDNN_POINTWISE_MIN;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::RELU_FWD:
+                cudnn_mode = CUDNN_POINTWISE_RELU_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::TANH_FWD:
+                cudnn_mode = CUDNN_POINTWISE_TANH_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SIGMOID_FWD:
+                cudnn_mode = CUDNN_POINTWISE_SIGMOID_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::ELU_FWD:
+                cudnn_mode = CUDNN_POINTWISE_ELU_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::GELU_FWD:
+                cudnn_mode = CUDNN_POINTWISE_GELU_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SOFTPLUS_FWD:
+                cudnn_mode = CUDNN_POINTWISE_SOFTPLUS_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SWISH_FWD:
+                cudnn_mode = CUDNN_POINTWISE_SWISH_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::RELU_BWD:
+                cudnn_mode = CUDNN_POINTWISE_RELU_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::TANH_BWD:
+                cudnn_mode = CUDNN_POINTWISE_TANH_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SIGMOID_BWD:
+                cudnn_mode = CUDNN_POINTWISE_SIGMOID_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::ELU_BWD:
+                cudnn_mode = CUDNN_POINTWISE_ELU_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::GELU_BWD:
+                cudnn_mode = CUDNN_POINTWISE_GELU_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SOFTPLUS_BWD:
+                cudnn_mode = CUDNN_POINTWISE_SOFTPLUS_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case PointwiseMode_t::SWISH_BWD:
+                cudnn_mode = CUDNN_POINTWISE_SWISH_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+
+            case PointwiseMode_t::DIV:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_DIV;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::ADD_SQUARE:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_ADD_SQUARE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::EXP:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_EXP;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::SUB:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_SUB;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CMP_EQ:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CMP_EQ;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CMP_NEQ:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CMP_NEQ;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CMP_GT:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CMP_GT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CMP_GE:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CMP_GE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CMP_LT:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CMP_LT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CMP_LE:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CMP_LE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::LOGICAL_AND:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_LOGICAL_AND;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::LOGICAL_OR:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_LOGICAL_OR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::LOGICAL_NOT:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_LOGICAL_NOT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::LOG:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_LOG;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::NEG:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_NEG;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::MOD:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_MOD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::POW:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_POW;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::ABS:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_ABS;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::CEIL:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_CEIL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::COS:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_COS;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::FLOOR:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_FLOOR;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::RSQRT:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_RSQRT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::SIN:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_SIN;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::TAN:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_POINTWISE_TAN;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+
+            case PointwiseMode_t::GEN_INDEX:
+            #if (CUDNN_VERSION >= 8400)
+                cudnn_mode = CUDNN_POINTWISE_GEN_INDEX;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::BINARY_SELECT:
+            #if (CUDNN_VERSION >= 8400)
+                cudnn_mode = CUDNN_POINTWISE_BINARY_SELECT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            
+            case PointwiseMode_t::ERF:
+            #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_POINTWISE_ERF;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::IDENTITY:
+            #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_POINTWISE_IDENTITY;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::GELU_APPROX_TANH_BWD:
+            #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_POINTWISE_GELU_APPROX_TANH_BWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case PointwiseMode_t::GELU_APPROX_TANH_FWD:
+            #if (CUDNN_VERSION >= 8500)
+                cudnn_mode = CUDNN_POINTWISE_GELU_APPROX_TANH_FWD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+
+            case PointwiseMode_t::RECIPROCAL:
+            #if (CUDNN_VERSION >= 8900)
+                cudnn_mode = CUDNN_POINTWISE_RECIPROCAL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+
+    }
+
     static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendDescriptorType_t& cudnn_mode) {
         switch (mode) {
             case DescriptorType_t::POINTWISE_DESCRIPTOR:
@@ -1173,6 +1558,133 @@ static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::TensorReorderi
     #endif
         }
         return DescriptorType_t::NOT_SET;
+    }
+
+    // To be deprecated. Only exists as setPointwiseMode(cudnnPointwiseMode_t mode) requires it.
+    static inline cudnn_frontend::PointwiseMode_t convert_from_cudnn_type(cudnnPointwiseMode_t const cudnn_mode) {
+        switch (cudnn_mode)
+        {
+            case CUDNN_POINTWISE_ADD:
+                return PointwiseMode_t::ADD;
+            case CUDNN_POINTWISE_MUL:
+                return PointwiseMode_t::MUL;
+            case CUDNN_POINTWISE_SQRT:
+                return PointwiseMode_t::SQRT;
+            case CUDNN_POINTWISE_MAX:
+                return PointwiseMode_t::MAX;
+            case CUDNN_POINTWISE_MIN:
+                return PointwiseMode_t::MIN;
+            case CUDNN_POINTWISE_RELU_FWD:
+                return PointwiseMode_t::RELU_FWD;
+            case CUDNN_POINTWISE_TANH_FWD:
+                return PointwiseMode_t::TANH_FWD;
+            case CUDNN_POINTWISE_SIGMOID_FWD:
+                return PointwiseMode_t::SIGMOID_FWD;
+            case CUDNN_POINTWISE_ELU_FWD:
+                return PointwiseMode_t::ELU_FWD;
+            case CUDNN_POINTWISE_GELU_FWD:
+                return PointwiseMode_t::GELU_FWD;
+            case CUDNN_POINTWISE_SOFTPLUS_FWD:
+                return PointwiseMode_t::SOFTPLUS_FWD;
+            case CUDNN_POINTWISE_SWISH_FWD:
+                return PointwiseMode_t::SWISH_FWD;
+            case CUDNN_POINTWISE_RELU_BWD:
+                return PointwiseMode_t::RELU_BWD;
+            case CUDNN_POINTWISE_TANH_BWD:
+                return PointwiseMode_t::TANH_BWD;
+            case CUDNN_POINTWISE_SIGMOID_BWD:
+                return PointwiseMode_t::SIGMOID_BWD;
+            case CUDNN_POINTWISE_ELU_BWD:
+                return PointwiseMode_t::ELU_BWD;
+            case CUDNN_POINTWISE_GELU_BWD:
+                return PointwiseMode_t::GELU_BWD;
+            case CUDNN_POINTWISE_SOFTPLUS_BWD:
+                return PointwiseMode_t::SOFTPLUS_BWD;
+            case CUDNN_POINTWISE_SWISH_BWD:
+                return PointwiseMode_t::SWISH_BWD;
+
+#if (CUDNN_VERSION >= 8300)
+            case CUDNN_POINTWISE_DIV:
+                return PointwiseMode_t::DIV;
+            case CUDNN_POINTWISE_ADD_SQUARE:
+                return PointwiseMode_t::ADD_SQUARE;
+            case CUDNN_POINTWISE_EXP:
+                return PointwiseMode_t::EXP;
+            case CUDNN_POINTWISE_SUB:
+                return PointwiseMode_t::SUB;
+            case CUDNN_POINTWISE_CMP_EQ:
+                return PointwiseMode_t::CMP_EQ;
+            case CUDNN_POINTWISE_CMP_NEQ:
+                return PointwiseMode_t::CMP_NEQ;
+            case CUDNN_POINTWISE_CMP_GT:
+                return PointwiseMode_t::CMP_GT;
+            case CUDNN_POINTWISE_CMP_GE:
+                return PointwiseMode_t::CMP_GE;
+            case CUDNN_POINTWISE_CMP_LT:
+                return PointwiseMode_t::CMP_LT;
+            case CUDNN_POINTWISE_CMP_LE:
+                return PointwiseMode_t::CMP_LE;
+            case CUDNN_POINTWISE_LOGICAL_AND:
+                return PointwiseMode_t::LOGICAL_AND;
+            case CUDNN_POINTWISE_LOGICAL_OR:
+                return PointwiseMode_t::LOGICAL_OR;
+            case CUDNN_POINTWISE_LOGICAL_NOT:
+                return PointwiseMode_t::LOGICAL_NOT;
+            case CUDNN_POINTWISE_LOG:
+                return PointwiseMode_t::LOG;
+            case CUDNN_POINTWISE_NEG:
+                return PointwiseMode_t::NEG;
+            case CUDNN_POINTWISE_MOD:
+                return PointwiseMode_t::MOD;
+            case CUDNN_POINTWISE_POW:
+                return PointwiseMode_t::POW;
+            case CUDNN_POINTWISE_ABS:
+                return PointwiseMode_t::ABS;
+            case CUDNN_POINTWISE_CEIL:
+                return PointwiseMode_t::CEIL;
+            case CUDNN_POINTWISE_COS:
+                return PointwiseMode_t::COS;
+            case CUDNN_POINTWISE_FLOOR:
+                return PointwiseMode_t::FLOOR;
+            case CUDNN_POINTWISE_RSQRT:
+                return PointwiseMode_t::RSQRT;
+            case CUDNN_POINTWISE_SIN:
+                return PointwiseMode_t::SIN;
+            case CUDNN_POINTWISE_TAN:
+                return PointwiseMode_t::TAN;
+#endif
+
+#if (CUDNN_VERSION >= 8400)
+            case CUDNN_POINTWISE_GEN_INDEX:
+                return PointwiseMode_t::GEN_INDEX;
+            case CUDNN_POINTWISE_BINARY_SELECT:
+                return PointwiseMode_t::BINARY_SELECT;
+#endif
+
+#if (CUDNN_VERSION >= 8500)
+            case CUDNN_POINTWISE_ERF:
+                return PointwiseMode_t::ERF;
+            case CUDNN_POINTWISE_IDENTITY:
+                return PointwiseMode_t::IDENTITY;
+            case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
+                return PointwiseMode_t::GELU_APPROX_TANH_BWD;
+            case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
+                return PointwiseMode_t::GELU_APPROX_TANH_FWD;
+#endif
+
+#if (CUDNN_VERSION >= 8900)
+            case CUDNN_POINTWISE_RECIPROCAL:
+                return PointwiseMode_t::RECIPROCAL;
+                break;
+#endif
+
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return PointwiseMode_t::NOT_SET;
+                break;
+    #endif
+        }
+        return PointwiseMode_t::NOT_SET;
     }
 
 } // namespace detail

@@ -147,7 +147,7 @@ public:
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
         props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
-        props_ptr->set_mode("Add");
+        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
 
         // TODO: Check whether image and weight already exist.
         props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});

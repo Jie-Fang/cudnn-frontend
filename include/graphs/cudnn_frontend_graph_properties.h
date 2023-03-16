@@ -443,7 +443,7 @@ public:
     };
 
 private:
-    cudnnPointwiseMode_t mode;
+    PointwiseMode_t mode;
 public:
     bool is_mode_set;
 
@@ -464,24 +464,16 @@ public:
         return 0;
     }
 
-    cudnnPointwiseMode_t const &
+    PointwiseMode_t const &
     get_mode() const {
         return mode;
     }
 
 
-    int
-    set_mode(cudnnPointwiseMode_t value) {
+    error_t set_mode(PointwiseMode_t value) {
         mode = value;
         is_mode_set = true;
-        return 0;
-    }
-
-    int
-    set_mode(std::string value) {
-        mode = string_to_pointwise_mode(value);
-        is_mode_set = true;
-        return 0;
+        return error_t::OK;
     }
 
     error_t

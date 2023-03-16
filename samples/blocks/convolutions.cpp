@@ -131,7 +131,7 @@ run_pointwise_node() {
     cudnn_frontend::PointwiseNode pointwise_node{"pointwise_node"};
 
     auto props = std::make_shared<cudnn_frontend::pointwise_properties>("pointwise_prop");
-    props->set_mode(CUDNN_POINTWISE_ADD);
+    props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
     props->set_tensor_data_type(CUDNN_DATA_HALF);
     props->set_compute_type(CUDNN_DATA_FLOAT);
     props->set_port_names({
@@ -368,7 +368,7 @@ run_convolution_fp8_node() {
     convolution_fp8_node.add_tensor("tensor2", tensor2);
 
     auto X_DQ_props = std::make_shared<cudnn_frontend::pointwise_properties>("x_dq_prop");
-    X_DQ_props->set_mode(CUDNN_POINTWISE_MUL);
+    X_DQ_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     // TODO: remove setting tensor data type in operation properties.
     X_DQ_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
     X_DQ_props->set_compute_type(CUDNN_DATA_FLOAT);
@@ -388,7 +388,7 @@ run_convolution_fp8_node() {
     convolution_fp8_node.add_tensor("tensor4", tensor4);
 
     auto W_DQ_props = std::make_shared<cudnn_frontend::pointwise_properties>("w_dq_props");
-    W_DQ_props->set_mode(CUDNN_POINTWISE_MUL);
+    W_DQ_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     W_DQ_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
     W_DQ_props->set_compute_type(CUDNN_DATA_FLOAT);
     W_DQ_props->set_port_names({
@@ -407,7 +407,7 @@ run_convolution_fp8_node() {
     convolution_fp8_node.add_tensor("tensor6", tensor6);
 
     auto Y_Q_props = std::make_shared<cudnn_frontend::pointwise_properties>("y_q_prop");
-    Y_Q_props->set_mode(CUDNN_POINTWISE_MUL);
+    Y_Q_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     // TODO: remove setting tensor data type in operation properties.
     Y_Q_props->set_tensor_data_type(CUDNN_DATA_FLOAT);
     Y_Q_props->set_compute_type(CUDNN_DATA_FLOAT);
@@ -504,7 +504,7 @@ run_convolution_pointwise_node() {
     convolution_pointwise_node.add_tensor("tensor2", tensor2);
     
     auto pointwise_props = std::make_shared<cudnn_frontend::pointwise_properties>("pointwise_prop");
-    pointwise_props->set_mode(CUDNN_POINTWISE_ADD);
+    pointwise_props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
     pointwise_props->set_tensor_data_type(CUDNN_DATA_HALF);
     pointwise_props->set_compute_type(CUDNN_DATA_FLOAT);
     pointwise_props->set_port_names({

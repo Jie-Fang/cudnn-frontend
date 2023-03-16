@@ -192,7 +192,7 @@ class Operation_v8 : public BackendDescriptor {
     float alpha_s = 1.0f, beta_s = .0f, alpha2_s = 1.0f;
     double alpha_d = 1.0, beta_d = 0.0, alpha2_d = 1.0;
     int64_t pointwise_port_count = -1;
-    cudnnPointwiseMode_t pointwise_mode;
+    PointwiseMode_t pointwise_mode = PointwiseMode_t::NOT_SET;
     bool is_pointwise_activation_fwd_op = false;
     bool is_pointwise_identity_op = false;
     bool is_pointwise_activation_bwd_op = false;
@@ -408,166 +408,9 @@ class OperationBuilder_v8 {
     build_pointwise_op() {
         auto status = CUDNN_STATUS_SUCCESS;
 
-        switch (m_operation.pointwise_mode) {
-            case CUDNN_POINTWISE_ADD:
-                m_operation.operationTag = "Add";
-                break;
-            case CUDNN_POINTWISE_MUL:
-                m_operation.operationTag = "Mul";
-                break;
-#if (CUDNN_VERSION >= 8300)
-            case CUDNN_POINTWISE_DIV:
-                m_operation.operationTag = "Div";
-                break;
-            case CUDNN_POINTWISE_ADD_SQUARE:
-                m_operation.operationTag = "AddSquare";
-                break;
-            case CUDNN_POINTWISE_EXP:
-                m_operation.operationTag = "Exp";
-                break;
-            case CUDNN_POINTWISE_SUB:
-                m_operation.operationTag = "Sub";
-                break;
-            case CUDNN_POINTWISE_CMP_EQ:
-                m_operation.operationTag = "CmpEq";
-                break;
-            case CUDNN_POINTWISE_CMP_NEQ:
-                m_operation.operationTag = "CmpNeq";
-                break;
-            case CUDNN_POINTWISE_CMP_GT:
-                m_operation.operationTag = "CmpGT";
-                break;
-            case CUDNN_POINTWISE_CMP_GE:
-                m_operation.operationTag = "CmpGE";
-                break;
-            case CUDNN_POINTWISE_CMP_LT:
-                m_operation.operationTag = "CmpLT";
-                break;
-            case CUDNN_POINTWISE_CMP_LE:
-                m_operation.operationTag = "CmpLE";
-                break;
-            case CUDNN_POINTWISE_LOGICAL_OR:
-                m_operation.operationTag = "LogicalOr";
-                break;
-            case CUDNN_POINTWISE_LOGICAL_AND:
-                m_operation.operationTag = "LogicalAnd";
-                break;
-            case CUDNN_POINTWISE_LOGICAL_NOT:
-                m_operation.operationTag = "LogicalNot";
-                break;
-            case CUDNN_POINTWISE_LOG:
-                m_operation.operationTag = "Log";
-                break;
-            case CUDNN_POINTWISE_NEG:
-                m_operation.operationTag = "Neg";
-                break;
-            case CUDNN_POINTWISE_MOD:
-                m_operation.operationTag = "Mod";
-                break;
-            case CUDNN_POINTWISE_POW:
-                m_operation.operationTag = "Pow";
-                break;
-            case CUDNN_POINTWISE_ABS:
-                m_operation.operationTag = "Abs";
-                break;
-            case CUDNN_POINTWISE_CEIL:
-                m_operation.operationTag = "Ceil";
-                break;
-            case CUDNN_POINTWISE_FLOOR:
-                m_operation.operationTag = "Floor";
-                break;
-            case CUDNN_POINTWISE_SIN:
-                m_operation.operationTag = "Sine";
-                break;
-            case CUDNN_POINTWISE_COS:
-                m_operation.operationTag = "Cosine";
-                break;
-            case CUDNN_POINTWISE_TAN:
-                m_operation.operationTag = "Tan";
-                break;
-            case CUDNN_POINTWISE_RSQRT:
-                m_operation.operationTag = "RSqrt";
-                break;
-#endif
-            case CUDNN_POINTWISE_MIN:
-                m_operation.operationTag = "Min";
-                break;
-            case CUDNN_POINTWISE_MAX:
-                m_operation.operationTag = "Max";
-                break;
-            case CUDNN_POINTWISE_SQRT:
-                m_operation.operationTag = "Sqrt";
-                break;
-            case CUDNN_POINTWISE_RELU_FWD:
-                m_operation.operationTag = "ReluFwd";
-                break;
-            case CUDNN_POINTWISE_TANH_FWD:
-                m_operation.operationTag = "TanhFwd";
-                break;
-            case CUDNN_POINTWISE_SIGMOID_FWD:
-                m_operation.operationTag = "SigmoidFwd";
-                break;
-            case CUDNN_POINTWISE_ELU_FWD:
-                m_operation.operationTag = "EluFwd";
-                break;
-            case CUDNN_POINTWISE_GELU_FWD:
-                m_operation.operationTag = "GeluFwd";
-                break;
-            case CUDNN_POINTWISE_SOFTPLUS_FWD:
-                m_operation.operationTag = "SoftplusFwd";
-                break;
-            case CUDNN_POINTWISE_SWISH_FWD:
-                m_operation.operationTag = "SwishFwd";
-                break;
-            case CUDNN_POINTWISE_RELU_BWD:
-                m_operation.operationTag = "ReluBwd";
-                break;
-            case CUDNN_POINTWISE_TANH_BWD:
-                m_operation.operationTag = "TanhBwd";
-                break;
-            case CUDNN_POINTWISE_SIGMOID_BWD:
-                m_operation.operationTag = "SigmoidBwd";
-                break;
-            case CUDNN_POINTWISE_ELU_BWD:
-                m_operation.operationTag = "EluBwd";
-                break;
-            case CUDNN_POINTWISE_GELU_BWD:
-                m_operation.operationTag = "GeluBwd";
-                break;
-            case CUDNN_POINTWISE_SOFTPLUS_BWD:
-                m_operation.operationTag = "SoftplusBwd";
-                break;
-            case CUDNN_POINTWISE_SWISH_BWD:
-                m_operation.operationTag = "SwishBwd";
-                break;
-#if (CUDNN_VERSION >= 8400)
-            case CUDNN_POINTWISE_GEN_INDEX:
-                m_operation.operationTag = "GenIndex";
-                break;
-            case CUDNN_POINTWISE_BINARY_SELECT:
-                m_operation.operationTag = "BinarySelect";
-                break;
-#endif
-#if (CUDNN_VERSION >= 8500)
-            case CUDNN_POINTWISE_ERF:
-                m_operation.operationTag = "ERF";
-                break;
-            case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
-                m_operation.operationTag = "GeluApproxTanhFwd";
-                break;
-            case CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
-                m_operation.operationTag = "GeluApproxTanhBwd";
-                break;
-            case CUDNN_POINTWISE_IDENTITY:
-                m_operation.operationTag = "Identity";
-                break;
-#endif
-#if (CUDNN_VERSION >= 8900)
-            case CUDNN_POINTWISE_RECIPROCAL:
-                m_operation.operationTag = "Reciprocal";
-                break;
-#endif
-        }
+        std::stringstream ss;
+        ss << m_operation.pointwise_mode;
+        m_operation.operationTag = ss.str();
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR,
@@ -2248,7 +2091,7 @@ class OperationBuilder_v8 {
                 return CUDNN_STATUS_BAD_PARAM;
             }
         } else {
-            msg = "CUDNN_BACKEND_OPERATION: Unsupported cudnn pointwise mode. Check and set CUDNN_POINTWISE_*";
+            msg = "CUDNN_BACKEND_OPERATION: Unsupported cudnn pointwise mode. Check PointwiseMode_t::*";
             return CUDNN_STATUS_BAD_PARAM;
         }
         return CUDNN_STATUS_SUCCESS;
@@ -2738,71 +2581,71 @@ class OperationBuilder_v8 {
         m_operation.pointwise_port_count = pointWiseDesc.getPortCount();
         m_operation.pointwise_mode       = pointWiseDesc.getPointWiseMode();
 
-        m_operation.is_pointwise_math_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_ADD) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MUL) ||
+        m_operation.is_pointwise_math_op = ((m_operation.pointwise_mode == PointwiseMode_t::ADD) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::MUL) ||
 #if (CUDNN_VERSION >= 8300)
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_DIV) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_SUB) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_ADD_SQUARE) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_RSQRT) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_SIN) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_COS) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_TAN) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOGICAL_OR) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOGICAL_AND) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOGICAL_NOT) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_EQ) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_NEQ) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_GT) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_GE) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_LT) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CMP_LE) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_LOG) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_NEG) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MOD) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_POW) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_ABS) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_CEIL) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_FLOOR) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::DIV) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::SUB) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::ADD_SQUARE) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::RSQRT) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::SIN) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::COS) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::TAN) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::LOGICAL_OR) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::LOGICAL_AND) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::LOGICAL_NOT) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CMP_EQ) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CMP_NEQ) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CMP_GT) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CMP_GE) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CMP_LT) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CMP_LE) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::LOG) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::NEG) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::MOD) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::POW) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::ABS) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::CEIL) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::FLOOR) ||
 #endif
 #if (CUDNN_VERSION >= 8400)
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_GEN_INDEX) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_BINARY_SELECT) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::GEN_INDEX) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::BINARY_SELECT) ||
 #endif
 #if (CUDNN_VERSION >= 8500)
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_ERF) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::ERF) ||
 #endif
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
-                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_SQRT));
+                                            (m_operation.pointwise_mode == PointwiseMode_t::MIN) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::MAX) ||
+                                            (m_operation.pointwise_mode == PointwiseMode_t::SQRT));
 #if (CUDNN_VERSION >= 8500)
-        m_operation.is_pointwise_identity_op = (m_operation.pointwise_mode == CUDNN_POINTWISE_IDENTITY);
+        m_operation.is_pointwise_identity_op = (m_operation.pointwise_mode == PointwiseMode_t::IDENTITY);
 #endif      
 
-        m_operation.is_pointwise_activation_fwd_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_RELU_FWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_TANH_FWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SIGMOID_FWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_FWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_FWD) ||
+        m_operation.is_pointwise_activation_fwd_op = ((m_operation.pointwise_mode == PointwiseMode_t::RELU_FWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::TANH_FWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::SIGMOID_FWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::ELU_FWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::GELU_FWD) ||
 #if (CUDNN_VERSION >= 8500)
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_APPROX_TANH_FWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::GELU_APPROX_TANH_FWD) ||
 #endif
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_FWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::SOFTPLUS_FWD) ||
 #if (CUDNN_VERSION >= 8300)
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_EXP) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::EXP) ||
 #endif
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_FWD));
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::SWISH_FWD));
 
-        m_operation.is_pointwise_activation_bwd_op = ((m_operation.pointwise_mode == CUDNN_POINTWISE_RELU_BWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_TANH_BWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SIGMOID_BWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_ELU_BWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_BWD) ||
+        m_operation.is_pointwise_activation_bwd_op = ((m_operation.pointwise_mode == PointwiseMode_t::RELU_BWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::TANH_BWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::SIGMOID_BWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::ELU_BWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::GELU_BWD) ||
 #if (CUDNN_VERSION >= 8500)
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_APPROX_TANH_BWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::GELU_APPROX_TANH_BWD) ||
 #endif
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_BWD) ||
-                                                      (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_BWD));
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::SOFTPLUS_BWD) ||
+                                                      (m_operation.pointwise_mode == PointwiseMode_t::SWISH_BWD));
 
         return *this;
     }
