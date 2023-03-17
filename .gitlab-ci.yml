@@ -101,6 +101,16 @@ build:cudnn_8.8_clang:
         - Hopper
     extends: .build:template
 
+build:cudnn_8.9:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.109
+    stage: build
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends: .build:template
+
 test:cudnn_8.2:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
     stage: test
@@ -226,3 +236,24 @@ test:cudnn_8.8:Ampere:
         - Ampere
     needs:
         - ["build:cudnn_8.8: [Ampere]"]
+
+.test:cudnn_8.9:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.109
+    stage: test
+    extends: .test:template
+
+test:cudnn_8.9:Hopper:
+    extends: .test:cudnn_8.9
+    dependencies: ["build:cudnn_8.9: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.9: [Hopper]"]
+
+test:cudnn_8.9:Ampere:
+    extends: .test:cudnn_8.9
+    dependencies: ["build:cudnn_8.9: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.9: [Ampere]"]
