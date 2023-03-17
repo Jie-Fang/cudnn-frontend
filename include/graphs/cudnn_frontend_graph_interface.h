@@ -236,8 +236,7 @@ public:
         return error_t::OK;
     }
 
-    error_t
-    build() {
+    error_t build() {
         node.tensor_props = all_tensors;
         
         for (auto const &prop : conv_properties) {
@@ -259,7 +258,7 @@ public:
         }
 
         for (auto const &prop : pw_properties) {
-            getLogger() << "Adding the pointwise node" << prop.first << std::endl;
+            getLogger() << "Adding the pointwise node " << prop.first << std::endl;
             auto pointwise_node = std::make_shared<PointwiseNode>(prop.first, uid_offset);
             pointwise_node->props = prop.second;
             pointwise_node->parent_node = &node;
@@ -267,13 +266,22 @@ public:
             uid_offset += 100;
         }
 
-        node.build();
+        auto status = node.build();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
 
-        return error_t::OK;
+        return status;
     }
 
     error_t execute(std::unordered_map<std::string, void *> var_pack) {
         auto status = node.execute(var_pack);
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
+            return status;
+        }
+
         return status;
     }
 

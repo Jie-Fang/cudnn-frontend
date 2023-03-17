@@ -30,7 +30,10 @@
 #include "fp8_sample.h"
 #include "mha_sample.h"
 #include "fused_mha_sample.h"
+
 #include "blocks/convolutions.h"
+
+#include "graphs/convolutions.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2736,4 +2739,8 @@ TEST_CASE("FP8 Composite Nodes", "[fp8][composite][node]") {
 
 TEST_CASE("Composite Nodes", "[composite][node]") {
     run_convolution_pointwise_node();
+}
+
+TEST_CASE("Convolution Graphs", "[conv][graph]") {
+    test_convolution_scale_bias_relu_graph();
 }

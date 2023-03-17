@@ -21,11 +21,6 @@ namespace cudnn_frontend {
 // Interface for all nodes to follow.
 class INode: public ICudnn {
 
-    friend class ConvolutionFP8Node;
-    friend class ConvolutionPointwiseNode;
-
-private:
-
 protected:
     // Type of each node. Nodes can either be a composite (value COMPOSITE) or
     // one of the other primitive types. Primitives types are nothing but 
@@ -156,6 +151,11 @@ public:
         }
         
         auto status = execute_cudnn_plans(tensor_uid_to_pointer_map, workspace_ptr);
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
+            return status;
+        }
+        
         return status;
     }
     

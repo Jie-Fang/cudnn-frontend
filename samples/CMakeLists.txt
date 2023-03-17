@@ -20,7 +20,8 @@ add_executable(
     samples
     
     blocks/convolutions.cpp
-    
+    graphs/convolutions.cpp
+
     conv_sample.cpp 
     test_list.cpp 
     fp16_emu.cpp 
