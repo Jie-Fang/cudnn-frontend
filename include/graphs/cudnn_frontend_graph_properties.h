@@ -99,6 +99,11 @@ public:
     get_dim() const {
         return dim;
     }
+    
+    std::vector<int64_t>&
+    get_dim() {
+        return dim;
+    }
 
     int
     set_dim(std::vector<int64_t> const& value) {
@@ -249,9 +254,6 @@ public:
         return 0;
     }
 
-    virtual std::vector<std::string>
-    get_inputs() const = 0;
-
     virtual ~operation_properties() = default;
 };
 
@@ -338,11 +340,6 @@ public:
         return 0;
     }
 
-    std::vector<std::string>
-    get_inputs() const override {
-        return {port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
-    }
-
     friend std::ostream& operator<<(std::ostream& os, const convolution_properties& props);
 };
 
@@ -412,12 +409,6 @@ public:
         }
         return 0;
     }
-
-    std::vector<std::string>
-    get_inputs() const override {
-        return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::W)};
-    }
-
     friend std::ostream& operator<<(std::ostream& os, const matmul_properties& props);
 };
 
@@ -469,7 +460,6 @@ public:
         return mode;
     }
 
-
     error_t set_mode(PointwiseMode_t value) {
         mode = value;
         is_mode_set = true;
@@ -487,11 +477,6 @@ public:
     std::string
     get_port_name(PORTS port) const {
         return port_to_name.at(port);
-    }
-
-    std::vector<std::string>
-    get_inputs() const override {
-        return{port_to_name.at(PORTS::X), port_to_name.at(PORTS::B)};
     }
 
     friend std::ostream& operator<<(std::ostream& os, const pointwise_properties& props);
@@ -567,11 +552,6 @@ public:
         }
         return 0;
     }
-
-    std::vector<std::string>
-    get_inputs() const override {
-        return {};
-    }
 };
 
 class reduction_properties : public operation_properties {
@@ -614,11 +594,6 @@ public:
         mode = value;
         is_mode_set = true;
         return 0;
-    }
-
-    std::vector<std::string>
-    get_inputs() const override {
-        return{port_to_name.at(PORTS::X)};
     }
 
     error_t

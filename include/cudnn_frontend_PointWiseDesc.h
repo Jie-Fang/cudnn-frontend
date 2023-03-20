@@ -66,67 +66,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
 
     int64_t
     getPortCount() const {
-        switch (mode) {
-            case PointwiseMode_t::NOT_SET:
-                return 0;
-
-            case PointwiseMode_t::ADD:
-            case PointwiseMode_t::MUL:
-            case PointwiseMode_t::DIV:
-            case PointwiseMode_t::ADD_SQUARE:
-            case PointwiseMode_t::SUB:
-            case PointwiseMode_t::CMP_EQ:
-            case PointwiseMode_t::CMP_NEQ:
-            case PointwiseMode_t::CMP_GT:
-            case PointwiseMode_t::CMP_GE:
-            case PointwiseMode_t::CMP_LT:
-            case PointwiseMode_t::CMP_LE:
-            case PointwiseMode_t::LOGICAL_AND:
-            case PointwiseMode_t::LOGICAL_OR:
-            case PointwiseMode_t::MIN:
-            case PointwiseMode_t::MAX:
-            case PointwiseMode_t::RELU_BWD:
-            case PointwiseMode_t::TANH_BWD:
-            case PointwiseMode_t::SIGMOID_BWD:
-            case PointwiseMode_t::ELU_BWD:
-            case PointwiseMode_t::GELU_BWD:
-            case PointwiseMode_t::SOFTPLUS_BWD:
-            case PointwiseMode_t::SWISH_BWD:
-            case PointwiseMode_t::GELU_APPROX_TANH_BWD:
-                return 3;
-
-            case PointwiseMode_t::SQRT:
-            case PointwiseMode_t::RELU_FWD:
-            case PointwiseMode_t::TANH_FWD:
-            case PointwiseMode_t::SIGMOID_FWD:
-            case PointwiseMode_t::ELU_FWD:
-            case PointwiseMode_t::GELU_FWD:
-            case PointwiseMode_t::SOFTPLUS_FWD:
-            case PointwiseMode_t::SWISH_FWD:
-            case PointwiseMode_t::EXP:
-            case PointwiseMode_t::LOG:
-            case PointwiseMode_t::NEG:
-            case PointwiseMode_t::MOD:
-            case PointwiseMode_t::POW:
-            case PointwiseMode_t::ABS:
-            case PointwiseMode_t::CEIL:
-            case PointwiseMode_t::FLOOR:
-            case PointwiseMode_t::COS:
-            case PointwiseMode_t::TAN:
-            case PointwiseMode_t::SIN:
-            case PointwiseMode_t::RSQRT:
-            case PointwiseMode_t::LOGICAL_NOT:
-            case PointwiseMode_t::GEN_INDEX:
-            case PointwiseMode_t::ERF:
-            case PointwiseMode_t::GELU_APPROX_TANH_FWD:
-            case PointwiseMode_t::IDENTITY:
-            case PointwiseMode_t::RECIPROCAL:
-                return 2;
-
-            case PointwiseMode_t::BINARY_SELECT:
-                return 4;
-        }
-        return -1;
+        return get_pointwise_mode_port_count(mode);
     }
 
     PointwiseMode_t

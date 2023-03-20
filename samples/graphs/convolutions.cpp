@@ -54,7 +54,6 @@ void test_convolution_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(filter_props));
     
     auto response_props = std::make_shared<cudnn_frontend::tensor_properties>("response");
-    response_props->set_dim({4, 64, 16, 16});
     response_props->set_is_virtual(true);
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(response_props));
 
@@ -74,7 +73,6 @@ void test_convolution_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(scale_props));
 
     auto scale_output = std::make_shared<cudnn_frontend::tensor_properties>("scale_output");
-    scale_output->set_dim({4, 64, 16, 16});
     scale_output->set_is_virtual(true);
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(scale_output));
 
@@ -93,8 +91,21 @@ void test_convolution_scale_bias_relu_graph() {
     bias_props->set_dim({1, 64, 1, 1});
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(bias_props));
     
+    auto bias_output_props = std::make_shared<cudnn_frontend::tensor_properties>("bias_output");
+    bias_output_props->set_is_virtual(true);
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(bias_output_props));
+
+    auto pw_relu_props = std::make_shared<cudnn_frontend::pointwise_properties>("pw_bias");
+    pw_relu_props->set_tensor_data_type(CUDNN_DATA_HALF);
+    pw_relu_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pw_relu_props->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+    pw_relu_props->set_port_names({
+        {cudnn_frontend::pointwise_properties::PORTS::X, pw_bias_props->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y)}
+        , {cudnn_frontend::pointwise_properties::PORTS::Y, "output"}
+    });
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(pw_relu_props));
+    
     auto output_props = std::make_shared<cudnn_frontend::tensor_properties>("output");
-    output_props->set_dim({4, 64, 16, 16});
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(output_props));
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.build());

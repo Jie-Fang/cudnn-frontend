@@ -36,7 +36,40 @@ public:
     }
 
     error_t infer_properties() override final {
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
         props->update_uids(offset);
+
+        // TODO: Only inferrencing from (X, W) -> Y works today.
+        auto x_tensor_prop = get_tensor_props(props->get_port_name(convolution_properties::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_port_name(convolution_properties::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y));
+        
+        auto const& x_tensor_dim = x_tensor_prop->get_dim();
+        auto const& w_tensor_dim = w_tensor_prop->get_dim();
+        auto& y_tensor_dim = y_tensor_prop->get_dim();
+        if(x_tensor_dim.size() != w_tensor_dim.size()) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
+            return status;
+        }
+        
+        if(y_tensor_dim.empty()) {
+            y_tensor_dim.resize(4);
+            auto const& padding = props->get_padding();
+            auto const& stride = props->get_stride();
+            // auto const& dilation = props->get_dilation();
+            y_tensor_dim[0] = x_tensor_dim[0];
+            for(size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {        
+                y_tensor_dim[dim] = 1 + (x_tensor_dim[dim] - w_tensor_dim[dim] + 2*padding[dim - 2]) / stride[dim - 2];
+            }
+            y_tensor_dim[1] = w_tensor_dim[0];
+        } else {
+            if(x_tensor_dim.size() != y_tensor_dim.size()) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+                return status;
+            }
+        }
 
         for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<convolution_properties::PORTS>(i)));

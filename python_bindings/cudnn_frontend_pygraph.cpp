@@ -165,12 +165,44 @@ public:
         return output_props_ptr;
     }
 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes input properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    add_relu(
+        std::string const& name
+        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
+        , std::string const& compute_type
+    ) {
+        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+
+        // TODO: Check whether image and weight already exist.
+        props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+
+        // Add output tensor to graph
+        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        auto status = graph.add_tensor(output_props_ptr);
+        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+
+        // Add pointwise node to graph
+        status = graph.add_node(props_ptr);
+        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+
+        return output_props_ptr;
+    }
+
     void build() {
         auto status = graph.infer_shapes();
         throw_if(status != cudnn_frontend::error_t::OK, status, "Property inferencing failed.");
 
         status = graph.build();
         throw_if(status != cudnn_frontend::error_t::OK, status, "Backend graph building failed.");
+
+        return;
     }
 
     void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::tensor_properties>, int64_t> var_pack) {
@@ -227,6 +259,11 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("bias"),
+             py::arg_v("compute_type", "float")
+        )
+        .def("add_relu", &PyGraph::add_relu, 
+             py::arg_v("name", "test_tensor_name"),
+             py::arg("input"),
              py::arg_v("compute_type", "float")
         )
         .def("build", &PyGraph::build)

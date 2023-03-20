@@ -15,7 +15,7 @@ void init_properties(py::module_ &m) {
         .def("get_name", &cudnn_frontend::tensor_properties::get_name)
         .def("get_data_type", &cudnn_frontend::tensor_properties::get_data_type)
         .def("set_data_type", &cudnn_frontend::tensor_properties::set_data_type)
-        .def("get_dim", &cudnn_frontend::tensor_properties::get_dim)
+        .def("get_dim", static_cast< std::vector<int64_t>& (cudnn_frontend::tensor_properties::*)()>((&cudnn_frontend::tensor_properties::get_dim)))
         .def("set_dim", &cudnn_frontend::tensor_properties::set_dim)
         .def("get_stride", &cudnn_frontend::tensor_properties::get_stride)
         .def("set_stride", &cudnn_frontend::tensor_properties::set_stride)

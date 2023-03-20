@@ -26,6 +26,11 @@ protected:
     std::vector<std::vector<int64_t>> variant_pack_uids;
 
     error_t create_cudnn_tensor(std::shared_ptr<tensor_properties const> const& props) {
+
+        auto const& dim = props->get_dim();
+        getLogger() << "[cudnn_frontend] INFO: Tensor dims are ";
+        for(auto sz: dim) getLogger() << sz << " ";
+
         auto tensor = cudnn_frontend::TensorBuilder()
                         .setDim(props->get_stride().size(), props->get_dim().data())
                         .setStrides(props->get_stride().size(), props->get_stride().data())

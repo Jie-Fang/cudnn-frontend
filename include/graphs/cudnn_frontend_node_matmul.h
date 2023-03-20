@@ -36,6 +36,8 @@ public:
     }
 
     error_t infer_properties() override final {
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node named " << name << "." << std::endl;
+
         props->update_uids(offset);
 
         for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
