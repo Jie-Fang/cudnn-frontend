@@ -34,6 +34,7 @@
 #include "blocks/convolutions.h"
 
 #include "graphs/convolutions.h"
+#include "graphs/matmuls.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2743,4 +2744,8 @@ TEST_CASE("Composite Nodes", "[composite][node]") {
 
 TEST_CASE("Convolution Graphs", "[conv][graph]") {
     test_convolution_scale_bias_relu_graph();
+}
+
+TEST_CASE("Matmul Graphs", "[matmul][graph]") {
+    test_matmul_scale_bias_relu_graph();
 }

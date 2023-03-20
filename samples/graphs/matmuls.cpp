@@ -25,32 +25,83 @@
 
 #include <cudnn_frontend.h>
 
-#include "convolutions.h"
+#include "matmuls.h"
 
-void test_convolution_scale_bias_relu_graph() {
+void test_matmul_relu_graph() {
     cudnn_frontend::cuDNNFEContext context;
-    cudnn_frontend::Graph graph("conv_sbr", context);
+    cudnn_frontend::Graph graph("matmul_sbr", context);
     
-    auto conv_props = std::make_shared<cudnn_frontend::convolution_properties>("conv");
-    conv_props->set_padding({1, 1});
-    conv_props->set_stride({1, 1});
-    conv_props->set_dilation({1, 1});
-    conv_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    conv_props->set_compute_type(CUDNN_DATA_FLOAT);
+    auto matmul_props = std::make_shared<cudnn_frontend::matmul_properties>("matmul");
+    matmul_props->set_tensor_data_type(CUDNN_DATA_HALF);
+    matmul_props->set_compute_type(CUDNN_DATA_FLOAT);
 
-    conv_props->set_port_names({
-        {cudnn_frontend::convolution_properties::PORTS::X, "image"}
-        , {cudnn_frontend::convolution_properties::PORTS::W, "filter"}
-        , {cudnn_frontend::convolution_properties::PORTS::Y, "response"}
+    matmul_props->set_port_names({
+        {cudnn_frontend::matmul_properties::PORTS::X, "image"}
+        , {cudnn_frontend::matmul_properties::PORTS::W, "filter"}
+        , {cudnn_frontend::matmul_properties::PORTS::Y, "response"}
     });
-    REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(conv_props));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(matmul_props));
 
     auto image_props = std::make_shared<cudnn_frontend::tensor_properties>("image");
-    image_props->set_dim({4, 32, 16, 16});
+    image_props->set_dim({4, 16, 64});
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(image_props));
 
     auto filter_props = std::make_shared<cudnn_frontend::tensor_properties>("filter");
-    filter_props->set_dim({64, 32, 3, 3});
+    filter_props->set_dim({4, 64, 32});
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(filter_props));
+    
+    auto response_props = std::make_shared<cudnn_frontend::tensor_properties>("response");
+    response_props->set_is_virtual(true);
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(response_props));
+
+    auto pw_relu_props = std::make_shared<cudnn_frontend::pointwise_properties>("pw_relu");
+    pw_relu_props->set_tensor_data_type(CUDNN_DATA_HALF);
+    pw_relu_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pw_relu_props->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+    pw_relu_props->set_port_names({
+        {cudnn_frontend::pointwise_properties::PORTS::X, matmul_props->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y)}
+        , {cudnn_frontend::pointwise_properties::PORTS::Y, "output"}
+    });
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(pw_relu_props));
+    
+    auto output_props = std::make_shared<cudnn_frontend::tensor_properties>("output");
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(output_props));
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+
+    Surface<half> x_tensor(image_props->get_tensor_size(), false);
+    Surface<half> w_tensor(filter_props->get_tensor_size(), false);
+    Surface<half> y_tensor(output_props->get_tensor_size(), false);
+
+    std::unordered_map<std::string, void*> variant_pack = {
+        {"image", x_tensor.devPtr}
+        , {"filter", w_tensor.devPtr}
+        , {"output", y_tensor.devPtr}
+    };
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+}
+
+void test_matmul_scale_bias_relu_graph() {
+    cudnn_frontend::cuDNNFEContext context;
+    cudnn_frontend::Graph graph("matmul_sbr", context);
+    
+    auto matmul_props = std::make_shared<cudnn_frontend::matmul_properties>("matmul");
+    matmul_props->set_tensor_data_type(CUDNN_DATA_HALF);
+    matmul_props->set_compute_type(CUDNN_DATA_FLOAT);
+
+    matmul_props->set_port_names({
+        {cudnn_frontend::matmul_properties::PORTS::X, "image"}
+        , {cudnn_frontend::matmul_properties::PORTS::W, "filter"}
+        , {cudnn_frontend::matmul_properties::PORTS::Y, "response"}
+    });
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(matmul_props));
+
+    auto image_props = std::make_shared<cudnn_frontend::tensor_properties>("image");
+    image_props->set_dim({4, 16, 64});
+    REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(image_props));
+
+    auto filter_props = std::make_shared<cudnn_frontend::tensor_properties>("filter");
+    filter_props->set_dim({4, 64, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(filter_props));
     
     auto response_props = std::make_shared<cudnn_frontend::tensor_properties>("response");
@@ -62,14 +113,14 @@ void test_convolution_scale_bias_relu_graph() {
     pw_scale_props->set_compute_type(CUDNN_DATA_FLOAT);
     pw_scale_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     pw_scale_props->set_port_names({
-        {cudnn_frontend::pointwise_properties::PORTS::X, conv_props->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y)}
+        {cudnn_frontend::pointwise_properties::PORTS::X, matmul_props->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y)}
         , {cudnn_frontend::pointwise_properties::PORTS::B, "scale"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "scale_output"}
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(pw_scale_props));
 
     auto scale_props = std::make_shared<cudnn_frontend::tensor_properties>("scale");
-    scale_props->set_dim({1, 64, 1, 1});
+    scale_props->set_dim({4, 16, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(scale_props));
 
     auto scale_output = std::make_shared<cudnn_frontend::tensor_properties>("scale_output");
@@ -88,7 +139,7 @@ void test_convolution_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_node(pw_bias_props));
 
     auto bias_props = std::make_shared<cudnn_frontend::tensor_properties>("bias");
-    bias_props->set_dim({1, 64, 1, 1});
+    bias_props->set_dim({4, 16, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(bias_props));
     
     auto bias_output_props = std::make_shared<cudnn_frontend::tensor_properties>("bias_output");
@@ -108,8 +159,11 @@ void test_convolution_scale_bias_relu_graph() {
     auto output_props = std::make_shared<cudnn_frontend::tensor_properties>("output");
     REQUIRE(cudnn_frontend::error_t::OK == graph.add_tensor(output_props));
 
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
-
+    #if (CUDNN_VERSION >= 8500)
+        REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+    #else
+        SKIP("Cudnn 8.4.1 and below did not support matmul epilogue fusion with Column Major layout");
+    #endif
     Surface<half> x_tensor(image_props->get_tensor_size(), false);
     Surface<half> w_tensor(filter_props->get_tensor_size(), false);
     Surface<half> s_tensor(scale_props->get_tensor_size(), false);

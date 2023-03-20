@@ -21,6 +21,7 @@ add_executable(
     
     blocks/convolutions.cpp
     graphs/convolutions.cpp
+    graphs/matmuls.cpp
 
     conv_sample.cpp 
     test_list.cpp 

@@ -159,7 +159,7 @@ public:
         return status;
     }
     
-    INode(std::string const& name, int64_t const offset) : name(name), offset(offset) {}
+    INode(std::string const& name, int64_t const offset) : name(name), offset(offset), parent_node(nullptr) {}
 
     virtual ~INode() {};
 

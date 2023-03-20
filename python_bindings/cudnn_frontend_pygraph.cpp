@@ -196,10 +196,7 @@ public:
     }
 
     void build() {
-        auto status = graph.infer_shapes();
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Property inferencing failed.");
-
-        status = graph.build();
+        auto status = graph.build();
         throw_if(status != cudnn_frontend::error_t::OK, status, "Backend graph building failed.");
 
         return;

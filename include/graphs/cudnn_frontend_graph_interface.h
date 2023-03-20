@@ -281,6 +281,10 @@ public:
         }
 
         status = infer_shapes();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
 
         status = flat_node.build();
         if(status != error_t::OK) {

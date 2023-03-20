@@ -54,7 +54,7 @@ public:
         }
         
         if(y_tensor_dim.empty()) {
-            y_tensor_dim.resize(4);
+            y_tensor_dim.resize(x_tensor_dim.size());
             auto const& padding = props->get_padding();
             auto const& stride = props->get_stride();
             // auto const& dilation = props->get_dilation();

@@ -40,11 +40,38 @@ public:
 
         props->update_uids(offset);
 
+        // TODO: Only inferrencing from (X, W) -> Y works today.
+        auto x_tensor_prop = get_tensor_props(props->get_port_name(matmul_properties::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_port_name(matmul_properties::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_port_name(matmul_properties::PORTS::Y));
+        
+        auto const& x_tensor_dim = x_tensor_prop->get_dim();
+        auto const& w_tensor_dim = w_tensor_prop->get_dim();
+        auto& y_tensor_dim = y_tensor_prop->get_dim();
+        if(x_tensor_dim.size() != w_tensor_dim.size()) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
+            return status;
+        }
+        
+        if(y_tensor_dim.empty()) {
+            y_tensor_dim.resize(x_tensor_dim.size());
+            y_tensor_dim[0] = x_tensor_dim[0]; // B
+            y_tensor_dim[1] = x_tensor_dim[1]; // M
+            y_tensor_dim[2] = w_tensor_dim[2]; // N
+        } else {
+            if(x_tensor_dim.size() != y_tensor_dim.size()) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+                return status;
+            }
+        }
+
         for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<matmul_properties::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NCHW, props->get_tensor_data_type(), props->uids[i]);
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
         }
 
         return error_t::OK;

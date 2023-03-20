@@ -47,10 +47,8 @@ public:
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
         auto& y_tensor_dim = y_tensor_prop->get_dim();        
         if(y_tensor_dim.empty()) {
-            y_tensor_dim.resize(x_tensor_dim.size());
-            for(size_t dim = 0; dim < x_tensor_dim.size(); ++dim) {        
-                y_tensor_dim[dim] = x_tensor_dim[dim];
-            }
+            y_tensor_prop->set_dim(x_tensor_dim);
+            y_tensor_prop->set_stride(x_tensor_prop->get_stride());
         } else {
             if(x_tensor_dim.size() != y_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
