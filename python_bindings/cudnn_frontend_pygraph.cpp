@@ -89,7 +89,7 @@ public:
         props_ptr->set_dilation(dilation);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->set_port_names({{cudnn_frontend::convolution_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_properties::PORTS::W, weight_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::convolution_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_properties::PORTS::W, weight_props_ptr->get_name()}});
         
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
@@ -119,7 +119,7 @@ public:
         props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
         
         // TODO: Check whether image and weight already exist.
-        props_ptr->set_port_names({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
@@ -150,7 +150,7 @@ public:
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
@@ -180,7 +180,7 @@ public:
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
@@ -210,7 +210,7 @@ public:
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
@@ -240,7 +240,7 @@ public:
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->set_port_names({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));

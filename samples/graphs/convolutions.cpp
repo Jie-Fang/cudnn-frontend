@@ -38,7 +38,7 @@ void test_convolution_scale_bias_relu_graph() {
     conv_props->set_tensor_data_type(CUDNN_DATA_HALF);
     conv_props->set_compute_type(CUDNN_DATA_FLOAT);
 
-    conv_props->set_port_names({
+    conv_props->map_port_to_tensor({
         {cudnn_frontend::convolution_properties::PORTS::X, "image"}
         , {cudnn_frontend::convolution_properties::PORTS::W, "filter"}
         , {cudnn_frontend::convolution_properties::PORTS::Y, "response"}
@@ -61,7 +61,7 @@ void test_convolution_scale_bias_relu_graph() {
     pw_scale_props->set_tensor_data_type(CUDNN_DATA_HALF);
     pw_scale_props->set_compute_type(CUDNN_DATA_FLOAT);
     pw_scale_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
-    pw_scale_props->set_port_names({
+    pw_scale_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, conv_props->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y)}
         , {cudnn_frontend::pointwise_properties::PORTS::B, "scale"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "scale_output"}
@@ -80,7 +80,7 @@ void test_convolution_scale_bias_relu_graph() {
     pw_bias_props->set_tensor_data_type(CUDNN_DATA_HALF);
     pw_bias_props->set_compute_type(CUDNN_DATA_FLOAT);
     pw_bias_props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
-    pw_bias_props->set_port_names({
+    pw_bias_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, pw_scale_props->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y)}
         , {cudnn_frontend::pointwise_properties::PORTS::B, "bias"}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "bias_output"}
@@ -99,7 +99,7 @@ void test_convolution_scale_bias_relu_graph() {
     pw_relu_props->set_tensor_data_type(CUDNN_DATA_HALF);
     pw_relu_props->set_compute_type(CUDNN_DATA_FLOAT);
     pw_relu_props->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
-    pw_relu_props->set_port_names({
+    pw_relu_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, pw_bias_props->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y)}
         , {cudnn_frontend::pointwise_properties::PORTS::Y, "output"}
     });

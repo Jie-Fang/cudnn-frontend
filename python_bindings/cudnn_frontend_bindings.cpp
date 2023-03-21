@@ -44,7 +44,7 @@ PYBIND11_MODULE(pycudnn, m)
     .def("get_tensor_data_type",  &reduction_properties::get_tensor_data_type)
     .def("set_tensor_data_type",  &reduction_properties::set_tensor_data_type)
     .def("get_port_name",       &reduction_properties::get_port_name)
-    .def("set_port_names",       &reduction_properties::set_port_names)
+    .def("map_port_to_tensor",       &reduction_properties::map_port_to_tensor)
     ;
 
 

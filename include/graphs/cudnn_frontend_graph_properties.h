@@ -284,8 +284,7 @@ public:
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    error_t
-    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
@@ -390,8 +389,7 @@ public:
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    error_t
-    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
@@ -466,8 +464,7 @@ public:
         return error_t::OK;
     }
 
-    error_t
-    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
@@ -533,8 +530,7 @@ public:
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    error_t
-    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
@@ -596,8 +592,7 @@ public:
         return 0;
     }
 
-    error_t
-    set_port_names(std::vector<std::pair<PORTS, std::string>> const& names) {
+    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }

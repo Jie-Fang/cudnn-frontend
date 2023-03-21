@@ -45,7 +45,7 @@ void init_properties(py::module_ &m) {
         .def("get_compute_type",     &cudnn_frontend::convolution_properties::get_compute_type)
         .def("set_compute_type",     &cudnn_frontend::convolution_properties::set_compute_type)
         .def("get_port_name",       &cudnn_frontend::convolution_properties::get_port_name)
-        .def("set_port_names",       &cudnn_frontend::convolution_properties::set_port_names)
+        .def("map_port_to_tensor",       &cudnn_frontend::convolution_properties::map_port_to_tensor)
         .def("__repr__", [](cudnn_frontend::convolution_properties const& props){
             std::ostringstream out;
             out << props;
@@ -65,7 +65,7 @@ void init_properties(py::module_ &m) {
         .def("get_compute_type",     &cudnn_frontend::convolution_properties::get_compute_type)
         .def("set_compute_type",     &cudnn_frontend::convolution_properties::set_compute_type)
         .def("get_port_name",       &cudnn_frontend::matmul_properties::get_port_name)
-        .def("set_port_names",       &cudnn_frontend::matmul_properties::set_port_names)
+        .def("map_port_to_tensor",       &cudnn_frontend::matmul_properties::map_port_to_tensor)
         .def("__repr__", [](cudnn_frontend::matmul_properties const& props){
             std::ostringstream out;
             out << props;
@@ -87,7 +87,7 @@ void init_properties(py::module_ &m) {
         .def("get_compute_type",      &cudnn_frontend::convolution_properties::get_compute_type)
         .def("set_compute_type",      &cudnn_frontend::convolution_properties::set_compute_type)
         .def("get_port_name",       &cudnn_frontend::pointwise_properties::get_port_name)
-        .def("set_port_names",       &cudnn_frontend::pointwise_properties::set_port_names);
+        .def("map_port_to_tensor",       &cudnn_frontend::pointwise_properties::map_port_to_tensor);
 
     py::enum_<cudnn_frontend::pointwise_properties::PORTS>(pointwise_properties, "ports")
         .value("X", cudnn_frontend::pointwise_properties::PORTS::X)
