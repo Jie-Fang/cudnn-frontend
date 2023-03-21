@@ -1235,28 +1235,9 @@ run_mha_bprop(int64_t b,
                            .setOperationGraph(all_ops.size(), all_ops.data())
                            .build();
 
-
-        cudnn_frontend::EngineConfigList filtered_configs;
-        auto statuses = cudnn_frontend::get_heuristics_list<1>({"heuristics_instant"}, opGraph, ::allowAllConfig, filtered_configs, true);
-
-        if (filtered_configs.size() == 0) {
-            cudnn_frontend::set_error_and_throw_exception(
-                    nullptr,
-                    CUDNN_STATUS_NOT_SUPPORTED,
-                    "run_mha_bprop: No config returned by the heuristics");
-        }
-
-        auto plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
-
-        std::cout << "Plan tag: " << plan.getTag() << std::endl;
-
-        auto workspace_size = plan.getWorkspaceSize();
-        std::cout << plan.describe() << " requires workspace " << workspace_size << std::endl;
-
-        void* workspace_ptr = nullptr;
-        if (workspace_size > 0) {
-            checkCudaErr(cudaMalloc(&workspace_ptr, workspace_size));
-        }
+        // {b, h, s_q, s_kv, d, seed, layout(enum class, should be int), bias_type(enum class, should be int), is_causal_masking(bool), tensorType(cudnnDataType_t)}
+        opGraph.setFeatureVector({b, h, s_q, s_kv, d, static_cast<int64_t>(0), static_cast<int64_t>(layout),
+                                 static_cast<int64_t>(0), static_cast<int64_t>(is_causal_masking), static_cast<int64_t>(tensorType)});
 
         // add all the data pointers to be used in the variant pack
         data_ptrs.insert(std::pair<uint64_t, void*>(dqTensor.getId(), devPtrdQ));
@@ -1279,19 +1260,13 @@ run_mha_bprop(int64_t b,
         data_ptrs.insert(std::pair<uint64_t, void*>(S_CONST_ID, &scaling_factor));
         data_ptrs.insert(std::pair<uint64_t, void*>(zeroTensor.getId(), &zeroVal));
 
-        auto variantPack  = cudnn_frontend::VariantPackBuilder()
-                               .setWorkspacePointer(workspace_ptr)
-                               .setDataPointers(data_ptrs)
-                               .build();
-        std::cout << "variantPack " << variantPack.describe() << std::endl;
-        cudnnStatus_t status = cudnnBackendExecute(handle_, plan.get_raw_desc(), variantPack.get_raw_desc());
-        if (workspace_size > 0) {
-            checkCudaErr(cudaFree(workspace_ptr));
-        }
+        cudnn_frontend::ExecutionPlanCache plan_cache("mha_bprop_cache");
+
+        execute_cached_plan(handle_, plan_cache, opGraph, data_ptrs);
+        
+        execute_cached_plan(handle_, plan_cache, opGraph, data_ptrs);
 
         checkCudnnErr(cudnnDestroy(handle_));
-
-        cudnn_frontend::throw_if([status]() { return (status != CUDNN_STATUS_SUCCESS); }, "Plan execute error", status);
 
     } catch (cudnn_frontend::cudnnException& e) {
         struct cudaDeviceProp prop;
