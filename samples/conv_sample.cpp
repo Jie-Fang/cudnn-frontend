@@ -742,7 +742,10 @@ run_from_cudnn_find(int64_t* x_dim,
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
         auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan const& plan) -> bool {
-            return plan.getWorkspaceSize() != 0;
+            const int32_t max_plan_count = 5;
+            static int32_t plan_count = 0;
+            plan_count++;
+            return plan.getWorkspaceSize() != 0 || plan_count > max_plan_count;
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
