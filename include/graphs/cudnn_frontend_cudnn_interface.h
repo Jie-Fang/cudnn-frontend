@@ -120,6 +120,8 @@ protected:
             }
             variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
         }
+        
+        cudnnDestroy(handle);
 
 	    return error_t::OK;
     }
@@ -171,6 +173,8 @@ public:
             }
             getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
         }
+
+        cudnnDestroy(handle);
 
         return error_t::OK;
     }
