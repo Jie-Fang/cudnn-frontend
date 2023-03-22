@@ -25,11 +25,11 @@ public:
         return name;
     }
 
-    virtual error_t add_tensor(std::shared_ptr<tensor_properties> props_ptr) = 0;
+    virtual error_t insert_tensor(std::shared_ptr<tensor_properties> props_ptr) = 0;
 
-    virtual error_t add_node(std::shared_ptr<convolution_properties> props_ptr) = 0;
-    virtual error_t add_node(std::shared_ptr<matmul_properties> props_ptr) = 0;
-    virtual error_t add_node(std::shared_ptr<pointwise_properties> props_ptr) = 0;
+    virtual error_t insert_node(std::shared_ptr<convolution_properties> props_ptr) = 0;
+    virtual error_t insert_node(std::shared_ptr<matmul_properties> props_ptr) = 0;
+    virtual error_t insert_node(std::shared_ptr<pointwise_properties> props_ptr) = 0;
     
     friend std::ostream& operator<<(std::ostream& os, const IGraph& props);
 };
@@ -86,7 +86,7 @@ public:
 
     // Add a tensor properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t add_tensor(std::shared_ptr<tensor_properties> props_ptr) {
+    error_t insert_tensor(std::shared_ptr<tensor_properties> props_ptr) {
         all_tensors.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
@@ -98,21 +98,21 @@ public:
 
     // Add a conv properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t add_node(std::shared_ptr<convolution_properties> props_ptr) {
+    error_t insert_node(std::shared_ptr<convolution_properties> props_ptr) {
         conv_properties.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
     
     // Add a pointwise properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t add_node(std::shared_ptr<pointwise_properties> props_ptr) {
+    error_t insert_node(std::shared_ptr<pointwise_properties> props_ptr) {
         pw_properties.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
     
     // Add a matmul properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t add_node(std::shared_ptr<matmul_properties> props_ptr) {
+    error_t insert_node(std::shared_ptr<matmul_properties> props_ptr) {
         mm_properties.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }

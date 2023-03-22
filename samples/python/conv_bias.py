@@ -4,14 +4,14 @@ import numpy as np
 
 graph = pycudnn.pygraph("nvfuser")
 
-image = graph.add_tensor(name = "image", dim = [4,16,56,56])
-weight = graph.add_tensor(name = "weight", dim = [16,16,3,3])
-bias = graph.add_tensor(name = "bias", dim = [1,16,1,1])
+image = graph.insert_tensor(name = "image", dim = [4,16,56,56])
+weight = graph.insert_tensor(name = "weight", dim = [16,16,3,3])
+bias = graph.insert_tensor(name = "bias", dim = [1,16,1,1])
 
-response = graph.add_conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
+response = graph.insert_conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
 response.set_is_virtual(True)
 
-output = graph.add_bias(name = "bias", input = response, bias = bias)
+output = graph.insert_bias(name = "bias", input = response, bias = bias)
 
 graph.build()
 

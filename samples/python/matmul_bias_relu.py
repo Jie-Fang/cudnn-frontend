@@ -4,17 +4,17 @@ import numpy as np
 
 graph = pycudnn.pygraph("nvfuser")
 
-image = graph.add_tensor(name = "image", dim = [4,16,56])
-weight = graph.add_tensor(name = "weight", dim = [4,56,16])
-bias = graph.add_tensor(name = "bias", dim = [4,16,16])
+image = graph.insert_tensor(name = "image", dim = [4,16,56])
+weight = graph.insert_tensor(name = "weight", dim = [4,56,16])
+bias = graph.insert_tensor(name = "bias", dim = [4,16,16])
 
-response = graph.add_matmul(name = "matmul", image = image, weight = weight)
+response = graph.insert_matmul(name = "matmul", image = image, weight = weight)
 response.set_is_virtual(True)
 
-output = graph.add_bias(name = "bias", input = response, bias = bias)
+output = graph.insert_bias(name = "bias", input = response, bias = bias)
 output.set_is_virtual(True)
 
-relu = graph.add_relu(name = "relu", input = output)
+relu = graph.insert_relu(name = "relu", input = output)
 
 graph.build()
 

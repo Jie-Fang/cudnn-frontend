@@ -163,7 +163,7 @@ public:
 
     virtual ~INode() {};
 
-    int add_tensor(std::string const& name, tensor_properties& properties) {
+    int insert_tensor(std::string const& name, tensor_properties& properties) {
         tensor_props.emplace(name, std::make_shared<tensor_properties>(properties));
         return 0;
     }

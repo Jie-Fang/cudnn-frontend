@@ -52,15 +52,15 @@ run_matmul_node() {
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({1, 32, 16});
-    matmul_node.add_tensor("tensor0", tensor0);
+    matmul_node.insert_tensor("tensor0", tensor0);
 
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
     tensor1.set_dim({1, 16, 32});
-    matmul_node.add_tensor("tensor1", tensor1);
+    matmul_node.insert_tensor("tensor1", tensor1);
 
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
     tensor2.set_dim({1, 32, 32});
-    matmul_node.add_tensor("tensor2", tensor2);
+    matmul_node.insert_tensor("tensor2", tensor2);
 
     REQUIRE(cudnn_frontend::error_t::OK == matmul_node.build());
 
@@ -99,15 +99,15 @@ run_convolution_node() {
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
-    convolution_node.add_tensor("tensor0", tensor0);
+    convolution_node.insert_tensor("tensor0", tensor0);
 
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
     tensor1.set_dim({64, 32, 3, 3});
-    convolution_node.add_tensor("tensor1", tensor1);
+    convolution_node.insert_tensor("tensor1", tensor1);
 
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
-    convolution_node.add_tensor("tensor2", tensor2);
+    convolution_node.insert_tensor("tensor2", tensor2);
 
     REQUIRE(cudnn_frontend::error_t::OK == convolution_node.build());
 
@@ -143,15 +143,15 @@ run_pointwise_node() {
     
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
-    pointwise_node.add_tensor("tensor0", tensor0);
+    pointwise_node.insert_tensor("tensor0", tensor0);
 
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
     tensor1.set_dim({1, 32, 1, 1});
-    pointwise_node.add_tensor("tensor1", tensor1);
+    pointwise_node.insert_tensor("tensor1", tensor1);
 
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
     tensor2.set_dim({4, 32, 16, 16});
-    pointwise_node.add_tensor("tensor2", tensor2);
+    pointwise_node.insert_tensor("tensor2", tensor2);
 
     REQUIRE(cudnn_frontend::error_t::OK == pointwise_node.build());
 
@@ -186,12 +186,12 @@ run_reduction_node() {
     
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
-    reduction_node.add_tensor("tensor0", tensor0);
+    reduction_node.insert_tensor("tensor0", tensor0);
 
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
     tensor1.set_dim({1, 32, 1, 1});
     tensor1.set_data_type(CUDNN_DATA_FLOAT);
-    reduction_node.add_tensor("tensor1", tensor1);
+    reduction_node.insert_tensor("tensor1", tensor1);
 
     REQUIRE(cudnn_frontend::error_t::OK == reduction_node.build());
 
@@ -231,63 +231,63 @@ void run_batchnorm_node() {
     
     cudnn_frontend::tensor_properties input{"input"};
     input.set_dim({4, 32, 16, 16});
-    batchnorm_node.add_tensor("input", input);
+    batchnorm_node.insert_tensor("input", input);
 
     cudnn_frontend::tensor_properties mean{"mean"};
     mean.set_dim({1, 32, 1, 1});
     mean.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("mean", mean);
+    batchnorm_node.insert_tensor("mean", mean);
     
     cudnn_frontend::tensor_properties variance{"variance"};
     variance.set_dim({1, 32, 1, 1});
     variance.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("variance", variance);
+    batchnorm_node.insert_tensor("variance", variance);
 
     cudnn_frontend::tensor_properties in_running_mean{"in_running_mean"};
     in_running_mean.set_dim({1, 32, 1, 1});
     in_running_mean.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("in_running_mean", in_running_mean);
+    batchnorm_node.insert_tensor("in_running_mean", in_running_mean);
     
     cudnn_frontend::tensor_properties in_running_variance{"in_running_variance"};
     in_running_variance.set_dim({1, 32, 1, 1});
     in_running_variance.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("in_running_variance", in_running_variance);
+    batchnorm_node.insert_tensor("in_running_variance", in_running_variance);
 
     cudnn_frontend::tensor_properties out_running_mean{"out_running_mean"};
     out_running_mean.set_dim({1, 32, 1, 1});
     out_running_mean.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("out_running_mean", out_running_mean);
+    batchnorm_node.insert_tensor("out_running_mean", out_running_mean);
     
     cudnn_frontend::tensor_properties out_running_variance{"out_running_variance"};
     out_running_variance.set_dim({1, 32, 1, 1});
     out_running_variance.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("out_running_variance", out_running_variance);
+    batchnorm_node.insert_tensor("out_running_variance", out_running_variance);
     
     cudnn_frontend::tensor_properties scale{"scale"};
     scale.set_dim({1, 32, 1, 1});
     scale.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("scale", scale);
+    batchnorm_node.insert_tensor("scale", scale);
     
     cudnn_frontend::tensor_properties bias{"bias"};
     bias.set_dim({1, 32, 1, 1});
     bias.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("bias", bias);
+    batchnorm_node.insert_tensor("bias", bias);
 
     cudnn_frontend::tensor_properties epsilon{"epsilon"};
     epsilon.set_dim({1, 1, 1, 1});
     epsilon.set_is_pass_by_value(true);
     epsilon.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("epsilon", epsilon);
+    batchnorm_node.insert_tensor("epsilon", epsilon);
     
     cudnn_frontend::tensor_properties exp_avg{"exp_avg"};
     exp_avg.set_dim({1, 1, 1, 1});
     exp_avg.set_is_pass_by_value(true);
     exp_avg.set_data_type(CUDNN_DATA_FLOAT);
-    batchnorm_node.add_tensor("exp_avg", exp_avg);
+    batchnorm_node.insert_tensor("exp_avg", exp_avg);
     
     cudnn_frontend::tensor_properties output{"output"};
     output.set_dim({4, 32, 16, 16});
-    batchnorm_node.add_tensor("output", output);
+    batchnorm_node.insert_tensor("output", output);
 
     #if (CUDNN_VERSION >= 8700)
         REQUIRE(cudnn_frontend::error_t::OK == batchnorm_node.build());
@@ -356,16 +356,16 @@ run_convolution_fp8_node() {
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
-    convolution_fp8_node.add_tensor("tensor0", tensor0);
+    convolution_fp8_node.insert_tensor("tensor0", tensor0);
 
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
     tensor1.set_dim({64, 32, 3, 3});
-    convolution_fp8_node.add_tensor("tensor1", tensor1);
+    convolution_fp8_node.insert_tensor("tensor1", tensor1);
 
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
     tensor2.set_data_type(CUDNN_DATA_FLOAT);
-    convolution_fp8_node.add_tensor("tensor2", tensor2);
+    convolution_fp8_node.insert_tensor("tensor2", tensor2);
 
     auto X_DQ_props = std::make_shared<cudnn_frontend::pointwise_properties>("x_dq_prop");
     X_DQ_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
@@ -381,11 +381,11 @@ run_convolution_fp8_node() {
 
     cudnn_frontend::tensor_properties tensor3{"tensor3"};
     tensor3.set_dim({1, 1, 1, 1});
-    convolution_fp8_node.add_tensor("tensor3", tensor3);
+    convolution_fp8_node.insert_tensor("tensor3", tensor3);
 
     cudnn_frontend::tensor_properties tensor4{"tensor4"};
     tensor4.set_dim({4, 64, 16, 16});
-    convolution_fp8_node.add_tensor("tensor4", tensor4);
+    convolution_fp8_node.insert_tensor("tensor4", tensor4);
 
     auto W_DQ_props = std::make_shared<cudnn_frontend::pointwise_properties>("w_dq_props");
     W_DQ_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
@@ -400,11 +400,11 @@ run_convolution_fp8_node() {
 
     cudnn_frontend::tensor_properties tensor5{"tensor5"};
     tensor5.set_dim({1, 1, 1, 1});
-    convolution_fp8_node.add_tensor("tensor5", tensor5);
+    convolution_fp8_node.insert_tensor("tensor5", tensor5);
 
     cudnn_frontend::tensor_properties tensor6{"tensor6"};
     tensor6.set_dim({4, 64, 16, 16});
-    convolution_fp8_node.add_tensor("tensor6", tensor6);
+    convolution_fp8_node.insert_tensor("tensor6", tensor6);
 
     auto Y_Q_props = std::make_shared<cudnn_frontend::pointwise_properties>("y_q_prop");
     Y_Q_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
@@ -420,12 +420,12 @@ run_convolution_fp8_node() {
 
     cudnn_frontend::tensor_properties tensor7{"tensor7"};
     tensor7.set_dim({1, 1, 1, 1});
-    convolution_fp8_node.add_tensor("tensor7", tensor7);
+    convolution_fp8_node.insert_tensor("tensor7", tensor7);
 
     cudnn_frontend::tensor_properties tensor8{"tensor8"};
     tensor8.set_dim({4, 64, 16, 16});
     tensor8.set_data_type(CUDNN_DATA_FP8_E4M3);
-    convolution_fp8_node.add_tensor("tensor8", tensor8);
+    convolution_fp8_node.insert_tensor("tensor8", tensor8);
 
     auto amax_props = std::make_shared<cudnn_frontend::reduction_properties>("amax_prop");
     amax_props->set_mode(CUDNN_REDUCE_TENSOR_AMAX);
@@ -440,7 +440,7 @@ run_convolution_fp8_node() {
 
     cudnn_frontend::tensor_properties tensor9{"tensor9"};
     tensor9.set_dim({1, 1, 1, 1});
-    convolution_fp8_node.add_tensor("tensor9", tensor9);
+    convolution_fp8_node.insert_tensor("tensor9", tensor9);
 
     if (check_device_arch_newer_than("hopper")) {
         REQUIRE(cudnn_frontend::error_t::OK == convolution_fp8_node.build());
@@ -493,15 +493,15 @@ run_convolution_pointwise_node() {
 
     cudnn_frontend::tensor_properties tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
-    convolution_pointwise_node.add_tensor("tensor0", tensor0);
+    convolution_pointwise_node.insert_tensor("tensor0", tensor0);
     
     cudnn_frontend::tensor_properties tensor1{"tensor1"};
     tensor1.set_dim({64, 32, 3, 3});
-    convolution_pointwise_node.add_tensor("tensor1", tensor1);
+    convolution_pointwise_node.insert_tensor("tensor1", tensor1);
     
     cudnn_frontend::tensor_properties tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
-    convolution_pointwise_node.add_tensor("tensor2", tensor2);
+    convolution_pointwise_node.insert_tensor("tensor2", tensor2);
     
     auto pointwise_props = std::make_shared<cudnn_frontend::pointwise_properties>("pointwise_prop");
     pointwise_props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
@@ -516,11 +516,11 @@ run_convolution_pointwise_node() {
 
     cudnn_frontend::tensor_properties tensor3{"tensor3"};
     tensor3.set_dim({1, 64, 1, 1});
-    convolution_pointwise_node.add_tensor("tensor3", tensor3);
+    convolution_pointwise_node.insert_tensor("tensor3", tensor3);
 
     cudnn_frontend::tensor_properties tensor4{"tensor4"};
     tensor4.set_dim({4, 64, 16, 16});
-    convolution_pointwise_node.add_tensor("tensor4", tensor4);
+    convolution_pointwise_node.insert_tensor("tensor4", tensor4);
 
     REQUIRE(cudnn_frontend::error_t::OK == convolution_pointwise_node.build());
     
