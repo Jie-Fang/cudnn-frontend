@@ -16,7 +16,7 @@ protected:
 
     std::string name;
     // TODO: use custom FE data type string/enum.
-    cudnnDataType_t data_type = CUDNN_DATA_FLOAT;
+    DataType_t data_type = DataType_t::NOT_SET;
     std::vector<int64_t> dim = {};
     std::vector<int64_t> stride = {};
     bool is_virtual = false;
@@ -38,7 +38,7 @@ public:
 
     // TODO: Currently this structure takes in unrolled list of properties to set.
     // But later, it will take in the context and derive properties to set from it.
-    int set_properties_from_context(cudnnTensorFormat_t const filter_format, cudnnDataType_t const data_type, int64_t const uid) {
+    int set_properties_from_context(cudnnTensorFormat_t const filter_format, DataType_t const data_type, int64_t const uid) {
         if(!is_stride_set) {
             generateStrides(filter_format);
         }
@@ -83,16 +83,16 @@ public:
 
     tensor_properties(const std::string &name) : name(name) {}
 
-    cudnnDataType_t const &
+    DataType_t const &
     get_data_type() const {
         return data_type;
     }
 
-    int
-    set_data_type(cudnnDataType_t value) {
+    error_t
+    set_data_type(DataType_t value) {
         data_type = value;
         is_data_type_set = true;
-        return 0;
+        return error_t::OK;
     }
 
     std::vector<int64_t> const &
@@ -209,8 +209,8 @@ protected:
     // TODO: remove setting tensor data type in operation properties.
     // The operation only has to know of the compute type. cudnn operation
     // will convert any tensor type to compute type internally.
-    cudnnDataType_t tensor_data_type;
-    cudnnDataType_t compute_type;
+    DataType_t tensor_data_type;
+    DataType_t compute_type;
 
     Tag tag;
 public:
@@ -230,28 +230,27 @@ public:
         return tag;
     }
 
-    cudnnDataType_t
+    DataType_t
     get_tensor_data_type() const {
         return tensor_data_type;
     }
 
-    int
-    set_tensor_data_type(cudnnDataType_t value) {
+    error_t
+    set_tensor_data_type(DataType_t value) {
         tensor_data_type = value;
         is_tensor_data_type_set = true;
-        return 0;
+        return error_t::OK;
     }
 
-    cudnnDataType_t
+    DataType_t
     get_compute_type() const {
         return compute_type;
     }
 
-    int
-    set_compute_type(cudnnDataType_t value) {
+    error_t set_compute_type(DataType_t value) {
         compute_type = value;
         is_compute_type_set = true;
-        return 0;
+        return error_t::OK;
     }
 
     virtual ~operation_properties() = default;

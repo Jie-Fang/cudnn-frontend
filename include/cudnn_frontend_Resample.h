@@ -53,7 +53,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
 #if (CUDNN_VERSION >= 8500)
         char sep = ',';
         ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: "
-           << "Compute Type: " << to_string(computeType)
+           << "Compute Type: " << computeType
            << ", Resample Mode: " << resample_mode
            << ", Spatial Dimensions: " << spatialDim 
            << ", Nan Propagation: " << std::to_string(nanOpt)
@@ -93,7 +93,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
      *  @{
      */
     
-    cudnnDataType_t
+    DataType_t
     getComputeType() const {
         return computeType;
     }
@@ -150,7 +150,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
     operator=(ResampleDesc_v8 const &) = delete;
 
     // default values for attributes 
-    cudnnDataType_t computeType = CUDNN_DATA_FLOAT;   
+    DataType_t computeType = DataType_t::FLOAT;   
     cudnnNanPropagation_t nanOpt = CUDNN_NOT_PROPAGATE_NAN;
     ResampleMode_t resample_mode = ResampleMode_t::NOT_SET;
     PaddingMode_t padding_mode = PaddingMode_t::NOT_SET;
@@ -177,8 +177,14 @@ class ResampleDescBuilder_v8 {
      */
     //! Set compute type for the Resample Descriptor
     auto
+    setComputeType(DataType_t data_type) ->  ResampleDescBuilder_v8 & {
+        m_resampleDesc.computeType = data_type;
+        return *this;
+    }
+    // To be deprecated in v1.0.
+    auto
     setComputeType(cudnnDataType_t data_type_) ->  ResampleDescBuilder_v8 & {
-        m_resampleDesc.computeType = data_type_;
+        m_resampleDesc.computeType = detail::convert_from_cudnn_type(data_type_);
         return *this;
     }
 
@@ -370,11 +376,20 @@ class ResampleDescBuilder_v8 {
             return std::move(m_resampleDesc);
         }
 
+        cudnnDataType_t cudnn_data_type;
+        status = detail::convert_to_cudnn_type(m_resampleDesc.computeType, cudnn_data_type);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_resampleDesc,
+                status,
+                "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: SetAttribute CUDNN_ATTR_RESAMPLE_COMP_TYPE Failed");
+            return std::move(m_resampleDesc);
+        }
         status = cudnnBackendSetAttribute(m_resampleDesc.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_RESAMPLE_COMP_TYPE, 
                                           CUDNN_TYPE_DATA_TYPE,    
                                           1, 
-                                          &(m_resampleDesc.computeType));
+                                          &cudnn_data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_resampleDesc,

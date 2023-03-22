@@ -24,18 +24,16 @@ PYBIND11_MODULE(pycudnn, m)
   py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
     .def(py::init<>())
     .def("set_intermediate_data_type", &cuDNNFEContext::set_intermediate_data_type)
-    .def("get_intermediate_data_type", &cuDNNFEContext::get_intermediate_data_type_string)
     .def("set_tensor_data_type", &cuDNNFEContext::set_tensor_data_type)
-    .def("get_tensor_data_type", &cuDNNFEContext::get_tensor_data_type_string)
+    .def("get_tensor_data_type", &cuDNNFEContext::get_tensor_data_type)
     .def("set_compute_type", &cuDNNFEContext::set_compute_type)
-    .def("get_compute_type", &cuDNNFEContext::get_compute_type_string)
+    .def("get_compute_type", &cuDNNFEContext::get_compute_type)
     .def("set_tensor_dims", &cuDNNFEContext::set_tensor_dims)
     .def("get_tensor_dims", &cuDNNFEContext::get_tensor_dims)
     .def("set_layout", &cuDNNFEContext::set_layout)
     .def("get_layout", &cuDNNFEContext::get_layout_string)
     .def("set_spatial_dims", &cuDNNFEContext::set_spatial_dims)
-    .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims)
-    .def("__repr__",      &cuDNNFEContext::describe);
+    .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims);
 
   py::class_<reduction_properties> reduction_properties(m, "reduction_properties");
   reduction_properties.def(py::init<std::string const &>())
@@ -47,9 +45,26 @@ PYBIND11_MODULE(pycudnn, m)
     .def("map_port_to_tensor",       &reduction_properties::map_port_to_tensor)
     ;
 
-
   py::enum_<reduction_properties::PORTS>(m, "reduction_ports")
         .value("X", reduction_properties::PORTS::X)
         .value("Y", reduction_properties::PORTS::Y)
         .export_values();
+
+  py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
+        .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)
+        .value("DOUBLE", cudnn_frontend::DataType_t::DOUBLE)
+        .value("HALF", cudnn_frontend::DataType_t::HALF)
+        .value("INT8", cudnn_frontend::DataType_t::INT8)
+        .value("INT32", cudnn_frontend::DataType_t::INT32)
+        .value("INT8x4", cudnn_frontend::DataType_t::INT8x4)
+        .value("UINT8", cudnn_frontend::DataType_t::UINT8)
+        .value("UINT8x4", cudnn_frontend::DataType_t::UINT8x4)
+        .value("INT8x32", cudnn_frontend::DataType_t::INT8x32)
+        .value("BFLOAT16", cudnn_frontend::DataType_t::BFLOAT16)
+        .value("INT64", cudnn_frontend::DataType_t::INT64)
+        .value("BOOLEAN", cudnn_frontend::DataType_t::BOOLEAN)
+        .value("FP8_E4M3", cudnn_frontend::DataType_t::FP8_E4M3)
+        .value("FP8_E5M2", cudnn_frontend::DataType_t::FP8_E5M2)
+        .value("FAST_FLOAT_FOR_FP8", cudnn_frontend::DataType_t::FAST_FLOAT_FOR_FP8)
+        .value("NOT_SET", cudnn_frontend::DataType_t::NOT_SET);
 }

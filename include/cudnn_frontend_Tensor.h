@@ -57,7 +57,7 @@ class Tensor_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
-           << " Datatype: " << to_string(data_type) << " Id: " << std::to_string(id) << " Alignment: " << alignment
+           << " Datatype: " << data_type << " Id: " << std::to_string(id) << " Alignment: " << alignment
            << " nDims " << nDims << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
         ss << " Dim [ ";
         for (auto i = 0; i < nDims; i++) {
@@ -157,7 +157,7 @@ class Tensor_v8 : public BackendDescriptor {
     Tensor_v8 &
     operator=(Tensor_v8 const &) = delete;
 
-    cudnnDataType_t data_type               = CUDNN_DATA_FLOAT;  //! Datatype of the elements
+    DataType_t data_type                    = DataType_t::NOT_SET;  //! Datatype of the elements
     int64_t btensor_dimA[CUDNN_DIM_MAX + 1] = {-1};              //! n, g, c, d, h, w
     int64_t btensor_strA[CUDNN_DIM_MAX + 1] = {-1};              //! n, g, c, d, h, w
     int64_t id                              = -1;                //! Unique id of the tensor
@@ -181,9 +181,13 @@ class TensorBuilder_v8 {
      *  @{
      */
     //! Set Datatype for the Tensor_v8
-    auto
-    setDataType(cudnnDataType_t data_type_) -> TensorBuilder_v8 & {
-        m_tensor.data_type = data_type_;
+    auto setDataType(DataType_t data_type) -> TensorBuilder_v8 & {
+        m_tensor.data_type = data_type;
+        return *this;
+    }
+    // To be deprecated in v1.0. Please use setDataType(DataType_t) instead.
+    auto setDataType(cudnnDataType_t data_type) -> TensorBuilder_v8 & {
+        m_tensor.data_type = detail::convert_from_cudnn_type(data_type);
         return *this;
     }
     //! Set Dimensions of the tensor
@@ -319,11 +323,20 @@ class TensorBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
+        cudnnDataType_t cudnn_data_type;
+        status = detail::convert_to_cudnn_type(m_tensor.data_type, cudnn_data_type);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_tensor,
+                status,
+                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DATA_TYPE Failed");
+            return std::move(m_tensor);
+        }
         status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_TENSOR_DATA_TYPE,
                                           CUDNN_TYPE_DATA_TYPE,
                                           1,
-                                          &m_tensor.data_type);
+                                          &cudnn_data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DATA_TYPE Failed");

@@ -134,49 +134,6 @@ set_error_and_throw_exception(BackendDescriptor const *desc, cudnnStatus_t statu
 #endif
 }
 
-static inline std::string
-to_string(cudnnDataType_t type) {
-    switch(type) {
-        case CUDNN_DATA_FLOAT:
-            return std::string("CUDNN_DATA_FLOAT");
-        case CUDNN_DATA_DOUBLE:
-            return std::string("CUDNN_DATA_DOUBLE");
-        case CUDNN_DATA_HALF:
-            return std::string("CUDNN_DATA_HALF");
-        case CUDNN_DATA_INT8:
-            return std::string("CUDNN_DATA_INT8");
-        case CUDNN_DATA_INT32:
-            return std::string("CUDNN_DATA_INT32");
-        case CUDNN_DATA_INT8x4: // x4 and x32 are replaced by vectorized dimension in the v8 API 
-            return std::string("CUDNN_DATA_INT8x4");
-        case CUDNN_DATA_UINT8:
-            return std::string("CUDNN_DATA_UINT8");
-        case CUDNN_DATA_UINT8x4: // x4 and x32 are replaced by vectorized dimension in the v8 API 
-            return std::string("CUDNN_DATA_UINT8x4");
-        case CUDNN_DATA_INT8x32: // x4 and x32 are replaced by vectorized dimension in the v8 API 
-            return std::string("CUDNN_DATA_INT8x32");
-        case CUDNN_DATA_INT64:
-            return std::string("CUDNN_DATA_INT64");
-        case CUDNN_DATA_BFLOAT16:
-            return std::string("CUDNN_DATA_BFLOAT16");
-#if (CUDNN_VERSION >= 8300)
-        case CUDNN_DATA_BOOLEAN:
-            return std::string("CUDNN_DATA_BOOLEAN");
-#endif
-#if (CUDNN_VERSION >= 8600)
-        case CUDNN_DATA_FP8_E5M2:
-            return std::string("CUDNN_DATA_FP8_E5M2");
-        case CUDNN_DATA_FP8_E4M3:
-            return std::string("CUDNN_DATA_FP8_E4M3");
-#endif
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            return std::string("UNKNOWN DATA_TYPE");
-#endif
-    }
-    return std::string("");
-}
-
 #if (CUDNN_VERSION >= 8200)  
 static inline std::string
 to_string(cudnnBackendBehaviorNote_t note) {
@@ -387,6 +344,26 @@ enum class PointwiseMode_t {
     RECIPROCAL,
 };
 
+enum class DataType_t {
+    NOT_SET,
+
+    FLOAT,
+    DOUBLE,
+    HALF,
+    INT8,
+    INT32,
+    INT8x4,
+    UINT8,
+    UINT8x4,
+    INT8x32,
+    BFLOAT16,
+    INT64,
+    BOOLEAN,
+    FP8_E4M3,
+    FP8_E5M2,
+    FAST_FLOAT_FOR_FP8,
+};
+
 static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
     switch (mode) {
         case PointwiseMode_t::NOT_SET:
@@ -449,6 +426,60 @@ static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
             return 4;
     }
     return -1;
+}
+
+static inline std::ostream& operator<<(std::ostream& os, const DataType_t& mode) {
+    switch (mode) {
+        case DataType_t::FLOAT:
+            os << "FLOAT";
+            break;
+        case DataType_t::DOUBLE:
+            os << "DOUBLE";
+            break;
+        case DataType_t::HALF:
+            os << "HALF";
+            break;
+        case DataType_t::INT8:
+            os << "INT8";
+            break;
+        case DataType_t::INT32:
+            os << "INT32";
+            break;
+        case DataType_t::INT8x4:
+            os << "INT8x4";
+            break;
+        case DataType_t::UINT8:
+            os << "UINT8";
+            break;
+        case DataType_t::UINT8x4:
+            os << "UINT8x4";
+            break;
+        case DataType_t::INT8x32:
+            os << "INT8x32";
+            break;
+        case DataType_t::BFLOAT16:
+            os << "BFLOAT16";
+            break;
+        case DataType_t::INT64:
+            os << "INT64";
+            break;
+        case DataType_t::BOOLEAN:
+            os << "BOOLEAN";
+            break;
+        case DataType_t::FP8_E4M3:
+            os << "FP8_E4M3";
+            break;
+        case DataType_t::FP8_E5M2:
+            os << "FP8_E5M2";
+            break;
+        case DataType_t::FAST_FLOAT_FOR_FP8:
+            os << "FAST_FLOAT_FOR_FP8";
+            break;
+        case DataType_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
 }
 
 static inline std::ostream& operator<<(std::ostream& os, const PointwiseMode_t& mode) {
@@ -820,6 +851,79 @@ static inline std::ostream& operator<<(std::ostream& os, const PaddingMode_t& mo
 
 namespace detail {
 
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cudnn_mode) {
+        switch (mode) {
+            
+            case DataType_t::FLOAT:
+                cudnn_mode = CUDNN_DATA_FLOAT;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::DOUBLE:
+                cudnn_mode = CUDNN_DATA_DOUBLE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::HALF:
+                cudnn_mode = CUDNN_DATA_HALF;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::INT8:
+                cudnn_mode = CUDNN_DATA_INT8;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::INT32:
+                cudnn_mode = CUDNN_DATA_INT32;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::INT8x4:
+                cudnn_mode = CUDNN_DATA_INT8x4;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::UINT8:
+                cudnn_mode = CUDNN_DATA_UINT8;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::UINT8x4:
+                cudnn_mode = CUDNN_DATA_UINT8x4;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::INT8x32:
+                cudnn_mode = CUDNN_DATA_INT8x32;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::BFLOAT16:
+                cudnn_mode = CUDNN_DATA_BFLOAT16;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::INT64:
+                cudnn_mode = CUDNN_DATA_INT64;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case DataType_t::BOOLEAN:
+            #if (CUDNN_VERSION >= 8300)
+                cudnn_mode = CUDNN_DATA_BOOLEAN;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case DataType_t::FP8_E4M3:
+            #if (CUDNN_VERSION >= 8600)
+                cudnn_mode = CUDNN_DATA_FP8_E4M3;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case DataType_t::FP8_E5M2:
+            #if (CUDNN_VERSION >= 8600)
+                cudnn_mode = CUDNN_DATA_FP8_E5M2;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+            case DataType_t::FAST_FLOAT_FOR_FP8:
+            #if (CUDNN_VERSION >= 8700)
+                cudnn_mode = CUDNN_DATA_FAST_FLOAT_FOR_FP8;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            #else
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
     static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::PointwiseMode_t const mode, cudnnPointwiseMode_t& cudnn_mode) {
         switch (mode) {
             case PointwiseMode_t::ADD:
@@ -1107,7 +1211,6 @@ namespace detail {
             #endif
         }
         return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-
     }
 
     static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendDescriptorType_t& cudnn_mode) {
@@ -1739,16 +1842,62 @@ static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::TensorReorderi
 #if (CUDNN_VERSION >= 8900)
             case CUDNN_POINTWISE_RECIPROCAL:
                 return PointwiseMode_t::RECIPROCAL;
-                break;
 #endif
 
     #ifndef NO_DEFAULT_IN_SWITCH
             default:
                 return PointwiseMode_t::NOT_SET;
-                break;
     #endif
         }
         return PointwiseMode_t::NOT_SET;
+    }
+
+    // To be deprecated. Only exists as setDataType(cudnnDataType_t mode) requires it.
+    static inline cudnn_frontend::DataType_t convert_from_cudnn_type(cudnnDataType_t const cudnn_mode) {
+        switch (cudnn_mode)
+        {
+            case CUDNN_DATA_FLOAT:
+                return DataType_t::FLOAT;
+            case CUDNN_DATA_DOUBLE:
+                return DataType_t::DOUBLE;
+            case CUDNN_DATA_HALF:
+                return DataType_t::HALF;
+            case CUDNN_DATA_INT8:
+                return DataType_t::INT8;
+            case CUDNN_DATA_INT32:
+                return DataType_t::INT32;
+            case CUDNN_DATA_INT8x4:
+                return DataType_t::INT8x4;
+            case CUDNN_DATA_UINT8:
+                return DataType_t::UINT8;
+            case CUDNN_DATA_UINT8x4:
+                return DataType_t::UINT8x4;
+            case CUDNN_DATA_INT8x32:
+                return DataType_t::INT8x32;
+            case CUDNN_DATA_BFLOAT16:
+                return DataType_t::BFLOAT16;
+            case CUDNN_DATA_INT64:
+                return DataType_t::INT64;
+#if (CUDNN_VERSION >= 8300)
+            case CUDNN_DATA_BOOLEAN:
+                return DataType_t::BOOLEAN;
+#endif
+#if (CUDNN_VERSION >= 8600)
+            case CUDNN_DATA_FP8_E4M3:
+                return DataType_t::FP8_E4M3;
+            case CUDNN_DATA_FP8_E5M2:
+                return DataType_t::FP8_E5M2;
+#endif
+#if (CUDNN_VERSION >= 8700)
+            case CUDNN_DATA_FAST_FLOAT_FOR_FP8:
+                return DataType_t::FAST_FLOAT_FOR_FP8;
+#endif
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return DataType_t::NOT_SET;
+    #endif
+        }
+        return DataType_t::NOT_SET;
     }
 
 } // namespace detail

@@ -32,8 +32,8 @@ void test_matmul_relu_graph() {
     cudnn_frontend::Graph graph("matmul_sbr", context);
     
     auto matmul_props = std::make_shared<cudnn_frontend::matmul_properties>("matmul");
-    matmul_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    matmul_props->set_compute_type(CUDNN_DATA_FLOAT);
+    matmul_props->set_tensor_data_type(cudnn_frontend::DataType_t::HALF);
+    matmul_props->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
 
     matmul_props->map_port_to_tensor({
         {cudnn_frontend::matmul_properties::PORTS::X, "image"}
@@ -55,8 +55,8 @@ void test_matmul_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(response_props));
 
     auto pw_relu_props = std::make_shared<cudnn_frontend::pointwise_properties>("pw_relu");
-    pw_relu_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    pw_relu_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pw_relu_props->set_tensor_data_type(cudnn_frontend::DataType_t::HALF);
+    pw_relu_props->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_relu_props->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
     pw_relu_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, matmul_props->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y)}
@@ -86,8 +86,8 @@ void test_matmul_scale_bias_relu_graph() {
     cudnn_frontend::Graph graph("matmul_sbr", context);
     
     auto matmul_props = std::make_shared<cudnn_frontend::matmul_properties>("matmul");
-    matmul_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    matmul_props->set_compute_type(CUDNN_DATA_FLOAT);
+    matmul_props->set_tensor_data_type(cudnn_frontend::DataType_t::HALF);
+    matmul_props->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
 
     matmul_props->map_port_to_tensor({
         {cudnn_frontend::matmul_properties::PORTS::X, "image"}
@@ -109,8 +109,8 @@ void test_matmul_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(response_props));
 
     auto pw_scale_props = std::make_shared<cudnn_frontend::pointwise_properties>("pw_scale");
-    pw_scale_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    pw_scale_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pw_scale_props->set_tensor_data_type(cudnn_frontend::DataType_t::HALF);
+    pw_scale_props->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_scale_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     pw_scale_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, matmul_props->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y)}
@@ -128,8 +128,8 @@ void test_matmul_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(scale_output));
 
     auto pw_bias_props = std::make_shared<cudnn_frontend::pointwise_properties>("pw_bias");
-    pw_bias_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    pw_bias_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pw_bias_props->set_tensor_data_type(cudnn_frontend::DataType_t::HALF);
+    pw_bias_props->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_bias_props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
     pw_bias_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, pw_scale_props->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y)}
@@ -147,8 +147,8 @@ void test_matmul_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(bias_output_props));
 
     auto pw_relu_props = std::make_shared<cudnn_frontend::pointwise_properties>("pw_relu");
-    pw_relu_props->set_tensor_data_type(CUDNN_DATA_HALF);
-    pw_relu_props->set_compute_type(CUDNN_DATA_FLOAT);
+    pw_relu_props->set_tensor_data_type(cudnn_frontend::DataType_t::HALF);
+    pw_relu_props->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_relu_props->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
     pw_relu_props->map_port_to_tensor({
         {cudnn_frontend::pointwise_properties::PORTS::X, pw_bias_props->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y)}

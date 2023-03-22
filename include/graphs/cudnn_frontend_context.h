@@ -18,34 +18,31 @@ public:
 protected:
     int64_t tensor_dims  = 4;
     int64_t spatial_dims = 2;
-    cudnnDataType_t compute_type           = CUDNN_DATA_FLOAT;
-    cudnnDataType_t intermediate_data_type = CUDNN_DATA_FLOAT;
-    cudnnDataType_t tensor_data_type       = CUDNN_DATA_HALF;
+    DataType_t compute_type           = DataType_t::FLOAT;
+    DataType_t intermediate_data_type = DataType_t::FLOAT;
+    DataType_t tensor_data_type       = DataType_t::HALF;
     Layout layout                          = Layout::ChannelLast;
 
 public:    
 
     cuDNNFEContext() {}
 
-    int
-    set_intermediate_data_type(std::string type) {
-        auto ret_val = is_valid_type(type);
-        intermediate_data_type = string_to_data_type(type);
-        return ret_val;
+    error_t
+    set_intermediate_data_type(DataType_t type) {
+        intermediate_data_type = type;
+        return error_t::OK;
     }
 
-    int
-    set_tensor_data_type(std::string type) {
-        auto ret_val = is_valid_type(type);
-        tensor_data_type = string_to_data_type(type);
-        return ret_val;
+    error_t
+    set_tensor_data_type(DataType_t type) {
+        tensor_data_type = type;
+        return error_t::OK;
     }
 
-    int
-    set_compute_type(std::string type) {
-        auto ret_val = is_valid_type(type);
-        compute_type = string_to_data_type(type);
-        return ret_val;
+    error_t
+    set_compute_type(DataType_t type) {
+        compute_type = type;
+        return error_t::OK;
     }
     
     int
@@ -74,34 +71,19 @@ public:
         return false;
     }
 
-    std::string
-    get_tensor_data_type_string() const {
-        return to_string(tensor_data_type);
-    }
-
-    std::string
-    get_intermediate_data_type_string() const {
-        return to_string(intermediate_data_type);
-    }
-
-    std::string
-    get_compute_type_string() const {
-        return to_string(compute_type);
-    }
-
-    cudnnDataType_t
+    DataType_t
     get_tensor_data_type() const {
-        return (tensor_data_type);
+        return tensor_data_type;
     }
 
-    cudnnDataType_t
+    DataType_t
     get_intermediate_data_type() const {
-        return (intermediate_data_type);
+        return intermediate_data_type;
     }
 
-    cudnnDataType_t
+    DataType_t
     get_compute_type() const {
-        return (compute_type);
+        return compute_type;
     }
         
     int64_t
@@ -128,17 +110,6 @@ public:
     Layout
     get_layout() const {
         return layout;
-    }
-
-    std::string
-    describe() const {
-        return 
-        "cuDNNFEContext Tensor Dims: "  + std::to_string(tensor_dims)
-        + " Spatial Dims: "  + std::to_string(spatial_dims)
-        + " Layout: " + get_layout_string()
-        + " Compute precision: " + get_compute_type_string()
-        + " Tensor type: " + get_tensor_data_type_string()
-        + " Intermediate type: " + get_intermediate_data_type_string();
     }
 };
 

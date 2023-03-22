@@ -49,14 +49,14 @@ public:
     std::shared_ptr<cudnn_frontend::tensor_properties> 
     insert_tensor(
         std::string const& name
-        , std::string const& data_type
+        , cudnn_frontend::DataType_t const& data_type
         , std::vector<int64_t> const& dim
         , std::vector<int64_t> const& stride
         , bool const& isVirtual
         , bool const& isByValue
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(name);
-        props_ptr->set_data_type(CUDNN_DATA_HALF);
+        props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         props_ptr->set_dim(dim);
         props_ptr->set_stride(stride);
         props_ptr->set_is_virtual(isVirtual);
@@ -77,13 +77,13 @@ public:
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& image_props_ptr
         , std::shared_ptr<cudnn_frontend::tensor_properties>& weight_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
         , std::vector<int64_t> const& padding
         , std::vector<int64_t> const& stride
         , std::vector<int64_t> const& dilation
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::convolution_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_padding(padding);
         props_ptr->set_stride(stride);
         props_ptr->set_dilation(dilation);
@@ -93,7 +93,7 @@ public:
         
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -113,17 +113,17 @@ public:
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& image_props_ptr
         , std::shared_ptr<cudnn_frontend::tensor_properties>& weight_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::matmul_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         
         // TODO: Check whether image and weight already exist.
         props_ptr->map_port_to_tensor({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -143,10 +143,10 @@ public:
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
         , std::shared_ptr<cudnn_frontend::tensor_properties>& bias_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
 
         // TODO: Check whether image and weight already exist.
@@ -154,7 +154,7 @@ public:
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -174,10 +174,10 @@ public:
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
         , std::shared_ptr<cudnn_frontend::tensor_properties>& scale_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
 
         // TODO: Check whether image and weight already exist.
@@ -185,7 +185,7 @@ public:
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -204,10 +204,10 @@ public:
     insert_relu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
 
         // TODO: Check whether image and weight already exist.
@@ -215,7 +215,7 @@ public:
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -234,10 +234,10 @@ public:
     insert_elu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
 
         // TODO: Check whether image and weight already exist.
@@ -245,7 +245,7 @@ public:
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -264,10 +264,10 @@ public:
     insert_gelu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
-        , std::string const& compute_type
+        , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
-        props_ptr->set_compute_type(CUDNN_DATA_FLOAT);
+        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
 
         // TODO: Check whether image and weight already exist.
@@ -275,7 +275,7 @@ public:
 
         // Add output tensor to graph
         auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
-        output_props_ptr->set_data_type(CUDNN_DATA_HALF);
+        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
 
@@ -322,7 +322,7 @@ void init_pygraph_submodule(py::module_ &m) {
         .def(py::init<std::string const &>())
         .def("insert_tensor", &PyGraph::insert_tensor, 
              py::arg_v("name", "test_tensor_name"),
-             py::arg_v("data_type", "half"),
+             py::arg("data_type"),
              py::arg_v{"dim", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"is_virtual", false},
@@ -332,7 +332,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
              py::arg("weight"),
-             py::arg_v("compute_type", "float"),
+             py::arg("compute_type"),
              py::arg_v{"padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
@@ -341,34 +341,34 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
              py::arg("weight"),
-             py::arg_v("compute_type", "float")
+             py::arg("compute_type")
         )
         .def("insert_bias", &PyGraph::insert_bias, 
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("bias"),
-             py::arg_v("compute_type", "float")
+             py::arg("compute_type")
         )
         .def("insert_scale", &PyGraph::insert_scale, 
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("scale"),
-             py::arg_v("compute_type", "float")
+             py::arg("compute_type")
         )
         .def("insert_relu", &PyGraph::insert_relu, 
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
-             py::arg_v("compute_type", "float")
+             py::arg("compute_type")
         )
         .def("insert_elu", &PyGraph::insert_elu, 
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
-             py::arg_v("compute_type", "float")
+             py::arg("compute_type")
         )
         .def("insert_gelu", &PyGraph::insert_gelu, 
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
-             py::arg_v("compute_type", "float")
+             py::arg("compute_type")
         )
         .def("build", &PyGraph::build)
         .def("execute", &PyGraph::execute)

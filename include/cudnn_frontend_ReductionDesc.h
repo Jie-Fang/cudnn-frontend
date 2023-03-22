@@ -52,7 +52,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_REDUCTION_DESCRIPTOR :"
-           << " Math precision " << (compute_type) << " Reduction operator " << (reduction_op);
+           << " Math precision " << compute_type << " Reduction operator " << (reduction_op);
         return ss.str();
     }
 
@@ -68,7 +68,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
     ReductionDesc_v8 &
     operator=(ReductionDesc_v8 const &) = delete;
 
-    cudnnDataType_t compute_type     = CUDNN_DATA_FLOAT;
+    DataType_t compute_type     = DataType_t::NOT_SET;
     cudnnReduceTensorOp_t reduction_op = CUDNN_REDUCE_TENSOR_ADD;
 };
 
@@ -82,9 +82,13 @@ class ReductionDescBuilder_v8 {
      *  @{
      */
     //! Set Math Precision Data Type for the Reduction Operation
+    auto setComputeType(DataType_t data_type_) -> ReductionDescBuilder_v8 & {
+        m_reductionDesc.compute_type = data_type_;
+        return *this;
+    }
     auto
     setComputeType(cudnnDataType_t data_type_) -> ReductionDescBuilder_v8 & {
-        m_reductionDesc.compute_type = data_type_;
+        m_reductionDesc.compute_type = detail::convert_from_cudnn_type(data_type_);
         return *this;
     }
     //! Set redution operator for the Reduction Operation
@@ -114,11 +118,20 @@ class ReductionDescBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
+        cudnnDataType_t cudnn_data_type;
+        status = detail::convert_to_cudnn_type(m_reductionDesc.compute_type, cudnn_data_type);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_reductionDesc,
+                status,
+                "CUDNN_BACKEND_REDUCTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_REDUCTION_COMP_TYPE Failed");
+            return std::move(m_reductionDesc);
+        }
         status = cudnnBackendSetAttribute(m_reductionDesc.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_REDUCTION_COMP_TYPE,
                                           CUDNN_TYPE_DATA_TYPE,
                                           1,
-                                          &m_reductionDesc.compute_type);
+                                          &cudnn_data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_reductionDesc,

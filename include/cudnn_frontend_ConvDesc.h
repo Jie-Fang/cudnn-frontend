@@ -59,7 +59,7 @@ class ConvDesc_v8 : public BackendDescriptor {
         std::stringstream ss;
         char sep = ' ';
         ss << "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR :"
-           << " Datatype: " << to_string(compute_type) << " Mode: " << std::to_string(mode)
+           << " Datatype: " << compute_type << " Mode: " << std::to_string(mode)
            << " Num Dimensions: " << nDims;
         ss << " PadLower [";
         for (auto i = 0; i < nDims; i++) {
@@ -92,12 +92,12 @@ class ConvDesc_v8 : public BackendDescriptor {
     ~ConvDesc_v8() = default;
 
     // TODO: Deprecate in v1.0
-    cudnnDataType_t
+    DataType_t
     getComputePrecision() const {
         return compute_type;
     }
     
-    cudnnDataType_t
+    DataType_t
     getComputeType() const {
         return compute_type;
     }
@@ -145,7 +145,7 @@ class ConvDesc_v8 : public BackendDescriptor {
     ConvDesc_v8 &
     operator=(ConvDesc_v8 const &) = delete;
 
-    cudnnDataType_t compute_type   = CUDNN_DATA_FLOAT;   //! Convolution operation data type
+    DataType_t compute_type   = DataType_t::FLOAT;   //! Convolution operation data type
     cudnnConvolutionMode_t mode         = CUDNN_CONVOLUTION;  //! Convolution vs cross correlation
     int64_t nDims                       = -1;                 //! number of dimensions
     int64_t padLower[CUDNN_DIM_MAX + 1] = {0};                //! d, h, w
@@ -164,9 +164,14 @@ class ConvDescBuilder_v8 {
      *  @{
      */
     //! Set Datatype for the Convolution Operation
+    auto setComputeType(DataType_t data_type) -> ConvDescBuilder_v8 & {
+        m_convDesc.compute_type = data_type;
+        return *this;
+    }
+    // To be deprecated in v1.0.
     auto
     setComputeType(cudnnDataType_t data_type_) ->  ConvDescBuilder_v8 & {
-        m_convDesc.compute_type = data_type_;
+        m_convDesc.compute_type = detail::convert_from_cudnn_type(data_type_);
         return *this;
     }
     //! Set Padding Lower of the convDesc
@@ -264,11 +269,20 @@ class ConvDescBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
+        cudnnDataType_t cudnn_data_type;
+        status = detail::convert_to_cudnn_type(m_convDesc.compute_type, cudnn_data_type);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_convDesc,
+                status,
+                "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_CONVOLUTION_COMP_TYPE Failed");
+            return std::move(m_convDesc);
+        }
         status = cudnnBackendSetAttribute(m_convDesc.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_CONVOLUTION_COMP_TYPE,
                                           CUDNN_TYPE_DATA_TYPE,
                                           1,
-                                          &m_convDesc.compute_type);
+                                          &cudnn_data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_convDesc,

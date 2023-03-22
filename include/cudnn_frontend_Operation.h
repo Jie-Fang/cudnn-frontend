@@ -2333,14 +2333,14 @@ class OperationBuilder_v8 {
                 "CUDNN_BACKEND_OPERATION_*_DESCRIPTOR: Non Convolution operation does not need Convolution DESCRIPTOR");
         }
         m_operation.cdesc = conv.get_desc();
-        if (conv.getComputePrecision() == CUDNN_DATA_DOUBLE) {
+        if (conv.getComputePrecision() == DataType_t::DOUBLE) {
             m_operation.alphabetaType = CUDNN_TYPE_DOUBLE;
         }
         is2D = conv.getDimensionCount() == 2;
         copy_dims_and_strides(conv.getPadding(), conv_padding);
         copy_dims_and_strides(conv.getDilation(), conv_dilation);
         copy_dims_and_strides(conv.getStride(), conv_stride);
-        cType = conv.getComputePrecision();
+        cType = static_cast<int>(conv.getComputePrecision());
         mode  = conv.getMathMode();
         return *this;
     }

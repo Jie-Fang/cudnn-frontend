@@ -60,7 +60,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_POINTWISE_DESCRIPTOR :"
-           << " Mode: " << mode << " Math precision " << to_string(compute_type);
+           << " Mode: " << mode << " Math precision " << compute_type;
         return ss.str();
     }
 
@@ -86,7 +86,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     PointWiseDesc_v8 &
     operator=(PointWiseDesc_v8 const &) = delete;
 
-    cudnnDataType_t compute_type          = CUDNN_DATA_FLOAT;
+    DataType_t compute_type          = DataType_t::FLOAT;
     PointwiseMode_t mode                  = PointwiseMode_t::NOT_SET;
     cudnnNanPropagation_t nan_propagation = CUDNN_NOT_PROPAGATE_NAN;
     double upper_clip                     = std::numeric_limits<double>::max();
@@ -111,8 +111,13 @@ class PointWiseDescBuilder_v8 {
      */
     //! Set Math Precision Data Type for the Convolution Operation
     auto
-    setComputeType(cudnnDataType_t data_type_) -> PointWiseDescBuilder_v8 & {
+    setComputeType(DataType_t data_type_) -> PointWiseDescBuilder_v8 & {
         m_pointWiseDesc.compute_type = data_type_;
+        return *this;
+    }
+    auto
+    setComputeType(cudnnDataType_t data_type_) -> PointWiseDescBuilder_v8 & {
+        m_pointWiseDesc.compute_type = detail::convert_from_cudnn_type(data_type_);
         return *this;
     }
     //! Set upper and lower limits for the RELU activation
@@ -232,11 +237,20 @@ class PointWiseDescBuilder_v8 {
             return std::move(m_pointWiseDesc);
         }
 
+        cudnnDataType_t cudnn_data_type;
+        status = detail::convert_to_cudnn_type(m_pointWiseDesc.compute_type, cudnn_data_type);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_pointWiseDesc,
+                status,
+                "CUDNN_BACKEND_POINTWISE_DESCRIPTOR: SetAttribute CUDNN_ATTR_POINTWISE_MATH_PREC Failed");
+            return std::move(m_pointWiseDesc);
+        }
         status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_POINTWISE_MATH_PREC,
                                           CUDNN_TYPE_DATA_TYPE,
                                           1,
-                                          &m_pointWiseDesc.compute_type);
+                                          &cudnn_data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc,
@@ -272,7 +286,7 @@ class PointWiseDescBuilder_v8 {
                 return std::move(m_pointWiseDesc);
             }
 
-            if (m_pointWiseDesc.compute_type == CUDNN_DATA_FLOAT) {
+            if (m_pointWiseDesc.compute_type == DataType_t::FLOAT) {
                 double clamped_upper_clip =
                     std::min<double>(m_pointWiseDesc.upper_clip, std::numeric_limits<float>::max());
                 status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
