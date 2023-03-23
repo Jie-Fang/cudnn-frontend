@@ -570,7 +570,6 @@ class OperationBuilder_v8 {
                 break;
 #endif
         }
-        
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR,

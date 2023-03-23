@@ -187,47 +187,18 @@ void generateMHAStrides(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t
     {
         case MHA_Matrix::Q_Matrix:
             if (layout == MHA_Layout::QKV_INTERLEAVED) {
-                strideA[seqlen_dim_idx] = 3 * h * d;
                 strideA[hidden_dim_idx] = 1;
+                strideA[seqlen_dim_idx] = 3 * h * d;
                 strideA[head_dim_idx] = d;
                 strideA[batch_dim_idx] = s_q * 3 * h * d;
-
-            } else if (layout == MHA_Layout::SBH_INTERLEAVED) {
-                strideA[seqlen_dim_idx] = 3 * h * d * b;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = 3 * d;
-                strideA[batch_dim_idx] = 3 * h * d;
             } else {
-                strideA[seqlen_dim_idx] = h * d;
                 strideA[hidden_dim_idx] = 1;
+                strideA[seqlen_dim_idx] = h * d;
                 strideA[head_dim_idx] = d;
                 strideA[batch_dim_idx] = s_q * h * d;
             }
             break;
         case MHA_Matrix::K_Matrix:
-            if (layout == MHA_Layout::QKV_INTERLEAVED) {
-                strideA[seqlen_dim_idx] = 3 * h * d;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = d;
-                strideA[batch_dim_idx] = s_kv * 3 * h * d;
-            } else if (layout == MHA_Layout::KV_INTERLEAVED) {
-                strideA[seqlen_dim_idx] = 2 * h * d;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = d;
-                strideA[batch_dim_idx] = s_kv * 2 * h * d;
-            } else if (layout == MHA_Layout::SBH_INTERLEAVED) {
-                strideA[seqlen_dim_idx] = 3 * h * d * b;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = 3 * d;
-                strideA[batch_dim_idx] = 3 * h * d;
-            } else {
-                strideA[seqlen_dim_idx] = h * d;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = d;
-                strideA[batch_dim_idx] = s_kv * h * d;
-            }
-            break;
-        case MHA_Matrix::K_Matrix_Transpose:
             if (layout == MHA_Layout::QKV_INTERLEAVED) {
                 strideA[seqlen_transpose_dim_idx] = 3 * h * d;
                 strideA[hidden_transpose_dim_idx] = 1;
@@ -238,11 +209,6 @@ void generateMHAStrides(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t
                 strideA[hidden_transpose_dim_idx] = 1;
                 strideA[head_dim_idx] = d;
                 strideA[batch_dim_idx] = s_kv * 2 * h * d;
-            } else if (layout == MHA_Layout::SBH_INTERLEAVED) {
-                strideA[seqlen_transpose_dim_idx] = 3 * h * d * b;
-                strideA[hidden_transpose_dim_idx] = 1;
-                strideA[head_dim_idx] = 3 * d;
-                strideA[batch_dim_idx] = 3 * h * d;
             } else {
                 strideA[seqlen_transpose_dim_idx] = h * d;
                 strideA[hidden_transpose_dim_idx] = 1;
@@ -252,46 +218,18 @@ void generateMHAStrides(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t
             break;
         case MHA_Matrix::V_Matrix:
             if (layout == MHA_Layout::QKV_INTERLEAVED) {
+                strideA[hidden_dim_idx] = 1;
                 strideA[seqlen_dim_idx] = 3 * h * d;
-                strideA[hidden_dim_idx] = 1;
                 strideA[head_dim_idx] = d;
                 strideA[batch_dim_idx] = s_kv * 3 * h * d;
             } else if (layout == MHA_Layout::KV_INTERLEAVED) {
+                strideA[hidden_dim_idx] = 1;
                 strideA[seqlen_dim_idx] = 2* h * d;
-                strideA[hidden_dim_idx] = 1;
                 strideA[head_dim_idx] = d;
                 strideA[batch_dim_idx] = s_kv * 2 * h * d;
-            } else if (layout == MHA_Layout::SBH_INTERLEAVED) {
-                strideA[seqlen_dim_idx] = 3 * h * d * b;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = 3 * d;
-                strideA[batch_dim_idx] = 3 * h * d;
             } else {
+                strideA[hidden_dim_idx] = 1;
                 strideA[seqlen_dim_idx] = h * d;
-                strideA[hidden_dim_idx] = 1;
-                strideA[head_dim_idx] = d;
-                strideA[batch_dim_idx] = s_kv * h * d;
-            }
-            break;
-        case MHA_Matrix::V_Matrix_Transpose:
-            if (layout == MHA_Layout::QKV_INTERLEAVED) {
-                strideA[seqlen_transpose_dim_idx] = 3 * h * d;
-                strideA[hidden_transpose_dim_idx] = 1;
-                strideA[head_dim_idx] = d;
-                strideA[batch_dim_idx] = s_kv * 3 * h * d;
-            } else if (layout == MHA_Layout::KV_INTERLEAVED) {
-                strideA[seqlen_transpose_dim_idx] = 2* h * d;
-                strideA[hidden_transpose_dim_idx] = 1;
-                strideA[head_dim_idx] = d;
-                strideA[batch_dim_idx] = s_kv * 2 * h * d;
-            } else if (layout == MHA_Layout::SBH_INTERLEAVED) {
-                strideA[seqlen_transpose_dim_idx] = 3 * h * d * b;
-                strideA[hidden_transpose_dim_idx] = 1;
-                strideA[head_dim_idx] = 3 * d;
-                strideA[batch_dim_idx] = 3 * h * d;
-            } else {
-                strideA[seqlen_transpose_dim_idx] = h * d;
-                strideA[hidden_transpose_dim_idx] = 1;
                 strideA[head_dim_idx] = d;
                 strideA[batch_dim_idx] = s_kv * h * d;
             }
