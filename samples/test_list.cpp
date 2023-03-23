@@ -1219,8 +1219,8 @@ TEST_CASE("ConvColReduction sample", "[frontend][fusion][ConvColReduction]") {
 TEST_CASE("Use errata to block global(index) for execution", "[frontend][errata][wgrad]" ) {
     std::cout << "TEST_CASE :: Use  errata to block a global index for engine generation" << std::endl;
     INFO("TEST_CASE :: Use  errata to block global index for engine generation");
-    int64_t dimA[]        = {1, 32, 4, 4};
-    int64_t filterdimA[]  = {32, 32, 1, 1};
+    int64_t dimA[]        = {1, 32, 128, 128};
+    int64_t filterdimA[]  = {32, 32, 3, 3};
     int64_t outdimA[]     = {0, 0, 0, 0}; // Computed Below
     int64_t padA[]        = {0, 0};
     int64_t dilationA[] = {1, 1};
