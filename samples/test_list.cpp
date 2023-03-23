@@ -30,6 +30,7 @@
 #include "fp8_sample.h"
 #include "mha_sample.h"
 #include "fused_mha_sample.h"
+#include "bf16_llm_sample.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2716,6 +2717,198 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 
     if (devActualSeqlenK) cudaFree(devActualSeqlenK);
     if (hostActualSeqlenK) free(hostActualSeqlenK);
+
+    std::cout << "\n========================================================================================\n";
+}
+#endif
+
+#if (CUDNN_VERSION >= 8900)
+TEST_CASE("BF16 LLM Fprop sample", "[frontend][fusion][BF16LLMFprop]") {
+    std::cout << "TEST_CASE :: BF16 LLM Fprop with backend API" << std::endl;
+    INFO("TEST_CASE ::  BF16 LLM Fprop with backend API");
+
+    int64_t b = 1;  // batch size
+    int64_t h = 2;  // head dim
+    int64_t s_q = 2048; // q tensor is padded to this seq length
+    int64_t s_kv = 2048; // k and v tensor is padded to this seq length
+    int64_t d = 128;  // hidden dim
+
+    int64_t seed = 123456; // seed for generating the dropout mask
+
+    MHA_Layout layout = MHA_Layout::SBH_INTERLEAVED; // layout of the tensors Q,K and V. BF16 LLM has layout [S,B,H,3,D]
+
+    float scaling_factor = 0.5; // scale value before softmax
+
+    bool isTraining = true; // training or inference mode
+    double dropout_probability = 0.2f; // probability of dropout. Should be 0.0 for inference mode
+
+    printf("====PARAMETERS====\n");
+    printf("batch is %" PRId64 ", head dim is %" PRId64 ", q sequence length is %" PRId64 ", kv sequence length is %" PRId64 ", hidden dim is %" PRId64 "\n", b, h, s_q, s_kv, d);
+
+    void* devPtrQ            = nullptr; // queries
+    void* devPtrK            = nullptr; // keys
+    void* devPtrV            = nullptr; // values
+    void* devPtrSoftmaxStats = nullptr; // softmax stats
+    void* devPtrO            = nullptr; // final output
+
+    // the setup is for the qkv interleaved layout (qkv interleaved assumes s_q = s_kv)
+    int64_t qkvTensorDim[] = {b, s_q, 3, h, d};
+    CUDNN_FRONTEND_UNUSED(qkvTensorDim);
+
+    int64_t xSize = b * s_q * 3 * h * d;
+    Surface<half> xTensor(xSize, false);
+    devPtrQ = (void *)xTensor.devPtr; // q points to the top of qkv
+    devPtrK = (void *)(xTensor.devPtr + h * d); // k is at an offset of h * d
+    devPtrV = (void *)(xTensor.devPtr + 2 * h * d); // v is at an offset of 2 * h * d
+
+    void* devPtrDropoutSeed = nullptr; // Seed for dropout
+    void* devPtrDropoutOffset = nullptr; // Offset for dropout
+
+    int64_t scaleSize = 1;
+    Surface<int64_t> dropoutSeed(scaleSize, false, seed);
+    devPtrDropoutSeed = (void *)dropoutSeed.devPtr;
+    Surface<int64_t> dropoutOffset(scaleSize, false, (int64_t)1);
+    devPtrDropoutOffset = (void *)dropoutOffset.devPtr;
+
+    int64_t softmaxStatsSize = b * h * s_q;
+    Surface<float> softmaxStats(softmaxStatsSize, false);
+    if (isTraining) {
+        devPtrSoftmaxStats = (void *)softmaxStats.devPtr;
+    }
+    
+    int64_t oSize   = b * s_q * h * d;
+    Surface<half> oTensor(oSize, false);
+    devPtrO = (void *)oTensor.devPtr;
+
+    run_bf16_LLM_fprop(b,
+                h,
+                s_q,
+                s_kv,
+                d,
+                layout,
+                scaling_factor,
+                isTraining,
+                dropout_probability,
+                devPtrQ,
+                devPtrK,
+                devPtrV,
+                devPtrSoftmaxStats,
+                devPtrO,
+                devPtrDropoutSeed,
+                devPtrDropoutOffset,
+                CUDNN_DATA_BFLOAT16);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(oTensor.hostPtr, oTensor.devPtr, sizeof(oTensor.hostPtr[0]) * oSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+
+TEST_CASE("BF16 LLM Bprop sample", "[frontend][fusion][BF16LLMBprop]") {
+    std::cout << "TEST_CASE :: BF16 LLM Bprop with backend API" << std::endl;
+    INFO("TEST_CASE ::  BF16 LLM Bprop with backend API");
+
+    int64_t b = 1;  // batch size
+    int64_t h = 2;  // head dim
+    int64_t s_q = 2048; // q tensor is padded to this seq length
+    int64_t s_kv = 2048; // k and v tensor is padded to this seq length
+    int64_t d = 128;  // hidden dim
+
+    MHA_Layout layout = MHA_Layout::SBH_INTERLEAVED; // layout of the tensors Q,K and V. BF16 LLM has layout [S,B,H,3,D]
+
+    float scaling_factor = 0.8f; // scale value before softmax
+    float dropout_probability = 0.2f; // probability of dropout
+
+    int64_t seed = 123456; // seed for generating the dropout mask
+
+    printf("====PARAMETERS====\n");
+    printf("batch is %" PRId64 ", head dim is %" PRId64 ", q sequence length is %" PRId64 ", kv sequence length is %" PRId64 ", hidden dim is %" PRId64 "\n", b, h, s_q, s_kv, d);
+
+    void* devPtrQ          = nullptr; // queries
+    void* devPtrKTranspose = nullptr; // keys transposed
+    void* devPtrVTranspose = nullptr; // values transposed
+    void* devPtrO          = nullptr; // final output from fprop
+
+    void* devPtrdQ      = nullptr; // derivative of queries
+    void* devPtrdQAccum = nullptr; // derivative of queries accumulator
+    void* devPtrdK      = nullptr; // derivative of keys
+    void* devPtrdV      = nullptr; // derivative of values
+
+    void* devPtrSoftmaxStats = nullptr; // softmax stats
+    void* devPtrSoftmaxSum   = nullptr; // softmax sum
+
+    void* devPtrDropoutSeed = nullptr; // Seed for dropout
+    void* devPtrDropoutOffset = nullptr; // Offset for dropout
+
+    void* devPtrdO = nullptr; // input to the bprop, derivative of output
+
+    // the setup is for the qkv interleaved layout (qkv interleaved assumes s_q = s_kv)
+    int64_t qkvTensorDim[] = {b, s_q, 3, h, d};
+    CUDNN_FRONTEND_UNUSED(qkvTensorDim);
+
+    int64_t qkvSize = b * s_q * 3 * h * d;
+    Surface<half> qkvTensor(qkvSize, false);
+    devPtrQ = (void *)qkvTensor.devPtr; // q points to the top of qkv
+    devPtrKTranspose = (void *)(qkvTensor.devPtr + h * d); // k is at an offset of h * d
+    devPtrVTranspose = (void *)(qkvTensor.devPtr + 2 * h * d); // v is at an offset of 2 * h * d
+
+    int64_t softmaxStatsSize = b * h * s_q;
+    Surface<float> softmaxStats(softmaxStatsSize, false);
+    devPtrSoftmaxStats = (void *)softmaxStats.devPtr;
+    Surface<float> softmaxSum(softmaxStatsSize, false);
+    devPtrSoftmaxSum = (void *)softmaxSum.devPtr;
+
+    int64_t dqkvSize = b * s_q * 3 * h * d;
+    Surface<half> dqkvTensor(dqkvSize, false);
+    devPtrdQ = (void *)dqkvTensor.devPtr; // dq points to the top of dqkv
+    devPtrdK = (void *)(dqkvTensor.devPtr + h * d); // dk is at an offset of h * d
+    devPtrdV = (void *)(dqkvTensor.devPtr + 2 * h * d); // dv is at an offset of 2 * h * d
+
+    int64_t dqAccumSize = b * s_q * h * d;
+    Surface<float> dqAccumTensor(dqAccumSize, false);
+    devPtrdQAccum = (void *)dqAccumTensor.devPtr;
+    // dqAccumulator needs to be memset to 0 before being passed into the kernel
+    checkCudaErr(cudaMemset(devPtrdQAccum, 0, dqAccumSize * sizeof(float)));
+
+    int64_t scaleSize = 1;
+    Surface<int64_t> dropoutSeed(scaleSize, false, seed);
+    devPtrDropoutSeed = (void *)dropoutSeed.devPtr;
+    Surface<int64_t> dropoutOffset(scaleSize, false, (int64_t)1);
+    devPtrDropoutOffset = (void *)dropoutOffset.devPtr;
+
+    int64_t oSize   = b * s_q * h * d;
+    Surface<half> oTensor(oSize, false);
+    devPtrO = (void *)oTensor.devPtr;
+    Surface<half> doTensor(oSize, false);
+    devPtrdO = (void *)doTensor.devPtr;
+
+    run_bf16_LLM_bprop(b, 
+                h, 
+                s_q,
+                s_kv,
+                d,
+                layout,
+                scaling_factor,
+                dropout_probability,
+                devPtrQ, 
+                devPtrKTranspose,   
+                devPtrVTranspose,
+                devPtrO,
+                devPtrSoftmaxStats,
+                devPtrSoftmaxSum,
+                devPtrdQAccum,
+                devPtrdQ, 
+                devPtrdK,
+                devPtrdV,   
+                devPtrdO,
+                devPtrDropoutSeed,
+                devPtrDropoutOffset,
+                CUDNN_DATA_BFLOAT16);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(dqkvTensor.hostPtr, dqkvTensor.devPtr, sizeof(dqkvTensor.hostPtr[0]) * dqkvSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
 
     std::cout << "\n========================================================================================\n";
 }
