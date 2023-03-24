@@ -247,7 +247,7 @@ createScale(int64_t b,
 
     int64_t k_dim [4] =  {b, h, d, s_kv};
     int64_t k_stride [4];
-    generateMHAStrides(b, h, s_q, s_kv, d, k_stride, layout, MHA_Matrix::K_Matrix);
+    generateMHAStrides(b, h, s_q, s_kv, d, k_stride, layout, MHA_Matrix::K_Matrix_Transpose);
 
     auto scaleTensor = tensor_create(tensorType, S_CONST_ID, scale_dim, scale_stride, false, true); // is by value
     auto kTensor = tensor_create(tensorType, K_ID, k_dim, k_stride, false, false);
@@ -278,7 +278,7 @@ createBMM1(int64_t b,
 
     int64_t k_dim [4] =  {b, h, d, s_kv};
     int64_t k_stride [4];
-    generateMHAStrides(b, h, s_q, s_kv, d, k_stride, layout, MHA_Matrix::K_Matrix);
+    generateMHAStrides(b, h, s_q, s_kv, d, k_stride, layout, MHA_Matrix::K_Matrix_Transpose);
 
     int64_t p_dim [4] = {b, h, s_q, s_kv};
     int64_t p_stride [4];
