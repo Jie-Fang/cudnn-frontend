@@ -1023,11 +1023,11 @@ run_mha_bprop(int64_t b,
 
         int64_t k_dim [4] =  {b, h, s_kv, d};
         int64_t k_stride [4];
-        generateMHAStrides(b, h, s_q, s_kv, d, k_stride, layout, MHA_Matrix::V_Matrix); // type is correct as K is not transposed
+        generateMHAStrides(b, h, s_q, s_kv, d, k_stride, layout, MHA_Matrix::K_Matrix); // type is correct as K is not transposed
 
         int64_t v_dim [4] =  {b, h, d, s_kv};
         int64_t v_stride [4];
-        generateMHAStrides(b, h, s_q, s_kv, d, v_stride, layout, MHA_Matrix::K_Matrix); // type is correct as V is transposed
+        generateMHAStrides(b, h, s_q, s_kv, d, v_stride, layout, MHA_Matrix::V_Matrix_Transpose); // type is correct as V is transposed
 
         int64_t p_dim [4] = {b, h, s_q, s_kv};
         int64_t p_stride [4];
