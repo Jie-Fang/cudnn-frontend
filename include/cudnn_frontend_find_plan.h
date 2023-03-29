@@ -53,7 +53,7 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans_t plans, VariantPack const
     cudaDeviceSynchronize();
 
     cudaStream_t stream = nullptr;
-    ::cudnnGetStream(handle, &stream);
+    cudnnGetStream(handle, &stream);
 
     for (auto &plan : plans) {
         float time_ms       = 0.0f;
@@ -61,7 +61,7 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans_t plans, VariantPack const
         float min_time_ms   = std::numeric_limits<float>::max();
 
         // Warm-up run
-        auto warmup_status = ::cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
+        auto warmup_status = cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
         if (warmup_status != CUDNN_STATUS_SUCCESS) {
             getLogger() << "[cudnn_frontend] Plan " << plan.getTag() << " failed with " << to_string(warmup_status) << std::endl;
             continue;
@@ -72,7 +72,7 @@ time_sorted_plan(cudnnHandle_t handle, executionPlans_t plans, VariantPack const
         for (int i = 0; i < maxIterCount; i++) {
             cudaEventRecord(start, stream);
 
-            ::cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
+            cudnnBackendExecute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
 
             cudaEventRecord(stop, stream);
             cudaEventSynchronize(stop);
