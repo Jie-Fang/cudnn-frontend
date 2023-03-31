@@ -46,7 +46,7 @@ public:
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_tensor(
         std::string const& name
         , cudnn_frontend::DataType_t const& data_type
@@ -55,7 +55,7 @@ public:
         , bool const& isVirtual
         , bool const& isByValue
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(name);
         props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         props_ptr->set_dim(dim);
         props_ptr->set_stride(stride);
@@ -72,11 +72,11 @@ public:
     // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_conv(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& image_props_ptr
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& weight_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
         , std::vector<int64_t> const& padding
         , std::vector<int64_t> const& stride
@@ -92,7 +92,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::convolution_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_properties::PORTS::W, weight_props_ptr->get_name()}});
         
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -108,11 +108,11 @@ public:
     // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_matmul(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& image_props_ptr
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& weight_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::matmul_properties>(name);
@@ -122,7 +122,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -138,11 +138,11 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_bias(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& bias_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
@@ -153,7 +153,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -169,11 +169,11 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_scale(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& scale_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
@@ -184,7 +184,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, scale_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -200,10 +200,10 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_relu(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
@@ -214,7 +214,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -230,10 +230,10 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_elu(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
@@ -244,7 +244,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -260,10 +260,10 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::tensor_properties> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_gelu(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::tensor_properties>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
@@ -274,7 +274,7 @@ public:
         props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::tensor_properties>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -293,7 +293,7 @@ public:
         return;
     }
 
-    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::tensor_properties>, int64_t> var_pack) {
+    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, int64_t> var_pack) {
         std::unordered_map<std::string, void *> var_pack_;
         for (auto item : var_pack) {
             var_pack_.insert(std::make_pair(item.first->get_name(), (void *)item.second));

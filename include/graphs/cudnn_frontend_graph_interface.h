@@ -12,7 +12,7 @@ namespace cudnn_frontend {
 class IGraph {
 protected:
     std::string name;
-    std::unordered_map<std::string, std::shared_ptr<tensor_properties>> all_tensors;
+    std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> all_tensors;
     std::unordered_map<std::string, std::shared_ptr<convolution_properties>>  conv_properties;
     std::unordered_map<std::string, std::shared_ptr<matmul_properties>>  mm_properties;
     std::unordered_map<std::string, std::shared_ptr<pointwise_properties>>    pw_properties;
@@ -25,7 +25,7 @@ public:
         return name;
     }
 
-    virtual error_t insert_tensor(std::shared_ptr<tensor_properties> props_ptr) = 0;
+    virtual error_t insert_tensor(std::shared_ptr<graph::Tensor> props_ptr) = 0;
 
     virtual error_t insert_node(std::shared_ptr<convolution_properties> props_ptr) = 0;
     virtual error_t insert_node(std::shared_ptr<matmul_properties> props_ptr) = 0;
@@ -79,20 +79,20 @@ public:
         return error_t::OK;
     }
 
-    tensor_properties &
+    graph::Tensor &
     tensor_at(std::string const& name) {
         return *(all_tensors.at(name));
     }
 
     // Add a tensor properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t insert_tensor(std::shared_ptr<tensor_properties> props_ptr) {
+    error_t insert_tensor(std::shared_ptr<graph::Tensor> props_ptr) {
         all_tensors.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
 
     // Returns a shared pointer by value, so the caller is also an owner.
-    std::shared_ptr<tensor_properties> get_tensor(std::string const& tensor_name) {
+    std::shared_ptr<graph::Tensor> get_tensor(std::string const& tensor_name) {
         return all_tensors.at(tensor_name);
     }
 

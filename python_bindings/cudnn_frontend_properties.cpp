@@ -10,23 +10,23 @@ namespace py = pybind11;
 using namespace pybind11::literals;
 
 void init_properties(py::module_ &m) {
-    py::class_<cudnn_frontend::tensor_properties, std::shared_ptr<cudnn_frontend::tensor_properties>>(m, "tensor_properties")
+    py::class_<cudnn_frontend::graph::Tensor, std::shared_ptr<cudnn_frontend::graph::Tensor>>(m, "tensor")
         .def(py::init<std::string const &>())
-        .def("get_name", &cudnn_frontend::tensor_properties::get_name)
-        .def("get_data_type", &cudnn_frontend::tensor_properties::get_data_type)
-        .def("set_data_type", &cudnn_frontend::tensor_properties::set_data_type)
-        .def("get_dim", static_cast< std::vector<int64_t>& (cudnn_frontend::tensor_properties::*)()>((&cudnn_frontend::tensor_properties::get_dim)))
-        .def("set_dim", &cudnn_frontend::tensor_properties::set_dim)
-        .def("get_stride", &cudnn_frontend::tensor_properties::get_stride)
-        .def("set_stride", &cudnn_frontend::tensor_properties::set_stride)
-        .def("get_is_virtual", &cudnn_frontend::tensor_properties::get_is_virtual)
-        .def("set_is_virtual", &cudnn_frontend::tensor_properties::set_is_virtual)
-        .def("get_is_pass_by_value", &cudnn_frontend::tensor_properties::get_is_pass_by_value)
-        .def("set_is_pass_by_value", &cudnn_frontend::tensor_properties::set_is_pass_by_value)
-        .def("get_uid", &cudnn_frontend::tensor_properties::get_uid)
-        .def("set_uid", &cudnn_frontend::tensor_properties::set_uid)
-        .def("get_size", &cudnn_frontend::tensor_properties::get_size)
-        .def("__repr__", [](cudnn_frontend::tensor_properties const& props){
+        .def("get_name", &cudnn_frontend::graph::Tensor::get_name)
+        .def("get_data_type", &cudnn_frontend::graph::Tensor::get_data_type)
+        .def("set_data_type", &cudnn_frontend::graph::Tensor::set_data_type)
+        .def("get_dim", static_cast< std::vector<int64_t>& (cudnn_frontend::graph::Tensor::*)()>((&cudnn_frontend::graph::Tensor::get_dim)))
+        .def("set_dim", &cudnn_frontend::graph::Tensor::set_dim)
+        .def("get_stride", &cudnn_frontend::graph::Tensor::get_stride)
+        .def("set_stride", &cudnn_frontend::graph::Tensor::set_stride)
+        .def("get_is_virtual", &cudnn_frontend::graph::Tensor::get_is_virtual)
+        .def("set_is_virtual", &cudnn_frontend::graph::Tensor::set_is_virtual)
+        .def("get_is_pass_by_value", &cudnn_frontend::graph::Tensor::get_is_pass_by_value)
+        .def("set_is_pass_by_value", &cudnn_frontend::graph::Tensor::set_is_pass_by_value)
+        .def("get_uid", &cudnn_frontend::graph::Tensor::get_uid)
+        .def("set_uid", &cudnn_frontend::graph::Tensor::set_uid)
+        .def("get_size", &cudnn_frontend::graph::Tensor::get_size)
+        .def("__repr__", [](cudnn_frontend::graph::Tensor const& props){
             std::ostringstream out;
             out << props;
             return out.str();

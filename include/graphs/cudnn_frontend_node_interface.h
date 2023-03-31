@@ -76,7 +76,7 @@ public:
 
     // Tensors belonging to each node.
     // Connecting nodes can modify and delete tensors in this container.
-    std::unordered_map<std::string, std::shared_ptr<tensor_properties>> tensor_props;
+    std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> tensor_props;
 
     INode* parent_node;
     std::unordered_map <std::string, std::shared_ptr<INode>> sub_nodes;
@@ -163,12 +163,12 @@ public:
 
     virtual ~INode() {};
 
-    int insert_tensor(std::string const& name, tensor_properties& properties) {
-        tensor_props.emplace(name, std::make_shared<tensor_properties>(properties));
+    int insert_tensor(std::string const& name, graph::Tensor& properties) {
+        tensor_props.emplace(name, std::make_shared<graph::Tensor>(properties));
         return 0;
     }
     
-    std::shared_ptr<tensor_properties> get_tensor_props(std::string const& name) {
+    std::shared_ptr<graph::Tensor> get_tensor_props(std::string const& name) {
         if(tensor_props.count(name)) {
             return tensor_props.at(name);
         }

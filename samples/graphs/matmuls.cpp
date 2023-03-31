@@ -42,15 +42,15 @@ void test_matmul_relu_graph() {
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(matmul_props));
 
-    auto image_props = std::make_shared<cudnn_frontend::tensor_properties>("image");
+    auto image_props = std::make_shared<cudnn_frontend::graph::Tensor>("image");
     image_props->set_dim({4, 16, 64});
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(image_props));
 
-    auto filter_props = std::make_shared<cudnn_frontend::tensor_properties>("filter");
+    auto filter_props = std::make_shared<cudnn_frontend::graph::Tensor>("filter");
     filter_props->set_dim({4, 64, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(filter_props));
     
-    auto response_props = std::make_shared<cudnn_frontend::tensor_properties>("response");
+    auto response_props = std::make_shared<cudnn_frontend::graph::Tensor>("response");
     response_props->set_is_virtual(true);
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(response_props));
 
@@ -64,7 +64,7 @@ void test_matmul_relu_graph() {
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(pw_relu_props));
     
-    auto output_props = std::make_shared<cudnn_frontend::tensor_properties>("output");
+    auto output_props = std::make_shared<cudnn_frontend::graph::Tensor>("output");
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(output_props));
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.build());
@@ -96,15 +96,15 @@ void test_matmul_scale_bias_relu_graph() {
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(matmul_props));
 
-    auto image_props = std::make_shared<cudnn_frontend::tensor_properties>("image");
+    auto image_props = std::make_shared<cudnn_frontend::graph::Tensor>("image");
     image_props->set_dim({4, 16, 64});
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(image_props));
 
-    auto filter_props = std::make_shared<cudnn_frontend::tensor_properties>("filter");
+    auto filter_props = std::make_shared<cudnn_frontend::graph::Tensor>("filter");
     filter_props->set_dim({4, 64, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(filter_props));
     
-    auto response_props = std::make_shared<cudnn_frontend::tensor_properties>("response");
+    auto response_props = std::make_shared<cudnn_frontend::graph::Tensor>("response");
     response_props->set_is_virtual(true);
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(response_props));
 
@@ -119,11 +119,11 @@ void test_matmul_scale_bias_relu_graph() {
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(pw_scale_props));
 
-    auto scale_props = std::make_shared<cudnn_frontend::tensor_properties>("scale");
+    auto scale_props = std::make_shared<cudnn_frontend::graph::Tensor>("scale");
     scale_props->set_dim({4, 16, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(scale_props));
 
-    auto scale_output = std::make_shared<cudnn_frontend::tensor_properties>("scale_output");
+    auto scale_output = std::make_shared<cudnn_frontend::graph::Tensor>("scale_output");
     scale_output->set_is_virtual(true);
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(scale_output));
 
@@ -138,11 +138,11 @@ void test_matmul_scale_bias_relu_graph() {
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(pw_bias_props));
 
-    auto bias_props = std::make_shared<cudnn_frontend::tensor_properties>("bias");
+    auto bias_props = std::make_shared<cudnn_frontend::graph::Tensor>("bias");
     bias_props->set_dim({4, 16, 32});
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(bias_props));
     
-    auto bias_output_props = std::make_shared<cudnn_frontend::tensor_properties>("bias_output");
+    auto bias_output_props = std::make_shared<cudnn_frontend::graph::Tensor>("bias_output");
     bias_output_props->set_is_virtual(true);
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(bias_output_props));
 
@@ -156,7 +156,7 @@ void test_matmul_scale_bias_relu_graph() {
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(pw_relu_props));
     
-    auto output_props = std::make_shared<cudnn_frontend::tensor_properties>("output");
+    auto output_props = std::make_shared<cudnn_frontend::graph::Tensor>("output");
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_tensor(output_props));
 
     #if (CUDNN_VERSION >= 8500)

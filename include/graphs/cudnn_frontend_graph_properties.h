@@ -9,9 +9,11 @@
 
 namespace cudnn_frontend {
 
+namespace graph {
+
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
-class tensor_properties {
+class Tensor {
 protected:
 
     std::string name;
@@ -81,7 +83,7 @@ public:
         return std::accumulate(dim.begin(), dim.end(), initialProduct, std::multiplies<int64_t>());
     }
 
-    tensor_properties(const std::string &name) : name(name) {}
+    Tensor(const std::string &name) : name(name) {}
 
     DataType_t const &
     get_data_type() const {
@@ -171,10 +173,10 @@ public:
         return size;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const tensor_properties& props);
+    friend std::ostream& operator<<(std::ostream& os, const Tensor& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const tensor_properties& props) {
+inline std::ostream& operator<<(std::ostream& os, const Tensor& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " dim: [";
@@ -192,6 +194,8 @@ inline std::ostream& operator<<(std::ostream& os, const tensor_properties& props
     << "}";
     return os;
 }
+
+} // namespace graph
 
 class operation_properties {
 public:

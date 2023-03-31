@@ -50,15 +50,15 @@ run_matmul_node() {
     });
     matmul_node.set_properties("matmul_node", props);
 
-    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    cudnn_frontend::graph::Tensor tensor0{"tensor0"};
     tensor0.set_dim({1, 32, 16});
     matmul_node.insert_tensor("tensor0", tensor0);
 
-    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    cudnn_frontend::graph::Tensor tensor1{"tensor1"};
     tensor1.set_dim({1, 16, 32});
     matmul_node.insert_tensor("tensor1", tensor1);
 
-    cudnn_frontend::tensor_properties tensor2{"tensor2"};
+    cudnn_frontend::graph::Tensor tensor2{"tensor2"};
     tensor2.set_dim({1, 32, 32});
     matmul_node.insert_tensor("tensor2", tensor2);
 
@@ -97,15 +97,15 @@ run_convolution_node() {
     });
     convolution_node.set_properties("conv_node", props);
 
-    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    cudnn_frontend::graph::Tensor tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
     convolution_node.insert_tensor("tensor0", tensor0);
 
-    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    cudnn_frontend::graph::Tensor tensor1{"tensor1"};
     tensor1.set_dim({64, 32, 3, 3});
     convolution_node.insert_tensor("tensor1", tensor1);
 
-    cudnn_frontend::tensor_properties tensor2{"tensor2"};
+    cudnn_frontend::graph::Tensor tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
     convolution_node.insert_tensor("tensor2", tensor2);
 
@@ -141,15 +141,15 @@ run_pointwise_node() {
     });
     pointwise_node.props = props;
     
-    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    cudnn_frontend::graph::Tensor tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
     pointwise_node.insert_tensor("tensor0", tensor0);
 
-    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    cudnn_frontend::graph::Tensor tensor1{"tensor1"};
     tensor1.set_dim({1, 32, 1, 1});
     pointwise_node.insert_tensor("tensor1", tensor1);
 
-    cudnn_frontend::tensor_properties tensor2{"tensor2"};
+    cudnn_frontend::graph::Tensor tensor2{"tensor2"};
     tensor2.set_dim({4, 32, 16, 16});
     pointwise_node.insert_tensor("tensor2", tensor2);
 
@@ -184,11 +184,11 @@ run_reduction_node() {
     });
     reduction_node.set_properties("reduction_node", props);
     
-    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    cudnn_frontend::graph::Tensor tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
     reduction_node.insert_tensor("tensor0", tensor0);
 
-    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    cudnn_frontend::graph::Tensor tensor1{"tensor1"};
     tensor1.set_dim({1, 32, 1, 1});
     tensor1.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     reduction_node.insert_tensor("tensor1", tensor1);
@@ -229,63 +229,63 @@ void run_batchnorm_node() {
     });
     batchnorm_node.set_properties("batchnorm_node", props);
     
-    cudnn_frontend::tensor_properties input{"input"};
+    cudnn_frontend::graph::Tensor input{"input"};
     input.set_dim({4, 32, 16, 16});
     batchnorm_node.insert_tensor("input", input);
 
-    cudnn_frontend::tensor_properties mean{"mean"};
+    cudnn_frontend::graph::Tensor mean{"mean"};
     mean.set_dim({1, 32, 1, 1});
     mean.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("mean", mean);
     
-    cudnn_frontend::tensor_properties variance{"variance"};
+    cudnn_frontend::graph::Tensor variance{"variance"};
     variance.set_dim({1, 32, 1, 1});
     variance.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("variance", variance);
 
-    cudnn_frontend::tensor_properties in_running_mean{"in_running_mean"};
+    cudnn_frontend::graph::Tensor in_running_mean{"in_running_mean"};
     in_running_mean.set_dim({1, 32, 1, 1});
     in_running_mean.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("in_running_mean", in_running_mean);
     
-    cudnn_frontend::tensor_properties in_running_variance{"in_running_variance"};
+    cudnn_frontend::graph::Tensor in_running_variance{"in_running_variance"};
     in_running_variance.set_dim({1, 32, 1, 1});
     in_running_variance.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("in_running_variance", in_running_variance);
 
-    cudnn_frontend::tensor_properties out_running_mean{"out_running_mean"};
+    cudnn_frontend::graph::Tensor out_running_mean{"out_running_mean"};
     out_running_mean.set_dim({1, 32, 1, 1});
     out_running_mean.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("out_running_mean", out_running_mean);
     
-    cudnn_frontend::tensor_properties out_running_variance{"out_running_variance"};
+    cudnn_frontend::graph::Tensor out_running_variance{"out_running_variance"};
     out_running_variance.set_dim({1, 32, 1, 1});
     out_running_variance.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("out_running_variance", out_running_variance);
     
-    cudnn_frontend::tensor_properties scale{"scale"};
+    cudnn_frontend::graph::Tensor scale{"scale"};
     scale.set_dim({1, 32, 1, 1});
     scale.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("scale", scale);
     
-    cudnn_frontend::tensor_properties bias{"bias"};
+    cudnn_frontend::graph::Tensor bias{"bias"};
     bias.set_dim({1, 32, 1, 1});
     bias.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("bias", bias);
 
-    cudnn_frontend::tensor_properties epsilon{"epsilon"};
+    cudnn_frontend::graph::Tensor epsilon{"epsilon"};
     epsilon.set_dim({1, 1, 1, 1});
     epsilon.set_is_pass_by_value(true);
     epsilon.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("epsilon", epsilon);
     
-    cudnn_frontend::tensor_properties exp_avg{"exp_avg"};
+    cudnn_frontend::graph::Tensor exp_avg{"exp_avg"};
     exp_avg.set_dim({1, 1, 1, 1});
     exp_avg.set_is_pass_by_value(true);
     exp_avg.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("exp_avg", exp_avg);
     
-    cudnn_frontend::tensor_properties output{"output"};
+    cudnn_frontend::graph::Tensor output{"output"};
     output.set_dim({4, 32, 16, 16});
     batchnorm_node.insert_tensor("output", output);
 
@@ -354,15 +354,15 @@ run_convolution_fp8_node() {
     });
     convolution_fp8_node.set_properties("conv", props);
 
-    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    cudnn_frontend::graph::Tensor tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
     convolution_fp8_node.insert_tensor("tensor0", tensor0);
 
-    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    cudnn_frontend::graph::Tensor tensor1{"tensor1"};
     tensor1.set_dim({64, 32, 3, 3});
     convolution_fp8_node.insert_tensor("tensor1", tensor1);
 
-    cudnn_frontend::tensor_properties tensor2{"tensor2"};
+    cudnn_frontend::graph::Tensor tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
     tensor2.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     convolution_fp8_node.insert_tensor("tensor2", tensor2);
@@ -379,11 +379,11 @@ run_convolution_fp8_node() {
     });
     convolution_fp8_node.set_properties("X_DQ", X_DQ_props);
 
-    cudnn_frontend::tensor_properties tensor3{"tensor3"};
+    cudnn_frontend::graph::Tensor tensor3{"tensor3"};
     tensor3.set_dim({1, 1, 1, 1});
     convolution_fp8_node.insert_tensor("tensor3", tensor3);
 
-    cudnn_frontend::tensor_properties tensor4{"tensor4"};
+    cudnn_frontend::graph::Tensor tensor4{"tensor4"};
     tensor4.set_dim({4, 64, 16, 16});
     convolution_fp8_node.insert_tensor("tensor4", tensor4);
 
@@ -398,11 +398,11 @@ run_convolution_fp8_node() {
     });
     convolution_fp8_node.set_properties("W_DQ", W_DQ_props);
 
-    cudnn_frontend::tensor_properties tensor5{"tensor5"};
+    cudnn_frontend::graph::Tensor tensor5{"tensor5"};
     tensor5.set_dim({1, 1, 1, 1});
     convolution_fp8_node.insert_tensor("tensor5", tensor5);
 
-    cudnn_frontend::tensor_properties tensor6{"tensor6"};
+    cudnn_frontend::graph::Tensor tensor6{"tensor6"};
     tensor6.set_dim({4, 64, 16, 16});
     convolution_fp8_node.insert_tensor("tensor6", tensor6);
 
@@ -418,11 +418,11 @@ run_convolution_fp8_node() {
     });
     convolution_fp8_node.set_properties("Y_Q", Y_Q_props);
 
-    cudnn_frontend::tensor_properties tensor7{"tensor7"};
+    cudnn_frontend::graph::Tensor tensor7{"tensor7"};
     tensor7.set_dim({1, 1, 1, 1});
     convolution_fp8_node.insert_tensor("tensor7", tensor7);
 
-    cudnn_frontend::tensor_properties tensor8{"tensor8"};
+    cudnn_frontend::graph::Tensor tensor8{"tensor8"};
     tensor8.set_dim({4, 64, 16, 16});
     tensor8.set_data_type(cudnn_frontend::DataType_t::FP8_E4M3);
     convolution_fp8_node.insert_tensor("tensor8", tensor8);
@@ -438,7 +438,7 @@ run_convolution_fp8_node() {
     });
     convolution_fp8_node.set_properties("amax", amax_props);
 
-    cudnn_frontend::tensor_properties tensor9{"tensor9"};
+    cudnn_frontend::graph::Tensor tensor9{"tensor9"};
     tensor9.set_dim({1, 1, 1, 1});
     convolution_fp8_node.insert_tensor("tensor9", tensor9);
 
@@ -491,15 +491,15 @@ run_convolution_pointwise_node() {
     });
     convolution_pointwise_node.set_properties("conv", conv_props);
 
-    cudnn_frontend::tensor_properties tensor0{"tensor0"};
+    cudnn_frontend::graph::Tensor tensor0{"tensor0"};
     tensor0.set_dim({4, 32, 16, 16});
     convolution_pointwise_node.insert_tensor("tensor0", tensor0);
     
-    cudnn_frontend::tensor_properties tensor1{"tensor1"};
+    cudnn_frontend::graph::Tensor tensor1{"tensor1"};
     tensor1.set_dim({64, 32, 3, 3});
     convolution_pointwise_node.insert_tensor("tensor1", tensor1);
     
-    cudnn_frontend::tensor_properties tensor2{"tensor2"};
+    cudnn_frontend::graph::Tensor tensor2{"tensor2"};
     tensor2.set_dim({4, 64, 16, 16});
     convolution_pointwise_node.insert_tensor("tensor2", tensor2);
     
@@ -514,11 +514,11 @@ run_convolution_pointwise_node() {
     });
     convolution_pointwise_node.set_properties("pointwise", pointwise_props);
 
-    cudnn_frontend::tensor_properties tensor3{"tensor3"};
+    cudnn_frontend::graph::Tensor tensor3{"tensor3"};
     tensor3.set_dim({1, 64, 1, 1});
     convolution_pointwise_node.insert_tensor("tensor3", tensor3);
 
-    cudnn_frontend::tensor_properties tensor4{"tensor4"};
+    cudnn_frontend::graph::Tensor tensor4{"tensor4"};
     tensor4.set_dim({4, 64, 16, 16});
     convolution_pointwise_node.insert_tensor("tensor4", tensor4);
 

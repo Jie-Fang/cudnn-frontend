@@ -25,7 +25,7 @@ protected:
     std::vector<std::unique_ptr<ExecutionPlan>> execution_plans;
     std::vector<std::vector<int64_t>> variant_pack_uids;
 
-    error_t create_cudnn_tensor(std::shared_ptr<tensor_properties const> const& props) {
+    error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor const> const& props) {
 
         auto const& dim = props->get_dim();
         getLogger() << "[cudnn_frontend] INFO: Tensor dims are ";
