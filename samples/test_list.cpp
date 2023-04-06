@@ -28,9 +28,10 @@
 #include "conv_sample.h"
 #include "fusion_sample.h"
 #include "fp8_sample.h"
+#include "fp8_flash_mha_sample.h"
+#include "f16_flash_mha_sample.h"
 #include "mha_sample.h"
 #include "fused_mha_sample.h"
-#include "bf16_llm_sample.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2723,9 +2724,9 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 #endif
 
 #if (CUDNN_VERSION >= 8900)
-TEST_CASE("BF16 LLM Fprop sample", "[frontend][fusion][BF16LLMFprop]") {
-    std::cout << "TEST_CASE :: BF16 LLM Fprop with backend API" << std::endl;
-    INFO("TEST_CASE ::  BF16 LLM Fprop with backend API");
+TEST_CASE("BF16 LLM Flash MHA Fprop sample", "[frontend][fusion][BF16LLMFprop]") {
+    std::cout << "TEST_CASE :: BF16 LLM Flash MHA Fprop with backend API" << std::endl;
+    INFO("TEST_CASE ::  BF16 LLM Flash MHA Fprop with backend API");
 
     int64_t b = 2;  // batch size
     int64_t h = 12;  // head dim
@@ -2780,7 +2781,7 @@ TEST_CASE("BF16 LLM Fprop sample", "[frontend][fusion][BF16LLMFprop]") {
     Surface<half> oTensor(oSize, false);
     devPtrO = (void *)oTensor.devPtr;
 
-    run_bf16_LLM_fprop(b,
+    run_f16_flash_attention_fprop(b,
                 h,
                 s_q,
                 s_kv,
@@ -2805,9 +2806,9 @@ TEST_CASE("BF16 LLM Fprop sample", "[frontend][fusion][BF16LLMFprop]") {
     std::cout << "\n========================================================================================\n";
 }
 
-TEST_CASE("BF16 LLM Bprop sample", "[frontend][fusion][BF16LLMBprop]") {
-    std::cout << "TEST_CASE :: BF16 LLM Bprop with backend API" << std::endl;
-    INFO("TEST_CASE ::  BF16 LLM Bprop with backend API");
+TEST_CASE("BF16 LLM Flash MHA Bprop sample", "[frontend][fusion][BF16LLMBprop]") {
+    std::cout << "TEST_CASE :: BF16 LLM Flash MHA Bprop with backend API" << std::endl;
+    INFO("TEST_CASE ::  BF16 LLM Flash MHA Bprop with backend API");
 
     int64_t b = 2;  // batch size
     int64_t h = 12;  // head dim
@@ -2883,7 +2884,7 @@ TEST_CASE("BF16 LLM Bprop sample", "[frontend][fusion][BF16LLMBprop]") {
     Surface<half> doTensor(oSize, false);
     devPtrdO = (void *)doTensor.devPtr;
 
-    run_bf16_LLM_bprop(b, 
+    run_f16_flash_attention_bprop(b, 
                 h, 
                 s_q,
                 s_kv,
@@ -2909,6 +2910,422 @@ TEST_CASE("BF16 LLM Bprop sample", "[frontend][fusion][BF16LLMBprop]") {
     checkCudaErr(cudaDeviceSynchronize());
     checkCudaErr(cudaMemcpy(dqkvTensor.hostPtr, dqkvTensor.devPtr, sizeof(dqkvTensor.hostPtr[0]) * dqkvSize, cudaMemcpyDeviceToHost));
     checkCudaErr(cudaDeviceSynchronize());
+
+    std::cout << "\n========================================================================================\n";
+}
+#endif
+
+#if (CUDNN_VERSION >= 8900)
+TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") {
+    std::cout << "TEST_CASE :: FP8 Flash MHA Fprop with backend API" << std::endl;
+    INFO("TEST_CASE :: FP8 Flash MHA Fprop with backend API");
+
+    int64_t b = 48;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+
+    MHA_Layout layout = MHA_Layout::QKV_INTERLEAVED; // layout of the tensors Q,K and V
+
+    // this scaling factor needs to be bfloat16 for data type bfloat16
+    float attnScale = 0.125f; // scale value before softmax
+    bool isTraining = true; // is training or inference
+    float dropoutProbability = 0.0f; // probability of dropout. If inference, dropout should be 0.0f
+    int64_t seed = 123456; // seed for generating the dropout mask
+
+    printf("====PARAMETERS====\n");
+    printf("batch is %" PRId64 ", head dim is %" PRId64 ", q sequence length is %" PRId64 ", kv sequence length is %" PRId64 ", hidden dim is %" PRId64 "\n", b, h, s_q, s_kv, d);
+
+    void* devPtrQKV        = nullptr; // QKV interleaved tensor
+    void* devPtrM          = nullptr; // M tensor (row reduction max of QK.T)
+    void* devPtrZInv       = nullptr; // ZInv tensor (1 / row reduction sum of exponention of e^(x-M))
+    void* devPtrO          = nullptr; // final output
+
+    int* devPtrActualSeqlenOverride     = nullptr; // actual seqlen override (MNK override)
+    int* devPtrQKVRaggedOffset          = nullptr; // Offset overrides for QKV
+    int* devPtrORaggedOffset            = nullptr; // Offset override for O
+
+    void* devPtrDropoutSeed     = nullptr; // Dropout seed
+    void* devPtrDropoutOffset   = nullptr; // Dropout offset used in Philox RNG
+
+    // ================ FP8 tensors ===============================
+    void* devPtrDescaleQ        = nullptr;
+    void* devPtrDescaleK        = nullptr;
+    void* devPtrDescaleV        = nullptr;
+    void* devPtrDescaleS        = nullptr;
+    void* devPtrScaleS          = nullptr;
+    void* devPtrScaleO          = nullptr;
+    void* devPtrAmaxO           = nullptr;
+    void* devPtrAmaxS           = nullptr;
+
+    int* hostActualSeqlenOverride     = nullptr; // MNK override
+    int* hostPtrQKVRaggedOffset       = nullptr;
+    int* hostPtrORaggedOffset         = nullptr;
+
+    // the setup is for the qkv interleaved layout (qkv interleaved assumes s_q = s_kv)
+    int64_t qkvTensorDim[] = {b, s_q, 3, h, d};
+    CUDNN_FRONTEND_UNUSED(qkvTensorDim);
+
+    /*********All FP8 Tensors have values initialized in range [0, 50]******************/
+
+    int64_t qkvSize = b * s_q * 3 * h * d;
+    Surface<uint8_t> qkvTensor(qkvSize, false);
+    devPtrQKV = (void *)qkvTensor.devPtr;
+
+    int64_t reductionSize = b * h * s_q;
+    Surface<float> mTensor(reductionSize, false);
+    Surface<float> zInvTensor(reductionSize, false);
+    // Set M and Z INV device pointers up if training mode. Defaults to nullptr
+    if (isTraining) {
+        devPtrM    = (void *)mTensor.devPtr;
+        devPtrZInv = (void *)zInvTensor.devPtr;
+    }
+    
+    int64_t scalarSize = 1;
+    Surface<int64_t> dropoutSeed(scalarSize, false, seed);
+    devPtrDropoutSeed = (void *)dropoutSeed.devPtr;
+    Surface<int64_t> dropoutOffset(scalarSize, false, (int64_t)1);
+    devPtrDropoutOffset = (void *)dropoutOffset.devPtr;
+
+    Surface<float> descaleQ(scalarSize, false, 1.0f);
+    devPtrDescaleQ = (void *)descaleQ.devPtr;
+    Surface<float> descaleK(scalarSize, false, 1.0f);
+    devPtrDescaleK = (void *)descaleK.devPtr;
+    Surface<float> descaleV(scalarSize, false, 1.0f);
+    devPtrDescaleV = (void *)descaleV.devPtr;
+    Surface<float> descaleS(scalarSize, false, 1.0f);
+    devPtrDescaleS = (void *)descaleS.devPtr;
+
+    Surface<float> scaleS(scalarSize, false, 1.0f);
+    devPtrScaleS = (void *)scaleS.devPtr;
+    Surface<float> scaleO(scalarSize, false, 1.0f);
+    devPtrScaleO = (void *)scaleO.devPtr;
+
+    Surface<float> amaxO(scalarSize, false);
+    devPtrAmaxO = (void *)amaxO.devPtr;
+    Surface<float> amaxS(scalarSize, false);
+    devPtrAmaxS = (void *)amaxS.devPtr;
+
+
+    // setup of actual seqlen Q and seqlen K and seqlen O
+    checkCudaErr(cudaMalloc((void**)&(devPtrActualSeqlenOverride), (b) * sizeof(devPtrActualSeqlenOverride[0])));
+    hostActualSeqlenOverride = (int*) calloc(b, sizeof(hostActualSeqlenOverride[0]));
+
+    for (int i = 0; i < b; i++) {
+        // random number between 16 and 512 for host seq len
+        hostActualSeqlenOverride[i] = rand() % (s_q - 16 + 1) + 16;
+    }
+
+    checkCudaErr(cudaMemcpy(devPtrActualSeqlenOverride, hostActualSeqlenOverride, sizeof(hostActualSeqlenOverride[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMalloc((void**)&(devPtrQKVRaggedOffset), (b + 1) * sizeof(devPtrQKVRaggedOffset[0])));
+    hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
+
+
+    int QKVprefixSum[b + 1];
+    for (int i = 0; i < b + 1; i++) {
+        // Calculate prefix sum of hostActualSeqLenK
+        if (i == 0) {
+            QKVprefixSum[i] = 0;
+        } else {
+            QKVprefixSum[i] = QKVprefixSum[i - 1] + hostActualSeqlenOverride[i - 1];
+        }
+    }
+
+    int offsetStride = h * d;
+    // Variable sequence lengths for QKV and O
+    for (int i = 0; i < b + 1; i++) {
+        hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
+    }
+
+    checkCudaErr(cudaMemcpy(devPtrQKVRaggedOffset, hostPtrQKVRaggedOffset, sizeof(hostPtrQKVRaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMalloc((void**)&(devPtrORaggedOffset), (b + 1) * sizeof(devPtrORaggedOffset[0])));
+    hostPtrORaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrORaggedOffset[0])); // ragged offset has b+1 elements
+
+    for (int i = 0; i < b + 1; i++) {
+        hostPtrORaggedOffset[i] = offsetStride * QKVprefixSum[i];
+    }
+
+    checkCudaErr(cudaMemcpy(devPtrORaggedOffset, hostPtrORaggedOffset, sizeof(hostPtrORaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+
+    int64_t oSize   = b * s_q * h * d;
+    Surface<uint8_t> oTensor(oSize, false);
+    devPtrO = (void *)oTensor.devPtr;
+
+    run_fp8_flash_mha_fprop(b,
+                h,
+                s_q,
+                s_kv,
+                d,
+                attnScale,
+                isTraining,
+                dropoutProbability,
+                layout,
+                devPtrQKV,
+                devPtrM,
+                devPtrZInv,
+                devPtrO,
+                devPtrDropoutSeed,
+                devPtrDropoutOffset,
+                devPtrDescaleQ,
+                devPtrDescaleK,
+                devPtrDescaleV,
+                devPtrDescaleS,
+                devPtrScaleS,
+                devPtrScaleO,
+                devPtrAmaxO,
+                devPtrAmaxS,
+                devPtrQKVRaggedOffset,
+                devPtrORaggedOffset,
+                devPtrActualSeqlenOverride,
+                CUDNN_DATA_FP8_E4M3);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(oTensor.hostPtr, oTensor.devPtr, sizeof(oTensor.hostPtr[0]) * oSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    if (devPtrActualSeqlenOverride) cudaFree(devPtrActualSeqlenOverride);
+    if (hostActualSeqlenOverride) free(hostActualSeqlenOverride);
+
+    std::cout << "\n========================================================================================\n";
+}
+
+TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") {
+    std::cout << "TEST_CASE :: FP8 Flash MHA Bprop with backend API" << std::endl;
+    INFO("TEST_CASE :: FP8 Flash MHA Bprop with backend API");
+
+    int64_t b = 48;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+
+    MHA_Layout layout = MHA_Layout::QKV_INTERLEAVED; // layout of the tensors Q,K and V
+
+    float attnScale = 0.125f; // scale value before softmax
+
+    float dropoutProbability = 0.0f; // probability of dropout. If inference, dropout should be 0.0f
+    int64_t seed = 123456; // seed for generating the dropout mask
+
+    printf("====PARAMETERS====\n");
+    printf("batch is %" PRId64 ", head dim is %" PRId64 ", q sequence length is %" PRId64 ", kv sequence length is %" PRId64 ", hidden dim is %" PRId64 "\n", b, h, s_q, s_kv, d);
+
+    void* devPtrQKV   = nullptr; // QKV interleaved tensor
+    void* devPtrM     = nullptr; // M tensor (row reduction max of QK.T)
+    void* devPtrZInv  = nullptr; // ZInv tensor (1 / row reduction sum of exponention of e^(x-M))
+    void* devPtrO     = nullptr; // final output
+    void* devPtrdO    = nullptr; // loss
+    void* devPtrdQKV  = nullptr; // dQKV interleaved tensor
+
+    int* devPtrActualSeqlenOverride   = nullptr; // actual seqlen override (MNK override)
+    int* devPtrQKVRaggedOffset        = nullptr; // Offset overrides for QKV
+    int* devPtrORaggedOffset          = nullptr; // Offset override for O
+
+    void* devPtrDropoutSeed     = nullptr; // Dropout seed
+    void* devPtrDropoutOffset   = nullptr; // Dropout offset used in Philox RNG
+
+    // ================ FP8 tensors ===============================
+    void* devPtrDescaleQ        = nullptr;
+    void* devPtrDescaleK        = nullptr;
+    void* devPtrDescaleV        = nullptr;
+    void* devPtrDescaleO        = nullptr;
+    void* devPtrDescaledO       = nullptr;
+    void* devPtrDescaleS        = nullptr;
+    void* devPtrDescaledS       = nullptr;
+    void* devPtrScaleS          = nullptr;
+    void* devPtrScaledS         = nullptr;
+    void* devPtrScaledQ         = nullptr;
+    void* devPtrScaledK         = nullptr;
+    void* devPtrScaledV         = nullptr;
+    void* devPtrAmaxdS          = nullptr;
+    void* devPtrAmaxdQ          = nullptr;
+    void* devPtrAmaxdK          = nullptr;
+    void* devPtrAmaxdV          = nullptr;
+
+    int* hostActualSeqlenOverride      = nullptr;
+    int* hostPtrQKVRaggedOffset        = nullptr;
+    int* hostPtrORaggedOffset          = nullptr;
+
+    // the setup is for the qkv interleaved layout (qkv interleaved assumes s_q = s_kv)
+    int64_t qkvTensorDim[] = {b, s_q, 3, h, d};
+    CUDNN_FRONTEND_UNUSED(qkvTensorDim);
+
+    /*********All FP8 Tensors have values initialized in range [0, 50]******************/
+
+    int64_t qkvSize = b * s_q * 3 * h * d;
+    // Make a surfaced with unsigned 8 bit int
+    Surface<uint8_t> qkvTensor(qkvSize, false);
+    devPtrQKV = (void *)qkvTensor.devPtr;
+    Surface<uint8_t> dQkvTensor(qkvSize, false);
+    devPtrdQKV = (void *)dQkvTensor.devPtr;
+
+    int64_t reductionSize = b * h * s_q;
+    Surface<float> mTensor(reductionSize, false);
+    Surface<float> zInvTensor(reductionSize, false);
+    devPtrM     = (void *)mTensor.devPtr;
+    devPtrZInv  = (void *)zInvTensor.devPtr;
+
+    int64_t scalarSize = 1;
+
+    Surface<int64_t> dropoutSeed(scalarSize, false, seed);
+    devPtrDropoutSeed = (void *)dropoutSeed.devPtr;
+    Surface<int64_t> dropoutOffset(scalarSize, false, (int64_t)1);
+    devPtrDropoutOffset = (void *)dropoutOffset.devPtr;
+
+    Surface<float> descaleQ(scalarSize, false, 1.0f);
+    devPtrDescaleQ = (void *)descaleQ.devPtr;
+
+    Surface<float> descaleK(scalarSize, false, 1.0f);
+    devPtrDescaleK = (void *)descaleK.devPtr;
+
+    Surface<float> descaleV(scalarSize, false, 1.0f);
+    devPtrDescaleV = (void *)descaleV.devPtr;
+
+    Surface<float> descaleS(scalarSize, false, 1.0f);
+    devPtrDescaleS = (void *)descaleS.devPtr;
+
+    Surface<float> descaledS(scalarSize, false, 1.0f);
+    devPtrDescaledS = (void *)descaledS.devPtr;
+
+    Surface<float> descaleO(scalarSize, false, 1.0f);
+    devPtrDescaleO = (void *)descaleO.devPtr;
+
+    Surface<float> descaledO(scalarSize, false, 1.0f);
+    devPtrDescaledO = (void *)descaledO.devPtr;
+
+    Surface<float> scaleS(scalarSize, false, 1.0f);
+    devPtrScaleS = (void *)scaleS.devPtr;
+
+    Surface<float> scaledS(scalarSize, false, 1.0f);
+    devPtrScaledS = (void *)scaledS.devPtr;
+
+    Surface<float> scaledQ(scalarSize, false, 1.0f);
+    devPtrScaledQ = (void *)scaledQ.devPtr;
+
+    Surface<float> scaledK(scalarSize, false, 1.0f);
+    devPtrScaledK = (void *)scaledK.devPtr;
+
+    Surface<float> scaledV(scalarSize, false, 1.0f);
+    devPtrScaledV = (void *)scaledV.devPtr;
+
+    Surface<float> amaxdS(scalarSize, false, 0.0f);
+    devPtrAmaxdS = (void *)amaxdS.devPtr;
+
+    Surface<float> amaxdQ(scalarSize, false, 0.0f);
+    devPtrAmaxdQ = (void *)amaxdQ.devPtr;
+
+    Surface<float> amaxdK(scalarSize, false, 0.0f);
+    devPtrAmaxdK = (void *)amaxdK.devPtr;
+
+    Surface<float> amaxdV(scalarSize, false, 0.0f);
+    devPtrAmaxdV = (void *)amaxdV.devPtr;
+
+
+    // setup of actual seqlen Q and seqlen K and seqlen O
+    checkCudaErr(cudaMalloc((void**)&(devPtrActualSeqlenOverride), (b) * sizeof(devPtrActualSeqlenOverride[0])));
+    hostActualSeqlenOverride = (int*) calloc(b, sizeof(hostActualSeqlenOverride[0]));
+
+    for (int i = 0; i < b; i++) {
+        // random number between 16 and 512 for host seq len
+        hostActualSeqlenOverride[i] = rand() % (512 - 16 + 1) + 16;
+    }
+
+    checkCudaErr(cudaMemcpy(devPtrActualSeqlenOverride, hostActualSeqlenOverride, sizeof(hostActualSeqlenOverride[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMalloc((void**)&(devPtrQKVRaggedOffset), (b + 1) * sizeof(devPtrQKVRaggedOffset[0])));
+    hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
+
+
+    int QKVprefixSum[b + 1];
+    for (int i = 0; i < b + 1; i++) {
+        // Calculate prefix sum of hostActualSeqLenK
+        if (i == 0) {
+            QKVprefixSum[i] = 0;
+        } else {
+            QKVprefixSum[i] = QKVprefixSum[i - 1] + hostActualSeqlenOverride[i - 1];
+        }
+    }
+
+    checkCudaErr(cudaMalloc((void**)&(devPtrQKVRaggedOffset), (b + 1) * sizeof(devPtrQKVRaggedOffset[0])));
+    hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
+
+    int offsetStride = h * d;
+    // Variable sequence lengths for QKV and O
+    for (int i = 0; i < b + 1; i++) {
+        hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
+    }
+
+    checkCudaErr(cudaMemcpy(devPtrQKVRaggedOffset, hostPtrQKVRaggedOffset, sizeof(hostPtrQKVRaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    checkCudaErr(cudaMalloc((void**)&(devPtrORaggedOffset), (b + 1) * sizeof(devPtrORaggedOffset[0])));
+    hostPtrORaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrORaggedOffset[0])); // ragged offset has b+1 elements
+
+    for (int i = 0; i < b + 1; i++) {
+        hostPtrORaggedOffset[i] = offsetStride * QKVprefixSum[i];
+    }
+
+    checkCudaErr(cudaMemcpy(devPtrORaggedOffset, hostPtrORaggedOffset, sizeof(hostPtrORaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+
+    int64_t oSize   = b * s_q * h * d;
+    Surface<uint8_t> oTensor(oSize, false);
+    devPtrO = (void *)oTensor.devPtr;
+
+    Surface<uint8_t> dOTensor(oSize, false);
+    devPtrdO = (void *)dOTensor.devPtr;
+
+    run_fp8_flash_mha_bprop(b,
+                h,
+                s_q,
+                s_kv,
+                d,
+                attnScale,
+                dropoutProbability,
+                layout,
+                devPtrQKV,
+                devPtrM,
+                devPtrZInv,
+                devPtrO,
+                devPtrdO,
+                devPtrdQKV,
+                devPtrDropoutSeed,
+                devPtrDropoutOffset,
+                devPtrDescaleQ,
+                devPtrDescaleK,
+                devPtrDescaleV,
+                devPtrDescaleO,
+                devPtrDescaledO,
+                devPtrDescaleS,
+                devPtrDescaledS,
+                devPtrScaleS,
+                devPtrScaledS,
+                devPtrScaledQ,
+                devPtrScaledK,
+                devPtrScaledV,
+                devPtrAmaxdS,
+                devPtrAmaxdQ,
+                devPtrAmaxdK,
+                devPtrAmaxdV,
+                devPtrQKVRaggedOffset,
+                devPtrORaggedOffset,
+                devPtrActualSeqlenOverride,
+                CUDNN_DATA_FP8_E4M3);
+
+    checkCudaErr(cudaDeviceSynchronize());
+    checkCudaErr(cudaMemcpy(dQkvTensor.hostPtr, dQkvTensor.devPtr, sizeof(dQkvTensor.hostPtr[0]) * qkvSize, cudaMemcpyDeviceToHost));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    if (devPtrActualSeqlenOverride) cudaFree(devPtrActualSeqlenOverride);
+    if (hostActualSeqlenOverride) free(hostActualSeqlenOverride);
 
     std::cout << "\n========================================================================================\n";
 }

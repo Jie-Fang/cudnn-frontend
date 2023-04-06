@@ -82,6 +82,16 @@ void initImage(int8_t* image, int64_t imageSize) {
     }
 }
 
+// Currently set to generate random integers [0, 50] to avoid uint8 overflow
+void initImage(uint8_t* image, int64_t imageSize) {
+    static unsigned seed = 123456789;
+    for (int64_t index = 0; index < imageSize; index++) {
+        seed = (1103515245 * seed + 12345) & 0xffffffff;
+        // Takes floats from [0, 1), scales and casts to ints from [0, 50]
+        image[index] = (uint8_t)(50 * float(seed) * 2.3283064e-10f);  // 2^-32
+    }
+}
+
 // Currently set to generate uniform integers [0,1]
 void initImage(int32_t* image, int64_t imageSize) {
     static unsigned seed = 123456789;

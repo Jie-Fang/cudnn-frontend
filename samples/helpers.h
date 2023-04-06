@@ -85,6 +85,7 @@ void initImage(float* image, int64_t imageSize);
 void initImage(half1* image, int64_t imageSize);
 void testinitImage(half1* image, int64_t imageSize, int test);
 void initImage(int8_t* image, int64_t imageSize);
+void initImage(uint8_t* image, int64_t imageSize);
 void initImage(int32_t* image, int64_t imageSize);
 void initImage(int64_t* image, int64_t imageSize);
 void initImage(bool* image, int64_t imageSize);

@@ -40,7 +40,7 @@
 #if (CUDNN_VERSION >= 8900)
 
 void 
-run_bf16_LLM_fprop(int64_t b, 
+run_f16_flash_attention_fprop(int64_t b, 
               int64_t h, 
               int64_t s_q,
               int64_t s_kv,
@@ -59,7 +59,7 @@ run_bf16_LLM_fprop(int64_t b,
               cudnnDataType_t tensorType);
 
 void 
-run_bf16_LLM_bprop(int64_t b, 
+run_f16_flash_attention_bprop(int64_t b, 
               int64_t h, 
               int64_t s_q,
               int64_t s_kv,

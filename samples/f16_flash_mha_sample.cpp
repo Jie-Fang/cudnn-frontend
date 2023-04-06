@@ -20,7 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "bf16_llm_sample.h"
+#include "f16_flash_mha_sample.h"
 #include <cudnn_frontend.h>
 #include "error_util.h"
 
@@ -676,7 +676,7 @@ createSoftmaxBackward(int64_t b,
 }
 
 void 
-run_bf16_LLM_fprop(int64_t b, 
+run_f16_flash_attention_fprop(int64_t b, 
               int64_t h, 
               int64_t s_q,
               int64_t s_kv,
@@ -806,7 +806,7 @@ run_bf16_LLM_fprop(int64_t b,
 }
 
 void 
-run_bf16_LLM_bprop(int64_t b, 
+run_f16_flash_attention_bprop(int64_t b, 
               int64_t h, 
               int64_t s_q,
               int64_t s_kv,

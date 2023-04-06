@@ -2734,6 +2734,9 @@ class OperationBuilder_v8 {
 #if (CUDNN_VERSION >= 8500)
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_ERF) ||
 #endif
+#if (CUDNN_VERSION >= 8900)
+                                            (m_operation.pointwise_mode == CUDNN_POINTWISE_RECIPROCAL) ||
+#endif
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MIN) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_MAX) ||
                                             (m_operation.pointwise_mode == CUDNN_POINTWISE_SQRT));
@@ -2762,7 +2765,7 @@ class OperationBuilder_v8 {
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_BWD) ||
 #if (CUDNN_VERSION >= 8500)
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_GELU_APPROX_TANH_BWD) ||
-#endif
+#endif 
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SOFTPLUS_BWD) ||
                                                       (m_operation.pointwise_mode == CUDNN_POINTWISE_SWISH_BWD));
 
