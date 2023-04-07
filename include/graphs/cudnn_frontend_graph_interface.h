@@ -254,7 +254,7 @@ public:
         flat_node.tensor_props = all_tensors;
         
         for (auto const &prop : conv) {
-            getLogger() << "[cudnn_frontend] INFO: Adding the conv node " << prop.first << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << prop.first << std::endl;
             auto conv_node = std::make_shared<ConvolutionNode>(prop.first, uid_offset);
             conv_node->props = prop.second;
             conv_node->parent_node = &flat_node;
@@ -263,7 +263,7 @@ public:
         }
 
         for (auto const &prop : mm) {
-            getLogger() << "[cudnn_frontend] INFO: Adding the matmul node " << prop.first << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << prop.first << std::endl;
             auto matmul_node = std::make_shared<MatMulNode>(prop.first, uid_offset);
             matmul_node->props = prop.second;
             matmul_node->parent_node = &flat_node;
@@ -272,7 +272,7 @@ public:
         }
 
         for (auto const &prop : pw) {
-            getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node " << prop.first << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << prop.first << std::endl;
             auto pointwise_node = std::make_shared<PointwiseNode>(prop.first, uid_offset);
             pointwise_node->props = prop.second;
             pointwise_node->parent_node = &flat_node;

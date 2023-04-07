@@ -170,15 +170,17 @@ public:
         return 0;
     }
     
-    std::shared_ptr<graph::Tensor> get_tensor_props(std::string const& name) {
+    std::shared_ptr<graph::Tensor> get_tensor_props(std::string const& name) const {
         if(tensor_props.count(name)) {
             return tensor_props.at(name);
         }
         if(parent_node == nullptr) {
             return nullptr;
         }
-        tensor_props[name] = parent_node->get_tensor_props(name);
-        return tensor_props.at(name);
+        // This optimization is not required right now.
+        // And without it, this function can be qualified as const which helps during development.
+        // tensor_props[name] = parent_node->get_tensor_props(name);
+        return parent_node->get_tensor_props(name);
     }
 };
 

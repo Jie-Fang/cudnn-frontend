@@ -425,7 +425,7 @@ inline std::ostream& operator<<(std::ostream& os, const matmul& props) {
 class pointwise : public operation {
 public:
     enum PORTS {
-        X = 0,
+        X,
         B,
         Y,
 

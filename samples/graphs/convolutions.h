@@ -21,3 +21,5 @@
  */
 
 void test_convolution_scale_bias_relu_graph();
+
+void test_convolution_batchnorm_infernece_graph();

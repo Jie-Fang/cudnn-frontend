@@ -77,20 +77,49 @@ public:
     error_t validate() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating PointwiseNode..." << std::endl;
 
+        auto status = error_t::OK;
+
+        // Ensure that ports are matched to tensors in accordance with port count.
+        // X and Y should always be present.
+        auto X = get_tensor_props(props->get_port_name(pointwise::PORTS::X));
+        if(X == nullptr) {
+            status = error_t::ATTRIBUTE_NOT_SET;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " X port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
+            return status;
+        }
+
+        auto Y = get_tensor_props(props->get_port_name(pointwise::PORTS::Y));
+        if(Y == nullptr) {
+            status = error_t::ATTRIBUTE_NOT_SET;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Y port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
+            return status;
+        }
+
+        auto const port_count = get_pointwise_mode_port_count(props->get_mode());
+        if(port_count == 3) {
+            auto B = get_tensor_props(props->get_port_name(pointwise::PORTS::B));
+            if(B == nullptr) {
+                status = error_t::ATTRIBUTE_NOT_SET;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " B port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
+                return status;
+            }
+        }
+
         getLogger() << "[cudnn_frontend] INFO: " << "Validated PointwiseNode." << std::endl;
-        return error_t::OK;
+        return status;
     }
 
     error_t createTensors() override final {
         
-        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode tensors X:" << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
         create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise::PORTS::X)));
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode tensors Y:" << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
         create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise::PORTS::Y)));
-
-        if(props->get_mode() == PointwiseMode_t::ADD || props->get_mode() == PointwiseMode_t::MUL) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode tensors B:" << std::endl;
+        
+        auto const port_count = get_pointwise_mode_port_count(props->get_mode());
+        if(port_count == 3) {
+            getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors B:" << std::endl;
             create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise::PORTS::B)));
         }
 
@@ -126,9 +155,10 @@ public:
                 , get_tensor_props(props->get_port_name(pointwise::PORTS::B))
                 , get_tensor_props(props->get_port_name(pointwise::PORTS::Y))
             };
+            auto& tensors_in_operation = tensors_in_operations[name];
             for(auto const& tensor_props: tensor_props_involved_in_operation) {
                 if(tensor_props->get_is_virtual() == false) {
-                    tensors_in_operations[name].emplace_back(tensor_props->get_uid());
+                    tensors_in_operation.emplace_back(tensor_props->get_uid());
                 }
             }
         }
@@ -145,9 +175,10 @@ public:
                 get_tensor_props(props->get_port_name(pointwise::PORTS::X))
                 , get_tensor_props(props->get_port_name(pointwise::PORTS::Y))
             };
+            auto& tensors_in_operation = tensors_in_operations[name];
             for(auto const& tensor_props: tensor_props_involved_in_operation) {
                 if(tensor_props->get_is_virtual() == false) {
-                    tensors_in_operations[name].emplace_back(tensor_props->get_uid());
+                    tensors_in_operation.emplace_back(tensor_props->get_uid());
                 }
             }
         }

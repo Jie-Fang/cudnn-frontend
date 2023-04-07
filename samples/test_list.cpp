@@ -2746,6 +2746,7 @@ TEST_CASE("Composite Nodes", "[composite][node]") {
 
 TEST_CASE("Convolution Graphs", "[conv][graph]") {
     test_convolution_scale_bias_relu_graph();
+    test_convolution_batchnorm_infernece_graph();
 }
 
 TEST_CASE("Matmul Graphs", "[matmul][graph]") {
