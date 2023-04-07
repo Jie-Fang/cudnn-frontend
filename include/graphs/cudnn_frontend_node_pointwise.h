@@ -43,8 +43,8 @@ public:
         props->update_uids(offset);
 
         // TODO: Only inferrencing from (X, B) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_port_name(pointwise::PORTS::X));
-        auto y_tensor_prop = get_tensor_props(props->get_port_name(pointwise::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::X));
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::Y));
         
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
         auto& y_tensor_dim = y_tensor_prop->get_dim();        
@@ -60,7 +60,7 @@ public:
         }
 
         for(size_t i = 0; i < pointwise::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<pointwise::PORTS>(i)));
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<pointwise::PORTS>(i)));
             if(tensor_prop == nullptr)
                 continue;
 
@@ -81,14 +81,14 @@ public:
 
         // Ensure that ports are matched to tensors in accordance with port count.
         // X and Y should always be present.
-        auto X = get_tensor_props(props->get_port_name(pointwise::PORTS::X));
+        auto X = get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::X));
         if(X == nullptr) {
             status = error_t::ATTRIBUTE_NOT_SET;
             getLogger() << "[cudnn_frontend] ERROR: " << status << " X port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
             return status;
         }
 
-        auto Y = get_tensor_props(props->get_port_name(pointwise::PORTS::Y));
+        auto Y = get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::Y));
         if(Y == nullptr) {
             status = error_t::ATTRIBUTE_NOT_SET;
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Y port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
@@ -97,7 +97,7 @@ public:
 
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count == 3) {
-            auto B = get_tensor_props(props->get_port_name(pointwise::PORTS::B));
+            auto B = get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::B));
             if(B == nullptr) {
                 status = error_t::ATTRIBUTE_NOT_SET;
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " B port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
@@ -112,15 +112,15 @@ public:
     error_t createTensors() override final {
         
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::X)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::Y)));
         
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count == 3) {
             getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors B:" << std::endl;
-            create_cudnn_tensor(get_tensor_props(props->get_port_name(pointwise::PORTS::B)));
+            create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::B)));
         }
 
         return error_t::OK;
@@ -151,9 +151,9 @@ public:
                 
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
-                get_tensor_props(props->get_port_name(pointwise::PORTS::X))
-                , get_tensor_props(props->get_port_name(pointwise::PORTS::B))
-                , get_tensor_props(props->get_port_name(pointwise::PORTS::Y))
+                get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::X))
+                , get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::B))
+                , get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::Y))
             };
             auto& tensors_in_operation = tensors_in_operations[name];
             for(auto const& tensor_props: tensor_props_involved_in_operation) {
@@ -172,8 +172,8 @@ public:
    
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
-                get_tensor_props(props->get_port_name(pointwise::PORTS::X))
-                , get_tensor_props(props->get_port_name(pointwise::PORTS::Y))
+                get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::X))
+                , get_tensor_props(props->get_tensor_at_port(pointwise::PORTS::Y))
             };
             auto& tensors_in_operation = tensors_in_operations[name];
             for(auto const& tensor_props: tensor_props_involved_in_operation) {

@@ -44,7 +44,7 @@ void init_properties(py::module_ &m) {
         .def("set_tensor_data_type", &cudnn_frontend::graph::convolution::set_tensor_data_type)
         .def("get_compute_type",     &cudnn_frontend::graph::convolution::get_compute_type)
         .def("set_compute_type",     &cudnn_frontend::graph::convolution::set_compute_type)
-        .def("get_port_name",       &cudnn_frontend::graph::convolution::get_port_name)
+        .def("get_tensor_at_port",       &cudnn_frontend::graph::convolution::get_tensor_at_port)
         .def("map_port_to_tensor",       &cudnn_frontend::graph::convolution::map_port_to_tensor)
         .def("__repr__", [](cudnn_frontend::graph::convolution const& props){
             std::ostringstream out;
@@ -64,7 +64,7 @@ void init_properties(py::module_ &m) {
         .def("set_tensor_data_type", &cudnn_frontend::graph::convolution::set_tensor_data_type)
         .def("get_compute_type",     &cudnn_frontend::graph::convolution::get_compute_type)
         .def("set_compute_type",     &cudnn_frontend::graph::convolution::set_compute_type)
-        .def("get_port_name",       &cudnn_frontend::graph::matmul::get_port_name)
+        .def("get_tensor_at_port",       &cudnn_frontend::graph::matmul::get_tensor_at_port)
         .def("map_port_to_tensor",       &cudnn_frontend::graph::matmul::map_port_to_tensor)
         .def("__repr__", [](cudnn_frontend::graph::matmul const& props){
             std::ostringstream out;
@@ -86,7 +86,7 @@ void init_properties(py::module_ &m) {
         .def("set_tensor_data_type",  &cudnn_frontend::graph::convolution::set_tensor_data_type)
         .def("get_compute_type",      &cudnn_frontend::graph::convolution::get_compute_type)
         .def("set_compute_type",      &cudnn_frontend::graph::convolution::set_compute_type)
-        .def("get_port_name",       &cudnn_frontend::graph::pointwise::get_port_name)
+        .def("get_tensor_at_port",       &cudnn_frontend::graph::pointwise::get_tensor_at_port)
         .def("map_port_to_tensor",       &cudnn_frontend::graph::pointwise::map_port_to_tensor);
 
     py::enum_<cudnn_frontend::graph::pointwise::PORTS>(pointwise, "ports")

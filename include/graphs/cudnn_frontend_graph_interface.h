@@ -127,9 +127,9 @@ public:
         std::unordered_map<std::string, std::vector<std::string>> outgoing_nodes_for_tensors;
         for (auto &node : conv) {
             all_nodes[node.first] = node.second;
-            auto &y_tensor = all_tensors.at(node.second->get_port_name(convolution::PORTS::Y));
-            auto &x_tensor = all_tensors.at(node.second->get_port_name(convolution::PORTS::X));
-            auto &w_tensor = all_tensors.at(node.second->get_port_name(convolution::PORTS::W));
+            auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(convolution::PORTS::Y));
+            auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(convolution::PORTS::X));
+            auto &w_tensor = all_tensors.at(node.second->get_tensor_at_port(convolution::PORTS::W));
         
             outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
             outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());
@@ -141,9 +141,9 @@ public:
         }
         for (auto &node : mm) {
             all_nodes[node.first] = node.second;
-            auto &y_tensor = all_tensors.at(node.second->get_port_name(matmul::PORTS::Y));
-            auto &x_tensor = all_tensors.at(node.second->get_port_name(matmul::PORTS::X));
-            auto &w_tensor = all_tensors.at(node.second->get_port_name(matmul::PORTS::W));
+            auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(matmul::PORTS::Y));
+            auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(matmul::PORTS::X));
+            auto &w_tensor = all_tensors.at(node.second->get_tensor_at_port(matmul::PORTS::W));
         
             outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
             outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());
@@ -158,9 +158,9 @@ public:
             
             auto const port_count = get_pointwise_mode_port_count(node.second->get_mode());
             if(port_count == 3) {
-                auto &y_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::Y));
-                auto &x_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::X));
-                auto &b_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::B));
+                auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(pointwise::PORTS::Y));
+                auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(pointwise::PORTS::X));
+                auto &b_tensor = all_tensors.at(node.second->get_tensor_at_port(pointwise::PORTS::B));
             
                 outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
                 outgoing_nodes_for_tensors[b_tensor->get_name()].push_back(node.second->get_name());
@@ -171,8 +171,8 @@ public:
                 outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
             }
             else if(port_count == 2) {
-                auto &y_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::Y));
-                auto &x_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::X));
+                auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(pointwise::PORTS::Y));
+                auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(pointwise::PORTS::X));
             
                 outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
                 incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());

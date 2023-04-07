@@ -59,7 +59,7 @@ void test_matmul_relu_graph() {
     pw_relu->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_relu->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
     pw_relu->map_port_to_tensor({
-        {cudnn_frontend::graph::pointwise::PORTS::X, matmul->get_port_name(cudnn_frontend::graph::matmul::PORTS::Y)}
+        {cudnn_frontend::graph::pointwise::PORTS::X, matmul->get_tensor_at_port(cudnn_frontend::graph::matmul::PORTS::Y)}
         , {cudnn_frontend::graph::pointwise::PORTS::Y, "output"}
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(pw_relu));
@@ -113,7 +113,7 @@ void test_matmul_scale_bias_relu_graph() {
     pw_scale->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_scale->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     pw_scale->map_port_to_tensor({
-        {cudnn_frontend::graph::pointwise::PORTS::X, matmul->get_port_name(cudnn_frontend::graph::matmul::PORTS::Y)}
+        {cudnn_frontend::graph::pointwise::PORTS::X, matmul->get_tensor_at_port(cudnn_frontend::graph::matmul::PORTS::Y)}
         , {cudnn_frontend::graph::pointwise::PORTS::B, "scale"}
         , {cudnn_frontend::graph::pointwise::PORTS::Y, "scale_output"}
     });
@@ -132,7 +132,7 @@ void test_matmul_scale_bias_relu_graph() {
     pw_bias->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_bias->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
     pw_bias->map_port_to_tensor({
-        {cudnn_frontend::graph::pointwise::PORTS::X, pw_scale->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y)}
+        {cudnn_frontend::graph::pointwise::PORTS::X, pw_scale->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y)}
         , {cudnn_frontend::graph::pointwise::PORTS::B, "bias"}
         , {cudnn_frontend::graph::pointwise::PORTS::Y, "bias_output"}
     });
@@ -151,7 +151,7 @@ void test_matmul_scale_bias_relu_graph() {
     pw_relu->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
     pw_relu->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
     pw_relu->map_port_to_tensor({
-        {cudnn_frontend::graph::pointwise::PORTS::X, pw_bias->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y)}
+        {cudnn_frontend::graph::pointwise::PORTS::X, pw_bias->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y)}
         , {cudnn_frontend::graph::pointwise::PORTS::Y, "output"}
     });
     REQUIRE(cudnn_frontend::error_t::OK == graph.insert_node(pw_relu));

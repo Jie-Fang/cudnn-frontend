@@ -43,9 +43,9 @@ public:
         props->update_uids(offset);
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_port_name(matmul::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_port_name(matmul::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_port_name(matmul::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(matmul::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(matmul::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(matmul::PORTS::Y));
         
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
         auto const& w_tensor_dim = w_tensor_prop->get_dim();
@@ -70,7 +70,7 @@ public:
         }
 
         for(size_t i = 0; i < matmul::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<matmul::PORTS>(i)));
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<matmul::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
@@ -94,9 +94,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(matmul::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(matmul::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(matmul::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors." << std::endl;
 
@@ -127,9 +127,9 @@ public:
 
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_port_name(matmul::PORTS::X))
-            , get_tensor_props(props->get_port_name(matmul::PORTS::W))
-            , get_tensor_props(props->get_port_name(matmul::PORTS::Y))
+            get_tensor_props(props->get_tensor_at_port(matmul::PORTS::X))
+            , get_tensor_props(props->get_tensor_at_port(matmul::PORTS::W))
+            , get_tensor_props(props->get_tensor_at_port(matmul::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {

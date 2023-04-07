@@ -87,17 +87,17 @@ public:
 
     error_t infer_properties() override final {        
         auto const& conv_node_ptr = std::static_pointer_cast<ConvolutionNode>(sub_nodes.at("conv"));
-        auto conv_output_tensor = get_tensor_props(conv_node_ptr->props->get_port_name(convolution::PORTS::Y));
+        auto conv_output_tensor = get_tensor_props(conv_node_ptr->props->get_tensor_at_port(convolution::PORTS::Y));
         conv_node_ptr->props->uids[convolution::PORTS::Y] = conv_output_tensor->get_uid();
         conv_output_tensor->set_is_virtual(true);
         
         auto const& x_dq_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at("X_DQ"));
-        auto x_dq_tensor = get_tensor_props(x_dq_node_ptr->props->get_port_name(pointwise::PORTS::Y));
+        auto x_dq_tensor = get_tensor_props(x_dq_node_ptr->props->get_tensor_at_port(pointwise::PORTS::Y));
         x_dq_node_ptr->props->uids[pointwise::PORTS::Y] = x_dq_tensor->get_uid();
         x_dq_tensor->set_is_virtual(true);
         
         auto const& w_dq_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at("W_DQ"));
-        auto w_dq_tensor = get_tensor_props(w_dq_node_ptr->props->get_port_name(pointwise::PORTS::Y));
+        auto w_dq_tensor = get_tensor_props(w_dq_node_ptr->props->get_tensor_at_port(pointwise::PORTS::Y));
         w_dq_node_ptr->props->uids[pointwise::PORTS::Y] = w_dq_tensor->get_uid();
         w_dq_tensor->set_is_virtual(true);
 

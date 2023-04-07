@@ -293,7 +293,7 @@ public:
     }
 
     std::string
-    get_port_name(PORTS port) const {
+    get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -363,7 +363,7 @@ inline std::ostream& operator<<(std::ostream& os, const convolution& props) {
     os << "],"
     << " ports: [";
     for(size_t i = 0; i < convolution::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<convolution::PORTS>(i)) << ",";
+        os << props.get_tensor_at_port(static_cast<convolution::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
@@ -398,7 +398,7 @@ public:
     }
 
     std::string
-    get_port_name(PORTS port) const {
+    get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -416,7 +416,7 @@ inline std::ostream& operator<<(std::ostream& os, const matmul& props) {
     << " name: '" << props.get_name() << "',"
     << " ports: [";
     for(size_t i = 0; i < matmul::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<matmul::PORTS>(i)) << ",";
+        os << props.get_tensor_at_port(static_cast<matmul::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
@@ -473,7 +473,7 @@ public:
     }
 
     std::string
-    get_port_name(PORTS port) const {
+    get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -485,7 +485,7 @@ inline std::ostream& operator<<(std::ostream& os, const pointwise& props) {
     << " name: '" << props.get_name() << "',"
     << " ports: [";
     for(size_t i = 0; i < pointwise::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<pointwise::PORTS>(i)) << ",";
+        os << props.get_tensor_at_port(static_cast<pointwise::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
@@ -539,7 +539,7 @@ public:
     }
 
     std::string
-    get_port_name(PORTS port) const {
+    get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -601,7 +601,7 @@ public:
     }
 
     std::string
-    get_port_name(PORTS port) const {
+    get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 };
