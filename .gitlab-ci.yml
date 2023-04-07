@@ -105,7 +105,7 @@ build:cudnn_8.8_clang:
     extends: .build:template
 
 build:cudnn_8.9:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.109
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132
     stage: build
     parallel:
         matrix:
@@ -115,7 +115,7 @@ build:cudnn_8.9:
     extends: .build:template
 
 build:cudnn_8.9_clang:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.109_clang
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
     stage: build
     tags:
         - Hopper
@@ -248,7 +248,7 @@ test:cudnn_8.8:Ampere:
         - ["build:cudnn_8.8: [Ampere]"]
 
 .test:cudnn_8.9:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.109
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132
     stage: test
     extends: .test:template
 

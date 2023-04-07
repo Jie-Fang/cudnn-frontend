@@ -2615,6 +2615,9 @@ class OperationBuilder_v8 {
 #if (CUDNN_VERSION >= 8500)
                                             (m_operation.pointwise_mode == PointwiseMode_t::ERF) ||
 #endif
+#if (CUDNN_VERSION >= 8900)
+                                            (m_operation.pointwise_mode == PointwiseMode_t::RECIPROCAL) ||
+#endif
                                             (m_operation.pointwise_mode == PointwiseMode_t::MIN) ||
                                             (m_operation.pointwise_mode == PointwiseMode_t::MAX) ||
                                             (m_operation.pointwise_mode == PointwiseMode_t::SQRT));
