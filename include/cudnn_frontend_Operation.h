@@ -569,6 +569,11 @@ class OperationBuilder_v8 {
                 m_operation.operationTag = "Reciprocal";
                 break;
 #endif
+#ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                m_operation.operationTag = "UNKNOWN_POINTWISE_OPERATION";
+                break;
+#endif
         }
         
 
