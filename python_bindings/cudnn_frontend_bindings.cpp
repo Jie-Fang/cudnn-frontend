@@ -35,21 +35,6 @@ PYBIND11_MODULE(pycudnn, m)
     .def("set_spatial_dims", &cuDNNFEContext::set_spatial_dims)
     .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims);
 
-  py::class_<reduction_properties> reduction_properties(m, "reduction_properties");
-  reduction_properties.def(py::init<std::string const &>())
-    .def("get_mode", &reduction_properties::get_mode)
-    .def("set_mode", &reduction_properties::set_mode)
-    .def("get_tensor_data_type",  &reduction_properties::get_tensor_data_type)
-    .def("set_tensor_data_type",  &reduction_properties::set_tensor_data_type)
-    .def("get_port_name",       &reduction_properties::get_port_name)
-    .def("map_port_to_tensor",       &reduction_properties::map_port_to_tensor)
-    ;
-
-  py::enum_<reduction_properties::PORTS>(m, "reduction_ports")
-        .value("X", reduction_properties::PORTS::X)
-        .value("Y", reduction_properties::PORTS::Y)
-        .export_values();
-
   py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
         .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)
         .value("DOUBLE", cudnn_frontend::DataType_t::DOUBLE)

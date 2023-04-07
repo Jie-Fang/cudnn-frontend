@@ -195,9 +195,7 @@ inline std::ostream& operator<<(std::ostream& os, const Tensor& props) {
     return os;
 }
 
-} // namespace graph
-
-class operation_properties {
+class operation {
 public:
     enum class Tag {
         BatchNorm,
@@ -222,7 +220,7 @@ public:
     bool is_tensor_data_type_set = false;
     bool is_compute_type_set = false;
 
-    operation_properties(const std::string name, Tag t) : name(name), tag(t) {}
+    operation(const std::string name, Tag t) : name(name), tag(t) {}
 
     std::string const
     get_name() const {
@@ -257,10 +255,10 @@ public:
         return error_t::OK;
     }
 
-    virtual ~operation_properties() = default;
+    virtual ~operation() = default;
 };
 
-class convolution_properties : public operation_properties {
+class convolution : public operation {
 public:
     enum PORTS {
         X = 0,
@@ -281,7 +279,7 @@ public:
 
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    convolution_properties(const std::string name) : operation_properties(name, Tag::Convolution) {
+    convolution(const std::string name) : operation(name, Tag::Convolution) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
@@ -342,10 +340,10 @@ public:
         return 0;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const convolution_properties& props);
+    friend std::ostream& operator<<(std::ostream& os, const convolution& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const convolution_properties& props) {
+inline std::ostream& operator<<(std::ostream& os, const convolution& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " dilation: [";
@@ -364,14 +362,14 @@ inline std::ostream& operator<<(std::ostream& os, const convolution_properties& 
     }
     os << "],"
     << " ports: [";
-    for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<convolution_properties::PORTS>(i)) << ",";
+    for(size_t i = 0; i < convolution::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<convolution::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class matmul_properties : public operation_properties {
+class matmul : public operation {
 public:
     enum PORTS {
         X = 0,
@@ -386,7 +384,7 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    matmul_properties(const std::string name) : operation_properties(name, Tag::MatMul) {
+    matmul(const std::string name) : operation(name, Tag::MatMul) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
@@ -410,21 +408,21 @@ public:
         }
         return 0;
     }
-    friend std::ostream& operator<<(std::ostream& os, const matmul_properties& props);
+    friend std::ostream& operator<<(std::ostream& os, const matmul& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const matmul_properties& props) {
+inline std::ostream& operator<<(std::ostream& os, const matmul& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " ports: [";
-    for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<matmul_properties::PORTS>(i)) << ",";
+    for(size_t i = 0; i < matmul::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<matmul::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class pointwise_properties : public operation_properties {
+class pointwise : public operation {
 public:
     enum PORTS {
         X = 0,
@@ -442,7 +440,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    pointwise_properties(const std::string name) : operation_properties(name, Tag::Pointwise) {
+    pointwise(const std::string name) : operation(name, Tag::Pointwise) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::B] = name + "::B";
         port_to_name[PORTS::Y] = name + "::Y";
@@ -479,22 +477,22 @@ public:
         return port_to_name.at(port);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const pointwise_properties& props);
+    friend std::ostream& operator<<(std::ostream& os, const pointwise& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const pointwise_properties& props) {
+inline std::ostream& operator<<(std::ostream& os, const pointwise& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " ports: [";
-    for(size_t i = 0; i < pointwise_properties::PORTS::COUNT; ++i) {
-        os << props.get_port_name(static_cast<pointwise_properties::PORTS>(i)) << ",";
+    for(size_t i = 0; i < pointwise::PORTS::COUNT; ++i) {
+        os << props.get_port_name(static_cast<pointwise::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
 
-class batchnorm_properties : public operation_properties {
+class batchnorm : public operation {
 public:
     enum PORTS {
         X = 0,
@@ -518,7 +516,7 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    batchnorm_properties(const std::string name) : operation_properties(name, Tag::BatchNorm) {
+    batchnorm(const std::string name) : operation(name, Tag::BatchNorm) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Mean] = name + "::Mean";
         port_to_name[PORTS::Var] = name + "::Var";
@@ -553,7 +551,7 @@ public:
     }
 };
 
-class reduction_properties : public operation_properties {
+class reduction : public operation {
 public:
     enum PORTS {
         X = 0,
@@ -571,7 +569,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    reduction_properties(const std::string name) : operation_properties(name, Tag::Reduction) {
+    reduction(const std::string name) : operation(name, Tag::Reduction) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Y] = name + "::Y";
     }
@@ -607,5 +605,7 @@ public:
         return port_to_name.at(port);
     }
 };
+
+} // namespace graph
 
 }

@@ -9,13 +9,15 @@
 
 namespace cudnn_frontend {
 
+namespace graph {
+
 class MatMulNode : public INode {
 private:
 
 protected:
 
 public:
-    std::shared_ptr<matmul_properties> props;
+    std::shared_ptr<matmul> props;
 
     MatMulNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
 
@@ -23,7 +25,7 @@ public:
         return Type::MATMUL;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<matmul_properties> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<matmul> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -41,9 +43,9 @@ public:
         props->update_uids(offset);
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_port_name(matmul_properties::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_port_name(matmul_properties::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_port_name(matmul_properties::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_port_name(matmul::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_port_name(matmul::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_port_name(matmul::PORTS::Y));
         
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
         auto const& w_tensor_dim = w_tensor_prop->get_dim();
@@ -67,8 +69,8 @@ public:
             }
         }
 
-        for(size_t i = 0; i < matmul_properties::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<matmul_properties::PORTS>(i)));
+        for(size_t i = 0; i < matmul::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<matmul::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
@@ -92,9 +94,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul_properties::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul_properties::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul_properties::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(matmul::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors." << std::endl;
 
@@ -116,18 +118,18 @@ public:
 
         // Create the matmul operation.
         auto matmul_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR)
-                                        .setaMatDesc(*(tensors.at(props->uids[matmul_properties::PORTS::X])))
-                                        .setbMatDesc(*(tensors.at(props->uids[matmul_properties::PORTS::W])))
-                                        .setcMatDesc(*(tensors.at(props->uids[matmul_properties::PORTS::Y])))
+                                        .setaMatDesc(*(tensors.at(props->uids[matmul::PORTS::X])))
+                                        .setbMatDesc(*(tensors.at(props->uids[matmul::PORTS::W])))
+                                        .setcMatDesc(*(tensors.at(props->uids[matmul::PORTS::Y])))
                                         .setmatmulDesc(matmul_descriptor)
                                         .build();
         operations.emplace(name, std::make_shared<Operation>(std::move(matmul_operation)));
 
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_port_name(matmul_properties::PORTS::X))
-            , get_tensor_props(props->get_port_name(matmul_properties::PORTS::W))
-            , get_tensor_props(props->get_port_name(matmul_properties::PORTS::Y))
+            get_tensor_props(props->get_port_name(matmul::PORTS::X))
+            , get_tensor_props(props->get_port_name(matmul::PORTS::W))
+            , get_tensor_props(props->get_port_name(matmul::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {
@@ -159,5 +161,7 @@ public:
         return error_t::OK;
     }
 };
+
+} // namespace graph
 
 } // namespace cudnn_frontend

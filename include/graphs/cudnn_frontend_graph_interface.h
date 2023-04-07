@@ -7,15 +7,15 @@
 
 namespace cudnn_frontend {
 
-
+namespace graph {
 
 class IGraph {
 protected:
     std::string name;
     std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> all_tensors;
-    std::unordered_map<std::string, std::shared_ptr<convolution_properties>>  conv_properties;
-    std::unordered_map<std::string, std::shared_ptr<matmul_properties>>  mm_properties;
-    std::unordered_map<std::string, std::shared_ptr<pointwise_properties>>    pw_properties;
+    std::unordered_map<std::string, std::shared_ptr<convolution>>  conv;
+    std::unordered_map<std::string, std::shared_ptr<matmul>>  mm;
+    std::unordered_map<std::string, std::shared_ptr<pointwise>>    pw;
     
 public:
     IGraph(std::string const &name ) : name(name) {}
@@ -27,9 +27,9 @@ public:
 
     virtual error_t insert_tensor(std::shared_ptr<graph::Tensor> props_ptr) = 0;
 
-    virtual error_t insert_node(std::shared_ptr<convolution_properties> props_ptr) = 0;
-    virtual error_t insert_node(std::shared_ptr<matmul_properties> props_ptr) = 0;
-    virtual error_t insert_node(std::shared_ptr<pointwise_properties> props_ptr) = 0;
+    virtual error_t insert_node(std::shared_ptr<convolution> props_ptr) = 0;
+    virtual error_t insert_node(std::shared_ptr<matmul> props_ptr) = 0;
+    virtual error_t insert_node(std::shared_ptr<pointwise> props_ptr) = 0;
     
     friend std::ostream& operator<<(std::ostream& os, const IGraph& props);
 };
@@ -42,17 +42,17 @@ inline std::ostream& operator<<(std::ostream& os, const IGraph& graph) {
     }
     os << "],"
     << "\nconv: [\n";
-    for(auto const& node: graph.conv_properties) {
+    for(auto const& node: graph.conv) {
         os << (node.second) << ",";
     }
     os << "],"
     << "\npointwise: [\n";
-    for(auto const& node: graph.pw_properties) {
+    for(auto const& node: graph.pw) {
         os << (node.second) << ",";
     }
     os << "],"
     << "\nmatmul: [\n";
-    for(auto const& node: graph.mm_properties) {
+    for(auto const& node: graph.mm) {
         os << (node.second) << ",";
     }
     os << "],";
@@ -98,38 +98,38 @@ public:
 
     // Add a conv properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t insert_node(std::shared_ptr<convolution_properties> props_ptr) {
-        conv_properties.emplace(props_ptr->get_name(), props_ptr);
+    error_t insert_node(std::shared_ptr<convolution> props_ptr) {
+        conv.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
     
     // Add a pointwise properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t insert_node(std::shared_ptr<pointwise_properties> props_ptr) {
-        pw_properties.emplace(props_ptr->get_name(), props_ptr);
+    error_t insert_node(std::shared_ptr<pointwise> props_ptr) {
+        pw.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
     
     // Add a matmul properties object with shared ownership.
     // A shared pointer is taken by value, which makes the graph an owner too.
-    error_t insert_node(std::shared_ptr<matmul_properties> props_ptr) {
-        mm_properties.emplace(props_ptr->get_name(), props_ptr);
+    error_t insert_node(std::shared_ptr<matmul> props_ptr) {
+        mm.emplace(props_ptr->get_name(), props_ptr);
         return error_t::OK;
     }
 
     error_t infer_shapes() noexcept {
-        std::unordered_map<std::string, std::shared_ptr<operation_properties const>> all_nodes;
+        std::unordered_map<std::string, std::shared_ptr<operation const>> all_nodes;
 
         // Make map of tensors to/from nodes
         std::unordered_map<std::string, std::vector<std::string>> incoming_tensors_for_nodes;
         std::unordered_map<std::string, std::vector<std::string>> outgoing_tensors_for_nodes;
         std::unordered_map<std::string, std::vector<std::string>> incoming_nodes_for_tensors;
         std::unordered_map<std::string, std::vector<std::string>> outgoing_nodes_for_tensors;
-        for (auto &node : conv_properties) {
+        for (auto &node : conv) {
             all_nodes[node.first] = node.second;
-            auto &y_tensor = all_tensors.at(node.second->get_port_name(convolution_properties::PORTS::Y));
-            auto &x_tensor = all_tensors.at(node.second->get_port_name(convolution_properties::PORTS::X));
-            auto &w_tensor = all_tensors.at(node.second->get_port_name(convolution_properties::PORTS::W));
+            auto &y_tensor = all_tensors.at(node.second->get_port_name(convolution::PORTS::Y));
+            auto &x_tensor = all_tensors.at(node.second->get_port_name(convolution::PORTS::X));
+            auto &w_tensor = all_tensors.at(node.second->get_port_name(convolution::PORTS::W));
         
             outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
             outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());
@@ -139,11 +139,11 @@ public:
             incoming_tensors_for_nodes[node.second->get_name()].push_back(w_tensor->get_name());
             outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
         }
-        for (auto &node : mm_properties) {
+        for (auto &node : mm) {
             all_nodes[node.first] = node.second;
-            auto &y_tensor = all_tensors.at(node.second->get_port_name(matmul_properties::PORTS::Y));
-            auto &x_tensor = all_tensors.at(node.second->get_port_name(matmul_properties::PORTS::X));
-            auto &w_tensor = all_tensors.at(node.second->get_port_name(matmul_properties::PORTS::W));
+            auto &y_tensor = all_tensors.at(node.second->get_port_name(matmul::PORTS::Y));
+            auto &x_tensor = all_tensors.at(node.second->get_port_name(matmul::PORTS::X));
+            auto &w_tensor = all_tensors.at(node.second->get_port_name(matmul::PORTS::W));
         
             outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
             outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());
@@ -153,14 +153,14 @@ public:
             incoming_tensors_for_nodes[node.second->get_name()].push_back(w_tensor->get_name());
             outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
         }
-        for (auto &node : pw_properties) {
+        for (auto &node : pw) {
             all_nodes[node.first] = node.second;
             
             auto const port_count = get_pointwise_mode_port_count(node.second->get_mode());
             if(port_count == 3) {
-                auto &y_tensor = all_tensors.at(node.second->get_port_name(pointwise_properties::PORTS::Y));
-                auto &x_tensor = all_tensors.at(node.second->get_port_name(pointwise_properties::PORTS::X));
-                auto &b_tensor = all_tensors.at(node.second->get_port_name(pointwise_properties::PORTS::B));
+                auto &y_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::Y));
+                auto &x_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::X));
+                auto &b_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::B));
             
                 outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
                 outgoing_nodes_for_tensors[b_tensor->get_name()].push_back(node.second->get_name());
@@ -171,8 +171,8 @@ public:
                 outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
             }
             else if(port_count == 2) {
-                auto &y_tensor = all_tensors.at(node.second->get_port_name(pointwise_properties::PORTS::Y));
-                auto &x_tensor = all_tensors.at(node.second->get_port_name(pointwise_properties::PORTS::X));
+                auto &y_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::Y));
+                auto &x_tensor = all_tensors.at(node.second->get_port_name(pointwise::PORTS::X));
             
                 outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
                 incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
@@ -218,27 +218,27 @@ public:
         getLogger() << std::endl;
 
         for(std::string const& node: sorted_nodes) {
-            std::shared_ptr<operation_properties const> node_props = all_nodes[node];
+            std::shared_ptr<operation const> node_props = all_nodes[node];
             
             switch (node_props->get_tag()) {
-                case operation_properties::Tag::Pointwise:{
-                    auto pw_node = std::static_pointer_cast<pointwise_properties const>(node_props);
+                case operation::Tag::Pointwise:{
+                    auto pw_node = std::static_pointer_cast<pointwise const>(node_props);
                     flat_node.sub_nodes[node]->infer_properties();
                     break;
                 }
-                case operation_properties::Tag::Convolution: {
-                    auto conv_node = std::static_pointer_cast<convolution_properties const>(node_props);
+                case operation::Tag::Convolution: {
+                    auto conv_node = std::static_pointer_cast<convolution const>(node_props);
                     flat_node.sub_nodes[node]->infer_properties();
                     break;
                 }
-                case operation_properties::Tag::BatchNorm: {
+                case operation::Tag::BatchNorm: {
                 }
                 break;
-                case operation_properties::Tag::Reduction: {
+                case operation::Tag::Reduction: {
                 }
                 break;
-                case operation_properties::Tag::MatMul: {
-                    auto mm_node = std::static_pointer_cast<matmul_properties const>(node_props);
+                case operation::Tag::MatMul: {
+                    auto mm_node = std::static_pointer_cast<matmul const>(node_props);
                     flat_node.sub_nodes[node]->infer_properties();
                     break;
                 }
@@ -253,7 +253,7 @@ public:
 
         flat_node.tensor_props = all_tensors;
         
-        for (auto const &prop : conv_properties) {
+        for (auto const &prop : conv) {
             getLogger() << "[cudnn_frontend] INFO: Adding the conv node " << prop.first << std::endl;
             auto conv_node = std::make_shared<ConvolutionNode>(prop.first, uid_offset);
             conv_node->props = prop.second;
@@ -262,7 +262,7 @@ public:
             uid_offset += 100;
         }
 
-        for (auto const &prop : mm_properties) {
+        for (auto const &prop : mm) {
             getLogger() << "[cudnn_frontend] INFO: Adding the matmul node " << prop.first << std::endl;
             auto matmul_node = std::make_shared<MatMulNode>(prop.first, uid_offset);
             matmul_node->props = prop.second;
@@ -271,7 +271,7 @@ public:
             uid_offset += 100;
         }
 
-        for (auto const &prop : pw_properties) {
+        for (auto const &prop : pw) {
             getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node " << prop.first << std::endl;
             auto pointwise_node = std::make_shared<PointwiseNode>(prop.first, uid_offset);
             pointwise_node->props = prop.second;
@@ -308,4 +308,6 @@ public:
     ~Graph() = default;
 };
 
-}
+} // namespace graph
+
+} // namespace cudnn_frontend

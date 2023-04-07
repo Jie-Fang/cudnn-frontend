@@ -18,6 +18,8 @@
 
 namespace cudnn_frontend {
 
+namespace graph {
+
 // Interface for all nodes to follow.
 class INode: public ICudnn {
 
@@ -217,5 +219,7 @@ public:
 
     ~CompositeNode() {};
 };
+
+} // namespace graph
 
 } // namespace cudnn_frontend

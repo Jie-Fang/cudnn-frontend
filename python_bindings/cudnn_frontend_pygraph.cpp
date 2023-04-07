@@ -37,7 +37,7 @@ void throw_if(bool const cond, cudnn_frontend::error_t const error_code, std::st
 // This class is only meant direct pythonic API calls to c++ Graph class.
 class PyGraph {
     // This Graph class is the sole structure which implicitly makes PyGraph own all tensors, nodes, and cudnn descriptors.
-    cudnn_frontend::Graph graph;
+    cudnn_frontend::graph::Graph graph;
 
 public:
     // TODO: only uses context as implementation underneath requires it.
@@ -82,17 +82,17 @@ public:
         , std::vector<int64_t> const& stride
         , std::vector<int64_t> const& dilation
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::convolution_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::convolution>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_padding(padding);
         props_ptr->set_stride(stride);
         props_ptr->set_dilation(dilation);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::convolution_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::convolution_properties::PORTS::W, weight_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::convolution::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::graph::convolution::PORTS::W, weight_props_ptr->get_name()}});
         
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::convolution_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::convolution::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -115,14 +115,14 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::matmul_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::matmul>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::matmul_properties::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::matmul_properties::PORTS::W, weight_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::matmul::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::graph::matmul::PORTS::W, weight_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::matmul_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::matmul::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -145,15 +145,15 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, bias_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::graph::pointwise::PORTS::B, bias_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -176,15 +176,15 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::pointwise_properties::PORTS::B, scale_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::graph::pointwise::PORTS::B, scale_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -206,15 +206,15 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -236,15 +236,15 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
@@ -266,15 +266,15 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::pointwise_properties>(name);
+        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
         props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
         props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
 
         // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::pointwise_properties::PORTS::X, input_props_ptr->get_name()}});
+        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}});
 
         // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::pointwise_properties::PORTS::Y));
+        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_port_name(cudnn_frontend::graph::pointwise::PORTS::Y));
         output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
         auto status = graph.insert_tensor(output_props_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");

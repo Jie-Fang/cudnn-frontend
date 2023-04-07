@@ -8,13 +8,15 @@
 
 namespace cudnn_frontend {
 
+namespace graph {
+
 class BatchNormNode : public INode {
 private:
 
 protected:
 
 public:
-    std::shared_ptr<batchnorm_properties> props;
+    std::shared_ptr<batchnorm> props;
 
     BatchNormNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
 
@@ -22,7 +24,7 @@ public:
         return Type::BATCHNORM;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<batchnorm_properties> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<batchnorm> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -37,8 +39,8 @@ public:
     error_t infer_properties() override final {
         props->update_uids(offset);
 
-        for(size_t i = 0; i < batchnorm_properties::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<batchnorm_properties::PORTS>(i)));
+        for(size_t i = 0; i < batchnorm::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<batchnorm::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
@@ -62,18 +64,18 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building BatchNormNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Mean)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Var)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Previous_running_mean)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Previous_running_var)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Next_running_mean)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Next_running_var)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::EPS)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::EXP_AVG)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Scale)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Bias)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Mean)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Var)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Previous_running_mean)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Previous_running_var)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Next_running_mean)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Next_running_var)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::EPS)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::EXP_AVG)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Scale)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Bias)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(batchnorm::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built BatchNormNode tensors." << std::endl;
 
@@ -92,31 +94,31 @@ public:
         auto batchnorm_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
                                         .setNormalizationMode(NormMode_t::BATCH_NORM)
                                         .setNormFwdPhase(NormFwdPhase_t::TRAINING)
-                                        .setxDesc(*(tensors.at(props->uids[batchnorm_properties::PORTS::X])))
-                                        .setSavedMeanAndInvVar(*(tensors.at(props->uids[batchnorm_properties::PORTS::Mean])), *(tensors.at(props->uids[batchnorm_properties::PORTS::Var])))
-                                        .setScaleAndBias(*(tensors.at(props->uids[batchnorm_properties::PORTS::Scale])), *(tensors.at(props->uids[batchnorm_properties::PORTS::Bias])))
-                                        .setPrevRunningMeanAndVar(*(tensors.at(props->uids[batchnorm_properties::PORTS::Previous_running_mean])), *(tensors.at(props->uids[batchnorm_properties::PORTS::Previous_running_var])))
-                                        .setNextRunningMeanAndVar(*(tensors.at(props->uids[batchnorm_properties::PORTS::Next_running_mean])), *(tensors.at(props->uids[batchnorm_properties::PORTS::Next_running_var])))
-                                        .setEpsilonTensor(*(tensors.at(props->uids[batchnorm_properties::PORTS::EPS])))
-                                        .setExpDecayFactorTensor(*(tensors.at(props->uids[batchnorm_properties::PORTS::EXP_AVG])))
-                                        .setyDesc(*(tensors.at(props->uids[batchnorm_properties::PORTS::Y])))
+                                        .setxDesc(*(tensors.at(props->uids[batchnorm::PORTS::X])))
+                                        .setSavedMeanAndInvVar(*(tensors.at(props->uids[batchnorm::PORTS::Mean])), *(tensors.at(props->uids[batchnorm::PORTS::Var])))
+                                        .setScaleAndBias(*(tensors.at(props->uids[batchnorm::PORTS::Scale])), *(tensors.at(props->uids[batchnorm::PORTS::Bias])))
+                                        .setPrevRunningMeanAndVar(*(tensors.at(props->uids[batchnorm::PORTS::Previous_running_mean])), *(tensors.at(props->uids[batchnorm::PORTS::Previous_running_var])))
+                                        .setNextRunningMeanAndVar(*(tensors.at(props->uids[batchnorm::PORTS::Next_running_mean])), *(tensors.at(props->uids[batchnorm::PORTS::Next_running_var])))
+                                        .setEpsilonTensor(*(tensors.at(props->uids[batchnorm::PORTS::EPS])))
+                                        .setExpDecayFactorTensor(*(tensors.at(props->uids[batchnorm::PORTS::EXP_AVG])))
+                                        .setyDesc(*(tensors.at(props->uids[batchnorm::PORTS::Y])))
                                         .build();
         operations.emplace(name, std::make_shared<Operation>(std::move(batchnorm_operation)));
         
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::X))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Mean))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Var))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Previous_running_mean))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Previous_running_var))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Next_running_mean))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Next_running_var))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::EPS))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::EXP_AVG))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Scale))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Bias))
-            , get_tensor_props(props->get_port_name(batchnorm_properties::PORTS::Y))
+            get_tensor_props(props->get_port_name(batchnorm::PORTS::X))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Mean))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Var))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Previous_running_mean))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Previous_running_var))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Next_running_mean))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Next_running_var))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::EPS))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::EXP_AVG))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Scale))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Bias))
+            , get_tensor_props(props->get_port_name(batchnorm::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {
@@ -148,5 +150,7 @@ public:
         return error_t::OK;
     }
 };
+
+} // namespace graph
 
 } // namespace cudnn_frontend

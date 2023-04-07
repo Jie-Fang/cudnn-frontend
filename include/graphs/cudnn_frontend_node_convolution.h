@@ -9,13 +9,15 @@
 
 namespace cudnn_frontend {
 
+namespace graph {
+
 class ConvolutionNode : public INode {
 private:
 
 protected:
 
 public:
-    std::shared_ptr<convolution_properties> props;
+    std::shared_ptr<convolution> props;
 
     ConvolutionNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
 
@@ -23,7 +25,7 @@ public:
         return Type::CONVOLUTION;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<convolution_properties> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<convolution> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -40,9 +42,9 @@ public:
         props->update_uids(offset);
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_port_name(convolution_properties::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_port_name(convolution_properties::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_port_name(convolution::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_port_name(convolution::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_port_name(convolution::PORTS::Y));
         
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
         auto const& w_tensor_dim = w_tensor_prop->get_dim();
@@ -71,8 +73,8 @@ public:
             }
         }
 
-        for(size_t i = 0; i < convolution_properties::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<convolution_properties::PORTS>(i)));
+        for(size_t i = 0; i < convolution::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props->get_port_name(static_cast<convolution::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
@@ -96,9 +98,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution_properties::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution_properties::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_port_name(convolution::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
@@ -127,9 +129,9 @@ public:
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(props->uids[convolution_properties::PORTS::X])))
-                                        .setwDesc(*(tensors.at(props->uids[convolution_properties::PORTS::W])))
-                                        .setyDesc(*(tensors.at(props->uids[convolution_properties::PORTS::Y])))
+                                        .setxDesc(*(tensors.at(props->uids[convolution::PORTS::X])))
+                                        .setwDesc(*(tensors.at(props->uids[convolution::PORTS::W])))
+                                        .setyDesc(*(tensors.at(props->uids[convolution::PORTS::Y])))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
@@ -138,9 +140,9 @@ public:
         
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_port_name(convolution_properties::PORTS::X))
-            , get_tensor_props(props->get_port_name(convolution_properties::PORTS::W))
-            , get_tensor_props(props->get_port_name(convolution_properties::PORTS::Y))
+            get_tensor_props(props->get_port_name(convolution::PORTS::X))
+            , get_tensor_props(props->get_port_name(convolution::PORTS::W))
+            , get_tensor_props(props->get_port_name(convolution::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {
@@ -172,5 +174,7 @@ public:
         return error_t::OK;
     }
 };
+
+} // namespace graph
 
 } // namespace cudnn_frontend
