@@ -3038,7 +3038,7 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
     int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
-        hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
+        hostPtrQKVRaggedOffset[i] = static_cast<int32_t>(3 * offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrQKVRaggedOffset, hostPtrQKVRaggedOffset, sizeof(hostPtrQKVRaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3048,7 +3048,7 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
     hostPtrORaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrORaggedOffset[0])); // ragged offset has b+1 elements
 
     for (int i = 0; i < b + 1; i++) {
-        hostPtrORaggedOffset[i] = offsetStride * QKVprefixSum[i];
+        hostPtrORaggedOffset[i] = static_cast<int32_t>(offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrORaggedOffset, hostPtrORaggedOffset, sizeof(hostPtrORaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3261,7 +3261,7 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
-        hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
+        hostPtrQKVRaggedOffset[i] = static_cast<int32_t>(3 * offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrQKVRaggedOffset, hostPtrQKVRaggedOffset, sizeof(hostPtrQKVRaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3271,7 +3271,7 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     hostPtrORaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrORaggedOffset[0])); // ragged offset has b+1 elements
 
     for (int i = 0; i < b + 1; i++) {
-        hostPtrORaggedOffset[i] = offsetStride * QKVprefixSum[i];
+        hostPtrORaggedOffset[i] = static_cast<int32_t>(offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrORaggedOffset, hostPtrORaggedOffset, sizeof(hostPtrORaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
