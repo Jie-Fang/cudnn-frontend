@@ -3024,7 +3024,8 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
     hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
 
 
-    int QKVprefixSum[b + 1];
+    std::vector<int64_t> QKVprefixSum;
+    QKVprefixSum.resize(b + 1);
     for (int i = 0; i < b + 1; i++) {
         // Calculate prefix sum of hostActualSeqLenK
         if (i == 0) {
@@ -3034,7 +3035,7 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
         }
     }
 
-    int offsetStride = h * d;
+    int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
         hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
@@ -3243,7 +3244,8 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
 
 
-    int QKVprefixSum[b + 1];
+    std::vector<int64_t> QKVprefixSum;
+    QKVprefixSum.resize(b + 1);
     for (int i = 0; i < b + 1; i++) {
         // Calculate prefix sum of hostActualSeqLenK
         if (i == 0) {
@@ -3256,7 +3258,7 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     checkCudaErr(cudaMalloc((void**)&(devPtrQKVRaggedOffset), (b + 1) * sizeof(devPtrQKVRaggedOffset[0])));
     hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
 
-    int offsetStride = h * d;
+    int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
         hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];

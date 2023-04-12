@@ -97,23 +97,23 @@ check_shape(cudnnBackendDescriptor_t &op,
         #endif
     }
     // tensor_dims is 1 indexed
-    int first_dim = tensor_dims[1]; // batch size for input/output tensor, output channels for filter tensor
-    int blocked_first_dim = blocked_shape[0];
+    int64_t first_dim = tensor_dims[1]; // batch size for input/output tensor, output channels for filter tensor
+    int64_t blocked_first_dim = blocked_shape[0];
 
     // Defaults to true becuase -1 means we don't filter that out (Wildcard). If something later blocks, then the comparison will be correct
     bool blocked = (blocked_first_dim != -1) ? (first_dim == blocked_first_dim) : true;
 
     // Check for shape format to extract the right dimension. Filter shape will always be "NCHW" for convenience.
-    int channels = (shape_format == "NCHW") ? tensor_dims[2] : tensor_dims[4]; // channels
-    int blocked_channels = (shape_format == "NCHW") ? blocked_shape[1] : blocked_shape[3];
+    int64_t channels = (shape_format == "NCHW") ? tensor_dims[2] : tensor_dims[4]; // channels
+    int64_t blocked_channels = (shape_format == "NCHW") ? blocked_shape[1] : blocked_shape[3];
     blocked = (blocked_channels != -1) ? (blocked && channels == blocked_channels) : true;
 
-    int height = (shape_format == "NCHW") ? tensor_dims[3] : tensor_dims[2];
-    int blocked_height = (shape_format == "NCHW") ? blocked_shape[2] : blocked_shape[1];
+    int64_t height = (shape_format == "NCHW") ? tensor_dims[3] : tensor_dims[2];
+    int64_t blocked_height = (shape_format == "NCHW") ? blocked_shape[2] : blocked_shape[1];
     blocked = (blocked_height != -1) ? (blocked && height == blocked_height) : true;
     
-    int width = (shape_format == "NCHW") ? tensor_dims[4] : tensor_dims[3];
-    int blocked_width = (shape_format == "NCHW") ? blocked_shape[3] : blocked_shape[2];
+    int64_t width = (shape_format == "NCHW") ? tensor_dims[4] : tensor_dims[3];
+    int64_t blocked_width = (shape_format == "NCHW") ? blocked_shape[3] : blocked_shape[2];
     blocked = (blocked_width != -1) ? (blocked && width == blocked_width) : true;
 
     return blocked;
