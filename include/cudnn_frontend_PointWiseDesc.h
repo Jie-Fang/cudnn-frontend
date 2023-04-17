@@ -135,6 +135,10 @@ class PointWiseDesc_v8 : public BackendDescriptor {
             case CUDNN_POINTWISE_RECIPROCAL:
                 return 2;
 #endif
+#ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return -1;
+#endif
         }
         return -1;
     }
