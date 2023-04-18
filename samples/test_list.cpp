@@ -1651,7 +1651,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU Reference", "[frontend][fusion][b
 
     batch_normalize<half>(afterConvTensor.hostPtr, afterBNTensor.hostPtr, stats, Ysize, yTensorDim);
 
-    std::vector<std::pair<float, float>> after_normalization((size_t)yTensorDim[0]);
+    std::vector<std::pair<float, float>> after_normalization((size_t)Sumsize);
 
     gen_stats_cpu<half>(afterBNTensor.hostPtr, after_normalization, Ysize, yTensorDim);
 
@@ -1661,7 +1661,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU Reference", "[frontend][fusion][b
         if (diff > THRESHOLD) { numErrors++;}
     }
 
-    for (int index = 0; index < yTensorDim[0]; index++) { 
+    for (int index = 0; index < Sumsize; index++) { 
         // Data should have 0 mean
         float diff         = getError(0, after_normalization[index].first);
         if (diff < 0) diff = -diff;
