@@ -16,7 +16,7 @@ private:
 protected:
 
 public:
-    std::shared_ptr<reduction> props;
+    std::shared_ptr<Reduction> props;
 
     ReductionNode(std::string const& name, int64_t const offset = 1)  : INode (name, offset) {}
 
@@ -24,7 +24,7 @@ public:
         return Type::REDUCTION;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<reduction> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<Reduction> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -39,11 +39,11 @@ public:
     error_t infer_properties() override final {
         props->update_uids(offset);
         
-        for(size_t i = 0; i < reduction::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<reduction::PORTS>(i)));
+        for(size_t i = 0; i < Reduction::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Reduction::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
         }
         return error_t::OK;
     }
@@ -58,8 +58,8 @@ public:
     error_t createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Building ReductionNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(reduction::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(reduction::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ReductionNode tensors." << std::endl;
 
@@ -80,17 +80,17 @@ public:
                                                         .build();
 
         auto reduction_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(props->uids[reduction::PORTS::X])))
-                                        .setyDesc(*(tensors.at(props->uids[reduction::PORTS::Y])))
+                                        .setxDesc(*(tensors.at(props->uids[Reduction::PORTS::X])))
+                                        .setyDesc(*(tensors.at(props->uids[Reduction::PORTS::Y])))
                                         .setreductionDesc(reduction_descriptor)
                                         .build();
         
-        operations.emplace(name, std::make_shared<Operation>(std::move(reduction_operation)));
+        operations.emplace(name, std::make_shared<Operation_v8>(std::move(reduction_operation)));
 
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_tensor_at_port(reduction::PORTS::X))
-            , get_tensor_props(props->get_tensor_at_port(reduction::PORTS::Y))
+            get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X))
+            , get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {

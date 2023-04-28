@@ -19,7 +19,7 @@ private:
 
 protected:
     std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
-    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation>> operations;
+    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation_v8>> operations;
     std::unordered_map<std::string, std::vector<int64_t>> tensors_in_operations;
 
     std::vector<std::unique_ptr<ExecutionPlan>> execution_plans;
@@ -27,9 +27,13 @@ protected:
 
     error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor const> const& props) {
 
-        auto const& dim = props->get_dim();
+        auto dim = props->get_dim();
         getLogger() << "[cudnn_frontend] INFO: Tensor dims are ";
         for(auto sz: dim) getLogger() << sz << " ";
+
+        auto stride = props->get_stride();
+        getLogger() << ", strides are ";
+        for(auto sz: stride) getLogger() << sz << " ";
 
         auto tensor = cudnn_frontend::TensorBuilder()
                         .setDim(props->get_stride().size(), props->get_dim().data())

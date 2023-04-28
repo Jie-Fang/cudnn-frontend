@@ -17,7 +17,7 @@ private:
 protected:
 
 public:
-    std::shared_ptr<convolution> props;
+    std::shared_ptr<Convolution> props;
 
     ConvolutionNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
 
@@ -25,7 +25,7 @@ public:
         return Type::CONVOLUTION;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<convolution> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<Convolution> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -42,13 +42,13 @@ public:
         props->update_uids(offset);
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(convolution::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(convolution::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(convolution::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y));
         
-        auto const& x_tensor_dim = x_tensor_prop->get_dim();
-        auto const& w_tensor_dim = w_tensor_prop->get_dim();
-        auto& y_tensor_dim = y_tensor_prop->get_dim();
+        auto const x_tensor_dim = x_tensor_prop->get_dim();
+        auto const w_tensor_dim = w_tensor_prop->get_dim();
+        auto y_tensor_dim = y_tensor_prop->get_dim();
         if(x_tensor_dim.size() != w_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
             getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
@@ -59,12 +59,16 @@ public:
             y_tensor_dim.resize(x_tensor_dim.size());
             auto const& padding = props->get_padding();
             auto const& stride = props->get_stride();
-            // auto const& dilation = props->get_dilation();
+            auto const& dilation = props->get_dilation();
+            // N
             y_tensor_dim[0] = x_tensor_dim[0];
+            // PQ
             for(size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {        
-                y_tensor_dim[dim] = 1 + (x_tensor_dim[dim] - w_tensor_dim[dim] + 2*padding[dim - 2]) / stride[dim - 2];
+                y_tensor_dim[dim] = 1 + (x_tensor_dim[dim] - dilation[dim-2]*(w_tensor_dim[dim]-1)-1 + 2*padding[dim - 2]) / stride[dim - 2];
             }
+            // K
             y_tensor_dim[1] = w_tensor_dim[0];
+            y_tensor_prop->set_dim(y_tensor_dim);
         } else {
             if(x_tensor_dim.size() != y_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
@@ -73,11 +77,11 @@ public:
             }
         }
 
-        for(size_t i = 0; i < convolution::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<convolution::PORTS>(i)));
+        for(size_t i = 0; i < Convolution::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Convolution::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
         }
 
         return error_t::OK;
@@ -98,9 +102,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(convolution::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(convolution::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(convolution::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
@@ -129,20 +133,20 @@ public:
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(props->uids[convolution::PORTS::X])))
-                                        .setwDesc(*(tensors.at(props->uids[convolution::PORTS::W])))
-                                        .setyDesc(*(tensors.at(props->uids[convolution::PORTS::Y])))
+                                        .setxDesc(*(tensors.at(props->uids[Convolution::PORTS::X])))
+                                        .setwDesc(*(tensors.at(props->uids[Convolution::PORTS::W])))
+                                        .setyDesc(*(tensors.at(props->uids[Convolution::PORTS::Y])))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
                                         .build();
-        operations.emplace(name, std::make_shared<Operation>(std::move(convolution_operation)));
+        operations.emplace(name, std::make_shared<Operation_v8>(std::move(convolution_operation)));
         
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_tensor_at_port(convolution::PORTS::X))
-            , get_tensor_props(props->get_tensor_at_port(convolution::PORTS::W))
-            , get_tensor_props(props->get_tensor_at_port(convolution::PORTS::Y))
+            get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X))
+            , get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W))
+            , get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {

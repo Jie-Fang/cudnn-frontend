@@ -17,7 +17,7 @@ private:
 protected:
 
 public:
-    std::shared_ptr<matmul> props;
+    std::shared_ptr<Matmul> props;
 
     MatMulNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
 
@@ -25,7 +25,7 @@ public:
         return Type::MATMUL;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<matmul> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<Matmul> properties) {
         if(sub_nodes.size() != 0) {
             return 1;
         }
@@ -43,13 +43,13 @@ public:
         props->update_uids(offset);
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(matmul::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(matmul::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(matmul::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::X));
+        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::W));
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::Y));
         
-        auto const& x_tensor_dim = x_tensor_prop->get_dim();
-        auto const& w_tensor_dim = w_tensor_prop->get_dim();
-        auto& y_tensor_dim = y_tensor_prop->get_dim();
+        auto const x_tensor_dim = x_tensor_prop->get_dim();
+        auto const w_tensor_dim = w_tensor_prop->get_dim();
+        auto y_tensor_dim = y_tensor_prop->get_dim();
         if(x_tensor_dim.size() != w_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
             getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
@@ -61,6 +61,7 @@ public:
             y_tensor_dim[0] = x_tensor_dim[0]; // B
             y_tensor_dim[1] = x_tensor_dim[1]; // M
             y_tensor_dim[2] = w_tensor_dim[2]; // N
+            y_tensor_prop->set_dim(y_tensor_dim);
         } else {
             if(x_tensor_dim.size() != y_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
@@ -69,11 +70,11 @@ public:
             }
         }
 
-        for(size_t i = 0; i < matmul::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<matmul::PORTS>(i)));
+        for(size_t i = 0; i < Matmul::PORTS::COUNT; ++i) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Matmul::PORTS>(i)));
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->get_tensor_data_type(), props->uids[i]);
+            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
         }
 
         return error_t::OK;
@@ -94,9 +95,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(matmul::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(matmul::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(matmul::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::W)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::Y)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors." << std::endl;
 
@@ -118,18 +119,18 @@ public:
 
         // Create the matmul operation.
         auto matmul_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR)
-                                        .setaMatDesc(*(tensors.at(props->uids[matmul::PORTS::X])))
-                                        .setbMatDesc(*(tensors.at(props->uids[matmul::PORTS::W])))
-                                        .setcMatDesc(*(tensors.at(props->uids[matmul::PORTS::Y])))
+                                        .setaMatDesc(*(tensors.at(props->uids[Matmul::PORTS::X])))
+                                        .setbMatDesc(*(tensors.at(props->uids[Matmul::PORTS::W])))
+                                        .setcMatDesc(*(tensors.at(props->uids[Matmul::PORTS::Y])))
                                         .setmatmulDesc(matmul_descriptor)
                                         .build();
-        operations.emplace(name, std::make_shared<Operation>(std::move(matmul_operation)));
+        operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
 
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_tensor_at_port(matmul::PORTS::X))
-            , get_tensor_props(props->get_tensor_at_port(matmul::PORTS::W))
-            , get_tensor_props(props->get_tensor_at_port(matmul::PORTS::Y))
+            get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::X))
+            , get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::W))
+            , get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::Y))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {

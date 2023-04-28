@@ -34,7 +34,7 @@ public:
         return Type::COMPOSITE;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<convolution> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<Convolution> properties) {
         if(sub_nodes.count(INode_name) == 0) {
             return 1;
         }
@@ -48,7 +48,7 @@ public:
         return 0;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<pointwise> properties) {
+    int set_properties(std::string const& INode_name, std::shared_ptr<Pointwise> properties) {
         if(sub_nodes.count(INode_name) == 0) {
             return 1;
         }
@@ -64,7 +64,7 @@ public:
     
     error_t infer_properties() override final {        
         auto const& conv_node_ptr = std::dynamic_pointer_cast<ConvolutionNode>(sub_nodes.at("conv"));
-        tensor_props.at(conv_node_ptr->props->get_tensor_at_port(convolution::PORTS::Y))->set_is_virtual(true);
+        tensor_props.at(conv_node_ptr->props->get_tensor_at_port(Convolution::PORTS::Y))->set_is_virtual(true);
 
         for(auto const& sub_node: sub_nodes) {
             sub_node.second->infer_properties();

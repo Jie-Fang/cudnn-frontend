@@ -15,9 +15,7 @@ namespace graph {
 // Each property has a getter setter.
 class Tensor {
 protected:
-
     std::string name;
-    // TODO: use custom FE data type string/enum.
     DataType_t data_type = DataType_t::NOT_SET;
     std::vector<int64_t> dim = {};
     std::vector<int64_t> stride = {};
@@ -33,19 +31,11 @@ public:
     bool is_pass_by_value_set = false;
     bool is_uid_set = false;
 
-    std::string const
-    get_name() const {
-        return name;
-    }
-
     // TODO: Currently this structure takes in unrolled list of properties to set.
     // But later, it will take in the context and derive properties to set from it.
-    int set_properties_from_context(cudnnTensorFormat_t const filter_format, DataType_t const data_type, int64_t const uid) {
+    int set_properties_from_context(cudnnTensorFormat_t const filter_format, int64_t const uid) {
         if(!is_stride_set) {
             generateStrides(filter_format);
-        }
-        if(!is_data_type_set) {
-            set_data_type(data_type);
         }
         if(!is_uid_set) {
             set_uid(uid);
@@ -85,92 +75,73 @@ public:
 
     Tensor(const std::string &name) : name(name) {}
 
-    DataType_t const &
-    get_data_type() const {
+    std::string get_name() const {
+        return name;
+    }
+
+    auto set_name(std::string const& value) -> Tensor& {
+        name = value;
+        return *this;
+    }
+
+    DataType_t get_data_type() const {
         return data_type;
     }
 
-    error_t
-    set_data_type(DataType_t value) {
+    auto set_data_type(DataType_t const value) -> Tensor& {
         data_type = value;
         is_data_type_set = true;
-        return error_t::OK;
-    }
-
-    std::vector<int64_t> const &
-    get_dim() const {
-        return dim;
+        return *this;
     }
     
-    std::vector<int64_t>&
-    get_dim() {
+    std::vector<int64_t> get_dim() const {
         return dim;
     }
 
-    int
-    set_dim(std::vector<int64_t> const& value) {
+    auto set_dim(std::vector<int64_t> const& value) -> Tensor& {
         dim = value;
         is_dim_set = true;
-        return 0;
+        return *this;
     }
 
-    std::vector<int64_t> const &
-    get_stride() const {
+    std::vector<int64_t> get_stride() const {
         return stride;
     }
 
-    int
-    set_stride(std::vector<int64_t> const& value) {
-        // empty object implies caller wants cudnn to infer strides.
-        if(value.empty()) {
-            return 0;
-        }
+    auto set_stride(std::vector<int64_t> const& value) -> Tensor& {
         stride = value;
         is_stride_set = true;
-        return 0;
+        return *this;
     }
 
-    bool const &
-    get_is_virtual() const {
+    bool get_is_virtual() const {
         return is_virtual;
     }
 
-    int
-    set_is_virtual(bool value) {
+    auto set_is_virtual(bool const value) -> Tensor& {
         is_virtual = value;
         is_virtual_set = true;
-        return 0;
+        return *this;
     }
 
-    bool const &
-    get_is_pass_by_value() const {
+    bool get_is_pass_by_value() const {
         return is_pass_by_value;
     }
 
-    int
-    set_is_pass_by_value(bool value) {
+    auto set_is_pass_by_value(bool const value) -> Tensor& {
         is_pass_by_value = value;
         is_pass_by_value_set = true;
-        return 0;
+        return *this;
     }
 
-    int64_t
-    get_uid() const {
+    int64_t get_uid() const {
         return uid;
     }
 
-    int
-    set_uid(int64_t value) {
+    auto set_uid(int64_t value) -> Tensor& {
         uid = value;
         is_uid_set = true;
-        return 0;
-    }
-
-    // TODO: put coorect size
-    int64_t
-    get_size() const {
-        auto size = std::accumulate(begin(dim), end(dim), 2 /*sizeof(half)*/, std::multiplies<double>());
-        return size;
+        return *this;
     }
 
     friend std::ostream& operator<<(std::ostream& os, const Tensor& props);
@@ -195,7 +166,7 @@ inline std::ostream& operator<<(std::ostream& os, const Tensor& props) {
     return os;
 }
 
-class operation {
+class Operation {
 public:
     enum class Tag {
         BatchNorm,
@@ -208,60 +179,35 @@ public:
 protected:
 
     std::string name;
-    // TODO: remove setting tensor data type in operation properties.
-    // The operation only has to know of the compute type. cudnn operation
-    // will convert any tensor type to compute type internally.
-    DataType_t tensor_data_type;
     DataType_t compute_type;
 
     Tag tag;
 public:
 
-    bool is_tensor_data_type_set = false;
     bool is_compute_type_set = false;
 
-    operation(const std::string name, Tag t) : name(name), tag(t) {}
+    Operation(const std::string name, Tag t) : name(name), tag(t) {}
 
     std::string const
     get_name() const {
         return name;
     }
 
-    Tag
-    get_tag() const {
+    Tag get_tag() const {
         return tag;
     }
 
-    DataType_t
-    get_tensor_data_type() const {
-        return tensor_data_type;
-    }
-
-    error_t
-    set_tensor_data_type(DataType_t value) {
-        tensor_data_type = value;
-        is_tensor_data_type_set = true;
-        return error_t::OK;
-    }
-
-    DataType_t
-    get_compute_type() const {
+    DataType_t get_compute_type() const {
         return compute_type;
     }
 
-    error_t set_compute_type(DataType_t value) {
-        compute_type = value;
-        is_compute_type_set = true;
-        return error_t::OK;
-    }
-
-    virtual ~operation() = default;
+    virtual ~Operation() = default;
 };
 
-class convolution : public operation {
+class Convolution : public Operation {
 public:
     enum PORTS {
-        X = 0,
+        X,
         W,
         Y,
 
@@ -279,21 +225,20 @@ public:
 
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    convolution(const std::string name) : operation(name, Tag::Convolution) {
+    Convolution(const std::string name) : Operation(name, Tag::Convolution) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
+    Convolution& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return error_t::OK;
+        return *this;
     }
 
-    std::string
-    get_tensor_at_port(PORTS port) const {
+    std::string get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -304,46 +249,46 @@ public:
         return 0;
     }
 
-    std::vector<int64_t> const &
-    get_padding() const {
+    Convolution& set_compute_type(DataType_t value) {
+        compute_type = value;
+        is_compute_type_set = true;
+        return *this;
+    }
+
+    std::vector<int64_t> get_padding() const {
         return padding;
     }
 
-    int
-    set_padding(std::vector<int64_t> value) {
+    Convolution& set_padding(std::vector<int64_t> value) {
         padding = value;
         is_padding_set = true;
-        return 0;
+        return *this;
     }
 
-    std::vector<int64_t> const &
-    get_stride() const {
+    std::vector<int64_t> get_stride() const {
         return stride;
     }
 
-    int
-    set_stride(std::vector<int64_t> value) {
+    Convolution& set_stride(std::vector<int64_t> value) {
         stride = value;
         is_stride_set = true;
-        return 0;
+        return *this;
     }
 
-    std::vector<int64_t> const &
-    get_dilation() const {
+    std::vector<int64_t> get_dilation() const {
         return dilation;
     }
 
-    int
-    set_dilation(std::vector<int64_t> value) {
+    Convolution& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         is_dilation_set = true;
-        return 0;
+        return *this;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const convolution& props);
+    friend std::ostream& operator<<(std::ostream& os, const Convolution& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const convolution& props) {
+inline std::ostream& operator<<(std::ostream& os, const Convolution& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " dilation: [";
@@ -362,17 +307,17 @@ inline std::ostream& operator<<(std::ostream& os, const convolution& props) {
     }
     os << "],"
     << " ports: [";
-    for(size_t i = 0; i < convolution::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<convolution::PORTS>(i)) << ",";
+    for(size_t i = 0; i < Convolution::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Convolution::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class matmul : public operation {
+class Matmul : public Operation {
 public:
     enum PORTS {
-        X = 0,
+        X,
         W,
         Y,
 
@@ -384,21 +329,20 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    matmul(const std::string name) : operation(name, Tag::MatMul) {
+    Matmul(const std::string name) : Operation(name, Tag::MatMul) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::W] = name + "::W";
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
+    Matmul& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return error_t::OK;
+        return *this;
     }
 
-    std::string
-    get_tensor_at_port(PORTS port) const {
+    std::string get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -408,21 +352,28 @@ public:
         }
         return 0;
     }
-    friend std::ostream& operator<<(std::ostream& os, const matmul& props);
+
+    Matmul& set_compute_type(DataType_t value) {
+        compute_type = value;
+        is_compute_type_set = true;
+        return *this;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Matmul& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const matmul& props) {
+inline std::ostream& operator<<(std::ostream& os, const Matmul& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " ports: [";
-    for(size_t i = 0; i < matmul::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<matmul::PORTS>(i)) << ",";
+    for(size_t i = 0; i < Matmul::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Matmul::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
-class pointwise : public operation {
+class Pointwise : public Operation {
 public:
     enum PORTS {
         X,
@@ -440,7 +391,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    pointwise(const std::string name) : operation(name, Tag::Pointwise) {
+    Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::B] = name + "::B";
         port_to_name[PORTS::Y] = name + "::Y";
@@ -454,45 +405,49 @@ public:
         return 0;
     }
 
-    PointwiseMode_t const &
-    get_mode() const {
+    Pointwise& set_compute_type(DataType_t value) {
+        compute_type = value;
+        is_compute_type_set = true;
+        return *this;
+    }
+
+    PointwiseMode_t get_mode() const {
         return mode;
     }
 
-    error_t set_mode(PointwiseMode_t value) {
+    Pointwise& set_mode(PointwiseMode_t value) {
         mode = value;
         is_mode_set = true;
-        return error_t::OK;
+        return *this;
     }
 
-    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
+    Pointwise& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return error_t::OK;
+        return *this;
     }
 
-    std::string
-    get_tensor_at_port(PORTS port) const {
+    std::string get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const pointwise& props);
+    friend std::ostream& operator<<(std::ostream& os, const Pointwise& props);
 };
 
-inline std::ostream& operator<<(std::ostream& os, const pointwise& props) {
+inline std::ostream& operator<<(std::ostream& os, const Pointwise& props) {
     os << "{" 
     << " name: '" << props.get_name() << "',"
     << " ports: [";
-    for(size_t i = 0; i < pointwise::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<pointwise::PORTS>(i)) << ",";
+    for(size_t i = 0; i < Pointwise::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Pointwise::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
 }
 
 
-class batchnorm : public operation {
+class Batchnorm : public Operation {
 public:
     enum PORTS {
         X = 0,
@@ -516,7 +471,7 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    batchnorm(const std::string name) : operation(name, Tag::BatchNorm) {
+    Batchnorm(const std::string name) : Operation(name, Tag::BatchNorm) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Mean] = name + "::Mean";
         port_to_name[PORTS::Var] = name + "::Var";
@@ -531,15 +486,14 @@ public:
         port_to_name[PORTS::Y] = name + "::Y";
     }
 
-    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
+    Batchnorm& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return error_t::OK;
+        return *this;
     }
 
-    std::string
-    get_tensor_at_port(PORTS port) const {
+    std::string get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
     }
 
@@ -549,9 +503,15 @@ public:
         }
         return 0;
     }
+    
+    Batchnorm& set_compute_type(DataType_t value) {
+        compute_type = value;
+        is_compute_type_set = true;
+        return *this;
+    }
 };
 
-class reduction : public operation {
+class Reduction : public Operation {
 public:
     enum PORTS {
         X = 0,
@@ -569,7 +529,7 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
 
-    reduction(const std::string name) : operation(name, Tag::Reduction) {
+    Reduction(const std::string name) : Operation(name, Tag::Reduction) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Y] = name + "::Y";
     }
@@ -581,28 +541,31 @@ public:
         return 0;
     }
 
-    cudnnReduceTensorOp_t const &
-    get_mode() const {
+    cudnnReduceTensorOp_t get_mode() const {
         return mode;
     }
 
-    int
-    set_mode(cudnnReduceTensorOp_t value) {
+    Reduction& set_mode(cudnnReduceTensorOp_t value) {
         mode = value;
         is_mode_set = true;
-        return 0;
+        return *this;
     }
 
-    error_t map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
+    Reduction& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
         for(auto const& p: names) {
             port_to_name[p.first] = p.second;
         }
-        return error_t::OK;
+        return *this;
     }
 
-    std::string
-    get_tensor_at_port(PORTS port) const {
+    std::string get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
+    }
+    
+    Reduction& set_compute_type(DataType_t value) {
+        compute_type = value;
+        is_compute_type_set = true;
+        return *this;
     }
 };
 

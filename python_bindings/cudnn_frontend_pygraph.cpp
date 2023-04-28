@@ -40,12 +40,8 @@ class PyGraph {
     cudnn_frontend::graph::Graph graph;
 
 public:
-    // TODO: only uses context as implementation underneath requires it.
-    // Later will be removed as it will passed on to functions like a handle.
-    PyGraph(std::string const &name ) : graph(name, cudnn_frontend::cuDNNFEContext()) {}
+    PyGraph(std::string const &name ) : graph(name) {}
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_tensor(
         std::string const& name
@@ -55,23 +51,24 @@ public:
         , bool const& isVirtual
         , bool const& isByValue
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(name);
-        props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        props_ptr->set_dim(dim);
-        props_ptr->set_stride(stride);
-        props_ptr->set_is_virtual(isVirtual);
-        props_ptr->set_is_pass_by_value(isByValue);
+        auto props = cudnn_frontend::graph::Tensor(name);
 
-        auto status = graph.insert_tensor(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding tensor " + name + " failed.");
+        if(data_type != cudnn_frontend::DataType_t::NOT_SET)
+            props.set_data_type(data_type);
+        
+        if(dim.size())
+            props.set_dim(dim);
+        
+        if(stride.size())
+            props.set_stride(stride);
+        
+        props.set_is_virtual(isVirtual).set_is_pass_by_value(isByValue);
+        
+        graph.insert_tensor(props);
 
-        return props_ptr;
+        return graph.get_tensor(name);
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes image and weight properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_conv(
         std::string const& name
@@ -82,32 +79,26 @@ public:
         , std::vector<int64_t> const& stride
         , std::vector<int64_t> const& dilation
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::convolution>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        props_ptr->set_padding(padding);
-        props_ptr->set_stride(stride);
-        props_ptr->set_dilation(dilation);
-
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::convolution::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::graph::convolution::PORTS::W, weight_props_ptr->get_name()}});
+        auto props = cudnn_frontend::graph::Convolution(name)
+                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_padding(padding)
+                        .set_stride(stride)
+                        .set_dilation(dilation)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Convolution::PORTS::X, image_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Convolution::PORTS::W, weight_props_ptr->get_name()}
+                        });
         
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::convolution::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
-
         // Add conv node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
+        
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
 
-        return output_props_ptr;
+        return graph.get_tensor(output_tensor_name);
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes image and weight properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_matmul(
         std::string const& name
@@ -115,29 +106,23 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::matmul>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::matmul::PORTS::X, image_props_ptr->get_name()}, {cudnn_frontend::graph::matmul::PORTS::W, weight_props_ptr->get_name()}});
-
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::matmul::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+        auto props = cudnn_frontend::graph::Matmul(name)
+        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+        .map_port_to_tensor({
+            {cudnn_frontend::graph::Matmul::PORTS::X, image_props_ptr->get_name()}
+            , {cudnn_frontend::graph::Matmul::PORTS::W, weight_props_ptr->get_name()}
+        });
 
         // Add matmul node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
 
-        return output_props_ptr;
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
+
+        return graph.get_tensor(output_tensor_name);
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes input properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_bias(
         std::string const& name
@@ -145,30 +130,24 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
-
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::graph::pointwise::PORTS::B, bias_props_ptr->get_name()}});
-
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+        auto props = cudnn_frontend::graph::Pointwise(name)
+                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::B, bias_props_ptr->get_name()}
+                        });
 
         // Add pointwise node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
 
-        return output_props_ptr;
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
+
+        return graph.get_tensor(output_tensor_name);
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes input properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_scale(
         std::string const& name
@@ -176,84 +155,68 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
-
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}, {cudnn_frontend::graph::pointwise::PORTS::B, scale_props_ptr->get_name()}});
-
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+        auto props = cudnn_frontend::graph::Pointwise(name)
+                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::B, scale_props_ptr->get_name()}
+                        });
 
         // Add pointwise node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
 
-        return output_props_ptr;
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
+
+        return graph.get_tensor(output_tensor_name);
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes input properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_relu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
-
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}});
-
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+        auto props = cudnn_frontend::graph::Pointwise(name)
+                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
+                        });
 
         // Add pointwise node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
 
-        return output_props_ptr;
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
+
+        return graph.get_tensor(output_tensor_name);
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes input properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor> 
     insert_elu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
-
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}});
-
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+        auto props = cudnn_frontend::graph::Pointwise(name)
+                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
+                        });
 
         // Add pointwise node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
 
-        return output_props_ptr;
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
+
+        return graph.get_tensor(output_tensor_name);
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -266,24 +229,21 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_type
     ) {
-        auto props_ptr = std::make_shared<cudnn_frontend::graph::pointwise>(name);
-        props_ptr->set_compute_type(cudnn_frontend::DataType_t::FLOAT);
-        props_ptr->set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
-
-        // TODO: Check whether image and weight already exist.
-        props_ptr->map_port_to_tensor({{cudnn_frontend::graph::pointwise::PORTS::X, input_props_ptr->get_name()}});
-
-        // Add output tensor to graph
-        auto output_props_ptr = std::make_shared<cudnn_frontend::graph::Tensor>(props_ptr->get_tensor_at_port(cudnn_frontend::graph::pointwise::PORTS::Y));
-        output_props_ptr->set_data_type(cudnn_frontend::DataType_t::HALF);
-        auto status = graph.insert_tensor(output_props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding output tensor to node " + name + " failed.");
+        auto props = cudnn_frontend::graph::Pointwise(name)
+                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
+                        });
 
         // Add pointwise node to graph
-        status = graph.insert_node(props_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Adding node " + name + " failed.");
+        graph.insert_node(props);
 
-        return output_props_ptr;
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y);
+        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
+        graph.insert_tensor(output_tensor);
+
+        return graph.get_tensor(output_tensor_name);
     }
 
     void build() {
@@ -318,11 +278,30 @@ default_vector(void) {
 }
 
 void init_pygraph_submodule(py::module_ &m) {
+    
+  py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
+        .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)
+        .value("DOUBLE", cudnn_frontend::DataType_t::DOUBLE)
+        .value("HALF", cudnn_frontend::DataType_t::HALF)
+        .value("INT8", cudnn_frontend::DataType_t::INT8)
+        .value("INT32", cudnn_frontend::DataType_t::INT32)
+        .value("INT8x4", cudnn_frontend::DataType_t::INT8x4)
+        .value("UINT8", cudnn_frontend::DataType_t::UINT8)
+        .value("UINT8x4", cudnn_frontend::DataType_t::UINT8x4)
+        .value("INT8x32", cudnn_frontend::DataType_t::INT8x32)
+        .value("BFLOAT16", cudnn_frontend::DataType_t::BFLOAT16)
+        .value("INT64", cudnn_frontend::DataType_t::INT64)
+        .value("BOOLEAN", cudnn_frontend::DataType_t::BOOLEAN)
+        .value("FP8_E4M3", cudnn_frontend::DataType_t::FP8_E4M3)
+        .value("FP8_E5M2", cudnn_frontend::DataType_t::FP8_E5M2)
+        .value("FAST_FLOAT_FOR_FP8", cudnn_frontend::DataType_t::FAST_FLOAT_FOR_FP8)
+        .value("NOT_SET", cudnn_frontend::DataType_t::NOT_SET);
+        
   py::class_<PyGraph>(m, "pygraph")
         .def(py::init<std::string const &>())
         .def("insert_tensor", &PyGraph::insert_tensor, 
              py::arg_v("name", "test_tensor_name"),
-             py::arg("data_type"),
+             py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v{"dim", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"is_virtual", false},
