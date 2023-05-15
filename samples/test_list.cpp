@@ -32,6 +32,7 @@
 #include "f16_flash_mha_sample.h"
 #include "mha_sample.h"
 #include "fused_mha_sample.h"
+#include "norm_samples.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -3329,6 +3330,99 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     if (devPtrActualSeqlenOverride) cudaFree(devPtrActualSeqlenOverride);
     if (hostActualSeqlenOverride) free(hostActualSeqlenOverride);
 
+    std::cout << "\n========================================================================================\n";
+}
+#endif
+
+#if (CUDNN_VERSION >= 8800)
+TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
+    std::cout << "\n========================================================================================\n";
+    std::cout << "Batch normalization" << std::endl;
+    // This  example shows CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR and CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR
+
+    // Here Channel count is output channel.
+
+    // Tensor dims are always NCHW, but stride layout may be NCHW or NHWC depending on how you configure it. The strides take care of it
+    constexpr int64_t num_peers = 2;
+    int64_t n= 8;
+    int64_t c= 32;
+    int64_t h = 16;
+    int64_t w = 16;
+    int64_t tensorDims[]             = {n,c,h,w}; // Input tensor dims (NCHW)
+    int64_t peerDims[]               = {num_peers, 4*c, 1, 1}; // Peer stat tensor dims -> (Num GPUS, 2 * channel, 1, 1)
+    int64_t perChannelDims[]         = {1, c, 1, 1}; // Per channel sum (1, C, 1, 1)
+
+    int64_t epsilon[]               = {1, 1, 1, 1};
+
+    auto size_calculator = 
+        [](int64_t *arr) {
+            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
+        };
+
+    Surface<half> input(size_calculator(tensorDims), false);
+    Surface<half> output(size_calculator(tensorDims), false);
+
+    Surface<float> scale(size_calculator(perChannelDims), false); 
+    Surface<float> bias(size_calculator(perChannelDims), false); 
+
+    Surface<float> in_mean(size_calculator(perChannelDims), false); 
+    Surface<float> in_var(size_calculator(perChannelDims), false); 
+    Surface<float> out_mean(size_calculator(perChannelDims), false); 
+    Surface<float> out_var(size_calculator(perChannelDims), false); 
+    Surface<float> saved_mean(size_calculator(perChannelDims), false); 
+    Surface<float> saved_inv_var(size_calculator(perChannelDims), false); 
+
+    // Create two peer stat tensors for sample SGBN
+    Surface<float> peer_tensor1(size_calculator(peerDims), false, true);
+    Surface<float> peer_tensor2(size_calculator(peerDims), false, true);
+
+    Surface<float> bwd_peer_tensor1(size_calculator(peerDims), false, true);
+    Surface<float> bwd_peer_tensor2(size_calculator(peerDims), false, true);
+    // Example epsilon and decay values for batch normalization
+    double epsilon_val = 0.000001;
+    double expAverageFactorVal = 0.3;
+    SECTION("Run batch normalization forward") {
+        // Sample to show that the plan can be cached and run multiple times
+        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION FORWARD" << std::endl;
+        std::map<std::vector<int64_t>,cudnn_frontend::ExecutionPlan> plan_cache;
+        cudnnHandle_t handle;
+        try {
+            auto plan = run_batch_norm_forward(handle, tensorDims, perChannelDims, epsilon, peerDims, CUDNN_DATA_HALF);
+            std::vector<int64_t> fv = {n,c,h,w,num_peers,(int)CUDNN_DATA_HALF};
+            plan_cache.insert(std::make_pair(fv, plan));
+            execute_batch_norm_forward(handle, plan_cache.find(fv)->second,
+                    input.devPtr, output.devPtr, scale.devPtr, bias.devPtr,
+                    in_mean.devPtr, in_var.devPtr, out_mean.devPtr, out_var.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr, peer_tensor1.devPtr, peer_tensor2.devPtr,
+                    epsilon_val, expAverageFactorVal);
+        }  catch (cudnn_frontend::cudnnException &e) {
+            struct cudaDeviceProp prop;
+            checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+            if (prop.major == 8) {
+                std::cout << "[ERROR] Exception " << e.what() << std::endl;
+                CHECK(false);
+            }
+        }
+
+        std::cout << "\n========================================================================================\n";
+        
+    }
+
+    SECTION("Run batch normalization backward") {
+        Surface<float> dScale(size_calculator(perChannelDims), false); 
+        Surface<float> dBias(size_calculator(perChannelDims), false); 
+        Surface<half> dy(size_calculator(tensorDims), false);
+        Surface<half> dx(size_calculator(tensorDims), false);
+        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION BACKWARD" << std::endl;
+        run_batch_norm_backward(tensorDims, perChannelDims, epsilon, peerDims,
+                    input.devPtr, dy.devPtr, scale.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr,
+                    bwd_peer_tensor1.devPtr, bwd_peer_tensor2.devPtr,
+                    dx.devPtr, dScale.devPtr, dBias.devPtr,
+                    epsilon_val, CUDNN_DATA_HALF);
+        std::cout << "\n========================================================================================\n";
+        
+    }                    
     std::cout << "\n========================================================================================\n";
 }
 #endif

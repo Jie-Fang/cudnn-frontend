@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-project(cudnn_frontend VERSION 0.8)
+project(cudnn_frontend VERSION 0.9)
 
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
 
