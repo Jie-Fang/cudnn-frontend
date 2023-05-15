@@ -14,7 +14,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 # Find cudnn
-include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/cuDNN.cmake)
 
 add_executable(
     samples
