@@ -1087,7 +1087,7 @@ TEST_CASE("ConvDrelu sample", "[frontend][convDrelu][drelu]") {
     Surface<half> x_mem(Xsize, false);
     Surface<half> w_mem(Wsize, false);
     Surface<half> y_mem(Ysize, false);
-    Surface<half> extra_x_mem(Xsize, false);
+    Surface<half> extra_x_mem(Ysize, false);
 
     run_conv_drelu(xTensorDim_padded,
                    padding,
@@ -1498,27 +1498,6 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
     std::cout << "\n========================================================================================\n";
 }
 
-TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
-    std::cout << "Dual Scale Bias Act Relu" << std::endl;
-    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
-    int64_t yTensorDim[]              = { 32, 32, 7, 7}; 
-
-    int64_t Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
-    Surface<half> RP_Y(Ysize, false);
-    Surface<half> DP_Y(Ysize, false);
-    Surface<half> finalY(Ysize, false);
-
-    int64_t scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
-    
-    Surface<float> RP_scale(scaleSize, false);
-    Surface<float> RP_bias(scaleSize, false);
-
-    Surface<float> DP_scale(scaleSize, false);
-    Surface<float> DP_bias(scaleSize, false);
-    
-    run_dsbar(yTensorDim, perChannelScaleDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr);
-}
-
 TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     std::cout << "\n========================================================================================\n";
     std::cout << "Dual Scale Bias Act Relu on CPU" << std::endl;
@@ -1528,7 +1507,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     int64_t Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
     Surface<half> RP_Y(Ysize, true);
     Surface<half> DP_Y(Ysize, true);
-    Surface<float> finalY(Ysize, true);
+    Surface<half> finalY(Ysize, true);
 
     int64_t scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
     
@@ -1555,7 +1534,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     Surface<float> RP_afterScaleBias(Ysize, true);
     Surface<float> DP_afterScaleBias(Ysize, true);
     Surface<float> finalY_afterAdd(Ysize, true);
-    Surface<float> finalY_cpu(Ysize, true);
+    Surface<half> finalY_cpu(Ysize, true);
 
     // RP_afterScaleBias = RP_scale * RP_Y + RP_bias
     scale_and_bias_tensor_cpu<half, float, float>(RP_Y.hostPtr, RP_afterScaleBias.hostPtr, RP_scale.hostPtr, RP_bias.hostPtr, Ysize, yTensorDim);
@@ -1567,7 +1546,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     add_tensors_cpu<float>(RP_afterScaleBias.hostPtr, DP_afterScaleBias.hostPtr, finalY_afterAdd.hostPtr, Ysize);
 
     // finalY = relu(finalY_afterAdd)
-    relu<float, float>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
+    relu<float, half>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
 
     for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
         float diff         = getError(finalY.hostPtr[index], finalY_cpu.hostPtr[index]);
@@ -1728,8 +1707,8 @@ TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
     Surface<float> saved_mean(size_calculator(bnSavedMean), false); 
     Surface<float> saved_inv_var(size_calculator(bnSavedInvVar), false); 
 
-    Surface<half> eq_scale(size_calculator(eqScaleNext), false);
-    Surface<half> eq_bias(size_calculator(eqBiasNext), false);
+    Surface<float> eq_scale(size_calculator(eqScaleNext), false);
+    Surface<float> eq_bias(size_calculator(eqBiasNext), false);
 
     double epsilon_val = 0.05;
     double expAverageFactorVal = 0.9;

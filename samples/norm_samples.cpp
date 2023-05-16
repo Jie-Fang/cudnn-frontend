@@ -261,9 +261,9 @@ run_batch_norm_backward(
     void *saved_inv_vardevPtr,
     void *peer_devPtr1,
     void *peer_devPtr2,
+    void *dxDevPtr,
     void *dscaledevPtr,
     void *dbiasdevPtr,
-    void *dxDevPtr,
 
     double epsilon_val,
     cudnnDataType_t data_type)
@@ -307,10 +307,10 @@ run_batch_norm_backward(
                    .build();
         };
 
-        auto peer_tensor_create = [&peer_stride, &tensorDims](cudnnDataType_t type,
+        auto peer_tensor_create = [&peer_stride, &peerDims](cudnnDataType_t type,
                                 int64_t id) {
             return cudnn_frontend::TensorBuilder()
-                   .setDim(4, tensorDims)
+                   .setDim(4, peerDims)
                    .setStrides(4, peer_stride)
                    .setId(id)
                    .setAlignment(16)
@@ -343,6 +343,9 @@ run_batch_norm_backward(
         auto dScaleTensor        = per_channel_tensor_create(CUDNN_DATA_FLOAT, 201);
         auto dBiasTensor         = per_channel_tensor_create(CUDNN_DATA_FLOAT, 202);
 
+        std::cout << dxTensor.describe() << std::endl;
+        std::cout << dScaleTensor.describe() << std::endl;
+        std::cout << dBiasTensor.describe() << std::endl;
 
         int64_t epsilon_stride[4];
         generateStrides(epsilon, epsilon_stride, 4, CUDNN_TENSOR_NHWC);
