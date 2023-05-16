@@ -16,10 +16,17 @@ void init_pygraph_submodule(py::module_ &);
 // pybinds for all properties and helpers
 void init_properties(py::module_ &);
 
+bool
+is_cudnn_supported() {
+    return cudnnGetVersion() >= 8500;
+}
+
 PYBIND11_MODULE(pycudnn, m)
 {
   init_pygraph_submodule(m);
   init_properties(m);
+
+  m.def("is_cudnn_supported", &is_cudnn_supported);
 
   py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
     .def(py::init<>())

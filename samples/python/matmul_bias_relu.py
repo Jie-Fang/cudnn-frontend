@@ -2,6 +2,9 @@ from cuda import cuda, cudart
 import pycudnn
 import numpy as np
 
+if pycudnn.is_cudnn_supported() == False:
+    exit(0)
+
 graph = pycudnn.pygraph("nvfuser")
 
 image = graph.insert_tensor(name = "image", dim = [4,16,56], data_type = pycudnn.data_type.HALF)
@@ -33,6 +36,7 @@ cuda.cuMemcpyHtoD(w_dptr, h_W, weight.get_size())
 cuda.cuMemcpyHtoD(b_dptr, h_B, bias.get_size())
 cuda.cuMemcpyHtoD(y_dptr, h_Y, relu.get_size())
 
+print("Executing the Matmul + bias + relu graph")
 graph.execute({image :x_dptr, weight : w_dptr, bias : b_dptr, relu : y_dptr})
 
 cuda.cuMemcpyDtoH(h_Y, y_dptr, relu.get_size())

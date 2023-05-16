@@ -7,10 +7,7 @@ stages:
 
 .build:template:
     script:
-        - mkdir build
-        - cd build
-        - cmake ../
-        - cmake --build . -j16 --verbose
+        - ci/build.sh
     # keep the build directory so that later jobs can use it
     artifacts:
         paths:
@@ -19,9 +16,7 @@ stages:
 
 .test:template:
     script:
-        - nvidia-smi
-        - cd build
-        - bin/samples --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
+        - ci/run.sh
     # Upload test report to gitlab
     artifacts:
         when: always
