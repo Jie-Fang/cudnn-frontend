@@ -5,6 +5,14 @@ Include(FetchContent)
 # Find the cuda compiler
 find_package(CUDAToolkit)
 
+# Fetch and build dlpack
+FetchContent_Declare(
+  dlpack
+  GIT_REPOSITORY https://github.com/dmlc/dlpack
+  GIT_TAG        v0.8
+)
+FetchContent_MakeAvailable(dlpack)
+
 # Find cudnn
 include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
@@ -31,8 +39,10 @@ pybind11_add_module(
 
 target_link_libraries(
     pycudnn
+    
     PRIVATE cudnn_frontend
 
+    PRIVATE dlpack
     PRIVATE CUDA::cudart
     PRIVATE CUDA::cublas
     PRIVATE CUDA::nvrtc

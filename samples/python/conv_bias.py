@@ -1,6 +1,6 @@
-from cuda import cuda, cudart
 import pycudnn
 import numpy as np
+import cupy as cp
 
 print("Example 1. Executing the conv + bias graph")
 
@@ -22,26 +22,9 @@ output.set_data_type(pycudnn.data_type.HALF)
 
 graph.build()
 
-h_X = np.full(4*16*56*56, 1).astype(dtype=np.half)
-h_W = np.full(16*16*3*3, 1).astype(dtype=np.half)
-h_B = np.full(1*16*1*1, 2).astype(dtype=np.half)
-h_Y = np.full(4*16*56*56, 0).astype(dtype=np.half)
+X_gpu = cp.full([4,16,56,56], 1, dtype=cp.half)
+W_gpu = cp.full([16,16,3,3], 1, dtype=cp.half)
+B_gpu = cp.full([1,16,1,1], 2, dtype=cp.half)
+Y_gpu = cp.full([4,16,56,56], 0, dtype=cp.half)
 
-err, x_dptr = cudart.cudaMalloc(4*16*56*56)
-err, w_dptr = cudart.cudaMalloc(16*16*3*3)
-err, b_dptr = cudart.cudaMalloc(1*16*1*1)
-err, y_dptr = cudart.cudaMalloc(4*16*56*56)
-
-cuda.cuMemcpyHtoD(x_dptr, h_X, 4*16*56*56)
-cuda.cuMemcpyHtoD(w_dptr, h_W, 16*16*3*3)
-cuda.cuMemcpyHtoD(b_dptr, h_B, 1*16*1*1)
-cuda.cuMemcpyHtoD(y_dptr, h_Y, 4*16*56*56)
-
-graph.execute({image :x_dptr, weight : w_dptr, bias : b_dptr, output : y_dptr})
-
-cuda.cuMemcpyDtoH(h_Y, y_dptr, 4*16*56*56)
-
-cudart.cudaFree(x_dptr)
-cudart.cudaFree(w_dptr)
-cudart.cudaFree(b_dptr)
-cudart.cudaFree(y_dptr)
+graph.execute({image : X_gpu, weight : W_gpu, bias : B_gpu, output : Y_gpu})

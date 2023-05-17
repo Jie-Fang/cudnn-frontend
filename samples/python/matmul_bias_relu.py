@@ -1,7 +1,7 @@
-from cuda import cuda, cudart
 import pycudnn
 import numpy as np
-
+import cupy as cp
+import sys
 print("Example 2. Executing the Matmul + bias + relu graph")
 
 if pycudnn.is_cudnn_supported() == False:
@@ -25,26 +25,20 @@ relu.set_data_type(pycudnn.data_type.HALF)
 
 graph.build()
 
-h_X = np.full(4*16*56, 1).astype(dtype=np.half)
-h_W = np.full(4*56*16, 1).astype(dtype=np.half)
-h_B = np.full(4*16*16, 2).astype(dtype=np.half)
-h_Y = np.full(4*16*16, 0).astype(dtype=np.half)
+X_cpu = np.full([4,16,56], 1, dtype=np.half)
+W_cpu = np.full([4,56,16], 1, dtype=np.half)
+B_cpu = np.full([4,16,16], 2, dtype=np.half)
 
-err, x_dptr = cudart.cudaMalloc(4*16*56)
-err, w_dptr = cudart.cudaMalloc(4*56*16)
-err, b_dptr = cudart.cudaMalloc(4*16*16)
-err, y_dptr = cudart.cudaMalloc(4*16*16)
+X_gpu = cp.asarray(X_cpu)
+W_gpu = cp.asarray(W_cpu)
+B_gpu = cp.asarray(B_cpu)
+Y_gpu = cp.full([4,16,16], 0, dtype=cp.half)
 
-cuda.cuMemcpyHtoD(x_dptr, h_X, 4*16*56)
-cuda.cuMemcpyHtoD(w_dptr, h_W, 4*56*16)
-cuda.cuMemcpyHtoD(b_dptr, h_B, 4*16*16)
-cuda.cuMemcpyHtoD(y_dptr, h_Y, 4*16*16)
+graph.execute({image : X_gpu, weight :  W_gpu, bias :  B_gpu, relu :  Y_gpu})
 
-graph.execute({image :x_dptr, weight : w_dptr, bias : b_dptr, relu : y_dptr})
+Y_actual = cp.asnumpy(Y_gpu)
 
-cuda.cuMemcpyDtoH(h_Y, y_dptr, 4*16*16)
+Y_expected = np.matmul(X_cpu, W_cpu) + B_cpu
+Y_expected[Y_expected < 0] = 0
 
-cudart.cudaFree(x_dptr)
-cudart.cudaFree(w_dptr)
-cudart.cudaFree(b_dptr)
-cudart.cudaFree(y_dptr)
+np.testing.assert_allclose(Y_actual, Y_expected)

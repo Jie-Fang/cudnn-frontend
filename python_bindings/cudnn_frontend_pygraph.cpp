@@ -1,6 +1,12 @@
 #include <utility>
 #include <unordered_map>
 
+#include "dlpack/dlpack.h"
+
+// Part of the Array API specification.
+#define CUDNN_FRONTEND_DLPACK_CAPSULE_NAME "dltensor"
+#define CUDNN_FRONTEND_DLPACK_USED_CAPSULE_NAME "used_dltensor"
+
 #include "pybind11/pybind11.h"
 #include "pybind11/cast.h"
 #include "pybind11/stl.h"
@@ -32,6 +38,19 @@ void throw_if(bool const cond, cudnn_frontend::error_t const error_code, std::st
         case cudnn_frontend::error_t::GRAPH_EXECUTION_FAILED:
             throw std::runtime_error(error_msg);
     }
+}
+
+char* extract_data_pointer(py::object obj) {
+    // Check if the object has the __dlpack__() method
+    throw_if(!py::hasattr(obj, "__dlpack__"), cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Object does not have the __dlpack__() method");
+
+    py::capsule capsule = obj.attr("__dlpack__")();
+    throw_if(capsule.is_none(), cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Failed to retrieve the DLPack capsule.");
+
+    DLManagedTensor *managed = static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
+    throw_if(managed == nullptr, cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
+    
+    return (char *)managed->dl_tensor.data + managed->dl_tensor.byte_offset;
 }
 
 // This class is only meant direct pythonic API calls to c++ Graph class.
@@ -290,11 +309,12 @@ public:
         return;
     }
 
-    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, int64_t> var_pack) {
+    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack) {
         std::unordered_map<std::string, void *> var_pack_;
         for (auto item : var_pack) {
-            var_pack_.insert(std::make_pair(item.first->get_name(), (void *)item.second));
+            var_pack_.insert(std::make_pair(item.first->get_name(), extract_data_pointer(item.second)));
         }
+
         // TODO: Probably concatenate in a macro?
         auto status = graph.execute(var_pack_);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Graph execution failed");
