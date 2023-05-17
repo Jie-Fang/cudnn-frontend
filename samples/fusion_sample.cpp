@@ -2996,7 +2996,8 @@ cudnnStatus_t run_dsbar(int64_t *Y_dim,
                void *DP_YdevPtr,
                void *DP_scaleDevPtr,
                void *DP_biasDevPtr,
-               void *YdevPtr)
+               void *YdevPtr,
+               cudnnDataType_t op_data_type)
 {
     cudnnHandle_t handle_;
 
@@ -3130,7 +3131,7 @@ cudnnStatus_t run_dsbar(int64_t *Y_dim,
                             .setStride(4, stride)
                             .setId('f')
                             .setAlignment(16) //16 byte alignment
-                            .setDataType(CUDNN_DATA_HALF)
+                            .setDataType(op_data_type)
                             .build();
 
         std::cout << RP_yTensor.describe() << std::endl;

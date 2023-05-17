@@ -1440,16 +1440,37 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
     std::cout << "\n========================================================================================\n";
 }
 
-TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
+TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
+    std::cout << "Dual Scale Bias Act Relu" << std::endl;
+    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
+    int64_t yTensorDim[]              = { 32, 32, 7, 7};
+
+    int64_t Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
+    Surface<half> RP_Y(Ysize, false);
+    Surface<half> DP_Y(Ysize, false);
+    Surface<half> finalY(Ysize, false);
+
+    int64_t scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
+
+    Surface<float> RP_scale(scaleSize, false);
+    Surface<float> RP_bias(scaleSize, false);
+
+    Surface<float> DP_scale(scaleSize, false);
+    Surface<float> DP_bias(scaleSize, false);
+
+    run_dsbar(yTensorDim, perChannelScaleDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr, CUDNN_DATA_HALF);
+}
+
+TEST_CASE("Dual Scale Bias Act Relu with CPU Reference", "[frontend][fusion][DSBAR][CPU]") {
     std::cout << "\n========================================================================================\n";
-    std::cout << "Dual Scale Bias Act Relu on CPU" << std::endl;
+    std::cout << "Dual Scale Bias Act Relu with CPU Reference" << std::endl;
     int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
     int64_t yTensorDim[]              = { 32, 32, 7, 7}; 
 
     int64_t Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
     Surface<half> RP_Y(Ysize, true);
     Surface<half> DP_Y(Ysize, true);
-    Surface<half> finalY(Ysize, true);
+    Surface<float> finalY(Ysize, true);
 
     int64_t scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
     
@@ -1459,7 +1480,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     Surface<float> DP_scale(scaleSize, true);
     Surface<float> DP_bias(scaleSize, true);
 
-    cudnnStatus_t status = run_dsbar(yTensorDim, perChannelScaleDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr);
+    cudnnStatus_t status = run_dsbar(yTensorDim, perChannelScaleDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr, CUDNN_DATA_FLOAT);
 
     if (status != CUDNN_STATUS_SUCCESS) {
         std::cout << "Error in Dual Scale Bias Act Relu with CPU" << std::endl;
@@ -1476,7 +1497,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     Surface<float> RP_afterScaleBias(Ysize, true);
     Surface<float> DP_afterScaleBias(Ysize, true);
     Surface<float> finalY_afterAdd(Ysize, true);
-    Surface<half> finalY_cpu(Ysize, true);
+    Surface<float> finalY_cpu(Ysize, true);
 
     // RP_afterScaleBias = RP_scale * RP_Y + RP_bias
     scale_and_bias_tensor_cpu<half, float, float>(RP_Y.hostPtr, RP_afterScaleBias.hostPtr, RP_scale.hostPtr, RP_bias.hostPtr, Ysize, yTensorDim);
@@ -1488,7 +1509,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     add_tensors_cpu<float>(RP_afterScaleBias.hostPtr, DP_afterScaleBias.hostPtr, finalY_afterAdd.hostPtr, Ysize);
 
     // finalY = relu(finalY_afterAdd)
-    relu<float, half>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
+    relu<float, float>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
 
     for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
         float diff         = getError(finalY.hostPtr[index], finalY_cpu.hostPtr[index]);
@@ -3292,6 +3313,7 @@ TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
     Surface<float> out_var(size_calculator(perChannelDims), false); 
     Surface<float> saved_mean(size_calculator(perChannelDims), false); 
     Surface<float> saved_inv_var(size_calculator(perChannelDims), false); 
+
 
     // Create two peer stat tensors for sample SGBN
     Surface<float> peer_tensor1(size_calculator(peerDims), false, true);
