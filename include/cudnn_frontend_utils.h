@@ -439,7 +439,7 @@ static inline std::ostream& operator<<(std::ostream& os, const cudnnResampleMode
             break;
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
-            os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
+            os << "CUDNN_TENSOR_RESAMPLE_MODE_UNKNOWN";
 #endif
     }
     return os;
@@ -462,7 +462,7 @@ static inline std::ostream& operator<<(std::ostream& os, const cudnnPaddingMode_
             break;
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
-            os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
+            os << "CUDNN_TENSOR_PADDING_MODE_UNKNOWN";
 #endif
     }
     return os;
