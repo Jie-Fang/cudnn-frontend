@@ -410,7 +410,7 @@ run_batch_norm_backward(
             return cudnn_frontend::ExecutionPlanBuilder().setHandle(handle_).setEngineConfig(filtered_configs[0], opGraph.getTag()).build();
         };
 
-	CHECK(filtered_configs.size() > 0);
+	    REQUIRE(filtered_configs.size() > 0);
         auto plan = plan_builder();
         std::cout << "Plan tag: " << plan.getTag() << std::endl;
 

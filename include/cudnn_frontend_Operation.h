@@ -1207,11 +1207,12 @@ class OperationBuilder_v8 {
                 set_error_and_throw_exception(&operation, status, fail_msg);
             }
         };
-
+        cudnnBackendNormMode_t cudnn_norm_mode;
+        status = detail::convert_to_cudnn_type(m_operation.norm_mode, cudnn_norm_mode);
         set_attribute(m_operation,
                       CUDNN_ATTR_OPERATION_NORM_BWD_MODE ,
                       "CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_NORM_BWD_MODE Failed",
-                      &m_operation.norm_mode,
+                      &cudnn_norm_mode,
                       CUDNN_TYPE_NORM_MODE);
         if (status != CUDNN_STATUS_SUCCESS) {return std::move(m_operation);}
         if (m_operation.xdesc)
