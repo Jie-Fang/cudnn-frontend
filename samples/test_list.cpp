@@ -32,6 +32,7 @@
 #include "f16_flash_mha_sample.h"
 #include "mha_sample.h"
 #include "fused_mha_sample.h"
+#include "norm_samples.h"
 
 #include "blocks/convolutions.h"
 
@@ -1091,7 +1092,7 @@ TEST_CASE("ConvDrelu sample", "[frontend][convDrelu][drelu]") {
     Surface<half> x_mem(Xsize, false);
     Surface<half> w_mem(Wsize, false);
     Surface<half> y_mem(Ysize, false);
-    Surface<half> extra_x_mem(Xsize, false);
+    Surface<half> extra_x_mem(Ysize, false);
 
     run_conv_drelu(xTensorDim_padded,
                    padding,
@@ -1502,27 +1503,6 @@ TEST_CASE("Scale Bias Conv BNGenstats", "[frontend][fusion][bn_genstas]") {
     std::cout << "\n========================================================================================\n";
 }
 
-TEST_CASE("Dual Scale Bias Act Relu", "[frontend][fusion][DSBAR]") {
-    std::cout << "Dual Scale Bias Act Relu" << std::endl;
-    int64_t perChannelScaleDim[]      = { 1,  32, 1, 1};
-    int64_t yTensorDim[]              = { 32, 32, 7, 7}; 
-
-    int64_t Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
-    Surface<half> RP_Y(Ysize, false);
-    Surface<half> DP_Y(Ysize, false);
-    Surface<half> finalY(Ysize, false);
-
-    int64_t scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
-    
-    Surface<float> RP_scale(scaleSize, false);
-    Surface<float> RP_bias(scaleSize, false);
-
-    Surface<float> DP_scale(scaleSize, false);
-    Surface<float> DP_bias(scaleSize, false);
-    
-    run_dsbar(yTensorDim, perChannelScaleDim, RP_Y.devPtr, RP_scale.devPtr, RP_bias.devPtr, DP_Y.devPtr, DP_scale.devPtr, DP_bias.devPtr, finalY.devPtr);
-}
-
 TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     std::cout << "\n========================================================================================\n";
     std::cout << "Dual Scale Bias Act Relu on CPU" << std::endl;
@@ -1532,7 +1512,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     int64_t Ysize = yTensorDim[0] * yTensorDim[1] * yTensorDim[2] * yTensorDim[3];
     Surface<half> RP_Y(Ysize, true);
     Surface<half> DP_Y(Ysize, true);
-    Surface<float> finalY(Ysize, true);
+    Surface<half> finalY(Ysize, true);
 
     int64_t scaleSize = perChannelScaleDim[0] * perChannelScaleDim[1] * perChannelScaleDim[2] * perChannelScaleDim[3];
     
@@ -1559,7 +1539,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     Surface<float> RP_afterScaleBias(Ysize, true);
     Surface<float> DP_afterScaleBias(Ysize, true);
     Surface<float> finalY_afterAdd(Ysize, true);
-    Surface<float> finalY_cpu(Ysize, true);
+    Surface<half> finalY_cpu(Ysize, true);
 
     // RP_afterScaleBias = RP_scale * RP_Y + RP_bias
     scale_and_bias_tensor_cpu<half, float, float>(RP_Y.hostPtr, RP_afterScaleBias.hostPtr, RP_scale.hostPtr, RP_bias.hostPtr, Ysize, yTensorDim);
@@ -1571,7 +1551,7 @@ TEST_CASE("Dual Scale Bias Act Relu on CPU", "[frontend][fusion][DSBAR][CPU]") {
     add_tensors_cpu<float>(RP_afterScaleBias.hostPtr, DP_afterScaleBias.hostPtr, finalY_afterAdd.hostPtr, Ysize);
 
     // finalY = relu(finalY_afterAdd)
-    relu<float, float>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
+    relu<float, half>(finalY_afterAdd.hostPtr, finalY_cpu.hostPtr, Ysize);
 
     for (int index = 0; index < Ysize; index++) {  // assuming in data is packed
         float diff         = getError(finalY.hostPtr[index], finalY_cpu.hostPtr[index]);
@@ -1656,7 +1636,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU Reference", "[frontend][fusion][b
 
     batch_normalize<half>(afterConvTensor.hostPtr, afterBNTensor.hostPtr, stats, Ysize, yTensorDim);
 
-    std::vector<std::pair<float, float>> after_normalization((size_t)yTensorDim[0]);
+    std::vector<std::pair<float, float>> after_normalization((size_t)Sumsize);
 
     gen_stats_cpu<half>(afterBNTensor.hostPtr, after_normalization, Ysize, yTensorDim);
 
@@ -1666,7 +1646,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU Reference", "[frontend][fusion][b
         if (diff > THRESHOLD) { numErrors++;}
     }
 
-    for (int index = 0; index < yTensorDim[0]; index++) { 
+    for (int index = 0; index < Sumsize; index++) { 
         // Data should have 0 mean
         float diff         = getError(0, after_normalization[index].first);
         if (diff < 0) diff = -diff;
@@ -1732,8 +1712,8 @@ TEST_CASE("BN Finalize", "[frontend][fusion][bn_finalize]") {
     Surface<float> saved_mean(size_calculator(bnSavedMean), false); 
     Surface<float> saved_inv_var(size_calculator(bnSavedInvVar), false); 
 
-    Surface<half> eq_scale(size_calculator(eqScaleNext), false);
-    Surface<half> eq_bias(size_calculator(eqBiasNext), false);
+    Surface<float> eq_scale(size_calculator(eqScaleNext), false);
+    Surface<float> eq_bias(size_calculator(eqBiasNext), false);
 
     double epsilon_val = 0.05;
     double expAverageFactorVal = 0.9;
@@ -3053,7 +3033,8 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
     hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
 
 
-    int QKVprefixSum[b + 1];
+    std::vector<int64_t> QKVprefixSum;
+    QKVprefixSum.resize(b + 1);
     for (int i = 0; i < b + 1; i++) {
         // Calculate prefix sum of hostActualSeqLenK
         if (i == 0) {
@@ -3063,10 +3044,10 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
         }
     }
 
-    int offsetStride = h * d;
+    int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
-        hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
+        hostPtrQKVRaggedOffset[i] = static_cast<int32_t>(3 * offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrQKVRaggedOffset, hostPtrQKVRaggedOffset, sizeof(hostPtrQKVRaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3076,7 +3057,7 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
     hostPtrORaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrORaggedOffset[0])); // ragged offset has b+1 elements
 
     for (int i = 0; i < b + 1; i++) {
-        hostPtrORaggedOffset[i] = offsetStride * QKVprefixSum[i];
+        hostPtrORaggedOffset[i] = static_cast<int32_t>(offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrORaggedOffset, hostPtrORaggedOffset, sizeof(hostPtrORaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3272,7 +3253,8 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
 
 
-    int QKVprefixSum[b + 1];
+    std::vector<int64_t> QKVprefixSum;
+    QKVprefixSum.resize(b + 1);
     for (int i = 0; i < b + 1; i++) {
         // Calculate prefix sum of hostActualSeqLenK
         if (i == 0) {
@@ -3285,10 +3267,10 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     checkCudaErr(cudaMalloc((void**)&(devPtrQKVRaggedOffset), (b + 1) * sizeof(devPtrQKVRaggedOffset[0])));
     hostPtrQKVRaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0])); // ragged offset has b+1 elements
 
-    int offsetStride = h * d;
+    int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
-        hostPtrQKVRaggedOffset[i] = 3 * offsetStride * QKVprefixSum[i];
+        hostPtrQKVRaggedOffset[i] = static_cast<int32_t>(3 * offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrQKVRaggedOffset, hostPtrQKVRaggedOffset, sizeof(hostPtrQKVRaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3298,7 +3280,7 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     hostPtrORaggedOffset = (int*) calloc(b + 1, sizeof(hostPtrORaggedOffset[0])); // ragged offset has b+1 elements
 
     for (int i = 0; i < b + 1; i++) {
-        hostPtrORaggedOffset[i] = offsetStride * QKVprefixSum[i];
+        hostPtrORaggedOffset[i] = static_cast<int32_t>(offsetStride * QKVprefixSum[i]);
     }
 
     checkCudaErr(cudaMemcpy(devPtrORaggedOffset, hostPtrORaggedOffset, sizeof(hostPtrORaggedOffset[0]) * (b + 1), cudaMemcpyHostToDevice));
@@ -3356,6 +3338,99 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
     if (devPtrActualSeqlenOverride) cudaFree(devPtrActualSeqlenOverride);
     if (hostActualSeqlenOverride) free(hostActualSeqlenOverride);
 
+    std::cout << "\n========================================================================================\n";
+}
+#endif
+
+#if (CUDNN_VERSION >= 8800)
+TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
+    std::cout << "\n========================================================================================\n";
+    std::cout << "Batch normalization" << std::endl;
+    // This  example shows CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR and CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR
+
+    // Here Channel count is output channel.
+
+    // Tensor dims are always NCHW, but stride layout may be NCHW or NHWC depending on how you configure it. The strides take care of it
+    constexpr int64_t num_peers = 2;
+    int64_t n= 8;
+    int64_t c= 32;
+    int64_t h = 16;
+    int64_t w = 16;
+    int64_t tensorDims[]             = {n,c,h,w}; // Input tensor dims (NCHW)
+    int64_t peerDims[]               = {num_peers, 4*c, 1, 1}; // Peer stat tensor dims -> (Num GPUS, 2 * channel, 1, 1)
+    int64_t perChannelDims[]         = {1, c, 1, 1}; // Per channel sum (1, C, 1, 1)
+
+    int64_t epsilon[]               = {1, 1, 1, 1};
+
+    auto size_calculator = 
+        [](int64_t *arr) {
+            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
+        };
+
+    Surface<half> input(size_calculator(tensorDims), false);
+    Surface<half> output(size_calculator(tensorDims), false);
+
+    Surface<float> scale(size_calculator(perChannelDims), false); 
+    Surface<float> bias(size_calculator(perChannelDims), false); 
+
+    Surface<float> in_mean(size_calculator(perChannelDims), false); 
+    Surface<float> in_var(size_calculator(perChannelDims), false); 
+    Surface<float> out_mean(size_calculator(perChannelDims), false); 
+    Surface<float> out_var(size_calculator(perChannelDims), false); 
+    Surface<float> saved_mean(size_calculator(perChannelDims), false); 
+    Surface<float> saved_inv_var(size_calculator(perChannelDims), false); 
+
+    // Create two peer stat tensors for sample SGBN
+    Surface<float> peer_tensor1(size_calculator(peerDims), false, true);
+    Surface<float> peer_tensor2(size_calculator(peerDims), false, true);
+
+    Surface<float> bwd_peer_tensor1(size_calculator(peerDims), false, true);
+    Surface<float> bwd_peer_tensor2(size_calculator(peerDims), false, true);
+    // Example epsilon and decay values for batch normalization
+    double epsilon_val = 0.000001;
+    double expAverageFactorVal = 0.3;
+    SECTION("Run batch normalization forward") {
+        // Sample to show that the plan can be cached and run multiple times
+        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION FORWARD" << std::endl;
+        std::map<std::vector<int64_t>,cudnn_frontend::ExecutionPlan> plan_cache;
+        cudnnHandle_t handle;
+        try {
+            auto plan = run_batch_norm_forward(handle, tensorDims, perChannelDims, epsilon, peerDims, CUDNN_DATA_HALF);
+            std::vector<int64_t> fv = {n,c,h,w,num_peers,(int)CUDNN_DATA_HALF};
+            plan_cache.insert(std::make_pair(fv, plan));
+            execute_batch_norm_forward(handle, plan_cache.find(fv)->second,
+                    input.devPtr, output.devPtr, scale.devPtr, bias.devPtr,
+                    in_mean.devPtr, in_var.devPtr, out_mean.devPtr, out_var.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr, peer_tensor1.devPtr, peer_tensor2.devPtr,
+                    epsilon_val, expAverageFactorVal);
+        }  catch (cudnn_frontend::cudnnException &e) {
+            struct cudaDeviceProp prop;
+            checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
+            if (prop.major == 8) {
+                std::cout << "[ERROR] Exception " << e.what() << std::endl;
+                CHECK(false);
+            }
+        }
+
+        std::cout << "\n========================================================================================\n";
+        
+    }
+
+    SECTION("Run batch normalization backward") {
+        Surface<float> dScale(size_calculator(perChannelDims), false); 
+        Surface<float> dBias(size_calculator(perChannelDims), false); 
+        Surface<half> dy(size_calculator(tensorDims), false);
+        Surface<half> dx(size_calculator(tensorDims), false);
+        std:: cout << "SECTION: RUNNING BATCH NORMALIZATION BACKWARD" << std::endl;
+        run_batch_norm_backward(tensorDims, perChannelDims, epsilon, peerDims,
+                    input.devPtr, dy.devPtr, scale.devPtr,
+                    saved_mean.devPtr, saved_inv_var.devPtr,
+                    bwd_peer_tensor1.devPtr, bwd_peer_tensor2.devPtr,
+                    dx.devPtr, dScale.devPtr, dBias.devPtr,
+                    epsilon_val, CUDNN_DATA_HALF);
+        std::cout << "\n========================================================================================\n";
+        
+    }                    
     std::cout << "\n========================================================================================\n";
 }
 #endif

@@ -1188,7 +1188,7 @@ run_f16_flash_attention_bprop(int64_t b,
         data_ptrs.insert(std::pair<uint64_t, void*>(D_OFFSET_ID, devPtrDropoutOffset));
         data_ptrs.insert(std::pair<uint64_t, void*>(MASK_VAL_ID, &negInfinity));
 
-        float scaleProb = 1.0 - dropout_probability;
+        float scaleProb = 1.0f - dropout_probability;
         data_ptrs.insert(std::pair<uint64_t, void*>(D_CONST_ID, &scale_dropout));
         data_ptrs.insert(std::pair<uint64_t, void*>(S_CONST_ID, &scaling_factor));
         data_ptrs.insert(std::pair<uint64_t, void*>(SCALE_PROB, &scaleProb));

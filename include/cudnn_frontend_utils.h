@@ -785,6 +785,10 @@ static inline std::ostream& operator<<(std::ostream& os, const NormFwdPhase_t& m
         case NormFwdPhase_t::NOT_SET:
             os << "NOT_SET";
             break;
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
+#endif
     }
     return os;
 } 
@@ -826,6 +830,10 @@ static inline std::ostream& operator<<(std::ostream& os, const ResampleMode_t& m
         case ResampleMode_t::NOT_SET:
             os << "NOT_SET";
             break;
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
+#endif
     }
     return os;
 } 
@@ -845,6 +853,10 @@ static inline std::ostream& operator<<(std::ostream& os, const PaddingMode_t& mo
         case PaddingMode_t::NOT_SET:
             os << "NOT_SET";
             break;
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
+#endif
     }
     return os;
 } 
@@ -1903,4 +1915,3 @@ static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::TensorReorderi
 } // namespace detail
 
 }
-
