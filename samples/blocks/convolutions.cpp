@@ -240,69 +240,58 @@ void run_batchnorm_node() {
     batchnorm_node.insert_tensor("input", input);
 
     cudnn_frontend::graph::Tensor mean{"mean"};
-    mean.set_dim({1, 32, 1, 1});
     mean.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("mean", mean);
     
     cudnn_frontend::graph::Tensor variance{"variance"};
-    variance.set_dim({1, 32, 1, 1});
     variance.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("variance", variance);
 
     cudnn_frontend::graph::Tensor in_running_mean{"in_running_mean"};
-    in_running_mean.set_dim({1, 32, 1, 1});
     in_running_mean.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("in_running_mean", in_running_mean);
     
     cudnn_frontend::graph::Tensor in_running_variance{"in_running_variance"};
-    in_running_variance.set_dim({1, 32, 1, 1});
     in_running_variance.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("in_running_variance", in_running_variance);
 
     cudnn_frontend::graph::Tensor out_running_mean{"out_running_mean"};
-    out_running_mean.set_dim({1, 32, 1, 1});
     out_running_mean.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("out_running_mean", out_running_mean);
     
     cudnn_frontend::graph::Tensor out_running_variance{"out_running_variance"};
-    out_running_variance.set_dim({1, 32, 1, 1});
     out_running_variance.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("out_running_variance", out_running_variance);
     
     cudnn_frontend::graph::Tensor scale{"scale"};
-    scale.set_dim({1, 32, 1, 1});
     scale.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("scale", scale);
     
     cudnn_frontend::graph::Tensor bias{"bias"};
-    bias.set_dim({1, 32, 1, 1});
     bias.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("bias", bias);
 
     cudnn_frontend::graph::Tensor epsilon{"epsilon"};
-    epsilon.set_dim({1, 1, 1, 1});
     epsilon.set_is_pass_by_value(true);
     epsilon.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("epsilon", epsilon);
     
     cudnn_frontend::graph::Tensor exp_avg{"exp_avg"};
-    exp_avg.set_dim({1, 1, 1, 1});
     exp_avg.set_is_pass_by_value(true);
     exp_avg.set_data_type(cudnn_frontend::DataType_t::FLOAT);
     batchnorm_node.insert_tensor("exp_avg", exp_avg);
     
     cudnn_frontend::graph::Tensor output{"output"};
-    output.set_dim({4, 32, 16, 16});
     output.set_data_type(cudnn_frontend::DataType_t::HALF);
     batchnorm_node.insert_tensor("output", output);
 
     #if (CUDNN_VERSION >= 8700)
         REQUIRE(cudnn_frontend::error_t::OK == batchnorm_node.build());
     #elif (CUDNN_VERSION >= 8500)
-        std::cout << "Only multi-GPU batch norm is supported in cudnn versions prior to 8.7 and above 8.5." << std::endl;
+        SKIP("Only multi-GPU batch norm is supported in cudnn versions prior to 8.7 and above 8.5.");
         return;
     #else
-        std::cout << "Batch Norm is not supported in cudnn versions prior to 8.5." << std::endl;
+        SKIP("Batch Norm is not supported in cudnn versions prior to 8.5.");
         return;
     #endif
 

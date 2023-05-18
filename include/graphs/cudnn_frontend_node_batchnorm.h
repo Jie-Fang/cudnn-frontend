@@ -37,7 +37,50 @@ public:
     }
 
     error_t infer_properties() override final {
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for batchnorm node named " << name << "." << std::endl;
         props->update_uids(offset);
+
+        // TODO: Only inferrencing from X works today.
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::X));
+        auto const x_tensor_dim = x_tensor_prop->get_dim();
+
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Y));
+        auto y_tensor_dim = y_tensor_prop->get_dim();
+        if(y_tensor_dim.empty()) {
+            y_tensor_dim.resize(x_tensor_dim.size());
+            y_tensor_prop->set_dim(x_tensor_dim);
+        }
+
+        // Set channel length tensors
+        auto infer_per_channel_tensors = [this, &x_tensor_dim] (Batchnorm::PORTS const port) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
+            auto tensor_dim = tensor_prop->get_dim();
+            if(tensor_dim.empty()) {
+                tensor_dim.resize(x_tensor_dim.size(), 1);
+                tensor_dim[1] = x_tensor_dim[1];
+                tensor_prop->set_dim(tensor_dim);
+            }
+        };
+        infer_per_channel_tensors(Batchnorm::PORTS::Mean);
+        infer_per_channel_tensors(Batchnorm::PORTS::Var);
+        infer_per_channel_tensors(Batchnorm::PORTS::Next_running_mean);
+        infer_per_channel_tensors(Batchnorm::PORTS::Next_running_var);
+        infer_per_channel_tensors(Batchnorm::PORTS::Previous_running_mean);
+        infer_per_channel_tensors(Batchnorm::PORTS::Previous_running_var);
+        infer_per_channel_tensors(Batchnorm::PORTS::Scale);
+        infer_per_channel_tensors(Batchnorm::PORTS::Bias);
+
+        // Set scalars
+        auto infer_scalars = [this, &x_tensor_dim] (Batchnorm::PORTS const port) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
+            auto tensor_dim = tensor_prop->get_dim();
+            if(tensor_dim.empty()) {
+                tensor_dim.resize(x_tensor_dim.size(), 1);
+                tensor_prop->set_dim(tensor_dim);
+            }
+        };
+        infer_scalars(Batchnorm::PORTS::EPS);
+        infer_scalars(Batchnorm::PORTS::EXP_AVG);
 
         for(size_t i = 0; i < Batchnorm::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Batchnorm::PORTS>(i)));
@@ -52,9 +95,51 @@ public:
     error_t validate() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormNode..." << std::endl;
 
-        // TODO: check all properties of this operation and its tensor are correct
-        // Like do dim count match dim/stride
-        // Do dim and corresponding stride match
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::X));
+        auto const x_tensor_dim = x_tensor_prop->get_dim();
+
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Y));
+        auto const y_tensor_dim = y_tensor_prop->get_dim();
+        if(x_tensor_dim != y_tensor_dim) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+            return status;
+        }
+
+        auto validate_per_channel_tensors = [this, &x_tensor_dim] (Batchnorm::PORTS const port) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
+            auto tensor_dim = tensor_prop->get_dim();
+            if(x_tensor_dim[1] != tensor_dim[1]) {
+                auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+                return status;
+            }
+            return error_t::OK;
+        };
+        validate_per_channel_tensors(Batchnorm::PORTS::Mean);
+        validate_per_channel_tensors(Batchnorm::PORTS::Var);
+        validate_per_channel_tensors(Batchnorm::PORTS::Next_running_mean);
+        validate_per_channel_tensors(Batchnorm::PORTS::Next_running_var);
+        validate_per_channel_tensors(Batchnorm::PORTS::Previous_running_mean);
+        validate_per_channel_tensors(Batchnorm::PORTS::Previous_running_var);
+        validate_per_channel_tensors(Batchnorm::PORTS::Scale);
+        validate_per_channel_tensors(Batchnorm::PORTS::Bias);
+
+        auto validate_scalars = [this, &x_tensor_dim] (Batchnorm::PORTS const port) {
+            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
+            auto tensor_dim = tensor_prop->get_dim();
+            bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {
+                return element == 1;
+            });
+            if(!allOnes) {
+                auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+                return status;
+            }
+            return error_t::OK;
+        };
+        validate_scalars(Batchnorm::PORTS::EPS);
+        validate_scalars(Batchnorm::PORTS::EXP_AVG);
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormNode." << std::endl;
         return error_t::OK;
