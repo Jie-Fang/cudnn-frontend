@@ -295,9 +295,7 @@ void run_batchnorm_node() {
         return;
     #endif
 
-    int64_t workspace_size = 0;
-    batchnorm_node.get_workspace_size(workspace_size);
-    Surface<int8_t> workspace(workspace_size, false);
+    Surface<int8_t> workspace(batchnorm_node.get_workspace_size(), false);
 
     Surface<half> x_tensor(batchnorm_node.tensor_props.at("input")->get_tensor_size(), false);
     Surface<float> b_tensor(batchnorm_node.tensor_props.at("bias")->get_tensor_size(), false);

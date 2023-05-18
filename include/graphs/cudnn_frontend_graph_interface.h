@@ -2,6 +2,9 @@
 
 #include <unordered_map>
 
+#include "graphs/cudnn_frontend_node_batchnorm.h"
+#include "graphs/cudnn_frontend_node_convolution.h"
+#include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 
 namespace cudnn_frontend {
@@ -14,6 +17,7 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Tensor>> all_tensors;
     std::unordered_map<std::string, std::shared_ptr<Convolution>>  conv;
     std::unordered_map<std::string, std::shared_ptr<Matmul>>  mm;
+    std::unordered_map<std::string, std::shared_ptr<Batchnorm>>  bn;
     std::unordered_map<std::string, std::shared_ptr<Pointwise>>    pw;
 
 
@@ -46,11 +50,14 @@ public:
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name);
 
+    Graph& insert_node(Batchnorm const& props);
     Graph& insert_node(Convolution const& props);
     Graph& insert_node(Matmul const& props);
     Graph& insert_node(Pointwise const& props);
     
     error_t build();
+    
+    int64_t get_workspace_size();
     error_t execute(std::unordered_map<std::string, void *>);
 
     friend std::ostream& operator<<(std::ostream& os, const Graph& props);
@@ -77,6 +84,11 @@ inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
     os << "],"
     << "\nmatmul: [\n";
     for(auto const& node: graph.mm) {
+        os << (node.second) << ",";
+    }
+    os << "],"
+    << "\nbatchnorm: [\n";
+    for(auto const& node: graph.bn) {
         os << (node.second) << ",";
     }
     os << "],";
@@ -131,6 +143,11 @@ inline Graph& Graph::insert_node(Matmul const& props) {
     return *this;
 }
 
+inline Graph& Graph::insert_node(Batchnorm const& props) {
+    bn.emplace(props.get_name(), std::make_shared<Batchnorm>(props));
+    return *this;
+}
+
 inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name) {
     return all_tensors[tensor_name];
 }
@@ -170,6 +187,47 @@ inline error_t Graph::infer_shapes() {
         incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
         incoming_tensors_for_nodes[node.second->get_name()].push_back(w_tensor->get_name());
         outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
+    }
+    for (auto &node : bn) {
+        all_nodes[node.first] = node.second;
+        auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Y));
+        auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::X));
+        auto &mean_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Mean));
+        auto &var_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Var));
+        auto &prev_running_mean_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Previous_running_mean));
+        auto &prev_running_var_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Previous_running_var));
+        auto &next_running_mean_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Next_running_mean));
+        auto &next_running_var_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Next_running_var));
+        auto &scale_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Scale));
+        auto &bias_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Bias));
+        auto &eps_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::EPS));
+        auto &exp_avg_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG));
+    
+        outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[mean_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[var_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[exp_avg_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(node.second->get_name());
+        outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(node.second->get_name());
+        incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
+        incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(node.second->get_name());
+        incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(node.second->get_name());
+        
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(mean_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(var_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(prev_running_mean_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(prev_running_var_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(eps_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(exp_avg_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(scale_tensor->get_name());
+        incoming_tensors_for_nodes[node.second->get_name()].push_back(bias_tensor->get_name());
+        outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
+        outgoing_tensors_for_nodes[node.second->get_name()].push_back(next_running_mean_tensor->get_name());
+        outgoing_tensors_for_nodes[node.second->get_name()].push_back(next_running_var_tensor->get_name());
     }
     for (auto &node : pw) {
         all_nodes[node.first] = node.second;
@@ -250,6 +308,9 @@ inline error_t Graph::infer_shapes() {
                 break;
             }
             case Operation::Tag::BatchNorm: {
+                auto bn_node = std::static_pointer_cast<Batchnorm const>(node_props);
+                flat_node.sub_nodes[node]->infer_properties();
+                break;
             }
             break;
             case Operation::Tag::Reduction: {
@@ -264,6 +325,10 @@ inline error_t Graph::infer_shapes() {
     }
 
     return error_t::OK;
+}
+
+inline int64_t Graph::get_workspace_size() {
+    return flat_node.get_workspace_size();
 }
 
 inline error_t Graph::build() {
@@ -286,6 +351,15 @@ inline error_t Graph::build() {
         matmul_node->props = prop.second;
         matmul_node->parent_node = &flat_node;
         flat_node.sub_nodes[prop.first] = matmul_node;
+        uid_offset += 100;
+    }
+
+    for (auto const &prop : bn) {
+        getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << prop.first << std::endl;
+        auto batchnorm_node = std::make_shared<BatchNormNode>(prop.first, uid_offset);
+        batchnorm_node->props = prop.second;
+        batchnorm_node->parent_node = &flat_node;
+        flat_node.sub_nodes[prop.first] = batchnorm_node;
         uid_offset += 100;
     }
 

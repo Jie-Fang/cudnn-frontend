@@ -136,13 +136,12 @@ public:
         return operations;
     }
     
-    error_t get_workspace_size(int64_t& workspace_size) const {
+    int64_t get_cudnn_workspace_size() const {
         int64_t current_workspace_size = 0;
         for(auto const& execution_plan: execution_plans) {
             current_workspace_size += execution_plan->getWorkspaceSize();
         }
-        workspace_size = current_workspace_size;
-        return error_t::OK;
+        return current_workspace_size;
     }
 
     error_t execute_cudnn_plans(std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {

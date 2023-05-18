@@ -138,6 +138,14 @@ public:
 
         return error_t::OK;
     }
+    
+    int64_t get_workspace_size() const {
+        int64_t current_workspace_size = get_cudnn_workspace_size();
+        for(auto const& sub_node: sub_nodes) {
+            current_workspace_size += sub_node.second->get_cudnn_workspace_size();
+        }
+        return current_workspace_size;
+    }
 
     error_t execute(std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;

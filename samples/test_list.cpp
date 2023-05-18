@@ -38,6 +38,7 @@
 
 #include "graphs/convolutions.h"
 #include "graphs/matmuls.h"
+#include "graphs/batchnorm.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2735,6 +2736,11 @@ TEST_CASE("Convolution Graphs", "[conv][graph]") {
 TEST_CASE("Matmul Graphs", "[matmul][graph]") {
     test_matmul_scale_bias_relu_graph();
 }
+
+TEST_CASE("BatchNorm Graphs", "[batchnorm][graph]") {
+    test_batchnorm_graph();
+}
+
 #if (CUDNN_VERSION >= 8900)
 TEST_CASE("BF16 LLM Flash MHA Fprop sample", "[frontend][fusion][BF16LLMFprop]") {
     std::cout << "TEST_CASE :: BF16 LLM Flash MHA Fprop with backend API" << std::endl;
