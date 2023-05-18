@@ -2,7 +2,6 @@
 
 #include <unordered_map>
 
-#include "cudnn_frontend_context.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 
 namespace cudnn_frontend {
@@ -16,27 +15,40 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Convolution>>  conv;
     std::unordered_map<std::string, std::shared_ptr<Matmul>>  mm;
     std::unordered_map<std::string, std::shared_ptr<Pointwise>>    pw;
-    
-    cuDNNFEContext ctx;
+
+
+    int64_t tensor_dims  = 4;
+    int64_t spatial_dims = 2;
+    DataType_t compute_type           = DataType_t::FLOAT;
+    DataType_t intermediate_data_type = DataType_t::FLOAT;
+    DataType_t io_data_type           = DataType_t::HALF;
+
     int64_t uid_offset = 1;
 
     CompositeNode flat_node{"composite_node", 1};
 
     error_t infer_shapes();
+
 public:
     Graph(std::string name);
     
-    std::string const
+    std::string const &
     get_name() const {
         return name;
     }
 
-    Graph& insert_tensor(Tensor props_ptr);
+    Graph& set_intermediate_data_type(DataType_t type);
+    Graph& set_io_data_type(DataType_t type);
+    Graph& set_compute_type(DataType_t type);
+    Graph& set_tensor_dims(int64_t x);
+    Graph& set_spatial_dims(int64_t x);
+
+    Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name);
 
-    Graph& insert_node(Convolution props_ptr);
-    Graph& insert_node(Matmul props_ptr);
-    Graph& insert_node(Pointwise props_ptr);
+    Graph& insert_node(Convolution const& props);
+    Graph& insert_node(Matmul const& props);
+    Graph& insert_node(Pointwise const& props);
     
     error_t build();
     error_t execute(std::unordered_map<std::string, void *>);
@@ -74,22 +86,47 @@ inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
 
 inline Graph::Graph(std::string name) : name(name) {}
 
-inline Graph& Graph::insert_tensor(Tensor props) {
+inline Graph & Graph::set_intermediate_data_type(DataType_t type) {
+    intermediate_data_type = type;
+    return *this;
+}
+
+inline Graph & Graph::set_io_data_type(DataType_t type) {
+    io_data_type = type;
+    return *this;
+}
+
+inline Graph & Graph::set_compute_type(DataType_t type) {
+    compute_type = type;
+    return *this;
+}
+
+inline Graph & Graph::set_tensor_dims(int64_t x) {
+    tensor_dims = x;
+    return *this;
+}
+
+inline Graph & Graph::set_spatial_dims(int64_t x) {
+    spatial_dims = x;
+    return *this;
+}
+
+inline Graph& Graph::insert_tensor(Tensor const& props) {
     all_tensors.emplace(props.get_name(), std::make_shared<Tensor>(props));
     return *this;
 }
 
-inline Graph& Graph::insert_node(Convolution props) {
+inline Graph& Graph::insert_node(Convolution const& props) {
     conv.emplace(props.get_name(), std::make_shared<Convolution>(props));
     return *this;
 }
 
-inline Graph& Graph::insert_node(Pointwise props) {
+inline Graph& Graph::insert_node(Pointwise const &props) {
     pw.emplace(props.get_name(), std::make_shared<Pointwise>(props));
     return *this;
 }
 
-inline Graph& Graph::insert_node(Matmul props) {
+inline Graph& Graph::insert_node(Matmul const& props) {
     mm.emplace(props.get_name(), std::make_shared<Matmul>(props));
     return *this;
 }

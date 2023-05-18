@@ -23,22 +23,26 @@ is_cudnn_supported() {
 
 PYBIND11_MODULE(pycudnn, m)
 {
-  init_pygraph_submodule(m);
-  init_properties(m);
-
   m.def("is_cudnn_supported", &is_cudnn_supported);
 
-  py::class_<cuDNNFEContext>(m, "cuDNNFEContext")
-    .def(py::init<>())
-    .def("set_intermediate_data_type", &cuDNNFEContext::set_intermediate_data_type)
-    .def("set_tensor_data_type", &cuDNNFEContext::set_tensor_data_type)
-    .def("get_tensor_data_type", &cuDNNFEContext::get_tensor_data_type)
-    .def("set_compute_type", &cuDNNFEContext::set_compute_type)
-    .def("get_compute_type", &cuDNNFEContext::get_compute_type)
-    .def("set_tensor_dims", &cuDNNFEContext::set_tensor_dims)
-    .def("get_tensor_dims", &cuDNNFEContext::get_tensor_dims)
-    .def("set_layout", &cuDNNFEContext::set_layout)
-    .def("get_layout", &cuDNNFEContext::get_layout_string)
-    .def("set_spatial_dims", &cuDNNFEContext::set_spatial_dims)
-    .def("get_spatial_dims", &cuDNNFEContext::get_spatial_dims);
+  py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
+        .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)
+        .value("DOUBLE", cudnn_frontend::DataType_t::DOUBLE)
+        .value("HALF", cudnn_frontend::DataType_t::HALF)
+        .value("INT8", cudnn_frontend::DataType_t::INT8)
+        .value("INT32", cudnn_frontend::DataType_t::INT32)
+        .value("INT8x4", cudnn_frontend::DataType_t::INT8x4)
+        .value("UINT8", cudnn_frontend::DataType_t::UINT8)
+        .value("UINT8x4", cudnn_frontend::DataType_t::UINT8x4)
+        .value("INT8x32", cudnn_frontend::DataType_t::INT8x32)
+        .value("BFLOAT16", cudnn_frontend::DataType_t::BFLOAT16)
+        .value("INT64", cudnn_frontend::DataType_t::INT64)
+        .value("BOOLEAN", cudnn_frontend::DataType_t::BOOLEAN)
+        .value("FP8_E4M3", cudnn_frontend::DataType_t::FP8_E4M3)
+        .value("FP8_E5M2", cudnn_frontend::DataType_t::FP8_E5M2)
+        .value("FAST_FLOAT_FOR_FP8", cudnn_frontend::DataType_t::FAST_FLOAT_FOR_FP8)
+        .value("NOT_SET", cudnn_frontend::DataType_t::NOT_SET);
+
+  init_pygraph_submodule(m);
+  init_properties(m);
 }

@@ -28,6 +28,7 @@
 #include "convolutions.h"
 
 void test_convolution_scale_bias_relu_graph() {
+
     cudnn_frontend::graph::Graph graph("conv_sbr");
     
     auto conv = cudnn_frontend::graph::Convolution("conv")
@@ -112,7 +113,6 @@ void test_convolution_scale_bias_relu_graph() {
     };
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
 }
-
 
 void test_convolution_batchnorm_infernece_graph() {
     cudnn_frontend::graph::Graph graph("conv_bn_inference");

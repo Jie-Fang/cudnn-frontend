@@ -40,16 +40,29 @@ class PyGraph {
     cudnn_frontend::graph::Graph graph;
 
 public:
-    PyGraph(std::string const &name ) : graph(name) {}
+    PyGraph(std::string const &name,
+            int64_t tensor_dims,
+            int64_t spatial_dims,
+            cudnn_frontend::DataType_t io_data_type,
+            cudnn_frontend::DataType_t intermediate_data_type,
+            cudnn_frontend::DataType_t compute_data_type) : graph(name) {
+                graph.set_compute_type(compute_data_type)
+                    .set_intermediate_data_type(intermediate_data_type)
+                    .set_io_data_type(io_data_type)
+                    .set_tensor_dims(tensor_dims)
+                    .set_spatial_dims(spatial_dims);
+            }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_tensor(
-        std::string const& name
-        , cudnn_frontend::DataType_t const& data_type
-        , std::vector<int64_t> const& dim
-        , std::vector<int64_t> const& stride
-        , bool const& isVirtual
-        , bool const& isByValue
+        std::string const& name,
+        cudnn_frontend::DataType_t const& data_type,
+        std::vector<int64_t> const& dim,
+        std::vector<int64_t> const& stride,
+        bool const& isVirtual,
+        bool const& isByValue
     ) {
         auto props = cudnn_frontend::graph::Tensor(name);
 
@@ -69,15 +82,19 @@ public:
         return graph.get_tensor(name);
     }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes image and weight properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_conv(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
-        , std::vector<int64_t> const& padding
-        , std::vector<int64_t> const& stride
-        , std::vector<int64_t> const& dilation
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type,
+        std::vector<int64_t> const& padding,
+        std::vector<int64_t> const& stride,
+        std::vector<int64_t> const& dilation
     ) {
         auto props = cudnn_frontend::graph::Convolution(name)
                         .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
@@ -99,18 +116,22 @@ public:
         return graph.get_tensor(output_tensor_name);
     }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes image and weight properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_matmul(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props = cudnn_frontend::graph::Matmul(name)
         .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
         .map_port_to_tensor({
-            {cudnn_frontend::graph::Matmul::PORTS::X, image_props_ptr->get_name()}
-            , {cudnn_frontend::graph::Matmul::PORTS::W, weight_props_ptr->get_name()}
+            {cudnn_frontend::graph::Matmul::PORTS::X, image_props_ptr->get_name()},
+            {cudnn_frontend::graph::Matmul::PORTS::W, weight_props_ptr->get_name()}
         });
 
         // Add matmul node to graph
@@ -123,19 +144,23 @@ public:
         return graph.get_tensor(output_tensor_name);
     }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes input properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_bias(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
                         .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                         .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::B, bias_props_ptr->get_name()}
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()},
+                            {cudnn_frontend::graph::Pointwise::PORTS::B, bias_props_ptr->get_name()}
                         });
 
         // Add pointwise node to graph
@@ -148,19 +173,23 @@ public:
         return graph.get_tensor(output_tensor_name);
     }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes input properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_scale(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
                         .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                         .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::B, scale_props_ptr->get_name()}
+                            {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()},
+                            {cudnn_frontend::graph::Pointwise::PORTS::B, scale_props_ptr->get_name()}
                         });
 
         // Add pointwise node to graph
@@ -173,11 +202,15 @@ public:
         return graph.get_tensor(output_tensor_name);
     }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes input properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_relu(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
                         .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
@@ -196,11 +229,15 @@ public:
         return graph.get_tensor(output_tensor_name);
     }
 
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes input properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_elu(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
                         .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
@@ -223,7 +260,7 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor> 
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
     insert_gelu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
@@ -278,28 +315,17 @@ default_vector(void) {
 }
 
 void init_pygraph_submodule(py::module_ &m) {
-    
-  py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
-        .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)
-        .value("DOUBLE", cudnn_frontend::DataType_t::DOUBLE)
-        .value("HALF", cudnn_frontend::DataType_t::HALF)
-        .value("INT8", cudnn_frontend::DataType_t::INT8)
-        .value("INT32", cudnn_frontend::DataType_t::INT32)
-        .value("INT8x4", cudnn_frontend::DataType_t::INT8x4)
-        .value("UINT8", cudnn_frontend::DataType_t::UINT8)
-        .value("UINT8x4", cudnn_frontend::DataType_t::UINT8x4)
-        .value("INT8x32", cudnn_frontend::DataType_t::INT8x32)
-        .value("BFLOAT16", cudnn_frontend::DataType_t::BFLOAT16)
-        .value("INT64", cudnn_frontend::DataType_t::INT64)
-        .value("BOOLEAN", cudnn_frontend::DataType_t::BOOLEAN)
-        .value("FP8_E4M3", cudnn_frontend::DataType_t::FP8_E4M3)
-        .value("FP8_E5M2", cudnn_frontend::DataType_t::FP8_E5M2)
-        .value("FAST_FLOAT_FOR_FP8", cudnn_frontend::DataType_t::FAST_FLOAT_FOR_FP8)
-        .value("NOT_SET", cudnn_frontend::DataType_t::NOT_SET);
-        
-  py::class_<PyGraph>(m, "pygraph")
-        .def(py::init<std::string const &>())
-        .def("insert_tensor", &PyGraph::insert_tensor, 
+    py::class_<PyGraph>(m, "pygraph")
+        .def(py::init<std::string const &, int64_t, int64_t,
+                cudnn_frontend::DataType_t,cudnn_frontend::DataType_t,cudnn_frontend::DataType_t>(),
+             py::arg_v("name", "test_graph"),
+             py::arg_v("tensor_dims", 4),
+             py::arg_v("spatial_dims", 2),
+             py::arg_v("io_data_type", cudnn_frontend::DataType_t::HALF),
+             py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::FLOAT),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::FLOAT)
+        )
+        .def("tensor", &PyGraph::insert_tensor,
              py::arg_v("name", "test_tensor_name"),
              py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v{"dim", default_vector()},
@@ -307,7 +333,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"is_virtual", false},
              py::arg_v{"is_pass_by_value", false}
         )
-        .def("insert_conv", &PyGraph::insert_conv, 
+        .def("conv", &PyGraph::insert_conv,
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
              py::arg("weight"),
@@ -316,35 +342,35 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
         )
-        .def("insert_matmul", &PyGraph::insert_matmul, 
+        .def("matmul", &PyGraph::insert_matmul,
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
              py::arg("weight"),
              py::arg("compute_type")
         )
-        .def("insert_bias", &PyGraph::insert_bias, 
+        .def("bias", &PyGraph::insert_bias,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("bias"),
              py::arg("compute_type")
         )
-        .def("insert_scale", &PyGraph::insert_scale, 
+        .def("scale", &PyGraph::insert_scale,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("scale"),
              py::arg("compute_type")
         )
-        .def("insert_relu", &PyGraph::insert_relu, 
+        .def("relu", &PyGraph::insert_relu,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("compute_type")
         )
-        .def("insert_elu", &PyGraph::insert_elu, 
+        .def("elu", &PyGraph::insert_elu,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("compute_type")
         )
-        .def("insert_gelu", &PyGraph::insert_gelu, 
+        .def("insert_gelu", &PyGraph::insert_gelu,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("compute_type")

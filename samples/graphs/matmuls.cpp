@@ -75,6 +75,7 @@ void test_matmul_relu_graph() {
 }
 
 void test_matmul_scale_bias_relu_graph() {
+
     cudnn_frontend::graph::Graph graph("matmul_sbr");
     
     auto matmul = cudnn_frontend::graph::Matmul("matmul")

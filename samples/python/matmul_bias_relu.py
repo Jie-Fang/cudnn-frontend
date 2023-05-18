@@ -2,22 +2,25 @@ from cuda import cuda, cudart
 import pycudnn
 import numpy as np
 
+print("Example 2. Executing the Matmul + bias + relu graph")
+
 if pycudnn.is_cudnn_supported() == False:
+    print("cudnn version is not supported")
     exit(0)
 
 graph = pycudnn.pygraph("nvfuser")
 
-image = graph.insert_tensor(name = "image", dim = [4,16,56], data_type = pycudnn.data_type.HALF)
-weight = graph.insert_tensor(name = "weight", dim = [4,56,16], data_type = pycudnn.data_type.HALF)
-bias = graph.insert_tensor(name = "bias", dim = [4,16,16], data_type = pycudnn.data_type.HALF)
+image = graph.tensor(name = "image", dim = [4,16,56], data_type = pycudnn.data_type.HALF)
+weight = graph.tensor(name = "weight", dim = [4,56,16], data_type = pycudnn.data_type.HALF)
+bias = graph.tensor(name = "bias", dim = [4,16,16], data_type = pycudnn.data_type.HALF)
 
-response = graph.insert_matmul(name = "matmul", image = image, weight = weight, compute_type = pycudnn.data_type.FLOAT)
+response = graph.matmul(name = "matmul", image = image, weight = weight, compute_type = pycudnn.data_type.FLOAT)
 response.set_is_virtual(True).set_data_type(pycudnn.data_type.FLOAT)
 
-output = graph.insert_bias(name = "bias", input = response, bias = bias, compute_type = pycudnn.data_type.FLOAT)
+output = graph.bias(name = "bias", input = response, bias = bias, compute_type = pycudnn.data_type.FLOAT)
 output.set_is_virtual(True).set_data_type(pycudnn.data_type.FLOAT)
 
-relu = graph.insert_relu(name = "relu", input = output, compute_type = pycudnn.data_type.FLOAT)
+relu = graph.relu(name = "relu", input = output, compute_type = pycudnn.data_type.FLOAT)
 relu.set_data_type(pycudnn.data_type.HALF)
 
 graph.build()
@@ -37,7 +40,6 @@ cuda.cuMemcpyHtoD(w_dptr, h_W, 4*56*16)
 cuda.cuMemcpyHtoD(b_dptr, h_B, 4*16*16)
 cuda.cuMemcpyHtoD(y_dptr, h_Y, 4*16*16)
 
-print("Executing the Matmul + bias + relu graph")
 graph.execute({image :x_dptr, weight : w_dptr, bias : b_dptr, relu : y_dptr})
 
 cuda.cuMemcpyDtoH(h_Y, y_dptr, 4*16*16)
