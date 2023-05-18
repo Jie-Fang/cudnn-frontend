@@ -299,9 +299,11 @@ void run_batchnorm_node() {
     #if (CUDNN_VERSION >= 8700)
         REQUIRE(cudnn_frontend::error_t::OK == batchnorm_node.build());
     #elif (CUDNN_VERSION >= 8500)
-        SKIP("Only multi-GPU batch norm is supported in cudnn versions prior to 8.7 and above 8.5.");
+        std::cout << "Only multi-GPU batch norm is supported in cudnn versions prior to 8.7 and above 8.5." << std::endl;
+        return;
     #else
-        SKIP("Batch Norm is not supported in cudnn versions prior to 8.5.");
+        std::cout << "Batch Norm is not supported in cudnn versions prior to 8.5." << std::endl;
+        return;
     #endif
 
     int64_t workspace_size = 0;
@@ -452,7 +454,8 @@ run_convolution_fp8_node() {
         REQUIRE(cudnn_frontend::error_t::OK == convolution_fp8_node.build());
     }
     else {
-        SKIP("Architextures below hopper do not support fp8.");
+        std::cout << "Architextures below hopper do not support fp8." << std::endl;
+        return;
     }
 
     Surface<float> x_dq_tensor(convolution_fp8_node.tensor_props.at("tensor3")->get_tensor_size(), false);
