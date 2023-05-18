@@ -28,6 +28,7 @@ function run_cpp_tests() {
 
 function run_python_tests() {
     get_python_requirements
+    PYTHONPATH=./python_bindings python3 ../samples/python/batchnorm.py
     PYTHONPATH=./python_bindings python3 ../samples/python/conv_bias.py
     PYTHONPATH=./python_bindings python3 ../samples/python/matmul_bias_relu.py
 }

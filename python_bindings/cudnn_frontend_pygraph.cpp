@@ -103,6 +103,58 @@ public:
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
+    // Takes all tensor properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor>>
+    insert_batchnorm(
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& X_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_mean_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_var_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& epsilon_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& exp_avg_factor_props_ptr,
+        cudnn_frontend::DataType_t const& compute_type
+    ) {
+        auto props = cudnn_frontend::graph::Batchnorm(name)
+                        .set_compute_type(compute_type)
+                        .map_port_to_tensor({
+                            {cudnn_frontend::graph::Batchnorm::PORTS::X, X_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Batchnorm::PORTS::Previous_running_mean, in_running_mean_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Batchnorm::PORTS::Previous_running_var, in_running_var_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Batchnorm::PORTS::Scale, scale_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Batchnorm::PORTS::Bias, bias_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Batchnorm::PORTS::EPS, epsilon_props_ptr->get_name()}
+                            , {cudnn_frontend::graph::Batchnorm::PORTS::EXP_AVG, exp_avg_factor_props_ptr->get_name()}
+                        });        
+        graph.insert_node(props);
+        
+        auto Y_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y);
+        auto Y_tensor = cudnn_frontend::graph::Tensor(Y_tensor_name);
+        graph.insert_tensor(Y_tensor);
+        
+        auto Mean_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Mean);
+        auto Mean_tensor = cudnn_frontend::graph::Tensor(Mean_tensor_name);
+        graph.insert_tensor(Mean_tensor);
+        
+        auto Var_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Var);
+        auto Var_tensor = cudnn_frontend::graph::Tensor(Var_tensor_name);
+        graph.insert_tensor(Var_tensor);
+        
+        auto Next_running_mean_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Next_running_mean);
+        auto Next_running_mean_tensor = cudnn_frontend::graph::Tensor(Next_running_mean_tensor_name);
+        graph.insert_tensor(Next_running_mean_tensor);
+        
+        auto Next_running_var_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Next_running_var);
+        auto Next_running_var_tensor = cudnn_frontend::graph::Tensor(Next_running_var_tensor_name);
+        graph.insert_tensor(Next_running_var_tensor);
+
+        return {graph.get_tensor(Y_tensor_name), graph.get_tensor(Mean_tensor_name), graph.get_tensor(Var_tensor_name), graph.get_tensor(Next_running_mean_tensor_name), graph.get_tensor(Next_running_var_tensor_name)};
+    }
+
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor>
@@ -309,6 +361,10 @@ public:
         return;
     }
 
+    int64_t get_workspace_size() {
+        return graph.get_workspace_size();
+    }
+
     void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack) {
         std::unordered_map<std::string, void *> var_pack_;
         for (auto item : var_pack) {
@@ -353,6 +409,17 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"is_virtual", false},
              py::arg_v{"is_pass_by_value", false}
         )
+        .def("batchnorm", &PyGraph::insert_batchnorm,
+             py::arg_v("name", "test_tensor_name"),
+             py::arg("input"),
+             py::arg("scale"),
+             py::arg("bias"),
+             py::arg("in_running_mean"),
+             py::arg("in_running_var"),
+             py::arg("epsilon"),
+             py::arg("exp_avg_factor"),
+             py::arg("compute_type")
+        )
         .def("conv", &PyGraph::insert_conv,
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
@@ -396,6 +463,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("compute_type")
         )
         .def("build", &PyGraph::build)
+        .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute)
         .def("__repr__", [](PyGraph const& graph){
             std::ostringstream out;
