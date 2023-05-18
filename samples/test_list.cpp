@@ -2738,7 +2738,13 @@ TEST_CASE("Matmul Graphs", "[matmul][graph]") {
 }
 
 TEST_CASE("BatchNorm Graphs", "[batchnorm][graph]") {
+    #if (CUDNN_VERSION < 8700)
+        SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+    #endif
+
     test_batchnorm_graph();
+    test_batchnorm_relu_graph();
+    test_batchnorm_add_relu_graph();
 }
 
 #if (CUDNN_VERSION >= 8900)

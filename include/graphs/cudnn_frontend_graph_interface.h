@@ -204,8 +204,6 @@ inline error_t Graph::infer_shapes() {
         auto &exp_avg_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG));
     
         outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[mean_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[var_tensor->get_name()].push_back(node.second->get_name());
         outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(node.second->get_name());
         outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(node.second->get_name());
         outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(node.second->get_name());
@@ -213,12 +211,12 @@ inline error_t Graph::infer_shapes() {
         outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(node.second->get_name());
         outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(node.second->get_name());
         incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
+        incoming_nodes_for_tensors[mean_tensor->get_name()].push_back(node.second->get_name());
+        incoming_nodes_for_tensors[var_tensor->get_name()].push_back(node.second->get_name());
         incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(node.second->get_name());
         incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(node.second->get_name());
         
         incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(mean_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(var_tensor->get_name());
         incoming_tensors_for_nodes[node.second->get_name()].push_back(prev_running_mean_tensor->get_name());
         incoming_tensors_for_nodes[node.second->get_name()].push_back(prev_running_var_tensor->get_name());
         incoming_tensors_for_nodes[node.second->get_name()].push_back(eps_tensor->get_name());
@@ -226,6 +224,8 @@ inline error_t Graph::infer_shapes() {
         incoming_tensors_for_nodes[node.second->get_name()].push_back(scale_tensor->get_name());
         incoming_tensors_for_nodes[node.second->get_name()].push_back(bias_tensor->get_name());
         outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
+        outgoing_tensors_for_nodes[node.second->get_name()].push_back(mean_tensor->get_name());
+        outgoing_tensors_for_nodes[node.second->get_name()].push_back(var_tensor->get_name());
         outgoing_tensors_for_nodes[node.second->get_name()].push_back(next_running_mean_tensor->get_name());
         outgoing_tensors_for_nodes[node.second->get_name()].push_back(next_running_var_tensor->get_name());
     }

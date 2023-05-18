@@ -125,7 +125,7 @@ public:
         validate_per_channel_tensors(Batchnorm::PORTS::Scale);
         validate_per_channel_tensors(Batchnorm::PORTS::Bias);
 
-        auto validate_scalars = [this, &x_tensor_dim] (Batchnorm::PORTS const port) {
+        auto validate_scalars = [this] (Batchnorm::PORTS const port) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
             auto tensor_dim = tensor_prop->get_dim();
             bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {

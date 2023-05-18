@@ -21,3 +21,5 @@
  */
 
 void test_batchnorm_graph();
+void test_batchnorm_relu_graph();
+void test_batchnorm_add_relu_graph();
