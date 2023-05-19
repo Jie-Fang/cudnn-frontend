@@ -41,6 +41,13 @@ public:
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
         props->update_uids(offset);
 
+        // Merge with ancestor's context
+        fill_missing_context();
+
+        if(props->get_compute_data_type() == DataType_t::NOT_SET) {
+            props->set_compute_data_type(context.get_compute_data_type());
+        }
+
         // TODO: Only inferrencing from (X, W) -> Y works today.
         auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X));
         auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W));
@@ -79,6 +86,16 @@ public:
 
         for(size_t i = 0; i < Convolution::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Convolution::PORTS>(i)));
+
+            if(!(tensor_prop->is_data_type_set)) {
+                if(tensor_prop->get_is_virtual()) {
+                    tensor_prop->set_data_type(context.get_intermediate_data_type());
+                }    
+                else {
+                    tensor_prop->set_data_type(context.get_io_data_type());
+                }
+            }
+
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
@@ -122,7 +139,7 @@ public:
         // convolution descriptor
         int64_t const spatial_dim_count = props->get_padding().size();
         auto convolution_descriptor = cudnn_frontend::ConvDescBuilder()
-                                                        .setComputeType(props->get_compute_type())
+                                                        .setComputeType(props->get_compute_data_type())
                                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                                         .setSpatialDimCount(spatial_dim_count)
                                                         .setSpatialStride(spatial_dim_count, props->get_stride().data())

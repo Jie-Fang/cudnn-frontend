@@ -60,16 +60,12 @@ class PyGraph {
 
 public:
     PyGraph(std::string const &name,
-            int64_t tensor_dims,
-            int64_t spatial_dims,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
             cudnn_frontend::DataType_t compute_data_type) : graph(name) {
-                graph.set_compute_type(compute_data_type)
-                    .set_intermediate_data_type(intermediate_data_type)
-                    .set_io_data_type(io_data_type)
-                    .set_tensor_dims(tensor_dims)
-                    .set_spatial_dims(spatial_dims);
+                graph.set_compute_data_type(compute_data_type)
+                     .set_intermediate_data_type(intermediate_data_type)
+                     .set_io_data_type(io_data_type);
             }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -115,10 +111,10 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_var_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& epsilon_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& exp_avg_factor_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type
+        cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Batchnorm(name)
-                        .set_compute_type(compute_type)
+                        .set_compute_data_type(compute_data_type)
                         .map_port_to_tensor({
                             {cudnn_frontend::graph::Batchnorm::PORTS::X, X_props_ptr->get_name()}
                             , {cudnn_frontend::graph::Batchnorm::PORTS::Previous_running_mean, in_running_mean_props_ptr->get_name()}
@@ -162,13 +158,13 @@ public:
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type,
+        cudnn_frontend::DataType_t const& compute_data_type,
         std::vector<int64_t> const& padding,
         std::vector<int64_t> const& stride,
         std::vector<int64_t> const& dilation
     ) {
         auto props = cudnn_frontend::graph::Convolution(name)
-                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_padding(padding)
                         .set_stride(stride)
                         .set_dilation(dilation)
@@ -196,10 +192,10 @@ public:
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type
+        cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Matmul(name)
-        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
         .map_port_to_tensor({
             {cudnn_frontend::graph::Matmul::PORTS::X, image_props_ptr->get_name()},
             {cudnn_frontend::graph::Matmul::PORTS::W, weight_props_ptr->get_name()}
@@ -224,10 +220,10 @@ public:
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type
+        cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                         .map_port_to_tensor({
                             {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()},
@@ -253,10 +249,10 @@ public:
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type
+        cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                         .map_port_to_tensor({
                             {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()},
@@ -281,10 +277,10 @@ public:
     insert_relu(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type
+        cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                         .map_port_to_tensor({
                             {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
@@ -308,10 +304,10 @@ public:
     insert_elu(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
-        cudnn_frontend::DataType_t const& compute_type
+        cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD)
                         .map_port_to_tensor({
                             {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
@@ -335,10 +331,10 @@ public:
     insert_gelu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
-        , cudnn_frontend::DataType_t const& compute_type
+        , cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
                         .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD)
                         .map_port_to_tensor({
                             {cudnn_frontend::graph::Pointwise::PORTS::X, input_props_ptr->get_name()}
@@ -392,14 +388,11 @@ default_vector(void) {
 
 void init_pygraph_submodule(py::module_ &m) {
     py::class_<PyGraph>(m, "pygraph")
-        .def(py::init<std::string const &, int64_t, int64_t,
-                cudnn_frontend::DataType_t,cudnn_frontend::DataType_t,cudnn_frontend::DataType_t>(),
+        .def(py::init<std::string const &, cudnn_frontend::DataType_t, cudnn_frontend::DataType_t, cudnn_frontend::DataType_t>(),
              py::arg_v("name", "test_graph"),
-             py::arg_v("tensor_dims", 4),
-             py::arg_v("spatial_dims", 2),
-             py::arg_v("io_data_type", cudnn_frontend::DataType_t::HALF),
-             py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::FLOAT),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::FLOAT)
+             py::arg_v("io_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("tensor", &PyGraph::insert_tensor,
              py::arg_v("name", "test_tensor_name"),
@@ -418,13 +411,13 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("in_running_var"),
              py::arg("epsilon"),
              py::arg("exp_avg_factor"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("conv", &PyGraph::insert_conv,
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
              py::arg("weight"),
-             py::arg("compute_type"),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v{"padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
@@ -433,34 +426,34 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("name", "test_tensor_name"),
              py::arg("image"),
              py::arg("weight"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("bias", &PyGraph::insert_bias,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("bias"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("scale", &PyGraph::insert_scale,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("scale"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("relu", &PyGraph::insert_relu,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("elu", &PyGraph::insert_elu,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("insert_gelu", &PyGraph::insert_gelu,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
-             py::arg("compute_type")
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)

@@ -39,8 +39,8 @@ void init_properties(py::module_ &m) {
         .def("set_stride",   &cudnn_frontend::graph::Convolution::set_stride)
         .def("get_dilation", &cudnn_frontend::graph::Convolution::get_dilation)
         .def("set_dilation", &cudnn_frontend::graph::Convolution::set_dilation)
-        .def("get_compute_type",     &cudnn_frontend::graph::Convolution::get_compute_type)
-        .def("set_compute_type",     &cudnn_frontend::graph::Convolution::set_compute_type)
+        .def("get_compute_data_type",     &cudnn_frontend::graph::Convolution::get_compute_data_type)
+        .def("set_compute_data_type",     &cudnn_frontend::graph::Convolution::set_compute_data_type)
         .def("get_tensor_at_port",       &cudnn_frontend::graph::Convolution::get_tensor_at_port)
         .def("map_port_to_tensor",       &cudnn_frontend::graph::Convolution::map_port_to_tensor)
         .def("__repr__", [](cudnn_frontend::graph::Convolution const& props){
@@ -57,8 +57,8 @@ void init_properties(py::module_ &m) {
     
     py::class_<cudnn_frontend::graph::Matmul> matmul(m, "matmul");
     matmul.def(py::init<std::string const &>())
-        .def("get_compute_type",     &cudnn_frontend::graph::Matmul::get_compute_type)
-        .def("set_compute_type",     &cudnn_frontend::graph::Matmul::set_compute_type)
+        .def("get_compute_data_type",     &cudnn_frontend::graph::Matmul::get_compute_data_type)
+        .def("set_compute_data_type",     &cudnn_frontend::graph::Matmul::set_compute_data_type)
         .def("get_tensor_at_port",       &cudnn_frontend::graph::Matmul::get_tensor_at_port)
         .def("map_port_to_tensor",       &cudnn_frontend::graph::Matmul::map_port_to_tensor)
         .def("__repr__", [](cudnn_frontend::graph::Matmul const& props){
@@ -77,8 +77,8 @@ void init_properties(py::module_ &m) {
     pointwise.def(py::init<std::string const &>())
         .def("get_mode", &cudnn_frontend::graph::Pointwise::get_mode)
         .def("set_mode", &cudnn_frontend::graph::Pointwise::set_mode)
-        .def("get_compute_type",      &cudnn_frontend::graph::Pointwise::get_compute_type)
-        .def("set_compute_type",      &cudnn_frontend::graph::Pointwise::set_compute_type)
+        .def("get_compute_data_type",      &cudnn_frontend::graph::Pointwise::get_compute_data_type)
+        .def("set_compute_data_type",      &cudnn_frontend::graph::Pointwise::set_compute_data_type)
         .def("get_tensor_at_port",       &cudnn_frontend::graph::Pointwise::get_tensor_at_port)
         .def("map_port_to_tensor",       &cudnn_frontend::graph::Pointwise::map_port_to_tensor);
 

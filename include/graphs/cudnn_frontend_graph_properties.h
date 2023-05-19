@@ -179,12 +179,10 @@ public:
 protected:
 
     std::string name;
-    DataType_t compute_type;
+    DataType_t compute_data_type = DataType_t::NOT_SET;
 
     Tag tag;
 public:
-
-    bool is_compute_type_set = false;
 
     Operation(const std::string name, Tag t) : name(name), tag(t) {}
 
@@ -197,8 +195,8 @@ public:
         return tag;
     }
 
-    DataType_t get_compute_type() const {
-        return compute_type;
+    DataType_t get_compute_data_type() const {
+        return compute_data_type;
     }
 
     virtual ~Operation() = default;
@@ -249,9 +247,8 @@ public:
         return 0;
     }
 
-    Convolution& set_compute_type(DataType_t value) {
-        compute_type = value;
-        is_compute_type_set = true;
+    Convolution& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 
@@ -353,9 +350,8 @@ public:
         return 0;
     }
 
-    Matmul& set_compute_type(DataType_t value) {
-        compute_type = value;
-        is_compute_type_set = true;
+    Matmul& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 
@@ -405,9 +401,8 @@ public:
         return 0;
     }
 
-    Pointwise& set_compute_type(DataType_t value) {
-        compute_type = value;
-        is_compute_type_set = true;
+    Pointwise& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 
@@ -504,9 +499,8 @@ public:
         return 0;
     }
     
-    Batchnorm& set_compute_type(DataType_t value) {
-        compute_type = value;
-        is_compute_type_set = true;
+    Batchnorm& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 };
@@ -562,9 +556,8 @@ public:
         return port_to_name.at(port);
     }
     
-    Reduction& set_compute_type(DataType_t value) {
-        compute_type = value;
-        is_compute_type_set = true;
+    Reduction& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 };

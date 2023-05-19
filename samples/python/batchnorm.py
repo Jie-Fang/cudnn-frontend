@@ -8,23 +8,23 @@ if pycudnn.is_cudnn_supported() == False:
     print("cudnn version is not supported")
     exit(0)
 
-graph = pycudnn.pygraph("BN", compute_data_type = pycudnn.data_type.FLOAT)
+graph = pycudnn.pygraph("BN", io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
 X = graph.tensor(name = "X", dim = [4,16,56,56], data_type = pycudnn.data_type.HALF)
-scale = graph.tensor(name = "scale", dim = [1,16,1,1], data_type = pycudnn.data_type.FLOAT)
-bias = graph.tensor(name = "bias", dim = [1,16,1,1], data_type = pycudnn.data_type.FLOAT)
-in_running_mean = graph.tensor(name = "in_running_mean", dim = [1,16,1,1], data_type = pycudnn.data_type.FLOAT)
-in_running_var = graph.tensor(name = "in_running_var", dim = [1,16,1,1], data_type = pycudnn.data_type.FLOAT)
-epsilon  = graph.tensor(name = "epsilon", dim = [1,1,1,1], data_type = pycudnn.data_type.FLOAT, is_pass_by_value = True)
-exp_avg_factor = graph.tensor(name = "exp_avg_factor", dim = [1,1,1,1], data_type = pycudnn.data_type.FLOAT, is_pass_by_value = True)
+scale = graph.tensor(name = "scale", dim = [1,16,1,1])
+bias = graph.tensor(name = "bias", dim = [1,16,1,1])
+in_running_mean = graph.tensor(name = "in_running_mean", dim = [1,16,1,1])
+in_running_var = graph.tensor(name = "in_running_var", dim = [1,16,1,1])
+epsilon  = graph.tensor(name = "epsilon", dim = [1,1,1,1], is_pass_by_value = True)
+exp_avg_factor = graph.tensor(name = "exp_avg_factor", dim = [1,1,1,1], is_pass_by_value = True)
 
-(Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN", input = X, scale = scale, bias = bias, in_running_mean = in_running_mean, in_running_var = in_running_var, epsilon = epsilon, exp_avg_factor = exp_avg_factor, compute_type = pycudnn.data_type.FLOAT)
+(Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN", input = X, scale = scale, bias = bias, in_running_mean = in_running_mean, in_running_var = in_running_var, epsilon = epsilon, exp_avg_factor = exp_avg_factor)
 
 Y.set_is_virtual(False).set_data_type(pycudnn.data_type.HALF)
-saved_mean.set_is_virtual(False).set_data_type(pycudnn.data_type.FLOAT)
-saved_inv_var.set_is_virtual(False).set_data_type(pycudnn.data_type.FLOAT)
-out_running_mean.set_is_virtual(False).set_data_type(pycudnn.data_type.FLOAT)
-out_running_var.set_is_virtual(False).set_data_type(pycudnn.data_type.FLOAT)
+saved_mean.set_is_virtual(False)
+saved_inv_var.set_is_virtual(False)
+out_running_mean.set_is_virtual(False)
+out_running_var.set_is_virtual(False)
 
 graph.build()
 

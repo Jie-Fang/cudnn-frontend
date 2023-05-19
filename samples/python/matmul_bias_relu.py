@@ -8,20 +8,19 @@ if pycudnn.is_cudnn_supported() == False:
     print("cudnn version is not supported")
     exit(0)
 
-graph = pycudnn.pygraph("nvfuser")
+graph = pycudnn.pygraph("nvfuser", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
-image = graph.tensor(name = "image", dim = [4,16,56], data_type = pycudnn.data_type.HALF)
-weight = graph.tensor(name = "weight", dim = [4,56,16], data_type = pycudnn.data_type.HALF)
-bias = graph.tensor(name = "bias", dim = [4,16,16], data_type = pycudnn.data_type.HALF)
+image = graph.tensor(name = "image", dim = [4,16,56])
+weight = graph.tensor(name = "weight", dim = [4,56,16])
+bias = graph.tensor(name = "bias", dim = [4,16,16])
 
-response = graph.matmul(name = "matmul", image = image, weight = weight, compute_type = pycudnn.data_type.FLOAT)
-response.set_is_virtual(True).set_data_type(pycudnn.data_type.FLOAT)
+response = graph.matmul(name = "matmul", image = image, weight = weight)
+response.set_is_virtual(True)
 
-output = graph.bias(name = "bias", input = response, bias = bias, compute_type = pycudnn.data_type.FLOAT)
-output.set_is_virtual(True).set_data_type(pycudnn.data_type.FLOAT)
+output = graph.bias(name = "bias", input = response, bias = bias)
+output.set_is_virtual(True)
 
-relu = graph.relu(name = "relu", input = output, compute_type = pycudnn.data_type.FLOAT)
-relu.set_data_type(pycudnn.data_type.HALF)
+relu = graph.relu(name = "relu", input = output)
 
 graph.build()
 

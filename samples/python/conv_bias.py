@@ -8,17 +8,16 @@ if pycudnn.is_cudnn_supported() == False:
     print("cudnn version is not supported")
     exit(0)
 
-graph = pycudnn.pygraph("graph0", compute_data_type = pycudnn.data_type.FLOAT)
+graph = pycudnn.pygraph("graph0", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
-image  = graph.tensor(name = "image", dim = [4,16,56,56], data_type = pycudnn.data_type.HALF)
-weight = graph.tensor(name = "weight", dim = [16,16,3,3], data_type = pycudnn.data_type.HALF)
-bias   = graph.tensor(name = "bias", dim = [1,16,1,1], data_type = pycudnn.data_type.HALF)
+image  = graph.tensor(name = "image", dim = [4,16,56,56])
+weight = graph.tensor(name = "weight", dim = [16,16,3,3])
+bias   = graph.tensor(name = "bias", dim = [1,16,1,1])
 
-response = graph.conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1], compute_type = pycudnn.data_type.FLOAT)
-response.set_is_virtual(True).set_data_type(pycudnn.data_type.FLOAT)
+response = graph.conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
+response.set_is_virtual(True)
 
-output = graph.bias(name = "bias", input = response, bias = bias, compute_type = pycudnn.data_type.FLOAT)
-output.set_data_type(pycudnn.data_type.HALF)
+output = graph.bias(name = "bias", input = response, bias = bias)
 
 graph.build()
 

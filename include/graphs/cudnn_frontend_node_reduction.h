@@ -38,9 +38,26 @@ public:
 
     error_t infer_properties() override final {
         props->update_uids(offset);
+
+        // Merge with ancestor's context
+        fill_missing_context();
+
+        if(props->get_compute_data_type() == DataType_t::NOT_SET) {
+            props->set_compute_data_type(context.get_compute_data_type());
+        }
         
         for(size_t i = 0; i < Reduction::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Reduction::PORTS>(i)));
+
+            if(!(tensor_prop->is_data_type_set)) {
+                if(tensor_prop->get_is_virtual()) {
+                    tensor_prop->set_data_type(context.get_intermediate_data_type());
+                }    
+                else {
+                    tensor_prop->set_data_type(context.get_io_data_type());
+                }
+            }
+            
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
             tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
@@ -75,7 +92,7 @@ public:
         #endif
 
         auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
-                                                        .setComputeType(props->get_compute_type())
+                                                        .setComputeType(props->get_compute_data_type())
                                                         .setReductionOp(props->get_mode())
                                                         .build();
 

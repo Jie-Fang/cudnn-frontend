@@ -39,9 +39,15 @@ public:
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node named " << name << "." << std::endl;
-
         props->update_uids(offset);
 
+        // Merge with ancestor's context
+        fill_missing_context();
+
+        if(props->get_compute_data_type() == DataType_t::NOT_SET) {
+            props->set_compute_data_type(context.get_compute_data_type());
+        }
+        
         // TODO: Only inferrencing from (X, B) -> Y works today.
         auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::X));
         auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::Y));
@@ -62,6 +68,15 @@ public:
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Pointwise::PORTS>(i)));
             if(tensor_prop == nullptr)
                 continue;
+
+            if(!(tensor_prop->is_data_type_set)) {
+                if(tensor_prop->get_is_virtual()) {
+                    tensor_prop->set_data_type(context.get_intermediate_data_type());
+                }    
+                else {
+                    tensor_prop->set_data_type(context.get_io_data_type());
+                }
+            }
 
             // Users still do not set tensor uids
             // But there might be a case that a previous node when setting its properties set the shared tensor prop's uid.
@@ -135,7 +150,7 @@ public:
         #endif
 
         auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
-                                                        .setComputeType(props->get_compute_type())
+                                                        .setComputeType(props->get_compute_data_type())
                                                         .setMode(props->get_mode())
                                                         .build();
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());

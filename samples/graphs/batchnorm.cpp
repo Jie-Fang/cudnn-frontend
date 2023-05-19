@@ -29,9 +29,11 @@
 
 void test_batchnorm_graph() {
     cudnn_frontend::graph::Graph graph("SGBN");
+    graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
     
     auto sgbn = cudnn_frontend::graph::Batchnorm("SGBN")
-                    .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Batchnorm::PORTS::X, "X"}
                         , {cudnn_frontend::graph::Batchnorm::PORTS::Mean, "Mean"}
@@ -48,48 +50,33 @@ void test_batchnorm_graph() {
                     });
     graph.insert_node(sgbn);
 
-    auto X = cudnn_frontend::graph::Tensor("X").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(X);
-
-    auto Mean = cudnn_frontend::graph::Tensor("Mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Mean);
-    auto Var = cudnn_frontend::graph::Tensor("Var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Var);
-    auto Previous_running_mean = cudnn_frontend::graph::Tensor("Previous_running_mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Previous_running_mean);
-    auto Previous_running_var = cudnn_frontend::graph::Tensor("Previous_running_var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Previous_running_var);
-    auto Next_running_mean = cudnn_frontend::graph::Tensor("Next_running_mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Next_running_mean);
-    auto Next_running_var = cudnn_frontend::graph::Tensor("Next_running_var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Next_running_var);
-    auto Scale = cudnn_frontend::graph::Tensor("Scale").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Scale);
-    auto Bias = cudnn_frontend::graph::Tensor("Bias").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Bias);
-
-    auto EPS = cudnn_frontend::graph::Tensor("EPS").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_pass_by_value(true);
-    graph.insert_tensor(EPS);
-    auto EXP_AVG = cudnn_frontend::graph::Tensor("EXP_AVG").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_pass_by_value(true);
-    graph.insert_tensor(EXP_AVG);
-
-    auto Y = cudnn_frontend::graph::Tensor("Y").set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(Y);
+    graph.insert_tensor(cudnn_frontend::graph::Tensor("X").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Previous_running_mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Previous_running_var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Next_running_mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Next_running_var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Scale"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Bias"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("EPS").set_is_pass_by_value(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("EXP_AVG").set_is_pass_by_value(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_data_type(cudnn_frontend::DataType_t::HALF));
     
     REQUIRE(cudnn_frontend::error_t::OK == graph.build());
 
-    Surface<half> X_tensor(X.get_tensor_size(), false);
-    Surface<float> Mean_tensor(Mean.get_tensor_size(), false);
-    Surface<float> Var_tensor(Var.get_tensor_size(), false);
-    Surface<float> Previous_running_mean_tensor(Previous_running_mean.get_tensor_size(), false);
-    Surface<float> Previous_running_var_tensor(Previous_running_var.get_tensor_size(), false);
-    Surface<float> Next_running_mean_tensor(Next_running_mean.get_tensor_size(), false);
-    Surface<float> Next_running_var_tensor(Next_running_var.get_tensor_size(), false);
-    Surface<float> Scale_tensor(Scale.get_tensor_size(), false);
-    Surface<float> Bias_tensor(Bias.get_tensor_size(), false);
+    Surface<half> X_tensor(4*32*16*16, false);
+    Surface<float> Mean_tensor(16, false);
+    Surface<float> Var_tensor(16, false);
+    Surface<float> Previous_running_mean_tensor(16, false);
+    Surface<float> Previous_running_var_tensor(16, false);
+    Surface<float> Next_running_mean_tensor(16, false);
+    Surface<float> Next_running_var_tensor(16, false);
+    Surface<float> Scale_tensor(16, false);
+    Surface<float> Bias_tensor(16, false);
     float EPS_scalar = 0.001;
     float EXP_AVG_scalar = 0.001;
-    Surface<half> Y_tensor(Y.get_tensor_size(), false);
+    Surface<half> Y_tensor(4*32*16*16, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
 
@@ -113,9 +100,11 @@ void test_batchnorm_graph() {
 
 void test_batchnorm_relu_graph() {
     cudnn_frontend::graph::Graph graph("SGBN_Relu");
+    graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
     
     auto sgbn = cudnn_frontend::graph::Batchnorm("SGBN")
-                    .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Batchnorm::PORTS::X, "X"}
                         , {cudnn_frontend::graph::Batchnorm::PORTS::Mean, "Mean"}
@@ -132,60 +121,42 @@ void test_batchnorm_relu_graph() {
                     });
     graph.insert_node(sgbn);
 
-    auto X = cudnn_frontend::graph::Tensor("X").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(X);
-
-    auto Mean = cudnn_frontend::graph::Tensor("Mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Mean);
-    auto Var = cudnn_frontend::graph::Tensor("Var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Var);
-    auto Previous_running_mean = cudnn_frontend::graph::Tensor("Previous_running_mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Previous_running_mean);
-    auto Previous_running_var = cudnn_frontend::graph::Tensor("Previous_running_var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Previous_running_var);
-    auto Next_running_mean = cudnn_frontend::graph::Tensor("Next_running_mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Next_running_mean);
-    auto Next_running_var = cudnn_frontend::graph::Tensor("Next_running_var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Next_running_var);
-    auto Scale = cudnn_frontend::graph::Tensor("Scale").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Scale);
-    auto Bias = cudnn_frontend::graph::Tensor("Bias").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Bias);
-
-    auto EPS = cudnn_frontend::graph::Tensor("EPS").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_pass_by_value(true);
-    graph.insert_tensor(EPS);
-    auto EXP_AVG = cudnn_frontend::graph::Tensor("EXP_AVG").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_pass_by_value(true);
-    graph.insert_tensor(EXP_AVG);
-
-    auto Y = cudnn_frontend::graph::Tensor("Y").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_virtual(true);
-    graph.insert_tensor(Y);
-
     auto relu = cudnn_frontend::graph::Pointwise("relu")
-                    .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Pointwise::PORTS::X, sgbn.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y)}
                         , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
                     });
     graph.insert_node(relu);
-    
-    auto output = cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(output);
+
+    graph.insert_tensor(cudnn_frontend::graph::Tensor("X").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Previous_running_mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Previous_running_var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Next_running_mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Next_running_var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Scale"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Bias"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("EPS").set_is_pass_by_value(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("EXP_AVG").set_is_pass_by_value(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_is_virtual(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF));
     
     REQUIRE(cudnn_frontend::error_t::OK == graph.build());
 
-    Surface<half> X_tensor(X.get_tensor_size(), false);
-    Surface<float> Mean_tensor(Mean.get_tensor_size(), false);
-    Surface<float> Var_tensor(Var.get_tensor_size(), false);
-    Surface<float> Previous_running_mean_tensor(Previous_running_mean.get_tensor_size(), false);
-    Surface<float> Previous_running_var_tensor(Previous_running_var.get_tensor_size(), false);
-    Surface<float> Next_running_mean_tensor(Next_running_mean.get_tensor_size(), false);
-    Surface<float> Next_running_var_tensor(Next_running_var.get_tensor_size(), false);
-    Surface<float> Scale_tensor(Scale.get_tensor_size(), false);
-    Surface<float> Bias_tensor(Bias.get_tensor_size(), false);
+    Surface<half> X_tensor(4*32*16*16, false);
+    Surface<float> Mean_tensor(16, false);
+    Surface<float> Var_tensor(16, false);
+    Surface<float> Previous_running_mean_tensor(16, false);
+    Surface<float> Previous_running_var_tensor(16, false);
+    Surface<float> Next_running_mean_tensor(16, false);
+    Surface<float> Next_running_var_tensor(16, false);
+    Surface<float> Scale_tensor(16, false);
+    Surface<float> Bias_tensor(16, false);
     float EPS_scalar = 0.001;
     float EXP_AVG_scalar = 0.001;
-    Surface<half> Y_tensor(Y.get_tensor_size(), false);
+    Surface<half> Y_tensor(4*32*16*16, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
 
@@ -209,9 +180,11 @@ void test_batchnorm_relu_graph() {
 
 void test_batchnorm_add_relu_graph() {
     cudnn_frontend::graph::Graph graph("SGBN_Add_Relu");
+    graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
     
     auto sgbn = cudnn_frontend::graph::Batchnorm("SGBN")
-                    .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Batchnorm::PORTS::X, "X"}
                         , {cudnn_frontend::graph::Batchnorm::PORTS::Mean, "Mean"}
@@ -228,39 +201,7 @@ void test_batchnorm_add_relu_graph() {
                     });
     graph.insert_node(sgbn);
 
-    auto X = cudnn_frontend::graph::Tensor("X").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(X);
-
-    auto Mean = cudnn_frontend::graph::Tensor("Mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Mean);
-    auto Var = cudnn_frontend::graph::Tensor("Var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Var);
-    auto Previous_running_mean = cudnn_frontend::graph::Tensor("Previous_running_mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Previous_running_mean);
-    auto Previous_running_var = cudnn_frontend::graph::Tensor("Previous_running_var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Previous_running_var);
-    auto Next_running_mean = cudnn_frontend::graph::Tensor("Next_running_mean").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Next_running_mean);
-    auto Next_running_var = cudnn_frontend::graph::Tensor("Next_running_var").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Next_running_var);
-    auto Scale = cudnn_frontend::graph::Tensor("Scale").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Scale);
-    auto Bias = cudnn_frontend::graph::Tensor("Bias").set_data_type(cudnn_frontend::DataType_t::FLOAT);
-    graph.insert_tensor(Bias);
-
-    auto EPS = cudnn_frontend::graph::Tensor("EPS").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_pass_by_value(true);
-    graph.insert_tensor(EPS);
-    auto EXP_AVG = cudnn_frontend::graph::Tensor("EXP_AVG").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_pass_by_value(true);
-    graph.insert_tensor(EXP_AVG);
-
-    auto Y = cudnn_frontend::graph::Tensor("Y").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_virtual(true);
-    graph.insert_tensor(Y);
-
-    auto A = cudnn_frontend::graph::Tensor("A").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(A);
-
     auto add = cudnn_frontend::graph::Pointwise("add")
-                    .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                     .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Pointwise::PORTS::X, sgbn.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y)}
@@ -269,11 +210,7 @@ void test_batchnorm_add_relu_graph() {
                     });
     graph.insert_node(add);
 
-    auto add_output = cudnn_frontend::graph::Tensor("add_output").set_data_type(cudnn_frontend::DataType_t::FLOAT).set_is_virtual(true);
-    graph.insert_tensor(add_output);
-
     auto relu = cudnn_frontend::graph::Pointwise("relu")
-                    .set_compute_type(cudnn_frontend::DataType_t::FLOAT)
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Pointwise::PORTS::X, add.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
@@ -281,24 +218,37 @@ void test_batchnorm_add_relu_graph() {
                     });
     graph.insert_node(relu);
     
-    auto output = cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF);
-    graph.insert_tensor(output);
+    graph.insert_tensor(cudnn_frontend::graph::Tensor("X").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Previous_running_mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Previous_running_var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Next_running_mean"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Next_running_var"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Scale"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Bias"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("EPS").set_is_pass_by_value(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("EXP_AVG").set_is_pass_by_value(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_is_virtual(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("A").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF))
+         .insert_tensor(cudnn_frontend::graph::Tensor("add_output").set_is_virtual(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF));
     
     REQUIRE(cudnn_frontend::error_t::OK == graph.build());
 
-    Surface<half> X_tensor(X.get_tensor_size(), false);
-    Surface<float> Mean_tensor(Mean.get_tensor_size(), false);
-    Surface<float> Var_tensor(Var.get_tensor_size(), false);
-    Surface<float> Previous_running_mean_tensor(Previous_running_mean.get_tensor_size(), false);
-    Surface<float> Previous_running_var_tensor(Previous_running_var.get_tensor_size(), false);
-    Surface<float> Next_running_mean_tensor(Next_running_mean.get_tensor_size(), false);
-    Surface<float> Next_running_var_tensor(Next_running_var.get_tensor_size(), false);
-    Surface<float> Scale_tensor(Scale.get_tensor_size(), false);
-    Surface<float> Bias_tensor(Bias.get_tensor_size(), false);
+    Surface<half> X_tensor(4*32*16*16, false);
+    Surface<float> Mean_tensor(16, false);
+    Surface<float> Var_tensor(16, false);
+    Surface<float> Previous_running_mean_tensor(16, false);
+    Surface<float> Previous_running_var_tensor(16, false);
+    Surface<float> Next_running_mean_tensor(16, false);
+    Surface<float> Next_running_var_tensor(16, false);
+    Surface<float> Scale_tensor(16, false);
+    Surface<float> Bias_tensor(16, false);
     float EPS_scalar = 0.001;
     float EXP_AVG_scalar = 0.001;
-    Surface<half> A_tensor(A.get_tensor_size(), false);
-    Surface<half> Y_tensor(Y.get_tensor_size(), false);
+    Surface<half> A_tensor(4*32*16*16, false);
+    Surface<half> Y_tensor(4*32*16*16, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
 

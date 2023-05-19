@@ -7,6 +7,8 @@
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 
+#include <graphs/cudnn_frontend_graph_helpers.h>
+
 namespace cudnn_frontend {
 
 namespace graph {
@@ -20,18 +22,11 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Batchnorm>>  bn;
     std::unordered_map<std::string, std::shared_ptr<Pointwise>>    pw;
 
-
-    int64_t tensor_dims  = 4;
-    int64_t spatial_dims = 2;
-    DataType_t compute_type           = DataType_t::FLOAT;
-    DataType_t intermediate_data_type = DataType_t::FLOAT;
-    DataType_t io_data_type           = DataType_t::HALF;
-
     int64_t uid_offset = 1;
 
     CompositeNode flat_node{"composite_node", 1};
 
-    error_t infer_shapes();
+    error_t infer_properties();
 
 public:
     Graph(std::string name);
@@ -43,9 +38,7 @@ public:
 
     Graph& set_intermediate_data_type(DataType_t type);
     Graph& set_io_data_type(DataType_t type);
-    Graph& set_compute_type(DataType_t type);
-    Graph& set_tensor_dims(int64_t x);
-    Graph& set_spatial_dims(int64_t x);
+    Graph& set_compute_data_type(DataType_t type);
 
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name);
@@ -98,28 +91,18 @@ inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
 
 inline Graph::Graph(std::string name) : name(name) {}
 
-inline Graph & Graph::set_intermediate_data_type(DataType_t type) {
-    intermediate_data_type = type;
+inline Graph& Graph::set_intermediate_data_type(DataType_t const type) {
+    flat_node.set_intermediate_data_type(type);
     return *this;
 }
 
-inline Graph & Graph::set_io_data_type(DataType_t type) {
-    io_data_type = type;
+inline Graph& Graph::set_io_data_type(DataType_t const type) {
+    flat_node.set_io_data_type(type);
     return *this;
 }
 
-inline Graph & Graph::set_compute_type(DataType_t type) {
-    compute_type = type;
-    return *this;
-}
-
-inline Graph & Graph::set_tensor_dims(int64_t x) {
-    tensor_dims = x;
-    return *this;
-}
-
-inline Graph & Graph::set_spatial_dims(int64_t x) {
-    spatial_dims = x;
+inline Graph& Graph::set_compute_data_type(DataType_t const type) {
+    flat_node.set_compute_data_type(type);
     return *this;
 }
 
@@ -152,7 +135,7 @@ inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name)
     return all_tensors[tensor_name];
 }
 
-inline error_t Graph::infer_shapes() {
+inline error_t Graph::infer_properties() {
     std::unordered_map<std::string, std::shared_ptr<Operation const>> all_nodes;
 
     // Make map of tensors to/from nodes
@@ -372,7 +355,7 @@ inline error_t Graph::build() {
         uid_offset += 100;
     }
 
-    status = infer_shapes();
+    status = infer_properties();
     if(status != error_t::OK) {
         getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
         return status;

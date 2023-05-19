@@ -40,6 +40,8 @@ protected:
     
     virtual Type getType() = 0;
 
+    detail::Context context;
+    
     virtual error_t partition() = 0;
 
     virtual error_t createTensors() {
@@ -83,6 +85,21 @@ public:
     INode* parent_node;
     std::unordered_map <std::string, std::shared_ptr<INode>> sub_nodes;
     
+    error_t set_intermediate_data_type(DataType_t const type) {
+        context.set_intermediate_data_type(type);
+        return error_t::OK;
+    }
+
+    error_t set_io_data_type(DataType_t const type) {
+        context.set_io_data_type(type);
+        return error_t::OK;
+    }
+
+    error_t set_compute_data_type(DataType_t const type) {
+        context.set_compute_data_type(type);
+        return error_t::OK;
+    }
+
     virtual error_t infer_properties() {
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node.second->infer_properties();
@@ -189,6 +206,15 @@ public:
         // And without it, this function can be qualified as const which helps during development.
         // tensor_props[name] = parent_node->get_tensor_props(name);
         return parent_node->get_tensor_props(name);
+    }
+
+    void fill_missing_context() {
+        // If no parent_node, there is no context to fill missing properties with.
+        if(parent_node == nullptr)
+            return;
+
+        parent_node->fill_missing_context();
+        context.fill_missing_properties(parent_node->context);
     }
 };
 
