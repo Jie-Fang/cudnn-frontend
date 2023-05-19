@@ -12,7 +12,7 @@ target_include_directories(
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_compile_features(cudnn_frontend INTERFACE cxx_std_11)
+target_compile_features(cudnn_frontend INTERFACE cxx_std_17)
 
 if (${CUDNN_FRONTEND_BUILD_SAMPLES})
 add_subdirectory(samples)
