@@ -2,7 +2,7 @@ import pycudnn
 import numpy as np
 import cupy as cp
 
-print("Executing the BN graph")
+print("Example 3. Executing the BN graph")
 
 if pycudnn.is_cudnn_supported() == False:
     print("cudnn version is not supported")

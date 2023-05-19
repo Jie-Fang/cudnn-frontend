@@ -51,7 +51,7 @@ target_link_libraries(
 
 set_target_properties(
     pycudnn
-    PROPERTIES
+    PROPERTIES LINK_FLAGS "-Wl,--no-as-needed"
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib64
 )

@@ -3,7 +3,8 @@ variables:
 
 stages:
     - build
-    - test
+    - cpp_tests
+    - python_tests
 
 .build:template:
     script:
@@ -15,14 +16,20 @@ stages:
         expire_in: 1 week
 
 .test:template:
+    stage: cpp_tests
     script:
-        - ci/run.sh
+        - ci/run_cpp_tests.sh
     # Upload test report to gitlab
     artifacts:
         when: always
         reports:
             junit: build/result-junit.xml
         expire_in: 1 week
+
+.pytest:template:
+    stage: python_tests
+    script:
+        - ci/run_python_tests.sh
 
 build:cudnn_8.2:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
@@ -118,25 +125,38 @@ build:cudnn_8.9_clang:
 
 test:cudnn_8.2:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
-    stage: test
     tags:
         - Ampere
     needs:
         - build:cudnn_8.2
     extends: .test:template
 
+pytest:cudnn_8.2:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.4.2_cudnn_8.2.4.15
+    tags:
+        - Ampere
+    needs:
+        - build:cudnn_8.2
+    extends: .pytest:template
+
 test:cudnn_8.3:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.5.2_cudnn_8.3.3.40
-    stage: test
     tags:
         - Ampere
     needs:
         - build:cudnn_8.3
     extends: .test:template
 
+pytest:cudnn_8.3:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.5.2_cudnn_8.3.3.40
+    tags:
+        - Ampere
+    needs:
+        - build:cudnn_8.3
+    extends: .pytest:template
+
 test:cudnn_8.4:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
-    stage: test
     tags:
         - Ampere
     dependencies: ["build:cudnn_8.4: [Ampere]"]
@@ -144,9 +164,17 @@ test:cudnn_8.4:Ampere:
     needs:
         - ["build:cudnn_8.4: [Ampere]"]
 
+pytest:cudnn_8.4:Ampere:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
+    tags:
+        - Ampere
+    dependencies: ["build:cudnn_8.4: [Ampere]"]
+    extends: .pytest:template
+    needs:
+        - ["build:cudnn_8.4: [Ampere]"]
+
 test:cudnn_8.4:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
-    stage: test
     tags:
         - GA10x
     dependencies: ["build:cudnn_8.4: [GA10x]"]
@@ -154,19 +182,38 @@ test:cudnn_8.4:GA10x:
     needs:
         - ["build:cudnn_8.4: [GA10x]"]
 
+pytest:cudnn_8.4:GA10x:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.6.2_cudnn_8.4.0.27
+    tags:
+        - GA10x
+    dependencies: ["build:cudnn_8.4: [GA10x]"]
+    extends: .pytest:template
+    needs:
+        - ["build:cudnn_8.4: [GA10x]"]
+
 test:cudnn_8.5:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96
-    stage: test
     tags:
         - Ampere
     needs:
         - build:cudnn_8.5
     extends: .test:template
 
+pytest:cudnn_8.5:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.7.1_cudnn_8.5.0.96
+    tags:
+        - Ampere
+    needs:
+        - build:cudnn_8.5
+    extends: .pytest:template
+
 .test:cudnn_8.6:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.6.0.163
-    stage: test
     extends: .test:template
+
+.pytest:cudnn_8.6:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.6.0.163
+    extends: .pytest:template
 
 test:cudnn_8.6:Hopper:
     extends: .test:cudnn_8.6
@@ -192,10 +239,37 @@ test:cudnn_8.6:GA10x:
     needs:
         - ["build:cudnn_8.6: [GA10x]"]
 
+pytest:cudnn_8.6:Hopper:
+    extends: .pytest:cudnn_8.6
+    dependencies: ["build:cudnn_8.6: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.6: [Hopper]"]
+
+pytest:cudnn_8.6:Ampere:
+    extends: .pytest:cudnn_8.6
+    dependencies: ["build:cudnn_8.6: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.6: [Ampere]"]
+
+pytest:cudnn_8.6:GA10x:
+    extends: .pytest:cudnn_8.6
+    dependencies: ["build:cudnn_8.6: [GA10x]"]
+    tags:
+        - GA10x
+    needs:
+        - ["build:cudnn_8.6: [GA10x]"]
+
 .test:cudnn_8.7:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.7.0.84
-    stage: test
     extends: .test:template
+
+.pytest:cudnn_8.7:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8.0_cudnn_8.7.0.84
+    extends: .pytest:template
 
 test:cudnn_8.7:Hopper:
     extends: .test:cudnn_8.7
@@ -221,10 +295,37 @@ test:cudnn_8.7:GA10x:
     needs:
         - ["build:cudnn_8.7: [GA10x]"]
 
+pytest:cudnn_8.7:Hopper:
+    extends: .pytest:cudnn_8.7
+    dependencies: ["build:cudnn_8.7: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.7: [Hopper]"]
+
+pytest:cudnn_8.7:Ampere:
+    extends: .pytest:cudnn_8.7
+    dependencies: ["build:cudnn_8.7: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.7: [Ampere]"]
+
+pytest:cudnn_8.7:GA10x:
+    extends: .pytest:cudnn_8.7
+    dependencies: ["build:cudnn_8.7: [GA10x]"]
+    tags:
+        - GA10x
+    needs:
+        - ["build:cudnn_8.7: [GA10x]"]
+
 .test:cudnn_8.8:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0.1_cudnn_8.8.0.121
-    stage: test
     extends: .test:template
+
+.pytest:cudnn_8.8:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0.1_cudnn_8.8.0.121
+    extends: .pytest:template
 
 test:cudnn_8.8:Hopper:
     extends: .test:cudnn_8.8
@@ -242,10 +343,29 @@ test:cudnn_8.8:Ampere:
     needs:
         - ["build:cudnn_8.8: [Ampere]"]
 
+pytest:cudnn_8.8:Hopper:
+    extends: .pytest:cudnn_8.8
+    dependencies: ["build:cudnn_8.8: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.8: [Hopper]"]
+
+pytest:cudnn_8.8:Ampere:
+    extends: .pytest:cudnn_8.8
+    dependencies: ["build:cudnn_8.8: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.8: [Ampere]"]
+
 .test:cudnn_8.9:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132
-    stage: test
     extends: .test:template
+
+.pytest:cudnn_8.9:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132
+    extends: .pytest:template
 
 test:cudnn_8.9:Hopper:
     extends: .test:cudnn_8.9
@@ -257,6 +377,22 @@ test:cudnn_8.9:Hopper:
 
 test:cudnn_8.9:Ampere:
     extends: .test:cudnn_8.9
+    dependencies: ["build:cudnn_8.9: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.9: [Ampere]"]
+
+pytest:cudnn_8.9:Hopper:
+    extends: .pytest:cudnn_8.9
+    dependencies: ["build:cudnn_8.9: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.9: [Hopper]"]
+
+pytest:cudnn_8.9:Ampere:
+    extends: .pytest:cudnn_8.9
     dependencies: ["build:cudnn_8.9: [Ampere]"]
     tags:
         - Ampere
