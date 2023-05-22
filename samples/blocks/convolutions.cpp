@@ -60,6 +60,7 @@ run_matmul_node() {
 
     cudnn_frontend::graph::Tensor tensor2{"tensor2"};
     tensor2.set_dim({1, 32, 32});
+    tensor2.set_stride({1024,32,1}); // Only column major output pre 8.5
     matmul_node.insert_tensor("tensor2", tensor2);
 
     REQUIRE(cudnn_frontend::error_t::OK == matmul_node.build());
