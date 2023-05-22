@@ -92,13 +92,13 @@ public:
         conv_output_tensor->set_is_virtual(true);
         
         auto const& x_dq_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at("X_DQ"));
-        auto x_dq_tensor = get_tensor_props(x_dq_node_ptr->props->get_tensor_at_port(Pointwise::PORTS::Y));
-        x_dq_node_ptr->props->uids[Pointwise::PORTS::Y] = x_dq_tensor->get_uid();
+        auto x_dq_tensor = get_tensor_props(x_dq_node_ptr->props->get_tensor_at_port(Pointwise::PORTS::OUT_0));
+        x_dq_node_ptr->props->uids[Pointwise::PORTS::OUT_0] = x_dq_tensor->get_uid();
         x_dq_tensor->set_is_virtual(true);
         
         auto const& w_dq_node_ptr = std::static_pointer_cast<PointwiseNode>(sub_nodes.at("W_DQ"));
-        auto w_dq_tensor = get_tensor_props(w_dq_node_ptr->props->get_tensor_at_port(Pointwise::PORTS::Y));
-        w_dq_node_ptr->props->uids[Pointwise::PORTS::Y] = w_dq_tensor->get_uid();
+        auto w_dq_tensor = get_tensor_props(w_dq_node_ptr->props->get_tensor_at_port(Pointwise::PORTS::OUT_0));
+        w_dq_node_ptr->props->uids[Pointwise::PORTS::OUT_0] = w_dq_tensor->get_uid();
         w_dq_tensor->set_is_virtual(true);
 
         for(auto const& sub_node: sub_nodes) {

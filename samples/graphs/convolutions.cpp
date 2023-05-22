@@ -48,26 +48,26 @@ void test_convolution_scale_bias_relu_graph() {
     auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
                     .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, conv.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "scale"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "scale_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, conv.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
                     });
     graph.insert_node(pw_scale);
 
     auto pw_bias = cudnn_frontend::graph::Pointwise("pw_bias")
                     .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "bias"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "bias_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "bias"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "bias_output"}
                     });
     graph.insert_node(pw_bias);
 
     auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
                     });
     graph.insert_node(pw_relu);
     
@@ -125,9 +125,9 @@ void test_convolution_batchnorm_infernece_graph() {
     auto mean_sub = cudnn_frontend::graph::Pointwise("mean_sub")
                     .set_mode(cudnn_frontend::PointwiseMode_t::SUB)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, conv.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "mean"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "mean_sub_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, conv.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "mean"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "mean_sub_output"}
                     });
     graph.insert_node(mean_sub);
 
@@ -137,9 +137,9 @@ void test_convolution_batchnorm_infernece_graph() {
     auto epsilon_add = cudnn_frontend::graph::Pointwise("epsilon_add")
                         .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                         .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::X, "var"}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::B, "epsilon"}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::Y, "var_with_epsilon"}
+                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "var"}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "epsilon"}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "var_with_epsilon"}
                         });
     graph.insert_node(epsilon_add);
 
@@ -149,8 +149,8 @@ void test_convolution_batchnorm_infernece_graph() {
     auto rsqrt_var = cudnn_frontend::graph::Pointwise("rsqrt_var")
                         .set_mode(cudnn_frontend::PointwiseMode_t::RSQRT)
                         .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::X, epsilon_add.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::Y, "inv_var"}
+                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, epsilon_add.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "inv_var"}
                         });
     graph.insert_node(rsqrt_var);
 
@@ -160,9 +160,9 @@ void test_convolution_batchnorm_infernece_graph() {
     auto inv_var_mul = cudnn_frontend::graph::Pointwise("inv_var_mul")
                         .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                         .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::X, mean_sub.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::B, rsqrt_var.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::Y, "norm_input"}
+                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, mean_sub.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, rsqrt_var.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "norm_input"}
                         });
     graph.insert_node(inv_var_mul);
 
@@ -173,9 +173,9 @@ void test_convolution_batchnorm_infernece_graph() {
     auto scale_mul = cudnn_frontend::graph::Pointwise("scale_mul")
                         .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                         .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::X, inv_var_mul.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::B, "scale"}
-                            , {cudnn_frontend::graph::Pointwise::PORTS::Y, "scale_output"}
+                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, inv_var_mul.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
+                            , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
                         });
     graph.insert_node(scale_mul);
 
@@ -185,9 +185,9 @@ void test_convolution_batchnorm_infernece_graph() {
     auto bias_add = cudnn_frontend::graph::Pointwise("bias_add")
                     .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, scale_mul.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "bias"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "bias_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, scale_mul.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "bias"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "bias_output"}
                     });
     graph.insert_node(bias_add);
 

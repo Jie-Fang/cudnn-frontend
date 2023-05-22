@@ -49,8 +49,8 @@ public:
         }
         
         // TODO: Only inferrencing from (X, B) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::X));
-        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0));
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0));
         
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
         auto y_tensor_dim = y_tensor_prop->get_dim();        
@@ -95,14 +95,14 @@ public:
 
         // Ensure that ports are matched to tensors in accordance with port count.
         // X and Y should always be present.
-        auto X = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::X));
+        auto X = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0));
         if(X == nullptr) {
             status = error_t::ATTRIBUTE_NOT_SET;
             getLogger() << "[cudnn_frontend] ERROR: " << status << " X port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
             return status;
         }
 
-        auto Y = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::Y));
+        auto Y = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0));
         if(Y == nullptr) {
             status = error_t::ATTRIBUTE_NOT_SET;
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Y port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
@@ -111,7 +111,7 @@ public:
 
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count == 3) {
-            auto B = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::B));
+            auto B = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_1));
             if(B == nullptr) {
                 status = error_t::ATTRIBUTE_NOT_SET;
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " B port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
@@ -126,15 +126,15 @@ public:
     error_t createTensors() override final {
         
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::X)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0)));
         
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count == 3) {
             getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors B:" << std::endl;
-            create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::B)));
+            create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_1)));
         }
 
         return error_t::OK;
@@ -156,18 +156,18 @@ public:
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count == 3) {
             auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
-                                            .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::X])))
-                                            .setbDesc(*(tensors.at(props->uids[Pointwise::PORTS::B])))
-                                            .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::Y])))
+                                            .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
+                                            .setbDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_1])))
+                                            .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::OUT_0])))
                                             .setpwDesc(pointwise_descriptor)
                                             .build();
             operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
                 
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
-                get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::X))
-                , get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::B))
-                , get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::Y))
+                get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0))
+                , get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_1))
+                , get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0))
             };
             auto& tensors_in_operation = tensors_in_operations[name];
             for(auto const& tensor_props: tensor_props_involved_in_operation) {
@@ -178,16 +178,16 @@ public:
         }
         else if(port_count == 2) {
             auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
-                                            .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::X])))
-                                            .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::Y])))
+                                            .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
+                                            .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::OUT_0])))
                                             .setpwDesc(pointwise_descriptor)
                                             .build();
             operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
    
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
-                get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::X))
-                , get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::Y))
+                get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0))
+                , get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0))
             };
             auto& tensors_in_operation = tensors_in_operations[name];
             for(auto const& tensor_props: tensor_props_involved_in_operation) {

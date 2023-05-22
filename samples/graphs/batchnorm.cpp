@@ -124,8 +124,8 @@ void test_batchnorm_relu_graph() {
     auto relu = cudnn_frontend::graph::Pointwise("relu")
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, sgbn.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, sgbn.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
                     });
     graph.insert_node(relu);
 
@@ -204,17 +204,17 @@ void test_batchnorm_add_relu_graph() {
     auto add = cudnn_frontend::graph::Pointwise("add")
                     .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, sgbn.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "A"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "add_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, sgbn.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "A"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "add_output"}
                     });
     graph.insert_node(add);
 
     auto relu = cudnn_frontend::graph::Pointwise("relu")
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, add.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, add.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
                     });
     graph.insert_node(relu);
     

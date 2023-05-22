@@ -136,9 +136,9 @@ run_pointwise_node() {
     auto props = std::make_shared<cudnn_frontend::graph::Pointwise>("pointwise_prop");
     props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
     props->map_port_to_tensor({
-        {cudnn_frontend::graph::Pointwise::PORTS::X, "tensor0"} 
-        , {cudnn_frontend::graph::Pointwise::PORTS::B, "tensor1"}
-        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "tensor2"}
+        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "tensor0"} 
+        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "tensor1"}
+        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "tensor2"}
     });
     pointwise_node.props = props;
     
@@ -351,9 +351,9 @@ run_convolution_fp8_node() {
     auto X_DQ_props = std::make_shared<cudnn_frontend::graph::Pointwise>("x_dq_prop");
     X_DQ_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     X_DQ_props->map_port_to_tensor({
-        {cudnn_frontend::graph::Pointwise::PORTS::X, "tensor2"} 
-        , {cudnn_frontend::graph::Pointwise::PORTS::B, "tensor3"}
-        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "tensor4"}
+        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "tensor2"} 
+        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "tensor3"}
+        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "tensor4"}
     });
     convolution_fp8_node.set_properties("X_DQ", X_DQ_props);
 
@@ -370,9 +370,9 @@ run_convolution_fp8_node() {
     auto W_DQ_props = std::make_shared<cudnn_frontend::graph::Pointwise>("w_dq_props");
     W_DQ_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     W_DQ_props->map_port_to_tensor({
-        {cudnn_frontend::graph::Pointwise::PORTS::X, "tensor4"} 
-        , {cudnn_frontend::graph::Pointwise::PORTS::B, "tensor5"}
-        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "tensor6"}
+        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "tensor4"} 
+        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "tensor5"}
+        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "tensor6"}
     });
     convolution_fp8_node.set_properties("W_DQ", W_DQ_props);
 
@@ -389,9 +389,9 @@ run_convolution_fp8_node() {
     auto Y_Q_props = std::make_shared<cudnn_frontend::graph::Pointwise>("y_q_prop");
     Y_Q_props->set_mode(cudnn_frontend::PointwiseMode_t::MUL);
     Y_Q_props->map_port_to_tensor({
-        {cudnn_frontend::graph::Pointwise::PORTS::X, "tensor6"} 
-        , {cudnn_frontend::graph::Pointwise::PORTS::B, "tensor7"}
-        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "tensor8"}
+        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "tensor6"} 
+        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "tensor7"}
+        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "tensor8"}
     });
     convolution_fp8_node.set_properties("Y_Q", Y_Q_props);
 
@@ -482,9 +482,9 @@ run_convolution_pointwise_node() {
     auto pointwise_props = std::make_shared<cudnn_frontend::graph::Pointwise>("pointwise_prop");
     pointwise_props->set_mode(cudnn_frontend::PointwiseMode_t::ADD);
     pointwise_props->map_port_to_tensor({
-        {cudnn_frontend::graph::Pointwise::PORTS::X, "tensor2"} 
-        , {cudnn_frontend::graph::Pointwise::PORTS::B, "tensor3"}
-        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "tensor4"}
+        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "tensor2"} 
+        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "tensor3"}
+        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "tensor4"}
     });
     convolution_pointwise_node.set_properties("pointwise", pointwise_props);
 

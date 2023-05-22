@@ -44,8 +44,8 @@ void test_matmul_relu_graph() {
     auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
                     });
     graph.insert_node(pw_relu);
     
@@ -86,26 +86,26 @@ void test_matmul_scale_bias_relu_graph() {
     auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
                     .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "scale"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "scale_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
                     });
     graph.insert_node(pw_scale);
 
     auto pw_bias = cudnn_frontend::graph::Pointwise("pw_bias")
                     .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::B, "bias"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "bias_output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "bias"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "bias_output"}
                     });
     graph.insert_node(pw_bias);
 
     auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::Y)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
                     });
     graph.insert_node(pw_relu);
     

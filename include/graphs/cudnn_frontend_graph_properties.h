@@ -370,9 +370,9 @@ inline std::ostream& operator<<(std::ostream& os, const Matmul& props) {
 class Pointwise : public Operation {
 public:
     enum PORTS {
-        X,
-        B,
-        Y,
+        IN_0,
+        IN_1,
+        OUT_0,
 
         COUNT
     };
@@ -386,9 +386,9 @@ public:
     int64_t uids[PORTS::COUNT];
 
     Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {
-        port_to_name[PORTS::X] = name + "::X";
-        port_to_name[PORTS::B] = name + "::B";
-        port_to_name[PORTS::Y] = name + "::Y";
+        port_to_name[PORTS::IN_0] = name + "::IN_0";
+        port_to_name[PORTS::IN_1] = name + "::IN_1";
+        port_to_name[PORTS::OUT_0] = name + "::OUT_0";
     }
 
     int 

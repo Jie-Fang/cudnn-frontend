@@ -83,8 +83,8 @@ void init_properties(py::module_ &m) {
         .def("map_port_to_tensor",       &cudnn_frontend::graph::Pointwise::map_port_to_tensor);
 
     py::enum_<cudnn_frontend::graph::Pointwise::PORTS>(pointwise, "ports")
-        .value("X", cudnn_frontend::graph::Pointwise::PORTS::X)
-        .value("B", cudnn_frontend::graph::Pointwise::PORTS::B)
-        .value("Y", cudnn_frontend::graph::Pointwise::PORTS::Y)
+        .value("X", cudnn_frontend::graph::Pointwise::PORTS::IN_0)
+        .value("B", cudnn_frontend::graph::Pointwise::PORTS::IN_1)
+        .value("Y", cudnn_frontend::graph::Pointwise::PORTS::OUT_0)
         .export_values();
 }
