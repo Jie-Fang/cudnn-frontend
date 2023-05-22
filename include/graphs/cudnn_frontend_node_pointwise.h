@@ -69,7 +69,7 @@ public:
             if(tensor_prop == nullptr)
                 continue;
 
-            if(!(tensor_prop->is_data_type_set)) {
+            if(tensor_prop->get_data_type() == DataType_t::NOT_SET) {
                 if(tensor_prop->get_is_virtual()) {
                     tensor_prop->set_data_type(context.get_intermediate_data_type());
                 }    

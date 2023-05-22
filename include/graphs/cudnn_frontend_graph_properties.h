@@ -24,7 +24,6 @@ protected:
     int64_t uid;
 
 public:
-    bool is_data_type_set = false;
     bool is_dim_set = false;
     bool is_stride_set = false;
     bool is_virtual_set = false;
@@ -90,7 +89,6 @@ public:
 
     auto set_data_type(DataType_t const value) -> Tensor& {
         data_type = value;
-        is_data_type_set = true;
         return *this;
     }
     

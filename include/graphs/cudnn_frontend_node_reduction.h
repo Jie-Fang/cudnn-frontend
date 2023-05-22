@@ -49,7 +49,7 @@ public:
         for(size_t i = 0; i < Reduction::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Reduction::PORTS>(i)));
 
-            if(!(tensor_prop->is_data_type_set)) {
+            if(tensor_prop->get_data_type() == DataType_t::NOT_SET) {
                 if(tensor_prop->get_is_virtual()) {
                     tensor_prop->set_data_type(context.get_intermediate_data_type());
                 }    
