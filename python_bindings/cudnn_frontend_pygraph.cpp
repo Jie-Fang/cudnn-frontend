@@ -41,7 +41,6 @@ void throw_if(bool const cond, cudnn_frontend::error_t const error_code, std::st
 }
 
 char* extract_data_pointer(py::object obj) {
-    // Check if the object has the __dlpack__() method
     throw_if(!py::hasattr(obj, "__dlpack__"), cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Object does not have the __dlpack__() method");
 
     py::capsule capsule = obj.attr("__dlpack__")();
@@ -49,7 +48,10 @@ char* extract_data_pointer(py::object obj) {
 
     DLManagedTensor *managed = static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
     throw_if(managed == nullptr, cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
-    
+
+    DLDeviceType device_type = managed->dl_tensor.device.device_type;
+    throw_if(device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged, cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Invalid device type.");
+
     return (char *)managed->dl_tensor.data + managed->dl_tensor.byte_offset;
 }
 
