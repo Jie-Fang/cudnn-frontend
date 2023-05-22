@@ -167,9 +167,9 @@ inline std::ostream& operator<<(std::ostream& os, const Tensor& props) {
 class Operation {
 public:
     enum class Tag {
-        BatchNorm,
+        Batchnorm,
         Convolution,
-        MatMul,
+        Matmul,
         Pointwise,
         Reduction
     };
@@ -324,7 +324,7 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    Matmul(const std::string name) : Operation(name, Tag::MatMul) {
+    Matmul(const std::string name) : Operation(name, Tag::Matmul) {
         port_to_name[PORTS::A] = name + "::A";
         port_to_name[PORTS::B] = name + "::B";
         port_to_name[PORTS::C] = name + "::C";
@@ -464,7 +464,7 @@ public:
     
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
-    Batchnorm(const std::string name) : Operation(name, Tag::BatchNorm) {
+    Batchnorm(const std::string name) : Operation(name, Tag::Batchnorm) {
         port_to_name[PORTS::X] = name + "::X";
         port_to_name[PORTS::Mean] = name + "::Mean";
         port_to_name[PORTS::Var] = name + "::Var";

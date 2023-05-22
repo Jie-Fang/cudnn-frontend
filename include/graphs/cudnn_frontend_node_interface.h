@@ -402,7 +402,7 @@ class Execution_plan_list {
 
 };
 
-class CompositeNode : public INode {
+class FlatNode : public INode {
 
 protected:
     std::vector<std::string> operation_names;
@@ -413,7 +413,7 @@ protected:
     }
 
     error_t createOperationGraphs(cudnnHandle_t handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning CompositeNode..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning FlatNode..." << std::endl;
 
         // Currently just make one large graph of operations from all sub nodes.
         for (auto node : sub_nodes) {
@@ -427,11 +427,11 @@ protected:
 
         auto status = create_cudnn_operation_graphs({operation_names}, handle);
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in CompositeNode." << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
             return status;
         }
 
-        getLogger() << "[cudnn_frontend] INFO: Partitioned CompositeNode." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Partitioned FlatNode." << std::endl;
         return error_t::OK;
     }
 
@@ -440,7 +440,7 @@ protected:
 
         // auto status = create_cudnn_execution_plan();
         // if(status != error_t::OK) {
-        //     getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in CompositeNode." << std::endl;
+        //     getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
         //     return status;
         // }
 
@@ -449,9 +449,9 @@ protected:
     }
 
 public:
-    CompositeNode(std::string const& name, int64_t const offset) : INode(name, offset) {}
+    FlatNode(std::string const& name, int64_t const offset) : INode(name, offset) {}
 
-    ~CompositeNode() {};
+    ~FlatNode() {};
 
     error_t
     set_executor(Execution_plan_list const &plan_list) {

@@ -53,15 +53,12 @@ inline int64_t Plans::get_workspace_size(){
 class Graph {
 private:
     std::string name;
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> all_tensors;
-    std::unordered_map<std::string, std::shared_ptr<Convolution>>  conv;
-    std::unordered_map<std::string, std::shared_ptr<Matmul>>  mm;
-    std::unordered_map<std::string, std::shared_ptr<Batchnorm>>  bn;
-    std::unordered_map<std::string, std::shared_ptr<Pointwise>>    pw;
+    std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors;
+    std::unordered_map<std::string, std::shared_ptr<Operation>> nodes;
 
     int64_t uid_offset = 1;
 
-    CompositeNode flat_node{"composite_node", 1};
+    FlatNode flat_node{"flat_node", 1};
 
     error_t infer_properties();
 
@@ -80,10 +77,7 @@ public:
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name);
 
-    Graph& insert_node(Batchnorm const& props);
-    Graph& insert_node(Convolution const& props);
-    Graph& insert_node(Matmul const& props);
-    Graph& insert_node(Pointwise const& props);
+    Graph& insert_node(Operation const& props);
     
     error_t build(cudnnHandle_t handle);
     
@@ -108,33 +102,16 @@ public:
 };
 
 inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
-    os << "{"
-    << "\ntensors: [\n";
-    for(auto const& tensor: graph.all_tensors) {
+    os << "{tensors: [\n";
+    for(auto const& tensor: graph.tensors) {
         os << *(tensor.second) << ",";
     }
     os << "],"
-    << "\nconv: [\n";
-    for(auto const& node: graph.conv) {
+    << "\nnodes: [\n";
+    for(auto const& node: graph.nodes) {
         os << (node.second) << ",";
     }
-    os << "],"
-    << "\npointwise: [\n";
-    for(auto const& node: graph.pw) {
-        os << (node.second) << ",";
-    }
-    os << "],"
-    << "\nmatmul: [\n";
-    for(auto const& node: graph.mm) {
-        os << (node.second) << ",";
-    }
-    os << "],"
-    << "\nbatchnorm: [\n";
-    for(auto const& node: graph.bn) {
-        os << (node.second) << ",";
-    }
-    os << "],";
-    os << "}";
+    os << "]}";
     return os;
 }
 
@@ -162,138 +139,164 @@ inline Graph& Graph::set_compute_data_type(DataType_t const type) {
 }
 
 inline Graph& Graph::insert_tensor(Tensor const& props) {
-    all_tensors.emplace(props.get_name(), std::make_shared<Tensor>(props));
+    tensors.emplace(props.get_name(), std::make_shared<Tensor>(props));
     return *this;
 }
 
-inline Graph& Graph::insert_node(Convolution const& props) {
-    conv.emplace(props.get_name(), std::make_shared<Convolution>(props));
-    return *this;
-}
+inline Graph& Graph::insert_node(Operation const& props) {
+    
+    switch (props.get_tag()) {
+        case Operation::Tag::Batchnorm:{
+            nodes.emplace(props.get_name(), std::make_shared<Batchnorm>((Batchnorm&)props));
+            break;
+        }
+        case Operation::Tag::Convolution:{
+            nodes.emplace(props.get_name(), std::make_shared<Convolution>((Convolution&)props));
+            break;
+        }
+        case Operation::Tag::Matmul:{
+            nodes.emplace(props.get_name(), std::make_shared<Matmul>((Matmul&)props));
+            break;
+        }
+        case Operation::Tag::Pointwise:{
+            nodes.emplace(props.get_name(), std::make_shared<Pointwise>((Pointwise&)props));
+            break;
+        }
+        case Operation::Tag::Reduction:{
+            nodes.emplace(props.get_name(), std::make_shared<Reduction>((Reduction&)props));
+            break;
+        }
+    }
 
-inline Graph& Graph::insert_node(Pointwise const &props) {
-    pw.emplace(props.get_name(), std::make_shared<Pointwise>(props));
-    return *this;
-}
-
-inline Graph& Graph::insert_node(Matmul const& props) {
-    mm.emplace(props.get_name(), std::make_shared<Matmul>(props));
-    return *this;
-}
-
-inline Graph& Graph::insert_node(Batchnorm const& props) {
-    bn.emplace(props.get_name(), std::make_shared<Batchnorm>(props));
+    
     return *this;
 }
 
 inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name) {
-    return all_tensors[tensor_name];
+    return tensors[tensor_name];
 }
 
 inline error_t Graph::infer_properties() {
-    std::unordered_map<std::string, std::shared_ptr<Operation const>> all_nodes;
-
     // Make map of tensors to/from nodes
     std::unordered_map<std::string, std::vector<std::string>> incoming_tensors_for_nodes;
     std::unordered_map<std::string, std::vector<std::string>> outgoing_tensors_for_nodes;
     std::unordered_map<std::string, std::vector<std::string>> incoming_nodes_for_tensors;
     std::unordered_map<std::string, std::vector<std::string>> outgoing_nodes_for_tensors;
-    for (auto &node : conv) {
-        all_nodes[node.first] = node.second;
-        auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Convolution::PORTS::Y));
-        auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Convolution::PORTS::X));
-        auto &w_tensor = all_tensors.at(node.second->get_tensor_at_port(Convolution::PORTS::W));
-    
-        outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
-        
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(w_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
-    }
-    for (auto &node : mm) {
-        all_nodes[node.first] = node.second;
-        auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::C));
-        auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::A));
-        auto &w_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::B));
-    
-        outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
-        
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(w_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
-    }
-    for (auto &node : bn) {
-        all_nodes[node.first] = node.second;
-        auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Y));
-        auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::X));
-        auto &mean_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Mean));
-        auto &var_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Var));
-        auto &prev_running_mean_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Previous_running_mean));
-        auto &prev_running_var_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Previous_running_var));
-        auto &next_running_mean_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Next_running_mean));
-        auto &next_running_var_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Next_running_var));
-        auto &scale_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Scale));
-        auto &bias_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::Bias));
-        auto &eps_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::EPS));
-        auto &exp_avg_tensor = all_tensors.at(node.second->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG));
-    
-        outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[exp_avg_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(node.second->get_name());
-        outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[mean_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[var_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(node.second->get_name());
-        incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(node.second->get_name());
-        
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(prev_running_mean_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(prev_running_var_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(eps_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(exp_avg_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(scale_tensor->get_name());
-        incoming_tensors_for_nodes[node.second->get_name()].push_back(bias_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(mean_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(var_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(next_running_mean_tensor->get_name());
-        outgoing_tensors_for_nodes[node.second->get_name()].push_back(next_running_var_tensor->get_name());
-    }
-    for (auto &node : pw) {
-        all_nodes[node.first] = node.second;
-        
-        auto const port_count = get_pointwise_mode_port_count(node.second->get_mode());
-        if(port_count == 3) {
-            auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Pointwise::PORTS::OUT_0));
-            auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Pointwise::PORTS::IN_0));
-            auto &b_tensor = all_tensors.at(node.second->get_tensor_at_port(Pointwise::PORTS::IN_1));
-        
-            outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
-            outgoing_nodes_for_tensors[b_tensor->get_name()].push_back(node.second->get_name());
-            incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
-        
-            incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
-            incoming_tensors_for_nodes[node.second->get_name()].push_back(b_tensor->get_name());
-            outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
-        }
-        else if(port_count == 2) {
-            auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Pointwise::PORTS::OUT_0));
-            auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Pointwise::PORTS::IN_0));
-        
-            outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
-            incoming_nodes_for_tensors[y_tensor->get_name()].push_back(node.second->get_name());
+    for (auto &node : nodes) {
+        switch (node.second->get_tag()) {
+            case Operation::Tag::Convolution: {
+                auto conv_node = std::static_pointer_cast<Convolution>(node.second);
+                auto &y_tensor = tensors.at(conv_node->get_tensor_at_port(Convolution::PORTS::Y));
+                auto &x_tensor = tensors.at(conv_node->get_tensor_at_port(Convolution::PORTS::X));
+                auto &w_tensor = tensors.at(conv_node->get_tensor_at_port(Convolution::PORTS::W));
             
-            incoming_tensors_for_nodes[node.second->get_name()].push_back(x_tensor->get_name());
-            outgoing_tensors_for_nodes[node.second->get_name()].push_back(y_tensor->get_name());
-        }            
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(conv_node->get_name());
+                outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(conv_node->get_name());
+                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(conv_node->get_name());
+                
+                incoming_tensors_for_nodes[conv_node->get_name()].push_back(x_tensor->get_name());
+                incoming_tensors_for_nodes[conv_node->get_name()].push_back(w_tensor->get_name());
+                outgoing_tensors_for_nodes[conv_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Matmul: {
+                auto matmul_node = std::static_pointer_cast<Matmul>(node.second);       
+                auto &y_tensor = tensors.at(matmul_node->get_tensor_at_port(Matmul::PORTS::C));
+                auto &x_tensor = tensors.at(matmul_node->get_tensor_at_port(Matmul::PORTS::A));
+                auto &w_tensor = tensors.at(matmul_node->get_tensor_at_port(Matmul::PORTS::B));
+            
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(matmul_node->get_name());
+                outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(matmul_node->get_name());
+                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(matmul_node->get_name());
+                
+                incoming_tensors_for_nodes[matmul_node->get_name()].push_back(x_tensor->get_name());
+                incoming_tensors_for_nodes[matmul_node->get_name()].push_back(w_tensor->get_name());
+                outgoing_tensors_for_nodes[matmul_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Batchnorm: {
+                auto batchnorm_node = std::static_pointer_cast<Batchnorm>(node.second);    
+                auto &y_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Y));
+                auto &x_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::X));
+                auto &mean_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Mean));
+                auto &var_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Var));
+                auto &prev_running_mean_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Previous_running_mean));
+                auto &prev_running_var_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Previous_running_var));
+                auto &next_running_mean_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Next_running_mean));
+                auto &next_running_var_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Next_running_var));
+                auto &scale_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Scale));
+                auto &bias_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Bias));
+                auto &eps_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::EPS));
+                auto &exp_avg_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG));
+    
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(batchnorm_node->get_name());
+                outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(batchnorm_node->get_name());
+                outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(batchnorm_node->get_name());
+                outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(batchnorm_node->get_name());
+                outgoing_nodes_for_tensors[exp_avg_tensor->get_name()].push_back(batchnorm_node->get_name());
+                outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(batchnorm_node->get_name());
+                outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(batchnorm_node->get_name());
+                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(batchnorm_node->get_name());
+                incoming_nodes_for_tensors[mean_tensor->get_name()].push_back(batchnorm_node->get_name());
+                incoming_nodes_for_tensors[var_tensor->get_name()].push_back(batchnorm_node->get_name());
+                incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(batchnorm_node->get_name());
+                incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(batchnorm_node->get_name());
+                
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(x_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(prev_running_mean_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(prev_running_var_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(eps_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(exp_avg_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(scale_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(bias_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(y_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(mean_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(var_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(next_running_mean_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(next_running_var_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Pointwise: {
+                auto pointwise_node = std::static_pointer_cast<Pointwise>(node.second); 
+                auto const port_count = get_pointwise_mode_port_count(pointwise_node->get_mode());
+                if(port_count == 3) {
+                    auto &y_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::OUT_0));
+                    auto &x_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_0));
+                    auto &b_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_1));
+                
+                    outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(pointwise_node->get_name());
+                    outgoing_nodes_for_tensors[b_tensor->get_name()].push_back(pointwise_node->get_name());
+                    incoming_nodes_for_tensors[y_tensor->get_name()].push_back(pointwise_node->get_name());
+                
+                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(x_tensor->get_name());
+                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(b_tensor->get_name());
+                    outgoing_tensors_for_nodes[pointwise_node->get_name()].push_back(y_tensor->get_name());
+                }
+                else if(port_count == 2) {
+                    auto &y_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::OUT_0));
+                    auto &x_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_0));
+                
+                    outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(pointwise_node->get_name());
+                    incoming_nodes_for_tensors[y_tensor->get_name()].push_back(pointwise_node->get_name());
+                    
+                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(x_tensor->get_name());
+                    outgoing_tensors_for_nodes[pointwise_node->get_name()].push_back(y_tensor->get_name());
+                }
+                break;
+            }
+            case Operation::Tag::Reduction: {
+                auto reduction_node = std::static_pointer_cast<Reduction>(node.second);       
+                auto &y_tensor = tensors.at(reduction_node->get_tensor_at_port(Reduction::PORTS::Y));
+                auto &x_tensor = tensors.at(reduction_node->get_tensor_at_port(Reduction::PORTS::X));
+            
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(reduction_node->get_name());
+                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(reduction_node->get_name());
+                
+                incoming_tensors_for_nodes[reduction_node->get_name()].push_back(x_tensor->get_name());
+                outgoing_tensors_for_nodes[reduction_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+        }       
     }
 
     // https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
@@ -332,34 +335,7 @@ inline error_t Graph::infer_properties() {
     getLogger() << std::endl;
 
     for(std::string const& node: sorted_nodes) {
-        std::shared_ptr<Operation const> node_props = all_nodes[node];
-        
-        switch (node_props->get_tag()) {
-            case Operation::Tag::Pointwise:{
-                auto pw_node = std::static_pointer_cast<Pointwise const>(node_props);
-                flat_node.sub_nodes[node]->infer_properties();
-                break;
-            }
-            case Operation::Tag::Convolution: {
-                auto conv_node = std::static_pointer_cast<Convolution const>(node_props);
-                flat_node.sub_nodes[node]->infer_properties();
-                break;
-            }
-            case Operation::Tag::BatchNorm: {
-                auto bn_node = std::static_pointer_cast<Batchnorm const>(node_props);
-                flat_node.sub_nodes[node]->infer_properties();
-                break;
-            }
-            break;
-            case Operation::Tag::Reduction: {
-            }
-            break;
-            case Operation::Tag::MatMul: {
-                auto mm_node = std::static_pointer_cast<Matmul const>(node_props);
-                flat_node.sub_nodes[node]->infer_properties();
-                break;
-            }
-        }
+        flat_node.sub_nodes[node]->infer_properties();
     }
 
     return error_t::OK;
@@ -372,42 +348,56 @@ inline int64_t Graph::get_workspace_size() {
 inline error_t Graph::build(cudnnHandle_t handle) {
     auto status = error_t::OK;
 
-    flat_node.tensor_props = all_tensors;
+    flat_node.tensor_props = tensors;
     
-    for (auto const &prop : conv) {
-        getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << prop.first << std::endl;
-        auto conv_node = std::make_shared<ConvolutionNode>(prop.first, uid_offset);
-        conv_node->props = prop.second;
-        conv_node->parent_node = &flat_node;
-        flat_node.sub_nodes[prop.first] = conv_node;
-        uid_offset += 100;
-    }
-
-    for (auto const &prop : mm) {
-        getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << prop.first << std::endl;
-        auto matmul_node = std::make_shared<MatMulNode>(prop.first, uid_offset);
-        matmul_node->props = prop.second;
-        matmul_node->parent_node = &flat_node;
-        flat_node.sub_nodes[prop.first] = matmul_node;
-        uid_offset += 100;
-    }
-
-    for (auto const &prop : bn) {
-        getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << prop.first << std::endl;
-        auto batchnorm_node = std::make_shared<BatchNormNode>(prop.first, uid_offset);
-        batchnorm_node->props = prop.second;
-        batchnorm_node->parent_node = &flat_node;
-        flat_node.sub_nodes[prop.first] = batchnorm_node;
-        uid_offset += 100;
-    }
-
-    for (auto const &prop : pw) {
-        getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << prop.first << std::endl;
-        auto pointwise_node = std::make_shared<PointwiseNode>(prop.first, uid_offset);
-        pointwise_node->props = prop.second;
-        pointwise_node->parent_node = &flat_node;
-        flat_node.sub_nodes[prop.first] = pointwise_node;
-        uid_offset += 100;
+    for (auto &node : nodes) {
+        switch (node.second->get_tag()) {
+            case Operation::Tag::Convolution: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node.first << std::endl;
+                auto conv_node = std::make_shared<ConvolutionNode>(node.first, uid_offset);
+                conv_node->props = std::static_pointer_cast<Convolution>(node.second);
+                conv_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = conv_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Matmul: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << node.first << std::endl;
+                auto matmul_node = std::make_shared<MatMulNode>(node.first, uid_offset);
+                matmul_node->props = std::static_pointer_cast<Matmul>(node.second);
+                matmul_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = matmul_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Batchnorm: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << node.first << std::endl;
+                auto batchnorm_node = std::make_shared<BatchNormNode>(node.first, uid_offset);
+                batchnorm_node->props = std::static_pointer_cast<Batchnorm>(node.second);
+                batchnorm_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = batchnorm_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Pointwise: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << node.first << std::endl;
+                auto pointwise_node = std::make_shared<PointwiseNode>(node.first, uid_offset);
+                pointwise_node->props = std::static_pointer_cast<Pointwise>(node.second);
+                pointwise_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = pointwise_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Reduction: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the reduction node named " << node.first << std::endl;
+                auto reduction_node = std::make_shared<ReductionNode>(node.first, uid_offset);
+                reduction_node->props = std::static_pointer_cast<Reduction>(node.second);
+                reduction_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = reduction_node;
+                uid_offset += 100;
+                break;
+            }
+        }
     }
 
     status = infer_properties();
