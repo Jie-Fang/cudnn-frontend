@@ -4,8 +4,8 @@ import cupy as cp
 
 print("Example 3. Executing the BN graph")
 
-if pycudnn.is_cudnn_supported() == False:
-    print("cudnn version is not supported")
+if pycudnn.get_cudnn_version() < 8700:
+    print("cudnn version does not support SGBN")
     exit(0)
 
 graph = pycudnn.pygraph("BN", io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)

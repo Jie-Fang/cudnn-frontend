@@ -4,8 +4,8 @@ import cupy as cp
 
 print("Example 1. Executing the conv + bias graph")
 
-if pycudnn.is_cudnn_supported() == False:
-    print("cudnn version is not supported")
+if pycudnn.get_cudnn_version() < 8500:
+    print("cudnn version does not conv+bias fusion")
     exit(0)
 
 graph = pycudnn.pygraph("graph0", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)

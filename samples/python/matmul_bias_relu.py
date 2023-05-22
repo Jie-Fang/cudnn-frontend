@@ -4,8 +4,8 @@ import cupy as cp
 import sys
 print("Example 2. Executing the Matmul + bias + relu graph")
 
-if pycudnn.is_cudnn_supported() == False:
-    print("cudnn version is not supported")
+if pycudnn.get_cudnn_version() < 8500:
+    print("cudnn version does not support matmul+bias fusion for specified layout")
     exit(0)
 
 graph = pycudnn.pygraph("nvfuser", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
