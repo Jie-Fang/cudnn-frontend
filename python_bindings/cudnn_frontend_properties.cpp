@@ -68,9 +68,9 @@ void init_properties(py::module_ &m) {
         });;
 
     py::enum_<cudnn_frontend::graph::Matmul::PORTS>(matmul, "ports")
-        .value("X", cudnn_frontend::graph::Matmul::PORTS::X)
-        .value("W", cudnn_frontend::graph::Matmul::PORTS::W)
-        .value("Y", cudnn_frontend::graph::Matmul::PORTS::Y)
+        .value("A", cudnn_frontend::graph::Matmul::PORTS::A)
+        .value("B", cudnn_frontend::graph::Matmul::PORTS::B)
+        .value("C", cudnn_frontend::graph::Matmul::PORTS::C)
         .export_values();
 
     py::class_<cudnn_frontend::graph::Pointwise> pointwise(m, "pointwise");

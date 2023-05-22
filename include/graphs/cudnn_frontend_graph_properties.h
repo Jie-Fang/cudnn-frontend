@@ -312,9 +312,9 @@ inline std::ostream& operator<<(std::ostream& os, const Convolution& props) {
 class Matmul : public Operation {
 public:
     enum PORTS {
-        X,
-        W,
-        Y,
+        A,
+        B,
+        C,
 
         COUNT
     };
@@ -325,9 +325,9 @@ public:
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
     Matmul(const std::string name) : Operation(name, Tag::MatMul) {
-        port_to_name[PORTS::X] = name + "::X";
-        port_to_name[PORTS::W] = name + "::W";
-        port_to_name[PORTS::Y] = name + "::Y";
+        port_to_name[PORTS::A] = name + "::A";
+        port_to_name[PORTS::B] = name + "::B";
+        port_to_name[PORTS::C] = name + "::C";
     }
 
     Matmul& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {

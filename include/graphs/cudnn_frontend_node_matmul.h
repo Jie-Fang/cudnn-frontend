@@ -50,9 +50,9 @@ public:
         }
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::Y));
+        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::A));
+        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::B));
+        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::C));
         
         auto const x_tensor_dim = x_tensor_prop->get_dim();
         auto const w_tensor_dim = w_tensor_prop->get_dim();
@@ -112,9 +112,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::Y)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::A)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::B)));
+        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::C)));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors." << std::endl;
 
@@ -136,18 +136,18 @@ public:
 
         // Create the matmul operation.
         auto matmul_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_MATMUL_DESCRIPTOR)
-                                        .setaMatDesc(*(tensors.at(props->uids[Matmul::PORTS::X])))
-                                        .setbMatDesc(*(tensors.at(props->uids[Matmul::PORTS::W])))
-                                        .setcMatDesc(*(tensors.at(props->uids[Matmul::PORTS::Y])))
+                                        .setaMatDesc(*(tensors.at(props->uids[Matmul::PORTS::A])))
+                                        .setbMatDesc(*(tensors.at(props->uids[Matmul::PORTS::B])))
+                                        .setcMatDesc(*(tensors.at(props->uids[Matmul::PORTS::C])))
                                         .setmatmulDesc(matmul_descriptor)
                                         .build();
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
 
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::X))
-            , get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::W))
-            , get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::Y))
+            get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::A))
+            , get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::B))
+            , get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::C))
         };
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {

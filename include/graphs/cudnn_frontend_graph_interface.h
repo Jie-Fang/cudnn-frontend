@@ -159,9 +159,9 @@ inline error_t Graph::infer_properties() {
     }
     for (auto &node : mm) {
         all_nodes[node.first] = node.second;
-        auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::Y));
-        auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::X));
-        auto &w_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::W));
+        auto &y_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::C));
+        auto &x_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::A));
+        auto &w_tensor = all_tensors.at(node.second->get_tensor_at_port(Matmul::PORTS::B));
     
         outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(node.second->get_name());
         outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(node.second->get_name());

@@ -199,14 +199,14 @@ public:
         auto props = cudnn_frontend::graph::Matmul(name)
         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
         .map_port_to_tensor({
-            {cudnn_frontend::graph::Matmul::PORTS::X, image_props_ptr->get_name()},
-            {cudnn_frontend::graph::Matmul::PORTS::W, weight_props_ptr->get_name()}
+            {cudnn_frontend::graph::Matmul::PORTS::A, image_props_ptr->get_name()},
+            {cudnn_frontend::graph::Matmul::PORTS::B, weight_props_ptr->get_name()}
         });
 
         // Add matmul node to graph
         graph.insert_node(props);
 
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::Y);
+        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C);
         auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
         graph.insert_tensor(output_tensor);
 

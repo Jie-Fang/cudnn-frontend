@@ -35,16 +35,16 @@ void test_matmul_relu_graph() {
     
     auto matmul = cudnn_frontend::graph::Matmul("matmul")
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Matmul::PORTS::X, "image"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::W, "filter"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::Y, "response"}
+                        {cudnn_frontend::graph::Matmul::PORTS::A, "image"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::B, "filter"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::C, "response"}
                     });
     graph.insert_node(matmul);
 
     auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
                     .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::Y)}
+                        {cudnn_frontend::graph::Pointwise::PORTS::X, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
                         , {cudnn_frontend::graph::Pointwise::PORTS::Y, "output"}
                     });
     graph.insert_node(pw_relu);
@@ -77,16 +77,16 @@ void test_matmul_scale_bias_relu_graph() {
     
     auto matmul = cudnn_frontend::graph::Matmul("matmul")
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Matmul::PORTS::X, "image"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::W, "filter"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::Y, "response"}
+                        {cudnn_frontend::graph::Matmul::PORTS::A, "image"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::B, "filter"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::C, "response"}
                     });
     graph.insert_node(matmul);
 
     auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
                     .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::X, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::Y)}
+                        {cudnn_frontend::graph::Pointwise::PORTS::X, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
                         , {cudnn_frontend::graph::Pointwise::PORTS::B, "scale"}
                         , {cudnn_frontend::graph::Pointwise::PORTS::Y, "scale_output"}
                     });

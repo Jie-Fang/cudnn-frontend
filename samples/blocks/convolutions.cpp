@@ -44,9 +44,9 @@ run_matmul_node() {
     
     auto props = std::make_shared<cudnn_frontend::graph::Matmul>("matmul_prop");
     props->map_port_to_tensor({
-        {cudnn_frontend::graph::Matmul::PORTS::X, "tensor0"} 
-        , {cudnn_frontend::graph::Matmul::PORTS::W, "tensor1"}
-        , {cudnn_frontend::graph::Matmul::PORTS::Y, "tensor2"}
+        {cudnn_frontend::graph::Matmul::PORTS::A, "tensor0"} 
+        , {cudnn_frontend::graph::Matmul::PORTS::B, "tensor1"}
+        , {cudnn_frontend::graph::Matmul::PORTS::C, "tensor2"}
     });
     matmul_node.set_properties("matmul_node", props);
 
