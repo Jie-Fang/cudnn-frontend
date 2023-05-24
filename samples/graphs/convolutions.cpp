@@ -106,6 +106,101 @@ void test_convolution_scale_bias_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
 }
 
+cudnn_frontend::graph::Graph build_scale_bias_relu_graph() {
+    cudnn_frontend::graph::Graph sbr_graph("sbr");
+    sbr_graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+
+    auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "input"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
+                    });
+    sbr_graph.insert_node(pw_scale);
+
+    auto pw_bias = cudnn_frontend::graph::Pointwise("pw_bias")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "bias"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "bias_output"}
+                    });
+    sbr_graph.insert_node(pw_bias);
+
+    auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
+                    });
+    sbr_graph.insert_node(pw_relu);
+        
+    sbr_graph.insert_tensor(cudnn_frontend::graph::Tensor("input").set_is_virtual(true))
+             .insert_tensor(cudnn_frontend::graph::Tensor("scale").set_dim({1, 64, 1, 1}))
+             .insert_tensor(cudnn_frontend::graph::Tensor("scale_output").set_is_virtual(true))
+             .insert_tensor(cudnn_frontend::graph::Tensor("bias").set_dim({1, 64, 1, 1}))
+             .insert_tensor(cudnn_frontend::graph::Tensor("bias_output").set_is_virtual(true))
+             .insert_tensor(cudnn_frontend::graph::Tensor("output"));
+
+    return sbr_graph;
+}
+
+void test_insert_graph() {
+
+    cudnn_frontend::graph::Graph conv_graph("conv");
+    conv_graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+    
+    auto conv = cudnn_frontend::graph::Convolution("conv")
+                .set_padding({1, 1})
+                .set_stride({1, 1})
+                .set_dilation({1, 1})
+                .map_port_to_tensor({
+                    {cudnn_frontend::graph::Convolution::PORTS::X, "image"}
+                    , {cudnn_frontend::graph::Convolution::PORTS::W, "filter"}
+                    , {cudnn_frontend::graph::Convolution::PORTS::Y, "response"}
+                });
+    conv_graph.insert_node(conv);
+    
+    conv_graph.insert_tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 32, 16, 16}))
+              .insert_tensor(cudnn_frontend::graph::Tensor("filter").set_dim({64, 32, 3, 3}))
+              .insert_tensor(cudnn_frontend::graph::Tensor("response").set_is_virtual(true));
+    
+    auto const sbr_graph = build_scale_bias_relu_graph();
+    std::unordered_map<std::string, std::string> connections;
+    connections["response"] = "input";
+    conv_graph.insert_graph(sbr_graph, connections);
+    
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == conv_graph.build(handle));
+
+    auto plans = conv_graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == conv_graph.set_executor(plans));
+
+    Surface<half> x_tensor(4*32*16*16, false);
+    Surface<half> w_tensor(64*32*3*3, false);
+    Surface<half> s_tensor(64, false);
+    Surface<half> b_tensor(64, false);
+    Surface<half> y_tensor(4*64*3*3, false);
+
+    std::unordered_map<std::string, void*> variant_pack = {
+        {"image", x_tensor.devPtr}
+        , {"filter", w_tensor.devPtr}
+        , {"scale", s_tensor.devPtr}
+        , {"bias", b_tensor.devPtr}
+        , {"output", y_tensor.devPtr}
+    };
+    REQUIRE(cudnn_frontend::error_t::OK == conv_graph.execute(variant_pack));
+}
+
 void test_convolution_batchnorm_infernece_graph() {
     cudnn_frontend::graph::Graph graph("conv_bn_inference");
     graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)

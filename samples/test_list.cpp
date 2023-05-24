@@ -2707,6 +2707,10 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
 }
 #endif
 
+TEST_CASE("Graph Functionality", "[graph][functionality]") {
+    test_insert_graph();
+}
+
 TEST_CASE("Convolution Graphs", "[conv][graph]") {
     test_convolution_scale_bias_relu_graph();
     test_convolution_batchnorm_infernece_graph();

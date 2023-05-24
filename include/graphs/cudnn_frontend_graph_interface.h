@@ -62,6 +62,9 @@ private:
 
     error_t infer_properties();
 
+    Graph& insert_tensor_(std::shared_ptr<Tensor> tensor_ptr);
+    Graph& insert_node_(std::shared_ptr<Operation> node_ptr);
+
 public:
     Graph(std::string name);
     
@@ -75,9 +78,11 @@ public:
     Graph& set_compute_data_type(DataType_t type);
 
     Graph& insert_tensor(Tensor const& props);
-    std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name);
+    std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
     Graph& insert_node(Operation const& props);
+
+    Graph& insert_graph(Graph const& graph, std::unordered_map<std::string, std::string> const& connections);
     
     error_t build(cudnnHandle_t handle);
     
@@ -138,42 +143,144 @@ inline Graph& Graph::set_compute_data_type(DataType_t const type) {
     return *this;
 }
 
-inline Graph& Graph::insert_tensor(Tensor const& props) {
-    tensors.emplace(props.get_name(), std::make_shared<Tensor>(props));
+inline Graph& Graph::insert_tensor_(std::shared_ptr<Tensor> tensor_ptr) {
+    tensors.emplace(tensor_ptr->get_name(), tensor_ptr);
     return *this;
 }
 
-inline Graph& Graph::insert_node(Operation const& props) {
-    
-    switch (props.get_tag()) {
+inline Graph& Graph::insert_tensor(Tensor const& props) {
+    insert_tensor_(std::make_shared<Tensor>(props));
+    return *this;
+}
+
+inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {    
+    switch (node_ptr->get_tag()) {
         case Operation::Tag::Batchnorm:{
-            nodes.emplace(props.get_name(), std::make_shared<Batchnorm>((Batchnorm&)props));
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm>(node_ptr));
             break;
         }
         case Operation::Tag::Convolution:{
-            nodes.emplace(props.get_name(), std::make_shared<Convolution>((Convolution&)props));
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Convolution>(node_ptr));
             break;
         }
         case Operation::Tag::Matmul:{
-            nodes.emplace(props.get_name(), std::make_shared<Matmul>((Matmul&)props));
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Matmul>(node_ptr));
             break;
         }
         case Operation::Tag::Pointwise:{
-            nodes.emplace(props.get_name(), std::make_shared<Pointwise>((Pointwise&)props));
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Pointwise>(node_ptr));
             break;
         }
         case Operation::Tag::Reduction:{
-            nodes.emplace(props.get_name(), std::make_shared<Reduction>((Reduction&)props));
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Reduction>(node_ptr));
             break;
         }
     }
 
-    
     return *this;
 }
 
-inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name) {
-    return tensors[tensor_name];
+inline Graph& Graph::insert_node(Operation const& props) {    
+    switch (props.get_tag()) {
+        case Operation::Tag::Batchnorm:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm>((Batchnorm&)props)));
+            break;
+        }
+        case Operation::Tag::Convolution:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Convolution>((Convolution&)props)));
+            break;
+        }
+        case Operation::Tag::Matmul:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Matmul>((Matmul&)props)));
+            break;
+        }
+        case Operation::Tag::Pointwise:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Pointwise>((Pointwise&)props)));
+            break;
+        }
+        case Operation::Tag::Reduction:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Reduction>((Reduction&)props)));
+            break;
+        }
+    }
+
+    return *this;
+}
+
+inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name) const {
+    return tensors.at(tensor_name);
+}
+
+inline Graph& Graph::insert_graph(Graph const& other_graph, std::unordered_map<std::string, std::string> const& connections) {
+
+    // Look at connections and connect their nodes
+    for(auto const& connection: connections) {
+        auto const& tensor_A = get_tensor(connection.first);
+        auto const& tensor_B = other_graph.get_tensor(connection.second);
+        
+        // TODO: Check all specified properties of the two connected tensors are same.
+        // tensor_A.get() == tensor_B.get();
+
+        // Iterate over nodes and change port name to match connection
+        for(auto& node: nodes) {
+            switch (node.second->get_tag()) {
+                case Operation::Tag::Batchnorm:{
+                    for(auto& itr: std::static_pointer_cast<Batchnorm>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
+                case Operation::Tag::Convolution:{
+                    for(auto& itr: std::static_pointer_cast<Convolution>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
+                case Operation::Tag::Matmul:{
+                    for(auto& itr: std::static_pointer_cast<Matmul>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
+                case Operation::Tag::Pointwise:{
+                    for(auto& itr: std::static_pointer_cast<Pointwise>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
+                case Operation::Tag::Reduction:{
+                    for(auto& itr: std::static_pointer_cast<Reduction>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Add tensors to this graph.
+    for(auto itr: other_graph.tensors) {
+        if (auto search = tensors.find(itr.first); search != tensors.end()) {
+            getLogger() << "[cudnn_frontend] ERROR: " << itr.first << " exists in both the graphs." << std::endl;
+        }
+        insert_tensor_(itr.second);
+    }
+
+    for(auto itr: other_graph.nodes) {
+        insert_node_(itr.second);
+    }
+
+    return *this;
 }
 
 inline error_t Graph::infer_properties() {
