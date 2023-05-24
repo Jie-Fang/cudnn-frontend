@@ -218,13 +218,31 @@ inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name)
 
 inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::string, std::string> const& connections) {
 
+    // Add tensors to this graph.
+    for(auto itr: other_graph.tensors) {
+        if (auto search = tensors.find(itr.first); search != tensors.end()) {
+            getLogger() << "[cudnn_frontend] ERROR: " << itr.first << " exists in both the graphs." << std::endl;
+        }
+        // Apply other_graph's properties before inserting into this graph.
+        itr.second->fill_from_context(other_graph.get_context());
+        insert_tensor_(itr.second);
+    }
+
     // Look at connections and connect their nodes
     for(auto const& connection: connections) {
-        auto const& tensor_A = get_tensor(connection.first);
-        auto const& tensor_B = other_graph.get_tensor(connection.second);
+        auto tensor_A = get_tensor(connection.first);
+        auto tensor_B = other_graph.get_tensor(connection.second);
         
         // TODO: Check all specified properties of the two connected tensors are same.
-        // tensor_A.get() == tensor_B.get();
+        tensor_A->fill_from_context(get_context());
+        if(tensor_A->get_data_type() != cudnn_frontend::DataType_t::NOT_SET && tensor_B->get_data_type() != cudnn_frontend::DataType_t::NOT_SET) {
+            if(tensor_A->get_data_type() != tensor_B->get_data_type()) {
+                getLogger() << "[cudnn_frontend] ERROR: Connection between " << connection.first << " " << connection.first << " have different data types." << std::endl;
+            }
+        }
+        if(tensor_A->get_is_virtual() != tensor_B->get_is_virtual()) {
+            getLogger() << "[cudnn_frontend] ERROR: Connection between " << connection.first << " " << connection.first << " have different virtualness." << std::endl;
+        }
 
         // Iterate over nodes and change port name to match connection
         for(auto& node: nodes) {
@@ -271,16 +289,6 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                 }
             }
         }
-    }
-
-    // Add tensors to this graph.
-    for(auto itr: other_graph.tensors) {
-        if (auto search = tensors.find(itr.first); search != tensors.end()) {
-            getLogger() << "[cudnn_frontend] ERROR: " << itr.first << " exists in both the graphs." << std::endl;
-        }
-        // Apply other_graph's properties before inserting into this graph.
-        itr.second->fill_from_context(other_graph.get_context());
-        insert_tensor_(itr.second);
     }
 
     for(auto itr: other_graph.nodes) {

@@ -126,6 +126,10 @@ TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
     connections["S"] = "S";
     mha_graph.insert_graph(BMM2_graph, connections);
 
+    #if (CUDNN_VERSION < 8700)
+        SKIP("fmha patterns are not supported in cudnn versions prior to 8.7");
+    #endif
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == mha_graph.build(handle));
