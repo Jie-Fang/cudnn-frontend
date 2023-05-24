@@ -34,9 +34,10 @@
 #include "fused_mha_sample.h"
 #include "norm_samples.h"
 
+#include "graphs/batchnorm.h"
 #include "graphs/convolutions.h"
 #include "graphs/matmuls.h"
-#include "graphs/batchnorm.h"
+#include "graphs/mha.h"
 
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
@@ -2728,6 +2729,16 @@ TEST_CASE("BatchNorm Graphs", "[batchnorm][graph]") {
     test_batchnorm_graph();
     test_batchnorm_relu_graph();
     test_batchnorm_add_relu_graph();
+}
+
+TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
+    int64_t b = 32;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+
+    run_mha_gemm_only_graph(b, h, s_q, s_kv, d);
 }
 
 #if (CUDNN_VERSION >= 8900)

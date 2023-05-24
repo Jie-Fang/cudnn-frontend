@@ -19,6 +19,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/cuDNN.cmake)
 add_executable(
     samples
     
+    graphs/mha.cpp
     graphs/convolutions.cpp
     graphs/matmuls.cpp
     graphs/batchnorm.cpp
