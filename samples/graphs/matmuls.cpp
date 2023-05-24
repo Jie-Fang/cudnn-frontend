@@ -25,57 +25,7 @@
 
 #include <cudnn_frontend.h>
 
-#include "matmuls.h"
-
-void test_matmul_relu_graph() {
-    cudnn_frontend::graph::Graph graph("matmul_sbr");
-    graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
-         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
-         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
-    
-    auto matmul = cudnn_frontend::graph::Matmul("matmul")
-                    .map_port_to_tensor({
-                        {cudnn_frontend::graph::Matmul::PORTS::A, "image"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::B, "filter"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::C, "response"}
-                    });
-    graph.insert_node(matmul);
-
-    auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
-                    .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
-                    .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
-                    });
-    graph.insert_node(pw_relu);
-    
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 16, 64}))
-         .insert_tensor(cudnn_frontend::graph::Tensor("filter").set_dim({4, 64, 32}))
-         .insert_tensor(cudnn_frontend::graph::Tensor("response").set_is_virtual(true))
-         .insert_tensor(cudnn_frontend::graph::Tensor("output"));
-
-    cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
-    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
-    cudnnDestroy(handle);
-
-    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
-
-    Surface<half> x_tensor(4*16*64, false);
-    Surface<half> w_tensor(4*64*32, false);
-    Surface<half> y_tensor(4*16*32, false);
-
-    std::unordered_map<std::string, void*> variant_pack = {
-        {"image", x_tensor.devPtr}
-        , {"filter", w_tensor.devPtr}
-        , {"output", y_tensor.devPtr}
-    };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
-}
-
-void test_matmul_scale_bias_relu_graph() {
+TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
 
     cudnn_frontend::graph::Graph graph("matmul_sbr");
     graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)

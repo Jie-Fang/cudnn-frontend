@@ -25,10 +25,7 @@
 
 #include <cudnn_frontend.h>
 
-#include "convolutions.h"
-
-void test_convolution_scale_bias_relu_graph() {
-
+TEST_CASE("Convolution SBR Graph", "[conv][graph]") {
     cudnn_frontend::graph::Graph graph("conv_sbr");
     graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -172,8 +169,8 @@ cudnn_frontend::graph::Graph build_convolution_graph() {
     return conv_graph;
 }
 
-void test_insert_graph() {
 
+TEST_CASE("Graph Functionality", "[graph][functionality]") {
     cudnn_frontend::graph::Graph master_graph("conv_sbr_graph");
     auto conv_graph = build_convolution_graph();
     auto sbr_graph = build_scale_bias_relu_graph();
@@ -209,7 +206,7 @@ void test_insert_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == master_graph.execute(variant_pack));
 }
 
-void test_convolution_batchnorm_infernece_graph() {
+TEST_CASE("Convolution BN Inference Graph", "[conv][graph]") {
     cudnn_frontend::graph::Graph graph("conv_bn_inference");
     graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)

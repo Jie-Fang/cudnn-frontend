@@ -34,11 +34,6 @@
 #include "fused_mha_sample.h"
 #include "norm_samples.h"
 
-#include "graphs/batchnorm.h"
-#include "graphs/convolutions.h"
-#include "graphs/matmuls.h"
-#include "graphs/mha.h"
-
 TEST_CASE("Tensor creation comparison", "[frontend][comparison][backend]") {
     // Consider creation of a 2d Tensor
     // n,c,h,w as 4,32,32,32
@@ -2707,39 +2702,6 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     std::cout << "\n========================================================================================\n";
 }
 #endif
-
-TEST_CASE("Graph Functionality", "[graph][functionality]") {
-    test_insert_graph();
-}
-
-TEST_CASE("Convolution Graphs", "[conv][graph]") {
-    test_convolution_scale_bias_relu_graph();
-    test_convolution_batchnorm_infernece_graph();
-}
-
-TEST_CASE("Matmul Graphs", "[matmul][graph]") {
-    test_matmul_scale_bias_relu_graph();
-}
-
-TEST_CASE("BatchNorm Graphs", "[batchnorm][graph]") {
-    #if (CUDNN_VERSION < 8700)
-        SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
-    #endif
-
-    test_batchnorm_graph();
-    test_batchnorm_relu_graph();
-    test_batchnorm_add_relu_graph();
-}
-
-TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
-    int64_t b = 32;  // batch size
-    int64_t h = 16;  // head dim
-    int64_t s_q = 512; // q tensor is padded to this seq length
-    int64_t s_kv = 512; // k and v tensor is padded to this seq length
-    int64_t d = 64;  // hidden dim
-
-    run_mha_gemm_only_graph(b, h, s_q, s_kv, d);
-}
 
 #if (CUDNN_VERSION >= 8900)
 TEST_CASE("BF16 LLM Flash MHA Fprop sample", "[frontend][fusion][BF16LLMFprop]") {

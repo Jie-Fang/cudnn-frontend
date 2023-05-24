@@ -25,8 +25,6 @@
 
 #include <cudnn_frontend.h>
 
-#include "mha.h"
-
 cudnn_frontend::graph::Graph build_BMM1_graph(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t d) {
     std::vector<int64_t> q_dim = {b, h, s_q, d};
     std::vector<int64_t> q_stride(q_dim.size());
@@ -111,7 +109,14 @@ cudnn_frontend::graph::Graph build_BMM2_graph(int64_t b, int64_t h, int64_t s_q,
                             // .setkOverrideDesc(seqlenKTensor)
 }
 
-void run_mha_gemm_only_graph(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t d) {
+
+TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
+    int64_t b = 32;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+
     cudnn_frontend::graph::Graph mha_graph("mha");
     auto BMM1_graph = build_BMM1_graph(b, h, s_q, s_kv, d);
     auto BMM2_graph = build_BMM2_graph(b, h, s_q, s_kv, d);

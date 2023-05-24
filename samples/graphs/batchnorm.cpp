@@ -25,9 +25,7 @@
 
 #include <cudnn_frontend.h>
 
-#include "batchnorm.h"
-
-void test_batchnorm_graph() {
+TEST_CASE("SGBN Graph", "[batchnorm][graph]") {
     cudnn_frontend::graph::Graph graph("SGBN");
     graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -63,6 +61,10 @@ void test_batchnorm_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("EXP_AVG").set_is_pass_by_value(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_data_type(cudnn_frontend::DataType_t::HALF));
     
+    #if (CUDNN_VERSION < 8700)
+        SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+    #endif
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
@@ -105,7 +107,7 @@ void test_batchnorm_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
 }
 
-void test_batchnorm_relu_graph() {
+TEST_CASE("SGBN Relu Graph", "[batchnorm][graph]") {
     cudnn_frontend::graph::Graph graph("SGBN_Relu");
     graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -150,6 +152,10 @@ void test_batchnorm_relu_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_is_virtual(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF));
     
+    #if (CUDNN_VERSION < 8700)
+        SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+    #endif
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
@@ -192,7 +198,7 @@ void test_batchnorm_relu_graph() {
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
 }
 
-void test_batchnorm_add_relu_graph() {
+TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     cudnn_frontend::graph::Graph graph("SGBN_Add_Relu");
     graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -247,6 +253,10 @@ void test_batchnorm_add_relu_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("A").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF))
          .insert_tensor(cudnn_frontend::graph::Tensor("add_output").set_is_virtual(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF));
+
+    #if (CUDNN_VERSION < 8700)
+        SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+    #endif
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
