@@ -40,7 +40,6 @@ public:
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node named " << name << "." << std::endl;
         props->update_uids(offset);
-
         // Merge with ancestor's context
         fill_missing_context();
 
@@ -53,7 +52,7 @@ public:
         auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0));
         
         auto const& x_tensor_dim = x_tensor_prop->get_dim();
-        auto y_tensor_dim = y_tensor_prop->get_dim();        
+        auto y_tensor_dim = y_tensor_prop->get_dim();
         if(y_tensor_dim.empty()) {
             y_tensor_prop->set_dim(x_tensor_dim);
         } else {
@@ -124,7 +123,7 @@ public:
     }
 
     error_t createTensors() override final {
-        
+
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
         create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0)));
 
@@ -162,7 +161,7 @@ public:
                                             .setpwDesc(pointwise_descriptor)
                                             .build();
             operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
-                
+
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
                 get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0))
@@ -183,7 +182,7 @@ public:
                                             .setpwDesc(pointwise_descriptor)
                                             .build();
             operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
-   
+
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
                 get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0))
@@ -208,16 +207,11 @@ public:
         return error_t::OK;
     }
 
-    error_t partition() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning PointwiseNode..." << std::endl;
-        
-        auto status = create_cudnn_execution_plan({{name}});
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in PointwiseNode." << std::endl;
-            return status;
-        }
+    error_t createOperationGraphs(cudnnHandle_t) override final {
+        return error_t::OK;
+    }
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioned PointwiseNode." << std::endl;
+    error_t createExecutionPlans() override final {
         return error_t::OK;
     }
 };

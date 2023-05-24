@@ -54,7 +54,14 @@ void test_matmul_relu_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("response").set_is_virtual(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("output"));
 
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
     Surface<half> x_tensor(4*16*64, false);
     Surface<half> w_tensor(4*64*32, false);
@@ -118,11 +125,20 @@ void test_matmul_scale_bias_relu_graph() {
     graph.insert_tensor(cudnn_frontend::graph::Tensor("bias_output").set_is_virtual(true));
     graph.insert_tensor(cudnn_frontend::graph::Tensor("output"));
 
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
     #if (CUDNN_VERSION >= 8500)
-        REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+        REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
     #else
         SKIP("Cudnn 8.4.1 and below did not support matmul epilogue fusion with Column Major layout");
     #endif
+
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
+
     Surface<half> x_tensor(4*16*64, false);
     Surface<half> w_tensor(4*64*32, false);
     Surface<half> s_tensor(4*16*32, false);

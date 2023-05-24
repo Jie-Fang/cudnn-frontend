@@ -34,8 +34,6 @@
 #include "fused_mha_sample.h"
 #include "norm_samples.h"
 
-#include "blocks/convolutions.h"
-
 #include "graphs/convolutions.h"
 #include "graphs/matmuls.h"
 #include "graphs/batchnorm.h"
@@ -2708,25 +2706,6 @@ TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     std::cout << "\n========================================================================================\n";
 }
 #endif
-
-TEST_CASE("Primitive Nodes", "[primitive][node]") {
-    run_convolution_node();
-    run_pointwise_node();
-    run_reduction_node();
-    run_matmul_node();
-}
-
-TEST_CASE("Batch Norm Node", "[primitive][node][batchnorm]") {
-    run_batchnorm_node();
-}
-
-TEST_CASE("FP8 Composite Nodes", "[fp8][composite][node]") {
-    run_convolution_fp8_node();
-}
-
-TEST_CASE("Composite Nodes", "[composite][node]") {
-    run_convolution_pointwise_node();
-}
 
 TEST_CASE("Convolution Graphs", "[conv][graph]") {
     test_convolution_scale_bias_relu_graph();

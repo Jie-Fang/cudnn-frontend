@@ -10,6 +10,7 @@
 
 namespace cudnn_frontend {
 
+using op_graph_to_engine_configs = std::unordered_map<std::string, EngineConfigList>;
 enum class error_t {
     OK
     , ATTRIBUTE_NOT_SET
@@ -18,6 +19,7 @@ enum class error_t {
     , INVALID_VARIANT_PACK
     , GRAPH_EXECUTION_PLAN_CREATION_FAILED
     , GRAPH_EXECUTION_FAILED
+    , HEURISTIC_QUERY_FAILED
 };
 
 static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
@@ -43,6 +45,9 @@ static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
             break;
         case error_t::GRAPH_EXECUTION_FAILED:
             os << "GRAPH_EXECUTION_FAILED";
+            break;
+        case error_t::HEURISTIC_QUERY_FAILED:
+            os << "HEURISTIC_QUERY_FAILED";
             break;
     }
     return os;

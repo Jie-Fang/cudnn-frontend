@@ -344,6 +344,12 @@ enum class PointwiseMode_t {
     RECIPROCAL,
 };
 
+enum class HeurMode_t {
+    HEUR_MODE_A,
+    HEUR_MODE_B,
+    HEUR_MODE_FALLBACK,
+};
+
 enum class DataType_t {
     NOT_SET,
 

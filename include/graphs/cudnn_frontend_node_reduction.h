@@ -126,16 +126,11 @@ public:
         return error_t::OK;
     }
 
-    error_t partition() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning ReductionNode..." << std::endl;
-        
-        auto status = create_cudnn_execution_plan({{name}});
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in ReductionNode." << std::endl;
-            return status;
-        }
+    error_t createOperationGraphs(cudnnHandle_t) override final {
+        return error_t::OK;
+    }
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioned ReductionNode." << std::endl;
+    error_t createExecutionPlans() override final {
         return error_t::OK;
     }
 };

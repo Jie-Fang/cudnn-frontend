@@ -63,7 +63,14 @@ void test_batchnorm_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("EXP_AVG").set_is_pass_by_value(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_data_type(cudnn_frontend::DataType_t::HALF));
     
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
     Surface<half> X_tensor(4*32*16*16, false);
     Surface<float> Mean_tensor(16, false);
@@ -143,7 +150,14 @@ void test_batchnorm_relu_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("Y").set_is_virtual(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF));
     
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
     Surface<half> X_tensor(4*32*16*16, false);
     Surface<float> Mean_tensor(16, false);
@@ -233,8 +247,15 @@ void test_batchnorm_add_relu_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("A").set_dim({4, 32, 16, 16}).set_data_type(cudnn_frontend::DataType_t::HALF))
          .insert_tensor(cudnn_frontend::graph::Tensor("add_output").set_is_virtual(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("output").set_data_type(cudnn_frontend::DataType_t::HALF));
-    
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
     Surface<half> X_tensor(4*32*16*16, false);
     Surface<float> Mean_tensor(16, false);

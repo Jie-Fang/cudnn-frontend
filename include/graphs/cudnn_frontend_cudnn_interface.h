@@ -22,7 +22,13 @@ protected:
     std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation_v8>> operations;
     std::unordered_map<std::string, std::vector<int64_t>> tensors_in_operations;
 
-    std::vector<std::unique_ptr<ExecutionPlan>> execution_plans;
+    std::vector<std::shared_ptr<OperationGraph_v8>>    operation_graphs;
+    std::vector<std::shared_ptr<ExecutionPlan>>        execution_plans;
+
+
+    op_graph_to_engine_configs  mode_a_engine_configs;
+    op_graph_to_engine_configs  mode_b_engine_configs;
+    op_graph_to_engine_configs  fallback_engine_configs;
     std::vector<std::vector<int64_t>> variant_pack_uids;
 
     error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor const> const& props) {
@@ -49,9 +55,7 @@ protected:
         return error_t::OK;
     }
 
-    error_t create_cudnn_execution_plan(std::vector<std::vector<std::string>> const& sub_graphs) {
-        cudnnHandle_t handle;
-        cudnnCreate(&handle);
+    error_t create_cudnn_operation_graphs(std::vector<std::vector<std::string>> const& sub_graphs, cudnnHandle_t handle) {
 
         for(auto const& sub_graph: sub_graphs) {
             std::vector<Operation const*> cudnn_operations;
@@ -60,36 +64,85 @@ protected:
             }
             auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(cudnn_operations.size(), cudnn_operations.data()).build();
 
-            getLogger() << "[cudnn_frontend] INFO: " << " Getting plan from heuristics for " << cudnn_operation_graph.getTag() << " ..." << std::endl;
+            operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
+            getLogger() << "[cudnn_frontend] INFO: " << " Successfully built Operation Graphs." << std::endl;
 
-            cudnn_frontend::EngineConfigList filtered_configs;
-            auto statuses = 
-                cudnn_frontend::get_heuristics_list<2>({"heuristics_instant", "heuristics_fallback"}, cudnn_operation_graph, allowAllConfig, filtered_configs, true);
-            
-            getLogger() << "[cudnn_frontend] INFO: " << "get_heuristics_list statuses: ";
+
+            // Push variant pack tensors required for this operation graph
+            std::vector<int64_t> variant_pack_for_operation_graph = {};
+            for(auto const& operation_name: sub_graph) {
+                auto const& temp = tensors_in_operations.at(operation_name);
+                variant_pack_for_operation_graph.insert(std::end(variant_pack_for_operation_graph), std::begin(temp), std::end(temp));
+            }
+            variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
+        }
+	    return error_t::OK;
+    }
+
+    error_t query_heuristics() {
+        for(auto const& op_graph: operation_graphs) {
+            getLogger() << "[cudnn_frontend] INFO: " << " Getting plan from heuristics for " << op_graph->getTag() << " ..." << std::endl;
+
+            cudnn_frontend::EngineConfigList mode_a_configs;
+            cudnn_frontend::EngineConfigList mode_b_configs;
+            cudnn_frontend::EngineConfigList fallback_configs;
+            auto statuses =
+                cudnn_frontend::get_heuristics_list<1>({"heuristics_mode_a"}, *op_graph, allowAllConfig, mode_a_configs, true);
+
+            getLogger() << "[cudnn_frontend] INFO: " << "mode_a get_heuristics_list statuses: ";
+            for (size_t i = 0 ; i < statuses.size(); i++) {
+                getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+            }
+            getLogger() << std::endl;
+            statuses =
+                cudnn_frontend::get_heuristics_list<1>({"heuristics_mode_b"}, *op_graph, allowAllConfig, mode_b_configs, true);
+
+            getLogger() << "[cudnn_frontend] INFO: " << "mode_b get_heuristics_list statuses: ";
+            for (size_t i = 0 ; i < statuses.size(); i++) {
+                getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+            }
+            getLogger() << std::endl;
+            statuses =
+                cudnn_frontend::get_heuristics_list<1>({"heuristics_fallback"}, *op_graph, allowAllConfig, fallback_configs, true);
+
+            getLogger() << "[cudnn_frontend] INFO: " << "fallback get_heuristics_list statuses: ";
             for (size_t i = 0 ; i < statuses.size(); i++) {
                 getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
             }
             getLogger() << std::endl;
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Filter config list has " << filtered_configs.size() << " configurations." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Mode A config list has " << mode_a_configs.size() << " configurations." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Mode B config list has " << mode_b_configs.size() << " configurations." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Fallback config list has " << fallback_configs.size() << " configurations." << std::endl;
+            mode_a_engine_configs.emplace(op_graph->getTag(), mode_a_configs);
+            mode_b_engine_configs.emplace(op_graph->getTag(), mode_b_configs);
+            fallback_engine_configs.emplace(op_graph->getTag(), fallback_configs);
+        }
+	    return error_t::OK;
+    }
 
-            for (size_t i = 0; i < filtered_configs.size(); i++) {
+    error_t create_cudnn_execution_plan() {
+        cudnnHandle_t handle;
+        cudnnCreate(&handle);
+
+        for(auto const& filtered_configs: mode_a_engine_configs) {
+            for (size_t i = 0; i < filtered_configs.second.size(); i++) {
                 getLogger() << "[cudnn_frontend] INFO: " << "Trying config: " << i << std::endl;
 
                 #ifndef NV_CUDNN_DISABLE_EXCEPTION
                 try {
                 #endif
 
+                auto configs = filtered_configs.second;
                 auto plan = cudnn_frontend::ExecutionPlanBuilder()
                                 .setHandle(handle)
-                                .setEngineConfig(filtered_configs[i], cudnn_operation_graph.getTag())
+                                .setEngineConfig(configs[i], filtered_configs.first)
                                 .build();
                 if (plan.get_status() != CUDNN_STATUS_SUCCESS) {
                     getLogger() << "[cudnn_frontend] ERROR: " << "Config " << i << " failed with " << plan.get_error() << std::endl;
                     // If last config, return error
                     // or else continue to the next config
-                    if (i == filtered_configs.size() - 1) {
+                    if (i == filtered_configs.second.size() - 1) {
                         return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
                     }
                     continue;
@@ -97,7 +150,7 @@ protected:
                 getLogger() << "[cudnn_frontend] INFO: " << "Config " << i << " succeeded! Plan has built!" << std::endl;
                 getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
                 
-                execution_plans.push_back(std::make_unique<ExecutionPlan>(std::move(plan)));
+                execution_plans.push_back(std::make_shared<ExecutionPlan>(std::move(plan)));
                 getLogger() << "[cudnn_frontend] INFO: " << " Successfully built plan." << std::endl;
 
                 // Getting here means plan successfully built
@@ -108,21 +161,13 @@ protected:
                 } catch (cudnn_frontend::cudnnException &e) {
                     // The last config didn't work (E.g. all configs didn't work)
                     getLogger() << "[cudnn_frontend] ERROR: " << "Config " << i << " failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
-                    if (i == filtered_configs.size() - 1) {
+                    if (i == filtered_configs.second.size() - 1) {
                         return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
                     }
                     continue;
                 }
                 #endif
             }
-            
-            // Push variant pack tensors required for this operation graph
-            std::vector<int64_t> variant_pack_for_operation_graph = {}; 
-            for(auto const& operation_name: sub_graph) {
-                auto const& temp = tensors_in_operations.at(operation_name);
-                variant_pack_for_operation_graph.insert(std::end(variant_pack_for_operation_graph), std::begin(temp), std::end(temp));
-            }
-            variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
         }
         
         cudnnDestroy(handle);
@@ -147,6 +192,8 @@ public:
     error_t execute_cudnn_plans(std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {
         cudnnHandle_t handle;
         cudnnCreate(&handle);
+
+        getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plans.size() << " Plans." << std::endl;
 
         for(size_t i = 0; i < execution_plans.size(); ++i) {
             auto const& execution_plan = execution_plans[i];

@@ -37,6 +37,8 @@ void throw_if(bool const cond, cudnn_frontend::error_t const error_code, std::st
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_t::GRAPH_EXECUTION_FAILED:
             throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_t::HEURISTIC_QUERY_FAILED:
+            throw std::runtime_error(error_msg);
     }
 }
 
@@ -353,8 +355,23 @@ public:
     }
 
     void build() {
-        auto status = graph.build();
+        cudnnHandle_t handle;
+        cudnnCreate(&handle);
+        auto status = graph.build(handle);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Backend graph building failed.");
+
+        auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+        status = graph.set_executor(plans);
+        if (status != cudnn_frontend::error_t::OK) {
+            auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
+                        .build_plans(handle);
+
+            status = graph.set_executor(plans);
+            throw_if(status != cudnn_frontend::error_t::OK, status, "Backend Plan building failed.");
+        }
+        cudnnDestroy(handle);
 
         return;
     }

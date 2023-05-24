@@ -80,7 +80,15 @@ void test_convolution_scale_bias_relu_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("bias_output").set_is_virtual(true))
          .insert_tensor(cudnn_frontend::graph::Tensor("output"));
 
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
@@ -206,14 +214,21 @@ void test_convolution_batchnorm_infernece_graph() {
          .insert_tensor(cudnn_frontend::graph::Tensor("bias").set_dim({1, 64, 1, 1}))
          .insert_tensor(cudnn_frontend::graph::Tensor("bias_output").set_data_type(cudnn_frontend::DataType_t::HALF));
 
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
     #if (CUDNN_VERSION >= 8500)
-        REQUIRE(cudnn_frontend::error_t::OK == graph.build());
+        REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
     #elif (CUDNN_VERSION >= 8300)
         SKIP("Passing tensors by value, here epsilon, is not supported prior to 8500.");
     #else
         SKIP("RSQRT pointwise mode does not exist prior to 8300.");
     #endif
 
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+    cudnnDestroy(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);

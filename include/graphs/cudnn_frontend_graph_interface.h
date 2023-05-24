@@ -13,6 +13,43 @@ namespace cudnn_frontend {
 
 namespace graph {
 
+class Plans {
+    friend class Graph;
+    Execution_plan_list list_of_engine_configs;
+    public:
+        Plans &filter_by_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &);
+        Plans &filter_by_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &);
+        Plans &build_plans(cudnnHandle_t);
+
+        int64_t get_workspace_size();
+        int64_t get_max_workspace_size();
+};
+
+inline Plans& Plans::filter_by_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
+    list_of_engine_configs.filter_by_behavior_notes(notes);
+    return *this;
+}
+
+inline Plans& Plans::filter_by_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
+    list_of_engine_configs.filter_by_numeric_notes(notes);
+    return *this;
+}
+
+inline Plans& Plans::build_plans(cudnnHandle_t h){
+    list_of_engine_configs.build_plans(h);
+    return *this;
+}
+
+
+inline int64_t Plans::get_max_workspace_size(){
+    return list_of_engine_configs.get_max_workspace_size();
+}
+
+
+inline int64_t Plans::get_workspace_size(){
+    return list_of_engine_configs.get_workspace_size();
+}
+
 class Graph {
 private:
     std::string name;
@@ -48,8 +85,20 @@ public:
     Graph& insert_node(Matmul const& props);
     Graph& insert_node(Pointwise const& props);
     
-    error_t build();
+    error_t build(cudnnHandle_t handle);
     
+    Plans
+    get_execution_plan_list(HeurMode_t mode);
+
+    error_t
+    set_executor(Plans const & plan) {
+        if (plan.list_of_engine_configs.get_candidate() == nullptr) {
+            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+        }
+        flat_node.set_executor(plan.list_of_engine_configs);
+        return error_t::OK;
+    }
+
     int64_t get_workspace_size();
     error_t execute(std::unordered_map<std::string, void *>);
 
@@ -90,6 +139,12 @@ inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
 }
 
 inline Graph::Graph(std::string name) : name(name) {}
+
+inline Plans Graph::get_execution_plan_list(HeurMode_t mode) {
+    Plans plan_list;
+    flat_node.get_engine_configs(mode, plan_list.list_of_engine_configs);
+    return plan_list;
+}
 
 inline Graph& Graph::set_intermediate_data_type(DataType_t const type) {
     flat_node.set_intermediate_data_type(type);
@@ -314,7 +369,7 @@ inline int64_t Graph::get_workspace_size() {
     return flat_node.get_workspace_size();
 }
 
-inline error_t Graph::build() {
+inline error_t Graph::build(cudnnHandle_t handle) {
     auto status = error_t::OK;
 
     flat_node.tensor_props = all_tensors;
@@ -361,7 +416,7 @@ inline error_t Graph::build() {
         return status;
     }
 
-    status = flat_node.build();
+    status = flat_node.build(handle);
     if(status != error_t::OK) {
         getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
         return status;

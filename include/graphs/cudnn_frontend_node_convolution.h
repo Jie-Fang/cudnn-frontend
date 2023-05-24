@@ -32,7 +32,7 @@ public:
         if(INode_name != name) {
             return 1;
         }
-        
+
         props = properties;
         return 0;
     }
@@ -61,7 +61,7 @@ public:
             getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
             return status;
         }
-        
+
         if(y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
             auto const& padding = props->get_padding();
@@ -70,7 +70,7 @@ public:
             // N
             y_tensor_dim[0] = x_tensor_dim[0];
             // PQ
-            for(size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {        
+            for(size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {
                 y_tensor_dim[dim] = 1 + (x_tensor_dim[dim] - dilation[dim-2]*(w_tensor_dim[dim]-1)-1 + 2*padding[dim - 2]) / stride[dim - 2];
             }
             // K
@@ -103,7 +103,7 @@ public:
 
         return error_t::OK;
     }
-    
+
     error_t validate() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionNode..." << std::endl;
 
@@ -127,7 +127,7 @@ public:
 
         return error_t::OK;
     }
-    
+
     error_t createOperations() override final {
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode operations..." << std::endl;
@@ -158,7 +158,7 @@ public:
                                         .setBeta(0.f)
                                         .build();
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(convolution_operation)));
-        
+
         // Push all real tensors as required for operation execution.
         auto const& tensor_props_involved_in_operation = {
             get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X))
@@ -182,16 +182,11 @@ public:
         return error_t::OK;
     }
 
-    error_t partition() override final {
-        getLogger() << "[cudnn_frontend] INFO: Partitioning ConvolutionNode..." << std::endl;
+    error_t createOperationGraphs(cudnnHandle_t) override final {
+        return error_t::OK;
+    }
 
-        auto status = create_cudnn_execution_plan({{name}});
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in ConvolutionNode." << std::endl;
-            return status;
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: Partitioned ConvolutionNode." << std::endl;
+    error_t createExecutionPlans() override final {
         return error_t::OK;
     }
 };
