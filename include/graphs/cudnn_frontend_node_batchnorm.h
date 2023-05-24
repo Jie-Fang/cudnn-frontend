@@ -91,14 +91,7 @@ public:
         for(size_t i = 0; i < Batchnorm::PORTS::COUNT; ++i) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Batchnorm::PORTS>(i)));
 
-            if(tensor_prop->get_data_type() == DataType_t::NOT_SET) {
-                if(tensor_prop->get_is_virtual()) {
-                    tensor_prop->set_data_type(context.get_intermediate_data_type());
-                }    
-                else {
-                    tensor_prop->set_data_type(context.get_io_data_type());
-                }
-            }
+            tensor_prop->fill_from_context(get_context());
 
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();

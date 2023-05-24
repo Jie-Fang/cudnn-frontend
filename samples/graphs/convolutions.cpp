@@ -148,8 +148,7 @@ cudnn_frontend::graph::Graph build_scale_bias_relu_graph() {
     return sbr_graph;
 }
 
-void test_insert_graph() {
-
+cudnn_frontend::graph::Graph build_convolution_graph() {
     cudnn_frontend::graph::Graph conv_graph("conv");
     conv_graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
@@ -170,20 +169,29 @@ void test_insert_graph() {
               .insert_tensor(cudnn_frontend::graph::Tensor("filter").set_dim({64, 32, 3, 3}))
               .insert_tensor(cudnn_frontend::graph::Tensor("response").set_is_virtual(true));
     
-    auto const sbr_graph = build_scale_bias_relu_graph();
+    return conv_graph;
+}
+
+void test_insert_graph() {
+
+    cudnn_frontend::graph::Graph master_graph("conv_sbr_graph");
+    auto conv_graph = build_convolution_graph();
+    auto sbr_graph = build_scale_bias_relu_graph();
+
     std::unordered_map<std::string, std::string> connections;
+    master_graph.insert_graph(conv_graph, connections);
     connections["response"] = "input";
-    conv_graph.insert_graph(sbr_graph, connections);
+    master_graph.insert_graph(sbr_graph, connections);
     
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(cudnn_frontend::error_t::OK == conv_graph.build(handle));
+    REQUIRE(cudnn_frontend::error_t::OK == master_graph.build(handle));
 
-    auto plans = conv_graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+    auto plans = master_graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
     cudnnDestroy(handle);
 
-    REQUIRE(cudnn_frontend::error_t::OK == conv_graph.set_executor(plans));
+    REQUIRE(cudnn_frontend::error_t::OK == master_graph.set_executor(plans));
 
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
@@ -198,7 +206,7 @@ void test_insert_graph() {
         , {"bias", b_tensor.devPtr}
         , {"output", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == conv_graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == master_graph.execute(variant_pack));
 }
 
 void test_convolution_batchnorm_infernece_graph() {

@@ -59,6 +59,7 @@ private:
     int64_t uid_offset = 1;
 
     FlatNode flat_node{"flat_node", 1};
+    detail::Context& get_context();
 
     error_t infer_properties();
 
@@ -76,13 +77,13 @@ public:
     Graph& set_intermediate_data_type(DataType_t type);
     Graph& set_io_data_type(DataType_t type);
     Graph& set_compute_data_type(DataType_t type);
-
+    
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
     Graph& insert_node(Operation const& props);
 
-    Graph& insert_graph(Graph const& graph, std::unordered_map<std::string, std::string> const& connections);
+    Graph& insert_graph(Graph& other_graph, std::unordered_map<std::string, std::string> const& connections);
     
     error_t build(cudnnHandle_t handle);
     
@@ -141,6 +142,10 @@ inline Graph& Graph::set_io_data_type(DataType_t const type) {
 inline Graph& Graph::set_compute_data_type(DataType_t const type) {
     flat_node.set_compute_data_type(type);
     return *this;
+}
+
+inline detail::Context& Graph::get_context() {
+    return flat_node.get_context();
 }
 
 inline Graph& Graph::insert_tensor_(std::shared_ptr<Tensor> tensor_ptr) {
@@ -211,7 +216,7 @@ inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name)
     return tensors.at(tensor_name);
 }
 
-inline Graph& Graph::insert_graph(Graph const& other_graph, std::unordered_map<std::string, std::string> const& connections) {
+inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::string, std::string> const& connections) {
 
     // Look at connections and connect their nodes
     for(auto const& connection: connections) {
@@ -273,10 +278,35 @@ inline Graph& Graph::insert_graph(Graph const& other_graph, std::unordered_map<s
         if (auto search = tensors.find(itr.first); search != tensors.end()) {
             getLogger() << "[cudnn_frontend] ERROR: " << itr.first << " exists in both the graphs." << std::endl;
         }
+        // Apply other_graph's properties before inserting into this graph.
+        itr.second->fill_from_context(other_graph.get_context());
         insert_tensor_(itr.second);
     }
 
     for(auto itr: other_graph.nodes) {
+        // Apply other_graph's properties before inserting into this graph.
+        switch (itr.second->get_tag()) {
+            case Operation::Tag::Batchnorm: {
+                std::static_pointer_cast<Batchnorm>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Convolution: {
+                std::static_pointer_cast<Convolution>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Matmul: {
+                std::static_pointer_cast<Matmul>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Pointwise: {
+                std::static_pointer_cast<Pointwise>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Reduction: {
+                std::static_pointer_cast<Reduction>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+        }
         insert_node_(itr.second);
     }
 

@@ -68,14 +68,7 @@ public:
             if(tensor_prop == nullptr)
                 continue;
 
-            if(tensor_prop->get_data_type() == DataType_t::NOT_SET) {
-                if(tensor_prop->get_is_virtual()) {
-                    tensor_prop->set_data_type(context.get_intermediate_data_type());
-                }    
-                else {
-                    tensor_prop->set_data_type(context.get_io_data_type());
-                }
-            }
+            tensor_prop->fill_from_context(get_context());
 
             // Users still do not set tensor uids
             // But there might be a case that a previous node when setting its properties set the shared tensor prop's uid.

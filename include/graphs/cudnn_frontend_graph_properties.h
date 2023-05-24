@@ -142,6 +142,18 @@ public:
         return *this;
     }
 
+    auto fill_from_context(detail::Context const& context) -> Tensor& {
+        if(get_data_type() == DataType_t::NOT_SET) {
+            if(get_is_virtual()) {
+                set_data_type(context.get_intermediate_data_type());
+            }    
+            else {
+                set_data_type(context.get_io_data_type());
+            }
+        }
+        return *this;
+    }
+
     friend std::ostream& operator<<(std::ostream& os, const Tensor& props);
 };
 
@@ -280,6 +292,13 @@ public:
         return *this;
     }
 
+    auto fill_from_context(detail::Context const& context) -> Convolution& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+
     friend std::ostream& operator<<(std::ostream& os, const Convolution& props);
 };
 
@@ -353,6 +372,13 @@ public:
         return *this;
     }
 
+    auto fill_from_context(detail::Context const& context) -> Matmul& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+
     friend std::ostream& operator<<(std::ostream& os, const Matmul& props);
 };
 
@@ -423,6 +449,13 @@ public:
 
     std::string get_tensor_at_port(PORTS port) const {
         return port_to_name.at(port);
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Pointwise& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
     }
 
     friend std::ostream& operator<<(std::ostream& os, const Pointwise& props);
@@ -501,6 +534,13 @@ public:
         compute_data_type = value;
         return *this;
     }
+
+    auto fill_from_context(detail::Context const& context) -> Batchnorm& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
 };
 
 class Reduction : public Operation {
@@ -556,6 +596,13 @@ public:
     
     Reduction& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Reduction& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
         return *this;
     }
 };

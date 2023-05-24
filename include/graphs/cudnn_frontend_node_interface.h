@@ -100,6 +100,10 @@ public:
         return error_t::OK;
     }
 
+    detail::Context& get_context() {
+        return context;
+    }
+
     virtual error_t infer_properties() {
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node.second->infer_properties();
