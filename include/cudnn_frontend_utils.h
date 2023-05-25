@@ -370,6 +370,20 @@ enum class DataType_t {
     FAST_FLOAT_FOR_FP8,
 };
 
+enum class ReductionMode_t {
+    NOT_SET,
+
+    ADD,
+    MUL,
+    MIN,
+    MAX,
+    AMAX,
+    AVG,
+    NORM1,
+    NORM2,
+    MUL_NO_ZEROS
+};
+
 static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
     switch (mode) {
         case PointwiseMode_t::NOT_SET:
@@ -668,6 +682,42 @@ static inline std::ostream& operator<<(std::ostream& os, const NormMode_t& mode)
     return os;
 }
 
+static inline std::ostream& operator<<(std::ostream& os, const ReductionMode_t& mode) {
+    switch (mode) {
+        case ReductionMode_t::ADD:
+            os << "ADD";
+            break;
+        case ReductionMode_t::MUL:
+            os << "MUL";
+            break;
+        case ReductionMode_t::MIN:
+            os << "MIN";
+            break;
+        case ReductionMode_t::MAX:
+            os << "MAX";
+            break;
+        case ReductionMode_t::AMAX:
+            os << "AMAX";
+            break;
+        case ReductionMode_t::AVG:
+            os << "AVG";
+            break;
+        case ReductionMode_t::NORM1:
+            os << "NORM1";
+            break;
+        case ReductionMode_t::NORM2:
+            os << "NORM2";
+            break;
+        case ReductionMode_t::MUL_NO_ZEROS:
+            os << "MUL_NO_ZEROS";
+            break;
+        case ReductionMode_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
+}
+
 static inline std::ostream& operator<<(std::ostream& os, const DescriptorType_t& mode) {
     switch (mode) {
         case DescriptorType_t::POINTWISE_DESCRIPTOR:
@@ -934,6 +984,45 @@ namespace detail {
                 return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
             #endif
 
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::ReductionMode_t const mode, cudnnReduceTensorOp_t& cudnn_mode) {
+        switch (mode) {
+            
+            case ReductionMode_t::ADD:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_ADD;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::MUL:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_MUL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::MIN:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_MIN;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::MAX:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_MAX;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::AMAX:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_AMAX;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::AVG:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_AVG;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::NORM1:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_NORM1;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::NORM2:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_NORM2;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case ReductionMode_t::MUL_NO_ZEROS:
+                cudnn_mode = CUDNN_REDUCE_TENSOR_MUL_NO_ZEROS;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            
             #ifndef NO_DEFAULT_IN_SWITCH
             default:
                 return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
@@ -1916,6 +2005,36 @@ static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::TensorReorderi
     #endif
         }
         return DataType_t::NOT_SET;
+    }
+
+    // To be deprecated. Only exists as setReductionOp(cudnnReduceTensorOp_t mode) requires it.
+    static inline cudnn_frontend::ReductionMode_t convert_from_cudnn_type(cudnnReduceTensorOp_t const cudnn_mode) {
+        switch (cudnn_mode)
+        {
+            case CUDNN_REDUCE_TENSOR_ADD:
+                return ReductionMode_t::ADD;
+            case CUDNN_REDUCE_TENSOR_MUL:
+                return ReductionMode_t::MUL;
+            case CUDNN_REDUCE_TENSOR_MIN:
+                return ReductionMode_t::MIN;
+            case CUDNN_REDUCE_TENSOR_MAX:
+                return ReductionMode_t::MAX;
+            case CUDNN_REDUCE_TENSOR_AMAX:
+                return ReductionMode_t::AMAX;
+            case CUDNN_REDUCE_TENSOR_AVG:
+                return ReductionMode_t::AVG;
+            case CUDNN_REDUCE_TENSOR_NORM1:
+                return ReductionMode_t::NORM1;
+            case CUDNN_REDUCE_TENSOR_NORM2:
+                return ReductionMode_t::NORM2;
+            case CUDNN_REDUCE_TENSOR_MUL_NO_ZEROS:
+                return ReductionMode_t::MUL_NO_ZEROS;
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return ReductionMode_t::NOT_SET;
+    #endif
+        }
+        return ReductionMode_t::NOT_SET;
     }
 
 } // namespace detail

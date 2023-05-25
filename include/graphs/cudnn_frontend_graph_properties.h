@@ -553,7 +553,7 @@ public:
     };
 
 private:
-    cudnnReduceTensorOp_t mode;
+    ReductionMode_t mode;
 
 public:
     bool is_mode_set;
@@ -573,11 +573,11 @@ public:
         return 0;
     }
 
-    cudnnReduceTensorOp_t get_mode() const {
+    ReductionMode_t get_mode() const {
         return mode;
     }
 
-    Reduction& set_mode(cudnnReduceTensorOp_t value) {
+    Reduction& set_mode(ReductionMode_t value) {
         mode = value;
         is_mode_set = true;
         return *this;

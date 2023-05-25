@@ -91,7 +91,7 @@ cudnn_frontend::graph::Graph build_softmax_graph(int64_t b, int64_t h, int64_t s
     softmax.insert_tensor(cudnn_frontend::graph::Tensor("S").set_dim(afterBMM1_dim).set_stride(afterBMM1_stride).set_is_virtual(true).set_data_type(cudnn_frontend::DataType_t::HALF));
 
     auto max = cudnn_frontend::graph::Reduction("max")
-                    .set_mode(CUDNN_REDUCE_TENSOR_MAX)
+                    .set_mode(cudnn_frontend::ReductionMode_t::MAX)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Reduction::PORTS::X, "P"}
                         , {cudnn_frontend::graph::Reduction::PORTS::Y, "MAX"}
@@ -116,7 +116,7 @@ cudnn_frontend::graph::Graph build_softmax_graph(int64_t b, int64_t h, int64_t s
     softmax.insert_node(exp);
 
     auto sum = cudnn_frontend::graph::Reduction("sum")
-                    .set_mode(CUDNN_REDUCE_TENSOR_ADD)
+                    .set_mode(cudnn_frontend::ReductionMode_t::ADD)
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Reduction::PORTS::X, "E"}
                         , {cudnn_frontend::graph::Reduction::PORTS::Y, "SUM"}

@@ -40,7 +40,7 @@ namespace cudnn_frontend {
 /// This class tells the properties of the Reduction operation
 /// Properties:
 ///    - compute_type
-///    - reduction_op
+///    - reduction_mode
 ///
 /// Use ReductionDesc_v8 to build this class.
 /// Describe returns a string describing the Reduction operation
@@ -52,7 +52,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_REDUCTION_DESCRIPTOR :"
-           << " Math precision " << compute_type << " Reduction operator " << (reduction_op);
+           << " Math precision " << compute_type << " Reduction mode " << reduction_mode;
         return ss.str();
     }
 
@@ -69,7 +69,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
     operator=(ReductionDesc_v8 const &) = delete;
 
     DataType_t compute_type     = DataType_t::NOT_SET;
-    cudnnReduceTensorOp_t reduction_op = CUDNN_REDUCE_TENSOR_ADD;
+    ReductionMode_t reduction_mode = ReductionMode_t::NOT_SET;
 };
 
 ////
@@ -92,9 +92,12 @@ class ReductionDescBuilder_v8 {
         return *this;
     }
     //! Set redution operator for the Reduction Operation
-    auto
-    setReductionOp(cudnnReduceTensorOp_t op_) -> ReductionDescBuilder_v8 & {
-        m_reductionDesc.reduction_op = op_;
+    auto setReductionOp(ReductionMode_t op_) -> ReductionDescBuilder_v8 & {
+        m_reductionDesc.reduction_mode = op_;
+        return *this;
+    }
+    auto setReductionOp(cudnnReduceTensorOp_t op_) -> ReductionDescBuilder_v8 & {
+        m_reductionDesc.reduction_mode = detail::convert_from_cudnn_type(op_);
         return *this;
     }
     /** @} */
@@ -140,11 +143,20 @@ class ReductionDescBuilder_v8 {
             return std::move(m_reductionDesc);
         }
 
+        cudnnReduceTensorOp_t cudnn_reduction_mode;
+        status = detail::convert_to_cudnn_type(m_reductionDesc.reduction_mode, cudnn_reduction_mode);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_reductionDesc,
+                status,
+                "CUDNN_BACKEND_REDUCTION_DESCRIPTOR: SetAttribute CUDNN_ATTR_REDUCTION_OPERATOR Failed");
+            return std::move(m_reductionDesc);
+        }
         status = cudnnBackendSetAttribute(m_reductionDesc.pointer->get_backend_descriptor(),
                                           CUDNN_ATTR_REDUCTION_OPERATOR,
                                           CUDNN_TYPE_REDUCTION_OPERATOR_TYPE,
                                           1,
-                                          &m_reductionDesc.reduction_op);
+                                          &cudnn_reduction_mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_reductionDesc,
