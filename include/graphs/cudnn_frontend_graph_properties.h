@@ -21,6 +21,7 @@ protected:
     std::vector<int64_t> stride = {};
     bool is_virtual = false;
     bool is_pass_by_value = false;
+    TensorReordering_t reordering_type = TensorReordering_t::NONE;
     int64_t uid;
 
 public:
@@ -129,6 +130,15 @@ public:
     auto set_is_pass_by_value(bool const value) -> Tensor& {
         is_pass_by_value = value;
         is_pass_by_value_set = true;
+        return *this;
+    }
+    
+    TensorReordering_t get_reordering_type() const {
+        return reordering_type;
+    }
+
+    auto set_reordering_type(TensorReordering_t const value) -> Tensor& {
+        reordering_type = value;
         return *this;
     }
 

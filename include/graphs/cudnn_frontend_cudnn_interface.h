@@ -29,7 +29,8 @@ protected:
     op_graph_to_engine_configs  mode_a_engine_configs;
     op_graph_to_engine_configs  mode_b_engine_configs;
     op_graph_to_engine_configs  fallback_engine_configs;
-    std::vector<std::vector<int64_t>> variant_pack_uids;
+    // uids in a variant pack have to be unique, so keep a set of them.
+    std::vector<std::unordered_set<int64_t>> variant_pack_uids;
 
     error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor const> const& props) {
 
@@ -49,6 +50,7 @@ protected:
                         .setDataType(props->get_data_type())
                         .setVirtual(props->get_is_virtual())
                         .setByValue(props->get_is_pass_by_value())
+                        .setReorderType(props->get_reordering_type())
                         .build();
         tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
         
@@ -68,14 +70,10 @@ protected:
             getLogger() << "[cudnn_frontend] INFO: " << " Successfully built Operation Graphs." << std::endl;
 
             // Push variant pack tensors required for this operation graph
-            std::vector<int64_t> variant_pack_for_operation_graph = {};
+            std::unordered_set<int64_t> variant_pack_for_operation_graph;
             for(auto const& operation_name: sub_graph) {
-                // If operation name does not even exist in tensor_in_opetations, skip.
-                // if (auto search = tensors_in_operations.find(operation_name); tensors_in_operations == tensors.end()) {
-                //     continue;
-                // }
                 auto const& temp = tensors_in_operations.at(operation_name);
-                variant_pack_for_operation_graph.insert(std::end(variant_pack_for_operation_graph), std::begin(temp), std::end(temp));
+                variant_pack_for_operation_graph.insert(std::begin(temp), std::end(temp));
             }
             variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
         }
@@ -205,12 +203,14 @@ public:
             getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
 
             std::vector<void *> device_ptrs;
+            std::vector<int64_t> uids;
             for(auto const& uid: variant_pack_uid) {
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
+                uids.push_back(uid);
             }
             auto variant_pack = VariantPackBuilder()
                                 .setDataPointers(device_ptrs.size(), device_ptrs.data())
-                                .setUids(variant_pack_uid.size(), variant_pack_uid.data())
+                                .setUids(uids.size(), uids.data())
                                 .setWorkspacePointer(workspace_ptr)
                                 .build();
             if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
