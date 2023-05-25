@@ -43,12 +43,12 @@ cudnn_frontend::graph::Graph build_BMM1_graph(int64_t b, int64_t h, int64_t s_q,
 
     cudnn_frontend::graph::Graph bmm1("bmm1");
     bmm1.set_io_data_type(cudnn_frontend::DataType_t::HALF)
-         .set_intermediate_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
 
     bmm1.insert_tensor(cudnn_frontend::graph::Tensor("Q").set_dim(q_dim).set_stride(q_stride));
     bmm1.insert_tensor(cudnn_frontend::graph::Tensor("K").set_dim(k_dim).set_stride(k_stride));
-    bmm1.insert_tensor(cudnn_frontend::graph::Tensor("S").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
+    bmm1.insert_tensor(cudnn_frontend::graph::Tensor("P").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
 
     // auto seqlenQTensor = tensor_create(CUDNN_DATA_INT32, Q_SEQLEN_ID, seqlen_dim, seqlen_stride, false, false);
     // auto seqlenKTensor = tensor_create(CUDNN_DATA_INT32, K_SEQLEN_ID, seqlen_dim, seqlen_stride, false, false);
@@ -60,11 +60,79 @@ cudnn_frontend::graph::Graph build_BMM1_graph(int64_t b, int64_t h, int64_t s_q,
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Matmul::PORTS::A, "Q"}
                         , {cudnn_frontend::graph::Matmul::PORTS::B, "K"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::C, "S"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::C, "P"}
                     });
     bmm1.insert_node(matmul);
 
     return bmm1;
+}
+
+cudnn_frontend::graph::Graph build_softmax_graph(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t d) {
+    std::vector<int64_t> afterBMM1_dim = {b, h, s_q, s_kv};
+    std::vector<int64_t> afterBMM1_stride = {h * s_q * s_kv, s_q * s_kv, s_kv, 1};
+
+    std::vector<int64_t> afterReduction_dim = {b, h, s_q, 1};
+    std::vector<int64_t> afterReduction_stride = {h * s_q, s_q, 1, 1};
+
+    std::vector<int64_t> s_dim = {b, h, s_q, s_kv};
+    std::vector<int64_t> s_stride(s_dim.size());
+    generateMHAStrides(b, h, s_q, s_kv, d, s_stride.data(), MHA_Layout::QKV_INTERLEAVED, MHA_Matrix::S_Matrix);
+
+    cudnn_frontend::graph::Graph softmax("softmax");
+    softmax.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("P").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("MAX").set_dim(afterReduction_dim).set_stride(afterReduction_stride).set_is_virtual(true));
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("P_MAX").set_dim(afterBMM1_dim).set_stride(afterBMM1_stride).set_is_virtual(true));
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("E").set_dim(afterBMM1_dim).set_stride(afterBMM1_stride).set_is_virtual(true));
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("SUM").set_dim(afterReduction_dim).set_stride(afterReduction_stride).set_is_virtual(true));
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("S").set_dim(afterBMM1_dim).set_stride(afterBMM1_stride).set_is_virtual(true).set_data_type(cudnn_frontend::DataType_t::HALF));
+
+    auto max = cudnn_frontend::graph::Reduction("max")
+                    .set_mode(CUDNN_REDUCE_TENSOR_MAX)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Reduction::PORTS::X, "P"}
+                        , {cudnn_frontend::graph::Reduction::PORTS::Y, "MAX"}
+                    });
+    softmax.insert_node(max);
+
+    auto sub = cudnn_frontend::graph::Pointwise("sub")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::SUB)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "P"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "MAX"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "P_MAX"}
+                    });
+    softmax.insert_node(sub);
+
+    auto exp = cudnn_frontend::graph::Pointwise("exp")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::EXP)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "P_MAX"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "E"}
+                    });
+    softmax.insert_node(exp);
+
+    auto sum = cudnn_frontend::graph::Reduction("sum")
+                    .set_mode(CUDNN_REDUCE_TENSOR_ADD)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Reduction::PORTS::X, "E"}
+                        , {cudnn_frontend::graph::Reduction::PORTS::Y, "SUM"}
+                    });
+    softmax.insert_node(sum);
+
+    auto div = cudnn_frontend::graph::Pointwise("div")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::DIV)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "E"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "SUM"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "S"}
+                    });
+    softmax.insert_node(div);
+
+    return softmax;
 }
 
 cudnn_frontend::graph::Graph build_BMM2_graph(int64_t b, int64_t h, int64_t s_q, int64_t s_kv, int64_t d) {
@@ -88,7 +156,7 @@ cudnn_frontend::graph::Graph build_BMM2_graph(int64_t b, int64_t h, int64_t s_q,
 
     cudnn_frontend::graph::Graph bmm2("bmm2");
     bmm2.set_io_data_type(cudnn_frontend::DataType_t::HALF)
-         .set_intermediate_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
 
     bmm2.insert_tensor(cudnn_frontend::graph::Tensor("S").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
@@ -120,9 +188,18 @@ TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
     cudnn_frontend::graph::Graph mha_graph("mha");
     auto BMM1_graph = build_BMM1_graph(b, h, s_q, s_kv, d);
     auto BMM2_graph = build_BMM2_graph(b, h, s_q, s_kv, d);
+    auto softmax_graph = build_softmax_graph(b, h, s_q, s_kv, d);
 
     std::unordered_map<std::string, std::string> connections;
+    
+    connections.clear();
     mha_graph.insert_graph(BMM1_graph, connections);
+    
+    connections.clear();
+    connections["P"] = "P";
+    mha_graph.insert_graph(softmax_graph, connections);
+    
+    connections.clear();
     connections["S"] = "S";
     mha_graph.insert_graph(BMM2_graph, connections);
 

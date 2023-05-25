@@ -67,10 +67,13 @@ protected:
             operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
             getLogger() << "[cudnn_frontend] INFO: " << " Successfully built Operation Graphs." << std::endl;
 
-
             // Push variant pack tensors required for this operation graph
             std::vector<int64_t> variant_pack_for_operation_graph = {};
             for(auto const& operation_name: sub_graph) {
+                // If operation name does not even exist in tensor_in_opetations, skip.
+                // if (auto search = tensors_in_operations.find(operation_name); tensors_in_operations == tensors.end()) {
+                //     continue;
+                // }
                 auto const& temp = tensors_in_operations.at(operation_name);
                 variant_pack_for_operation_graph.insert(std::end(variant_pack_for_operation_graph), std::begin(temp), std::end(temp));
             }

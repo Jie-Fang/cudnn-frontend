@@ -102,9 +102,10 @@ public:
             get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X))
             , get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y))
         };
+        auto& tensors_in_operation = tensors_in_operations[name];
         for(auto const& tensor_props: tensor_props_involved_in_operation) {
             if(tensor_props->get_is_virtual() == false) {
-                tensors_in_operations[name].emplace_back(tensor_props->get_uid());
+                tensors_in_operation.emplace_back(tensor_props->get_uid());
             }
         }
 
