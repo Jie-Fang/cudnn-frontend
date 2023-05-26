@@ -57,7 +57,7 @@ protected:
         return error_t::OK;
     }
 
-    error_t create_cudnn_operation_graphs(std::vector<std::vector<std::string>> const& sub_graphs, cudnnHandle_t handle) {
+    error_t create_cudnn_operation_graphs(cudnnHandle_t handle, std::vector<std::vector<std::string>> const& sub_graphs) {
 
         for(auto const& sub_graph: sub_graphs) {
             std::vector<Operation const*> cudnn_operations;
@@ -122,10 +122,7 @@ protected:
 	    return error_t::OK;
     }
 
-    error_t create_cudnn_execution_plan() {
-        cudnnHandle_t handle;
-        cudnnCreate(&handle);
-
+    error_t create_cudnn_execution_plan(cudnnHandle_t handle) {
         for(auto const& filtered_configs: mode_a_engine_configs) {
             for (size_t i = 0; i < filtered_configs.second.size(); i++) {
                 getLogger() << "[cudnn_frontend] INFO: " << "Trying config: " << i << std::endl;
@@ -170,8 +167,6 @@ protected:
                 #endif
             }
         }
-        
-        cudnnDestroy(handle);
 
 	    return error_t::OK;
     }
@@ -190,10 +185,7 @@ public:
         return current_workspace_size;
     }
 
-    error_t execute_cudnn_plans(std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {
-        cudnnHandle_t handle;
-        cudnnCreate(&handle);
-
+    error_t execute_cudnn_plans(cudnnHandle_t handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {
         getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plans.size() << " Plans." << std::endl;
 
         for(size_t i = 0; i < execution_plans.size(); ++i) {
@@ -230,8 +222,6 @@ public:
             }
             getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
         }
-
-        cudnnDestroy(handle);
 
         return error_t::OK;
     }

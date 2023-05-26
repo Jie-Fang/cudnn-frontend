@@ -85,7 +85,6 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
 
     auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
@@ -102,5 +101,6 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
         , {"bias", b_tensor.devPtr}
         , {"output", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    cudnnDestroy(handle);
 }

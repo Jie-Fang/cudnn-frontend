@@ -381,14 +381,19 @@ public:
     }
 
     void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack) {
+        cudnnHandle_t handle;
+        cudnnCreate(&handle);
+
         std::unordered_map<std::string, void *> var_pack_;
         for (auto item : var_pack) {
             var_pack_.insert(std::make_pair(item.first->get_name(), extract_data_pointer(item.second)));
         }
 
         // TODO: Probably concatenate in a macro?
-        auto status = graph.execute(var_pack_);
+        auto status = graph.execute(handle, var_pack_);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Graph execution failed");
+        
+        cudnnDestroy(handle);
         return;
     }
 

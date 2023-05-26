@@ -345,19 +345,22 @@ public:
         A,
         B,
         C,
+        A_OVERRIDE,
+        B_OVERRIDE,
+        C_OVERRIDE,
 
         COUNT
     };
-private:
-    
-public:
-    
+
     std::unordered_map<PORTS, std::string> port_to_name;
     int64_t uids[PORTS::COUNT];
     Matmul(const std::string name) : Operation(name, Tag::Matmul) {
         port_to_name[PORTS::A] = name + "::A";
         port_to_name[PORTS::B] = name + "::B";
         port_to_name[PORTS::C] = name + "::C";
+        port_to_name[PORTS::A_OVERRIDE] = name + "::A_OVERRIDE";
+        port_to_name[PORTS::B_OVERRIDE] = name + "::B_OVERRIDE";
+        port_to_name[PORTS::C_OVERRIDE] = name + "::C_OVERRIDE";
     }
 
     Matmul& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {

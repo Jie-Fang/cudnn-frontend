@@ -83,7 +83,6 @@ TEST_CASE("Convolution SBR Graph", "[conv][graph]") {
 
     auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
@@ -100,7 +99,8 @@ TEST_CASE("Convolution SBR Graph", "[conv][graph]") {
         , {"bias", b_tensor.devPtr}
         , {"output", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    cudnnDestroy(handle);
 }
 
 cudnn_frontend::graph::Graph build_scale_bias_relu_graph() {
@@ -186,7 +186,6 @@ TEST_CASE("Graph Functionality", "[graph][functionality]") {
 
     auto plans = master_graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == master_graph.set_executor(plans));
 
@@ -203,7 +202,9 @@ TEST_CASE("Graph Functionality", "[graph][functionality]") {
         , {"bias", b_tensor.devPtr}
         , {"output", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == master_graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == master_graph.execute(handle, variant_pack));
+
+    cudnnDestroy(handle);
 }
 
 TEST_CASE("Convolution BN Inference Graph", "[conv][graph]") {
@@ -326,7 +327,6 @@ TEST_CASE("Convolution BN Inference Graph", "[conv][graph]") {
 
     auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
@@ -349,5 +349,7 @@ TEST_CASE("Convolution BN Inference Graph", "[conv][graph]") {
         , {"bias", b_tensor.devPtr}
         , {"bias_output", y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+
+    cudnnDestroy(handle);
 }

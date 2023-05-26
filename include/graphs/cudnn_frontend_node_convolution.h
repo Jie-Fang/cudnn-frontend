@@ -177,7 +177,7 @@ public:
         return error_t::OK;
     }
 
-    error_t createExecutionPlans() override final {
+    error_t createExecutionPlans(cudnnHandle_t) override final {
         return error_t::OK;
     }
 };

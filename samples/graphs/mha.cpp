@@ -49,18 +49,16 @@ cudnn_frontend::graph::Graph build_BMM1_graph(int64_t b, int64_t h, int64_t s_q,
     bmm1.insert_tensor(cudnn_frontend::graph::Tensor("Q").set_dim(q_dim).set_stride(q_stride));
     bmm1.insert_tensor(cudnn_frontend::graph::Tensor("K").set_dim(k_dim).set_stride(k_stride));
     bmm1.insert_tensor(cudnn_frontend::graph::Tensor("P").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
-
-    // auto seqlenQTensor = tensor_create(CUDNN_DATA_INT32, Q_SEQLEN_ID, seqlen_dim, seqlen_stride, false, false);
-    // auto seqlenKTensor = tensor_create(CUDNN_DATA_INT32, K_SEQLEN_ID, seqlen_dim, seqlen_stride, false, false);
-
-                            // .setmOverrideDesc(seqlenQTensor)
-                            // .setnOverrideDesc(seqlenKTensor)
+    bmm1.insert_tensor(cudnn_frontend::graph::Tensor("SQ").set_dim(seqlen_dim).set_stride(seqlen_stride).set_data_type(cudnn_frontend::DataType_t::INT32));
+    bmm1.insert_tensor(cudnn_frontend::graph::Tensor("SK").set_dim(seqlen_dim).set_stride(seqlen_stride).set_data_type(cudnn_frontend::DataType_t::INT32));
     
     auto matmul = cudnn_frontend::graph::Matmul("bmm1")
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Matmul::PORTS::A, "Q"}
                         , {cudnn_frontend::graph::Matmul::PORTS::B, "K"}
                         , {cudnn_frontend::graph::Matmul::PORTS::C, "P"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::A_OVERRIDE, "SQ"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::B_OVERRIDE, "SK"}
                     });
     bmm1.insert_node(matmul);
 
@@ -164,11 +162,11 @@ cudnn_frontend::graph::Graph build_softmax_graph(int64_t b, int64_t h, int64_t s
     generateMHAStrides(b, h, s_q, s_kv, d, s_stride.data(), MHA_Layout::QKV_INTERLEAVED, MHA_Matrix::S_Matrix);
 
     cudnn_frontend::graph::Graph softmax("softmax");
-    softmax.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
+    softmax.set_io_data_type(cudnn_frontend::DataType_t::HALF)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
 
-    softmax.insert_tensor(cudnn_frontend::graph::Tensor("M_O").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
+    softmax.insert_tensor(cudnn_frontend::graph::Tensor("P").set_dim(s_dim).set_stride(s_stride).set_is_virtual(true));
     softmax.insert_tensor(cudnn_frontend::graph::Tensor("MAX").set_dim(afterReduction_dim).set_stride(afterReduction_stride).set_is_virtual(true));
     softmax.insert_tensor(cudnn_frontend::graph::Tensor("P_MAX").set_dim(afterBMM1_dim).set_stride(afterBMM1_stride).set_is_virtual(true));
     softmax.insert_tensor(cudnn_frontend::graph::Tensor("E").set_dim(afterBMM1_dim).set_stride(afterBMM1_stride).set_is_virtual(true));
@@ -178,11 +176,12 @@ cudnn_frontend::graph::Graph build_softmax_graph(int64_t b, int64_t h, int64_t s
     if(should_dump_output) {
         softmax_output.set_is_virtual(false).set_reordering_type(cudnn_frontend::TensorReordering_t::F16x16);
     }
-
+    softmax.insert_tensor(softmax_output);
+    
     auto max = cudnn_frontend::graph::Reduction("max")
                     .set_mode(cudnn_frontend::ReductionMode_t::MAX)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Reduction::PORTS::X, "M_O"}
+                        {cudnn_frontend::graph::Reduction::PORTS::X, "P"}
                         , {cudnn_frontend::graph::Reduction::PORTS::Y, "MAX"}
                     });
     softmax.insert_node(max);
@@ -190,7 +189,7 @@ cudnn_frontend::graph::Graph build_softmax_graph(int64_t b, int64_t h, int64_t s
     auto sub = cudnn_frontend::graph::Pointwise("sub")
                     .set_mode(cudnn_frontend::PointwiseMode_t::SUB)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "M_O"}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "P"}
                         , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "MAX"}
                         , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "P_MAX"}
                     });
@@ -240,9 +239,6 @@ cudnn_frontend::graph::Graph build_BMM2_graph(int64_t b, int64_t h, int64_t s_q,
     std::vector<int64_t> o_stride(o_dim.size());
     generateMHAStrides(b, h, s_q, s_kv, d, o_stride.data(), MHA_Layout::QKV_INTERLEAVED, MHA_Matrix::O_Matrix);
 
-    // auto seqlenQTensor = tensor_create(CUDNN_DATA_INT32, Q_SEQLEN_ID, seqlen_dim, seqlen_stride, false, false);
-    // auto seqlenKTensor = tensor_create(CUDNN_DATA_INT32, K_SEQLEN_ID, seqlen_dim, seqlen_stride, false, false);
-
     cudnn_frontend::graph::Graph bmm2("bmm2");
     bmm2.set_io_data_type(cudnn_frontend::DataType_t::HALF)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::HALF)
@@ -255,19 +251,20 @@ cudnn_frontend::graph::Graph build_BMM2_graph(int64_t b, int64_t h, int64_t s_q,
     bmm2.insert_tensor(a_tensor);
     bmm2.insert_tensor(cudnn_frontend::graph::Tensor("V").set_dim(v_dim).set_stride(v_stride));
     bmm2.insert_tensor(cudnn_frontend::graph::Tensor("O").set_dim(o_dim).set_stride(o_stride));
+    bmm2.insert_tensor(cudnn_frontend::graph::Tensor("SQ").set_dim(seqlen_dim).set_stride(seqlen_stride).set_data_type(cudnn_frontend::DataType_t::INT32));
+    bmm2.insert_tensor(cudnn_frontend::graph::Tensor("SK").set_dim(seqlen_dim).set_stride(seqlen_stride).set_data_type(cudnn_frontend::DataType_t::INT32));
 
     auto matmul = cudnn_frontend::graph::Matmul("bmm2")
                     .map_port_to_tensor({
                         {cudnn_frontend::graph::Matmul::PORTS::A, "S"}
                         , {cudnn_frontend::graph::Matmul::PORTS::B, "V"}
                         , {cudnn_frontend::graph::Matmul::PORTS::C, "O"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::A_OVERRIDE, "SQ"}
+                        , {cudnn_frontend::graph::Matmul::PORTS::C_OVERRIDE, "SK"}
                     });
     bmm2.insert_node(matmul);
 
     return bmm2;
-
-                            // .setmOverrideDesc(seqlenQTensor)
-                            // .setkOverrideDesc(seqlenKTensor)
 }
 
 
@@ -277,12 +274,12 @@ TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
     int64_t s_q = 512; // q tensor is padded to this seq length
     int64_t s_kv = 512; // k and v tensor is padded to this seq length
     int64_t d = 64;  // hidden dim
-    bool should_mask = true;
+    bool should_mask = false;
     bool should_dump_softmax_output = true;
 
     cudnn_frontend::graph::Graph mha_graph("mha");
     auto BMM1_graph = build_BMM1_graph(b, h, s_q, s_kv, d);
-    auto mask_graph = build_mask_graph(b, h, s_q, s_kv);
+    // auto mask_graph = build_mask_graph(b, h, s_q, s_kv);
     auto softmax_graph = build_softmax_graph(b, h, s_q, s_kv, d, should_dump_softmax_output);
     bool should_read_from_gmem = should_dump_softmax_output;
     auto BMM2_graph = build_BMM2_graph(b, h, s_q, s_kv, d, should_read_from_gmem);
@@ -292,12 +289,12 @@ TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
     connections.clear();
     mha_graph.insert_graph(BMM1_graph, connections);
     
-    connections.clear();
-    connections["P"] = "P";
-    mha_graph.insert_graph(mask_graph, connections);
+    // connections.clear();
+    // connections["P"] = "P";
+    // mha_graph.insert_graph(mask_graph, connections);
 
     connections.clear();
-    connections["M_O"] = "M_O";
+    connections["P"] = "P";
     mha_graph.insert_graph(softmax_graph, connections);
     
     connections.clear();
@@ -319,7 +316,6 @@ TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
 
     auto plans = mha_graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == mha_graph.set_executor(plans));
 
@@ -331,34 +327,37 @@ TEST_CASE("MHA Fprop Graphs", "[graph][mha]") {
     void* devPtrV = (qkvTensor.devPtr + 2 * h * d);
     void* devPtrO = oTensor.devPtr;
 
+    Surface<int32_t> devActualSeqlenQ(b, false);
+    Surface<int32_t> devActualSeqlenK(b, false);
+    std::vector<int32_t> hostActualSeqlenQ(b, 20);
+    std::vector<int32_t> hostActualSeqlenK(b, 20);
+
+    checkCudaErr(cudaMemcpy(devActualSeqlenQ.devPtr, hostActualSeqlenQ.data(), sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devActualSeqlenK.devPtr, hostActualSeqlenK.data(), sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
     std::unordered_map<std::string, void*> variant_pack = {
         {"Q", devPtrQ}
         , {"K", devPtrK}
+        , {"SQ", devActualSeqlenQ.devPtr}
+        , {"SK", devActualSeqlenK.devPtr}
         , {"V", devPtrV}
         , {"O", devPtrO}
     };
 
     if(should_mask) {
-        Surface<int> devActualSeqlenQ(b, false);
-        Surface<int> devActualSeqlenK(b, false);
-        std::vector<int> hostActualSeqlenQ(b, 128);
-        std::vector<int> hostActualSeqlenK(b, 128);
-
-        checkCudaErr(cudaMemcpy(devActualSeqlenQ.devPtr, hostActualSeqlenQ.data(), sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
-        checkCudaErr(cudaMemcpy(devActualSeqlenK.devPtr, hostActualSeqlenK.data(), sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
-        checkCudaErr(cudaDeviceSynchronize());
-        variant_pack["SQ"] = devActualSeqlenQ.devPtr;
-        variant_pack["SK"] = devActualSeqlenK.devPtr;
-    
         float negInfinity = std::numeric_limits<float>::min();
         variant_pack["VAL"] = &negInfinity;
     }
+    
+    Surface<half> sTensor(b * h * s_q * s_kv, false);
     if(should_dump_softmax_output) {
-        Surface<half> sTensor(b * h * s_q * s_kv, false);
         variant_pack["S"] = sTensor.devPtr;
     }
     
-    REQUIRE(cudnn_frontend::error_t::OK == mha_graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == mha_graph.execute(handle, variant_pack));
 
     checkCudaErr(cudaDeviceSynchronize());
+
+    cudnnDestroy(handle);
 }

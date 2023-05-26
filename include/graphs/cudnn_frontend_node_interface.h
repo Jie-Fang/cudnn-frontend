@@ -53,7 +53,7 @@ protected:
     }
 
     virtual error_t createOperationGraphs(cudnnHandle_t) = 0;
-    virtual error_t createExecutionPlans() = 0;
+    virtual error_t createExecutionPlans(cudnnHandle_t) = 0;
 
     virtual error_t createOperations() {
         for(auto const& sub_node: sub_nodes) {
@@ -163,7 +163,7 @@ public:
             return status;
         }
 
-        status = createExecutionPlans();
+        status = createExecutionPlans(handle);
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to buildExecutionPlans in " << name << std::endl;
             return status;
@@ -180,7 +180,7 @@ public:
         return current_workspace_size;
     }
 
-    error_t execute(std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
+    error_t execute(cudnnHandle_t handle, std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         void* workspace_ptr = nullptr;
 
@@ -193,7 +193,7 @@ public:
             }
         }
         
-        auto status = execute_cudnn_plans(tensor_uid_to_pointer_map, workspace_ptr);
+        auto status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace_ptr);
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
             return status;
@@ -429,7 +429,7 @@ protected:
 
         getLogger() << "Operation Graph has " << operation_names.size() << " operations." << std::endl;
 
-        auto status = create_cudnn_operation_graphs({operation_names}, handle);
+        auto status = create_cudnn_operation_graphs(handle, {operation_names});
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
             return status;
@@ -439,10 +439,11 @@ protected:
         return error_t::OK;
     }
 
-    error_t createExecutionPlans() override final {
+    error_t createExecutionPlans(cudnnHandle_t handle) override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Creating Execution Plans..." << std::endl;
 
-        // auto status = create_cudnn_execution_plan();
+        (void)handle;
+        // auto status = create_cudnn_execution_plan(handle);
         // if(status != error_t::OK) {
         //     getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
         //     return status;

@@ -100,7 +100,7 @@ public:
     }
 
     int64_t get_workspace_size();
-    error_t execute(std::unordered_map<std::string, void *>);
+    error_t execute(cudnnHandle_t handle, std::unordered_map<std::string, void *>);
 
     friend std::ostream& operator<<(std::ostream& os, const Graph& props);
     
@@ -564,8 +564,8 @@ inline error_t Graph::build(cudnnHandle_t handle) {
     return status;
 }
 
-inline error_t Graph::execute(std::unordered_map<std::string, void *> var_pack) {
-    auto status = flat_node.execute(var_pack);
+inline error_t Graph::execute(cudnnHandle_t handle, std::unordered_map<std::string, void *> var_pack) {
+    auto status = flat_node.execute(handle, var_pack);
     if(status != error_t::OK) {
         getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
         return status;

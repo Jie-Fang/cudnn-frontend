@@ -70,7 +70,6 @@ TEST_CASE("SGBN Graph", "[batchnorm][graph]") {
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
     auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
@@ -104,7 +103,9 @@ TEST_CASE("SGBN Graph", "[batchnorm][graph]") {
         , {"Y", Y_tensor.devPtr}
         , {"workspace", workspace.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+
+    cudnnDestroy(handle);
 }
 
 TEST_CASE("SGBN Relu Graph", "[batchnorm][graph]") {
@@ -161,7 +162,6 @@ TEST_CASE("SGBN Relu Graph", "[batchnorm][graph]") {
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
     auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
@@ -195,7 +195,9 @@ TEST_CASE("SGBN Relu Graph", "[batchnorm][graph]") {
         , {"output", Y_tensor.devPtr}
         , {"workspace", workspace.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+
+    cudnnDestroy(handle);
 }
 
 TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
@@ -260,10 +262,10 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
+    
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
     auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
                     .build_plans(handle);
-    cudnnDestroy(handle);
 
     REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
 
@@ -299,5 +301,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         , {"output", Y_tensor.devPtr}
         , {"workspace", workspace.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(variant_pack));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+
+    cudnnDestroy(handle);
 }
