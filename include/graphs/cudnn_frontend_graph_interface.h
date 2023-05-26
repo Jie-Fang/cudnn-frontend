@@ -293,6 +293,7 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
 
     for(auto itr: other_graph.nodes) {
         // Apply other_graph's properties before inserting into this graph.
+        getLogger() << "[cudnn_frontend] INFO: Adding " << itr.first << " node to larger graph." << std::endl;
         switch (itr.second->get_tag()) {
             case Operation::Tag::Batchnorm: {
                 std::static_pointer_cast<Batchnorm>(itr.second)->fill_from_context(other_graph.get_context());
@@ -404,29 +405,32 @@ inline error_t Graph::infer_properties() {
             case Operation::Tag::Pointwise: {
                 auto pointwise_node = std::static_pointer_cast<Pointwise>(node.second); 
                 auto const port_count = get_pointwise_mode_port_count(pointwise_node->get_mode());
-                if(port_count == 3) {
-                    auto &y_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::OUT_0));
-                    auto &x_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_0));
+                
+                auto &y_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::OUT_0));
+                auto &x_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_0));
+            
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(pointwise_node->get_name());
+                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(pointwise_node->get_name());
+                
+                incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(x_tensor->get_name());
+                outgoing_tensors_for_nodes[pointwise_node->get_name()].push_back(y_tensor->get_name());
+                
+                if(port_count >= 3) {
                     auto &b_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_1));
                 
-                    outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(pointwise_node->get_name());
                     outgoing_nodes_for_tensors[b_tensor->get_name()].push_back(pointwise_node->get_name());
-                    incoming_nodes_for_tensors[y_tensor->get_name()].push_back(pointwise_node->get_name());
                 
-                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(x_tensor->get_name());
                     incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(b_tensor->get_name());
-                    outgoing_tensors_for_nodes[pointwise_node->get_name()].push_back(y_tensor->get_name());
                 }
-                else if(port_count == 2) {
-                    auto &y_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::OUT_0));
-                    auto &x_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_0));
+
+                if(port_count >= 4) {
+                    auto &t_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_2));
                 
-                    outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(pointwise_node->get_name());
-                    incoming_nodes_for_tensors[y_tensor->get_name()].push_back(pointwise_node->get_name());
-                    
-                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(x_tensor->get_name());
-                    outgoing_tensors_for_nodes[pointwise_node->get_name()].push_back(y_tensor->get_name());
+                    outgoing_nodes_for_tensors[t_tensor->get_name()].push_back(pointwise_node->get_name());
+                
+                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(t_tensor->get_name());
                 }
+
                 break;
             }
             case Operation::Tag::Reduction: {

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <numeric>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -408,6 +409,7 @@ public:
     enum PORTS {
         IN_0,
         IN_1,
+        IN_2,
         OUT_0,
 
         COUNT
@@ -415,6 +417,7 @@ public:
 
 private:
     PointwiseMode_t mode;
+    std::optional<int64_t> axis;
 public:
     bool is_mode_set;
 
@@ -424,6 +427,7 @@ public:
     Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {
         port_to_name[PORTS::IN_0] = name + "::IN_0";
         port_to_name[PORTS::IN_1] = name + "::IN_1";
+        port_to_name[PORTS::IN_2] = name + "::IN_2";
         port_to_name[PORTS::OUT_0] = name + "::OUT_0";
     }
 
@@ -447,6 +451,15 @@ public:
     Pointwise& set_mode(PointwiseMode_t value) {
         mode = value;
         is_mode_set = true;
+        return *this;
+    }
+    
+    std::optional<int64_t> get_axis() const {
+        return axis;
+    }
+
+    Pointwise& set_axis(int64_t const axis) {
+        this->axis = axis;
         return *this;
     }
 

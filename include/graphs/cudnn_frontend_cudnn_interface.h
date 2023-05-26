@@ -205,6 +205,10 @@ public:
             std::vector<void *> device_ptrs;
             std::vector<int64_t> uids;
             for(auto const& uid: variant_pack_uid) {
+                if (auto search = tensor_uid_to_pointer_map.find(uid); search == tensor_uid_to_pointer_map.end()) {
+                    getLogger() << "[cudnn_frontend] ERROR: " << uid << " does not exist in variant pack." << std::endl;
+                    return error_t::INVALID_VARIANT_PACK;
+                }
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
                 uids.push_back(uid);
             }

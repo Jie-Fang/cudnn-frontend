@@ -204,7 +204,7 @@ class PointWiseDescBuilder_v8 {
 
     //! constructs the PointWiseDesc_v8 by calling the cudnn API
     //! Throws the appropriate error message
-    PointWiseDesc_v8 &&
+    PointWiseDesc_v8
     build() {
         // Create a descriptor. Memory allocation happens here.
         auto status = m_pointWiseDesc.initialize_managed_backend_pointer(CUDNN_BACKEND_POINTWISE_DESCRIPTOR);
