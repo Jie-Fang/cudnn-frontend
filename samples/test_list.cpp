@@ -30,7 +30,6 @@
 #include "fp8_sample.h"
 #include "fp8_flash_mha_sample.h"
 #include "f16_flash_mha_sample.h"
-#include "mha_sample.h"
 #include "fused_mha_sample.h"
 #include "norm_samples.h"
 
@@ -1405,63 +1404,6 @@ TEST_CASE("Use Plan cache for rerunning the same convolution", "[frontend][dnn_h
         if (diff < 0) diff = -diff;
         if (diff > THRESHOLD) { numErrors++;}
     }
-    REQUIRE(numErrors == 0);
-}
-
-TEST_CASE("Multihead attention sample", "[frontend][fusion][MultiHeadAttention]") {
-    std::cout << "TEST_CASE :: Sample Multihead Attention runtime fusion code with backend API" << std::endl;
-    INFO("TEST_CASE :: Sample Multihead Attention runtime fusion code with backend API");
-
-    int numErrors = 0;
-
-#if (CUDNN_VERSION >= 8301)
-    const int64_t inputSize  = 8; // 1024;
-    const int64_t outputSize = 8; // 1024;
-    const int64_t headSize   = 8;  // 64;
-    const int64_t seqLength  = 2;  // 128;
-    const int64_t numHeads   = 1;  // 16;
-    const int64_t batchSize  = 1;  // 32;
-
-    const int64_t inputTensorSize     = inputSize * seqLength * batchSize;
-    const int64_t outputTensorSize    = outputSize * seqLength * batchSize;
-    const int64_t QKVWeightTensorSize = inputSize * headSize * numHeads;    // To generate Q, K, V
-    const int64_t QKVBiasTensorSize   = headSize * numHeads;                // Add to Q, K, V
-    const int64_t OWeightTensorSize   = outputSize * headSize * numHeads;   // To generate final output
-    const int64_t OBiasTensorSize     = outputSize;                         // Add to final output
-
-    const int64_t totalWeightsAndBiasesSize = (QKVWeightTensorSize + QKVBiasTensorSize) * 3 + OWeightTensorSize + OBiasTensorSize;
-
-    Surface<half> input(inputTensorSize, false);
-    Surface<half> output(outputTensorSize, true);
-    Surface<half> weightsAndBiases(totalWeightsAndBiasesSize, false);
-
-    half const *QKVWeight = reinterpret_cast<half const *>(weightsAndBiases.devPtr);
-    half const *OWeight = reinterpret_cast<half const *>(weightsAndBiases.devPtr) + QKVWeightTensorSize * 3;
-    half const *QKVBias   = reinterpret_cast<half const *>(weightsAndBiases.devPtr) + QKVWeightTensorSize * 3 + OWeightTensorSize;
-    half const *OBias   = reinterpret_cast<half const *>(weightsAndBiases.devPtr) + QKVWeightTensorSize * 3 + OWeightTensorSize + QKVBiasTensorSize * 3;
-
-    cudaMemset(output.devPtr, 0, sizeof(output.hostPtr[0]) * outputTensorSize);
-
-    // Call multiHeadAttention sample
-    multiHeadAttention(inputSize,
-                       headSize,
-                       seqLength,
-                       numHeads,
-                       batchSize,
-                       outputSize,
-                       CUDNN_DATA_HALF,
-                       input.devPtr,
-                       QKVWeight,
-                       OWeight,
-                       QKVBias,
-                       OBias,
-                       output.devPtr);
-
-    checkCudaErr(cudaDeviceSynchronize());
-    checkCudaErr(cudaMemcpy(output.hostPtr, output.devPtr, (size_t)(sizeof(output.hostPtr[0]) * outputTensorSize), cudaMemcpyDeviceToHost));
-    checkCudaErr(cudaDeviceSynchronize());
-
-#endif
     REQUIRE(numErrors == 0);
 }
 
