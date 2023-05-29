@@ -39,6 +39,10 @@ void throw_if(bool const cond, cudnn_frontend::error_t const error_code, std::st
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_t::HEURISTIC_QUERY_FAILED:
             throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_t::INVALID_CUDA_DEVICE:
+            throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_t::UNSUPPORTED_GRAPH_FORMAT:
+            throw std::runtime_error(error_msg);
     }
 }
 

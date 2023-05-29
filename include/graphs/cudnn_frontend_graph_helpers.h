@@ -21,6 +21,8 @@ enum class [[nodiscard]] error_t {
     , GRAPH_EXECUTION_PLAN_CREATION_FAILED
     , GRAPH_EXECUTION_FAILED
     , HEURISTIC_QUERY_FAILED
+    , UNSUPPORTED_GRAPH_FORMAT
+    , INVALID_CUDA_DEVICE
 };
 
 #define CHECK_CUDNN_FRONTEND_ERROR(x) do { \
@@ -58,6 +60,12 @@ static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
         case error_t::HEURISTIC_QUERY_FAILED:
             os << "HEURISTIC_QUERY_FAILED";
             break;
+        case error_t::INVALID_CUDA_DEVICE:
+            os << "INVALID_CUDA_DEVICE";
+            break;
+        case error_t::UNSUPPORTED_GRAPH_FORMAT:
+            os << "UNSUPPORTED_GRAPH_FORMAT";
+            break;
     }
     return os;
 }
@@ -90,7 +98,7 @@ namespace detail {
             compute_data_type = type;
             return *this;
         }
-        
+
         DataType_t get_io_data_type() const {
             return io_data_type;
         }
@@ -116,7 +124,7 @@ namespace detail {
             return *this;
         }
     };
-    
+
     static inline std::ostream& operator<<(std::ostream& os, const Context& context) {
         os << "compute_data_type: " << context.get_compute_data_type() << ", intermediate_data_type: " << context.get_intermediate_data_type() << ", io_data_type: " << context.get_io_data_type() << std::endl;
         return os;

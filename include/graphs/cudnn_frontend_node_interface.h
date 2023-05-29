@@ -38,7 +38,6 @@ protected:
     };
     Type tag;
 
-    virtual Type getType() = 0;
     detail::Context context;
 
     virtual error_t createTensors() {
@@ -78,6 +77,7 @@ public:
     std::string name;
     int offset = 1;
 
+    virtual Type getType() = 0;
     // Tensors belonging to each node.
     // Connecting nodes can modify and delete tensors in this container.
     std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> tensor_props;
