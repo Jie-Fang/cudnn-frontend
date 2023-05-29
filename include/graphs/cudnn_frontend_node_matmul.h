@@ -109,14 +109,14 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::A)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::B)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::C)));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::A))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::B))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Matmul::PORTS::C))));
         
         for(auto const port: {Matmul::PORTS::A_OVERRIDE, Matmul::PORTS::B_OVERRIDE, Matmul::PORTS::C_OVERRIDE}) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
             if(tensor_prop != nullptr) {
-                create_cudnn_tensor(tensor_prop);
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor_prop));
             }
         }
         getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors." << std::endl;

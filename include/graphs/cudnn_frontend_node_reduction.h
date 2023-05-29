@@ -68,8 +68,8 @@ public:
     error_t createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Building ReductionNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y)));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y))));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ReductionNode tensors." << std::endl;
 

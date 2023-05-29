@@ -118,19 +118,19 @@ public:
     error_t createTensors() override final {
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0)));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0))));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0)));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::OUT_0))));
         
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count >= 3) {
             getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors B:" << std::endl;
-            create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_1)));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_1))));
         }
         if(port_count >= 4) {
             getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors T:" << std::endl;
-            create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_2)));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_2))));
         }
 
         return error_t::OK;

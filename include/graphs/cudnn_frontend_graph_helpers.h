@@ -11,7 +11,8 @@
 namespace cudnn_frontend {
 
 using op_graph_to_engine_configs = std::unordered_map<std::string, EngineConfigList>;
-enum class error_t {
+
+enum class [[nodiscard]] error_t {
     OK
     , ATTRIBUTE_NOT_SET
     , SHAPE_DEDUCTION_FAILED
@@ -21,6 +22,14 @@ enum class error_t {
     , GRAPH_EXECUTION_FAILED
     , HEURISTIC_QUERY_FAILED
 };
+
+#define CHECK_CUDNN_FRONTEND_ERROR(x) do { \
+  error_t retval = (x); \
+  if (retval != error_t::OK) { \
+    getLogger() << "[cudnn_frontend] ERROR: " << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__; \
+    return retval; \
+  } \
+} while (0)
 
 static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
     switch (mode)

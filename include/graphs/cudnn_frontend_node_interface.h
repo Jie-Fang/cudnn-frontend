@@ -84,21 +84,6 @@ public:
 
     INode* parent_node;
     std::unordered_map <std::string, std::shared_ptr<INode>> sub_nodes;
-    
-    error_t set_intermediate_data_type(DataType_t const type) {
-        context.set_intermediate_data_type(type);
-        return error_t::OK;
-    }
-
-    error_t set_io_data_type(DataType_t const type) {
-        context.set_io_data_type(type);
-        return error_t::OK;
-    }
-
-    error_t set_compute_data_type(DataType_t const type) {
-        context.set_compute_data_type(type);
-        return error_t::OK;
-    }
 
     detail::Context& get_context() {
         return context;
@@ -487,7 +472,7 @@ public:
         }
 
         getLogger() << "[cudnn_frontend] INFO: Querying engine config properties." << std::endl;
-        plan_list.query_properties();
+        CHECK_CUDNN_FRONTEND_ERROR(plan_list.query_properties());
 
         return error_t::OK;
     }

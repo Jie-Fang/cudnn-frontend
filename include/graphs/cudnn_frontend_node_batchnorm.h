@@ -126,14 +126,14 @@ public:
             }
             return error_t::OK;
         };
-        validate_per_channel_tensors(Batchnorm::PORTS::Mean);
-        validate_per_channel_tensors(Batchnorm::PORTS::Var);
-        validate_per_channel_tensors(Batchnorm::PORTS::Next_running_mean);
-        validate_per_channel_tensors(Batchnorm::PORTS::Next_running_var);
-        validate_per_channel_tensors(Batchnorm::PORTS::Previous_running_mean);
-        validate_per_channel_tensors(Batchnorm::PORTS::Previous_running_var);
-        validate_per_channel_tensors(Batchnorm::PORTS::Scale);
-        validate_per_channel_tensors(Batchnorm::PORTS::Bias);
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Mean));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Var));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Next_running_mean));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Next_running_var));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Previous_running_mean));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Previous_running_var));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Scale));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(Batchnorm::PORTS::Bias));
 
         auto validate_scalars = [this] (Batchnorm::PORTS const port) {
             auto tensor_prop = get_tensor_props(props->get_tensor_at_port(port));
@@ -148,8 +148,8 @@ public:
             }
             return error_t::OK;
         };
-        validate_scalars(Batchnorm::PORTS::EPS);
-        validate_scalars(Batchnorm::PORTS::EXP_AVG);
+        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(Batchnorm::PORTS::EPS));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(Batchnorm::PORTS::EXP_AVG));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormNode." << std::endl;
         return error_t::OK;
@@ -159,18 +159,18 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building BatchNormNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Mean)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Var)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Previous_running_mean)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Previous_running_var)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Next_running_mean)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Next_running_var)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::EPS)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Scale)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Bias)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Y)));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::X))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Mean))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Var))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Previous_running_mean))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Previous_running_var))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Next_running_mean))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Next_running_var))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::EPS))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Scale))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Bias))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Batchnorm::PORTS::Y))));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built BatchNormNode tensors." << std::endl;
 

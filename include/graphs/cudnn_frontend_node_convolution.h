@@ -110,9 +110,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W)));
-        create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y)));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y))));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 

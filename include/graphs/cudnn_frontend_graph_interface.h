@@ -26,17 +26,32 @@ class Plans {
 };
 
 inline Plans& Plans::filter_by_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
-    list_of_engine_configs.filter_by_behavior_notes(notes);
+    // TODO: The error returned is not propagate to user.
+    // Should the return value be changed to error_t too?
+    auto status = list_of_engine_configs.filter_by_behavior_notes(notes);
+    if(status != error_t::OK) {
+        getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl; 
+    }
     return *this;
 }
 
 inline Plans& Plans::filter_by_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
-    list_of_engine_configs.filter_by_numeric_notes(notes);
+    // TODO: The error returned is not propagate to user.
+    // Should the return value be changed to error_t too?
+    auto status = list_of_engine_configs.filter_by_numeric_notes(notes);
+    if(status != error_t::OK) {
+        getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl; 
+    }
     return *this;
 }
 
 inline Plans& Plans::build_plans(cudnnHandle_t h){
-    list_of_engine_configs.build_plans(h);
+    // TODO: The error returned is not propagate to user.
+    // Should the return value be changed to error_t too?
+    auto status = list_of_engine_configs.build_plans(h);
+    if(status != error_t::OK) {
+        getLogger() << "[cudnn_frontend] ERROR: Plan building failed." << std::endl; 
+    }
     return *this;
 }
 
@@ -90,12 +105,11 @@ public:
     Plans
     get_execution_plan_list(HeurMode_t mode);
 
-    error_t
-    set_executor(Plans const & plan) {
+    error_t set_executor(Plans const & plan) {
         if (plan.list_of_engine_configs.get_candidate() == nullptr) {
             return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
         }
-        flat_node.set_executor(plan.list_of_engine_configs);
+        CHECK_CUDNN_FRONTEND_ERROR(flat_node.set_executor(plan.list_of_engine_configs));
         return error_t::OK;
     }
 
@@ -125,22 +139,27 @@ inline Graph::Graph(std::string name) : name(name) {}
 
 inline Plans Graph::get_execution_plan_list(HeurMode_t mode) {
     Plans plan_list;
-    flat_node.get_engine_configs(mode, plan_list.list_of_engine_configs);
+    // TODO: The error returned is not propagate to user.
+    // Should the return value be changed to error_t too?
+    auto status = flat_node.get_engine_configs(mode, plan_list.list_of_engine_configs);
+    if(status != error_t::OK) {
+        getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl; 
+    }
     return plan_list;
 }
 
 inline Graph& Graph::set_intermediate_data_type(DataType_t const type) {
-    flat_node.set_intermediate_data_type(type);
+    get_context().set_intermediate_data_type(type);
     return *this;
 }
 
 inline Graph& Graph::set_io_data_type(DataType_t const type) {
-    flat_node.set_io_data_type(type);
+    get_context().set_io_data_type(type);
     return *this;
 }
 
 inline Graph& Graph::set_compute_data_type(DataType_t const type) {
-    flat_node.set_compute_data_type(type);
+    get_context().set_compute_data_type(type);
     return *this;
 }
 
@@ -484,7 +503,7 @@ inline error_t Graph::infer_properties() {
     getLogger() << std::endl;
 
     for(std::string const& node: sorted_nodes) {
-        flat_node.sub_nodes[node]->infer_properties();
+        CHECK_CUDNN_FRONTEND_ERROR(flat_node.sub_nodes[node]->infer_properties());
     }
 
     return error_t::OK;
@@ -495,8 +514,6 @@ inline int64_t Graph::get_workspace_size() {
 }
 
 inline error_t Graph::build(cudnnHandle_t handle) {
-    auto status = error_t::OK;
-
     flat_node.tensor_props = tensors;
     
     for (auto &node : nodes) {
@@ -549,29 +566,16 @@ inline error_t Graph::build(cudnnHandle_t handle) {
         }
     }
 
-    status = infer_properties();
-    if(status != error_t::OK) {
-        getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
-        return status;
-    }
+    CHECK_CUDNN_FRONTEND_ERROR(infer_properties());    
+    CHECK_CUDNN_FRONTEND_ERROR(flat_node.build(handle));
 
-    status = flat_node.build(handle);
-    if(status != error_t::OK) {
-        getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
-        return status;
-    }
-
-    return status;
+    return error_t::OK;
 }
 
 inline error_t Graph::execute(cudnnHandle_t handle, std::unordered_map<std::string, void *> var_pack) {
-    auto status = flat_node.execute(handle, var_pack);
-    if(status != error_t::OK) {
-        getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
-        return status;
-    }
-
-    return status;
+    CHECK_CUDNN_FRONTEND_ERROR(flat_node.execute(handle, var_pack));
+    
+    return error_t::OK;
 }
 
 } // namespace graph
