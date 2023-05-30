@@ -101,10 +101,12 @@ public:
     Graph& set_intermediate_data_type(DataType_t type);
     Graph& set_io_data_type(DataType_t type);
     Graph& set_compute_data_type(DataType_t type);
-
+    
+    std::shared_ptr<Tensor> tensor(Tensor const& tensor);
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
+    std::shared_ptr<Tensor> conv(Convolution& tensor);
     Graph& insert_node(Operation const& props);
 
     Graph& insert_graph(Graph& other_graph, std::unordered_map<std::string, std::string> const& connections);
@@ -124,6 +126,7 @@ public:
     }
 
     int64_t get_workspace_size();
+    error_t execute(cudnnHandle_t handle, std::unordered_map<std::shared_ptr<Tensor>, void *>);
     error_t execute(cudnnHandle_t handle, std::unordered_map<std::string, void *>);
 
     friend std::ostream& operator<<(std::ostream& os, const Graph& props);
@@ -177,6 +180,12 @@ inline detail::Context& Graph::get_context() {
     return flat_node.get_context();
 }
 
+inline std::shared_ptr<Tensor> Graph::tensor(Tensor const& tensor) {
+    auto tensor_ptr = std::make_shared<Tensor>(tensor);
+    tensors.emplace(tensor.get_name(), tensor_ptr);
+    return tensor_ptr;
+}
+
 inline Graph& Graph::insert_tensor_(std::shared_ptr<Tensor> tensor_ptr) {
     tensors.emplace(tensor_ptr->get_name(), tensor_ptr);
     return *this;
@@ -187,7 +196,17 @@ inline Graph& Graph::insert_tensor(Tensor const& props) {
     return *this;
 }
 
-inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
+inline std::shared_ptr<Tensor> Graph::conv(Convolution& conv) {
+
+    auto output_ptr = std::make_shared<Tensor>("conv_output");
+    tensors.emplace(output_ptr->get_name(), output_ptr);
+    conv.set_output(output_ptr);
+    nodes.emplace(conv.get_name(), std::make_shared<Convolution>(conv));
+
+    return output_ptr;
+}
+
+inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {    
     switch (node_ptr->get_tag()) {
         case Operation::Tag::Batchnorm:{
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm>(node_ptr));
@@ -1006,6 +1025,12 @@ inline error_t Graph::build(cudnnHandle_t handle) {
         CHECK_CUDNN_FRONTEND_ERROR(validate(handle));
     }
     CHECK_CUDNN_FRONTEND_ERROR(flat_node.build(handle));
+    return error_t::OK;
+}
+
+inline error_t Graph::execute(cudnnHandle_t handle, std::unordered_map<std::shared_ptr<Tensor>, void *> var_pack) {
+    CHECK_CUDNN_FRONTEND_ERROR(flat_node.execute(handle, var_pack));
+    
     return error_t::OK;
 }
 

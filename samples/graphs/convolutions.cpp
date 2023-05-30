@@ -25,6 +25,39 @@
 
 #include <cudnn_frontend.h>
 
+TEST_CASE("Conv Functional API", "[conv][graph]") {
+    cudnn_frontend::graph::Graph graph("conv");
+    graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+
+    auto image = graph.tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 32, 16, 16}));
+    auto filter = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({64, 32, 3, 3}));
+    
+    auto response = graph.conv(cudnn_frontend::graph::Convolution("conv").set_input(image).set_weight(filter).set_padding({1,1}).set_stride({1,1}).set_dilation({1,1}));
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
+
+    Surface<half> x_tensor(4*32*16*16, false);
+    Surface<half> w_tensor(64*32*3*3, false);
+    Surface<half> y_tensor(4*64*3*3, false);
+
+    std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void*> variant_pack = {
+        {image, x_tensor.devPtr}
+        , {filter, w_tensor.devPtr}
+        , {response, y_tensor.devPtr}
+    };
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    cudnnDestroy(handle);
+}
+
 TEST_CASE("Convolution SBR Graph", "[conv][graph]") {
     cudnn_frontend::graph::Graph graph("conv_sbr");
     graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)

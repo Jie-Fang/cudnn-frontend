@@ -543,6 +543,21 @@ public:
         return *this;
     }
 
+    Convolution& set_input(std::shared_ptr<Tensor> tensor) {
+        port_to_name[PORTS::X] = tensor->get_name();
+        return *this;
+    }
+
+    Convolution& set_weight(std::shared_ptr<Tensor> tensor) {
+        port_to_name[PORTS::W] = tensor->get_name();
+        return *this;
+    }
+
+    Convolution& set_output(std::shared_ptr<Tensor> tensor) {
+        port_to_name[PORTS::Y] = tensor->get_name();
+        return *this;
+    }
+
     friend std::ostream& operator<<(std::ostream& os, const Convolution& props);
 };
 

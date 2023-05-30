@@ -170,6 +170,28 @@ public:
         return current_workspace_size;
     }
 
+    error_t execute(cudnnHandle_t handle, std::unordered_map<std::shared_ptr<Tensor>, void*> const& tensor_to_pointer_map) {
+        std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
+        void* workspace_ptr = nullptr;
+
+        for (auto const &item : tensor_to_pointer_map) {
+            // if(item.first == "workspace") {
+            //     workspace_ptr = item.second;
+            // }
+            // else {
+                tensor_uid_to_pointer_map.emplace(item.first->get_uid(), item.second);
+            // }
+        }
+        
+        auto status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace_ptr);
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
+            return status;
+        }
+        
+        return status;
+    }
+
     error_t execute(cudnnHandle_t handle, std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         void* workspace_ptr = nullptr;
