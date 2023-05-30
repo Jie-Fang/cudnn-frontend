@@ -35,6 +35,17 @@ TEST_CASE("Conv Functional API", "[conv][graph]") {
     auto filter = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({64, 32, 3, 3}));
     
     auto response = graph.conv(cudnn_frontend::graph::Convolution("conv").set_input(image).set_weight(filter).set_padding({1,1}).set_stride({1,1}).set_dilation({1,1}));
+    response->set_is_virtual(true);
+
+    auto scale = graph.tensor(cudnn_frontend::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
+    auto scale_output = graph.pointwise(cudnn_frontend::graph::Pointwise("scale").set_mode(cudnn_frontend::PointwiseMode_t::MUL).set_inputs({response, scale}));
+    scale_output->set_is_virtual(true);
+
+    auto bias = graph.tensor(cudnn_frontend::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
+    auto bias_output = graph.pointwise(cudnn_frontend::graph::Pointwise("bias").set_mode(cudnn_frontend::PointwiseMode_t::ADD).set_inputs({scale_output, bias}));
+    bias_output->set_is_virtual(true);
+    
+    auto output = graph.pointwise(cudnn_frontend::graph::Pointwise("relu").set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD).set_inputs({bias_output}));
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
@@ -47,12 +58,16 @@ TEST_CASE("Conv Functional API", "[conv][graph]") {
 
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
+    Surface<half> s_tensor(64, false);
+    Surface<half> b_tensor(64, false);
     Surface<half> y_tensor(4*64*3*3, false);
 
     std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void*> variant_pack = {
         {image, x_tensor.devPtr}
         , {filter, w_tensor.devPtr}
-        , {response, y_tensor.devPtr}
+        , {scale, s_tensor.devPtr}
+        , {bias, b_tensor.devPtr}
+        , {output, y_tensor.devPtr}
     };
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
     cudnnDestroy(handle);

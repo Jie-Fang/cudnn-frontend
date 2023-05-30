@@ -842,6 +842,24 @@ public:
         return *this;
     }
 
+    Pointwise& set_inputs(std::vector<std::shared_ptr<Tensor>> tensors) {
+        size_t count = 0;
+        for(auto const port: {PORTS::IN_0, PORTS::IN_1, PORTS::IN_2}) {
+            port_to_name[port] = tensors[count]->get_name();
+            count++;
+            if(count >= tensors.size()) {
+                break;
+            }
+        }
+
+        return *this;
+    }
+
+    Pointwise& set_output(std::shared_ptr<Tensor> tensor) {
+        port_to_name[PORTS::OUT_0] = tensor->get_name();
+        return *this;
+    }
+
     friend std::ostream& operator<<(std::ostream& os, const Pointwise& props);
 };
 

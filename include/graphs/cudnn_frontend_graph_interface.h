@@ -106,7 +106,8 @@ public:
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
-    std::shared_ptr<Tensor> conv(Convolution& tensor);
+    std::shared_ptr<Tensor> conv(Convolution& conv);
+    std::shared_ptr<Tensor> pointwise(Pointwise& pointwise);
     Graph& insert_node(Operation const& props);
 
     Graph& insert_graph(Graph& other_graph, std::unordered_map<std::string, std::string> const& connections);
@@ -198,10 +199,20 @@ inline Graph& Graph::insert_tensor(Tensor const& props) {
 
 inline std::shared_ptr<Tensor> Graph::conv(Convolution& conv) {
 
-    auto output_ptr = std::make_shared<Tensor>("conv_output");
+    auto output_ptr = std::make_shared<Tensor>(conv.get_name() + "_output");
     tensors.emplace(output_ptr->get_name(), output_ptr);
     conv.set_output(output_ptr);
     nodes.emplace(conv.get_name(), std::make_shared<Convolution>(conv));
+
+    return output_ptr;
+}
+
+inline std::shared_ptr<Tensor> Graph::pointwise(Pointwise& pointwise) {
+
+    auto output_ptr = std::make_shared<Tensor>(pointwise.get_name() + "_output");
+    tensors.emplace(output_ptr->get_name(), output_ptr);
+    pointwise.set_output(output_ptr);
+    nodes.emplace(pointwise.get_name(), std::make_shared<Pointwise>(pointwise));
 
     return output_ptr;
 }
