@@ -153,7 +153,7 @@ public:
 
         auto const port_count = get_pointwise_mode_port_count(props->get_mode());
         if(port_count == 4) {
-            auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+            auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
                                             .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
                                             .setbDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_1])))
                                             .settDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_2])))
@@ -177,14 +177,24 @@ public:
             }
         }
         else if(port_count == 3) {
-            auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
-                                            .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
-                                            .setbDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_1])))
-                                            .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::OUT_0])))
-                                            .setpwDesc(pointwise_descriptor)
-                                            .build();
-            operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
-
+            if(props->get_mode() == PointwiseMode_t::RELU_BWD) {
+                auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
+                                                .setdyDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
+                                                .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_1])))
+                                                .setdxDesc(*(tensors.at(props->uids[Pointwise::PORTS::OUT_0])))
+                                                .setpwDesc(pointwise_descriptor)
+                                                .build();
+                operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
+            }
+            else {
+                auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
+                                                .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
+                                                .setbDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_1])))
+                                                .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::OUT_0])))
+                                                .setpwDesc(pointwise_descriptor)
+                                                .build();
+                operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
+            }
             // Push all real tensors as required for operation execution.
             auto const& tensor_props_involved_in_operation = {
                 get_tensor_props(props->get_tensor_at_port(Pointwise::PORTS::IN_0))
@@ -199,7 +209,7 @@ public:
             }
         }
         else if(port_count == 2) {
-            auto pointwise_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR)
+            auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
                                             .setxDesc(*(tensors.at(props->uids[Pointwise::PORTS::IN_0])))
                                             .setyDesc(*(tensors.at(props->uids[Pointwise::PORTS::OUT_0])))
                                             .setpwDesc(pointwise_descriptor)
