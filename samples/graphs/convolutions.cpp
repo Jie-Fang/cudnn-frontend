@@ -90,7 +90,7 @@ TEST_CASE("Convolution SBR Graph", "[conv][graph]") {
     Surface<half> w_tensor(64*32*3*3, false);
     Surface<half> s_tensor(64, false);
     Surface<half> b_tensor(64, false);
-    Surface<half> y_tensor(4*64*3*3, false);
+    Surface<half> y_tensor(4*64*16*16, false);
 
     std::unordered_map<std::string, void*> variant_pack = {
         {"image", x_tensor.devPtr}
@@ -98,6 +98,84 @@ TEST_CASE("Convolution SBR Graph", "[conv][graph]") {
         , {"scale", s_tensor.devPtr}
         , {"bias", b_tensor.devPtr}
         , {"output", y_tensor.devPtr}
+    };
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    cudnnDestroy(handle);
+}
+
+TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
+    cudnn_frontend::graph::Graph graph("wgrad");
+    graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+    
+    auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, "image"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
+                    });
+    graph.insert_node(pw_scale);
+
+    auto pw_bias = cudnn_frontend::graph::Pointwise("pw_bias")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "bias"}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "bias_output"}
+                    });
+    graph.insert_node(pw_bias);
+
+    auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
+                    .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
+                    .map_port_to_tensor({
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "relu_output"}
+                    });
+    graph.insert_node(pw_relu);
+
+    auto wgrad = cudnn_frontend::graph::Wgrad("wgrad")
+                .set_padding({1, 1})
+                .set_stride({1, 1})
+                .set_dilation({1, 1})
+                .map_port_to_tensor({
+                    {cudnn_frontend::graph::Wgrad::PORTS::X, pw_relu.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
+                    , {cudnn_frontend::graph::Wgrad::PORTS::DY, "grad"}
+                    , {cudnn_frontend::graph::Wgrad::PORTS::DW, "output"}
+                });
+    graph.insert_node(wgrad);
+
+    graph.insert_tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 32, 16, 16}))
+         .insert_tensor(cudnn_frontend::graph::Tensor("scale").set_dim({1, 32, 1, 1}))
+         .insert_tensor(cudnn_frontend::graph::Tensor("scale_output").set_is_virtual(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("bias").set_dim({1, 32, 1, 1}))
+         .insert_tensor(cudnn_frontend::graph::Tensor("bias_output").set_is_virtual(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("relu_output").set_is_virtual(true))
+         .insert_tensor(cudnn_frontend::graph::Tensor("grad").set_dim({4, 64, 16, 16}))
+         .insert_tensor(cudnn_frontend::graph::Tensor("output"));
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
+
+    Surface<half> x_tensor(4*32*16*16, false);
+    Surface<half> s_tensor(32, false);
+    Surface<half> b_tensor(32, false);
+    Surface<half> dy_tensor(4*64*16*16, false);
+    Surface<half> dw_tensor(64*32*3*3, false);
+
+    std::unordered_map<std::string, void*> variant_pack = {
+        {"image", x_tensor.devPtr}
+        , {"scale", s_tensor.devPtr}
+        , {"bias", b_tensor.devPtr}
+        , {"grad", dy_tensor.devPtr}
+        , {"output", dw_tensor.devPtr}
     };
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
     cudnnDestroy(handle);

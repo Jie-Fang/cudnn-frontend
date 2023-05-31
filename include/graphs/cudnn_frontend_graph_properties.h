@@ -194,7 +194,8 @@ public:
         Convolution,
         Matmul,
         Pointwise,
-        Reduction
+        Reduction,
+        Wgrad,
     };
 
 protected:
@@ -632,6 +633,116 @@ public:
         return *this;
     }
 };
+
+class Wgrad : public Operation {
+public:
+    enum PORTS {
+        DY,
+        X,
+        DW,
+
+        COUNT
+    };
+private:
+    std::vector<int64_t> padding;
+    std::vector<int64_t> stride;
+    std::vector<int64_t> dilation;
+
+public:
+
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+    Wgrad(const std::string name) : Operation(name, Tag::Wgrad) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::DW] = name + "::W";
+        port_to_name[PORTS::DY] = name + "::DY";
+    }
+
+    Wgrad& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
+        }
+        return *this;
+    }
+
+    std::string get_tensor_at_port(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    Wgrad& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_padding() const {
+        return padding;
+    }
+
+    Wgrad& set_padding(std::vector<int64_t> value) {
+        padding = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_stride() const {
+        return stride;
+    }
+
+    Wgrad& set_stride(std::vector<int64_t> value) {
+        stride = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_dilation() const {
+        return dilation;
+    }
+
+    Wgrad& set_dilation(std::vector<int64_t> value) {
+        dilation = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Wgrad& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Wgrad& props);
+};
+
+inline std::ostream& operator<<(std::ostream& os, const Wgrad& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " dilation: [";
+    for(size_t i = 0; i < props.get_dilation().size(); ++i) {
+        os << props.get_dilation()[i] << ",";
+    }
+    os << "],"
+    << " stride: [";
+    for(size_t i = 0; i < props.get_stride().size(); ++i) {
+        os << props.get_stride()[i] << ",";
+    }
+    os << "],"
+    << " padding: [";
+    for(size_t i = 0; i < props.get_padding().size(); ++i) {
+        os << props.get_padding()[i] << ",";
+    }
+    os << "],"
+    << " ports: [";
+    for(size_t i = 0; i < Wgrad::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Wgrad::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
 
 } // namespace graph
 

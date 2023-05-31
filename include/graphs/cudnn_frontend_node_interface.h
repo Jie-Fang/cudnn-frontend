@@ -35,6 +35,7 @@ protected:
         , POINTWISE
         , REDUCTION
         , RESAMPLE
+        , WGRAD
     };
     Type tag;
 

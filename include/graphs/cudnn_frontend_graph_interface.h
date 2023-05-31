@@ -6,6 +6,7 @@
 #include "graphs/cudnn_frontend_node_convolution.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
+#include "graphs/cudnn_frontend_node_wgrad.h"
 
 #include <graphs/cudnn_frontend_graph_helpers.h>
 
@@ -204,6 +205,10 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Reduction>(node_ptr));
             break;
         }
+        case Operation::Tag::Wgrad:{
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Wgrad>(node_ptr));
+            break;
+        }
     }
 
     return *this;
@@ -229,6 +234,10 @@ inline Graph& Graph::insert_node(Operation const& props) {
         }
         case Operation::Tag::Reduction:{
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Reduction>((Reduction&)props)));
+            break;
+        }
+        case Operation::Tag::Wgrad:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Wgrad>((Wgrad&)props)));
             break;
         }
     }
@@ -311,6 +320,14 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                     }
                     break;
                 }
+                case Operation::Tag::Wgrad:{
+                    for(auto& itr: std::static_pointer_cast<Wgrad>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
             }
         }
     }
@@ -337,6 +354,10 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
             }
             case Operation::Tag::Reduction: {
                 std::static_pointer_cast<Reduction>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Wgrad: {
+                std::static_pointer_cast<Wgrad>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
             }
         }
@@ -467,6 +488,21 @@ inline error_t Graph::infer_properties() {
 
                 incoming_tensors_for_nodes[reduction_node->get_name()].push_back(x_tensor->get_name());
                 outgoing_tensors_for_nodes[reduction_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Wgrad: {
+                auto conv_node = std::static_pointer_cast<Wgrad>(node.second);
+                auto &dy_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::DY));
+                auto &x_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::X));
+                auto &dw_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::DW));
+
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(conv_node->get_name());
+                outgoing_nodes_for_tensors[dy_tensor->get_name()].push_back(conv_node->get_name());
+                incoming_nodes_for_tensors[dw_tensor->get_name()].push_back(conv_node->get_name());
+
+                incoming_tensors_for_nodes[conv_node->get_name()].push_back(x_tensor->get_name());
+                incoming_tensors_for_nodes[conv_node->get_name()].push_back(dy_tensor->get_name());
+                outgoing_tensors_for_nodes[conv_node->get_name()].push_back(dw_tensor->get_name());
                 break;
             }
         }
@@ -710,6 +746,15 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 reduction_node->props = std::static_pointer_cast<Reduction>(node.second);
                 reduction_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = reduction_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Wgrad: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node.first << std::endl;
+                auto wgrad_node = std::make_shared<WgradNode>(node.first, uid_offset);
+                wgrad_node->props = std::static_pointer_cast<Wgrad>(node.second);
+                wgrad_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = wgrad_node;
                 uid_offset += 100;
                 break;
             }
