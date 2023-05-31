@@ -220,6 +220,13 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
          .insert_tensor(cudnn_frontend::graph::Tensor("eq_scale_dy").set_data_type(cudnn_frontend::DataType_t::FLOAT))
          .insert_tensor(cudnn_frontend::graph::Tensor("eq_scale_x").set_data_type(cudnn_frontend::DataType_t::FLOAT));
 
+    #if (CUDNN_VERSION < 8900)
+        SKIP("DgradDreluBNBwdWeight requires cudnn 8.9 and up");
+    #endif
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("DgradDreluBNBwdWeight requires ampere and above architecture.");
+    }
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));

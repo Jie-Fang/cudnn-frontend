@@ -67,6 +67,10 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
          .insert_tensor(cudnn_frontend::graph::Tensor("EQUIVALENT_SCALE"))
          .insert_tensor(cudnn_frontend::graph::Tensor("EQUIVALENT_BIAS"));
 
+    #if (CUDNN_VERSION < 8400)
+        SKIP("BNFinalize requires cudnn 8.4 and up");
+    #endif
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));

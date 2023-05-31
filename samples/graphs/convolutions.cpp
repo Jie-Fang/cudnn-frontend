@@ -155,6 +155,13 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
          .insert_tensor(cudnn_frontend::graph::Tensor("grad").set_dim({4, 64, 16, 16}))
          .insert_tensor(cudnn_frontend::graph::Tensor("output"));
 
+    #if (CUDNN_VERSION < 8800)
+        SKIP("ConvBNwgrad requires cudnn 8.8 and up");
+    #endif
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("ConvBNwgrad requires hopper and above architecture.");
+    }
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
@@ -170,12 +177,15 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
     Surface<half> dy_tensor(4*64*16*16, false);
     Surface<half> dw_tensor(64*32*3*3, false);
 
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+
     std::unordered_map<std::string, void*> variant_pack = {
         {"image", x_tensor.devPtr}
         , {"scale", s_tensor.devPtr}
         , {"bias", b_tensor.devPtr}
         , {"grad", dy_tensor.devPtr}
         , {"output", dw_tensor.devPtr}
+        , {"workspace", workspace.devPtr}
     };
     REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
     cudnnDestroy(handle);
@@ -242,6 +252,10 @@ TEST_CASE("Scale Bias Relu Conv Genstats Graph", "[conv][genstats][graph]") {
          .insert_tensor(cudnn_frontend::graph::Tensor("output"))
          .insert_tensor(cudnn_frontend::graph::Tensor("sum").set_data_type(cudnn_frontend::DataType_t::FLOAT))
          .insert_tensor(cudnn_frontend::graph::Tensor("sq_sum").set_data_type(cudnn_frontend::DataType_t::FLOAT));
+
+    #if (CUDNN_VERSION < 8800)
+        SKIP("ConvBNFprop requires cudnn 8.8 and up");
+    #endif
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
@@ -349,6 +363,13 @@ TEST_CASE("Scale Bias Add Relu Conv Genstats Graph", "[conv][genstats][graph]") 
          .insert_tensor(cudnn_frontend::graph::Tensor("sum").set_data_type(cudnn_frontend::DataType_t::FLOAT))
          .insert_tensor(cudnn_frontend::graph::Tensor("sq_sum").set_data_type(cudnn_frontend::DataType_t::FLOAT));
 
+    #if (CUDNN_VERSION < 8900)
+        SKIP("DBARCS requires cudnn 8.9 and up");
+    #endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("DBARCS requires hopper and above architecture.");
+    }
+    
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
@@ -482,6 +503,14 @@ TEST_CASE("Dual Scale Bias Add Relu Conv Genstats Graph", "[conv][genstats][grap
          .insert_tensor(cudnn_frontend::graph::Tensor("sum").set_data_type(cudnn_frontend::DataType_t::FLOAT))
          .insert_tensor(cudnn_frontend::graph::Tensor("sq_sum").set_data_type(cudnn_frontend::DataType_t::FLOAT));
 
+    
+    #if (CUDNN_VERSION < 8900)
+        SKIP("DBARCS requires cudnn 8.9 and up");
+    #endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("DBARCS requires hopper and above architecture.");
+    }
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
@@ -553,6 +582,10 @@ TEST_CASE("Conv Genstats Graph", "[conv][genstats][graph]") {
          .insert_tensor(cudnn_frontend::graph::Tensor("output"))
          .insert_tensor(cudnn_frontend::graph::Tensor("sum").set_data_type(cudnn_frontend::DataType_t::FLOAT))
          .insert_tensor(cudnn_frontend::graph::Tensor("sq_sum").set_data_type(cudnn_frontend::DataType_t::FLOAT));
+
+    #if (CUDNN_VERSION < 8800)
+        SKIP("ConvBNFprop requires cudnn 8.8 and up");
+    #endif
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
