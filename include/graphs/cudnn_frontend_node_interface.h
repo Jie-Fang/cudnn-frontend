@@ -30,6 +30,7 @@ protected:
     enum class Type {
         COMPOSITE
         , BATCHNORM
+        , BATCHNORM_BACKWARD_WEIGHT
         , BATCHNORM_FINALIZE
         , CONVOLUTION
         , DGRAD

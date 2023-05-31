@@ -191,6 +191,7 @@ class Operation {
 public:
     enum class Tag {
         Batchnorm,
+        Batchnorm_backward_weight,
         Batchnorm_finalize,
         Convolution,
         Dgrad,
@@ -226,6 +227,84 @@ public:
 
     virtual ~Operation() = default;
 };
+
+class Batchnorm_backward_weight : public Operation {
+public:
+    enum PORTS {
+        X,
+        MEAN,
+        INV_VARIANCE,
+        SCALE,
+        DY,
+        
+        DSCALE,
+        DBIAS,
+        EQUIVALENT_SCALE_DY,
+        EQUIVALENT_SCALE_X,
+        EQUIVALENT_BIAS,
+        
+        COUNT
+    };
+
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+    Batchnorm_backward_weight(const std::string name) : Operation(name, Tag::Batchnorm_backward_weight) {
+        port_to_name[PORTS::X] = name + "::X";
+        port_to_name[PORTS::MEAN] = name + "::MEAN";
+        port_to_name[PORTS::INV_VARIANCE] = name + "::INV_VARIANCE";
+        port_to_name[PORTS::SCALE] = name + "::SCALE";
+        port_to_name[PORTS::DY] = name + "::DY";
+        
+        port_to_name[PORTS::DSCALE] = name + "::DSCALE";
+        port_to_name[PORTS::DBIAS] = name + "::DBIAS";
+        port_to_name[PORTS::EQUIVALENT_SCALE_DY] = name + "::EQUIVALENT_SCALE_DY";
+        port_to_name[PORTS::EQUIVALENT_SCALE_X] = name + "::EQUIVALENT_SCALE_X";
+        port_to_name[PORTS::EQUIVALENT_BIAS] = name + "::EQUIVALENT_BIAS";
+    }
+
+    Batchnorm_backward_weight& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
+        }
+        return *this;
+    }
+
+    std::string get_tensor_at_port(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    Batchnorm_backward_weight& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Batchnorm_backward_weight& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Batchnorm_backward_weight& props);
+};
+
+inline std::ostream& operator<<(std::ostream& os, const Batchnorm_backward_weight& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " ports: [";
+    for(size_t i = 0; i < Batchnorm_backward_weight::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Batchnorm_backward_weight::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
 
 class Batchnorm_finalize : public Operation {
 public:
