@@ -4,6 +4,7 @@
 
 #include "graphs/cudnn_frontend_node_batchnorm.h"
 #include "graphs/cudnn_frontend_node_convolution.h"
+#include "graphs/cudnn_frontend_node_genstats.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 #include "graphs/cudnn_frontend_node_wgrad.h"
@@ -193,6 +194,10 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Convolution>(node_ptr));
             break;
         }
+        case Operation::Tag::Genstats:{
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Genstats>(node_ptr));
+            break;
+        }
         case Operation::Tag::Matmul:{
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Matmul>(node_ptr));
             break;
@@ -222,6 +227,10 @@ inline Graph& Graph::insert_node(Operation const& props) {
         }
         case Operation::Tag::Convolution:{
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Convolution>((Convolution&)props)));
+            break;
+        }
+        case Operation::Tag::Genstats:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Genstats>((Genstats&)props)));
             break;
         }
         case Operation::Tag::Matmul:{
@@ -296,6 +305,14 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                     }
                     break;
                 }
+                case Operation::Tag::Genstats:{
+                    for(auto& itr: std::static_pointer_cast<Genstats>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
                 case Operation::Tag::Matmul:{
                     for(auto& itr: std::static_pointer_cast<Matmul>(node.second)->port_to_name) {
                         if(itr.second == connection.first) {
@@ -344,6 +361,10 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                 std::static_pointer_cast<Convolution>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
             }
+            case Operation::Tag::Genstats: {
+                std::static_pointer_cast<Genstats>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
             case Operation::Tag::Matmul: {
                 std::static_pointer_cast<Matmul>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
@@ -388,6 +409,21 @@ inline error_t Graph::infer_properties() {
                 incoming_tensors_for_nodes[conv_node->get_name()].push_back(x_tensor->get_name());
                 incoming_tensors_for_nodes[conv_node->get_name()].push_back(w_tensor->get_name());
                 outgoing_tensors_for_nodes[conv_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Genstats: {
+                auto genstats_node = std::static_pointer_cast<Genstats>(node.second);
+                auto &x_tensor = tensors.at(genstats_node->get_tensor_at_port(Genstats::PORTS::X));
+                auto &sum_tensor = tensors.at(genstats_node->get_tensor_at_port(Genstats::PORTS::SUM));
+                auto &sq_sum_tensor = tensors.at(genstats_node->get_tensor_at_port(Genstats::PORTS::SQ_SUM));
+
+                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(genstats_node->get_name());
+                incoming_nodes_for_tensors[sum_tensor->get_name()].push_back(genstats_node->get_name());
+                incoming_nodes_for_tensors[sq_sum_tensor->get_name()].push_back(genstats_node->get_name());
+
+                incoming_tensors_for_nodes[genstats_node->get_name()].push_back(x_tensor->get_name());
+                outgoing_tensors_for_nodes[genstats_node->get_name()].push_back(sum_tensor->get_name());
+                outgoing_tensors_for_nodes[genstats_node->get_name()].push_back(sq_sum_tensor->get_name());
                 break;
             }
             case Operation::Tag::Matmul: {
@@ -710,6 +746,15 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 conv_node->props = std::static_pointer_cast<Convolution>(node.second);
                 conv_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = conv_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Genstats: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the genstats node named " << node.first << std::endl;
+                auto genstats_node = std::make_shared<GenstatsNode>(node.first, uid_offset);
+                genstats_node->props = std::static_pointer_cast<Genstats>(node.second);
+                genstats_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = genstats_node;
                 uid_offset += 100;
                 break;
             }

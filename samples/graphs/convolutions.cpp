@@ -181,6 +181,66 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
     cudnnDestroy(handle);
 }
 
+TEST_CASE("Conv Genstats Graph", "[conv][genstats][graph]") {
+    cudnn_frontend::graph::Graph graph("genstats");
+    graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
+         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
+         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+
+    auto conv = cudnn_frontend::graph::Convolution("Convolution")
+                .set_padding({1, 1})
+                .set_stride({1, 1})
+                .set_dilation({1, 1})
+                .map_port_to_tensor({
+                    {cudnn_frontend::graph::Convolution::PORTS::X, "image"}
+                    , {cudnn_frontend::graph::Convolution::PORTS::W, "weight"}
+                    , {cudnn_frontend::graph::Convolution::PORTS::Y, "output"}
+                });
+    graph.insert_node(conv);
+
+    auto genstats = cudnn_frontend::graph::Genstats("Genstats")
+                .map_port_to_tensor({
+                    {cudnn_frontend::graph::Genstats::PORTS::X, conv.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y)}
+                    , {cudnn_frontend::graph::Genstats::PORTS::SUM, "sum"}
+                    , {cudnn_frontend::graph::Genstats::PORTS::SQ_SUM, "sq_sum"}
+                });
+    graph.insert_node(genstats);
+
+    graph.insert_tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 32, 16, 16}))
+         .insert_tensor(cudnn_frontend::graph::Tensor("weight").set_dim({64, 32, 3, 3}))
+         .insert_tensor(cudnn_frontend::graph::Tensor("output"))
+         .insert_tensor(cudnn_frontend::graph::Tensor("sum").set_data_type(cudnn_frontend::DataType_t::FLOAT))
+         .insert_tensor(cudnn_frontend::graph::Tensor("sq_sum").set_data_type(cudnn_frontend::DataType_t::FLOAT));
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+
+    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
+
+    Surface<half> x_tensor(4*32*16*16, false);
+    Surface<half> w_tensor(64*32*3*3, false);
+    Surface<half> y_tensor(4*64*16*16, false);
+    Surface<float> sum_tensor(64, false);
+    Surface<float> sq_sum_tensor(64, false);
+    
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    
+    std::unordered_map<std::string, void*> variant_pack = {
+        {"image", x_tensor.devPtr}
+        , {"weight", w_tensor.devPtr}
+        , {"output", y_tensor.devPtr}
+        , {"sum", sum_tensor.devPtr}
+        , {"sq_sum", sq_sum_tensor.devPtr}
+        , {"workspace", workspace.devPtr}
+    };
+    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    cudnnDestroy(handle);
+}
+
 cudnn_frontend::graph::Graph build_scale_bias_relu_graph() {
     cudnn_frontend::graph::Graph sbr_graph("sbr");
     sbr_graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)

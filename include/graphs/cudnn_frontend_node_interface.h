@@ -31,6 +31,7 @@ protected:
         COMPOSITE
         , BATCHNORM
         , CONVOLUTION
+        , GENSTATS
         , MATMUL
         , POINTWISE
         , REDUCTION
