@@ -32,6 +32,7 @@ protected:
         , BATCHNORM
         , BATCHNORM_FINALIZE
         , CONVOLUTION
+        , DGRAD
         , GENSTATS
         , MATMUL
         , POINTWISE

@@ -9,6 +9,7 @@
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 #include "graphs/cudnn_frontend_node_wgrad.h"
+#include "graphs/cudnn_frontend_node_dgrad.h"
 
 #include <graphs/cudnn_frontend_graph_helpers.h>
 
@@ -199,6 +200,10 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Convolution>(node_ptr));
             break;
         }
+        case Operation::Tag::Dgrad:{
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Dgrad>(node_ptr));
+            break;
+        }
         case Operation::Tag::Genstats:{
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Genstats>(node_ptr));
             break;
@@ -236,6 +241,10 @@ inline Graph& Graph::insert_node(Operation const& props) {
         }
         case Operation::Tag::Convolution:{
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Convolution>((Convolution&)props)));
+            break;
+        }
+        case Operation::Tag::Dgrad:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Dgrad>((Dgrad&)props)));
             break;
         }
         case Operation::Tag::Genstats:{
@@ -322,6 +331,14 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                     }
                     break;
                 }
+                case Operation::Tag::Dgrad:{
+                    for(auto& itr: std::static_pointer_cast<Dgrad>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
                 case Operation::Tag::Genstats:{
                     for(auto& itr: std::static_pointer_cast<Genstats>(node.second)->port_to_name) {
                         if(itr.second == connection.first) {
@@ -382,6 +399,10 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                 std::static_pointer_cast<Convolution>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
             }
+            case Operation::Tag::Dgrad: {
+                std::static_pointer_cast<Dgrad>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
             case Operation::Tag::Genstats: {
                 std::static_pointer_cast<Genstats>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
@@ -430,6 +451,21 @@ inline error_t Graph::infer_properties() {
                 incoming_tensors_for_nodes[conv_node->get_name()].push_back(x_tensor->get_name());
                 incoming_tensors_for_nodes[conv_node->get_name()].push_back(w_tensor->get_name());
                 outgoing_tensors_for_nodes[conv_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Dgrad: {
+                auto dgrad_node = std::static_pointer_cast<Dgrad>(node.second);
+                auto &dy_tensor = tensors.at(dgrad_node->get_tensor_at_port(Dgrad::PORTS::DY));
+                auto &w_tensor = tensors.at(dgrad_node->get_tensor_at_port(Dgrad::PORTS::W));
+                auto &dx_tensor = tensors.at(dgrad_node->get_tensor_at_port(Dgrad::PORTS::DX));
+
+                outgoing_nodes_for_tensors[dy_tensor->get_name()].push_back(dgrad_node->get_name());
+                outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(dgrad_node->get_name());
+                incoming_nodes_for_tensors[dx_tensor->get_name()].push_back(dgrad_node->get_name());
+
+                incoming_tensors_for_nodes[dgrad_node->get_name()].push_back(dy_tensor->get_name());
+                incoming_tensors_for_nodes[dgrad_node->get_name()].push_back(w_tensor->get_name());
+                outgoing_tensors_for_nodes[dgrad_node->get_name()].push_back(dx_tensor->get_name());
                 break;
             }
             case Operation::Tag::Genstats: {
@@ -815,6 +851,15 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 conv_node->props = std::static_pointer_cast<Convolution>(node.second);
                 conv_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = conv_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Dgrad: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the dgrad node named " << node.first << std::endl;
+                auto dgrad_node = std::make_shared<DgradNode>(node.first, uid_offset);
+                dgrad_node->props = std::static_pointer_cast<Dgrad>(node.second);
+                dgrad_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = dgrad_node;
                 uid_offset += 100;
                 break;
             }

@@ -193,6 +193,7 @@ public:
         Batchnorm,
         Batchnorm_finalize,
         Convolution,
+        Dgrad,
         Genstats,
         Matmul,
         Pointwise,
@@ -487,6 +488,116 @@ inline std::ostream& operator<<(std::ostream& os, const Convolution& props) {
     << " ports: [";
     for(size_t i = 0; i < Convolution::PORTS::COUNT; ++i) {
         os << props.get_tensor_at_port(static_cast<Convolution::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
+
+class Dgrad : public Operation {
+public:
+    enum PORTS {
+        DY,
+        W,
+        DX,
+
+        COUNT
+    };
+private:
+    std::vector<int64_t> padding;
+    std::vector<int64_t> stride;
+    std::vector<int64_t> dilation;
+
+public:
+
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+    Dgrad(const std::string name) : Operation(name, Tag::Dgrad) {
+        port_to_name[PORTS::W] = name + "::W";
+        port_to_name[PORTS::DY] = name + "::DY";
+        port_to_name[PORTS::DX] = name + "::DX";
+    }
+
+    Dgrad& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
+        }
+        return *this;
+    }
+
+    std::string get_tensor_at_port(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    Dgrad& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_padding() const {
+        return padding;
+    }
+
+    Dgrad& set_padding(std::vector<int64_t> value) {
+        padding = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_stride() const {
+        return stride;
+    }
+
+    Dgrad& set_stride(std::vector<int64_t> value) {
+        stride = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_dilation() const {
+        return dilation;
+    }
+
+    Dgrad& set_dilation(std::vector<int64_t> value) {
+        dilation = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Dgrad& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Dgrad& props);
+};
+
+inline std::ostream& operator<<(std::ostream& os, const Dgrad& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " dilation: [";
+    for(size_t i = 0; i < props.get_dilation().size(); ++i) {
+        os << props.get_dilation()[i] << ",";
+    }
+    os << "],"
+    << " stride: [";
+    for(size_t i = 0; i < props.get_stride().size(); ++i) {
+        os << props.get_stride()[i] << ",";
+    }
+    os << "],"
+    << " padding: [";
+    for(size_t i = 0; i < props.get_padding().size(); ++i) {
+        os << props.get_padding()[i] << ",";
+    }
+    os << "],"
+    << " ports: [";
+    for(size_t i = 0; i < Dgrad::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Dgrad::PORTS>(i)) << ",";
     }
     os << "],";
     return os;
