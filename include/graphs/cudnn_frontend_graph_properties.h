@@ -191,6 +191,7 @@ class Operation {
 public:
     enum class Tag {
         Batchnorm,
+        Batchnorm_finalize,
         Convolution,
         Genstats,
         Matmul,
@@ -224,6 +225,94 @@ public:
 
     virtual ~Operation() = default;
 };
+
+class Batchnorm_finalize : public Operation {
+public:
+    enum PORTS {
+        SUM,
+        SQUARE_SUM,
+        MEAN,
+        INV_VARIANCE,
+        SCALE,
+        BIAS,
+        Previous_running_mean,
+        Previous_running_var,
+        EPSILON,
+        EXP_AVG,
+        ACCUMULATION_COUNT,
+        
+        EQUIVALENT_SCALE,
+        EQUIVALENT_BIAS,
+        Next_running_mean,
+        Next_running_var,
+        
+        COUNT
+    };
+
+    std::unordered_map<PORTS, std::string> port_to_name;
+    int64_t uids[PORTS::COUNT];
+    Batchnorm_finalize(const std::string name) : Operation(name, Tag::Batchnorm_finalize) {
+        port_to_name[PORTS::SUM] = name + "::SUM";
+        port_to_name[PORTS::SQUARE_SUM] = name + "::SQUARE_SUM";
+        port_to_name[PORTS::MEAN] = name + "::MEAN";
+        port_to_name[PORTS::INV_VARIANCE] = name + "::INV_VARIANCE";
+        port_to_name[PORTS::SCALE] = name + "::SCALE";
+        port_to_name[PORTS::BIAS] = name + "::BIAS";
+        port_to_name[PORTS::Previous_running_mean] = name + "::Previous_running_mean";
+        port_to_name[PORTS::Previous_running_var] = name + "::Previous_running_var";
+        port_to_name[PORTS::EPSILON] = name + "::EPSILON";
+        port_to_name[PORTS::EXP_AVG] = name + "::EXP_AVG";
+        port_to_name[PORTS::ACCUMULATION_COUNT] = name + "::ACCUMULATION_COUNT";
+        
+        port_to_name[PORTS::EQUIVALENT_BIAS] = name + "::EQUIVALENT_BIAS";
+        port_to_name[PORTS::EQUIVALENT_SCALE] = name + "::EQUIVALENT_SCALE";
+        port_to_name[PORTS::Next_running_mean] = name + "::Next_running_mean";
+        port_to_name[PORTS::Next_running_var] = name + "::Next_running_var";
+    }
+
+    Batchnorm_finalize& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
+        for(auto const& p: names) {
+            port_to_name[p.first] = p.second;
+        }
+        return *this;
+    }
+
+    std::string get_tensor_at_port(PORTS port) const {
+        return port_to_name.at(port);
+    }
+
+    int update_uids(int64_t offset) {
+        for(size_t i = 0; i < PORTS::COUNT; ++i) {
+            uids[i] = i + offset;
+        }
+        return 0;
+    }
+
+    Batchnorm_finalize& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Batchnorm_finalize& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Batchnorm_finalize& props);
+};
+
+inline std::ostream& operator<<(std::ostream& os, const Batchnorm_finalize& props) {
+    os << "{" 
+    << " name: '" << props.get_name() << "',"
+    << " ports: [";
+    for(size_t i = 0; i < Batchnorm_finalize::PORTS::COUNT; ++i) {
+        os << props.get_tensor_at_port(static_cast<Batchnorm_finalize::PORTS>(i)) << ",";
+    }
+    os << "],";
+    return os;
+}
 
 class Genstats : public Operation {
 public:

@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "graphs/cudnn_frontend_node_batchnorm.h"
+#include "graphs/cudnn_frontend_node_batchnorm_finalize.h"
 #include "graphs/cudnn_frontend_node_convolution.h"
 #include "graphs/cudnn_frontend_node_genstats.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
@@ -190,6 +191,10 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm>(node_ptr));
             break;
         }
+        case Operation::Tag::Batchnorm_finalize:{
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm_finalize>(node_ptr));
+            break;
+        }
         case Operation::Tag::Convolution:{
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Convolution>(node_ptr));
             break;
@@ -223,6 +228,10 @@ inline Graph& Graph::insert_node(Operation const& props) {
     switch (props.get_tag()) {
         case Operation::Tag::Batchnorm:{
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm>((Batchnorm&)props)));
+            break;
+        }
+        case Operation::Tag::Batchnorm_finalize:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm_finalize>((Batchnorm_finalize&)props)));
             break;
         }
         case Operation::Tag::Convolution:{
@@ -297,6 +306,14 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                     }
                     break;
                 }
+                case Operation::Tag::Batchnorm_finalize:{
+                    for(auto& itr: std::static_pointer_cast<Batchnorm_finalize>(node.second)->port_to_name) {
+                        if(itr.second == connection.first) {
+                            itr.second = connection.second;
+                        }
+                    }
+                    break;
+                }
                 case Operation::Tag::Convolution:{
                     for(auto& itr: std::static_pointer_cast<Convolution>(node.second)->port_to_name) {
                         if(itr.second == connection.first) {
@@ -355,6 +372,10 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
         switch (itr.second->get_tag()) {
             case Operation::Tag::Batchnorm: {
                 std::static_pointer_cast<Batchnorm>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Batchnorm_finalize: {
+                std::static_pointer_cast<Batchnorm_finalize>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
             }
             case Operation::Tag::Convolution: {
@@ -481,6 +502,54 @@ inline error_t Graph::infer_properties() {
                 outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(var_tensor->get_name());
                 outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(next_running_mean_tensor->get_name());
                 outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(next_running_var_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Batchnorm_finalize: {
+                auto batchnorm_finalize_node = std::static_pointer_cast<Batchnorm_finalize>(node.second);
+                auto &sum_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::SUM));
+                auto &square_sum_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::SQUARE_SUM));
+                auto &mean_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::MEAN));
+                auto &inv_var_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::INV_VARIANCE));
+                auto &prev_running_mean_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Previous_running_mean));
+                auto &prev_running_var_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Previous_running_var));
+                auto &next_running_mean_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Next_running_mean));
+                auto &next_running_var_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Next_running_var));
+                auto &scale_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::SCALE));
+                auto &bias_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::BIAS));
+                auto &eq_scale_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EQUIVALENT_SCALE));
+                auto &eq_bias_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EQUIVALENT_BIAS));
+                auto &eps_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EPSILON));
+                auto &exp_avg_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EXP_AVG));
+
+                outgoing_nodes_for_tensors[sum_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[square_sum_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[mean_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[inv_var_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[exp_avg_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                incoming_nodes_for_tensors[eq_scale_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+                incoming_nodes_for_tensors[eq_bias_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
+
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(sum_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(square_sum_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(prev_running_mean_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(prev_running_var_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(eps_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(exp_avg_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(scale_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(bias_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(mean_tensor->get_name());
+                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(inv_var_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(next_running_mean_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(next_running_var_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(eq_scale_tensor->get_name());
+                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(eq_bias_tensor->get_name());
                 break;
             }
             case Operation::Tag::Pointwise: {
@@ -773,6 +842,15 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 batchnorm_node->props = std::static_pointer_cast<Batchnorm>(node.second);
                 batchnorm_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = batchnorm_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Batchnorm_finalize: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node.first << std::endl;
+                auto batchnorm_finalize_node = std::make_shared<BatchNormFinalizeNode>(node.first, uid_offset);
+                batchnorm_finalize_node->props = std::static_pointer_cast<Batchnorm_finalize>(node.second);
+                batchnorm_finalize_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = batchnorm_finalize_node;
                 uid_offset += 100;
                 break;
             }

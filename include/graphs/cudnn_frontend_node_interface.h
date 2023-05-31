@@ -30,6 +30,7 @@ protected:
     enum class Type {
         COMPOSITE
         , BATCHNORM
+        , BATCHNORM_FINALIZE
         , CONVOLUTION
         , GENSTATS
         , MATMUL
