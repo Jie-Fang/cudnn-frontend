@@ -109,9 +109,14 @@ public:
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
     std::shared_ptr<Tensor> conv(Convolution& conv);
-    Matmul::Outputs matmul(Matmul::Inputs, Matmul& conv);
+
+    Matmul::Outputs matmul(Matmul::Inputs, Matmul const&);
+    std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Matmul const&);
+    
     std::shared_ptr<Tensor> pointwise(Pointwise& pointwise);
+    
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const&, Scaled_dot_product_attention const&);
+    
     Graph& insert_node(Operation const& props);
 
     error_t build(cudnnHandle_t handle);
@@ -219,7 +224,29 @@ inline std::shared_ptr<Tensor> Graph::pointwise(Pointwise& pointwise) {
     return output_ptr;
 }
 
-inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul& user_options) {
+
+inline std::shared_ptr<Tensor> Graph::matmul(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, Matmul const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Matmul>(user_options);
+
+    // Make required output tensors
+    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(C->get_name(), C);
+
+    // Set outputs
+    options->outputs.C = C;
+
+    // Set inputs
+    options->inputs.A = a;
+    options->inputs.B = b;
+
+    nodes.emplace(options->get_name(), options);
+
+    return C;
+}
+
+inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul const& user_options) {
 
     // Copy over the options from the user
     auto options = std::make_shared<Matmul>(user_options);

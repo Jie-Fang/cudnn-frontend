@@ -32,21 +32,21 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
         
-    cudnn_frontend::graph::Matmul::Inputs inputs;
-    inputs.A = graph.tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 16, 64}));
-    inputs.B = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({4, 64, 32}));
+    auto A = graph.tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 16, 64}));
+    auto B = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({4, 64, 32}));
+
     // TODO: Remove once inferencing is back in.
-    inputs.A->generateStrides(CUDNN_TENSOR_NHWC);
-    inputs.B->generateStrides(CUDNN_TENSOR_NHWC);
+    A->generateStrides(CUDNN_TENSOR_NHWC);
+    B->generateStrides(CUDNN_TENSOR_NHWC);
     
     cudnn_frontend::graph::Matmul matmul("matmul");
-    auto outputs = graph.matmul(inputs, matmul);
-    outputs.C->set_is_virtual(true);
+    auto C = graph.matmul(A, B, matmul);
+    C->set_is_virtual(true);
 
     auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
                     .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, outputs.C->get_name()}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, C->get_name()}
                         , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
                         , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
                     });
