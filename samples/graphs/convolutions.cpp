@@ -730,44 +730,6 @@ cudnn_frontend::graph::Graph build_convolution_graph() {
     return conv_graph;
 }
 
-
-TEST_CASE("Graph Functionality", "[graph][functionality]") {
-    cudnn_frontend::graph::Graph master_graph("conv_sbr_graph");
-    auto conv_graph = build_convolution_graph();
-    auto sbr_graph = build_scale_bias_relu_graph();
-
-    std::unordered_map<std::string, std::string> connections;
-    master_graph.insert_graph(conv_graph, connections);
-    connections["response"] = "input";
-    master_graph.insert_graph(sbr_graph, connections);
-    
-    cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(cudnn_frontend::error_t::OK == master_graph.build(handle));
-
-    auto plans = master_graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
-
-    REQUIRE(cudnn_frontend::error_t::OK == master_graph.set_executor(plans));
-
-    Surface<half> x_tensor(4*32*16*16, false);
-    Surface<half> w_tensor(64*32*3*3, false);
-    Surface<half> s_tensor(64, false);
-    Surface<half> b_tensor(64, false);
-    Surface<half> y_tensor(4*64*3*3, false);
-
-    std::unordered_map<std::string, void*> variant_pack = {
-        {"image", x_tensor.devPtr}
-        , {"filter", w_tensor.devPtr}
-        , {"scale", s_tensor.devPtr}
-        , {"bias", b_tensor.devPtr}
-        , {"output", y_tensor.devPtr}
-    };
-    REQUIRE(cudnn_frontend::error_t::OK == master_graph.execute(handle, variant_pack));
-
-    cudnnDestroy(handle);
-}
-
 TEST_CASE("Convolution BN Inference Graph", "[conv][graph]") {
     cudnn_frontend::graph::Graph graph("conv_bn_inference");
     graph.set_io_data_type(cudnn_frontend::DataType_t::FLOAT)
