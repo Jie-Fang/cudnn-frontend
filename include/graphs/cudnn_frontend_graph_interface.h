@@ -349,9 +349,13 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
     // Make required output tensors
     auto O = std::make_shared<Tensor>(options->get_name() + "_output");
     tensors.emplace(O->get_name(), O);
-
-    // Set outputs
     options->outputs.O = O;
+
+    if(options->get_is_inference() == false) {
+        auto S = std::make_shared<Tensor>(options->get_name() + "_softmax_output");
+        tensors.emplace(S->get_name(), S);
+        options->outputs.S = S;
+    }
 
     // Set inputs
     options->inputs = inputs;
@@ -403,6 +407,7 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node_ptr));
             break;
         }
+        case Operation::Tag::Softmax:{break;}
         case Operation::Tag::Wgrad:{
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Wgrad>(node_ptr));
             break;
@@ -454,6 +459,7 @@ inline Graph& Graph::insert_node(Operation const& props) {
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Scaled_dot_product_attention>((Scaled_dot_product_attention&)props)));
             break;
         }
+        case Operation::Tag::Softmax:{break;}
         case Operation::Tag::Wgrad:{
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Wgrad>((Wgrad&)props)));
             break;
@@ -692,15 +698,17 @@ inline error_t Graph::infer_properties() {
                 break;
             }
             case Operation::Tag::Reduction: {
-                auto reduction_node = std::static_pointer_cast<Reduction>(node.second);
-                auto &y_tensor = tensors.at(reduction_node->get_tensor_at_port(Reduction::PORTS::Y));
-                auto &x_tensor = tensors.at(reduction_node->get_tensor_at_port(Reduction::PORTS::X));
+                auto reduction_options = std::static_pointer_cast<Reduction>(node.second);
+                auto const& node_name = reduction_options->get_name();
 
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(reduction_node->get_name());
-                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(reduction_node->get_name());
+                auto const& Y = reduction_options->outputs.Y->get_name();;
+                auto const& X = reduction_options->inputs.X->get_name();;
 
-                incoming_tensors_for_nodes[reduction_node->get_name()].push_back(x_tensor->get_name());
-                outgoing_tensors_for_nodes[reduction_node->get_name()].push_back(y_tensor->get_name());
+                outgoing_nodes_for_tensors[X].push_back(node_name);
+                incoming_nodes_for_tensors[Y].push_back(node_name);
+
+                incoming_tensors_for_nodes[node_name].push_back(X);
+                outgoing_tensors_for_nodes[node_name].push_back(Y);
                 break;
             }
             case Operation::Tag::Scaled_dot_product_attention: {
@@ -724,6 +732,7 @@ inline error_t Graph::infer_properties() {
 
                 break;
             }
+            case Operation::Tag::Softmax:{break;}
             case Operation::Tag::Wgrad: {
                 auto conv_node = std::static_pointer_cast<Wgrad>(node.second);
                 auto &dy_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::DY));
@@ -1010,8 +1019,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Reduction: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the reduction node named " << node.first << std::endl;
-                auto reduction_node = std::make_shared<ReductionNode>(node.first, uid_offset);
-                reduction_node->props = std::static_pointer_cast<Reduction>(node.second);
+                auto reduction_node = std::make_shared<ReductionNode>(node.first, std::static_pointer_cast<Reduction>(node.second), uid_offset);
                 reduction_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = reduction_node;
                 uid_offset += 100;
@@ -1025,6 +1033,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 uid_offset += 100;
                 break;
             }
+            case Operation::Tag::Softmax:{break;}
             case Operation::Tag::Wgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node.first << std::endl;
                 auto wgrad_node = std::make_shared<WgradNode>(node.first, uid_offset);

@@ -200,6 +200,7 @@ public:
         Pointwise,
         Reduction,
         Scaled_dot_product_attention,
+        Softmax,
         Wgrad,
     };
 
@@ -867,53 +868,28 @@ public:
 
 class Reduction : public Operation {
 public:
-    enum PORTS {
-        X = 0,
-        Y,
+    
+    struct Inputs {
+        std::shared_ptr<Tensor> X;
+    } inputs;
 
-        COUNT
-    };
+    struct Outputs {
+        std::shared_ptr<Tensor> Y;
+    } outputs;
 
 private:
-    ReductionMode_t mode;
+    std::optional<ReductionMode_t> mode;
 
 public:
-    bool is_mode_set;
+    Reduction(const std::string name) : Operation(name, Tag::Reduction) {}
 
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
-
-    Reduction(const std::string name) : Operation(name, Tag::Reduction) {
-        port_to_name[PORTS::X] = name + "::X";
-        port_to_name[PORTS::Y] = name + "::Y";
-    }
-
-    int update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
-
-    ReductionMode_t get_mode() const {
+    std::optional<ReductionMode_t> get_mode() const {
         return mode;
     }
 
     Reduction& set_mode(ReductionMode_t value) {
         mode = value;
-        is_mode_set = true;
         return *this;
-    }
-
-    Reduction& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> const& names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
     }
     
     Reduction& set_compute_data_type(DataType_t value) {
@@ -922,6 +898,11 @@ public:
     }
 
     auto fill_from_context(detail::Context const& context) -> Reduction& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        outputs.Y->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
@@ -939,6 +920,8 @@ public:
         std::shared_ptr<Tensor> V;
         std::shared_ptr<Tensor> SEQ_LEN_Q;
         std::shared_ptr<Tensor> SEQ_LEN_K;
+        std::shared_ptr<Tensor> Mask;
+        std::shared_ptr<Tensor> Dropout_mask;
     } inputs;
 
     struct Outputs {
@@ -953,7 +936,11 @@ private:
     float scale_k;
     
 public:
-    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention) {}
+    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
+
+    bool get_is_inference() const {
+        return is_inference;
+    }
 
     Scaled_dot_product_attention& set_is_inference(bool const value){
         is_inference = value;
@@ -994,6 +981,50 @@ public:
         inputs.SEQ_LEN_Q->fill_from_context(context);
         inputs.SEQ_LEN_K->fill_from_context(context);
         outputs.O->fill_from_context(context);
+
+        // Fill this node
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Softmax : public Operation {
+public:
+
+    struct Inputs {
+        std::shared_ptr<Tensor> P;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
+    } outputs;
+
+private:
+    bool is_inference;
+
+public:
+    Softmax(const std::string name) : Operation(name, Tag::Softmax) {}
+
+    bool get_is_inference() const {
+        return is_inference;
+    }
+
+    Softmax& set_is_inference(bool const value){
+        is_inference = value;
+        return *this;
+    }
+
+    Softmax& set_compute_data_type(DataType_t const value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    Softmax& fill_from_context(detail::Context const& context) {
+        // Fill node's tensors
+        inputs.P->fill_from_context(context);
+        outputs.S->fill_from_context(context);
 
         // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {

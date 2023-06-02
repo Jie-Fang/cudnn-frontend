@@ -32,9 +32,11 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
     int64_t s_q = 512; // q tensor is padded to this seq length
     int64_t s_kv = 512; // k and v tensor is padded to this seq length
     int64_t d = 64;  // hidden dim
+    bool is_inference = false;
 
     fe::graph::Graph mha_graph("mha");
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
+             .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
 
     fe::graph::Scaled_dot_product_attention::Inputs inputs;
@@ -44,7 +46,7 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
     inputs.SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha");
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha").set_is_inference(is_inference);
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
@@ -90,6 +92,11 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
         , {inputs.V, devPtrV}
         , {outputs.O, devPtrO}
     };
+
+    Surface<half> sTensor(b * h * s_q * s_kv, false);
+    if(!is_inference) {
+        variant_pack[outputs.S] = sTensor.devPtr;
+    }
     
     REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
 

@@ -6,70 +6,58 @@
 #include "cudnn_frontend_graph_helpers.h"
 #include "cudnn_frontend_node_interface.h"
 
-namespace cudnn_frontend {
-
-namespace graph {
+namespace cudnn_frontend::graph {
 
 class ReductionNode : public INode {
-private:
-
-protected:
-
+    std::shared_ptr<Reduction> options;
 public:
-    std::shared_ptr<Reduction> props;
 
-    ReductionNode(std::string const& name, int64_t const offset = 1)  : INode (name, offset) {}
+    ReductionNode(std::string const& name, std::shared_ptr<Reduction> const options, int64_t const offset = 1)  : INode (name, offset), options(options) {}
 
     Type getType() override final {
         return Type::REDUCTION;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<Reduction> properties) {
-        if(sub_nodes.size() != 0) {
-            return 1;
-        }
-        if(INode_name != name) {
-            return 1;
-        }
-
-        props = properties;
-        return 0;
-    }
-
     error_t infer_properties() override final {
-        props->update_uids(offset);
 
         // Merge with ancestor's context
         fill_missing_context();
 
-        if(props->get_compute_data_type() == DataType_t::NOT_SET) {
-            props->set_compute_data_type(context.get_compute_data_type());
-        }
+        options->fill_from_context(get_context());
         
-        for(size_t i = 0; i < Reduction::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Reduction::PORTS>(i)));
-
-            tensor_prop->fill_from_context(get_context());
-            
-            if(tensor_prop->is_uid_set)
-                props->uids[i] = tensor_prop->get_uid();
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
+        // Only inferrencing from IN_0 to OUT_0 works today.
+        auto x_tensor = options->inputs.X;
+        auto y_tensor = options->outputs.Y;
+        
+        auto const& x_tensor_dim = x_tensor->get_dim();
+        auto y_tensor_dim = y_tensor->get_dim();
+        if(y_tensor_dim.empty()) {
+            y_tensor->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+        } else {
+            if(y_tensor_dim.size() != x_tensor_dim.size()) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+                return status;
+            }
         }
-        return error_t::OK;
-    }
 
-    error_t validate() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ReductionNode..." << std::endl;
+        // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
+        // But for the time being doing it here manually.
+        if(x_tensor->is_uid_set == false) {
+            x_tensor->set_uid(offset + 1);
+        }
+        if(y_tensor->is_uid_set == false) {
+            y_tensor->set_uid(offset + 2);
+        }
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated ReductionNode." << std::endl;
         return error_t::OK;
     }
 
     error_t createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Building ReductionNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X))));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.Y));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ReductionNode tensors." << std::endl;
 
@@ -85,27 +73,27 @@ public:
         #endif
 
         auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
-                                                        .setComputeType(props->get_compute_data_type())
-                                                        .setReductionOp(props->get_mode())
+                                                        .setComputeType(options->get_compute_data_type())
+                                                        .setReductionOp(options->get_mode().value())
                                                         .build();
 
         auto reduction_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(props->uids[Reduction::PORTS::X])))
-                                        .setyDesc(*(tensors.at(props->uids[Reduction::PORTS::Y])))
+                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
+                                        .setyDesc(*(tensors.at(options->outputs.Y->get_uid())))
                                         .setreductionDesc(reduction_descriptor)
                                         .build();
         
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(reduction_operation)));
 
         // Push all real tensors as required for operation execution.
-        auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::X))
-            , get_tensor_props(props->get_tensor_at_port(Reduction::PORTS::Y))
+        auto const& tensors_involved_in_operation = {
+            options->inputs.X
+            , options->outputs.Y
         };
         auto& tensors_in_operation = tensors_in_operations[name];
-        for(auto const& tensor_props: tensor_props_involved_in_operation) {
-            if(tensor_props->get_is_virtual() == false) {
-                tensors_in_operation.emplace_back(tensor_props->get_uid());
+        for(auto const& tensor: tensors_involved_in_operation) {
+            if(tensor && tensor->get_is_virtual() == false) {
+                tensors_in_operation.emplace_back(tensor->get_uid());
             }
         }
 
@@ -128,7 +116,5 @@ public:
         return error_t::OK;
     }
 };
-
-} // namespace graph
 
 } // namespace cudnn_frontend

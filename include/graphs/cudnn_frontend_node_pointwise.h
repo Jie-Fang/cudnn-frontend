@@ -7,9 +7,7 @@
 #include "cudnn_frontend_graph_helpers.h"
 #include "cudnn_frontend_node_interface.h"
 
-namespace cudnn_frontend {
-
-namespace graph {
+namespace cudnn_frontend::graph {
 
 class PointwiseNode : public INode {
     std::shared_ptr<Pointwise> options;
@@ -52,13 +50,13 @@ public:
             in_0_tensor->set_uid(offset + 1);
         }
         if(options->inputs.IN_1 && options->inputs.IN_1->is_uid_set == false) {
-            options->inputs.IN_1->set_uid(offset + 1);
+            options->inputs.IN_1->set_uid(offset + 2);
         }
         if(options->inputs.IN_2 && options->inputs.IN_2->is_uid_set == false) {
-            options->inputs.IN_2->set_uid(offset + 2);
+            options->inputs.IN_2->set_uid(offset + 3);
         }
         if(out_0_tensor->is_uid_set == false) {
-            out_0_tensor->set_uid(offset + 3);
+            out_0_tensor->set_uid(offset + 4);
         }
 
         return error_t::OK;
@@ -86,7 +84,7 @@ public:
         }
 
         auto const port_count = get_pointwise_mode_port_count(options->get_mode().value());
-        if(port_count == 3) {
+        if(port_count >= 3) {
             auto B = options->inputs.IN_1;
             if(B == nullptr) {
                 status = error_t::ATTRIBUTE_NOT_SET;
@@ -209,6 +207,4 @@ public:
     }
 };
 
-} // namespace graph
-
-} // namespace cudnn_frontend
+} // namespace cudnn_frontend::graph
