@@ -221,22 +221,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-                        .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, input_props_ptr->get_name()},
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_1, bias_props_ptr->get_name()}
-                        });
+        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
+        props.inputs.IN_0 = input_props_ptr;
+        props.inputs.IN_1 = bias_props_ptr;
+        auto outputs = graph.pointwise(props.inputs, props);
 
-        // Add pointwise node to graph
-        graph.insert_node(props);
-
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
-
-        return graph.get_tensor(output_tensor_name);
+        return outputs.OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -250,22 +240,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-                        .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, input_props_ptr->get_name()},
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_1, scale_props_ptr->get_name()}
-                        });
+        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
+        props.inputs.IN_0 = input_props_ptr;
+        props.inputs.IN_1 = scale_props_ptr;
+        auto outputs = graph.pointwise(props.inputs, props);
 
-        // Add pointwise node to graph
-        graph.insert_node(props);
-
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
-
-        return graph.get_tensor(output_tensor_name);
+        return outputs.OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -278,21 +258,11 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-                        .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, input_props_ptr->get_name()}
-                        });
+        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+        props.inputs.IN_0 = input_props_ptr;
+        auto outputs = graph.pointwise(props.inputs, props);
 
-        // Add pointwise node to graph
-        graph.insert_node(props);
-
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
-
-        return graph.get_tensor(output_tensor_name);
+        return outputs.OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -305,21 +275,11 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-                        .set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, input_props_ptr->get_name()}
-                        });
+        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
+        props.inputs.IN_0 = input_props_ptr;
+        auto outputs = graph.pointwise(props.inputs, props);
 
-        // Add pointwise node to graph
-        graph.insert_node(props);
-
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
-
-        return graph.get_tensor(output_tensor_name);
+        return outputs.OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -332,21 +292,11 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name)
-                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-                        .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Pointwise::PORTS::IN_0, input_props_ptr->get_name()}
-                        });
+        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
+        props.inputs.IN_0 = input_props_ptr;
+        auto outputs = graph.pointwise(props.inputs, props);
 
-        // Add pointwise node to graph
-        graph.insert_node(props);
-
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
-
-        return graph.get_tensor(output_tensor_name);
+        return outputs.OUT_0;
     }
 
     void build() {

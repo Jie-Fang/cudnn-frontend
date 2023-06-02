@@ -739,51 +739,35 @@ public:
 
 class Pointwise : public Operation {
 public:
-    enum PORTS {
-        IN_0,
-        IN_1,
-        IN_2,
-        OUT_0,
+    struct Inputs {
+        std::shared_ptr<Tensor> IN_0;
+        std::shared_ptr<Tensor> IN_1;
+        std::shared_ptr<Tensor> IN_2;
+    } inputs;
 
-        COUNT
-    };
+    struct Outputs {
+        std::shared_ptr<Tensor> OUT_0;
+    } outputs;
 
 private:
-    PointwiseMode_t mode;
+    std::optional<PointwiseMode_t> mode;
     std::optional<int64_t> axis;
+
 public:
-    bool is_mode_set;
 
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
+    Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {}
 
-    Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {
-        port_to_name[PORTS::IN_0] = name + "::IN_0";
-        port_to_name[PORTS::IN_1] = name + "::IN_1";
-        port_to_name[PORTS::IN_2] = name + "::IN_2";
-        port_to_name[PORTS::OUT_0] = name + "::OUT_0";
-    }
-
-    int 
-    update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
-
-    Pointwise& set_compute_data_type(DataType_t value) {
+    Pointwise& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
 
-    PointwiseMode_t get_mode() const {
+    std::optional<PointwiseMode_t> get_mode() const {
         return mode;
     }
 
-    Pointwise& set_mode(PointwiseMode_t value) {
+    Pointwise& set_mode(PointwiseMode_t const value) {
         mode = value;
-        is_mode_set = true;
         return *this;
     }
     
@@ -796,56 +780,20 @@ public:
         return *this;
     }
 
-    Pointwise& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
-    }
-
     auto fill_from_context(detail::Context const& context) -> Pointwise& {
+        // Fill node's tensors
+        inputs.IN_0->fill_from_context(context);
+        if(inputs.IN_1)inputs.IN_1->fill_from_context(context);
+        if(inputs.IN_2)inputs.IN_2->fill_from_context(context);
+        outputs.OUT_0->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
         return *this;
     }
-
-    Pointwise& set_inputs(std::vector<std::shared_ptr<Tensor>> tensors) {
-        size_t count = 0;
-        for(auto const port: {PORTS::IN_0, PORTS::IN_1, PORTS::IN_2}) {
-            port_to_name[port] = tensors[count]->get_name();
-            count++;
-            if(count >= tensors.size()) {
-                break;
-            }
-        }
-
-        return *this;
-    }
-
-    Pointwise& set_output(std::shared_ptr<Tensor> tensor) {
-        port_to_name[PORTS::OUT_0] = tensor->get_name();
-        return *this;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const Pointwise& props);
 };
-
-inline std::ostream& operator<<(std::ostream& os, const Pointwise& props) {
-    os << "{" 
-    << " name: '" << props.get_name() << "',"
-    << " ports: [";
-    for(size_t i = 0; i < Pointwise::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<Pointwise::PORTS>(i)) << ",";
-    }
-    os << "],";
-    return os;
-}
-
 
 class Batchnorm : public Operation {
 public:

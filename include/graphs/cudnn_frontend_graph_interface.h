@@ -113,7 +113,10 @@ public:
     Matmul::Outputs matmul(Matmul::Inputs, Matmul const&);
     std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Matmul const&);
     
-    std::shared_ptr<Tensor> pointwise(Pointwise& pointwise);
+    std::shared_ptr<Tensor> pointwise(std::shared_ptr<Tensor>, Pointwise const& pointwise);
+    std::shared_ptr<Tensor> pointwise(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Pointwise const& pointwise);
+    std::shared_ptr<Tensor> pointwise(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Pointwise const& pointwise);
+    Pointwise::Outputs pointwise(Pointwise::Inputs, Pointwise const& pointwise);
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const&, Scaled_dot_product_attention const&);
     
@@ -214,16 +217,88 @@ inline std::shared_ptr<Tensor> Graph::conv(Convolution& conv) {
     return output_ptr;
 }
 
-inline std::shared_ptr<Tensor> Graph::pointwise(Pointwise& pointwise) {
+inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, Pointwise const& user_options) {
 
-    auto output_ptr = std::make_shared<Tensor>(pointwise.get_name() + "_output");
-    tensors.emplace(output_ptr->get_name(), output_ptr);
-    pointwise.set_output(output_ptr);
-    nodes.emplace(pointwise.get_name(), std::make_shared<Pointwise>(pointwise));
+    // Copy over the options from the user
+    auto options = std::make_shared<Pointwise>(user_options);
 
-    return output_ptr;
+    // Make required output tensors
+    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(C->get_name(), C);
+
+    // Set outputs
+    options->outputs.OUT_0 = C;
+
+    // Set inputs
+    options->inputs.IN_0 = a;
+
+    nodes.emplace(options->get_name(), options);
+
+    return C;
 }
 
+inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, Pointwise const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Pointwise>(user_options);
+
+    // Make required output tensors
+    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(C->get_name(), C);
+
+    // Set outputs
+    options->outputs.OUT_0 = C;
+
+    // Set inputs
+    options->inputs.IN_0 = a;
+    options->inputs.IN_1 = b;
+
+    nodes.emplace(options->get_name(), options);
+
+    return C;
+}
+
+inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, std::shared_ptr<Tensor> c, Pointwise const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Pointwise>(user_options);
+
+    // Make required output tensors
+    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(C->get_name(), C);
+
+    // Set outputs
+    options->outputs.OUT_0 = C;
+
+    // Set inputs
+    options->inputs.IN_0 = a;
+    options->inputs.IN_1 = b;
+    options->inputs.IN_2 = c;
+
+    nodes.emplace(options->get_name(), options);
+
+    return C;
+}
+
+inline Pointwise::Outputs Graph::pointwise(Pointwise::Inputs inputs, Pointwise const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Pointwise>(user_options);
+
+    // Make required output tensors
+    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(C->get_name(), C);
+
+    // Set outputs
+    options->outputs.OUT_0 = C;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace(options->get_name(), options);
+
+    return options->outputs;
+}
 
 inline std::shared_ptr<Tensor> Graph::matmul(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, Matmul const& user_options) {
 
@@ -589,32 +664,29 @@ inline error_t Graph::infer_properties() {
                 break;
             }
             case Operation::Tag::Pointwise: {
-                auto pointwise_node = std::static_pointer_cast<Pointwise>(node.second);
-                auto const port_count = get_pointwise_mode_port_count(pointwise_node->get_mode());
+                auto pointwise_options = std::static_pointer_cast<Pointwise>(node.second);
+                auto const& node_name = pointwise_options->get_name();
+                auto const port_count = get_pointwise_mode_port_count(pointwise_options->get_mode().value());
 
-                auto &y_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::OUT_0));
-                auto &x_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_0));
+                auto const &IN_0 = pointwise_options->inputs.IN_0->get_name();
+                auto const &OUT_0 = pointwise_options->outputs.OUT_0->get_name();
 
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(pointwise_node->get_name());
-                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(pointwise_node->get_name());
+                outgoing_nodes_for_tensors[IN_0].push_back(node_name);
+                incoming_nodes_for_tensors[OUT_0].push_back(node_name);
 
-                incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(x_tensor->get_name());
-                outgoing_tensors_for_nodes[pointwise_node->get_name()].push_back(y_tensor->get_name());
+                incoming_tensors_for_nodes[node_name].push_back(IN_0);
+                outgoing_tensors_for_nodes[node_name].push_back(OUT_0);
 
                 if(port_count >= 3) {
-                    auto &b_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_1));
-
-                    outgoing_nodes_for_tensors[b_tensor->get_name()].push_back(pointwise_node->get_name());
-
-                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(b_tensor->get_name());
+                    auto const&IN_1 = pointwise_options->inputs.IN_1->get_name();
+                    outgoing_nodes_for_tensors[IN_1].push_back(node_name);
+                    incoming_tensors_for_nodes[node_name].push_back(IN_1);
                 }
 
                 if(port_count >= 4) {
-                    auto &t_tensor = tensors.at(pointwise_node->get_tensor_at_port(Pointwise::PORTS::IN_2));
-
-                    outgoing_nodes_for_tensors[t_tensor->get_name()].push_back(pointwise_node->get_name());
-
-                    incoming_tensors_for_nodes[pointwise_node->get_name()].push_back(t_tensor->get_name());
+                    auto const&IN_2 = pointwise_options->inputs.IN_2->get_name();
+                    outgoing_nodes_for_tensors[IN_2].push_back(node_name);
+                    incoming_tensors_for_nodes[node_name].push_back(IN_2);
                 }
 
                 break;
@@ -770,7 +842,7 @@ inline error_t Graph::run_graph_rules() const {
                 actual_pattern.push_back(tag_);
                 if (tag_ == Operation::Tag::Pointwise) {
                     auto pointwise_op = std::static_pointer_cast<cudnn_frontend::graph::Pointwise>(op_);
-                    actual_pointwise_pattern.push_back(pointwise_op->get_mode());
+                    actual_pointwise_pattern.push_back(pointwise_op->get_mode().value());
                 }
             }
             is_supported = std::includes(supported_pattern.begin(), supported_pattern.end(), actual_pattern.begin(), actual_pattern.end());
@@ -930,8 +1002,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Pointwise: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << node.first << std::endl;
-                auto pointwise_node = std::make_shared<PointwiseNode>(node.first, uid_offset);
-                pointwise_node->props = std::static_pointer_cast<Pointwise>(node.second);
+                auto pointwise_node = std::make_shared<PointwiseNode>(node.first, std::static_pointer_cast<Pointwise>(node.second), uid_offset);
                 pointwise_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = pointwise_node;
                 uid_offset += 100;

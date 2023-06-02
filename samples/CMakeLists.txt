@@ -20,10 +20,10 @@ add_executable(
     samples
     
     graphs/mha.cpp
-    graphs/convolutions.cpp
-    graphs/dgrads.cpp
+    # graphs/convolutions.cpp
+    # graphs/dgrads.cpp
     graphs/matmuls.cpp
-    graphs/batchnorm.cpp
+    # graphs/batchnorm.cpp
 
     conv_sample.cpp 
     test_list.cpp 

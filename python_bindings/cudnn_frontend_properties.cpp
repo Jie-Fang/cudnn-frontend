@@ -54,19 +54,4 @@ void init_properties(py::module_ &m) {
         .value("W", cudnn_frontend::graph::Convolution::PORTS::W)
         .value("Y", cudnn_frontend::graph::Convolution::PORTS::Y)
         .export_values();
-    
-    py::class_<cudnn_frontend::graph::Pointwise> pointwise(m, "pointwise");
-    pointwise.def(py::init<std::string const &>())
-        .def("get_mode", &cudnn_frontend::graph::Pointwise::get_mode)
-        .def("set_mode", &cudnn_frontend::graph::Pointwise::set_mode)
-        .def("get_compute_data_type",      &cudnn_frontend::graph::Pointwise::get_compute_data_type)
-        .def("set_compute_data_type",      &cudnn_frontend::graph::Pointwise::set_compute_data_type)
-        .def("get_tensor_at_port",       &cudnn_frontend::graph::Pointwise::get_tensor_at_port)
-        .def("map_port_to_tensor",       &cudnn_frontend::graph::Pointwise::map_port_to_tensor);
-
-    py::enum_<cudnn_frontend::graph::Pointwise::PORTS>(pointwise, "ports")
-        .value("X", cudnn_frontend::graph::Pointwise::PORTS::IN_0)
-        .value("B", cudnn_frontend::graph::Pointwise::PORTS::IN_1)
-        .value("Y", cudnn_frontend::graph::Pointwise::PORTS::OUT_0)
-        .export_values();
 }

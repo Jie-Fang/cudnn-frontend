@@ -26,67 +26,49 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
+    namespace fe = cudnn_frontend;
 
-    cudnn_frontend::graph::Graph graph("matmul_sbr");
-    graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
-         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
-         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+    fe::graph::Graph graph("matmul_sbr");
+    graph.set_io_data_type(fe::DataType_t::HALF)
+         .set_intermediate_data_type(fe::DataType_t::FLOAT)
+         .set_compute_data_type(fe::DataType_t::FLOAT);
         
-    auto A = graph.tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 16, 64}));
-    auto B = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({4, 64, 32}));
+    auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 16, 64}));
+    auto Y = graph.tensor(fe::graph::Tensor("filter").set_dim({4, 64, 32}));
+    X->generateStrides(CUDNN_TENSOR_NHWC);
+    Y->generateStrides(CUDNN_TENSOR_NHWC);
+    
+    fe::graph::Matmul matmul("matmul");
+    auto Z = graph.matmul(X, Y, matmul);
+    Z->set_is_virtual(true);
 
-    // TODO: Remove once inferencing is back in.
-    A->generateStrides(CUDNN_TENSOR_NHWC);
+    auto scale_options = fe::graph::Pointwise("pw_scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({4, 16, 32}));
+    S->generateStrides(CUDNN_TENSOR_NHWC);
+    auto scale_output = graph.pointwise(Z, S, scale_options);
+    scale_output->set_is_virtual(true);
+
+    auto bias_options = fe::graph::Pointwise("pw_bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto B = graph.tensor(fe::graph::Tensor("bias").set_dim({4, 16, 32}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
-    
-    cudnn_frontend::graph::Matmul matmul("matmul");
-    auto C = graph.matmul(A, B, matmul);
-    C->set_is_virtual(true);
+    auto bias_output = graph.pointwise(scale_output, B, bias_options);
+    bias_output->set_is_virtual(true);
 
-    auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
-                    .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
-                    .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, C->get_name()}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
-                    });
-    graph.insert_node(pw_scale);
-
-    auto pw_bias = cudnn_frontend::graph::Pointwise("pw_bias")
-                    .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
-                    .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_scale.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "bias"}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "bias_output"}
-                    });
-    graph.insert_node(pw_bias);
-
-    auto pw_relu = cudnn_frontend::graph::Pointwise("pw_relu")
-                    .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
-                    .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, pw_bias.get_tensor_at_port(cudnn_frontend::graph::Pointwise::PORTS::OUT_0)}
-                        , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "output"}
-                    });
-    graph.insert_node(pw_relu);
-    
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("scale").set_dim({4, 16, 32}));
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("scale_output").set_is_virtual(true));
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("bias").set_dim({4, 16, 32}));
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("bias_output").set_is_virtual(true));
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("output"));
+    auto relu_options = fe::graph::Pointwise("pw_relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto O = graph.pointwise(bias_output, relu_options);
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     #if (CUDNN_VERSION >= 8500)
-        REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+        REQUIRE(fe::error_t::OK == graph.build(handle));
     #else
         SKIP("Cudnn 8.4.1 and below did not support matmul epilogue fusion with Column Major layout");
     #endif
 
-    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
+    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
 
     Surface<half> x_tensor(4*16*64, false);
     Surface<half> w_tensor(4*64*32, false);
@@ -94,13 +76,13 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     Surface<half> b_tensor(4*16*32, false);
     Surface<half> y_tensor(4*16*32, false);
 
-    std::unordered_map<std::string, void*> variant_pack = {
-        {"image", x_tensor.devPtr}
-        , {"filter", w_tensor.devPtr}
-        , {"scale", s_tensor.devPtr}
-        , {"bias", b_tensor.devPtr}
-        , {"output", y_tensor.devPtr}
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+        {X, x_tensor.devPtr}
+        , {Y, w_tensor.devPtr}
+        , {S, s_tensor.devPtr}
+        , {B, b_tensor.devPtr}
+        , {O, y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
     cudnnDestroy(handle);
 }
