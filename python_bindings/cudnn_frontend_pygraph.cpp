@@ -202,21 +202,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Matmul(name)
-        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-        .map_port_to_tensor({
-            {cudnn_frontend::graph::Matmul::PORTS::A, image_props_ptr->get_name()},
-            {cudnn_frontend::graph::Matmul::PORTS::B, weight_props_ptr->get_name()}
-        });
+        auto props = cudnn_frontend::graph::Matmul(name).set_compute_data_type(compute_data_type);
+        props.inputs.A = image_props_ptr;
+        props.inputs.B = weight_props_ptr;
+        auto outputs = graph.matmul(props.inputs, props);
 
-        // Add matmul node to graph
-        graph.insert_node(props);
-
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
-
-        return graph.get_tensor(output_tensor_name);
+        return outputs.C;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own

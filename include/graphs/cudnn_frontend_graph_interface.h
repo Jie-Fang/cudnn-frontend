@@ -6,11 +6,13 @@
 #include "graphs/cudnn_frontend_node_batchnorm_backward_weight.h"
 #include "graphs/cudnn_frontend_node_batchnorm_finalize.h"
 #include "graphs/cudnn_frontend_node_convolution.h"
+#include "graphs/cudnn_frontend_node_dgrad.h"
 #include "graphs/cudnn_frontend_node_genstats.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
+#include "graphs/cudnn_frontend_node_reduction.h"
+#include "graphs/cudnn_frontend_node_scaled_dot_product_attention.h"
 #include "graphs/cudnn_frontend_node_wgrad.h"
-#include "graphs/cudnn_frontend_node_dgrad.h"
 
 #include <graphs/cudnn_frontend_graph_helpers.h>
 
@@ -107,7 +109,9 @@ public:
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
     std::shared_ptr<Tensor> conv(Convolution& conv);
+    Matmul::Outputs matmul(Matmul::Inputs, Matmul& conv);
     std::shared_ptr<Tensor> pointwise(Pointwise& pointwise);
+    Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const&, Scaled_dot_product_attention const&);
     Graph& insert_node(Operation const& props);
 
     Graph& insert_graph(Graph& other_graph, std::unordered_map<std::string, std::string> const& connections);
@@ -217,6 +221,46 @@ inline std::shared_ptr<Tensor> Graph::pointwise(Pointwise& pointwise) {
     return output_ptr;
 }
 
+inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Matmul>(user_options);
+
+    // Make required output tensors
+    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(C->get_name(), C);
+
+    // Set outputs
+    options->outputs.C = C;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace(options->get_name(), options);
+
+    return options->outputs;
+}
+
+inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const& inputs, Scaled_dot_product_attention const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Scaled_dot_product_attention>(user_options);
+    
+    // Make required output tensors
+    auto O = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(O->get_name(), O);
+
+    // Set outputs
+    options->outputs.O = O;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace(options->get_name(), options);
+
+    return options->outputs;
+}
+
 inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {    
     switch (node_ptr->get_tag()) {
         case Operation::Tag::Batchnorm:{
@@ -253,6 +297,10 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
         }
         case Operation::Tag::Reduction:{
             nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Reduction>(node_ptr));
+            break;
+        }
+        case Operation::Tag::Scaled_dot_product_attention:{
+            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node_ptr));
             break;
         }
         case Operation::Tag::Wgrad:{
@@ -300,6 +348,10 @@ inline Graph& Graph::insert_node(Operation const& props) {
         }
         case Operation::Tag::Reduction:{
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Reduction>((Reduction&)props)));
+            break;
+        }
+        case Operation::Tag::Scaled_dot_product_attention:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Scaled_dot_product_attention>((Scaled_dot_product_attention&)props)));
             break;
         }
         case Operation::Tag::Wgrad:{
@@ -395,11 +447,6 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                     break;
                 }
                 case Operation::Tag::Matmul:{
-                    for(auto& itr: std::static_pointer_cast<Matmul>(node.second)->port_to_name) {
-                        if(itr.second == connection.first) {
-                            itr.second = connection.second;
-                        }
-                    }
                     break;
                 }
                 case Operation::Tag::Pointwise:{
@@ -416,6 +463,9 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
                             itr.second = connection.second;
                         }
                     }
+                    break;
+                }
+                case Operation::Tag::Scaled_dot_product_attention:{
                     break;
                 }
                 case Operation::Tag::Wgrad:{
@@ -468,6 +518,10 @@ inline Graph& Graph::insert_graph(Graph& other_graph, std::unordered_map<std::st
             }
             case Operation::Tag::Reduction: {
                 std::static_pointer_cast<Reduction>(itr.second)->fill_from_context(other_graph.get_context());
+                break;
+            }
+            case Operation::Tag::Scaled_dot_product_attention: {
+                std::static_pointer_cast<Scaled_dot_product_attention>(itr.second)->fill_from_context(other_graph.get_context());
                 break;
             }
             case Operation::Tag::Wgrad: {
@@ -661,18 +715,20 @@ inline error_t Graph::infer_properties() {
                 break;
             }
             case Operation::Tag::Matmul: {
-                auto matmul_node = std::static_pointer_cast<Matmul>(node.second);
-                auto &y_tensor = tensors.at(matmul_node->get_tensor_at_port(Matmul::PORTS::C));
-                auto &x_tensor = tensors.at(matmul_node->get_tensor_at_port(Matmul::PORTS::A));
-                auto &w_tensor = tensors.at(matmul_node->get_tensor_at_port(Matmul::PORTS::B));
+                auto matmul_options = std::static_pointer_cast<Matmul>(node.second);
+                auto const& node_name = matmul_options->get_name();
 
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(matmul_node->get_name());
-                outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(matmul_node->get_name());
-                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(matmul_node->get_name());
+                auto const& A = matmul_options->inputs.A->get_name();
+                auto const& B = matmul_options->inputs.B->get_name();
+                auto const& C = matmul_options->outputs.C->get_name();
+                
+                outgoing_nodes_for_tensors[A].push_back(node_name);
+                outgoing_nodes_for_tensors[B].push_back(node_name);
+                incoming_nodes_for_tensors[C].push_back(node_name);
 
-                incoming_tensors_for_nodes[matmul_node->get_name()].push_back(x_tensor->get_name());
-                incoming_tensors_for_nodes[matmul_node->get_name()].push_back(w_tensor->get_name());
-                outgoing_tensors_for_nodes[matmul_node->get_name()].push_back(y_tensor->get_name());
+                incoming_tensors_for_nodes[node_name].push_back(A);
+                incoming_tensors_for_nodes[node_name].push_back(B);
+                outgoing_tensors_for_nodes[node_name].push_back(C);
                 break;
             }
             case Operation::Tag::Pointwise: {
@@ -716,6 +772,27 @@ inline error_t Graph::infer_properties() {
 
                 incoming_tensors_for_nodes[reduction_node->get_name()].push_back(x_tensor->get_name());
                 outgoing_tensors_for_nodes[reduction_node->get_name()].push_back(y_tensor->get_name());
+                break;
+            }
+            case Operation::Tag::Scaled_dot_product_attention: {
+                auto scaled_dot_product_attention_options = std::static_pointer_cast<Scaled_dot_product_attention>(node.second);
+                auto const& node_name = scaled_dot_product_attention_options->get_name();
+
+                auto const& Q = scaled_dot_product_attention_options->inputs.Q->get_name();
+                auto const& K = scaled_dot_product_attention_options->inputs.K->get_name();
+                auto const& V = scaled_dot_product_attention_options->inputs.V->get_name();
+                auto const& O = scaled_dot_product_attention_options->outputs.O->get_name();
+
+                outgoing_nodes_for_tensors[Q].push_back(node_name);
+                outgoing_nodes_for_tensors[K].push_back(node_name);
+                outgoing_nodes_for_tensors[V].push_back(node_name);
+                incoming_nodes_for_tensors[O].push_back(node_name);
+
+                incoming_tensors_for_nodes[node_name].push_back(Q);
+                incoming_tensors_for_nodes[node_name].push_back(K);
+                incoming_tensors_for_nodes[node_name].push_back(V);
+                outgoing_tensors_for_nodes[node_name].push_back(O);
+
                 break;
             }
             case Operation::Tag::Wgrad: {
@@ -988,8 +1065,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Matmul: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << node.first << std::endl;
-                auto matmul_node = std::make_shared<MatMulNode>(node.first, uid_offset);
-                matmul_node->props = std::static_pointer_cast<Matmul>(node.second);
+                auto matmul_node = std::make_shared<MatMulNode>(node.first, std::static_pointer_cast<Matmul>(node.second), uid_offset);
                 matmul_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = matmul_node;
                 uid_offset += 100;
@@ -1010,6 +1086,14 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 reduction_node->props = std::static_pointer_cast<Reduction>(node.second);
                 reduction_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = reduction_node;
+                uid_offset += 100;
+                break;
+            }
+            case Operation::Tag::Scaled_dot_product_attention: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the Scaled_dot_product_attention node named " << node.first << std::endl;
+                auto scaled_dot_product_attention_node = std::make_shared<ScaledDotProductAttentionNode>(node.first, std::static_pointer_cast<Scaled_dot_product_attention>(node.second), uid_offset);
+                scaled_dot_product_attention_node->parent_node = &flat_node;
+                flat_node.sub_nodes[node.first] = scaled_dot_product_attention_node;
                 uid_offset += 100;
                 break;
             }

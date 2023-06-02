@@ -28,7 +28,7 @@ enum class [[nodiscard]] error_t {
 #define CHECK_CUDNN_FRONTEND_ERROR(x) do { \
   error_t retval = (x); \
   if (retval != error_t::OK) { \
-    getLogger() << "[cudnn_frontend] ERROR: " << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__; \
+    getLogger() << "[cudnn_frontend] ERROR: " << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
     return retval; \
   } \
 } while (0)

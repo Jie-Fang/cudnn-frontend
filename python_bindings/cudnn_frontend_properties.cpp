@@ -55,24 +55,6 @@ void init_properties(py::module_ &m) {
         .value("Y", cudnn_frontend::graph::Convolution::PORTS::Y)
         .export_values();
     
-    py::class_<cudnn_frontend::graph::Matmul> matmul(m, "matmul");
-    matmul.def(py::init<std::string const &>())
-        .def("get_compute_data_type",     &cudnn_frontend::graph::Matmul::get_compute_data_type)
-        .def("set_compute_data_type",     &cudnn_frontend::graph::Matmul::set_compute_data_type)
-        .def("get_tensor_at_port",       &cudnn_frontend::graph::Matmul::get_tensor_at_port)
-        .def("map_port_to_tensor",       &cudnn_frontend::graph::Matmul::map_port_to_tensor)
-        .def("__repr__", [](cudnn_frontend::graph::Matmul const& props){
-            std::ostringstream out;
-            out << props;
-            return out.str();
-        });;
-
-    py::enum_<cudnn_frontend::graph::Matmul::PORTS>(matmul, "ports")
-        .value("A", cudnn_frontend::graph::Matmul::PORTS::A)
-        .value("B", cudnn_frontend::graph::Matmul::PORTS::B)
-        .value("C", cudnn_frontend::graph::Matmul::PORTS::C)
-        .export_values();
-
     py::class_<cudnn_frontend::graph::Pointwise> pointwise(m, "pointwise");
     pointwise.def(py::init<std::string const &>())
         .def("get_mode", &cudnn_frontend::graph::Pointwise::get_mode)

@@ -199,6 +199,7 @@ public:
         Matmul,
         Pointwise,
         Reduction,
+        Scaled_dot_product_attention,
         Wgrad,
     };
 
@@ -699,45 +700,19 @@ inline std::ostream& operator<<(std::ostream& os, const Dgrad& props) {
 
 class Matmul : public Operation {
 public:
-    enum PORTS {
-        A,
-        B,
-        C,
-        A_OVERRIDE,
-        B_OVERRIDE,
-        C_OVERRIDE,
+    struct Inputs {
+        std::shared_ptr<Tensor> A;
+        std::shared_ptr<Tensor> B;
+        std::shared_ptr<Tensor> M_override;
+        std::shared_ptr<Tensor> N_override;
+        std::shared_ptr<Tensor> K_override;
+    } inputs;
 
-        COUNT
-    };
+    struct Outputs {
+        std::shared_ptr<Tensor> C;
+    } outputs;
 
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
-    Matmul(const std::string name) : Operation(name, Tag::Matmul) {
-        port_to_name[PORTS::A] = name + "::A";
-        port_to_name[PORTS::B] = name + "::B";
-        port_to_name[PORTS::C] = name + "::C";
-        port_to_name[PORTS::A_OVERRIDE] = name + "::A_OVERRIDE";
-        port_to_name[PORTS::B_OVERRIDE] = name + "::B_OVERRIDE";
-        port_to_name[PORTS::C_OVERRIDE] = name + "::C_OVERRIDE";
-    }
-
-    Matmul& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
-    }
-
-    int update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
+    Matmul(const std::string name) : Operation(name, Tag::Matmul) {}
 
     Matmul& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -745,25 +720,22 @@ public:
     }
 
     auto fill_from_context(detail::Context const& context) -> Matmul& {
+        // Fill node's tensors
+        inputs.A->fill_from_context(context);
+        inputs.B->fill_from_context(context);
+        outputs.C->fill_from_context(context);
+
+        if(inputs.M_override)inputs.M_override->fill_from_context(context);
+        if(inputs.N_override)inputs.N_override->fill_from_context(context);
+        if(inputs.K_override)inputs.K_override->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
         return *this;
     }
-
-    friend std::ostream& operator<<(std::ostream& os, const Matmul& props);
 };
-
-inline std::ostream& operator<<(std::ostream& os, const Matmul& props) {
-    os << "{" 
-    << " name: '" << props.get_name() << "',"
-    << " ports: [";
-    for(size_t i = 0; i < Matmul::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<Matmul::PORTS>(i)) << ",";
-    }
-    os << "],";
-    return os;
-}
 
 class Pointwise : public Operation {
 public:
@@ -1002,6 +974,80 @@ public:
     }
 
     auto fill_from_context(detail::Context const& context) -> Reduction& {
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Scaled_dot_product_attention : public Operation {
+public:
+
+    struct Inputs {
+        std::shared_ptr<Tensor> Q;
+        std::shared_ptr<Tensor> K;
+        std::shared_ptr<Tensor> Bias;  // Optional bias after bmm1
+        std::shared_ptr<Tensor> V;
+        std::shared_ptr<Tensor> SEQ_LEN_Q;
+        std::shared_ptr<Tensor> SEQ_LEN_K;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor> O;
+    } outputs;
+
+private:
+    bool is_inference;
+    bool use_causal_masking;
+    double dropout_probability, dropout_scale;
+    float scale_k;
+    
+public:
+    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention) {}
+
+    Scaled_dot_product_attention& set_is_inference(bool const value){
+        is_inference = value;
+        return *this;
+    }
+
+    Scaled_dot_product_attention& set_scale_for_K(float const value){
+        scale_k = value;
+        return *this;
+    }
+
+    Scaled_dot_product_attention& set_masking(bool const use_causal) {
+        use_causal_masking = use_causal;
+        return *this;
+    }
+
+    Scaled_dot_product_attention& set_inference(bool const use_causal) {
+        use_causal_masking = use_causal;
+        return *this;
+    }
+
+    Scaled_dot_product_attention& set_dropout(double const probability, double const scale) {
+        dropout_probability = probability;
+        dropout_scale = scale;
+        return *this;
+    }
+
+    Scaled_dot_product_attention& set_compute_data_type(DataType_t const value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    Scaled_dot_product_attention& fill_from_context(detail::Context const& context) {
+        // Fill node's tensors
+        inputs.Q->fill_from_context(context);
+        inputs.K->fill_from_context(context);
+        inputs.V->fill_from_context(context);
+        inputs.SEQ_LEN_Q->fill_from_context(context);
+        inputs.SEQ_LEN_K->fill_from_context(context);
+        outputs.O->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }

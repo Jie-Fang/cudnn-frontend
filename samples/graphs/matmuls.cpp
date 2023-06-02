@@ -31,19 +31,22 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
          .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
          .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+        
+    cudnn_frontend::graph::Matmul::Inputs inputs;
+    inputs.A = graph.tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 16, 64}));
+    inputs.B = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({4, 64, 32}));
+    // TODO: Remove once inferencing is back in.
+    inputs.A->generateStrides(CUDNN_TENSOR_NHWC);
+    inputs.B->generateStrides(CUDNN_TENSOR_NHWC);
     
-    auto matmul = cudnn_frontend::graph::Matmul("matmul")
-                    .map_port_to_tensor({
-                        {cudnn_frontend::graph::Matmul::PORTS::A, "image"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::B, "filter"}
-                        , {cudnn_frontend::graph::Matmul::PORTS::C, "response"}
-                    });
-    graph.insert_node(matmul);
+    cudnn_frontend::graph::Matmul matmul("matmul");
+    auto outputs = graph.matmul(inputs, matmul);
+    outputs.C->set_is_virtual(true);
 
     auto pw_scale = cudnn_frontend::graph::Pointwise("pw_scale")
                     .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                     .map_port_to_tensor({
-                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, matmul.get_tensor_at_port(cudnn_frontend::graph::Matmul::PORTS::C)}
+                        {cudnn_frontend::graph::Pointwise::PORTS::IN_0, outputs.C->get_name()}
                         , {cudnn_frontend::graph::Pointwise::PORTS::IN_1, "scale"}
                         , {cudnn_frontend::graph::Pointwise::PORTS::OUT_0, "scale_output"}
                     });
@@ -66,9 +69,6 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
                     });
     graph.insert_node(pw_relu);
     
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 16, 64}));
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("filter").set_dim({4, 64, 32}));
-    graph.insert_tensor(cudnn_frontend::graph::Tensor("response").set_is_virtual(true));
     graph.insert_tensor(cudnn_frontend::graph::Tensor("scale").set_dim({4, 16, 32}));
     graph.insert_tensor(cudnn_frontend::graph::Tensor("scale_output").set_is_virtual(true));
     graph.insert_tensor(cudnn_frontend::graph::Tensor("bias").set_dim({4, 16, 32}));

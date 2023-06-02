@@ -33,17 +33,8 @@ protected:
     std::vector<std::unordered_set<int64_t>> variant_pack_uids;
 
     error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor const> const& props) {
-
-        auto dim = props->get_dim();
-        getLogger() << "[cudnn_frontend] INFO: Tensor dims are ";
-        for(auto sz: dim) getLogger() << sz << " ";
-
-        auto stride = props->get_stride();
-        getLogger() << ", strides are ";
-        for(auto sz: stride) getLogger() << sz << " ";
-
         auto tensor = cudnn_frontend::TensorBuilder()
-                        .setDim(props->get_stride().size(), props->get_dim().data())
+                        .setDim(props->get_dim().size(), props->get_dim().data())
                         .setStrides(props->get_stride().size(), props->get_stride().data())
                         .setId(props->get_uid())
                         .setAlignment(16)

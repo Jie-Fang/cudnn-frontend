@@ -10,8 +10,8 @@ if pycudnn.get_cudnn_version() < 8500:
 
 graph = pycudnn.pygraph("nvfuser", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
-image = graph.tensor(name = "image", dim = [4,16,56])
-weight = graph.tensor(name = "weight", dim = [4,56,16])
+image = graph.tensor(name = "image", dim = [4,16,64], stride = [1024,1,16])
+weight = graph.tensor(name = "weight", dim = [4,64,16], stride = [1024,1,64])
 bias = graph.tensor(name = "bias", dim = [4,16,16])
 
 response = graph.matmul(name = "matmul", image = image, weight = weight)
@@ -24,8 +24,8 @@ relu = graph.relu(name = "relu", input = output)
 
 graph.build()
 
-X_cpu = np.full([4,16,56], 1, dtype=np.half)
-W_cpu = np.full([4,56,16], 1, dtype=np.half)
+X_cpu = np.full([4,16,64], 1, dtype=np.half)
+W_cpu = np.full([4,64,16], 1, dtype=np.half)
 B_cpu = np.full([4,16,16], 2, dtype=np.half)
 
 X_gpu = cp.asarray(X_cpu)
