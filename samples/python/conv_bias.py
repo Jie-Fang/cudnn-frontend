@@ -10,9 +10,9 @@ if pycudnn.get_cudnn_version() < 8500:
 
 graph = pycudnn.pygraph("graph0", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
-image  = graph.tensor(name = "image", dim = [4,16,56,56])
-weight = graph.tensor(name = "weight", dim = [16,16,3,3])
-bias   = graph.tensor(name = "bias", dim = [1,16,1,1])
+image  = graph.tensor(name = "image", dim = [4,16,56,56], stride = [16*56*56,1,56*16,16])
+weight = graph.tensor(name = "weight", dim = [16,16,3,3], stride = [144,1,48,16])
+bias   = graph.tensor(name = "bias", dim = [1,16,1,1], stride = [16,1,16,16])
 
 response = graph.conv(name = "conv", image = image, weight = weight, padding = [1,1], stride = [1,1], dilation = [1,1])
 response.set_is_virtual(True)

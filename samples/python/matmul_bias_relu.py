@@ -12,7 +12,7 @@ graph = pycudnn.pygraph("nvfuser", io_data_type = pycudnn.data_type.HALF, interm
 
 image = graph.tensor(name = "image", dim = [4,16,64], stride = [1024,1,16])
 weight = graph.tensor(name = "weight", dim = [4,64,16], stride = [1024,1,64])
-bias = graph.tensor(name = "bias", dim = [4,16,16])
+bias = graph.tensor(name = "bias", dim = [4,16,16],  stride = [256,1,16])
 
 response = graph.matmul(name = "matmul", image = image, weight = weight)
 response.set_is_virtual(True)

@@ -108,7 +108,8 @@ public:
     Graph& insert_tensor(Tensor const& props);
     std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
 
-    std::shared_ptr<Tensor> conv(Convolution& conv);
+    std::shared_ptr<Tensor> conv(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Convolution const& conv);
+    Convolution::Outputs conv(Convolution::Inputs, Convolution const& conv);
 
     Matmul::Outputs matmul(Matmul::Inputs, Matmul const&);
     std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Matmul const&);
@@ -207,14 +208,43 @@ inline Graph& Graph::insert_tensor(Tensor const& props) {
     return *this;
 }
 
-inline std::shared_ptr<Tensor> Graph::conv(Convolution& conv) {
+inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> w,Convolution const& user_options) {
 
-    auto output_ptr = std::make_shared<Tensor>(conv.get_name() + "_output");
-    tensors.emplace(output_ptr->get_name(), output_ptr);
-    conv.set_output(output_ptr);
-    nodes.emplace(conv.get_name(), std::make_shared<Convolution>(conv));
+    // Copy over the options from the user
+    auto options = std::make_shared<Convolution>(user_options);
 
-    return output_ptr;
+    // Make required output tensors
+    auto Y = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(Y->get_name(), Y);
+    options->outputs.Y = Y;
+
+    // Set inputs
+    options->inputs.X = x;
+    options->inputs.W = w;
+
+    nodes.emplace(options->get_name(), options);
+
+    return Y;
+}
+
+inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Convolution>(user_options);
+
+    // Make required output tensors
+    auto Y = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(Y->get_name(), Y);
+
+    // Set outputs
+    options->outputs.Y = Y;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace(options->get_name(), options);
+
+    return options->outputs;
 }
 
 inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, Pointwise const& user_options) {
@@ -608,18 +638,20 @@ inline error_t Graph::infer_properties() {
                 break;
             }
             case Operation::Tag::Convolution: {
-                auto conv_node = std::static_pointer_cast<Convolution>(node.second);
-                auto &y_tensor = tensors.at(conv_node->get_tensor_at_port(Convolution::PORTS::Y));
-                auto &x_tensor = tensors.at(conv_node->get_tensor_at_port(Convolution::PORTS::X));
-                auto &w_tensor = tensors.at(conv_node->get_tensor_at_port(Convolution::PORTS::W));
+                auto conv_options = std::static_pointer_cast<Convolution>(node.second);
+                auto const& node_name = conv_options->get_name();
 
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(conv_node->get_name());
-                outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(conv_node->get_name());
-                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(conv_node->get_name());
+                auto const& X = conv_options->inputs.X->get_name();
+                auto const& W = conv_options->inputs.W->get_name();
+                auto const& Y = conv_options->outputs.Y->get_name();
 
-                incoming_tensors_for_nodes[conv_node->get_name()].push_back(x_tensor->get_name());
-                incoming_tensors_for_nodes[conv_node->get_name()].push_back(w_tensor->get_name());
-                outgoing_tensors_for_nodes[conv_node->get_name()].push_back(y_tensor->get_name());
+                outgoing_nodes_for_tensors[X].push_back(node_name);
+                outgoing_nodes_for_tensors[W].push_back(node_name);
+                incoming_nodes_for_tensors[Y].push_back(node_name);
+
+                incoming_tensors_for_nodes[node_name].push_back(X);
+                incoming_tensors_for_nodes[node_name].push_back(W);
+                outgoing_tensors_for_nodes[node_name].push_back(Y);
                 break;
             }
             case Operation::Tag::Dgrad: {
@@ -976,8 +1008,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Convolution: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node.first << std::endl;
-                auto conv_node = std::make_shared<ConvolutionNode>(node.first, uid_offset);
-                conv_node->props = std::static_pointer_cast<Convolution>(node.second);
+                auto conv_node = std::make_shared<ConvolutionNode>(node.first, std::static_pointer_cast<Convolution>(node.second), uid_offset);
                 conv_node->parent_node = &flat_node;
                 flat_node.sub_nodes[node.first] = conv_node;
                 uid_offset += 100;

@@ -460,13 +460,15 @@ inline std::ostream& operator<<(std::ostream& os, const Genstats& props) {
 
 class Convolution : public Operation {
 public:
-    enum PORTS {
-        X,
-        W,
-        Y,
+    struct Inputs {
+        std::shared_ptr<Tensor> X;
+        std::shared_ptr<Tensor> W;
+    } inputs;
 
-        COUNT
-    };
+    struct Outputs {
+        std::shared_ptr<Tensor> Y;
+    } outputs;
+
 private:
     std::vector<int64_t> padding  = {};
     std::vector<int64_t> stride   = {};
@@ -476,34 +478,10 @@ public:
     bool is_padding_set = false;
     bool is_stride_set = false;
     bool is_dilation_set = false;
+    
+    Convolution(const std::string name) : Operation(name, Tag::Convolution) {}
 
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
-    Convolution(const std::string name) : Operation(name, Tag::Convolution) {
-        port_to_name[PORTS::X] = name + "::X";
-        port_to_name[PORTS::W] = name + "::W";
-        port_to_name[PORTS::Y] = name + "::Y";
-    }
-
-    Convolution& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
-    }
-
-    int update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
-
-    Convolution& set_compute_data_type(DataType_t value) {
+    Convolution& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
@@ -539,55 +517,18 @@ public:
     }
 
     auto fill_from_context(detail::Context const& context) -> Convolution& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.W->fill_from_context(context);
+        outputs.Y->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
         return *this;
     }
-
-    Convolution& set_input(std::shared_ptr<Tensor> tensor) {
-        port_to_name[PORTS::X] = tensor->get_name();
-        return *this;
-    }
-
-    Convolution& set_weight(std::shared_ptr<Tensor> tensor) {
-        port_to_name[PORTS::W] = tensor->get_name();
-        return *this;
-    }
-
-    Convolution& set_output(std::shared_ptr<Tensor> tensor) {
-        port_to_name[PORTS::Y] = tensor->get_name();
-        return *this;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const Convolution& props);
 };
-
-inline std::ostream& operator<<(std::ostream& os, const Convolution& props) {
-    os << "{" 
-    << " name: '" << props.get_name() << "',"
-    << " dilation: [";
-    for(size_t i = 0; i < props.get_dilation().size(); ++i) {
-        os << props.get_dilation()[i] << ",";
-    }
-    os << "],"
-    << " stride: [";
-    for(size_t i = 0; i < props.get_stride().size(); ++i) {
-        os << props.get_stride()[i] << ",";
-    }
-    os << "],"
-    << " padding: [";
-    for(size_t i = 0; i < props.get_padding().size(); ++i) {
-        os << props.get_padding()[i] << ",";
-    }
-    os << "],"
-    << " ports: [";
-    for(size_t i = 0; i < Convolution::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<Convolution::PORTS>(i)) << ",";
-    }
-    os << "],";
-    return os;
-}
 
 class Dgrad : public Operation {
 public:

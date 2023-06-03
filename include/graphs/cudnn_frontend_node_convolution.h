@@ -7,53 +7,34 @@
 #include "cudnn_frontend_graph_helpers.h"
 #include "cudnn_frontend_node_interface.h"
 
-namespace cudnn_frontend {
-
-namespace graph {
+namespace cudnn_frontend::graph {
 
 class ConvolutionNode : public INode {
-private:
-
-protected:
-
+    std::shared_ptr<Convolution> options;
 public:
-    std::shared_ptr<Convolution> props;
 
-    ConvolutionNode(std::string const& name, int64_t offset = 1)  : INode (name, offset) {}
+    ConvolutionNode(std::string const& name, std::shared_ptr<Convolution> const options, int64_t offset = 1)  : INode (name, offset), options(options) {}
 
     Type getType() override final {
         return Type::CONVOLUTION;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<Convolution> properties) {
-        if(sub_nodes.size() != 0) {
-            return 1;
-        }
-        if(INode_name != name) {
-            return 1;
-        }
-
-        props = properties;
-        return 0;
-    }
-
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
-        props->update_uids(offset);
-
+        
         // Merge with ancestor's context
         fill_missing_context();
 
-        props->fill_from_context(get_context());
+        options->fill_from_context(get_context());
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto x_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X));
-        auto w_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W));
-        auto y_tensor_prop = get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y));
+        auto X = options->inputs.X;
+        auto W = options->inputs.W;
+        auto Y = options->outputs.Y;
         
-        auto const x_tensor_dim = x_tensor_prop->get_dim();
-        auto const w_tensor_dim = w_tensor_prop->get_dim();
-        auto y_tensor_dim = y_tensor_prop->get_dim();
+        auto const x_tensor_dim = X->get_dim();
+        auto const w_tensor_dim = W->get_dim();
+        auto y_tensor_dim = Y->get_dim();
         if(x_tensor_dim.size() != w_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
             getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
@@ -62,9 +43,9 @@ public:
 
         if(y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
-            auto const& padding = props->get_padding();
-            auto const& stride = props->get_stride();
-            auto const& dilation = props->get_dilation();
+            auto const& padding = options->get_padding();
+            auto const& stride = options->get_stride();
+            auto const& dilation = options->get_dilation();
             // N
             y_tensor_dim[0] = x_tensor_dim[0];
             // PQ
@@ -73,7 +54,7 @@ public:
             }
             // K
             y_tensor_dim[1] = w_tensor_dim[0];
-            y_tensor_prop->set_dim(y_tensor_dim);
+            Y->set_dim(y_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
         } else {
             if(x_tensor_dim.size() != y_tensor_dim.size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
@@ -82,27 +63,18 @@ public:
             }
         }
 
-        for(size_t i = 0; i < Convolution::PORTS::COUNT; ++i) {
-            auto tensor_prop = get_tensor_props(props->get_tensor_at_port(static_cast<Convolution::PORTS>(i)));
-
-            tensor_prop->fill_from_context(get_context());
-
-            if(tensor_prop->is_uid_set)
-                props->uids[i] = tensor_prop->get_uid();
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
+        // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
+        // But for the time being doing it here manually.
+        if(X->is_uid_set == false) {
+            X->set_uid(offset + 1);
+        }
+        if(W->is_uid_set == false) {
+            W->set_uid(offset + 2);
+        }
+        if(Y->is_uid_set == false) {
+            Y->set_uid(offset + 3);
         }
 
-        return error_t::OK;
-    }
-
-    error_t validate() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ConvolutionNode..." << std::endl;
-
-        // TODO: check all properties of this operation and its tensor are correct
-        // Like do dim count match dim/stride
-        // Do dim and corresponding stride match
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated ConvolutionNode." << std::endl;
         return error_t::OK;
     }
 
@@ -110,9 +82,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X))));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W))));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y))));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.W));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.Y));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
@@ -128,22 +100,22 @@ public:
         #endif
 
         // convolution descriptor
-        int64_t const spatial_dim_count = props->get_padding().size();
+        int64_t const spatial_dim_count = options->get_padding().size();
         auto convolution_descriptor = cudnn_frontend::ConvDescBuilder()
-                                                        .setComputeType(props->get_compute_data_type())
+                                                        .setComputeType(options->get_compute_data_type())
                                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                                         .setSpatialDimCount(spatial_dim_count)
-                                                        .setSpatialStride(spatial_dim_count, props->get_stride().data())
-                                                        .setPrePadding(spatial_dim_count, props->get_padding().data())
-                                                        .setPostPadding(spatial_dim_count, props->get_padding().data())
-                                                        .setDilation(spatial_dim_count, props->get_dilation().data())
+                                                        .setSpatialStride(spatial_dim_count, options->get_stride().data())
+                                                        .setPrePadding(spatial_dim_count, options->get_padding().data())
+                                                        .setPostPadding(spatial_dim_count, options->get_padding().data())
+                                                        .setDilation(spatial_dim_count, options->get_dilation().data())
                                                         .build();
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(props->uids[Convolution::PORTS::X])))
-                                        .setwDesc(*(tensors.at(props->uids[Convolution::PORTS::W])))
-                                        .setyDesc(*(tensors.at(props->uids[Convolution::PORTS::Y])))
+                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
+                                        .setwDesc(*(tensors.at(options->inputs.W->get_uid())))
+                                        .setyDesc(*(tensors.at(options->outputs.Y->get_uid())))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
@@ -151,14 +123,14 @@ public:
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(convolution_operation)));
 
         // Push all real tensors as required for operation execution.
-        auto const& tensor_props_involved_in_operation = {
-            get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::X))
-            , get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::W))
-            , get_tensor_props(props->get_tensor_at_port(Convolution::PORTS::Y))
+        auto const& tensors_involved_in_operation = {
+            options->inputs.X
+            , options->inputs.W
+            , options->outputs.Y
         };
-        for(auto const& tensor_props: tensor_props_involved_in_operation) {
-            if(tensor_props->get_is_virtual() == false) {
-                tensors_in_operations[name].emplace_back(tensor_props->get_uid());
+        for(auto const& tensor: tensors_involved_in_operation) {
+            if(tensor && tensor->get_is_virtual() == false) {
+                tensors_in_operations[name].emplace_back(tensor->get_uid());
             }
         }
 
@@ -182,6 +154,4 @@ public:
     }
 };
 
-} // namespace graph
-
-} // namespace cudnn_frontend
+} // namespace cudnn_frontend::graph

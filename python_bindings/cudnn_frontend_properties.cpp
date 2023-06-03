@@ -30,28 +30,4 @@ void init_properties(py::module_ &m) {
             out << props;
             return out.str();
         });
-    
-    py::class_<cudnn_frontend::graph::Convolution> convolution(m, "convolution");
-    convolution.def(py::init<std::string const &>())
-        .def("get_padding",  &cudnn_frontend::graph::Convolution::get_padding)
-        .def("set_padding",  &cudnn_frontend::graph::Convolution::set_padding)
-        .def("get_stride",   &cudnn_frontend::graph::Convolution::get_stride)
-        .def("set_stride",   &cudnn_frontend::graph::Convolution::set_stride)
-        .def("get_dilation", &cudnn_frontend::graph::Convolution::get_dilation)
-        .def("set_dilation", &cudnn_frontend::graph::Convolution::set_dilation)
-        .def("get_compute_data_type",     &cudnn_frontend::graph::Convolution::get_compute_data_type)
-        .def("set_compute_data_type",     &cudnn_frontend::graph::Convolution::set_compute_data_type)
-        .def("get_tensor_at_port",       &cudnn_frontend::graph::Convolution::get_tensor_at_port)
-        .def("map_port_to_tensor",       &cudnn_frontend::graph::Convolution::map_port_to_tensor)
-        .def("__repr__", [](cudnn_frontend::graph::Convolution const& props){
-            std::ostringstream out;
-            out << props;
-            return out.str();
-        });;
-
-    py::enum_<cudnn_frontend::graph::Convolution::PORTS>(convolution, "ports")
-        .value("X", cudnn_frontend::graph::Convolution::PORTS::X)
-        .value("W", cudnn_frontend::graph::Convolution::PORTS::W)
-        .value("Y", cudnn_frontend::graph::Convolution::PORTS::Y)
-        .export_values();
 }

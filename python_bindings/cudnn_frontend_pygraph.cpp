@@ -172,23 +172,15 @@ public:
         std::vector<int64_t> const& dilation
     ) {
         auto props = cudnn_frontend::graph::Convolution(name)
-                        .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
+                        .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
-                        .set_dilation(dilation)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Convolution::PORTS::X, image_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Convolution::PORTS::W, weight_props_ptr->get_name()}
-                        });
-        
-        // Add conv node to graph
-        graph.insert_node(props);
-        
-        auto output_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Convolution::PORTS::Y);
-        auto output_tensor = cudnn_frontend::graph::Tensor(output_tensor_name);
-        graph.insert_tensor(output_tensor);
+                        .set_dilation(dilation);
+        props.inputs.X = image_props_ptr;
+        props.inputs.W = weight_props_ptr;
+        auto outputs = graph.conv(props.inputs, props);
 
-        return graph.get_tensor(output_tensor_name);
+        return outputs.Y;        
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
