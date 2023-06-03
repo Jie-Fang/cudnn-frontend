@@ -24,18 +24,6 @@ public:
         return Type::BATCHNORM_BACKWARD_WEIGHT;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<Batchnorm_backward_weight> properties) {
-        if(sub_nodes.size() != 0) {
-            return 1;
-        }
-        if(INode_name != name) {
-            return 1;
-        }
-        
-        props = properties;
-        return 0;
-    }
-
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
         props->update_uids(offset);

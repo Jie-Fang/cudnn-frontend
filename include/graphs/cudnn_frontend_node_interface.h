@@ -47,7 +47,7 @@ protected:
 
     virtual error_t createTensors() {
         for(auto const& sub_node: sub_nodes) {
-            auto status = sub_node.second->createTensors();
+            auto status = sub_node->createTensors();
             if(status != error_t::OK) {
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create tensors in " << name << std::endl;
                 return status;
@@ -61,17 +61,17 @@ protected:
 
     virtual error_t createOperations() {
         for(auto const& sub_node: sub_nodes) {
-            auto status = sub_node.second->createOperations();
+            auto status = sub_node->createOperations();
             if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create operation for " << sub_node.first << " in " << name << std::endl;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create operation for " << name << " in " << name << std::endl;
                 return status;
             }
 
             // Roll up operations to parent node, so that parent can too partition operation graphs.
-            for (auto const &item : sub_node.second->get_operations()) {
+            for (auto const &item : sub_node->get_operations()) {
                 operations.emplace(item.first, item.second);
             }
-            for (auto const &item : sub_node.second->tensors_in_operations) {
+            for (auto const &item : sub_node->tensors_in_operations) {
                 tensors_in_operations.emplace(item.first, item.second);
             }
         }
@@ -88,7 +88,7 @@ public:
     std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> tensor_props;
 
     INode* parent_node;
-    std::unordered_map <std::string, std::shared_ptr<INode>> sub_nodes;
+    std::vector<std::shared_ptr<INode>> sub_nodes;
 
     detail::Context& get_context() {
         return context;
@@ -96,7 +96,7 @@ public:
 
     virtual error_t infer_properties() {
         for(auto const& sub_node: sub_nodes) {
-            auto status = sub_node.second->infer_properties();
+            auto status = sub_node->infer_properties();
             if(status != error_t::OK) {
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer properties in " << name << std::endl;
                 return status;
@@ -107,7 +107,7 @@ public:
 
     virtual error_t validate() const {
         for(auto const& sub_node: sub_nodes) {
-            auto status = sub_node.second->validate();
+            auto status = sub_node->validate();
             if(status != error_t::OK) {
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to validate in " << name << std::endl;
                 return status;
@@ -165,7 +165,7 @@ public:
     int64_t get_workspace_size() const {
         int64_t current_workspace_size = get_cudnn_workspace_size();
         for(auto const& sub_node: sub_nodes) {
-            current_workspace_size += sub_node.second->get_cudnn_workspace_size();
+            current_workspace_size += sub_node->get_cudnn_workspace_size();
         }
         return current_workspace_size;
     }
@@ -433,8 +433,8 @@ protected:
 
         // Currently just make one large graph of operations from all sub nodes.
         for (auto node : sub_nodes) {
-            getLogger() << "Getting the operation from " << node.first << std::endl;
-            for (auto &operation : node.second->get_operations()) {
+            getLogger() << "Getting the operation from " << name << std::endl;
+            for (auto &operation : node->get_operations()) {
                 operation_names.push_back(operation.first);
             }
         }

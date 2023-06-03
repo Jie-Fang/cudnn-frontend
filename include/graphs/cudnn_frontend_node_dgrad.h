@@ -25,18 +25,6 @@ public:
         return Type::DGRAD;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<Dgrad> properties) {
-        if(sub_nodes.size() != 0) {
-            return 1;
-        }
-        if(INode_name != name) {
-            return 1;
-        }
-
-        props = properties;
-        return 0;
-    }
-
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node named " << name << "." << std::endl;
         props->update_uids(offset);

@@ -33,7 +33,7 @@ namespace cudnn_frontend::graph {
             bmm1_options->inputs.N_override = options->inputs.SEQ_LEN_K;
             bmm1_options->outputs.C = P;
             auto bmm1_node = std::make_shared<MatMulNode>(bmm1_options->get_name(), bmm1_options, offset+100);
-            sub_nodes.emplace(bmm1_options->get_name(), bmm1_node);
+            sub_nodes.emplace_back(bmm1_node);
             bmm1_node->parent_node = this;
 
             // Lower options to softmax options
@@ -42,7 +42,7 @@ namespace cudnn_frontend::graph {
             softmax_options->inputs.P = bmm1_options->outputs.C;
             softmax_options->outputs.S = S;
             auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options, offset+200);
-            sub_nodes.emplace(softmax_options->get_name(), softmax_node);
+            sub_nodes.emplace_back(softmax_node);
             softmax_node->parent_node = this;
 
             // Lower options to bmm2 options
@@ -53,7 +53,7 @@ namespace cudnn_frontend::graph {
             bmm2_options->inputs.K_override = options->inputs.SEQ_LEN_K;
             bmm2_options->outputs.C = options->outputs.O;
             auto bmm2_node = std::make_shared<MatMulNode>(bmm2_options->get_name(), bmm2_options, offset + 300);
-            sub_nodes.emplace(bmm2_options->get_name(), bmm2_node);
+            sub_nodes.emplace_back(bmm2_node);
             bmm2_node->parent_node = this;
         }
 
@@ -92,18 +92,13 @@ namespace cudnn_frontend::graph {
              .set_is_virtual(true)
              .fill_from_context(get_context());
             
-            // TODO: Remove once sub_nodes is a vector which is implicitly in sorted order.
-            // Only exists to satisfy bmm2 validation
-            S->set_dim({b, h, s_q, s_kv})
-             .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
-
             // Infer dims and strides for output tensor as matmul node has no context of mha
             // TODO: Rethink whether mha node needs to set it?
             options->outputs.O->set_dim({b,h,s_q,d}).set_stride({s_q*h*d,d,h*d,1});
 
             // TODO: do away this redundant code by tweaking global infer_properties
             for(auto const& sub_node: sub_nodes) {
-                CHECK_CUDNN_FRONTEND_ERROR(sub_node.second->infer_properties());
+                CHECK_CUDNN_FRONTEND_ERROR(sub_node->infer_properties());
             }
 
 

@@ -34,7 +34,7 @@ namespace cudnn_frontend::graph {
             max_options->inputs.X = options->inputs.P;
             max_options->outputs.Y = MAX;
             auto max_node = std::make_shared<ReductionNode>(max_options->get_name(), max_options, offset+10);
-            sub_nodes.emplace(max_options->get_name(), max_node);
+            sub_nodes.emplace_back(max_node);
             max_node->parent_node = this;
 
             // Lower options to sub options
@@ -44,7 +44,7 @@ namespace cudnn_frontend::graph {
             sub_options->inputs.IN_1 = max_options->outputs.Y;
             sub_options->outputs.OUT_0 = P_MAX;
             auto sub_node = std::make_shared<PointwiseNode>(sub_options->get_name(), sub_options, offset+20);
-            sub_nodes.emplace(sub_options->get_name(), sub_node);
+            sub_nodes.emplace_back(sub_node);
             sub_node->parent_node = this;
 
             // Lower options to exp options
@@ -53,7 +53,7 @@ namespace cudnn_frontend::graph {
             exp_options->inputs.IN_0 = sub_options->outputs.OUT_0;
             exp_options->outputs.OUT_0 = E;
             auto exp_node = std::make_shared<PointwiseNode>(exp_options->get_name(), exp_options, offset+30);
-            sub_nodes.emplace(exp_options->get_name(), exp_node);
+            sub_nodes.emplace_back(exp_node);
             exp_node->parent_node = this;
 
             // Lower options to sum options
@@ -62,7 +62,7 @@ namespace cudnn_frontend::graph {
             sum_options->inputs.X = exp_options->outputs.OUT_0;
             sum_options->outputs.Y = SUM;
             auto sum_node = std::make_shared<ReductionNode>(sum_options->get_name(), sum_options, offset+40);
-            sub_nodes.emplace(sum_options->get_name(), sum_node);
+            sub_nodes.emplace_back(sum_node);
             sum_node->parent_node = this;
 
             // Lower options to div options
@@ -72,7 +72,7 @@ namespace cudnn_frontend::graph {
             div_options->inputs.IN_1 = sum_options->outputs.Y;
             div_options->outputs.OUT_0 = options->outputs.S;
             auto div_node = std::make_shared<PointwiseNode>(div_options->get_name(), div_options, offset+50);
-            sub_nodes.emplace(div_options->get_name(), div_node);
+            sub_nodes.emplace_back(div_node);
             div_node->parent_node = this;
         }
 
@@ -130,7 +130,7 @@ namespace cudnn_frontend::graph {
 
             // TODO: do away this redundant code by tweaking global infer_properties
             for(auto const& sub_node: sub_nodes) {
-                CHECK_CUDNN_FRONTEND_ERROR(sub_node.second->infer_properties());
+                CHECK_CUDNN_FRONTEND_ERROR(sub_node->infer_properties());
             }
 
 

@@ -23,18 +23,6 @@ public:
         return Type::GENSTATS;
     }
 
-    int set_properties(std::string const& INode_name, std::shared_ptr<Genstats> properties) {
-        if(sub_nodes.size() != 0) {
-            return 1;
-        }
-        if(INode_name != name) {
-            return 1;
-        }
-
-        props = properties;
-        return 0;
-    }
-
     error_t infer_properties() override final {
         props->update_uids(offset);
 

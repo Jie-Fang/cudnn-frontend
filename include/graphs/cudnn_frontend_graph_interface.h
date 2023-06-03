@@ -74,17 +74,13 @@ class Graph {
 private:
     std::string name;
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors;
-    std::unordered_map<std::string, std::shared_ptr<Operation>> nodes;
-
-    // https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
-    std::vector<std::string> sorted_nodes;
+    std::vector<std::shared_ptr<Operation>> nodes;
 
     int64_t uid_offset = 1;
 
     FlatNode flat_node{"flat_node", 1};
     detail::Context& get_context();
 
-    error_t infer_properties();
     error_t run_graph_rules() const;
 
     Graph& insert_tensor_(std::shared_ptr<Tensor> tensor_ptr);
@@ -154,7 +150,7 @@ inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
     os << "],"
     << "\nnodes: [\n";
     for(auto const& node: graph.nodes) {
-        os << (node.second) << ",";
+        os << node << ",";
     }
     os << "]}";
     return os;
@@ -222,7 +218,7 @@ inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::share
     options->inputs.X = x;
     options->inputs.W = w;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return Y;
 }
@@ -242,7 +238,7 @@ inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution 
     // Set inputs
     options->inputs = inputs;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return options->outputs;
 }
@@ -262,7 +258,7 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, Point
     // Set inputs
     options->inputs.IN_0 = a;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return C;
 }
@@ -283,7 +279,7 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::
     options->inputs.IN_0 = a;
     options->inputs.IN_1 = b;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return C;
 }
@@ -305,7 +301,7 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::
     options->inputs.IN_1 = b;
     options->inputs.IN_2 = c;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return C;
 }
@@ -325,7 +321,7 @@ inline Pointwise::Outputs Graph::pointwise(Pointwise::Inputs inputs, Pointwise c
     // Set inputs
     options->inputs = inputs;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return options->outputs;
 }
@@ -346,7 +342,7 @@ inline std::shared_ptr<Tensor> Graph::matmul(std::shared_ptr<Tensor> a, std::sha
     options->inputs.A = a;
     options->inputs.B = b;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return C;
 }
@@ -366,7 +362,7 @@ inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul const& user_o
     // Set inputs
     options->inputs = inputs;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return options->outputs;
 }
@@ -390,7 +386,7 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
     // Set inputs
     options->inputs = inputs;
 
-    nodes.emplace(options->get_name(), options);
+    nodes.emplace_back(options);
 
     return options->outputs;
 }
@@ -398,48 +394,48 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
 inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {    
     switch (node_ptr->get_tag()) {
         case Operation::Tag::Batchnorm:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Batchnorm>(node_ptr));
             break;
         }
         case Operation::Tag::Batchnorm_finalize:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm_finalize>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Batchnorm_finalize>(node_ptr));
             break;
         }
         case Operation::Tag::Batchnorm_backward_weight:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Batchnorm_backward_weight>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Batchnorm_backward_weight>(node_ptr));
             break;
         }
         case Operation::Tag::Convolution:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Convolution>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Convolution>(node_ptr));
             break;
         }
         case Operation::Tag::Dgrad:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Dgrad>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Dgrad>(node_ptr));
             break;
         }
         case Operation::Tag::Genstats:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Genstats>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Genstats>(node_ptr));
             break;
         }
         case Operation::Tag::Matmul:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Matmul>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Matmul>(node_ptr));
             break;
         }
         case Operation::Tag::Pointwise:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Pointwise>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Pointwise>(node_ptr));
             break;
         }
         case Operation::Tag::Reduction:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Reduction>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Reduction>(node_ptr));
             break;
         }
         case Operation::Tag::Scaled_dot_product_attention:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Scaled_dot_product_attention>(node_ptr));
             break;
         }
         case Operation::Tag::Softmax:{break;}
         case Operation::Tag::Wgrad:{
-            nodes.emplace(node_ptr->get_name(), std::static_pointer_cast<Wgrad>(node_ptr));
+            nodes.emplace_back(std::static_pointer_cast<Wgrad>(node_ptr));
             break;
         }
     }
@@ -503,327 +499,6 @@ inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name)
     return tensors.at(tensor_name);
 }
 
-inline error_t Graph::infer_properties() {
-    // Make map of tensors to/from nodes
-    std::unordered_map<std::string, std::vector<std::string>> incoming_tensors_for_nodes;
-    std::unordered_map<std::string, std::vector<std::string>> outgoing_tensors_for_nodes;
-    std::unordered_map<std::string, std::vector<std::string>> incoming_nodes_for_tensors;
-    std::unordered_map<std::string, std::vector<std::string>> outgoing_nodes_for_tensors;
-    for (auto &node : nodes) {
-        switch (node.second->get_tag()) {
-                        case Operation::Tag::Batchnorm: {
-                auto batchnorm_node = std::static_pointer_cast<Batchnorm>(node.second);
-                auto &y_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Y));
-                auto &x_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::X));
-                auto &mean_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Mean));
-                auto &var_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Var));
-                auto &prev_running_mean_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Previous_running_mean));
-                auto &prev_running_var_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Previous_running_var));
-                auto &next_running_mean_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Next_running_mean));
-                auto &next_running_var_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Next_running_var));
-                auto &scale_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Scale));
-                auto &bias_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::Bias));
-                auto &eps_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::EPS));
-                auto &exp_avg_tensor = tensors.at(batchnorm_node->get_tensor_at_port(Batchnorm::PORTS::EXP_AVG));
-
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(batchnorm_node->get_name());
-                outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(batchnorm_node->get_name());
-                outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(batchnorm_node->get_name());
-                outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(batchnorm_node->get_name());
-                outgoing_nodes_for_tensors[exp_avg_tensor->get_name()].push_back(batchnorm_node->get_name());
-                outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(batchnorm_node->get_name());
-                outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(batchnorm_node->get_name());
-                incoming_nodes_for_tensors[y_tensor->get_name()].push_back(batchnorm_node->get_name());
-                incoming_nodes_for_tensors[mean_tensor->get_name()].push_back(batchnorm_node->get_name());
-                incoming_nodes_for_tensors[var_tensor->get_name()].push_back(batchnorm_node->get_name());
-                incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(batchnorm_node->get_name());
-                incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(batchnorm_node->get_name());
-
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(x_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(prev_running_mean_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(prev_running_var_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(eps_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(exp_avg_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(scale_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_node->get_name()].push_back(bias_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(y_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(mean_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(var_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(next_running_mean_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_node->get_name()].push_back(next_running_var_tensor->get_name());
-                break;
-            }
-            case Operation::Tag::Batchnorm_backward_weight: {
-                auto batchnorm_backward_weight_node = std::static_pointer_cast<Batchnorm_backward_weight>(node.second);
-                auto &x_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::X));
-                auto &dy_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::DY));
-                auto &mean_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::MEAN));
-                auto &inv_var_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::INV_VARIANCE));
-                auto &scale_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::SCALE));
-                auto &dbias_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::DBIAS));
-                auto &dscale_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::DSCALE));
-                auto &eq_scale_dy_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::EQUIVALENT_SCALE_DY));
-                auto &eq_scale_x_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::EQUIVALENT_SCALE_X));
-                auto &eq_bias_tensor = tensors.at(batchnorm_backward_weight_node->get_tensor_at_port(Batchnorm_backward_weight::PORTS::EQUIVALENT_BIAS));
-
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                outgoing_nodes_for_tensors[dy_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                outgoing_nodes_for_tensors[mean_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                outgoing_nodes_for_tensors[inv_var_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                incoming_nodes_for_tensors[dscale_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                incoming_nodes_for_tensors[dbias_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                incoming_nodes_for_tensors[eq_scale_x_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                incoming_nodes_for_tensors[eq_scale_dy_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-                incoming_nodes_for_tensors[eq_bias_tensor->get_name()].push_back(batchnorm_backward_weight_node->get_name());
-
-                incoming_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(x_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(dy_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(scale_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(mean_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(inv_var_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(dscale_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(dbias_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(eq_scale_dy_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(eq_scale_x_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_backward_weight_node->get_name()].push_back(eq_bias_tensor->get_name());
-                break;
-            }
-            case Operation::Tag::Batchnorm_finalize: {
-                auto batchnorm_finalize_node = std::static_pointer_cast<Batchnorm_finalize>(node.second);
-                auto &sum_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::SUM));
-                auto &square_sum_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::SQUARE_SUM));
-                auto &mean_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::MEAN));
-                auto &inv_var_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::INV_VARIANCE));
-                auto &prev_running_mean_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Previous_running_mean));
-                auto &prev_running_var_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Previous_running_var));
-                auto &next_running_mean_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Next_running_mean));
-                auto &next_running_var_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::Next_running_var));
-                auto &scale_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::SCALE));
-                auto &bias_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::BIAS));
-                auto &eq_scale_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EQUIVALENT_SCALE));
-                auto &eq_bias_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EQUIVALENT_BIAS));
-                auto &eps_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EPSILON));
-                auto &exp_avg_tensor = tensors.at(batchnorm_finalize_node->get_tensor_at_port(Batchnorm_finalize::PORTS::EXP_AVG));
-
-                outgoing_nodes_for_tensors[sum_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[square_sum_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[mean_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[inv_var_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[prev_running_mean_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[prev_running_var_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[eps_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[exp_avg_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[scale_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                outgoing_nodes_for_tensors[bias_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                incoming_nodes_for_tensors[next_running_mean_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                incoming_nodes_for_tensors[next_running_var_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                incoming_nodes_for_tensors[eq_scale_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-                incoming_nodes_for_tensors[eq_bias_tensor->get_name()].push_back(batchnorm_finalize_node->get_name());
-
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(sum_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(square_sum_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(prev_running_mean_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(prev_running_var_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(eps_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(exp_avg_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(scale_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(bias_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(mean_tensor->get_name());
-                incoming_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(inv_var_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(next_running_mean_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(next_running_var_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(eq_scale_tensor->get_name());
-                outgoing_tensors_for_nodes[batchnorm_finalize_node->get_name()].push_back(eq_bias_tensor->get_name());
-                break;
-            }
-            case Operation::Tag::Convolution: {
-                auto conv_options = std::static_pointer_cast<Convolution>(node.second);
-                auto const& node_name = conv_options->get_name();
-
-                auto const& X = conv_options->inputs.X->get_name();
-                auto const& W = conv_options->inputs.W->get_name();
-                auto const& Y = conv_options->outputs.Y->get_name();
-
-                outgoing_nodes_for_tensors[X].push_back(node_name);
-                outgoing_nodes_for_tensors[W].push_back(node_name);
-                incoming_nodes_for_tensors[Y].push_back(node_name);
-
-                incoming_tensors_for_nodes[node_name].push_back(X);
-                incoming_tensors_for_nodes[node_name].push_back(W);
-                outgoing_tensors_for_nodes[node_name].push_back(Y);
-                break;
-            }
-            case Operation::Tag::Dgrad: {
-                auto dgrad_node = std::static_pointer_cast<Dgrad>(node.second);
-                auto &dy_tensor = tensors.at(dgrad_node->get_tensor_at_port(Dgrad::PORTS::DY));
-                auto &w_tensor = tensors.at(dgrad_node->get_tensor_at_port(Dgrad::PORTS::W));
-                auto &dx_tensor = tensors.at(dgrad_node->get_tensor_at_port(Dgrad::PORTS::DX));
-
-                outgoing_nodes_for_tensors[dy_tensor->get_name()].push_back(dgrad_node->get_name());
-                outgoing_nodes_for_tensors[w_tensor->get_name()].push_back(dgrad_node->get_name());
-                incoming_nodes_for_tensors[dx_tensor->get_name()].push_back(dgrad_node->get_name());
-
-                incoming_tensors_for_nodes[dgrad_node->get_name()].push_back(dy_tensor->get_name());
-                incoming_tensors_for_nodes[dgrad_node->get_name()].push_back(w_tensor->get_name());
-                outgoing_tensors_for_nodes[dgrad_node->get_name()].push_back(dx_tensor->get_name());
-                break;
-            }
-            case Operation::Tag::Genstats: {
-                auto genstats_node = std::static_pointer_cast<Genstats>(node.second);
-                auto &x_tensor = tensors.at(genstats_node->get_tensor_at_port(Genstats::PORTS::X));
-                auto &sum_tensor = tensors.at(genstats_node->get_tensor_at_port(Genstats::PORTS::SUM));
-                auto &sq_sum_tensor = tensors.at(genstats_node->get_tensor_at_port(Genstats::PORTS::SQ_SUM));
-
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(genstats_node->get_name());
-                incoming_nodes_for_tensors[sum_tensor->get_name()].push_back(genstats_node->get_name());
-                incoming_nodes_for_tensors[sq_sum_tensor->get_name()].push_back(genstats_node->get_name());
-
-                incoming_tensors_for_nodes[genstats_node->get_name()].push_back(x_tensor->get_name());
-                outgoing_tensors_for_nodes[genstats_node->get_name()].push_back(sum_tensor->get_name());
-                outgoing_tensors_for_nodes[genstats_node->get_name()].push_back(sq_sum_tensor->get_name());
-                break;
-            }
-            case Operation::Tag::Matmul: {
-                auto matmul_options = std::static_pointer_cast<Matmul>(node.second);
-                auto const& node_name = matmul_options->get_name();
-
-                auto const& A = matmul_options->inputs.A->get_name();
-                auto const& B = matmul_options->inputs.B->get_name();
-                auto const& C = matmul_options->outputs.C->get_name();
-                
-                outgoing_nodes_for_tensors[A].push_back(node_name);
-                outgoing_nodes_for_tensors[B].push_back(node_name);
-                incoming_nodes_for_tensors[C].push_back(node_name);
-
-                incoming_tensors_for_nodes[node_name].push_back(A);
-                incoming_tensors_for_nodes[node_name].push_back(B);
-                outgoing_tensors_for_nodes[node_name].push_back(C);
-                break;
-            }
-            case Operation::Tag::Pointwise: {
-                auto pointwise_options = std::static_pointer_cast<Pointwise>(node.second);
-                auto const& node_name = pointwise_options->get_name();
-                auto const port_count = get_pointwise_mode_port_count(pointwise_options->get_mode().value());
-
-                auto const &IN_0 = pointwise_options->inputs.IN_0->get_name();
-                auto const &OUT_0 = pointwise_options->outputs.OUT_0->get_name();
-
-                outgoing_nodes_for_tensors[IN_0].push_back(node_name);
-                incoming_nodes_for_tensors[OUT_0].push_back(node_name);
-
-                incoming_tensors_for_nodes[node_name].push_back(IN_0);
-                outgoing_tensors_for_nodes[node_name].push_back(OUT_0);
-
-                if(port_count >= 3) {
-                    auto const&IN_1 = pointwise_options->inputs.IN_1->get_name();
-                    outgoing_nodes_for_tensors[IN_1].push_back(node_name);
-                    incoming_tensors_for_nodes[node_name].push_back(IN_1);
-                }
-
-                if(port_count >= 4) {
-                    auto const&IN_2 = pointwise_options->inputs.IN_2->get_name();
-                    outgoing_nodes_for_tensors[IN_2].push_back(node_name);
-                    incoming_tensors_for_nodes[node_name].push_back(IN_2);
-                }
-
-                break;
-            }
-            case Operation::Tag::Reduction: {
-                auto reduction_options = std::static_pointer_cast<Reduction>(node.second);
-                auto const& node_name = reduction_options->get_name();
-
-                auto const& Y = reduction_options->outputs.Y->get_name();;
-                auto const& X = reduction_options->inputs.X->get_name();;
-
-                outgoing_nodes_for_tensors[X].push_back(node_name);
-                incoming_nodes_for_tensors[Y].push_back(node_name);
-
-                incoming_tensors_for_nodes[node_name].push_back(X);
-                outgoing_tensors_for_nodes[node_name].push_back(Y);
-                break;
-            }
-            case Operation::Tag::Scaled_dot_product_attention: {
-                auto scaled_dot_product_attention_options = std::static_pointer_cast<Scaled_dot_product_attention>(node.second);
-                auto const& node_name = scaled_dot_product_attention_options->get_name();
-
-                auto const& Q = scaled_dot_product_attention_options->inputs.Q->get_name();
-                auto const& K = scaled_dot_product_attention_options->inputs.K->get_name();
-                auto const& V = scaled_dot_product_attention_options->inputs.V->get_name();
-                auto const& O = scaled_dot_product_attention_options->outputs.O->get_name();
-
-                outgoing_nodes_for_tensors[Q].push_back(node_name);
-                outgoing_nodes_for_tensors[K].push_back(node_name);
-                outgoing_nodes_for_tensors[V].push_back(node_name);
-                incoming_nodes_for_tensors[O].push_back(node_name);
-
-                incoming_tensors_for_nodes[node_name].push_back(Q);
-                incoming_tensors_for_nodes[node_name].push_back(K);
-                incoming_tensors_for_nodes[node_name].push_back(V);
-                outgoing_tensors_for_nodes[node_name].push_back(O);
-
-                break;
-            }
-            case Operation::Tag::Softmax:{break;}
-            case Operation::Tag::Wgrad: {
-                auto conv_node = std::static_pointer_cast<Wgrad>(node.second);
-                auto &dy_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::DY));
-                auto &x_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::X));
-                auto &dw_tensor = tensors.at(conv_node->get_tensor_at_port(Wgrad::PORTS::DW));
-
-                outgoing_nodes_for_tensors[x_tensor->get_name()].push_back(conv_node->get_name());
-                outgoing_nodes_for_tensors[dy_tensor->get_name()].push_back(conv_node->get_name());
-                incoming_nodes_for_tensors[dw_tensor->get_name()].push_back(conv_node->get_name());
-
-                incoming_tensors_for_nodes[conv_node->get_name()].push_back(x_tensor->get_name());
-                incoming_tensors_for_nodes[conv_node->get_name()].push_back(dy_tensor->get_name());
-                outgoing_tensors_for_nodes[conv_node->get_name()].push_back(dw_tensor->get_name());
-                break;
-            }
-        }
-    }
-
-    // https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
-    std::unordered_map<std::string, int32_t> incoming_edges_count;
-    std::vector<std::string> source_nodes;
-    for(auto const& itr: incoming_tensors_for_nodes) {
-        incoming_edges_count[itr.first] = 0;
-        for(auto const& incoming_tensors: itr.second) {
-            incoming_edges_count[itr.first] += (incoming_nodes_for_tensors[incoming_tensors].size());
-        }
-        if(incoming_edges_count[itr.first] == 0) {
-            source_nodes.push_back(itr.first);
-        }
-    }
-
-    while(source_nodes.size()) {
-        std::string const node = source_nodes.back();
-        sorted_nodes.push_back(node);
-        source_nodes.pop_back();
-
-        for(std::string const& tensor: outgoing_tensors_for_nodes[node]) {
-            for(std::string const& next_node: outgoing_nodes_for_tensors[tensor]) {
-                --incoming_edges_count[next_node];
-                if(incoming_edges_count[next_node] == 0) {
-                    source_nodes.push_back(next_node);
-                }
-            }
-        }
-    }
-
-    getLogger() << "[cudnn_frontend] INFO: Sorted Nodes: ";
-    for(std::string const& node: sorted_nodes) {
-        getLogger() << node << " ";
-    }
-    getLogger() << std::endl;
-
-    for(std::string const& node: sorted_nodes) {
-        CHECK_CUDNN_FRONTEND_ERROR(flat_node.sub_nodes[node]->infer_properties());
-    }
-
-    return error_t::OK;
-}
-
 inline error_t Graph::run_graph_rules() const {
     int32_t major  = 0;
     int32_t minor  = 0;
@@ -857,14 +532,14 @@ inline error_t Graph::run_graph_rules() const {
 
     // Section 3.3.1 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-single-op-engine
     if (nodes.size() == 1) {
-        auto tag = nodes.begin()->second->get_tag();
+        auto tag = nodes[0]->get_tag();
         if (tag != Operation::Tag::Convolution &&
             tag != Operation::Tag::Batchnorm &&
             tag != Operation::Tag::Pointwise) {return error_t::UNSUPPORTED_GRAPH_FORMAT;}
     }
     // Section 3.3.3 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#specialized-runtime-fusion-engines
     bool is_first_node = true;
-    auto tag = nodes.find(sorted_nodes.front())->second->get_tag();
+    auto tag = nodes[0]->get_tag();
     switch (tag) {
         case Operation::Tag::Batchnorm: {
             auto supported_pattern = {Operation::Tag::Batchnorm, Operation::Tag::Pointwise, Operation::Tag::Pointwise, Operation::Tag::Pointwise};
@@ -873,16 +548,15 @@ inline error_t Graph::run_graph_rules() const {
             std::vector<PointwiseMode_t> actual_pointwise_pattern = {};
             (void) supported_pattern;
             (void) supported_pointwise_pattern;
-            for (auto const &node_name : sorted_nodes) {
+            for (auto const &node : nodes) {
                 if (true == is_first_node) {
                     is_first_node = false;
                     continue;
                 }
-                auto op_  = nodes.find(node_name)->second;
-                auto tag_ = op_->get_tag();
+                auto tag_ = node->get_tag();
                 actual_pattern.push_back(tag_);
                 if (tag_ == Operation::Tag::Pointwise) {
-                    auto pointwise_op = std::static_pointer_cast<cudnn_frontend::graph::Pointwise>(op_);
+                    auto pointwise_op = std::static_pointer_cast<cudnn_frontend::graph::Pointwise>(node);
                     actual_pointwise_pattern.push_back(pointwise_op->get_mode().value());
                 }
             }
@@ -925,9 +599,8 @@ inline error_t Graph::run_graph_rules() const {
     is_supported = true;
 
 
-    for (auto const &node_name : sorted_nodes) {
-        auto op_  = nodes.find(node_name)->second;
-        auto tag_ = op_->get_tag();
+    for (auto const &node : nodes) {
+        auto tag_ = node->get_tag();
 
         switch (state) {
             case Graph_parser_state::G1_PROCESS:
@@ -978,106 +651,106 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
     flat_node.tensor_props = tensors;
 
     for (auto &node : nodes) {
-        switch (node.second->get_tag()) {
+        switch (node->get_tag()) {
             case Operation::Tag::Batchnorm: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << node.first << std::endl;
-                auto batchnorm_node = std::make_shared<BatchNormNode>(node.first, uid_offset);
-                batchnorm_node->props = std::static_pointer_cast<Batchnorm>(node.second);
+                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << node->get_name() << std::endl;
+                auto batchnorm_node = std::make_shared<BatchNormNode>(node->get_name(), uid_offset);
+                batchnorm_node->props = std::static_pointer_cast<Batchnorm>(node);
                 batchnorm_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = batchnorm_node;
+                flat_node.sub_nodes.push_back(batchnorm_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Batchnorm_backward_weight: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node.first << std::endl;
-                auto batchnorm_backward_weight_node = std::make_shared<BatchnormBackwardWeightNode>(node.first, uid_offset);
-                batchnorm_backward_weight_node->props = std::static_pointer_cast<Batchnorm_backward_weight>(node.second);
+                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
+                auto batchnorm_backward_weight_node = std::make_shared<BatchnormBackwardWeightNode>(node->get_name(), uid_offset);
+                batchnorm_backward_weight_node->props = std::static_pointer_cast<Batchnorm_backward_weight>(node);
                 batchnorm_backward_weight_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = batchnorm_backward_weight_node;
+                flat_node.sub_nodes.push_back(batchnorm_backward_weight_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Batchnorm_finalize: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node.first << std::endl;
-                auto batchnorm_finalize_node = std::make_shared<BatchNormFinalizeNode>(node.first, uid_offset);
-                batchnorm_finalize_node->props = std::static_pointer_cast<Batchnorm_finalize>(node.second);
+                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
+                auto batchnorm_finalize_node = std::make_shared<BatchNormFinalizeNode>(node->get_name(), uid_offset);
+                batchnorm_finalize_node->props = std::static_pointer_cast<Batchnorm_finalize>(node);
                 batchnorm_finalize_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = batchnorm_finalize_node;
+                flat_node.sub_nodes.push_back(batchnorm_finalize_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Convolution: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node.first << std::endl;
-                auto conv_node = std::make_shared<ConvolutionNode>(node.first, std::static_pointer_cast<Convolution>(node.second), uid_offset);
+                getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node->get_name() << std::endl;
+                auto conv_node = std::make_shared<ConvolutionNode>(node->get_name(), std::static_pointer_cast<Convolution>(node), uid_offset);
                 conv_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = conv_node;
+                flat_node.sub_nodes.push_back(conv_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Dgrad: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the dgrad node named " << node.first << std::endl;
-                auto dgrad_node = std::make_shared<DgradNode>(node.first, uid_offset);
-                dgrad_node->props = std::static_pointer_cast<Dgrad>(node.second);
+                getLogger() << "[cudnn_frontend] INFO: Adding the dgrad node named " << node->get_name() << std::endl;
+                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), uid_offset);
+                dgrad_node->props = std::static_pointer_cast<Dgrad>(node);
                 dgrad_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = dgrad_node;
+                flat_node.sub_nodes.push_back(dgrad_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Genstats: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the genstats node named " << node.first << std::endl;
-                auto genstats_node = std::make_shared<GenstatsNode>(node.first, uid_offset);
-                genstats_node->props = std::static_pointer_cast<Genstats>(node.second);
+                getLogger() << "[cudnn_frontend] INFO: Adding the genstats node named " << node->get_name() << std::endl;
+                auto genstats_node = std::make_shared<GenstatsNode>(node->get_name(), uid_offset);
+                genstats_node->props = std::static_pointer_cast<Genstats>(node);
                 genstats_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = genstats_node;
+                flat_node.sub_nodes.push_back(genstats_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Matmul: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << node.first << std::endl;
-                auto matmul_node = std::make_shared<MatMulNode>(node.first, std::static_pointer_cast<Matmul>(node.second), uid_offset);
+                getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << node->get_name() << std::endl;
+                auto matmul_node = std::make_shared<MatMulNode>(node->get_name(), std::static_pointer_cast<Matmul>(node), uid_offset);
                 matmul_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = matmul_node;
+                flat_node.sub_nodes.push_back(matmul_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Pointwise: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << node.first << std::endl;
-                auto pointwise_node = std::make_shared<PointwiseNode>(node.first, std::static_pointer_cast<Pointwise>(node.second), uid_offset);
+                getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << node->get_name() << std::endl;
+                auto pointwise_node = std::make_shared<PointwiseNode>(node->get_name(), std::static_pointer_cast<Pointwise>(node), uid_offset);
                 pointwise_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = pointwise_node;
+                flat_node.sub_nodes.push_back(pointwise_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Reduction: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the reduction node named " << node.first << std::endl;
-                auto reduction_node = std::make_shared<ReductionNode>(node.first, std::static_pointer_cast<Reduction>(node.second), uid_offset);
+                getLogger() << "[cudnn_frontend] INFO: Adding the reduction node named " << node->get_name() << std::endl;
+                auto reduction_node = std::make_shared<ReductionNode>(node->get_name(), std::static_pointer_cast<Reduction>(node), uid_offset);
                 reduction_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = reduction_node;
+                flat_node.sub_nodes.push_back(reduction_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Scaled_dot_product_attention: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the Scaled_dot_product_attention node named " << node.first << std::endl;
-                auto scaled_dot_product_attention_node = std::make_shared<ScaledDotProductAttentionNode>(node.first, std::static_pointer_cast<Scaled_dot_product_attention>(node.second), uid_offset);
+                getLogger() << "[cudnn_frontend] INFO: Adding the Scaled_dot_product_attention node named " << node->get_name() << std::endl;
+                auto scaled_dot_product_attention_node = std::make_shared<ScaledDotProductAttentionNode>(node->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node), uid_offset);
                 scaled_dot_product_attention_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = scaled_dot_product_attention_node;
+                flat_node.sub_nodes.push_back(scaled_dot_product_attention_node);
                 uid_offset += 100;
                 break;
             }
             case Operation::Tag::Softmax:{break;}
             case Operation::Tag::Wgrad: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node.first << std::endl;
-                auto wgrad_node = std::make_shared<WgradNode>(node.first, uid_offset);
-                wgrad_node->props = std::static_pointer_cast<Wgrad>(node.second);
+                getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node->get_name() << std::endl;
+                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), uid_offset);
+                wgrad_node->props = std::static_pointer_cast<Wgrad>(node);
                 wgrad_node->parent_node = &flat_node;
-                flat_node.sub_nodes[node.first] = wgrad_node;
+                flat_node.sub_nodes.push_back(wgrad_node);
                 uid_offset += 100;
                 break;
             }
         }
     }
 
-    CHECK_CUDNN_FRONTEND_ERROR(infer_properties());
+    CHECK_CUDNN_FRONTEND_ERROR(flat_node.infer_properties());
     CHECK_CUDNN_FRONTEND_ERROR(run_graph_rules());
     is_validated = true;
     return error_t::OK;
