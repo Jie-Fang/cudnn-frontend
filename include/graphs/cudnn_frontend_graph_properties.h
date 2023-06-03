@@ -23,7 +23,8 @@ protected:
     bool is_virtual = false;
     bool is_pass_by_value = false;
     TensorReordering_t reordering_type = TensorReordering_t::NONE;
-    int64_t uid;
+    using uid_t = int64_t;
+    uid_t uid;
 
 public:
     bool is_dim_set = false;
@@ -31,19 +32,6 @@ public:
     bool is_virtual_set = false;
     bool is_pass_by_value_set = false;
     bool is_uid_set = false;
-
-    // TODO: Currently this structure takes in unrolled list of properties to set.
-    // But later, it will take in the context and derive properties to set from it.
-    int set_properties_from_context(cudnnTensorFormat_t const filter_format, int64_t const uid) {
-        if(!is_stride_set) {
-            generateStrides(filter_format);
-        }
-        if(!is_uid_set) {
-            set_uid(uid);
-        }
-
-        return 0;
-    }
 
     int
     generateStrides(cudnnTensorFormat_t const filterFormat) {
@@ -143,11 +131,11 @@ public:
         return *this;
     }
 
-    int64_t get_uid() const {
+    uid_t get_uid() const {
         return uid;
     }
 
-    auto set_uid(int64_t value) -> Tensor& {
+    auto set_uid(uid_t value) -> Tensor& {
         uid = value;
         is_uid_set = true;
         return *this;

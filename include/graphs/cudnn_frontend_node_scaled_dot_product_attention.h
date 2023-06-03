@@ -12,26 +12,19 @@
 namespace cudnn_frontend::graph {
 
     class ScaledDotProductAttentionNode : public INode {
-        // TODO: Just storing the virtual tensors here, but look for potentially better ideas?
-        // Otherwise this node is not owner of it anymore
         std::shared_ptr<Tensor> P;
-        std::shared_ptr<Tensor> S;
-
         std::shared_ptr<Scaled_dot_product_attention> options;
     public:
 
         ScaledDotProductAttentionNode(std::string const& name, std::shared_ptr<Scaled_dot_product_attention> const options, int64_t const offset = 1)  : INode (name, offset), options(options) {
-            // A dummy underlying tensor whose properties will be filled in infer_properties()
-            P = std::make_shared<Tensor>("P");
-            S = (options->get_is_inference() ? std::make_shared<Tensor>("S") : options->outputs.S); // Use tensor provided by Graph when real S
-
             // Lower options to bmm1 options
             auto bmm1_options = std::make_shared<Matmul>("bmm1");
             bmm1_options->inputs.A = options->inputs.Q;
             bmm1_options->inputs.B = options->inputs.K;
             bmm1_options->inputs.M_override = options->inputs.SEQ_LEN_Q;
             bmm1_options->inputs.N_override = options->inputs.SEQ_LEN_K;
-            bmm1_options->outputs.C = P;
+            bmm1_options->outputs.C = P = std::make_shared<Tensor>("P"); // A dummy underlying tensor whose properties will be filled in infer_properties()
+            bmm1_options->outputs.C->set_is_virtual(true);
             auto bmm1_node = std::make_shared<MatMulNode>(bmm1_options->get_name(), bmm1_options, offset+100);
             sub_nodes.emplace_back(bmm1_node);
             bmm1_node->parent_node = this;
@@ -40,7 +33,14 @@ namespace cudnn_frontend::graph {
             auto softmax_options = std::make_shared<Softmax>("softmax");
             softmax_options->set_is_inference(options->get_is_inference());
             softmax_options->inputs.P = bmm1_options->outputs.C;
-            softmax_options->outputs.S = S;
+            // Use tensor provided by Graph when real S
+            if(options->get_is_inference()) {
+                softmax_options->outputs.S = std::make_shared<Tensor>("S");
+                softmax_options->outputs.S->set_is_virtual(true);
+            }
+            else {
+                softmax_options->outputs.S = options->outputs.S;
+            }
             auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options, offset+200);
             sub_nodes.emplace_back(softmax_node);
             softmax_node->parent_node = this;
@@ -69,15 +69,6 @@ namespace cudnn_frontend::graph {
 
             options->fill_from_context(get_context());
 
-            // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
-            // But for the time being doing it here manually.
-            options->inputs.Q->set_uid(offset + 1);
-            options->inputs.K->set_uid(offset + 2);
-            options->inputs.V->set_uid(offset + 3);
-            options->inputs.SEQ_LEN_Q->set_uid(offset + 4);
-            options->inputs.SEQ_LEN_K->set_uid(offset + 5);
-            options->outputs.O->set_uid(offset + 6);
-
             // Fill properties of virtual tensors
             auto const& q_dim = options->inputs.Q->get_dim();
             auto b = q_dim[0];
@@ -89,7 +80,6 @@ namespace cudnn_frontend::graph {
             auto s_kv = k_dim[3];
             P->set_dim({b, h, s_q, s_kv})
              .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-             .set_is_virtual(true)
              .fill_from_context(get_context());
             
             // Infer dims and strides for output tensor as matmul node has no context of mha

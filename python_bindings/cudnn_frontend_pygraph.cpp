@@ -321,9 +321,9 @@ public:
         cudnnHandle_t handle;
         cudnnCreate(&handle);
 
-        std::unordered_map<std::string, void *> var_pack_;
+        std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void *> var_pack_;
         for (auto item : var_pack) {
-            var_pack_.insert(std::make_pair(item.first->get_name(), extract_data_pointer(item.second)));
+            var_pack_.insert(std::make_pair(item.first, extract_data_pointer(item.second)));
         }
 
         // TODO: Probably concatenate in a macro?

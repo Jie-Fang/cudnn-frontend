@@ -79,8 +79,6 @@ public:
 
             if(tensor_prop->is_uid_set)
                 props->uids[i] = tensor_prop->get_uid();
-
-            tensor_prop->set_properties_from_context(CUDNN_TENSOR_NHWC, props->uids[i]);
         }
 
         return error_t::OK;

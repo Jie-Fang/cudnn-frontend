@@ -41,15 +41,12 @@ public:
             }
         }
 
-        // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
-        // But for the time being doing it here manually.
-        if(x_tensor->is_uid_set == false) {
-            x_tensor->set_uid(offset + 1);
-        }
-        if(y_tensor->is_uid_set == false) {
-            y_tensor->set_uid(offset + 2);
-        }
+        return error_t::OK;
+    }
 
+    error_t assignUids_() override final {
+        options->inputs.X->set_uid(ICudnn::create_new_uid());
+        options->outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 

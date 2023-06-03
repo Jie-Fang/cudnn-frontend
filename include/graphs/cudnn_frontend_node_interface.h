@@ -23,6 +23,22 @@ namespace graph {
 // Interface for all nodes to follow.
 class INode: public ICudnn {
 
+    virtual error_t assignUids_() {
+        return error_t::OK;
+    };
+
+    error_t assignUids() {
+        CHECK_CUDNN_FRONTEND_ERROR(assignUids_());
+        for(auto const& sub_node: sub_nodes) {
+            auto status = sub_node->assignUids();
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create tensors in " << name << std::endl;
+                return status;
+            }
+        }
+        return error_t::OK;
+    }
+
 protected:
     // Type of each node. Nodes can either be a composite (value COMPOSITE) or
     // one of the other primitive types. Primitives types are nothing but
@@ -44,7 +60,7 @@ protected:
     Type tag;
 
     detail::Context context;
-
+    
     virtual error_t createTensors() {
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->createTensors();
@@ -83,8 +99,6 @@ public:
     int offset = 1;
 
     virtual Type getType() = 0;
-    // Tensors belonging to each node.
-    // Connecting nodes can modify and delete tensors in this container.
     std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> tensor_props;
 
     INode* parent_node;
@@ -126,6 +140,12 @@ public:
         status = validate();
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        status = assignUids();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to assignUids in " << name << std::endl;
             return status;
         }
 
@@ -192,37 +212,9 @@ public:
         return status;
     }
 
-    error_t execute(cudnnHandle_t handle, std::unordered_map<std::string, void*> const& tensor_name_to_pointer_map) {
-        std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
-        void* workspace_ptr = nullptr;
-
-        for (auto const &item : tensor_name_to_pointer_map) {
-            if(item.first == "workspace") {
-                workspace_ptr = item.second;
-            }
-            else {
-                tensor_uid_to_pointer_map.emplace(get_tensor_props(item.first)->get_uid(), item.second);
-            }
-        }
-        
-        auto status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace_ptr);
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
-            return status;
-        }
-        
-        return status;
-    }
-
     INode(std::string const& name, int64_t const offset) : name(name), offset(offset), parent_node(nullptr) {}
 
     virtual ~INode() {};
-
-    int insert_tensor(std::string const& name, graph::Tensor& properties) {
-        tensor_props.emplace(name, std::make_shared<graph::Tensor>(properties));
-        return 0;
-    }
-
 
     std::shared_ptr<graph::Tensor> get_tensor_props(std::string const& name) const {
         if(tensor_props.count(name)) {

@@ -770,11 +770,6 @@ inline error_t Graph::execute(cudnnHandle_t handle, std::unordered_map<std::shar
     return error_t::OK;
 }
 
-inline error_t Graph::execute(cudnnHandle_t handle, std::unordered_map<std::string, void *> var_pack) {
-    CHECK_CUDNN_FRONTEND_ERROR(flat_node.execute(handle, var_pack));
-    return error_t::OK;
-}
-
 } // namespace graph
 
 } // namespace cudnn_frontend

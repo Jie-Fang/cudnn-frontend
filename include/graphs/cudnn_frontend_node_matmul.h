@@ -56,27 +56,16 @@ namespace cudnn_frontend::graph {
                 }
             }
 
-            // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
-            // But for the time being doing it here manually.
-            if(a_tensor_prop->is_uid_set == false) {
-                a_tensor_prop->set_uid(offset + 1);
-            }
-            if(b_tensor_prop->is_uid_set == false) {
-                b_tensor_prop->set_uid(offset + 2);
-            }
-            if(options->inputs.M_override && options->inputs.M_override->is_uid_set == false) {
-                options->inputs.M_override->set_uid(offset + 4);
-            }
-            if(options->inputs.N_override && options->inputs.N_override->is_uid_set == false) {
-                options->inputs.N_override->set_uid(offset + 5);
-            }
-            if(options->inputs.K_override && options->inputs.K_override->is_uid_set == false) {
-                options->inputs.K_override->set_uid(offset + 6);
-            }
-            if(c_tensor_prop->is_uid_set == false) {
-                c_tensor_prop->set_uid(offset + 3);
-            }
+            return error_t::OK;
+        }
 
+        error_t assignUids_() override final {
+            options->inputs.A->set_uid(ICudnn::create_new_uid());
+            options->inputs.B->set_uid(ICudnn::create_new_uid());
+            if(options->inputs.M_override)options->inputs.M_override->set_uid(ICudnn::create_new_uid());
+            if(options->inputs.N_override)options->inputs.N_override->set_uid(ICudnn::create_new_uid());
+            if(options->inputs.K_override)options->inputs.K_override->set_uid(ICudnn::create_new_uid());
+            options->outputs.C->set_uid(ICudnn::create_new_uid());
             return error_t::OK;
         }
 

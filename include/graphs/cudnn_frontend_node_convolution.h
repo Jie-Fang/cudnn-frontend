@@ -63,18 +63,13 @@ public:
             }
         }
 
-        // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
-        // But for the time being doing it here manually.
-        if(X->is_uid_set == false) {
-            X->set_uid(offset + 1);
-        }
-        if(W->is_uid_set == false) {
-            W->set_uid(offset + 2);
-        }
-        if(Y->is_uid_set == false) {
-            Y->set_uid(offset + 3);
-        }
+        return error_t::OK;
+    }
 
+    error_t assignUids_() override final {
+        options->inputs.X->set_uid(ICudnn::create_new_uid());
+        options->inputs.W->set_uid(ICudnn::create_new_uid());
+        options->outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 

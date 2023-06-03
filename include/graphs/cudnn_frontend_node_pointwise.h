@@ -44,21 +44,6 @@ public:
             }
         }
 
-        // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
-        // But for the time being doing it here manually.
-        if(in_0_tensor->is_uid_set == false) {
-            in_0_tensor->set_uid(offset + 1);
-        }
-        if(options->inputs.IN_1 && options->inputs.IN_1->is_uid_set == false) {
-            options->inputs.IN_1->set_uid(offset + 2);
-        }
-        if(options->inputs.IN_2 && options->inputs.IN_2->is_uid_set == false) {
-            options->inputs.IN_2->set_uid(offset + 3);
-        }
-        if(out_0_tensor->is_uid_set == false) {
-            out_0_tensor->set_uid(offset + 4);
-        }
-
         return error_t::OK;
     }
 
@@ -95,6 +80,14 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated PointwiseNode." << std::endl;
         return status;
+    }
+
+    error_t assignUids_() override final {
+        options->inputs.IN_0->set_uid(ICudnn::create_new_uid());
+        if(options->inputs.IN_1)options->inputs.IN_1->set_uid(ICudnn::create_new_uid());
+        if(options->inputs.IN_2)options->inputs.IN_2->set_uid(ICudnn::create_new_uid());
+        options->outputs.OUT_0->set_uid(ICudnn::create_new_uid());
+        return error_t::OK;
     }
 
     error_t createTensors() override final {

@@ -88,11 +88,6 @@ namespace cudnn_frontend::graph {
 
             options->fill_from_context(get_context());
 
-            // TODO: gather all tensors and assign them uids at once using a counter. So no need to keep uids in properties.
-            // But for the time being doing it here manually.
-            options->inputs.P->set_uid(offset + 1);
-            options->outputs.S->set_uid(offset + 2);
-
             // Fill properties of virtual tensors
             auto const& p_dim = options->inputs.P->get_dim();
             auto b = p_dim[0];

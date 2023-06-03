@@ -15,12 +15,20 @@
 namespace cudnn_frontend {
 
 class ICudnn {
-private:
+public:
+    using uid_t = int64_t;
 
+    static uid_t create_new_uid() {
+        static uid_t uid = 0;
+        uid++;
+        return uid;
+    }
 protected:
-    std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
+
+    std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
+
     std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation_v8>> operations;
-    std::unordered_map<std::string, std::vector<int64_t>> tensors_in_operations;
+    std::unordered_map<std::string, std::vector<uid_t>> tensors_in_operations;
 
     std::vector<std::shared_ptr<OperationGraph_v8>>    operation_graphs;
     std::vector<std::shared_ptr<ExecutionPlan>>        execution_plans;
@@ -29,10 +37,16 @@ protected:
     op_graph_to_engine_configs  mode_a_engine_configs;
     op_graph_to_engine_configs  mode_b_engine_configs;
     op_graph_to_engine_configs  fallback_engine_configs;
-    // uids in a variant pack have to be unique, so keep a set of them.
-    std::vector<std::unordered_set<int64_t>> variant_pack_uids;
+    // uid_t in a variant pack have to be unique, so keep a set of them.
+    std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
-    error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor const> const& props) {
+    error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor> const& props) {
+        // Check whether tensor already created
+        if(tensors.find(props->get_uid()) != tensors.end()) {
+            return error_t::OK;
+        }
+
+        // Create new backend tensor
         auto tensor = cudnn_frontend::TensorBuilder()
                         .setDim(props->get_dim().size(), props->get_dim().data())
                         .setStrides(props->get_stride().size(), props->get_stride().data())
@@ -61,7 +75,7 @@ protected:
             getLogger() << "[cudnn_frontend] INFO: " << " Successfully built Operation Graphs." << std::endl;
 
             // Push variant pack tensors required for this operation graph
-            std::unordered_set<int64_t> variant_pack_for_operation_graph;
+            std::unordered_set<uid_t> variant_pack_for_operation_graph;
             for(auto const& operation_name: sub_graph) {
                 auto const& temp = tensors_in_operations.at(operation_name);
                 variant_pack_for_operation_graph.insert(std::begin(temp), std::end(temp));
@@ -176,7 +190,7 @@ public:
         return current_workspace_size;
     }
 
-    error_t execute_cudnn_plans(cudnnHandle_t handle, std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {
+    error_t execute_cudnn_plans(cudnnHandle_t handle, std::unordered_map<uid_t, void*> const& tensor_uid_to_pointer_map, void * workspace_ptr) {
         getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plans.size() << " Plans." << std::endl;
 
         for(size_t i = 0; i < execution_plans.size(); ++i) {
@@ -186,7 +200,7 @@ public:
             getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
 
             std::vector<void *> device_ptrs;
-            std::vector<int64_t> uids;
+            std::vector<uid_t> uids;
             for(auto const& uid: variant_pack_uid) {
                 if (auto search = tensor_uid_to_pointer_map.find(uid); search == tensor_uid_to_pointer_map.end()) {
                     getLogger() << "[cudnn_frontend] ERROR: " << uid << " does not exist in variant pack." << std::endl;
