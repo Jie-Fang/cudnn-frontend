@@ -32,12 +32,11 @@ public:
         auto in_0_tensor = options->inputs.IN_0;
         auto out_0_tensor = options->outputs.OUT_0;
         
-        auto const& in_0_tensor_dim = in_0_tensor->get_dim();
         auto out_0_tensor_dim = out_0_tensor->get_dim();
         if(out_0_tensor_dim.empty()) {
-            out_0_tensor->set_dim(in_0_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            out_0_tensor->set_dim(in_0_tensor->get_dim()).set_stride(in_0_tensor->get_stride());
         } else {
-            if(out_0_tensor_dim.size() != in_0_tensor_dim.size()) {
+            if(out_0_tensor_dim.size() != in_0_tensor->get_dim().size()) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
                 return status;

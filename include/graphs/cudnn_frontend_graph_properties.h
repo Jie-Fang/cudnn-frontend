@@ -865,7 +865,7 @@ private:
     float scale_k;
     
 public:
-    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
+    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false), scale_k(1.f) {}
 
     bool get_is_inference() const {
         return is_inference;
@@ -876,7 +876,11 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_attention& set_scale_for_K(float const value){
+    float get_scale_k() const {
+        return scale_k;
+    }
+
+    Scaled_dot_product_attention& set_scale_k(float const value){
         scale_k = value;
         return *this;
     }

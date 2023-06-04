@@ -119,8 +119,6 @@ namespace cudnn_frontend::graph {
                 ->set_dim({b, h, s_q, s_kv})
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
                 .set_reordering_type(cudnn_frontend::TensorReordering_t::F16x16)
-                .set_is_virtual(options->get_is_inference())
-                .set_data_type(DataType_t::HALF)
                 .fill_from_context(get_context());
 
             // TODO: do away this redundant code by tweaking global infer_properties

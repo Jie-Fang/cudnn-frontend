@@ -26,14 +26,15 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
-    namespace fe = cudnn_frontend;
     int64_t b = 32;  // batch size
     int64_t h = 16;  // head dim
     int64_t s_q = 512; // q tensor is padded to this seq length
     int64_t s_kv = 512; // k and v tensor is padded to this seq length
     int64_t d = 64;  // hidden dim
     bool is_inference = false;
+    bool use_bias = false;
 
+    namespace fe = cudnn_frontend;
     fe::graph::Graph mha_graph("mha");
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
@@ -42,6 +43,9 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
     fe::graph::Scaled_dot_product_attention::Inputs inputs;
     inputs.Q = mha_graph.tensor(fe::graph::Tensor("Q").set_dim({b,h,s_q,d}).set_stride({s_q*3*h*d,d,3*h*d,1}));
     inputs.K = mha_graph.tensor(fe::graph::Tensor("K").set_dim({b,h,d,s_kv}).set_stride({s_kv*3*h*d,d,1,3*h*d}));
+    if(use_bias) {
+        inputs.Bias = mha_graph.tensor(fe::graph::Tensor("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
+    }
     inputs.V = mha_graph.tensor(fe::graph::Tensor("V").set_dim({b,h,s_kv,d}).set_stride({s_kv*3*h*d,d,3*h*d,1}));
     inputs.SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
@@ -94,8 +98,13 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
     };
 
     Surface<half> sTensor(b * h * s_q * s_kv, false);
-    if(!is_inference) {
+    if(is_inference == false) {
         variant_pack[outputs.S] = sTensor.devPtr;
+    }
+    
+    Surface<half> bTensor(1 * h * s_q * s_kv, false);
+    if(use_bias) {
+        variant_pack[inputs.Bias] = bTensor.devPtr;
     }
     
     REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
