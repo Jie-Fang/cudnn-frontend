@@ -107,11 +107,14 @@ public:
     std::shared_ptr<Tensor> conv(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Convolution const& conv);
     Convolution::Outputs conv(Convolution::Inputs, Convolution const& conv);
     
-    std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight const& dbn_weight);
+    std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight const&);
     DBN_weight::Outputs dbn_weight(DBN_weight::Inputs, DBN_weight const& dbn_weight);
 
     std::shared_ptr<Tensor> dgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Dgrad const& dgrad);
     Dgrad::Outputs dgrad(Dgrad::Inputs, Dgrad const& dgrad);
+
+    std::array<std::shared_ptr<Tensor>, 2> genstats(std::shared_ptr<Tensor>, Genstats const&);
+    Genstats::Outputs genstats(Genstats::Inputs, Genstats const&);
 
     Matmul::Outputs matmul(Matmul::Inputs, Matmul const&);
     std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Matmul const&);
@@ -350,6 +353,52 @@ inline Dgrad::Outputs Graph::dgrad(Dgrad::Inputs inputs, Dgrad const& user_optio
 
     // Set outputs
     options->outputs.DX = DX;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace_back(options);
+
+    return options->outputs;
+}
+
+inline std::array<std::shared_ptr<Tensor>, 2> Graph::genstats(std::shared_ptr<Tensor> x, Genstats const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Genstats>(user_options);
+
+    // Make required output tensors
+    auto sum = std::make_shared<Tensor>(options->get_name() + "_sum_output");
+    tensors.emplace(sum->get_name(), sum);
+    auto sq_sum = std::make_shared<Tensor>(options->get_name() + "_sq_sum_output");
+    tensors.emplace(sq_sum->get_name(), sq_sum);
+
+    // Set outputs
+    options->outputs.SUM = sum;
+    options->outputs.SQ_SUM = sq_sum;
+
+    // Set inputs
+    options->inputs.X = x;
+
+    nodes.emplace_back(options);
+
+    return {sum, sq_sum};
+}
+
+inline Genstats::Outputs Graph::genstats(Genstats::Inputs inputs, Genstats const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Genstats>(user_options);
+
+    // Make required output tensors
+    auto sum = std::make_shared<Tensor>(options->get_name() + "_sum_output");
+    tensors.emplace(sum->get_name(), sum);
+    auto sq_sum = std::make_shared<Tensor>(options->get_name() + "_sq_sum_output");
+    tensors.emplace(sq_sum->get_name(), sq_sum);
+
+    // Set outputs
+    options->outputs.SUM = sum;
+    options->outputs.SQ_SUM = sq_sum;
 
     // Set inputs
     options->inputs = inputs;
@@ -851,8 +900,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Genstats: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the genstats node named " << node->get_name() << std::endl;
-                auto genstats_node = std::make_shared<GenstatsNode>(node->get_name(), uid_offset);
-                genstats_node->props = std::static_pointer_cast<Genstats>(node);
+                auto genstats_node = std::make_shared<GenstatsNode>(node->get_name(), std::static_pointer_cast<Genstats>(node), uid_offset);
                 genstats_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(genstats_node);
                 uid_offset += 100;

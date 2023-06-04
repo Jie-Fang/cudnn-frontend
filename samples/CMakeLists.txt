@@ -23,7 +23,7 @@ add_executable(
     graphs/convolutions.cpp
     graphs/dgrads.cpp
     graphs/matmuls.cpp
-    # graphs/batchnorm.cpp
+    graphs/batchnorm.cpp
 
     conv_sample.cpp 
     test_list.cpp 

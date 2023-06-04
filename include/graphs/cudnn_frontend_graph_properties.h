@@ -308,39 +308,16 @@ inline std::ostream& operator<<(std::ostream& os, const Batchnorm_finalize& prop
 
 class Genstats : public Operation {
 public:
-    enum PORTS {
-        X,
-        SUM,
-        SQ_SUM,
+    struct Inputs {
+        std::shared_ptr<Tensor> X;
+    } inputs;
 
-        COUNT
-    };
+    struct Outputs {
+        std::shared_ptr<Tensor> SUM;
+        std::shared_ptr<Tensor> SQ_SUM;
+    } outputs;
 
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
-    Genstats(const std::string name) : Operation(name, Tag::Genstats) {
-        port_to_name[PORTS::X] = name + "::X";
-        port_to_name[PORTS::SUM] = name + "::SUM";
-        port_to_name[PORTS::SQ_SUM] = name + "::SQ_SUM";
-    }
-
-    Genstats& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
-    }
-
-    int update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
+    Genstats(const std::string name) : Operation(name, Tag::Genstats) {}
 
     Genstats& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -348,25 +325,18 @@ public:
     }
 
     auto fill_from_context(detail::Context const& context) -> Genstats& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        outputs.SUM->fill_from_context(context);
+        outputs.SQ_SUM->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
         return *this;
     }
-
-    friend std::ostream& operator<<(std::ostream& os, const Genstats& props);
 };
-
-inline std::ostream& operator<<(std::ostream& os, const Genstats& props) {
-    os << "{" 
-    << " name: '" << props.get_name() << "',"
-    << " ports: [";
-    for(size_t i = 0; i < Genstats::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<Genstats::PORTS>(i)) << ",";
-    }
-    os << "],";
-    return os;
-}
 
 class Convolution : public Operation {
 public:
