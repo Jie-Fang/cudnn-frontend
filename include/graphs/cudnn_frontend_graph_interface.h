@@ -3,7 +3,7 @@
 #include <unordered_map>
 
 #include "graphs/cudnn_frontend_node_batchnorm.h"
-#include "graphs/cudnn_frontend_node_batchnorm_backward_weight.h"
+#include "graphs/cudnn_frontend_node_dbn_weight.h"
 #include "graphs/cudnn_frontend_node_batchnorm_finalize.h"
 #include "graphs/cudnn_frontend_node_convolution.h"
 #include "graphs/cudnn_frontend_node_dgrad.h"
@@ -106,6 +106,9 @@ public:
 
     std::shared_ptr<Tensor> conv(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Convolution const& conv);
     Convolution::Outputs conv(Convolution::Inputs, Convolution const& conv);
+    
+    std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight const& dbn_weight);
+    DBN_weight::Outputs dbn_weight(DBN_weight::Inputs, DBN_weight const& dbn_weight);
 
     std::shared_ptr<Tensor> dgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Dgrad const& dgrad);
     Dgrad::Outputs dgrad(Dgrad::Inputs, Dgrad const& dgrad);
@@ -240,6 +243,74 @@ inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution 
 
     // Set outputs
     options->outputs.Y = Y;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace_back(options);
+
+    return options->outputs;
+}
+
+inline std::array<std::shared_ptr<Tensor>, 5> Graph::dbn_weight(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> mean, std::shared_ptr<Tensor> inv_variance, std::shared_ptr<Tensor> scale, DBN_weight const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<DBN_weight>(user_options);
+
+    // Make required output tensors
+    auto dscale = std::make_shared<Tensor>(options->get_name() + "_dscale_output");
+    tensors.emplace(dscale->get_name(), dscale);
+    auto dbias = std::make_shared<Tensor>(options->get_name() + "_dbias_output");
+    tensors.emplace(dbias->get_name(), dbias);
+    auto eq_scale_dy = std::make_shared<Tensor>(options->get_name() + "_eq_scale_dy_output");
+    tensors.emplace(eq_scale_dy->get_name(), eq_scale_dy);
+    auto eq_scale_x = std::make_shared<Tensor>(options->get_name() + "_eq_scale_xoutput");
+    tensors.emplace(eq_scale_x->get_name(), eq_scale_x);
+    auto eq_bias = std::make_shared<Tensor>(options->get_name() + "_eq_bias_output");
+    tensors.emplace(eq_bias->get_name(), eq_bias);
+
+    // Set outputs
+    options->outputs.DSCALE = dscale;
+    options->outputs.DBIAS = dbias;
+    options->outputs.EQ_SCALE_DY = eq_scale_dy;
+    options->outputs.EQ_SCALE_X = eq_scale_x;
+    options->outputs.EQ_BIAS = eq_bias;
+
+    // Set inputs
+    options->inputs.DY = dy;
+    options->inputs.X = x;
+    options->inputs.SCALE = scale;
+    options->inputs.MEAN = mean;
+    options->inputs.INV_VARIANCE = inv_variance;
+
+    nodes.emplace_back(options);
+
+    return {dscale, dbias, eq_scale_dy, eq_scale_x, eq_bias};
+}
+
+inline DBN_weight::Outputs Graph::dbn_weight(DBN_weight::Inputs inputs, DBN_weight const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<DBN_weight>(user_options);
+
+    // Make required output tensors
+    auto dscale = std::make_shared<Tensor>(options->get_name() + "_dscale_output");
+    tensors.emplace(dscale->get_name(), dscale);
+    auto dbias = std::make_shared<Tensor>(options->get_name() + "_dbias_output");
+    tensors.emplace(dbias->get_name(), dbias);
+    auto eq_scale_dy = std::make_shared<Tensor>(options->get_name() + "_eq_scale_dy_output");
+    tensors.emplace(eq_scale_dy->get_name(), eq_scale_dy);
+    auto eq_scale_x = std::make_shared<Tensor>(options->get_name() + "_eq_scale_xoutput");
+    tensors.emplace(eq_scale_x->get_name(), eq_scale_x);
+    auto eq_bias = std::make_shared<Tensor>(options->get_name() + "_eq_bias_output");
+    tensors.emplace(eq_bias->get_name(), eq_bias);
+
+    // Set outputs
+    options->outputs.DSCALE = dscale;
+    options->outputs.DBIAS = dbias;
+    options->outputs.EQ_SCALE_DY = eq_scale_dy;
+    options->outputs.EQ_SCALE_X = eq_scale_x;
+    options->outputs.EQ_BIAS = eq_bias;
 
     // Set inputs
     options->inputs = inputs;
@@ -485,8 +556,8 @@ inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {
             nodes.emplace_back(std::static_pointer_cast<Batchnorm_finalize>(node_ptr));
             break;
         }
-        case Operation::Tag::Batchnorm_backward_weight:{
-            nodes.emplace_back(std::static_pointer_cast<Batchnorm_backward_weight>(node_ptr));
+        case Operation::Tag::DBN_weight:{
+            nodes.emplace_back(std::static_pointer_cast<DBN_weight>(node_ptr));
             break;
         }
         case Operation::Tag::Convolution:{
@@ -537,8 +608,8 @@ inline Graph& Graph::insert_node(Operation const& props) {
             insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm_finalize>((Batchnorm_finalize&)props)));
             break;
         }
-        case Operation::Tag::Batchnorm_backward_weight:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm_backward_weight>((Batchnorm_backward_weight&)props)));
+        case Operation::Tag::DBN_weight:{
+            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<DBN_weight>((DBN_weight&)props)));
             break;
         }
         case Operation::Tag::Convolution:{
@@ -745,12 +816,11 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 uid_offset += 100;
                 break;
             }
-            case Operation::Tag::Batchnorm_backward_weight: {
+            case Operation::Tag::DBN_weight: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
-                auto batchnorm_backward_weight_node = std::make_shared<BatchnormBackwardWeightNode>(node->get_name(), uid_offset);
-                batchnorm_backward_weight_node->props = std::static_pointer_cast<Batchnorm_backward_weight>(node);
-                batchnorm_backward_weight_node->parent_node = &flat_node;
-                flat_node.sub_nodes.push_back(batchnorm_backward_weight_node);
+                auto DBN_weight_node = std::make_shared<DBNWeightNode>(node->get_name(), std::static_pointer_cast<DBN_weight>(node), uid_offset);
+                DBN_weight_node->parent_node = &flat_node;
+                flat_node.sub_nodes.push_back(DBN_weight_node);
                 uid_offset += 100;
                 break;
             }

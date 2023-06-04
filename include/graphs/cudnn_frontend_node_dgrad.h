@@ -76,7 +76,6 @@ public:
         return error_t::OK;
     }
 
-
     error_t createTensors() override final {
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building DgradNode tensors..." << std::endl;
@@ -122,14 +121,14 @@ public:
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(dgrad_operation)));
 
         // Push all real tensors as required for operation execution.
-        auto const& tensor_options_involved_in_operation = {
+        auto const& tensors_involved_in_operation = {
             options->outputs.DX
             , options->inputs.W
             , options->inputs.DY
         };
-        for(auto const& tensor_options: tensor_options_involved_in_operation) {
-            if(tensor_options->get_is_virtual() == false) {
-                tensors_in_operations[name].emplace_back(tensor_options->get_uid());
+        for(auto const& tensor: tensors_involved_in_operation) {
+            if(tensor && tensor->get_is_virtual() == false) {
+                tensors_in_operations[name].emplace_back(tensor->get_uid());
             }
         }
 

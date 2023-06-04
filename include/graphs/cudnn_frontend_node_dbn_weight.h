@@ -1,0 +1,198 @@
+#pragma once
+
+#include <cudnn_frontend_Heuristics.h>
+#include <cudnn_frontend_Logging.h>
+
+#include "cudnn_frontend_graph_helpers.h"
+#include "cudnn_frontend_node_interface.h"
+
+namespace cudnn_frontend {
+
+namespace graph {
+
+class DBNWeightNode : public INode {
+    std::shared_ptr<DBN_weight> options;
+public:
+
+    DBNWeightNode(std::string const& name, std::shared_ptr<DBN_weight> const options, int64_t offset = 1)  : INode (name, offset), options(options) {
+        // outputs should be float type
+        options->outputs.DBIAS->set_data_type(DataType_t::FLOAT);
+        options->outputs.DSCALE->set_data_type(DataType_t::FLOAT);
+        options->outputs.EQ_BIAS->set_data_type(DataType_t::FLOAT);
+        options->outputs.EQ_SCALE_DY->set_data_type(DataType_t::FLOAT);
+        options->outputs.EQ_SCALE_X->set_data_type(DataType_t::FLOAT);
+    }
+
+    Type getType() override final {
+        return Type::DBN_WEIGHT;
+    }
+
+    error_t infer_properties() override final {
+        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
+        
+        // Merge with ancestor's context
+        fill_missing_context();
+            
+        // Use context to fill in missing options
+        options->fill_from_context(get_context());
+
+        // TODO: Only inferencing from DY works today.
+        auto DY = options->inputs.DY;
+        auto const dy_tensor_dim = DY->get_dim();
+
+        auto X = options->inputs.X;
+        auto x_tensor_dim = X->get_dim();
+        if(x_tensor_dim.empty()) {
+            x_tensor_dim.resize(dy_tensor_dim.size());
+            X->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+        }
+
+        // Set channel length tensors
+        auto infer_per_channel_tensors = [&dy_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+            if(T->get_dim().empty()) {
+                T->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            }
+        };
+        infer_per_channel_tensors(options->inputs.MEAN);
+        infer_per_channel_tensors(options->inputs.INV_VARIANCE);
+        infer_per_channel_tensors(options->inputs.SCALE);
+        infer_per_channel_tensors(options->outputs.DBIAS);
+        infer_per_channel_tensors(options->outputs.DSCALE);
+        infer_per_channel_tensors(options->outputs.EQ_BIAS);
+        infer_per_channel_tensors(options->outputs.EQ_SCALE_DY);
+        infer_per_channel_tensors(options->outputs.EQ_SCALE_X);
+
+        return error_t::OK;
+    }
+    
+    error_t validate() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating DBNWeightNode..." << std::endl;
+
+        auto DY = options->inputs.DY;
+        auto const dy_tensor_dim = DY->get_dim();
+
+        auto X = options->inputs.X;
+        auto const x_tensor_dim = X->get_dim();
+        if(dy_tensor_dim != x_tensor_dim) {
+            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at DY and X ports of " << name << "." << std::endl;
+            return status;
+        }
+        
+        auto validate_per_channel_tensors = [&dy_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+            if(dy_tensor_dim[1] != T->get_dim()[1]) {
+                auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at DY and Y ports." << std::endl;
+                return status;
+            }
+            return error_t::OK;
+        };
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.MEAN));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.INV_VARIANCE));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.SCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.DBIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.DSCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.EQ_BIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.EQ_SCALE_DY));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.EQ_SCALE_X));
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Validated DBNWeightNode." << std::endl;
+        return error_t::OK;
+    }
+
+    error_t assignUids_() override final {
+        options->inputs.X->set_uid(ICudnn::create_new_uid());
+        options->inputs.DY->set_uid(ICudnn::create_new_uid());
+        options->inputs.SCALE->set_uid(ICudnn::create_new_uid());
+        options->inputs.MEAN->set_uid(ICudnn::create_new_uid());
+        options->inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
+        options->outputs.DSCALE->set_uid(ICudnn::create_new_uid());
+        options->outputs.DBIAS->set_uid(ICudnn::create_new_uid());
+        options->outputs.EQ_SCALE_DY->set_uid(ICudnn::create_new_uid());
+        options->outputs.EQ_SCALE_X->set_uid(ICudnn::create_new_uid());
+        options->outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
+        return error_t::OK;
+    }
+
+    error_t createTensors() override final {
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode tensors..." << std::endl;
+
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.DY));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.MEAN));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.INV_VARIANCE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.SCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.DSCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.DBIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.EQ_BIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.EQ_SCALE_DY));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.EQ_SCALE_X));
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode tensors." << std::endl;
+
+        return error_t::OK;
+    }
+    
+    error_t createOperations() override final {
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode operations..." << std::endl;
+        
+        #ifndef NV_CUDNN_DISABLE_EXCEPTION
+        try {
+        #endif
+
+        // Create the batchnorm operation.
+        auto batchnorm_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR)
+                                        .setComputeType(CUDNN_DATA_FLOAT)
+                                        .setEqScalesAndBias(*(tensors.at(options->outputs.EQ_SCALE_DY->get_uid())), *(tensors.at(options->outputs.EQ_SCALE_X->get_uid())), *(tensors.at(options->outputs.EQ_BIAS->get_uid())))
+                                        .setSavedMeanAndInvVar(*(tensors.at(options->inputs.MEAN->get_uid())), *(tensors.at(options->inputs.INV_VARIANCE->get_uid())))
+                                        .setScale(*(tensors.at(options->inputs.SCALE->get_uid())))
+                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
+                                        .setdyDesc(*(tensors.at(options->inputs.DY->get_uid())))
+                                        .setDScaleAndDBias(*(tensors.at(options->outputs.DSCALE->get_uid())), *(tensors.at(options->outputs.DBIAS->get_uid())))
+                                        .build();
+        operations.emplace(name, std::make_shared<Operation_v8>(std::move(batchnorm_operation)));
+        
+        // Push all real tensors as required for operation execution.
+        auto const& tensors_involved_in_operation = {
+            options->inputs.X
+            , options->inputs.DY
+            , options->inputs.MEAN
+            , options->inputs.INV_VARIANCE
+            , options->inputs.SCALE
+            , options->outputs.DBIAS
+            , options->outputs.DSCALE
+            , options->outputs.EQ_BIAS
+            , options->outputs.EQ_SCALE_DY
+            , options->outputs.EQ_SCALE_X
+        };
+        for(auto const& tensor: tensors_involved_in_operation) {
+            if(tensor && tensor->get_is_virtual() == false) {
+                tensors_in_operations[name].emplace_back(tensor->get_uid());
+            }
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode operation." << std::endl;
+
+        #ifndef NV_CUDNN_DISABLE_EXCEPTION
+        } catch (cudnn_frontend::cudnnException &e) {
+            throw cudnnException(e.what(), e.getCudnnStatus());
+        }
+        #endif
+
+        return error_t::OK;
+    }
+
+    error_t createOperationGraphs(cudnnHandle_t) override final {
+        return error_t::OK;
+    }
+
+    error_t createExecutionPlans(cudnnHandle_t) override final {
+        return error_t::OK;
+    }
+};
+
+} // namespace graph
+
+} // namespace cudnn_frontend

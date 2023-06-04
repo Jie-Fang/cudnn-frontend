@@ -46,9 +46,9 @@ protected:
     enum class Type {
         COMPOSITE
         , BATCHNORM
-        , BATCHNORM_BACKWARD_WEIGHT
         , BATCHNORM_FINALIZE
         , CONVOLUTION
+        , DBN_WEIGHT
         , DGRAD
         , GENSTATS
         , MATMUL
@@ -195,12 +195,13 @@ public:
         void* workspace_ptr = nullptr;
 
         for (auto const &item : tensor_to_pointer_map) {
-            // if(item.first == "workspace") {
-            //     workspace_ptr = item.second;
-            // }
-            // else {
+            // TODO: worksapce hack. FIX ME!!!
+            if(item.first->get_name() == "workspace") {
+                workspace_ptr = item.second;
+            }
+            else {
                 tensor_uid_to_pointer_map.emplace(item.first->get_uid(), item.second);
-            // }
+            }
         }
         
         auto status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace_ptr);
