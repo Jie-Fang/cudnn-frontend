@@ -136,12 +136,16 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
     Surface<half> dy_tensor(4*64*16*16, false);
     Surface<half> dw_tensor(64*64*3*3, false);
 
+    auto workspace = graph.tensor(fe::graph::Tensor("workspace"));
+    Surface<int8_t> workspace_tensor(graph.get_workspace_size(), false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {S, s_tensor.devPtr}
         , {B, b_tensor.devPtr}
         , {DY, dy_tensor.devPtr}
         , {DW, dw_tensor.devPtr}
+        , {workspace, workspace_tensor.devPtr}
     };
     REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
     cudnnDestroy(handle);

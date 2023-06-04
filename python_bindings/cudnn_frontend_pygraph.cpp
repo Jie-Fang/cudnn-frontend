@@ -99,10 +99,8 @@ public:
             props.set_stride(stride);
         
         props.set_is_virtual(isVirtual).set_is_pass_by_value(isByValue);
-        
-        graph.insert_tensor(props);
 
-        return graph.get_tensor(name);
+        return graph.tensor(props);
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -122,39 +120,17 @@ public:
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Batchnorm(name)
-                        .set_compute_data_type(compute_data_type)
-                        .map_port_to_tensor({
-                            {cudnn_frontend::graph::Batchnorm::PORTS::X, X_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Batchnorm::PORTS::Previous_running_mean, in_running_mean_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Batchnorm::PORTS::Previous_running_var, in_running_var_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Batchnorm::PORTS::Scale, scale_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Batchnorm::PORTS::Bias, bias_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Batchnorm::PORTS::EPS, epsilon_props_ptr->get_name()}
-                            , {cudnn_frontend::graph::Batchnorm::PORTS::EXP_AVG, exp_avg_factor_props_ptr->get_name()}
-                        });        
-        graph.insert_node(props);
-        
-        auto Y_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Y);
-        auto Y_tensor = cudnn_frontend::graph::Tensor(Y_tensor_name);
-        graph.insert_tensor(Y_tensor);
-        
-        auto Mean_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Mean);
-        auto Mean_tensor = cudnn_frontend::graph::Tensor(Mean_tensor_name);
-        graph.insert_tensor(Mean_tensor);
-        
-        auto Var_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Var);
-        auto Var_tensor = cudnn_frontend::graph::Tensor(Var_tensor_name);
-        graph.insert_tensor(Var_tensor);
-        
-        auto Next_running_mean_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Next_running_mean);
-        auto Next_running_mean_tensor = cudnn_frontend::graph::Tensor(Next_running_mean_tensor_name);
-        graph.insert_tensor(Next_running_mean_tensor);
-        
-        auto Next_running_var_tensor_name = props.get_tensor_at_port(cudnn_frontend::graph::Batchnorm::PORTS::Next_running_var);
-        auto Next_running_var_tensor = cudnn_frontend::graph::Tensor(Next_running_var_tensor_name);
-        graph.insert_tensor(Next_running_var_tensor);
+                        .set_compute_data_type(compute_data_type);
+        props.inputs.X = X_props_ptr;
+        props.inputs.SCALE = scale_props_ptr;
+        props.inputs.BIAS = bias_props_ptr;
+        props.inputs.PREV_RUNNING_MEAN = in_running_mean_props_ptr;
+        props.inputs.PREV_RUNNING_VAR = in_running_var_props_ptr;
+        props.inputs.EPSILON = epsilon_props_ptr;
+        props.inputs.EXP_AVG = exp_avg_factor_props_ptr;
 
-        return {graph.get_tensor(Y_tensor_name), graph.get_tensor(Mean_tensor_name), graph.get_tensor(Var_tensor_name), graph.get_tensor(Next_running_mean_tensor_name), graph.get_tensor(Next_running_var_tensor_name)};
+        auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(props.inputs, props);
+        return {Y, mean, inv_var, next_running_mean, next_running_var};
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -180,7 +156,7 @@ public:
         props.inputs.W = weight_props_ptr;
         auto outputs = graph.conv(props.inputs, props);
 
-        return outputs.Y;        
+        return outputs.Y;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own

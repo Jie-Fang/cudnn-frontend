@@ -46,7 +46,7 @@ protected:
     enum class Type {
         COMPOSITE
         , BATCHNORM
-        , BATCHNORM_FINALIZE
+        , BN_FINALIZE
         , CONVOLUTION
         , DBN_WEIGHT
         , DGRAD
@@ -99,7 +99,6 @@ public:
     int offset = 1;
 
     virtual Type getType() = 0;
-    std::unordered_map<std::string, std::shared_ptr<graph::Tensor>> tensor_props;
 
     INode* parent_node;
     std::vector<std::shared_ptr<INode>> sub_nodes;
@@ -216,19 +215,6 @@ public:
     INode(std::string const& name, int64_t const offset) : name(name), offset(offset), parent_node(nullptr) {}
 
     virtual ~INode() {};
-
-    std::shared_ptr<graph::Tensor> get_tensor_props(std::string const& name) const {
-        if(tensor_props.count(name)) {
-            return tensor_props.at(name);
-        }
-        if(parent_node == nullptr) {
-            return nullptr;
-        }
-        // This optimization is not required right now.
-        // And without it, this function can be qualified as const which helps during development.
-        // tensor_props[name] = parent_node->get_tensor_props(name);
-        return parent_node->get_tensor_props(name);
-    }
 
     void fill_missing_context() {
         // If no parent_node, there is no context to fill missing properties with.

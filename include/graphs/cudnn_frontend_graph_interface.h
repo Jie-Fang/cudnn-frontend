@@ -4,7 +4,7 @@
 
 #include "graphs/cudnn_frontend_node_batchnorm.h"
 #include "graphs/cudnn_frontend_node_dbn_weight.h"
-#include "graphs/cudnn_frontend_node_batchnorm_finalize.h"
+#include "graphs/cudnn_frontend_node_bn_finalize.h"
 #include "graphs/cudnn_frontend_node_convolution.h"
 #include "graphs/cudnn_frontend_node_dgrad.h"
 #include "graphs/cudnn_frontend_node_genstats.h"
@@ -83,9 +83,6 @@ private:
 
     error_t run_graph_rules() const;
 
-    Graph& insert_tensor_(std::shared_ptr<Tensor> tensor_ptr);
-    Graph& insert_node_(std::shared_ptr<Operation> node_ptr);
-
     bool is_validated = false;
 
 public:
@@ -101,8 +98,10 @@ public:
     Graph& set_compute_data_type(DataType_t type);
     
     std::shared_ptr<Tensor> tensor(Tensor const& tensor);
-    Graph& insert_tensor(Tensor const& props);
-    std::shared_ptr<Tensor> get_tensor(std::string const& tensor_name) const;
+
+    Batchnorm::Outputs batchnorm(Batchnorm::Inputs, Batchnorm const&);
+
+    BN_finalize::Outputs bn_finalize(BN_finalize::Inputs, BN_finalize const&);
 
     std::shared_ptr<Tensor> conv(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Convolution const& conv);
     Convolution::Outputs conv(Convolution::Inputs, Convolution const& conv);
@@ -128,8 +127,6 @@ public:
     
     std::shared_ptr<Tensor> wgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Wgrad const& wgrad);
     Wgrad::Outputs wgrad(Wgrad::Inputs, Wgrad const& wgrad);
-
-    Graph& insert_node(Operation const& props);
 
     error_t build(cudnnHandle_t handle);
     error_t validate(cudnnHandle_t handle);
@@ -206,14 +203,65 @@ inline std::shared_ptr<Tensor> Graph::tensor(Tensor const& tensor) {
     return tensor_ptr;
 }
 
-inline Graph& Graph::insert_tensor_(std::shared_ptr<Tensor> tensor_ptr) {
-    tensors.emplace(tensor_ptr->get_name(), tensor_ptr);
-    return *this;
+inline BN_finalize::Outputs Graph::bn_finalize(BN_finalize::Inputs inputs, BN_finalize const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<BN_finalize>(user_options);
+
+    // Make required output tensors
+    auto EQ_SCALE = std::make_shared<Tensor>(options->get_name() + "_EQ_SCALE_output");
+    tensors.emplace(EQ_SCALE->get_name(), EQ_SCALE);
+    auto EQ_BIAS = std::make_shared<Tensor>(options->get_name() + "_EQ_BIAS_output");
+    tensors.emplace(EQ_BIAS->get_name(), EQ_BIAS);
+    auto NEXT_RUNNING_MEAN = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_MEAN_output");
+    tensors.emplace(NEXT_RUNNING_MEAN->get_name(), NEXT_RUNNING_MEAN);
+    auto NEXT_RUNNING_VAR = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_VAR_output");
+    tensors.emplace(NEXT_RUNNING_VAR->get_name(), NEXT_RUNNING_VAR);
+
+    // Set outputs
+    options->outputs.EQ_SCALE = EQ_SCALE;
+    options->outputs.EQ_BIAS = EQ_BIAS;
+    options->outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
+    options->outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace_back(options);
+
+    return options->outputs;
 }
 
-inline Graph& Graph::insert_tensor(Tensor const& props) {
-    insert_tensor_(std::make_shared<Tensor>(props));
-    return *this;
+inline Batchnorm::Outputs Graph::batchnorm(Batchnorm::Inputs inputs, Batchnorm const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Batchnorm>(user_options);
+
+    // Make required output tensors
+    auto Y = std::make_shared<Tensor>(options->get_name() + "_Y_output");
+    tensors.emplace(Y->get_name(), Y);
+    auto MEAN = std::make_shared<Tensor>(options->get_name() + "_MEAN_output");
+    tensors.emplace(MEAN->get_name(), MEAN);
+    auto INV_VARIANCE = std::make_shared<Tensor>(options->get_name() + "_INV_VARIANCE_output");
+    tensors.emplace(INV_VARIANCE->get_name(), INV_VARIANCE);
+    auto NEXT_RUNNING_MEAN = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_MEANoutput");
+    tensors.emplace(NEXT_RUNNING_MEAN->get_name(), NEXT_RUNNING_MEAN);
+    auto NEXT_RUNNING_VAR = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_VAR_output");
+    tensors.emplace(NEXT_RUNNING_VAR->get_name(), NEXT_RUNNING_VAR);
+
+    // Set outputs
+    options->outputs.Y = Y;
+    options->outputs.MEAN = MEAN;
+    options->outputs.INV_VARIANCE = INV_VARIANCE;
+    options->outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
+    options->outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace_back(options);
+
+    return options->outputs;
 }
 
 inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> w,Convolution const& user_options) {
@@ -595,114 +643,6 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
     return options->outputs;
 }
 
-inline Graph& Graph::insert_node_(std::shared_ptr<Operation> node_ptr) {    
-    switch (node_ptr->get_tag()) {
-        case Operation::Tag::Batchnorm:{
-            nodes.emplace_back(std::static_pointer_cast<Batchnorm>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Batchnorm_finalize:{
-            nodes.emplace_back(std::static_pointer_cast<Batchnorm_finalize>(node_ptr));
-            break;
-        }
-        case Operation::Tag::DBN_weight:{
-            nodes.emplace_back(std::static_pointer_cast<DBN_weight>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Convolution:{
-            nodes.emplace_back(std::static_pointer_cast<Convolution>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Dgrad:{
-            nodes.emplace_back(std::static_pointer_cast<Dgrad>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Genstats:{
-            nodes.emplace_back(std::static_pointer_cast<Genstats>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Matmul:{
-            nodes.emplace_back(std::static_pointer_cast<Matmul>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Pointwise:{
-            nodes.emplace_back(std::static_pointer_cast<Pointwise>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Reduction:{
-            nodes.emplace_back(std::static_pointer_cast<Reduction>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Scaled_dot_product_attention:{
-            nodes.emplace_back(std::static_pointer_cast<Scaled_dot_product_attention>(node_ptr));
-            break;
-        }
-        case Operation::Tag::Softmax:{break;}
-        case Operation::Tag::Wgrad:{
-            nodes.emplace_back(std::static_pointer_cast<Wgrad>(node_ptr));
-            break;
-        }
-    }
-
-    return *this;
-}
-
-inline Graph& Graph::insert_node(Operation const& props) {
-    switch (props.get_tag()) {
-        case Operation::Tag::Batchnorm:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm>((Batchnorm&)props)));
-            break;
-        }
-        case Operation::Tag::Batchnorm_finalize:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Batchnorm_finalize>((Batchnorm_finalize&)props)));
-            break;
-        }
-        case Operation::Tag::DBN_weight:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<DBN_weight>((DBN_weight&)props)));
-            break;
-        }
-        case Operation::Tag::Convolution:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Convolution>((Convolution&)props)));
-            break;
-        }
-        case Operation::Tag::Dgrad:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Dgrad>((Dgrad&)props)));
-            break;
-        }
-        case Operation::Tag::Genstats:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Genstats>((Genstats&)props)));
-            break;
-        }
-        case Operation::Tag::Matmul:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Matmul>((Matmul&)props)));
-            break;
-        }
-        case Operation::Tag::Pointwise:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Pointwise>((Pointwise&)props)));
-            break;
-        }
-        case Operation::Tag::Reduction:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Reduction>((Reduction&)props)));
-            break;
-        }
-        case Operation::Tag::Scaled_dot_product_attention:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Scaled_dot_product_attention>((Scaled_dot_product_attention&)props)));
-            break;
-        }
-        case Operation::Tag::Softmax:{break;}
-        case Operation::Tag::Wgrad:{
-            insert_node_(std::static_pointer_cast<Operation>(std::make_shared<Wgrad>((Wgrad&)props)));
-            break;
-        }
-    }
-
-    return *this;
-}
-
-inline std::shared_ptr<Tensor> Graph::get_tensor(std::string const& tensor_name) const {
-    return tensors.at(tensor_name);
-}
-
 inline error_t Graph::run_graph_rules() const {
     int32_t major  = 0;
     int32_t minor  = 0;
@@ -737,18 +677,18 @@ inline error_t Graph::run_graph_rules() const {
     // Section 3.3.1 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-single-op-engine
     if (nodes.size() == 1) {
         auto tag = nodes[0]->get_tag();
-        if (tag != Operation::Tag::Convolution &&
-            tag != Operation::Tag::Batchnorm &&
+        if (tag != Operation::Tag::Conv &&
+            tag != Operation::Tag::BN &&
             tag != Operation::Tag::Pointwise) {return error_t::UNSUPPORTED_GRAPH_FORMAT;}
     }
     // Section 3.3.3 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#specialized-runtime-fusion-engines
     bool is_first_node = true;
     auto tag = nodes[0]->get_tag();
     switch (tag) {
-        case Operation::Tag::Batchnorm: {
-            auto supported_pattern = {Operation::Tag::Batchnorm, Operation::Tag::Pointwise, Operation::Tag::Pointwise, Operation::Tag::Pointwise};
+        case Operation::Tag::BN: {
+            auto supported_pattern = {Operation::Tag::BN, Operation::Tag::Pointwise, Operation::Tag::Pointwise, Operation::Tag::Pointwise};
             auto supported_pointwise_pattern = {PointwiseMode_t::ADD, PointwiseMode_t::RELU_FWD, PointwiseMode_t::CMP_GT};
-            std::vector<Operation::Tag> actual_pattern = {Operation::Tag::Batchnorm};
+            std::vector<Operation::Tag> actual_pattern = {Operation::Tag::BN};
             std::vector<PointwiseMode_t> actual_pointwise_pattern = {};
             (void) supported_pattern;
             (void) supported_pointwise_pattern;
@@ -779,7 +719,7 @@ inline error_t Graph::run_graph_rules() const {
     // Section 3.3.2 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#runtime-fusion-engine
     
     // Check if g1 can be applied
-    if ((device_version < 800) && ((tag != Operation::Tag::Convolution) && (tag != Operation::Tag::Matmul))) {
+    if ((device_version < 800) && ((tag != Operation::Tag::Conv) && (tag != Operation::Tag::Matmul))) {
         getLogger() << "Device version insufficient" << std::endl;
         return error_t::UNSUPPORTED_GRAPH_FORMAT;
     }
@@ -809,7 +749,7 @@ inline error_t Graph::run_graph_rules() const {
         switch (state) {
             case Graph_parser_state::G1_PROCESS:
             case Graph_parser_state::G1_PROCESS_POINTWISE: {
-                if (tag_ == Operation::Tag::Convolution || tag_ == Operation::Tag::Matmul) {
+                if (tag_ == Operation::Tag::Conv || tag_ == Operation::Tag::Matmul) {
                     state = Graph_parser_state::G2_START;
                 // } else if ((tag_ == Operation::Tag::Resample_Fwd) || (tag_ == Operation::Tag::Resample_Bwd)) {
                 //     actual_g2_pattern.push_back(tag_);
@@ -852,14 +792,12 @@ inline int64_t Graph::get_workspace_size() {
 
 inline error_t Graph::validate(cudnnHandle_t handle) {
     (void) handle;
-    flat_node.tensor_props = tensors;
 
     for (auto &node : nodes) {
         switch (node->get_tag()) {
-            case Operation::Tag::Batchnorm: {
+            case Operation::Tag::BN: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << node->get_name() << std::endl;
-                auto batchnorm_node = std::make_shared<BatchNormNode>(node->get_name(), uid_offset);
-                batchnorm_node->props = std::static_pointer_cast<Batchnorm>(node);
+                auto batchnorm_node = std::make_shared<BatchNormNode>(node->get_name(), std::static_pointer_cast<Batchnorm>(node), uid_offset);
                 batchnorm_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(batchnorm_node);
                 uid_offset += 100;
@@ -873,16 +811,15 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 uid_offset += 100;
                 break;
             }
-            case Operation::Tag::Batchnorm_finalize: {
+            case Operation::Tag::BN_finalize: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
-                auto batchnorm_finalize_node = std::make_shared<BatchNormFinalizeNode>(node->get_name(), uid_offset);
-                batchnorm_finalize_node->props = std::static_pointer_cast<Batchnorm_finalize>(node);
-                batchnorm_finalize_node->parent_node = &flat_node;
-                flat_node.sub_nodes.push_back(batchnorm_finalize_node);
+                auto bn_finalize_node = std::make_shared<BatchNormFinalizeNode>(node->get_name(), std::static_pointer_cast<BN_finalize>(node), uid_offset);
+                bn_finalize_node->parent_node = &flat_node;
+                flat_node.sub_nodes.push_back(bn_finalize_node);
                 uid_offset += 100;
                 break;
             }
-            case Operation::Tag::Convolution: {
+            case Operation::Tag::Conv: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node->get_name() << std::endl;
                 auto conv_node = std::make_shared<ConvolutionNode>(node->get_name(), std::static_pointer_cast<Convolution>(node), uid_offset);
                 conv_node->parent_node = &flat_node;

@@ -178,9 +178,9 @@ inline std::ostream& operator<<(std::ostream& os, const Tensor& props) {
 class Operation {
 public:
     enum class Tag {
-        Batchnorm,
-        Batchnorm_finalize,
-        Convolution,
+        BN,
+        BN_finalize,
+        Conv,
         DBN_weight,
         Dgrad,
         Genstats,
@@ -218,93 +218,62 @@ public:
     virtual ~Operation() = default;
 };
 
-class Batchnorm_finalize : public Operation {
+class BN_finalize : public Operation {
 public:
-    enum PORTS {
-        SUM,
-        SQUARE_SUM,
-        MEAN,
-        INV_VARIANCE,
-        SCALE,
-        BIAS,
-        Previous_running_mean,
-        Previous_running_var,
-        EPSILON,
-        EXP_AVG,
-        ACCUMULATION_COUNT,
+    struct Inputs {
+        std::shared_ptr<Tensor> SUM;
+        std::shared_ptr<Tensor> SQ_SUM;
+        std::shared_ptr<Tensor> MEAN;
+        std::shared_ptr<Tensor> INV_VARIANCE;
+        std::shared_ptr<Tensor> SCALE;
+        std::shared_ptr<Tensor> BIAS;
+        std::shared_ptr<Tensor> PREV_RUNNING_MEAN;
+        std::shared_ptr<Tensor> PREV_RUNNING_VAR;
+        std::shared_ptr<Tensor> EPSILON;
+        std::shared_ptr<Tensor> EXP_AVG;
+        std::shared_ptr<Tensor> ACCUM_COUNT;
+    } inputs;
         
-        EQUIVALENT_SCALE,
-        EQUIVALENT_BIAS,
-        Next_running_mean,
-        Next_running_var,
-        
-        COUNT
-    };
+    struct Outputs {
+        std::shared_ptr<Tensor> EQ_SCALE;
+        std::shared_ptr<Tensor> EQ_BIAS;
+        std::shared_ptr<Tensor> NEXT_RUNNING_MEAN;
+        std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
+    } outputs;
 
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
-    Batchnorm_finalize(const std::string name) : Operation(name, Tag::Batchnorm_finalize) {
-        port_to_name[PORTS::SUM] = name + "::SUM";
-        port_to_name[PORTS::SQUARE_SUM] = name + "::SQUARE_SUM";
-        port_to_name[PORTS::MEAN] = name + "::MEAN";
-        port_to_name[PORTS::INV_VARIANCE] = name + "::INV_VARIANCE";
-        port_to_name[PORTS::SCALE] = name + "::SCALE";
-        port_to_name[PORTS::BIAS] = name + "::BIAS";
-        port_to_name[PORTS::Previous_running_mean] = name + "::Previous_running_mean";
-        port_to_name[PORTS::Previous_running_var] = name + "::Previous_running_var";
-        port_to_name[PORTS::EPSILON] = name + "::EPSILON";
-        port_to_name[PORTS::EXP_AVG] = name + "::EXP_AVG";
-        port_to_name[PORTS::ACCUMULATION_COUNT] = name + "::ACCUMULATION_COUNT";
-        
-        port_to_name[PORTS::EQUIVALENT_BIAS] = name + "::EQUIVALENT_BIAS";
-        port_to_name[PORTS::EQUIVALENT_SCALE] = name + "::EQUIVALENT_SCALE";
-        port_to_name[PORTS::Next_running_mean] = name + "::Next_running_mean";
-        port_to_name[PORTS::Next_running_var] = name + "::Next_running_var";
-    }
+    BN_finalize(const std::string name) : Operation(name, Tag::BN_finalize) {}
 
-    Batchnorm_finalize& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
-    }
-
-    int update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
-
-    Batchnorm_finalize& set_compute_data_type(DataType_t value) {
+    BN_finalize& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Batchnorm_finalize& {
+    auto fill_from_context(detail::Context const& context) -> BN_finalize& {
+        // Fill node's tensors
+        inputs.SUM->fill_from_context(context);
+        inputs.SQ_SUM->fill_from_context(context);
+        inputs.MEAN->fill_from_context(context);
+        inputs.INV_VARIANCE->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.PREV_RUNNING_MEAN->fill_from_context(context);
+        inputs.PREV_RUNNING_VAR->fill_from_context(context);
+        inputs.EPSILON->fill_from_context(context);
+        inputs.EXP_AVG->fill_from_context(context);
+        inputs.ACCUM_COUNT->fill_from_context(context);
+        
+        outputs.EQ_SCALE->fill_from_context(context);
+        outputs.EQ_BIAS->fill_from_context(context);
+        outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
+        outputs.NEXT_RUNNING_VAR->fill_from_context(context);
+
+        // Fill this node
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
         return *this;
     }
-
-    friend std::ostream& operator<<(std::ostream& os, const Batchnorm_finalize& props);
 };
-
-inline std::ostream& operator<<(std::ostream& os, const Batchnorm_finalize& props) {
-    os << "{" 
-    << " name: '" << props.get_name() << "',"
-    << " ports: [";
-    for(size_t i = 0; i < Batchnorm_finalize::PORTS::COUNT; ++i) {
-        os << props.get_tensor_at_port(static_cast<Batchnorm_finalize::PORTS>(i)) << ",";
-    }
-    os << "],";
-    return os;
-}
 
 class Genstats : public Operation {
 public:
@@ -359,7 +328,7 @@ public:
     bool is_stride_set = false;
     bool is_dilation_set = false;
     
-    Convolution(const std::string name) : Operation(name, Tag::Convolution) {}
+    Convolution(const std::string name) : Operation(name, Tag::Conv) {}
 
     Convolution& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
@@ -620,60 +589,25 @@ public:
 
 class Batchnorm : public Operation {
 public:
-    enum PORTS {
-        X = 0,
-        Mean,
-        Var,
-        EPS,
-        Scale,
-        Bias,
-        Previous_running_mean,
-        Previous_running_var,
-        Next_running_mean,
-        Next_running_var,
-        Y,
-        EXP_AVG,
+    struct Inputs {
+        std::shared_ptr<Tensor> X;
+        std::shared_ptr<Tensor> SCALE;
+        std::shared_ptr<Tensor> BIAS;
+        std::shared_ptr<Tensor> EPSILON;
+        std::shared_ptr<Tensor> PREV_RUNNING_MEAN;
+        std::shared_ptr<Tensor> PREV_RUNNING_VAR;
+        std::shared_ptr<Tensor> EXP_AVG;
+    } inputs;
 
-        COUNT
-    };
-private:
+    struct Outputs {
+        std::shared_ptr<Tensor> Y;
+        std::shared_ptr<Tensor> MEAN;
+        std::shared_ptr<Tensor> INV_VARIANCE;
+        std::shared_ptr<Tensor> NEXT_RUNNING_MEAN;
+        std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
+    } outputs;
     
-public:
-    
-    std::unordered_map<PORTS, std::string> port_to_name;
-    int64_t uids[PORTS::COUNT];
-    Batchnorm(const std::string name) : Operation(name, Tag::Batchnorm) {
-        port_to_name[PORTS::X] = name + "::X";
-        port_to_name[PORTS::Mean] = name + "::Mean";
-        port_to_name[PORTS::Var] = name + "::Var";
-        port_to_name[PORTS::EPS] = name + "::EPS";
-        port_to_name[PORTS::EXP_AVG] = name + "::EXP_AVG";
-        port_to_name[PORTS::Scale] = name + "::Scale";
-        port_to_name[PORTS::Bias] = name + "::Bias";
-        port_to_name[PORTS::Previous_running_mean] = name + "::Previous_running_mean";
-        port_to_name[PORTS::Previous_running_var] = name + "::Previous_running_var";
-        port_to_name[PORTS::Next_running_mean] = name + "::Next_running_mean";
-        port_to_name[PORTS::Next_running_var] = name + "::Next_running_var";
-        port_to_name[PORTS::Y] = name + "::Y";
-    }
-
-    Batchnorm& map_port_to_tensor(std::vector<std::pair<PORTS, std::string>> names) {
-        for(auto const& p: names) {
-            port_to_name[p.first] = p.second;
-        }
-        return *this;
-    }
-
-    std::string get_tensor_at_port(PORTS port) const {
-        return port_to_name.at(port);
-    }
-
-    int update_uids(int64_t offset) {
-        for(size_t i = 0; i < PORTS::COUNT; ++i) {
-            uids[i] = i + offset;
-        }
-        return 0;
-    }
+    Batchnorm(const std::string name) : Operation(name, Tag::BN) {}
     
     Batchnorm& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -681,6 +615,22 @@ public:
     }
 
     auto fill_from_context(detail::Context const& context) -> Batchnorm& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.PREV_RUNNING_MEAN->fill_from_context(context);
+        inputs.PREV_RUNNING_VAR->fill_from_context(context);
+        inputs.EPSILON->fill_from_context(context);
+        inputs.EXP_AVG->fill_from_context(context);
+        
+        
+        outputs.Y->fill_from_context(context);
+        outputs.MEAN->fill_from_context(context);
+        outputs.INV_VARIANCE->fill_from_context(context);
+        outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
+        outputs.NEXT_RUNNING_VAR->fill_from_context(context);
+
         if(get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
