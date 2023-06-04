@@ -117,6 +117,9 @@ public:
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const&, Scaled_dot_product_attention const&);
     
+    std::shared_ptr<Tensor> wgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Wgrad const& wgrad);
+    Wgrad::Outputs wgrad(Wgrad::Inputs, Wgrad const& wgrad);
+
     Graph& insert_node(Operation const& props);
 
     error_t build(cudnnHandle_t handle);
@@ -234,6 +237,45 @@ inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution 
 
     // Set outputs
     options->outputs.Y = Y;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace_back(options);
+
+    return options->outputs;
+}
+
+inline std::shared_ptr<Tensor> Graph::wgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> x, Wgrad const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Wgrad>(user_options);
+
+    // Make required output tensors
+    auto DW = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(DW->get_name(), DW);
+    options->outputs.DW = DW;
+
+    // Set inputs
+    options->inputs.X = x;
+    options->inputs.DY = dy;
+
+    nodes.emplace_back(options);
+
+    return DW;
+}
+
+inline Wgrad::Outputs Graph::wgrad(Wgrad::Inputs inputs, Wgrad const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Wgrad>(user_options);
+
+    // Make required output tensors
+    auto DW = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(DW->get_name(), DW);
+
+    // Set outputs
+    options->outputs.DW = DW;
 
     // Set inputs
     options->inputs = inputs;
@@ -740,8 +782,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             case Operation::Tag::Softmax:{break;}
             case Operation::Tag::Wgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node->get_name() << std::endl;
-                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), uid_offset);
-                wgrad_node->props = std::static_pointer_cast<Wgrad>(node);
+                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Wgrad>(node), uid_offset);
                 wgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(wgrad_node);
                 uid_offset += 100;

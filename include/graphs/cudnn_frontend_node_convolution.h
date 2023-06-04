@@ -57,7 +57,7 @@ public:
             Y->set_dim(y_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
         } else {
             if(x_tensor_dim.size() != y_tensor_dim.size()) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
+                auto status = error_t::SHAPE_DEDUCTION_FAILED;
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
                 return status;
             }

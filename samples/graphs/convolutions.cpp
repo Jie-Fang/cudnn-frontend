@@ -26,43 +26,44 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("CSBR Graph", "[conv][graph]") {
-    cudnn_frontend::graph::Graph graph("conv");
-    graph.set_io_data_type(cudnn_frontend::DataType_t::HALF)
-         .set_intermediate_data_type(cudnn_frontend::DataType_t::FLOAT)
-         .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph("conv");
+    graph.set_io_data_type(fe::DataType_t::HALF)
+         .set_intermediate_data_type(fe::DataType_t::FLOAT)
+         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    auto X = graph.tensor(cudnn_frontend::graph::Tensor("image").set_dim({4, 32, 16, 16}));
+    auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 32, 16, 16}));
     X->generateStrides(CUDNN_TENSOR_NHWC);
-    auto W = graph.tensor(cudnn_frontend::graph::Tensor("filter").set_dim({64, 32, 3, 3}));
+    auto W = graph.tensor(fe::graph::Tensor("filter").set_dim({64, 32, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto conv_options = cudnn_frontend::graph::Convolution("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto conv_options = fe::graph::Convolution("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto conv_output = graph.conv(X, W, conv_options);
     conv_output->set_is_virtual(true);
 
-    auto S = graph.tensor(cudnn_frontend::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
+    auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
-    auto scale_options = cudnn_frontend::graph::Pointwise("scale").set_mode(cudnn_frontend::PointwiseMode_t::MUL);
+    auto scale_options = fe::graph::Pointwise("scale").set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(conv_output, S, scale_options);
     scale_output->set_is_virtual(true);
 
-    auto B = graph.tensor(cudnn_frontend::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
+    auto B = graph.tensor(fe::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
-    auto bias_options = cudnn_frontend::graph::Pointwise("bias").set_mode(cudnn_frontend::PointwiseMode_t::ADD);
+    auto bias_options = fe::graph::Pointwise("bias").set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
     
-    auto relu_options = cudnn_frontend::graph::Pointwise("relu").set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto Y = graph.pointwise(bias_output, relu_options);
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(cudnn_frontend::error_t::OK == graph.build(handle));
+    REQUIRE(fe::error_t::OK == graph.build(handle));
 
-    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(cudnn_frontend::error_t::OK == graph.set_executor(plans));
+    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
 
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
@@ -70,13 +71,78 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     Surface<half> b_tensor(64, false);
     Surface<half> y_tensor(4*64*3*3, false);
 
-    std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void*> variant_pack = {
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {W, w_tensor.devPtr}
         , {S, s_tensor.devPtr}
         , {B, b_tensor.devPtr}
         , {Y, y_tensor.devPtr}
     };
-    REQUIRE(cudnn_frontend::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    cudnnDestroy(handle);
+}
+
+
+TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph("wgrad");
+    graph.set_io_data_type(fe::DataType_t::HALF)
+         .set_intermediate_data_type(fe::DataType_t::HALF)
+         .set_compute_data_type(fe::DataType_t::FLOAT);
+    
+    auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 64, 16, 16}));
+    X->generateStrides(CUDNN_TENSOR_NHWC);
+    auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
+    S->generateStrides(CUDNN_TENSOR_NHWC);
+
+    auto scale_options = fe::graph::Pointwise("scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto scale_output = graph.pointwise(X, S, scale_options);
+    scale_output->set_is_virtual(true);
+
+    auto B = graph.tensor(fe::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
+    B->generateStrides(CUDNN_TENSOR_NHWC);
+    auto bias_options = fe::graph::Pointwise("bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto bias_output = graph.pointwise(scale_output, B, bias_options);
+    bias_output->set_is_virtual(true);
+    
+    auto relu_options = fe::graph::Pointwise("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_output = graph.pointwise(bias_output, relu_options);
+    relu_output->set_is_virtual(true);
+
+    auto DY = graph.tensor(fe::graph::Tensor("image").set_dim({4, 64, 16, 16}));
+    DY->generateStrides(CUDNN_TENSOR_NHWC);
+    auto wgrad_options = fe::graph::Wgrad("wgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto DW = graph.wgrad(DY, relu_output, wgrad_options);
+
+    #if (CUDNN_VERSION < 8800)
+        SKIP("ConvBNwgrad requires cudnn 8.8 and up");
+    #endif
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("ConvBNwgrad requires hopper and above architecture.");
+    }
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(fe::error_t::OK == graph.build(handle));
+
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+
+    Surface<half> x_tensor(4*64*16*16, false);
+    Surface<half> s_tensor(64, false);
+    Surface<half> b_tensor(64, false);
+    Surface<half> dy_tensor(4*64*16*16, false);
+    Surface<half> dw_tensor(64*64*3*3, false);
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+        {X, x_tensor.devPtr}
+        , {S, s_tensor.devPtr}
+        , {B, b_tensor.devPtr}
+        , {DY, dy_tensor.devPtr}
+        , {DW, dw_tensor.devPtr}
+    };
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
     cudnnDestroy(handle);
 }
