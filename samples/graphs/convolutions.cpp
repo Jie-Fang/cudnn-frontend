@@ -109,7 +109,7 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
     auto relu_output = graph.pointwise(bias_output, relu_options);
     relu_output->set_is_virtual(true);
 
-    auto DY = graph.tensor(fe::graph::Tensor("image").set_dim({4, 64, 16, 16}));
+    auto DY = graph.tensor(fe::graph::Tensor("grad").set_dim({4, 64, 16, 16}));
     DY->generateStrides(CUDNN_TENSOR_NHWC);
     auto wgrad_options = fe::graph::Wgrad("wgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto DW = graph.wgrad(DY, relu_output, wgrad_options);

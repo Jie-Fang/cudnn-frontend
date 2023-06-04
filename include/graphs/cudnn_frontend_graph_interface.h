@@ -107,6 +107,9 @@ public:
     std::shared_ptr<Tensor> conv(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Convolution const& conv);
     Convolution::Outputs conv(Convolution::Inputs, Convolution const& conv);
 
+    std::shared_ptr<Tensor> dgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Dgrad const& dgrad);
+    Dgrad::Outputs dgrad(Dgrad::Inputs, Dgrad const& dgrad);
+
     Matmul::Outputs matmul(Matmul::Inputs, Matmul const&);
     std::shared_ptr<Tensor> matmul(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Matmul const&);
     
@@ -237,6 +240,45 @@ inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution 
 
     // Set outputs
     options->outputs.Y = Y;
+
+    // Set inputs
+    options->inputs = inputs;
+
+    nodes.emplace_back(options);
+
+    return options->outputs;
+}
+
+inline std::shared_ptr<Tensor> Graph::dgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> w, Dgrad const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Dgrad>(user_options);
+
+    // Make required output tensors
+    auto DX = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(DX->get_name(), DX);
+    options->outputs.DX = DX;
+
+    // Set inputs
+    options->inputs.DY = dy;
+    options->inputs.W = w;
+
+    nodes.emplace_back(options);
+
+    return DX;
+}
+
+inline Dgrad::Outputs Graph::dgrad(Dgrad::Inputs inputs, Dgrad const& user_options) {
+
+    // Copy over the options from the user
+    auto options = std::make_shared<Dgrad>(user_options);
+
+    // Make required output tensors
+    auto DX = std::make_shared<Tensor>(options->get_name() + "_output");
+    tensors.emplace(DX->get_name(), DX);
+
+    // Set outputs
+    options->outputs.DX = DX;
 
     // Set inputs
     options->inputs = inputs;
@@ -731,8 +773,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Dgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the dgrad node named " << node->get_name() << std::endl;
-                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), uid_offset);
-                dgrad_node->props = std::static_pointer_cast<Dgrad>(node);
+                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), std::static_pointer_cast<Dgrad>(node), uid_offset);
                 dgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(dgrad_node);
                 uid_offset += 100;

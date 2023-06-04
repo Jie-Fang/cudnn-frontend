@@ -21,7 +21,7 @@ add_executable(
     
     graphs/mha.cpp
     graphs/convolutions.cpp
-    # graphs/dgrads.cpp
+    graphs/dgrads.cpp
     graphs/matmuls.cpp
     # graphs/batchnorm.cpp
 
