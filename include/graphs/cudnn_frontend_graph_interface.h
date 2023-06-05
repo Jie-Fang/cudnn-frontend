@@ -73,7 +73,7 @@ inline int64_t Plans::get_workspace_size(){
 class Graph {
 private:
     std::string name;
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors;
+    std::unordered_set<std::shared_ptr<Tensor>> tensors;
     std::vector<std::shared_ptr<Operation>> nodes;
 
     FlatNode flat_node{"flat_node"};
@@ -84,7 +84,7 @@ private:
     std::shared_ptr<Tensor>
     output_tensor(std::string const &name) {
         auto tensor = std::make_shared<Tensor>(name);
-        tensors.emplace(name, tensor);
+        tensors.emplace(tensor);
         return tensor;
     }
 
@@ -159,7 +159,7 @@ public:
 inline std::ostream& operator<<(std::ostream& os, const Graph& graph) {
     os << "{tensors: [\n";
     for(auto const& tensor: graph.tensors) {
-        os << *(tensor.second) << ",";
+        os << *(tensor) << ",";
     }
     os << "],"
     << "\nnodes: [\n";
@@ -204,7 +204,7 @@ inline detail::Context& Graph::get_context() {
 
 inline std::shared_ptr<Tensor> Graph::tensor(Tensor const& tensor) {
     auto tensor_ptr = std::make_shared<Tensor>(tensor);
-    tensors.emplace(tensor.get_name(), tensor_ptr);
+    tensors.emplace(tensor_ptr);
     return tensor_ptr;
 }
 
