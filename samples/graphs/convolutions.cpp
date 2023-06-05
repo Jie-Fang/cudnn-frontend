@@ -69,7 +69,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     Surface<half> w_tensor(64*32*3*3, false);
     Surface<half> s_tensor(64, false);
     Surface<half> b_tensor(64, false);
-    Surface<half> y_tensor(4*64*3*3, false);
+    Surface<half> y_tensor(4*64*16*16, false);
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}

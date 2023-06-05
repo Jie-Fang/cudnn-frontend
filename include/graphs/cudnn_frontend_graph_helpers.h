@@ -33,6 +33,13 @@ enum class [[nodiscard]] error_t {
   } \
 } while (0)
 
+#define RETURN_CUDNN_FRONTEND_ERROR_IF(x, retval) do { \
+  if (x) { \
+    getLogger() << "[cudnn_frontend] ERROR: " << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+    return retval; \
+  } \
+} while (0)
+
 static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
     switch (mode)
     {

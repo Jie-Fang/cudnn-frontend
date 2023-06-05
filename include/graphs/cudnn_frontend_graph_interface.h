@@ -546,28 +546,36 @@ inline error_t Graph::run_graph_rules() const {
     auto device_version = (major * 100) + (minor * 10);
 
     auto cudnn_version = cudnnGetVersion();
-    if (device_version < 700) {
-        getLogger() << "Device version insufficient" << std::endl;
-        return error_t::UNSUPPORTED_GRAPH_FORMAT;
-    }
+    RETURN_CUDNN_FRONTEND_ERROR_IF(device_version < 700, error_t::UNSUPPORTED_GRAPH_FORMAT);
 
     bool is_supported = false;
-    // No rules check below cudnn 8.9.0
-    // Instead will be performed in the backend.
-    if (8900 >= cudnn_version) { return error_t::OK;}
 
-    // Section 3.3.1 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-single-op-engine
+    // No rules for cudnn 8.9.0 and below.
+    // Instead will be performed by backend.
+    RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_version <= 8900, error_t::OK);
+
+    auto const entrance_node_tag = nodes.front()->get_tag();
+
     if (nodes.size() == 1) {
-        auto tag = nodes[0]->get_tag();
-        if (tag != Operation::Tag::Conv &&
-            tag != Operation::Tag::BN &&
-            tag != Operation::Tag::Pointwise) {return error_t::UNSUPPORTED_GRAPH_FORMAT;}
+        // Only contains checks for
+        // Section 3.3.1 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-single-op-engine
+        std::unordered_set<Operation::Tag> const supported_tags = {
+                                                Operation::Tag::Conv
+                                                , Operation::Tag::Wgrad
+                                                , Operation::Tag::Dgrad
+                                                , Operation::Tag::BN
+                                                , Operation::Tag::Pointwise
+                                            };
+        RETURN_CUDNN_FRONTEND_ERROR_IF(supported_tags.find(entrance_node_tag) != supported_tags.end(), error_t::OK);
     }
+    
+    // Only contains checks for
     // Section 3.3.3 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#specialized-runtime-fusion-engines
-    bool is_first_node = true;
-    auto tag = nodes[0]->get_tag();
-    switch (tag) {
+    switch (entrance_node_tag) {
         case Operation::Tag::BN: {
+            // Only contains checks for
+            // Section 3.3.3.1
+            bool is_first_node = true;
             auto supported_pattern = {Operation::Tag::BN, Operation::Tag::Pointwise, Operation::Tag::Pointwise, Operation::Tag::Pointwise};
             auto supported_pointwise_pattern = {PointwiseMode_t::ADD, PointwiseMode_t::RELU_FWD, PointwiseMode_t::CMP_GT};
             std::vector<Operation::Tag> actual_pattern = {Operation::Tag::BN};
@@ -591,17 +599,22 @@ inline error_t Graph::run_graph_rules() const {
             getLogger() << "3.3.3.1. BnAddRelu supported" << std::endl;
             break;
         }
+        case Operation::Tag::Scaled_dot_product_attention: {
+            // Only contains checks for
+            // Section 3.3.3.3
+            is_supported = true;
+        }
         default: {
             break;
         }
     }
+    RETURN_CUDNN_FRONTEND_ERROR_IF(is_supported, error_t::OK);
 
-    if (true == is_supported) {return error_t::OK;}
     // Section 3.3.4 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-specialized-engine
     // Section 3.3.2 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#runtime-fusion-engine
     
     // Check if g1 can be applied
-    if ((device_version < 800) && ((tag != Operation::Tag::Conv) && (tag != Operation::Tag::Matmul))) {
+    if ((device_version < 800) && ((entrance_node_tag != Operation::Tag::Conv) && (entrance_node_tag != Operation::Tag::Matmul))) {
         getLogger() << "Device version insufficient" << std::endl;
         return error_t::UNSUPPORTED_GRAPH_FORMAT;
     }
@@ -664,7 +677,7 @@ inline error_t Graph::run_graph_rules() const {
     }
 
     // TODO
-    if (is_supported == false) {return error_t::UNSUPPORTED_GRAPH_FORMAT;}
+    if (is_supported == false) {return error_t::OK;}
     return error_t::OK;
 }
 
