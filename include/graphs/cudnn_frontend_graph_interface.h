@@ -81,6 +81,13 @@ private:
 
     error_t run_graph_rules() const;
 
+    std::shared_ptr<Tensor>
+    output_tensor(std::string const &name) {
+        auto tensor = std::make_shared<Tensor>(name);
+        tensors.emplace(name, tensor);
+        return tensor;
+    }
+
     bool is_validated = false;
 
 public:
@@ -206,21 +213,8 @@ inline BN_finalize::Outputs Graph::bn_finalize(BN_finalize::Inputs inputs, BN_fi
     // Copy over the options from the user
     auto options = std::make_shared<BN_finalize>(user_options);
 
-    // Make required output tensors
-    auto EQ_SCALE = std::make_shared<Tensor>(options->get_name() + "_EQ_SCALE_output");
-    tensors.emplace(EQ_SCALE->get_name(), EQ_SCALE);
-    auto EQ_BIAS = std::make_shared<Tensor>(options->get_name() + "_EQ_BIAS_output");
-    tensors.emplace(EQ_BIAS->get_name(), EQ_BIAS);
-    auto NEXT_RUNNING_MEAN = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_MEAN_output");
-    tensors.emplace(NEXT_RUNNING_MEAN->get_name(), NEXT_RUNNING_MEAN);
-    auto NEXT_RUNNING_VAR = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_VAR_output");
-    tensors.emplace(NEXT_RUNNING_VAR->get_name(), NEXT_RUNNING_VAR);
-
     // Set outputs
-    options->outputs.EQ_SCALE = EQ_SCALE;
-    options->outputs.EQ_BIAS = EQ_BIAS;
-    options->outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
-    options->outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
+    options->make_outputs([this](std::string const &name){return output_tensor(name);});
 
     // Set inputs
     options->inputs = inputs;
@@ -235,24 +229,8 @@ inline Batchnorm::Outputs Graph::batchnorm(Batchnorm::Inputs inputs, Batchnorm c
     // Copy over the options from the user
     auto options = std::make_shared<Batchnorm>(user_options);
 
-    // Make required output tensors
-    auto Y = std::make_shared<Tensor>(options->get_name() + "_Y_output");
-    tensors.emplace(Y->get_name(), Y);
-    auto MEAN = std::make_shared<Tensor>(options->get_name() + "_MEAN_output");
-    tensors.emplace(MEAN->get_name(), MEAN);
-    auto INV_VARIANCE = std::make_shared<Tensor>(options->get_name() + "_INV_VARIANCE_output");
-    tensors.emplace(INV_VARIANCE->get_name(), INV_VARIANCE);
-    auto NEXT_RUNNING_MEAN = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_MEANoutput");
-    tensors.emplace(NEXT_RUNNING_MEAN->get_name(), NEXT_RUNNING_MEAN);
-    auto NEXT_RUNNING_VAR = std::make_shared<Tensor>(options->get_name() + "_NEXT_RUNNING_VAR_output");
-    tensors.emplace(NEXT_RUNNING_VAR->get_name(), NEXT_RUNNING_VAR);
-
     // Set outputs
-    options->outputs.Y = Y;
-    options->outputs.MEAN = MEAN;
-    options->outputs.INV_VARIANCE = INV_VARIANCE;
-    options->outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
-    options->outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
+    options->make_outputs([this](std::string const &name){return output_tensor(name);});
 
     // Set inputs
     options->inputs = inputs;
@@ -268,9 +246,7 @@ inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::share
     auto options = std::make_shared<Convolution>(user_options);
 
     // Make required output tensors
-    auto Y = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(Y->get_name(), Y);
-    options->outputs.Y = Y;
+    options->outputs.Y = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.X = x;
@@ -278,7 +254,7 @@ inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::share
 
     nodes.emplace_back(options);
 
-    return Y;
+    return options->outputs.Y;
 }
 
 inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution const& user_options) {
@@ -286,12 +262,8 @@ inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution 
     // Copy over the options from the user
     auto options = std::make_shared<Convolution>(user_options);
 
-    // Make required output tensors
-    auto Y = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(Y->get_name(), Y);
-
     // Set outputs
-    options->outputs.Y = Y;
+    options->outputs.Y = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs = inputs;
@@ -307,23 +279,7 @@ inline std::array<std::shared_ptr<Tensor>, 5> Graph::dbn_weight(std::shared_ptr<
     auto options = std::make_shared<DBN_weight>(user_options);
 
     // Make required output tensors
-    auto dscale = std::make_shared<Tensor>(options->get_name() + "_dscale_output");
-    tensors.emplace(dscale->get_name(), dscale);
-    auto dbias = std::make_shared<Tensor>(options->get_name() + "_dbias_output");
-    tensors.emplace(dbias->get_name(), dbias);
-    auto eq_scale_dy = std::make_shared<Tensor>(options->get_name() + "_eq_scale_dy_output");
-    tensors.emplace(eq_scale_dy->get_name(), eq_scale_dy);
-    auto eq_scale_x = std::make_shared<Tensor>(options->get_name() + "_eq_scale_xoutput");
-    tensors.emplace(eq_scale_x->get_name(), eq_scale_x);
-    auto eq_bias = std::make_shared<Tensor>(options->get_name() + "_eq_bias_output");
-    tensors.emplace(eq_bias->get_name(), eq_bias);
-
-    // Set outputs
-    options->outputs.DSCALE = dscale;
-    options->outputs.DBIAS = dbias;
-    options->outputs.EQ_SCALE_DY = eq_scale_dy;
-    options->outputs.EQ_SCALE_X = eq_scale_x;
-    options->outputs.EQ_BIAS = eq_bias;
+    options->make_outputs([this](std::string const &name){return output_tensor(name);});
 
     // Set inputs
     options->inputs.DY = dy;
@@ -334,7 +290,7 @@ inline std::array<std::shared_ptr<Tensor>, 5> Graph::dbn_weight(std::shared_ptr<
 
     nodes.emplace_back(options);
 
-    return {dscale, dbias, eq_scale_dy, eq_scale_x, eq_bias};
+    return {options->outputs.DSCALE, options->outputs.DBIAS, options->outputs.EQ_SCALE_DY, options->outputs.EQ_SCALE_X, options->outputs.EQ_BIAS};
 }
 
 inline DBN_weight::Outputs Graph::dbn_weight(DBN_weight::Inputs inputs, DBN_weight const& user_options) {
@@ -343,23 +299,7 @@ inline DBN_weight::Outputs Graph::dbn_weight(DBN_weight::Inputs inputs, DBN_weig
     auto options = std::make_shared<DBN_weight>(user_options);
 
     // Make required output tensors
-    auto dscale = std::make_shared<Tensor>(options->get_name() + "_dscale_output");
-    tensors.emplace(dscale->get_name(), dscale);
-    auto dbias = std::make_shared<Tensor>(options->get_name() + "_dbias_output");
-    tensors.emplace(dbias->get_name(), dbias);
-    auto eq_scale_dy = std::make_shared<Tensor>(options->get_name() + "_eq_scale_dy_output");
-    tensors.emplace(eq_scale_dy->get_name(), eq_scale_dy);
-    auto eq_scale_x = std::make_shared<Tensor>(options->get_name() + "_eq_scale_xoutput");
-    tensors.emplace(eq_scale_x->get_name(), eq_scale_x);
-    auto eq_bias = std::make_shared<Tensor>(options->get_name() + "_eq_bias_output");
-    tensors.emplace(eq_bias->get_name(), eq_bias);
-
-    // Set outputs
-    options->outputs.DSCALE = dscale;
-    options->outputs.DBIAS = dbias;
-    options->outputs.EQ_SCALE_DY = eq_scale_dy;
-    options->outputs.EQ_SCALE_X = eq_scale_x;
-    options->outputs.EQ_BIAS = eq_bias;
+    options->make_outputs([this](std::string const &name){return output_tensor(name);});
 
     // Set inputs
     options->inputs = inputs;
@@ -375,9 +315,7 @@ inline std::shared_ptr<Tensor> Graph::dgrad(std::shared_ptr<Tensor> dy, std::sha
     auto options = std::make_shared<Dgrad>(user_options);
 
     // Make required output tensors
-    auto DX = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(DX->get_name(), DX);
-    options->outputs.DX = DX;
+    options->outputs.DX = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.DY = dy;
@@ -385,7 +323,7 @@ inline std::shared_ptr<Tensor> Graph::dgrad(std::shared_ptr<Tensor> dy, std::sha
 
     nodes.emplace_back(options);
 
-    return DX;
+    return options->outputs.DX;
 }
 
 inline Dgrad::Outputs Graph::dgrad(Dgrad::Inputs inputs, Dgrad const& user_options) {
@@ -394,11 +332,7 @@ inline Dgrad::Outputs Graph::dgrad(Dgrad::Inputs inputs, Dgrad const& user_optio
     auto options = std::make_shared<Dgrad>(user_options);
 
     // Make required output tensors
-    auto DX = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(DX->get_name(), DX);
-
-    // Set outputs
-    options->outputs.DX = DX;
+    options->outputs.DX = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs = inputs;
@@ -413,22 +347,16 @@ inline std::array<std::shared_ptr<Tensor>, 2> Graph::genstats(std::shared_ptr<Te
     // Copy over the options from the user
     auto options = std::make_shared<Genstats>(user_options);
 
-    // Make required output tensors
-    auto sum = std::make_shared<Tensor>(options->get_name() + "_sum_output");
-    tensors.emplace(sum->get_name(), sum);
-    auto sq_sum = std::make_shared<Tensor>(options->get_name() + "_sq_sum_output");
-    tensors.emplace(sq_sum->get_name(), sq_sum);
-
     // Set outputs
-    options->outputs.SUM = sum;
-    options->outputs.SQ_SUM = sq_sum;
+    options->outputs.SUM = output_tensor(options->get_name() + "_sum_output");
+    options->outputs.SQ_SUM = output_tensor(options->get_name() + "_sq_sum_output");
 
     // Set inputs
     options->inputs.X = x;
 
     nodes.emplace_back(options);
 
-    return {sum, sq_sum};
+    return {options->outputs.SUM, options->outputs.SQ_SUM};
 }
 
 inline Genstats::Outputs Graph::genstats(Genstats::Inputs inputs, Genstats const& user_options) {
@@ -437,14 +365,8 @@ inline Genstats::Outputs Graph::genstats(Genstats::Inputs inputs, Genstats const
     auto options = std::make_shared<Genstats>(user_options);
 
     // Make required output tensors
-    auto sum = std::make_shared<Tensor>(options->get_name() + "_sum_output");
-    tensors.emplace(sum->get_name(), sum);
-    auto sq_sum = std::make_shared<Tensor>(options->get_name() + "_sq_sum_output");
-    tensors.emplace(sq_sum->get_name(), sq_sum);
-
-    // Set outputs
-    options->outputs.SUM = sum;
-    options->outputs.SQ_SUM = sq_sum;
+    options->outputs.SUM = output_tensor(options->get_name() + "_sum_output");
+    options->outputs.SQ_SUM = output_tensor(options->get_name() + "_sq_sum_output");
 
     // Set inputs
     options->inputs = inputs;
@@ -460,9 +382,7 @@ inline std::shared_ptr<Tensor> Graph::wgrad(std::shared_ptr<Tensor> dy, std::sha
     auto options = std::make_shared<Wgrad>(user_options);
 
     // Make required output tensors
-    auto DW = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(DW->get_name(), DW);
-    options->outputs.DW = DW;
+    options->outputs.DW = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.X = x;
@@ -470,7 +390,7 @@ inline std::shared_ptr<Tensor> Graph::wgrad(std::shared_ptr<Tensor> dy, std::sha
 
     nodes.emplace_back(options);
 
-    return DW;
+    return options->outputs.DW;
 }
 
 inline Wgrad::Outputs Graph::wgrad(Wgrad::Inputs inputs, Wgrad const& user_options) {
@@ -479,11 +399,7 @@ inline Wgrad::Outputs Graph::wgrad(Wgrad::Inputs inputs, Wgrad const& user_optio
     auto options = std::make_shared<Wgrad>(user_options);
 
     // Make required output tensors
-    auto DW = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(DW->get_name(), DW);
-
-    // Set outputs
-    options->outputs.DW = DW;
+    options->outputs.DW = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs = inputs;
@@ -499,18 +415,14 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, Point
     auto options = std::make_shared<Pointwise>(user_options);
 
     // Make required output tensors
-    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(C->get_name(), C);
-
-    // Set outputs
-    options->outputs.OUT_0 = C;
+    options->outputs.OUT_0 = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.IN_0 = a;
 
     nodes.emplace_back(options);
 
-    return C;
+    return options->outputs.OUT_0;
 }
 
 inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, Pointwise const& user_options) {
@@ -518,12 +430,8 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::
     // Copy over the options from the user
     auto options = std::make_shared<Pointwise>(user_options);
 
-    // Make required output tensors
-    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(C->get_name(), C);
-
     // Set outputs
-    options->outputs.OUT_0 = C;
+    options->outputs.OUT_0 = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.IN_0 = a;
@@ -531,7 +439,7 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::
 
     nodes.emplace_back(options);
 
-    return C;
+    return options->outputs.OUT_0;
 }
 
 inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, std::shared_ptr<Tensor> c, Pointwise const& user_options) {
@@ -539,12 +447,7 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::
     // Copy over the options from the user
     auto options = std::make_shared<Pointwise>(user_options);
 
-    // Make required output tensors
-    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(C->get_name(), C);
-
-    // Set outputs
-    options->outputs.OUT_0 = C;
+    options->outputs.OUT_0 = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.IN_0 = a;
@@ -553,7 +456,7 @@ inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, std::
 
     nodes.emplace_back(options);
 
-    return C;
+    return options->outputs.OUT_0;
 }
 
 inline Pointwise::Outputs Graph::pointwise(Pointwise::Inputs inputs, Pointwise const& user_options) {
@@ -561,12 +464,7 @@ inline Pointwise::Outputs Graph::pointwise(Pointwise::Inputs inputs, Pointwise c
     // Copy over the options from the user
     auto options = std::make_shared<Pointwise>(user_options);
 
-    // Make required output tensors
-    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(C->get_name(), C);
-
-    // Set outputs
-    options->outputs.OUT_0 = C;
+    options->outputs.OUT_0 = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs = inputs;
@@ -581,12 +479,7 @@ inline std::shared_ptr<Tensor> Graph::matmul(std::shared_ptr<Tensor> a, std::sha
     // Copy over the options from the user
     auto options = std::make_shared<Matmul>(user_options);
 
-    // Make required output tensors
-    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(C->get_name(), C);
-
-    // Set outputs
-    options->outputs.C = C;
+    options->outputs.C = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs.A = a;
@@ -594,7 +487,7 @@ inline std::shared_ptr<Tensor> Graph::matmul(std::shared_ptr<Tensor> a, std::sha
 
     nodes.emplace_back(options);
 
-    return C;
+    return options->outputs.C;
 }
 
 inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul const& user_options) {
@@ -602,12 +495,7 @@ inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul const& user_o
     // Copy over the options from the user
     auto options = std::make_shared<Matmul>(user_options);
 
-    // Make required output tensors
-    auto C = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(C->get_name(), C);
-
-    // Set outputs
-    options->outputs.C = C;
+    options->outputs.C = output_tensor(options->get_name() + "_output");
 
     // Set inputs
     options->inputs = inputs;
@@ -623,14 +511,10 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
     auto options = std::make_shared<Scaled_dot_product_attention>(user_options);
     
     // Make required output tensors
-    auto O = std::make_shared<Tensor>(options->get_name() + "_output");
-    tensors.emplace(O->get_name(), O);
-    options->outputs.O = O;
+    options->outputs.O = output_tensor(options->get_name() + "_output");
 
     if(options->get_is_inference() == false) {
-        auto S = std::make_shared<Tensor>(options->get_name() + "_softmax_output");
-        tensors.emplace(S->get_name(), S);
-        options->outputs.S = S;
+        options->outputs.S = output_tensor(options->get_name() + "_softmax_output");
     }
 
     // Set inputs
