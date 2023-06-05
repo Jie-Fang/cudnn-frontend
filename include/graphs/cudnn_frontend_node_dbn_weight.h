@@ -14,7 +14,7 @@ class DBNWeightNode : public INode {
     std::shared_ptr<DBN_weight> options;
 public:
 
-    DBNWeightNode(std::string const& name, std::shared_ptr<DBN_weight> const options, int64_t offset = 1)  : INode (name, offset), options(options) {
+    DBNWeightNode(std::string const& name, std::shared_ptr<DBN_weight> const options)  : INode (name), options(options) {
         // outputs should be float type
         options->outputs.DBIAS->set_data_type(DataType_t::FLOAT);
         options->outputs.DSCALE->set_data_type(DataType_t::FLOAT);

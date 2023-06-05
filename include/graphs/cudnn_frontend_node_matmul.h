@@ -13,7 +13,7 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Matmul> options;
     public:
 
-        MatMulNode(std::string const& name, std::shared_ptr<Matmul> const options, int64_t const offset = 1)  : INode (name, offset), options(options) {}
+        MatMulNode(std::string const& name, std::shared_ptr<Matmul> const options)  : INode (name), options(options) {}
 
         Type getType() override final {
             return Type::MATMUL;

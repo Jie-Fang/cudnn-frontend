@@ -13,7 +13,7 @@ class WgradNode : public INode {
     std::shared_ptr<Wgrad> options;
 public:
 
-    WgradNode(std::string const& name, std::shared_ptr<Wgrad> const options, int64_t offset = 1)  : INode (name, offset), options(options) {}
+    WgradNode(std::string const& name, std::shared_ptr<Wgrad> const options)  : INode (name), options(options) {}
 
     Type getType() override final {
         return Type::WGRAD;

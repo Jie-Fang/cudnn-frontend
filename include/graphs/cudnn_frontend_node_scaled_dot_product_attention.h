@@ -17,7 +17,7 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Scaled_dot_product_attention> options;
     public:
 
-        ScaledDotProductAttentionNode(std::string const& name, std::shared_ptr<Scaled_dot_product_attention> const options, int64_t const offset = 1)  : INode (name, offset), options(options) {
+        ScaledDotProductAttentionNode(std::string const& name, std::shared_ptr<Scaled_dot_product_attention> const options)  : INode (name), options(options) {
             std::shared_ptr<Tensor> last_output;
 
             // Lower options to bmm1 options
@@ -28,14 +28,14 @@ namespace cudnn_frontend::graph {
             bmm1_options->inputs.N_override = options->inputs.SEQ_LEN_K;
             last_output = bmm1_options->outputs.C = P = std::make_shared<Tensor>("P"); // A dummy underlying tensor whose properties will be filled in infer_properties()
             bmm1_options->outputs.C->set_is_virtual(true);
-            auto bmm1_node = std::make_shared<MatMulNode>(bmm1_options->get_name(), bmm1_options, offset+100);
+            auto bmm1_node = std::make_shared<MatMulNode>(bmm1_options->get_name(), bmm1_options);
             sub_nodes.emplace_back(bmm1_node);
             bmm1_node->parent_node = this;
             
             if(options->inputs.Bias) {
                 // Lower options to add options
                 auto add_options = std::make_shared<Pointwise>("bias");
-                auto add_node = std::make_shared<PointwiseNode>(add_options->get_name(), add_options, offset+20);
+                auto add_node = std::make_shared<PointwiseNode>(add_options->get_name(), add_options);
                 sub_nodes.emplace_back(add_node);
                 add_node->parent_node = this;
                 add_options->set_mode(PointwiseMode_t::ADD);
@@ -59,7 +59,7 @@ namespace cudnn_frontend::graph {
                 // Requirement by cudnn backend as output is a special swizzled format.
                 last_output->set_reordering_type(cudnn_frontend::TensorReordering_t::F16x16);
             }
-            auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options, offset+200);
+            auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
             sub_nodes.emplace_back(softmax_node);
             softmax_node->parent_node = this;
 
@@ -72,7 +72,7 @@ namespace cudnn_frontend::graph {
             bmm2_options->inputs.M_override = options->inputs.SEQ_LEN_Q;
             bmm2_options->inputs.K_override = options->inputs.SEQ_LEN_K;
             bmm2_options->outputs.C = options->outputs.O;
-            auto bmm2_node = std::make_shared<MatMulNode>(bmm2_options->get_name(), bmm2_options, offset + 300);
+            auto bmm2_node = std::make_shared<MatMulNode>(bmm2_options->get_name(), bmm2_options);
             sub_nodes.emplace_back(bmm2_node);
             bmm2_node->parent_node = this;
         }

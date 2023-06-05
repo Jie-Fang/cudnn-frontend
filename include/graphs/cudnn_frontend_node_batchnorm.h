@@ -14,7 +14,7 @@ class BatchNormNode : public INode {
     std::shared_ptr<Batchnorm> options;
 public:
 
-    BatchNormNode(std::string const& name, std::shared_ptr<Batchnorm> const options, int64_t offset = 1)  : INode (name, offset), options(options) {
+    BatchNormNode(std::string const& name, std::shared_ptr<Batchnorm> const options)  : INode (name), options(options) {
         // outputs should be float type
         options->outputs.MEAN->set_data_type(DataType_t::FLOAT);
         options->outputs.INV_VARIANCE->set_data_type(DataType_t::FLOAT);

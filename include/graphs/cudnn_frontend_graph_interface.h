@@ -76,9 +76,7 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Tensor>> tensors;
     std::vector<std::shared_ptr<Operation>> nodes;
 
-    int64_t uid_offset = 1;
-
-    FlatNode flat_node{"flat_node", 1};
+    FlatNode flat_node{"flat_node"};
     detail::Context& get_context();
 
     error_t run_graph_rules() const;
@@ -797,91 +795,80 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
         switch (node->get_tag()) {
             case Operation::Tag::BN: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm node named " << node->get_name() << std::endl;
-                auto batchnorm_node = std::make_shared<BatchNormNode>(node->get_name(), std::static_pointer_cast<Batchnorm>(node), uid_offset);
+                auto batchnorm_node = std::make_shared<BatchNormNode>(node->get_name(), std::static_pointer_cast<Batchnorm>(node));
                 batchnorm_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(batchnorm_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::DBN_weight: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
-                auto DBN_weight_node = std::make_shared<DBNWeightNode>(node->get_name(), std::static_pointer_cast<DBN_weight>(node), uid_offset);
+                auto DBN_weight_node = std::make_shared<DBNWeightNode>(node->get_name(), std::static_pointer_cast<DBN_weight>(node));
                 DBN_weight_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(DBN_weight_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::BN_finalize: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
-                auto bn_finalize_node = std::make_shared<BatchNormFinalizeNode>(node->get_name(), std::static_pointer_cast<BN_finalize>(node), uid_offset);
+                auto bn_finalize_node = std::make_shared<BatchNormFinalizeNode>(node->get_name(), std::static_pointer_cast<BN_finalize>(node));
                 bn_finalize_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(bn_finalize_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Conv: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node->get_name() << std::endl;
-                auto conv_node = std::make_shared<ConvolutionNode>(node->get_name(), std::static_pointer_cast<Convolution>(node), uid_offset);
+                auto conv_node = std::make_shared<ConvolutionNode>(node->get_name(), std::static_pointer_cast<Convolution>(node));
                 conv_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(conv_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Dgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the dgrad node named " << node->get_name() << std::endl;
-                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), std::static_pointer_cast<Dgrad>(node), uid_offset);
+                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), std::static_pointer_cast<Dgrad>(node));
                 dgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(dgrad_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Genstats: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the genstats node named " << node->get_name() << std::endl;
-                auto genstats_node = std::make_shared<GenstatsNode>(node->get_name(), std::static_pointer_cast<Genstats>(node), uid_offset);
+                auto genstats_node = std::make_shared<GenstatsNode>(node->get_name(), std::static_pointer_cast<Genstats>(node));
                 genstats_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(genstats_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Matmul: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << node->get_name() << std::endl;
-                auto matmul_node = std::make_shared<MatMulNode>(node->get_name(), std::static_pointer_cast<Matmul>(node), uid_offset);
+                auto matmul_node = std::make_shared<MatMulNode>(node->get_name(), std::static_pointer_cast<Matmul>(node));
                 matmul_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(matmul_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Pointwise: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the pointwise node named " << node->get_name() << std::endl;
-                auto pointwise_node = std::make_shared<PointwiseNode>(node->get_name(), std::static_pointer_cast<Pointwise>(node), uid_offset);
+                auto pointwise_node = std::make_shared<PointwiseNode>(node->get_name(), std::static_pointer_cast<Pointwise>(node));
                 pointwise_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(pointwise_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Reduction: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the reduction node named " << node->get_name() << std::endl;
-                auto reduction_node = std::make_shared<ReductionNode>(node->get_name(), std::static_pointer_cast<Reduction>(node), uid_offset);
+                auto reduction_node = std::make_shared<ReductionNode>(node->get_name(), std::static_pointer_cast<Reduction>(node));
                 reduction_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(reduction_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Scaled_dot_product_attention: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the Scaled_dot_product_attention node named " << node->get_name() << std::endl;
-                auto scaled_dot_product_attention_node = std::make_shared<ScaledDotProductAttentionNode>(node->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node), uid_offset);
+                auto scaled_dot_product_attention_node = std::make_shared<ScaledDotProductAttentionNode>(node->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node));
                 scaled_dot_product_attention_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(scaled_dot_product_attention_node);
-                uid_offset += 100;
                 break;
             }
             case Operation::Tag::Softmax:{break;}
             case Operation::Tag::Wgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node->get_name() << std::endl;
-                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Wgrad>(node), uid_offset);
+                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Wgrad>(node));
                 wgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(wgrad_node);
-                uid_offset += 100;
                 break;
             }
         }

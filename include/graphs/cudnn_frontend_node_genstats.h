@@ -12,7 +12,7 @@ namespace graph {
 class GenstatsNode : public INode {
     std::shared_ptr<Genstats> options;
 public:
-    GenstatsNode(std::string const& name, std::shared_ptr<Genstats> const options, int64_t const offset = 1)  : INode (name, offset), options(options) {
+    GenstatsNode(std::string const& name, std::shared_ptr<Genstats> const options)  : INode (name), options(options) {
         // outputs should be float type
         options->outputs.SUM->set_data_type(DataType_t::FLOAT);
         options->outputs.SQ_SUM->set_data_type(DataType_t::FLOAT);

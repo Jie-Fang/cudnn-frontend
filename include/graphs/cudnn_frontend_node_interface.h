@@ -96,7 +96,6 @@ protected:
     
 public:
     std::string name;
-    int offset = 1;
 
     virtual Type getType() = 0;
 
@@ -212,7 +211,7 @@ public:
         return status;
     }
 
-    INode(std::string const& name, int64_t const offset) : name(name), offset(offset), parent_node(nullptr) {}
+    INode(std::string const& name) : name(name), parent_node(nullptr) {}
 
     virtual ~INode() {};
 
@@ -445,7 +444,7 @@ protected:
     }
 
 public:
-    FlatNode(std::string const& name, int64_t const offset) : INode(name, offset) {}
+    FlatNode(std::string const& name) : INode(name) {}
 
     ~FlatNode() {};
 

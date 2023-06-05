@@ -14,7 +14,7 @@ class BatchNormFinalizeNode : public INode {
     std::shared_ptr<BN_finalize> options;
 public:
 
-    BatchNormFinalizeNode(std::string const& name, std::shared_ptr<BN_finalize> const options, int64_t offset = 1)  : INode (name, offset), options(options) {}
+    BatchNormFinalizeNode(std::string const& name, std::shared_ptr<BN_finalize> const options)  : INode (name), options(options) {}
 
     Type getType() override final {
         return Type::BN_FINALIZE;

@@ -13,7 +13,7 @@ class ConvolutionNode : public INode {
     std::shared_ptr<Convolution> options;
 public:
 
-    ConvolutionNode(std::string const& name, std::shared_ptr<Convolution> const options, int64_t offset = 1)  : INode (name, offset), options(options) {}
+    ConvolutionNode(std::string const& name, std::shared_ptr<Convolution> const options)  : INode (name), options(options) {}
 
     Type getType() override final {
         return Type::CONVOLUTION;
