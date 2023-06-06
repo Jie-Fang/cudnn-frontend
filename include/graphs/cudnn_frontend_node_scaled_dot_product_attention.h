@@ -13,6 +13,7 @@ namespace cudnn_frontend::graph {
 
     class ScaledDotProductAttentionNode : public INode {
         std::shared_ptr<Tensor> P;
+        std::shared_ptr<Tensor> scale;
 
         std::shared_ptr<Scaled_dot_product_attention> options;
     public:
@@ -20,10 +21,28 @@ namespace cudnn_frontend::graph {
         ScaledDotProductAttentionNode(std::string const& name, std::shared_ptr<Scaled_dot_product_attention> const options)  : INode (name), options(options) {
             std::shared_ptr<Tensor> last_output;
 
+            // User does not create tensor for scale k, so create it internally
+            // Data type is i/o type
+            scale = std::make_shared<Tensor>("scale");
+            scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
+            
+            // Lower options to scale options
+            auto scale_options = std::make_shared<Pointwise>("scale");
+            scale_options->set_mode(PointwiseMode_t::MUL);
+            scale_options->inputs.IN_0 = options->inputs.K;
+            scale_options->inputs.IN_1 = scale;
+            last_output = scale_options->outputs.OUT_0 = std::make_shared<Tensor>("after_scale");
+            scale_options->outputs.OUT_0->set_is_virtual(true);
+            auto scale_node = std::make_shared<PointwiseNode>(scale_options->get_name(), scale_options);
+            sub_nodes.emplace_back(scale_node);
+            scale_node->parent_node = this;
+
             // Lower options to bmm1 options
             auto bmm1_options = std::make_shared<Matmul>("bmm1");
             bmm1_options->inputs.A = options->inputs.Q;
-            bmm1_options->inputs.B = options->inputs.K;
+            // Requirement by cudnn backend to take in bmm1 bType as i/o type.
+            last_output->set_data_type(DataType_t::HALF);
+            bmm1_options->inputs.B = last_output;
             bmm1_options->inputs.M_override = options->inputs.SEQ_LEN_Q;
             bmm1_options->inputs.N_override = options->inputs.SEQ_LEN_K;
             last_output = bmm1_options->outputs.C = P = std::make_shared<Tensor>("P"); // A dummy underlying tensor whose properties will be filled in infer_properties()
@@ -65,7 +84,7 @@ namespace cudnn_frontend::graph {
 
             // Lower options to bmm2 options
             auto bmm2_options = std::make_shared<Matmul>("bmm2");
-            // // Requirement by cudnn backend to take in bmm2 aType as i/o type.
+            // Requirement by cudnn backend to take in bmm2 aType as i/o type.
             last_output->set_data_type(DataType_t::HALF);
             bmm2_options->inputs.A = last_output;
             bmm2_options->inputs.B = options->inputs.V;
@@ -121,6 +140,14 @@ namespace cudnn_frontend::graph {
         error_t createExecutionPlans(cudnnHandle_t) override final {
             return error_t::OK;
         }
+    
+        virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
+            half scale_value = options->get_scale_k();
+            tensor_to_pass_by_value.emplace(scale, scale_value);
+
+            return error_t::OK;
+        }
+
     };
 
 } // namespace cudnn_frontend::graph

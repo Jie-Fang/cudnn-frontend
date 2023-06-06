@@ -9,8 +9,6 @@ def convert_to_cudnn_type(torch_type):
     else:
         raise ValueError("Unsupported tensor data type.")
 
-    return
-
 class SGBN(torch.nn.Module):
     def forward(self, input, running_mean, running_var, weight, bias):
         return torch.nn.functional.batch_norm(input, running_mean, running_var, weight=weight, bias=bias, training=True, momentum=0.1, eps=1.0e-5)

@@ -4,6 +4,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include <cuda_fp16.h>
+
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_Operation.h"
 #include "cudnn_frontend_OperationGraph.h"
@@ -12,9 +14,7 @@
 
 #include "graphs/cudnn_frontend_cudnn_interface.h"
 
-
 #include "graphs/cudnn_frontend_graph_properties.h"
-
 
 namespace cudnn_frontend {
 
@@ -22,7 +22,11 @@ namespace graph {
 
 // Interface for all nodes to follow.
 class INode: public ICudnn {
+public:
+    // A closed set of types that are allowed to be passed by value today
+    using pass_by_values_t = std::variant<half, float>; 
 
+private:
     virtual error_t assignUids_() {
         return error_t::OK;
     };
@@ -38,6 +42,22 @@ class INode: public ICudnn {
         }
         return error_t::OK;
     }
+
+    virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>&) {
+        return error_t::OK;
+    }
+
+    error_t gather_pass_by_value_tensors(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) {
+        CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(tensor_to_pass_by_value));
+        for(auto const& sub_node: sub_nodes) {
+            auto status = sub_node->gather_pass_by_value_tensors(tensor_to_pass_by_value);
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to gather pass by value tensors in " << name << std::endl;
+                return status;
+            }
+        }
+        return error_t::OK;
+    }  
 
 protected:
     // Type of each node. Nodes can either be a composite (value COMPOSITE) or
@@ -201,8 +221,32 @@ public:
                 tensor_uid_to_pointer_map.emplace(item.first->get_uid(), item.second);
             }
         }
+
+        std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t> tensor_to_pass_by_value;
+        auto status = gather_pass_by_value_tensors(tensor_to_pass_by_value);
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to gather_pass_by_value_tensors in " << name << std::endl;
+            return status;
+        }
+
+        // Add pass_by_value data pointers to tensor_uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during execute
+        for(auto& [tensor, value]: tensor_to_pass_by_value) {
+            void* value_ptr = nullptr;
+            if((value_ptr = std::get_if<half>(&value))) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), value_ptr);
+            }
+            else if((value_ptr = std::get_if<float>(&value))) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), value_ptr);
+            }
+            else {
+                status = error_t::INVALID_VARIANT_PACK;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Unexpected type for pass by value tensor in " << name << std::endl;
+                return status;
+            }
+        }
         
-        auto status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace_ptr);
+        status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace_ptr);
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
             return status;

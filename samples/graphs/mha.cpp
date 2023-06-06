@@ -50,7 +50,7 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
     inputs.SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha").set_is_inference(is_inference);
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha").set_is_inference(is_inference).set_scale_k(0.5f);
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
