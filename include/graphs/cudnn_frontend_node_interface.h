@@ -76,6 +76,7 @@ protected:
         , POINTWISE
         , REDUCTION
         , RESAMPLE
+        , RNG
         , WGRAD
     };
     Type tag;

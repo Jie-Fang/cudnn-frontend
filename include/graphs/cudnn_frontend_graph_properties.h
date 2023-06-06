@@ -181,15 +181,16 @@ public:
         BN,
         BN_finalize,
         Conv_fprop,
-        DBN_weight,
         Conv_dgrad,
+        Conv_wgrad,
+        DBN_weight,
         Genstats,
         Matmul,
         Pointwise,
         Reduction,
+        Rng,
         Scaled_dot_product_attention,
         Softmax,
-        Conv_wgrad,
     };
 
 protected:
@@ -735,6 +736,68 @@ public:
     }
 };
 
+class Rng : public Operation {
+public:
+    
+    struct Inputs {
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor> Y;
+    } outputs;
+
+private:
+    RngDistribution_t distribution;
+    std::optional<int64_t> seed;
+    std::optional<double> bernoulli_probability;
+
+public:
+    Rng(const std::string name) : Operation(name, Tag::Rng) {}
+
+    RngDistribution_t get_distribution() const {
+        return distribution;
+    }
+
+    Rng& set_distribution(RngDistribution_t value) {
+        distribution = value;
+        return *this;
+    }
+
+    std::optional<int64_t> get_seed() const {
+        return seed;
+    }
+
+    Rng& set_seed(std::optional<int64_t> value) {
+        seed = value;
+        return *this;
+    }
+
+    std::optional<double> get_bernoulli_probability() const {
+        return bernoulli_probability;
+    }
+
+    Rng& set_bernoulli_probability(std::optional<double> value) {
+        bernoulli_probability = value;
+        return *this;
+    }
+    
+    Rng& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Rng& {
+        // Fill node's tensors
+        outputs.Y->fill_from_context(context);
+
+        // Fill this node
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
 class Scaled_dot_product_attention : public Operation {
 public:
 
@@ -756,12 +819,14 @@ public:
 
 private:
     bool is_inference;
-    bool use_causal_masking;
-    double dropout_probability, dropout_scale;
     float scale_k;
+    bool use_causal_masking;
+    std::optional<float> dropout_probability;
+    std::optional<int64_t> seed;
+    float dropout_scale;
     
 public:
-    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false), scale_k(1.f) {}
+    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false), scale_k(1.f) , dropout_scale(1.f) {}
 
     bool get_is_inference() const {
         return is_inference;
@@ -786,13 +851,29 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_attention& set_inference(bool const use_causal) {
-        use_causal_masking = use_causal;
+    std::optional<int64_t> get_seed() const {
+        return seed;
+    }
+
+    Scaled_dot_product_attention& set_seed(std::optional<int64_t> value) {
+        seed = value;
         return *this;
     }
 
-    Scaled_dot_product_attention& set_dropout(double const probability, double const scale) {
+    std::optional<float> get_dropout_probability() const {
+        return dropout_probability;
+    }
+
+    Scaled_dot_product_attention& set_dropout_probability(float const probability) {
         dropout_probability = probability;
+        return *this;
+    }
+
+    float get_dropout_scale() const {
+        return dropout_scale;
+    }
+    
+    Scaled_dot_product_attention& set_dropout_scale(float const scale) {
         dropout_scale = scale;
         return *this;
     }

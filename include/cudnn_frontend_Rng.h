@@ -52,7 +52,7 @@ class RngDesc_v8 : public BackendDescriptor {
         std::stringstream ss;
 #if (CUDNN_VERSION >= 8700)
         ss  << "CUDNN_BACKEND_RNG_DESCRIPTOR: "
-            << "Distribution Type: " << to_string(distribution)
+            << "Distribution Type: " << distribution
             << ", Normal Distribution Mean: " << normal_dist_mean 
             << ", Normal Distribution Standard Deviation: " << normal_dist_std_dev 
             << ", Uniform Distribution Maximum: " << uniform_dist_max 
@@ -98,12 +98,10 @@ class RngDesc_v8 : public BackendDescriptor {
         return bernoulli_dist_probability;
     }
 
-#if (CUDNN_VERSION >= 8700)
-    cudnnRngDistribution_t
-    getDistribution() const {
+    RngDistribution_t getDistribution() const {
         return distribution;
     }
-#endif
+
     /** @} */
 
    private:
@@ -120,10 +118,8 @@ class RngDesc_v8 : public BackendDescriptor {
     double uniform_dist_min = -1;
     double bernoulli_dist_probability = -1;
 
-#if (CUDNN_VERSION >= 8700)
-    cudnnRngDistribution_t distribution = CUDNN_RNG_DISTRIBUTION_BERNOULLI;
-#endif
-    };
+    RngDistribution_t distribution = RngDistribution_t::NOT_SET;
+};
 
 ///
 /// RngDescBuilder_v8 Class
@@ -135,13 +131,19 @@ class RngDescBuilder_v8 {
      *  @{
      */
 
-#if (CUDNN_VERSION >= 8700)
     //! Set Rng distribution for the Rng Operation
-    auto
-    setRngDistribution(cudnnRngDistribution_t distribution_) -> RngDescBuilder_v8 & {
+    auto setRngDistribution(RngDistribution_t distribution_) -> RngDescBuilder_v8 & {
         m_RngDesc.distribution = distribution_;
         return *this;
     }
+
+#if (CUDNN_VERSION >= 8700)
+    //! Set Rng distribution for the Rng Operation
+    auto setRngDistribution(cudnnRngDistribution_t distribution_) -> RngDescBuilder_v8 & {        
+        m_RngDesc.distribution = detail::convert_from_cudnn_type(distribution_);
+        return *this;
+    }
+
 #endif
 
     //! Set normal distribution params (mean and std dev) for the Rng Operation
@@ -211,11 +213,21 @@ class RngDescBuilder_v8 {
         }
 
         // Once Created lets set the descriptor parameters.
+        cudnnRngDistribution_t cudnn_rng_distribution;
+        status = detail::convert_to_cudnn_type(m_RngDesc.distribution, cudnn_rng_distribution);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(
+                &m_RngDesc,
+                status,
+                "CUDNN_BACKEND_RNG_DESCRIPTOR: SetAttribute CUDNN_ATTR_RNG_DISTRIBUTION Failed");
+            return std::move(m_RngDesc);
+        }
+
         status = cudnnBackendSetAttribute(m_RngDesc.pointer->get_backend_descriptor(), 
                                           CUDNN_ATTR_RNG_DISTRIBUTION, 
                                           CUDNN_TYPE_RNG_DISTRIBUTION, 
                                           1,
-                                          &(m_RngDesc.distribution));
+                                          &cudnn_rng_distribution);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_RngDesc,
@@ -316,4 +328,7 @@ class RngDescBuilder_v8 {
    private:
     RngDesc_v8 m_RngDesc;
 };
+
+using RngDesc                   = RngDesc_v8;
+using RngDescBuilder            = RngDescBuilder_v8;
 }

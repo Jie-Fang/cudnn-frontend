@@ -3,16 +3,17 @@
 #include <unordered_map>
 
 #include "graphs/cudnn_frontend_node_batchnorm.h"
-#include "graphs/cudnn_frontend_node_dbn_weight.h"
 #include "graphs/cudnn_frontend_node_bn_finalize.h"
 #include "graphs/cudnn_frontend_node_conv_fprop.h"
 #include "graphs/cudnn_frontend_node_conv_dgrad.h"
+#include "graphs/cudnn_frontend_node_conv_wgrad.h"
+#include "graphs/cudnn_frontend_node_dbn_weight.h"
 #include "graphs/cudnn_frontend_node_genstats.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 #include "graphs/cudnn_frontend_node_reduction.h"
+#include "graphs/cudnn_frontend_node_rng.h"
 #include "graphs/cudnn_frontend_node_scaled_dot_product_attention.h"
-#include "graphs/cudnn_frontend_node_conv_wgrad.h"
 
 #include <graphs/cudnn_frontend_graph_helpers.h>
 
@@ -111,11 +112,14 @@ public:
     std::shared_ptr<Tensor> conv_fprop(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_fprop const& conv);
     Conv_fprop::Outputs conv_fprop(Conv_fprop::Inputs, Conv_fprop const& conv);
     
-    std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight const&);
-    DBN_weight::Outputs dbn_weight(DBN_weight::Inputs, DBN_weight const& dbn_weight);
-
     std::shared_ptr<Tensor> conv_dgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_dgrad const&);
     Conv_dgrad::Outputs conv_dgrad(Conv_dgrad::Inputs, Conv_dgrad const&);
+
+    std::shared_ptr<Tensor> conv_wgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_wgrad const&);
+    Conv_wgrad::Outputs conv_wgrad(Conv_wgrad::Inputs, Conv_wgrad const&);
+
+    std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight const&);
+    DBN_weight::Outputs dbn_weight(DBN_weight::Inputs, DBN_weight const& dbn_weight);
 
     std::array<std::shared_ptr<Tensor>, 2> genstats(std::shared_ptr<Tensor>, Genstats const&);
     Genstats::Outputs genstats(Genstats::Inputs, Genstats const&);
@@ -130,9 +134,6 @@ public:
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const&, Scaled_dot_product_attention const&);
     
-    std::shared_ptr<Tensor> conv_wgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_wgrad const&);
-    Conv_wgrad::Outputs conv_wgrad(Conv_wgrad::Inputs, Conv_wgrad const&);
-
     error_t build(cudnnHandle_t handle);
     error_t validate(cudnnHandle_t handle);
 
@@ -717,13 +718,6 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 flat_node.sub_nodes.push_back(batchnorm_node);
                 break;
             }
-            case Operation::Tag::DBN_weight: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
-                auto DBN_weight_node = std::make_shared<DBNWeightNode>(node->get_name(), std::static_pointer_cast<DBN_weight>(node));
-                DBN_weight_node->parent_node = &flat_node;
-                flat_node.sub_nodes.push_back(DBN_weight_node);
-                break;
-            }
             case Operation::Tag::BN_finalize: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
                 auto bn_finalize_node = std::make_shared<BatchNormFinalizeNode>(node->get_name(), std::static_pointer_cast<BN_finalize>(node));
@@ -743,6 +737,20 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), std::static_pointer_cast<Conv_dgrad>(node));
                 dgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(dgrad_node);
+                break;
+            }
+            case Operation::Tag::Conv_wgrad: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node->get_name() << std::endl;
+                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Conv_wgrad>(node));
+                wgrad_node->parent_node = &flat_node;
+                flat_node.sub_nodes.push_back(wgrad_node);
+                break;
+            }
+            case Operation::Tag::DBN_weight: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the batch norm finalize node named " << node->get_name() << std::endl;
+                auto DBN_weight_node = std::make_shared<DBNWeightNode>(node->get_name(), std::static_pointer_cast<DBN_weight>(node));
+                DBN_weight_node->parent_node = &flat_node;
+                flat_node.sub_nodes.push_back(DBN_weight_node);
                 break;
             }
             case Operation::Tag::Genstats: {
@@ -773,6 +781,13 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 flat_node.sub_nodes.push_back(reduction_node);
                 break;
             }
+            case Operation::Tag::Rng: {
+                getLogger() << "[cudnn_frontend] INFO: Adding the Rng node named " << node->get_name() << std::endl;
+                auto rng_node = std::make_shared<RngNode>(node->get_name(), std::static_pointer_cast<Rng>(node));
+                rng_node->parent_node = &flat_node;
+                flat_node.sub_nodes.push_back(rng_node);
+                break;
+            }
             case Operation::Tag::Scaled_dot_product_attention: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the Scaled_dot_product_attention node named " << node->get_name() << std::endl;
                 auto scaled_dot_product_attention_node = std::make_shared<ScaledDotProductAttentionNode>(node->get_name(), std::static_pointer_cast<Scaled_dot_product_attention>(node));
@@ -780,12 +795,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 flat_node.sub_nodes.push_back(scaled_dot_product_attention_node);
                 break;
             }
-            case Operation::Tag::Softmax:{break;}
-            case Operation::Tag::Conv_wgrad: {
-                getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node->get_name() << std::endl;
-                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Conv_wgrad>(node));
-                wgrad_node->parent_node = &flat_node;
-                flat_node.sub_nodes.push_back(wgrad_node);
+            case Operation::Tag::Softmax:{
                 break;
             }
         }

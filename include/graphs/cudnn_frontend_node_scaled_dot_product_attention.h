@@ -12,8 +12,10 @@
 namespace cudnn_frontend::graph {
 
     class ScaledDotProductAttentionNode : public INode {
+        std::shared_ptr<Tensor> rng_output;
         std::shared_ptr<Tensor> P;
         std::shared_ptr<Tensor> scale;
+        std::shared_ptr<Tensor> dropout_scale;
 
         std::shared_ptr<Scaled_dot_product_attention> options;
     public:
@@ -23,15 +25,17 @@ namespace cudnn_frontend::graph {
 
             // User does not create tensor for scale k, so create it internally
             // Data type is i/o type
-            scale = std::make_shared<Tensor>("scale");
+            scale = std::make_shared<Tensor>("scale_k");
             scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
+            dropout_scale = std::make_shared<Tensor>("dropout_scale");
+            dropout_scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
             
             // Lower options to scale options
-            auto scale_options = std::make_shared<Pointwise>("scale");
+            auto scale_options = std::make_shared<Pointwise>("scale_k");
             scale_options->set_mode(PointwiseMode_t::MUL);
             scale_options->inputs.IN_0 = options->inputs.K;
             scale_options->inputs.IN_1 = scale;
-            last_output = scale_options->outputs.OUT_0 = std::make_shared<Tensor>("after_scale");
+            last_output = scale_options->outputs.OUT_0 = std::make_shared<Tensor>("after_scale_k");
             scale_options->outputs.OUT_0->set_is_virtual(true);
             auto scale_node = std::make_shared<PointwiseNode>(scale_options->get_name(), scale_options);
             sub_nodes.emplace_back(scale_node);
@@ -54,14 +58,14 @@ namespace cudnn_frontend::graph {
             if(options->inputs.Bias) {
                 // Lower options to add options
                 auto add_options = std::make_shared<Pointwise>("bias");
-                auto add_node = std::make_shared<PointwiseNode>(add_options->get_name(), add_options);
-                sub_nodes.emplace_back(add_node);
-                add_node->parent_node = this;
                 add_options->set_mode(PointwiseMode_t::ADD);
                 add_options->inputs.IN_0 = bmm1_options->outputs.C;
                 add_options->inputs.IN_1 = options->inputs.Bias;
                 last_output = add_options->outputs.OUT_0 = std::make_shared<Tensor>("after_bias");
                 add_options->outputs.OUT_0->set_is_virtual(true);
+                auto add_node = std::make_shared<PointwiseNode>(add_options->get_name(), add_options);
+                sub_nodes.emplace_back(add_node);
+                add_node->parent_node = this;
             }
 
             // Lower options to softmax options
@@ -71,16 +75,70 @@ namespace cudnn_frontend::graph {
             if(options->get_is_inference()) {
                 last_output = softmax_options->outputs.S = std::make_shared<Tensor>("S");
                 softmax_options->outputs.S->set_is_virtual(true);
+                auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
+                sub_nodes.emplace_back(softmax_node);
+                softmax_node->parent_node = this;
             }
             else {
-                last_output = softmax_options->outputs.S = options->outputs.S;
-                
+                // Two cases for training: dropout present or not
+                bool const dropout_present = options->get_dropout_probability().has_value() || options->inputs.Dropout_mask;
+                if(dropout_present) {
+                    last_output = softmax_options->outputs.S = std::make_shared<Tensor>("S");
+                    softmax_options->outputs.S->set_is_virtual(true);
+                    auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
+                    sub_nodes.emplace_back(softmax_node);
+                    softmax_node->parent_node = this;
+
+                    if(options->get_dropout_probability().has_value()) {
+                        // Lower options to rng options
+                        auto rng_options = std::make_shared<Rng>("rng");
+                        rng_options->set_distribution(RngDistribution_t::BERNOULLI)
+                            .set_seed(options->get_seed())
+                            .set_bernoulli_probability(options->get_dropout_probability().value());
+                        last_output = rng_options->outputs.Y = rng_output = std::make_shared<Tensor>("after_rng");
+                        rng_options->outputs.Y->set_is_virtual(true);
+                        auto rng_node = std::make_shared<RngNode>(rng_options->get_name(), rng_options);
+                        sub_nodes.emplace_back(rng_node);
+                        rng_node->parent_node = this;
+                    }
+                    else {
+                        last_output = options->inputs.Dropout_mask;
+                    }
+
+                    // Lower options to mask options
+                    auto mask_options = std::make_shared<Pointwise>("mask");
+                    mask_options->set_mode(PointwiseMode_t::MUL);
+                    mask_options->inputs.IN_0 = softmax_options->outputs.S;
+                    mask_options->inputs.IN_1 = last_output;
+                    last_output = mask_options->outputs.OUT_0 = options->outputs.S;
+                    auto mask_node = std::make_shared<PointwiseNode>(mask_options->get_name(), mask_options);
+                    sub_nodes.emplace_back(mask_node);
+                    mask_node->parent_node = this;     
+                        
+                }
+                else {
+                    last_output = softmax_options->outputs.S = options->outputs.S;
+                    auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
+                    sub_nodes.emplace_back(softmax_node);
+                    softmax_node->parent_node = this;
+                }
+
                 // Requirement by cudnn backend as output is a special swizzled format.
                 last_output->set_reordering_type(cudnn_frontend::TensorReordering_t::F16x16);
             }
-            auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
-            sub_nodes.emplace_back(softmax_node);
-            softmax_node->parent_node = this;
+
+            // Inference or not, dropout or not, always put a scale.
+            // Default value 1.f. Will have no perf impact
+            // Lower options to dropout_scale options
+            auto dropout_scale_options = std::make_shared<Pointwise>("dropout_scale");
+            dropout_scale_options->set_mode(PointwiseMode_t::MUL);
+            dropout_scale_options->inputs.IN_0 = last_output;
+            dropout_scale_options->inputs.IN_1 = dropout_scale;
+            last_output = dropout_scale_options->outputs.OUT_0 = std::make_shared<Tensor>("after_dropout_scale");
+            dropout_scale_options->outputs.OUT_0->set_is_virtual(true);
+            auto dropout_scale_node = std::make_shared<PointwiseNode>(dropout_scale_options->get_name(), dropout_scale_options);
+            sub_nodes.emplace_back(dropout_scale_node);
+            dropout_scale_node->parent_node = this;
 
             // Lower options to bmm2 options
             auto bmm2_options = std::make_shared<Matmul>("bmm2");
@@ -120,9 +178,23 @@ namespace cudnn_frontend::graph {
             P->set_dim({b, h, s_q, s_kv})
              .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
              .fill_from_context(get_context());
+             
+            // rng_output
+            // kickstarting rng Y and subsequant MUL infer_properties
+            if(rng_output) {
+                rng_output->set_dim({b, h, s_q, s_kv})
+                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            }
+
             // Infer dims and strides for output tensor as matmul node has no context of mha
             // TODO: Rethink whether mha node needs to set it?
             options->outputs.O->set_dim({b,h,s_q,d}).set_stride({s_q*h*d,d,h*d,1});
+
+            // Compute dropout scale
+            if(options->get_dropout_probability().has_value()) {
+                auto const p = options->get_dropout_probability().value();
+                options->set_dropout_scale(1.f / (1.f - p));
+            }
 
             // TODO: do away this redundant code by tweaking global infer_properties
             for(auto const& sub_node: sub_nodes) {
@@ -144,6 +216,9 @@ namespace cudnn_frontend::graph {
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
             half scale_value = options->get_scale_k();
             tensor_to_pass_by_value.emplace(scale, scale_value);
+            
+            half dropout_scale_value = options->get_dropout_scale();
+            tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
 
             return error_t::OK;
         }

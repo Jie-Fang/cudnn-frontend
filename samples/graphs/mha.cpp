@@ -25,14 +25,16 @@
 
 #include <cudnn_frontend.h>
 
-TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
+TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward]") {
     int64_t b = 32;  // batch size
     int64_t h = 16;  // head dim
     int64_t s_q = 512; // q tensor is padded to this seq length
     int64_t s_kv = 512; // k and v tensor is padded to this seq length
     int64_t d = 64;  // hidden dim
-    bool is_inference = false;
-    bool use_bias = false;
+    bool is_inference = true;
+    bool use_bias = true;
+    float dropout_probability = 0.2f;
+    int64_t seed = 123456;
 
     namespace fe = cudnn_frontend;
     fe::graph::Graph mha_graph("mha");
@@ -50,7 +52,11 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
     inputs.SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha").set_is_inference(is_inference).set_scale_k(0.5f);
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
+                                                    .set_is_inference(is_inference)
+                                                    .set_scale_k(0.5f)
+                                                    .set_dropout_probability(dropout_probability)
+                                                    .set_seed(seed);
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
@@ -93,6 +99,191 @@ TEST_CASE("Scaled dot product Graphs", "[graph][mha][non_flash][forward]") {
         , {inputs.K, devPtrK}
         , {inputs.SEQ_LEN_Q, devActualSeqlenQ.devPtr}
         , {inputs.SEQ_LEN_K, devActualSeqlenK.devPtr}
+        , {inputs.V, devPtrV}
+        , {outputs.O, devPtrO}
+    };
+
+    Surface<half> sTensor(b * h * s_q * s_kv, false);
+    if(is_inference == false) {
+        variant_pack[outputs.S] = sTensor.devPtr;
+    }
+    
+    Surface<half> bTensor(1 * h * s_q * s_kv, false);
+    if(use_bias) {
+        variant_pack[inputs.Bias] = bTensor.devPtr;
+    }
+    
+    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
+
+    checkCudaErr(cudaDeviceSynchronize());
+
+    cudnnDestroy(handle);
+}
+
+TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][forward]") {
+    int64_t b = 32;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+    bool is_inference = true;
+    bool use_bias = true;
+
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph mha_graph("mha");
+    mha_graph.set_io_data_type(fe::DataType_t::HALF)
+             .set_intermediate_data_type(fe::DataType_t::FLOAT)
+             .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    fe::graph::Scaled_dot_product_attention::Inputs inputs;
+    inputs.Q = mha_graph.tensor(fe::graph::Tensor("Q").set_dim({b,h,s_q,d}).set_stride({s_q*3*h*d,d,3*h*d,1}));
+    inputs.K = mha_graph.tensor(fe::graph::Tensor("K").set_dim({b,h,d,s_kv}).set_stride({s_kv*3*h*d,d,1,3*h*d}));
+    if(use_bias) {
+        inputs.Bias = mha_graph.tensor(fe::graph::Tensor("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
+    }
+    inputs.V = mha_graph.tensor(fe::graph::Tensor("V").set_dim({b,h,s_kv,d}).set_stride({s_kv*3*h*d,d,3*h*d,1}));
+    inputs.SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
+    inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
+
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
+                                                    .set_is_inference(is_inference)
+                                                    .set_scale_k(0.5f);
+    auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
+
+    #if (CUDNN_VERSION < 8900)
+        SKIP("MHA Graph requires cudnn 8.9 and up");
+        return;
+    #endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("MHA Graph requires Hopper or above arch.");
+        return;
+    }
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+
+    //// Build variant pack
+    Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
+    Surface<half> oTensor(b * s_q * h * d, false);
+    void* devPtrQ = qkvTensor.devPtr;
+    void* devPtrK = (qkvTensor.devPtr + h * d);
+    void* devPtrV = (qkvTensor.devPtr + 2 * h * d);
+    void* devPtrO = oTensor.devPtr;
+
+    Surface<int32_t> devActualSeqlenQ(b, false);
+    Surface<int32_t> devActualSeqlenK(b, false);
+    std::vector<int32_t> hostActualSeqlenQ(b, 20);
+    std::vector<int32_t> hostActualSeqlenK(b, 20);
+
+    checkCudaErr(cudaMemcpy(devActualSeqlenQ.devPtr, hostActualSeqlenQ.data(), sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devActualSeqlenK.devPtr, hostActualSeqlenK.data(), sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+        {inputs.Q, devPtrQ}
+        , {inputs.K, devPtrK}
+        , {inputs.SEQ_LEN_Q, devActualSeqlenQ.devPtr}
+        , {inputs.SEQ_LEN_K, devActualSeqlenK.devPtr}
+        , {inputs.V, devPtrV}
+        , {outputs.O, devPtrO}
+    };
+
+    Surface<half> sTensor(b * h * s_q * s_kv, false);
+    if(is_inference == false) {
+        variant_pack[outputs.S] = sTensor.devPtr;
+    }
+    
+    Surface<half> bTensor(1 * h * s_q * s_kv, false);
+    if(use_bias) {
+        variant_pack[inputs.Bias] = bTensor.devPtr;
+    }
+    
+    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
+
+    checkCudaErr(cudaDeviceSynchronize());
+
+    cudnnDestroy(handle);
+}
+
+TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash][forward]") {
+    int64_t b = 32;  // batch size
+    int64_t h = 16;  // head dim
+    int64_t s_q = 512; // q tensor is padded to this seq length
+    int64_t s_kv = 512; // k and v tensor is padded to this seq length
+    int64_t d = 64;  // hidden dim
+    bool is_inference = false;
+    bool use_bias = true;
+
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph mha_graph("mha");
+    mha_graph.set_io_data_type(fe::DataType_t::HALF)
+             .set_intermediate_data_type(fe::DataType_t::FLOAT)
+             .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    fe::graph::Scaled_dot_product_attention::Inputs inputs;
+    inputs.Q = mha_graph.tensor(fe::graph::Tensor("Q").set_dim({b,h,s_q,d}).set_stride({s_q*3*h*d,d,3*h*d,1}));
+    inputs.K = mha_graph.tensor(fe::graph::Tensor("K").set_dim({b,h,d,s_kv}).set_stride({s_kv*3*h*d,d,1,3*h*d}));
+    inputs.Dropout_mask = mha_graph.tensor(fe::graph::Tensor("Dropout_mask").set_dim({b,h,s_q,s_kv}).set_stride({s_q*s_kv*h,s_q*s_kv,s_kv,1}));
+    if(use_bias) {
+        inputs.Bias = mha_graph.tensor(fe::graph::Tensor("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
+    }
+    inputs.V = mha_graph.tensor(fe::graph::Tensor("V").set_dim({b,h,s_kv,d}).set_stride({s_kv*3*h*d,d,3*h*d,1}));
+    inputs.SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
+    inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
+
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
+                                                    .set_is_inference(is_inference)
+                                                    .set_scale_k(0.5f);
+    auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
+
+    #if (CUDNN_VERSION < 8900)
+        SKIP("MHA Graph requires cudnn 8.9 and up");
+        return;
+    #endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("MHA Graph requires Hopper or above arch.");
+        return;
+    }
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+
+    //// Build variant pack
+    Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
+    Surface<half> dropoutMaskTensor(b * s_q * h * s_kv, false);
+    Surface<half> oTensor(b * s_q * h * d, false);
+    void* devPtrQ = qkvTensor.devPtr;
+    void* devPtrK = (qkvTensor.devPtr + h * d);
+    void* devPtrV = (qkvTensor.devPtr + 2 * h * d);
+    void* devPtrO = oTensor.devPtr;
+
+    Surface<int32_t> devActualSeqlenQ(b, false);
+    Surface<int32_t> devActualSeqlenK(b, false);
+    std::vector<int32_t> hostActualSeqlenQ(b, 20);
+    std::vector<int32_t> hostActualSeqlenK(b, 20);
+
+    checkCudaErr(cudaMemcpy(devActualSeqlenQ.devPtr, hostActualSeqlenQ.data(), sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devActualSeqlenK.devPtr, hostActualSeqlenK.data(), sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+        {inputs.Q, devPtrQ}
+        , {inputs.K, devPtrK}
+        , {inputs.SEQ_LEN_Q, devActualSeqlenQ.devPtr}
+        , {inputs.SEQ_LEN_K, devActualSeqlenK.devPtr}
+        , {inputs.Dropout_mask, dropoutMaskTensor.devPtr}
         , {inputs.V, devPtrV}
         , {outputs.O, devPtrO}
     };

@@ -384,6 +384,14 @@ enum class ReductionMode_t {
     MUL_NO_ZEROS
 };
 
+enum class RngDistribution_t {
+    NOT_SET,
+
+    BERNOULLI,
+    UNIFORM,
+    NORMAL,
+};
+
 static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
     switch (mode) {
         case PointwiseMode_t::NOT_SET:
@@ -446,6 +454,24 @@ static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
             return 4;
     }
     return -1;
+}
+
+static inline std::ostream& operator<<(std::ostream& os, const RngDistribution_t& mode) {
+    switch (mode) {
+        case RngDistribution_t::BERNOULLI:
+            os << "BERNOULLI";
+            break;
+        case RngDistribution_t::UNIFORM:
+            os << "UNIFORM";
+            break;
+        case RngDistribution_t::NORMAL:
+            os << "NORMAL";
+            break;
+        case RngDistribution_t::NOT_SET:
+            os << "NOT_SET";
+            break;
+    }
+    return os;
 }
 
 static inline std::ostream& operator<<(std::ostream& os, const DataType_t& mode) {
@@ -2036,6 +2062,47 @@ static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::TensorReorderi
         }
         return ReductionMode_t::NOT_SET;
     }
+
+#if (CUDNN_VERSION >= 8700)
+    static inline cudnnStatus_t convert_to_cudnn_type(cudnn_frontend::RngDistribution_t const mode, cudnnRngDistribution_t& cudnn_mode) {
+        switch (mode) {
+            
+            case RngDistribution_t::BERNOULLI:
+                cudnn_mode = CUDNN_RNG_DISTRIBUTION_BERNOULLI;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case RngDistribution_t::UNIFORM:
+                cudnn_mode = CUDNN_RNG_DISTRIBUTION_UNIFORM;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            case RngDistribution_t::NORMAL:
+                cudnn_mode = CUDNN_RNG_DISTRIBUTION_NORMAL;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            
+            #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            #endif
+        }
+        return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+    }
+
+    // To be deprecated. Only exists as setRngDistribution(cudnnRngDistribution_t mode) requires it.
+    static inline cudnn_frontend::RngDistribution_t convert_from_cudnn_type(cudnnRngDistribution_t const cudnn_mode) {
+        switch (cudnn_mode)
+        {
+            case CUDNN_RNG_DISTRIBUTION_BERNOULLI:
+                return RngDistribution_t::BERNOULLI;
+            case CUDNN_RNG_DISTRIBUTION_UNIFORM:
+                return RngDistribution_t::UNIFORM;
+            case CUDNN_RNG_DISTRIBUTION_NORMAL:
+                return RngDistribution_t::NORMAL;
+    #ifndef NO_DEFAULT_IN_SWITCH
+            default:
+                return RngDistribution_t::NOT_SET;
+    #endif
+        }
+        return RngDistribution_t::NOT_SET;
+    }
+#endif
 
 } // namespace detail
 

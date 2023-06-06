@@ -140,8 +140,6 @@ using EngineFallbackList        = EngineFallbackList_v8;
 using EngineFallbackListBuilder = EngineFallbackListBuilder_v8;
 using ResampleDesc              = ResampleDesc_v8;
 using ResampleDescBuilder       = ResampleDescBuilder_v8;
-using RngDesc                   = RngDesc_v8;
-using RngDescBuilder            = RngDescBuilder_v8;
 }
 
 
