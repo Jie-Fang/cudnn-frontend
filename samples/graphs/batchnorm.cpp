@@ -129,18 +129,14 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     auto prev_running_var = graph.tensor(fe::graph::Tensor("prev_running_var").set_data_type(fe::DataType_t::FLOAT));
     auto scale = graph.tensor(fe::graph::Tensor("scale").set_data_type(fe::DataType_t::FLOAT));
     auto bias = graph.tensor(fe::graph::Tensor("bias").set_data_type(fe::DataType_t::FLOAT));
-    auto epsilon = graph.tensor(fe::graph::Tensor("epsilon").set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
-    auto exp_avg = graph.tensor(fe::graph::Tensor("exp_avg").set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
 
     inputs.X = X;
     inputs.SCALE = scale;
     inputs.BIAS = bias;
     inputs.PREV_RUNNING_MEAN = prev_running_mean;
     inputs.PREV_RUNNING_VAR = prev_running_var;
-    inputs.EPSILON = epsilon;
-    inputs.EXP_AVG = exp_avg;
     
-    auto batchnorm_options = fe::graph::Batchnorm("batchnorm");
+    auto batchnorm_options = fe::graph::Batchnorm("batchnorm").set_epsilon(1.0e-5).set_momentum(0.1);
     auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(inputs, batchnorm_options);
     bn_output->set_is_virtual(true);
     
@@ -175,8 +171,6 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     Surface<float> Next_running_var_tensor(32, false);
     Surface<float> Scale_tensor(32, false);
     Surface<float> Bias_tensor(32, false);
-    float EPS_scalar = 0.001;
-    float EXP_AVG_scalar = 0.001;
     Surface<half> A_tensor(4*32*16*16, false);
     Surface<half> Y_tensor(4*32*16*16, false);
 
@@ -193,8 +187,6 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         , {next_running_var, Next_running_var_tensor.devPtr}
         , {scale, Scale_tensor.devPtr}
         , {bias, Bias_tensor.devPtr}
-        , {epsilon, &EPS_scalar}
-        , {exp_avg, &EXP_AVG_scalar}
         , {A, A_tensor.devPtr}
         , {Y, Y_tensor.devPtr}
         , {workspace, workspace_tensor.devPtr}

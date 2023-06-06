@@ -108,26 +108,26 @@ public:
     // Takes all tensor properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor>>
-    insert_batchnorm(
+    batchnorm(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& X_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_mean_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_var_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& epsilon_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& exp_avg_factor_props_ptr,
+        float const epsilon,
+        float const momentum,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Batchnorm(name)
-                        .set_compute_data_type(compute_data_type);
+                        .set_compute_data_type(compute_data_type)
+                        .set_epsilon(epsilon)
+                        .set_momentum(momentum);
         props.inputs.X = X_props_ptr;
         props.inputs.SCALE = scale_props_ptr;
         props.inputs.BIAS = bias_props_ptr;
         props.inputs.PREV_RUNNING_MEAN = in_running_mean_props_ptr;
         props.inputs.PREV_RUNNING_VAR = in_running_var_props_ptr;
-        props.inputs.EPSILON = epsilon_props_ptr;
-        props.inputs.EXP_AVG = exp_avg_factor_props_ptr;
 
         auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(props.inputs, props);
         return {Y, mean, inv_var, next_running_mean, next_running_var};
@@ -339,15 +339,15 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"is_virtual", false},
              py::arg_v{"is_pass_by_value", false}
         )
-        .def("batchnorm", &PyGraph::insert_batchnorm,
+        .def("batchnorm", &PyGraph::batchnorm,
              py::arg_v("name", "test_tensor_name"),
              py::arg("input"),
              py::arg("scale"),
              py::arg("bias"),
              py::arg("in_running_mean"),
              py::arg("in_running_var"),
-             py::arg("epsilon"),
-             py::arg("exp_avg_factor"),
+             py::arg_v("epsilon", 1.0e-5),
+             py::arg_v("momentum", 0.1),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("conv", &PyGraph::insert_conv,

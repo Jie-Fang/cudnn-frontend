@@ -610,10 +610,8 @@ public:
         std::shared_ptr<Tensor> X;
         std::shared_ptr<Tensor> SCALE;
         std::shared_ptr<Tensor> BIAS;
-        std::shared_ptr<Tensor> EPSILON;
         std::shared_ptr<Tensor> PREV_RUNNING_MEAN;
         std::shared_ptr<Tensor> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor> EXP_AVG;
     } inputs;
 
     struct Outputs {
@@ -623,7 +621,12 @@ public:
         std::shared_ptr<Tensor> NEXT_RUNNING_MEAN;
         std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
     } outputs;
-    
+private:
+    std::optional<float> epsilon;
+    std::optional<float> momentum;
+
+public:
+
     Batchnorm(const std::string name) : Operation(name, Tag::BN) {}
     
     Batchnorm& set_compute_data_type(DataType_t value) {
@@ -631,8 +634,25 @@ public:
         return *this;
     }
 
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
+    std::optional<float> get_epsilon() {
+        return epsilon;
+    }
+
+    Batchnorm& set_epsilon(float const value) {
+        epsilon = value;
+        return *this;
+    }
+
+    std::optional<float> get_momentum() {
+        return momentum;
+    }
+
+    Batchnorm& set_momentum(float const value) {
+        momentum = value;
+        return *this;
+    }
+
+    void make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
         outputs.Y = output_tensor(name + "_Y_output");
         outputs.MEAN = output_tensor(name + "_MEAN_output");;
         outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");;
@@ -647,9 +667,6 @@ public:
         inputs.BIAS->fill_from_context(context);
         inputs.PREV_RUNNING_MEAN->fill_from_context(context);
         inputs.PREV_RUNNING_VAR->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-        inputs.EXP_AVG->fill_from_context(context);
-        
         
         outputs.Y->fill_from_context(context);
         outputs.MEAN->fill_from_context(context);

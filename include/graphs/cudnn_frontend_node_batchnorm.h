@@ -11,6 +11,9 @@ namespace cudnn_frontend {
 namespace graph {
 
 class BatchNormNode : public INode {
+    std::shared_ptr<Tensor> epsilon;
+    std::shared_ptr<Tensor> momentum;
+    
     std::shared_ptr<Batchnorm> options;
 public:
 
@@ -20,6 +23,14 @@ public:
         options->outputs.INV_VARIANCE->set_data_type(DataType_t::FLOAT);
         options->outputs.NEXT_RUNNING_MEAN->set_data_type(DataType_t::FLOAT);
         options->outputs.NEXT_RUNNING_VAR->set_data_type(DataType_t::FLOAT);
+
+        // User does not create tensor for epsilon/momentum, so create it internally
+        // Data type is i/o type
+        epsilon = std::make_shared<Tensor>("epsilon");
+        epsilon->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
+
+        momentum = std::make_shared<Tensor>("momentum");
+        momentum->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
     }
 
     Type getType() override final {
@@ -63,17 +74,6 @@ public:
         infer_per_channel_tensors(options->inputs.SCALE);
         infer_per_channel_tensors(options->inputs.BIAS);
 
-        // Set scalars
-        auto infer_scalars = [&x_tensor_dim] (std::shared_ptr<Tensor>& T) {
-            auto tensor_dim = T->get_dim();
-            if(tensor_dim.empty()) {
-                tensor_dim.resize(x_tensor_dim.size(), 1);
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
-            }
-        };
-        infer_scalars(options->inputs.EPSILON);
-        infer_scalars(options->inputs.EXP_AVG);
-
         return error_t::OK;
     }
     
@@ -108,7 +108,7 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.SCALE));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.BIAS));
 
-        auto validate_scalars = [this] (std::shared_ptr<Tensor>& T) {
+        auto validate_scalars = [this] (std::shared_ptr<Tensor> const& T) {
             auto tensor_dim = T->get_dim();
             bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {
                 return element == 1;
@@ -120,8 +120,8 @@ public:
             }
             return error_t::OK;
         };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options->inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options->inputs.EXP_AVG));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(epsilon));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(momentum));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormNode." << std::endl;
         return error_t::OK;
@@ -133,8 +133,8 @@ public:
         options->inputs.BIAS->set_uid(ICudnn::create_new_uid());
         options->inputs.PREV_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
         options->inputs.PREV_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        options->inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options->inputs.EXP_AVG->set_uid(ICudnn::create_new_uid());
+        epsilon->set_uid(ICudnn::create_new_uid());
+        momentum->set_uid(ICudnn::create_new_uid());
         options->outputs.Y->set_uid(ICudnn::create_new_uid());
         options->outputs.MEAN->set_uid(ICudnn::create_new_uid());
         options->outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
@@ -150,8 +150,8 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.PREV_RUNNING_MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.PREV_RUNNING_VAR));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.EXP_AVG));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(epsilon));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(momentum));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.SCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.BIAS));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.Y));
@@ -182,8 +182,8 @@ public:
                                         .setScaleAndBias(*(tensors.at(options->inputs.SCALE->get_uid())), *(tensors.at(options->inputs.BIAS->get_uid())))
                                         .setPrevRunningMeanAndVar(*(tensors.at(options->inputs.PREV_RUNNING_MEAN->get_uid())), *(tensors.at(options->inputs.PREV_RUNNING_VAR->get_uid())))
                                         .setNextRunningMeanAndVar(*(tensors.at(options->outputs.NEXT_RUNNING_MEAN->get_uid())), *(tensors.at(options->outputs.NEXT_RUNNING_VAR->get_uid())))
-                                        .setEpsilonTensor(*(tensors.at(options->inputs.EPSILON->get_uid())))
-                                        .setExpDecayFactorTensor(*(tensors.at(options->inputs.EXP_AVG->get_uid())))
+                                        .setEpsilonTensor(*(tensors.at(epsilon->get_uid())))
+                                        .setExpDecayFactorTensor(*(tensors.at(momentum->get_uid())))
                                         .setyDesc(*(tensors.at(options->outputs.Y->get_uid())))
                                         .build();
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(batchnorm_operation)));
@@ -193,8 +193,8 @@ public:
             options->inputs.X
             , options->inputs.PREV_RUNNING_MEAN
             , options->inputs.PREV_RUNNING_VAR
-            , options->inputs.EPSILON
-            , options->inputs.EXP_AVG
+            , epsilon
+            , momentum
             , options->inputs.SCALE
             , options->inputs.BIAS
             , options->outputs.Y
@@ -225,6 +225,16 @@ public:
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
+        return error_t::OK;
+    }
+
+    virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
+        float epsilon_value = options->get_epsilon().value();
+        tensor_to_pass_by_value.emplace(epsilon, epsilon_value);
+
+        float momentum_value = options->get_momentum().value();
+        tensor_to_pass_by_value.emplace(momentum, momentum_value);
+
         return error_t::OK;
     }
 };
