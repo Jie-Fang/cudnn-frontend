@@ -38,6 +38,11 @@ PYBIND11_MODULE(pycudnn, m)
         .value("FAST_FLOAT_FOR_FP8", cudnn_frontend::DataType_t::FAST_FLOAT_FOR_FP8)
         .value("NOT_SET", cudnn_frontend::DataType_t::NOT_SET);
 
+  py::enum_<cudnn_frontend::NormFwdPhase_t>(m, "norm_forward_phase")
+        .value("INFERENCE", cudnn_frontend::NormFwdPhase_t::INFERENCE)
+        .value("TRAINING", cudnn_frontend::NormFwdPhase_t::TRAINING)
+        .value("NOT_SET", cudnn_frontend::NormFwdPhase_t::NOT_SET);
+
   init_pygraph_submodule(m);
   init_properties(m);
 }

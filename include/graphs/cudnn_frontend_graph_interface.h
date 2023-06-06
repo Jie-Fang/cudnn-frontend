@@ -543,10 +543,10 @@ inline error_t Graph::run_graph_rules() const {
     if (cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device) != cudaSuccess) {
         return error_t::INVALID_CUDA_DEVICE;
     }
-    auto device_version = (major * 100) + (minor * 10);
+    auto device_version = (major * 10) + (minor * 1);
 
     auto cudnn_version = cudnnGetVersion();
-    RETURN_CUDNN_FRONTEND_ERROR_IF(device_version < 700, error_t::UNSUPPORTED_GRAPH_FORMAT);
+    RETURN_CUDNN_FRONTEND_ERROR_IF(device_version < 70, error_t::UNSUPPORTED_GRAPH_FORMAT);
 
     bool is_supported = false;
 
@@ -573,36 +573,56 @@ inline error_t Graph::run_graph_rules() const {
     // Section 3.3.3 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#specialized-runtime-fusion-engines
     switch (entrance_node_tag) {
         case Operation::Tag::BN: {
-            // Only contains checks for
-            // Section 3.3.3.1
-            bool is_first_node = true;
-            auto supported_pattern = {Operation::Tag::BN, Operation::Tag::Pointwise, Operation::Tag::Pointwise, Operation::Tag::Pointwise};
-            auto supported_pointwise_pattern = {PointwiseMode_t::ADD, PointwiseMode_t::RELU_FWD, PointwiseMode_t::CMP_GT};
-            std::vector<Operation::Tag> actual_pattern = {Operation::Tag::BN};
-            std::vector<PointwiseMode_t> actual_pointwise_pattern = {};
-            (void) supported_pattern;
-            (void) supported_pointwise_pattern;
-            for (auto const &node : nodes) {
-                if (true == is_first_node) {
-                    is_first_node = false;
-                    continue;
-                }
-                auto tag_ = node->get_tag();
-                actual_pattern.push_back(tag_);
-                if (tag_ == Operation::Tag::Pointwise) {
-                    auto pointwise_op = std::static_pointer_cast<cudnn_frontend::graph::Pointwise>(node);
-                    actual_pointwise_pattern.push_back(pointwise_op->get_mode().value());
-                }
+            // Only contains checks for Section 3.3.3.1
+            auto bn_options = std::static_pointer_cast<cudnn_frontend::graph::Batchnorm>(nodes.front());
+
+            // The pointwise nodes: Add, ReLU, and GT (greater than) are optional.
+            if(std::any_of(std::next(nodes.begin(), 1), nodes.end(), [](auto const& node) {return node->get_tag() != Operation::Tag::Pointwise;})) {
+                break;
             }
-            is_supported = std::includes(supported_pattern.begin(), supported_pattern.end(), actual_pattern.begin(), actual_pattern.end());
-            is_supported = std::includes(supported_pointwise_pattern.begin(), supported_pointwise_pattern.end(), actual_pointwise_pattern.begin(), actual_pointwise_pattern.end());
-            getLogger() << "3.3.3.1. BnAddRelu supported" << std::endl;
+
+            auto pattern = {PointwiseMode_t::ADD, PointwiseMode_t::RELU_FWD, PointwiseMode_t::CMP_GT};
+            std::vector<PointwiseMode_t> actual_pattern = {};
+            for (auto itr = std::next(nodes.begin(), 1); itr != nodes.end(); itr++) {
+                auto pointwise_options = std::static_pointer_cast<cudnn_frontend::graph::Pointwise>(*itr);
+                actual_pattern.push_back(pointwise_options->get_mode().value());
+            }
+            if(!std::includes(pattern.begin(), pattern.end(), actual_pattern.begin(), actual_pattern.end())) {
+                break;
+            }
+
+            // The attribute CUDNN_ATTR_OPERATION_NORM_FWD_MODE for the norm forward operation must be set to CUDNN_BATCH_NORM.
+            // Hardcoded inside operation
+
+            // The attribute CUDNN_ATTR_OPERATION_NORM_FWD_PHASE for the norm forward operation must be set to CUDNN_NORM_FWD_TRAINING.
+            if(bn_options->get_forward_phase() != NormFwdPhase_t::TRAINING) {
+                break;
+            }
+
+            // For FP16 and BF16 data types, the channel count C for the tensors must be a multiple of 8 while
+            // for float data type the channel count must be a multiple of 4.
+            auto const& X = bn_options->inputs.X;
+            auto const X_data_type = X->get_data_type();
+            auto const& X_dim = X->get_dim();
+            if((X_data_type == DataType_t::FLOAT) && (X_dim[1]%4)) {
+                break;
+            }
+            else if((X_data_type == DataType_t::HALF || X_data_type == DataType_t::BFLOAT16) && (X_dim[1]%8)) {
+                break;
+            }
+
+            // These patterns are supported on devices with compute capability >= 8.0
+            if(device_version < 80) {
+                break;
+            }
+            
+            return error_t::OK;
             break;
         }
         case Operation::Tag::Scaled_dot_product_attention: {
             // Only contains checks for
             // Section 3.3.3.3
-            is_supported = true;
+            return error_t::OK;
         }
         default: {
             break;
@@ -614,7 +634,7 @@ inline error_t Graph::run_graph_rules() const {
     // Section 3.3.2 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#runtime-fusion-engine
     
     // Check if g1 can be applied
-    if ((device_version < 800) && ((entrance_node_tag != Operation::Tag::Conv) && (entrance_node_tag != Operation::Tag::Matmul))) {
+    if ((device_version < 80) && ((entrance_node_tag != Operation::Tag::Conv) && (entrance_node_tag != Operation::Tag::Matmul))) {
         getLogger() << "Device version insufficient" << std::endl;
         return error_t::UNSUPPORTED_GRAPH_FORMAT;
     }

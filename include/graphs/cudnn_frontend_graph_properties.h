@@ -622,15 +622,25 @@ public:
         std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
     } outputs;
 private:
+    NormFwdPhase_t forward_phase;
     std::optional<float> epsilon;
     std::optional<float> momentum;
 
 public:
 
-    Batchnorm(const std::string name) : Operation(name, Tag::BN) {}
+    Batchnorm(const std::string name) : Operation(name, Tag::BN), forward_phase(NormFwdPhase_t::NOT_SET) {}
     
     Batchnorm& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
+        return *this;
+    }
+
+    NormFwdPhase_t get_forward_phase() {
+        return forward_phase;
+    }
+
+    Batchnorm& set_forward_phase(NormFwdPhase_t const value) {
+        forward_phase = value;
         return *this;
     }
 

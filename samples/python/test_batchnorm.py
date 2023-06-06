@@ -36,7 +36,9 @@ def test_bn():
     in_running_mean = graph.tensor(name = "in_running_mean")
     in_running_var = graph.tensor(name = "in_running_var")
 
-    (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN", input = X
+    (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
+                                                                                        , norm_forward_phase = pycudnn.norm_forward_phase.TRAINING
+                                                                                        , input = X
                                                                                         , scale = scale, bias = bias
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var
                                                                                         , epsilon = epsilon_cpu, momentum = momentum_cpu)
@@ -47,7 +49,15 @@ def test_bn():
     out_running_mean.set_is_virtual(False)
     out_running_var.set_is_virtual(False)
 
-    graph.build()
+    try:
+        graph.build()
+    except RuntimeError as err:
+        if pycudnn.get_cudnn_version() < 8700:
+            print("BN not supported below cudnn 8.7")
+            return
+        else:
+            print(f"Unexpected {err=}, {type(err)=}")
+            raise
 
     saved_mean_actual = torch.zeros_like(scale_gpu)
     saved_inv_var_actual = torch.zeros_like(scale_gpu)

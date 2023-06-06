@@ -176,7 +176,7 @@ public:
         // Create the batchnorm operation.
         auto batchnorm_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
                                         .setNormalizationMode(NormMode_t::BATCH_NORM)
-                                        .setNormFwdPhase(NormFwdPhase_t::TRAINING)
+                                        .setNormFwdPhase(options->get_forward_phase())
                                         .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
                                         .setSavedMeanAndInvVar(*(tensors.at(options->outputs.MEAN->get_uid())), *(tensors.at(options->outputs.INV_VARIANCE->get_uid())))
                                         .setScaleAndBias(*(tensors.at(options->inputs.SCALE->get_uid())), *(tensors.at(options->inputs.BIAS->get_uid())))

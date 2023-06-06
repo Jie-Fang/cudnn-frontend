@@ -110,6 +110,7 @@ public:
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor>>
     batchnorm(
         std::string const& name,
+        cudnn_frontend::NormFwdPhase_t const forward_phase,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& X_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
@@ -120,6 +121,7 @@ public:
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Batchnorm(name)
+                        .set_forward_phase(forward_phase)
                         .set_compute_data_type(compute_data_type)
                         .set_epsilon(epsilon)
                         .set_momentum(momentum);
@@ -341,6 +343,7 @@ void init_pygraph_submodule(py::module_ &m) {
         )
         .def("batchnorm", &PyGraph::batchnorm,
              py::arg_v("name", "test_tensor_name"),
+             py::arg("norm_forward_phase"),
              py::arg("input"),
              py::arg("scale"),
              py::arg("bias"),

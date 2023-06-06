@@ -136,7 +136,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     inputs.PREV_RUNNING_MEAN = prev_running_mean;
     inputs.PREV_RUNNING_VAR = prev_running_var;
     
-    auto batchnorm_options = fe::graph::Batchnorm("batchnorm").set_epsilon(1.0e-5).set_momentum(0.1);
+    auto batchnorm_options = fe::graph::Batchnorm("batchnorm").set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(1.0e-5).set_momentum(0.1);
     auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(inputs, batchnorm_options);
     bn_output->set_is_virtual(true);
     
