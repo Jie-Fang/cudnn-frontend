@@ -641,8 +641,8 @@ inline error_t Graph::run_graph_rules() const {
 
     std::set<Operation::Tag> g1_supported_pattern = {/*Operation::Tag::Concat, Operation::Tag::Signal */Operation::Tag::Pointwise};
     std::set<Operation::Tag> g2_supported_pattern = { /*Operation::Tag::ResampleFwd,
-                                                        Operation::Tag::ResampleBwd,
-                                                        Operation::Tag::Genstats*/
+                                                        Operation::Tag::ResampleBwd*/
+                                                        Operation::Tag::Genstats,
                                                         Operation::Tag::Reduction,
                                                         Operation::Tag::Pointwise};
 

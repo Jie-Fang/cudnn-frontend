@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include <cuda_fp16.h>
+#include <variant>
 
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_Operation.h"

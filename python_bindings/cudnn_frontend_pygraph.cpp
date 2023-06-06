@@ -235,6 +235,18 @@ public:
         return outputs.OUT_0;
     }
 
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2UL>
+    insert_genstat(
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        cudnn_frontend::DataType_t const& compute_data_type
+    ) {
+        auto props = cudnn_frontend::graph::Genstats(name).set_compute_data_type(compute_data_type);
+        props.inputs.X = input_props_ptr;
+        auto outputs = graph.genstats(props.inputs.X, props);
+        return outputs;
+    }
+
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
@@ -342,7 +354,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"is_pass_by_value", false}
         )
         .def("batchnorm", &PyGraph::batchnorm,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "batch_norm"),
              py::arg("norm_forward_phase"),
              py::arg("input"),
              py::arg("scale"),
@@ -353,8 +365,13 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("momentum", 0.1),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
+        .def("genstats", &PyGraph::insert_genstat,
+             py::arg_v("name", "genstat"),
+             py::arg("input"),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        )
         .def("conv", &PyGraph::insert_conv,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "conv_fprop"),
              py::arg("image"),
              py::arg("weight"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -363,35 +380,35 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"dilation", default_vector()}
         )
         .def("matmul", &PyGraph::insert_matmul,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "matmul"),
              py::arg("image"),
              py::arg("weight"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("bias", &PyGraph::insert_bias,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "bias"),
              py::arg("input"),
              py::arg("bias"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("scale", &PyGraph::insert_scale,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "scale"),
              py::arg("input"),
              py::arg("scale"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("relu", &PyGraph::insert_relu,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "relu"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("elu", &PyGraph::insert_elu,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "elu"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("insert_gelu", &PyGraph::insert_gelu,
-             py::arg_v("name", "test_tensor_name"),
+             py::arg_v("name", "gelu"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
@@ -403,4 +420,5 @@ void init_pygraph_submodule(py::module_ &m) {
             out << graph;
             return out.str();
         });
+    m.def("get_cudnn_version", []()->size_t {return cudnnGetVersion();});
 }
