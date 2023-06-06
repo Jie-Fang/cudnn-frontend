@@ -9,11 +9,11 @@
 
 namespace cudnn_frontend::graph {
 
-    class MatMulNode : public INode {
+    class MatmulNode : public INode {
         std::shared_ptr<Matmul> options;
     public:
 
-        MatMulNode(std::string const& name, std::shared_ptr<Matmul> const options)  : INode (name), options(options) {}
+        MatmulNode(std::string const& name, std::shared_ptr<Matmul> const options)  : INode (name), options(options) {}
 
         Type getType() override final {
             return Type::MATMUL;
@@ -71,7 +71,7 @@ namespace cudnn_frontend::graph {
 
         error_t createTensors() override final {
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode tensors at node name " << name << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode tensors at node name " << name << std::endl;
 
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.A));
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.B));
@@ -82,14 +82,14 @@ namespace cudnn_frontend::graph {
                     CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor));
                 }
             }
-            getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode tensors at node name " << name << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Built MatmulNode tensors at node name " << name << std::endl;
 
             return error_t::OK;
         }
         
         error_t createOperations() override final {
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Building MatMulNode operations for node name " << name << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode operations for node name " << name << std::endl;
             
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             try {
@@ -150,7 +150,7 @@ namespace cudnn_frontend::graph {
                 }
             }
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Built MatMulNode operation for node name " << name << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Built MatmulNode operation for node name " << name << std::endl;
 
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             } catch (cudnn_frontend::cudnnException &e) {

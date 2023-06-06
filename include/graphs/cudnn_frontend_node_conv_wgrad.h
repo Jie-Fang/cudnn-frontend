@@ -10,10 +10,10 @@
 namespace cudnn_frontend::graph {
 
 class WgradNode : public INode {
-    std::shared_ptr<Wgrad> options;
+    std::shared_ptr<Conv_wgrad> options;
 public:
 
-    WgradNode(std::string const& name, std::shared_ptr<Wgrad> const options)  : INode (name), options(options) {}
+    WgradNode(std::string const& name, std::shared_ptr<Conv_wgrad> const options)  : INode (name), options(options) {}
 
     Type getType() override final {
         return Type::WGRAD;

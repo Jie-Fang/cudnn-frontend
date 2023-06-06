@@ -47,7 +47,7 @@ namespace cudnn_frontend::graph {
             bmm1_options->inputs.N_override = options->inputs.SEQ_LEN_K;
             last_output = bmm1_options->outputs.C = P = std::make_shared<Tensor>("P"); // A dummy underlying tensor whose properties will be filled in infer_properties()
             bmm1_options->outputs.C->set_is_virtual(true);
-            auto bmm1_node = std::make_shared<MatMulNode>(bmm1_options->get_name(), bmm1_options);
+            auto bmm1_node = std::make_shared<MatmulNode>(bmm1_options->get_name(), bmm1_options);
             sub_nodes.emplace_back(bmm1_node);
             bmm1_node->parent_node = this;
             
@@ -91,7 +91,7 @@ namespace cudnn_frontend::graph {
             bmm2_options->inputs.M_override = options->inputs.SEQ_LEN_Q;
             bmm2_options->inputs.K_override = options->inputs.SEQ_LEN_K;
             bmm2_options->outputs.C = options->outputs.O;
-            auto bmm2_node = std::make_shared<MatMulNode>(bmm2_options->get_name(), bmm2_options);
+            auto bmm2_node = std::make_shared<MatmulNode>(bmm2_options->get_name(), bmm2_options);
             sub_nodes.emplace_back(bmm2_node);
             bmm2_node->parent_node = this;
         }

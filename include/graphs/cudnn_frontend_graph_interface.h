@@ -5,14 +5,14 @@
 #include "graphs/cudnn_frontend_node_batchnorm.h"
 #include "graphs/cudnn_frontend_node_dbn_weight.h"
 #include "graphs/cudnn_frontend_node_bn_finalize.h"
-#include "graphs/cudnn_frontend_node_convolution.h"
-#include "graphs/cudnn_frontend_node_dgrad.h"
+#include "graphs/cudnn_frontend_node_conv_fprop.h"
+#include "graphs/cudnn_frontend_node_conv_dgrad.h"
 #include "graphs/cudnn_frontend_node_genstats.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
 #include "graphs/cudnn_frontend_node_pointwise.h"
 #include "graphs/cudnn_frontend_node_reduction.h"
 #include "graphs/cudnn_frontend_node_scaled_dot_product_attention.h"
-#include "graphs/cudnn_frontend_node_wgrad.h"
+#include "graphs/cudnn_frontend_node_conv_wgrad.h"
 
 #include <graphs/cudnn_frontend_graph_helpers.h>
 
@@ -108,14 +108,14 @@ public:
 
     BN_finalize::Outputs bn_finalize(BN_finalize::Inputs, BN_finalize const&);
 
-    std::shared_ptr<Tensor> conv(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Convolution const& conv);
-    Convolution::Outputs conv(Convolution::Inputs, Convolution const& conv);
+    std::shared_ptr<Tensor> conv_fprop(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_fprop const& conv);
+    Conv_fprop::Outputs conv_fprop(Conv_fprop::Inputs, Conv_fprop const& conv);
     
     std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight const&);
     DBN_weight::Outputs dbn_weight(DBN_weight::Inputs, DBN_weight const& dbn_weight);
 
-    std::shared_ptr<Tensor> dgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Dgrad const& dgrad);
-    Dgrad::Outputs dgrad(Dgrad::Inputs, Dgrad const& dgrad);
+    std::shared_ptr<Tensor> conv_dgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_dgrad const&);
+    Conv_dgrad::Outputs conv_dgrad(Conv_dgrad::Inputs, Conv_dgrad const&);
 
     std::array<std::shared_ptr<Tensor>, 2> genstats(std::shared_ptr<Tensor>, Genstats const&);
     Genstats::Outputs genstats(Genstats::Inputs, Genstats const&);
@@ -130,8 +130,8 @@ public:
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs const&, Scaled_dot_product_attention const&);
     
-    std::shared_ptr<Tensor> wgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Wgrad const& wgrad);
-    Wgrad::Outputs wgrad(Wgrad::Inputs, Wgrad const& wgrad);
+    std::shared_ptr<Tensor> conv_wgrad(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, Conv_wgrad const&);
+    Conv_wgrad::Outputs conv_wgrad(Conv_wgrad::Inputs, Conv_wgrad const&);
 
     error_t build(cudnnHandle_t handle);
     error_t validate(cudnnHandle_t handle);
@@ -240,10 +240,10 @@ inline Batchnorm::Outputs Graph::batchnorm(Batchnorm::Inputs inputs, Batchnorm c
     return options->outputs;
 }
 
-inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> w,Convolution const& user_options) {
+inline std::shared_ptr<Tensor> Graph::conv_fprop(std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> w, Conv_fprop const& user_options) {
 
     // Copy over the options from the user
-    auto options = std::make_shared<Convolution>(user_options);
+    auto options = std::make_shared<Conv_fprop>(user_options);
 
     // Make required output tensors
     options->outputs.Y = output_tensor(options->get_name() + "_output");
@@ -257,10 +257,10 @@ inline std::shared_ptr<Tensor> Graph::conv(std::shared_ptr<Tensor> x, std::share
     return options->outputs.Y;
 }
 
-inline Convolution::Outputs Graph::conv(Convolution::Inputs inputs, Convolution const& user_options) {
+inline Conv_fprop::Outputs Graph::conv_fprop(Conv_fprop::Inputs inputs, Conv_fprop const& user_options) {
 
     // Copy over the options from the user
-    auto options = std::make_shared<Convolution>(user_options);
+    auto options = std::make_shared<Conv_fprop>(user_options);
 
     // Set outputs
     options->outputs.Y = output_tensor(options->get_name() + "_output");
@@ -309,10 +309,10 @@ inline DBN_weight::Outputs Graph::dbn_weight(DBN_weight::Inputs inputs, DBN_weig
     return options->outputs;
 }
 
-inline std::shared_ptr<Tensor> Graph::dgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> w, Dgrad const& user_options) {
+inline std::shared_ptr<Tensor> Graph::conv_dgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> w, Conv_dgrad const& user_options) {
 
     // Copy over the options from the user
-    auto options = std::make_shared<Dgrad>(user_options);
+    auto options = std::make_shared<Conv_dgrad>(user_options);
 
     // Make required output tensors
     options->outputs.DX = output_tensor(options->get_name() + "_output");
@@ -326,10 +326,10 @@ inline std::shared_ptr<Tensor> Graph::dgrad(std::shared_ptr<Tensor> dy, std::sha
     return options->outputs.DX;
 }
 
-inline Dgrad::Outputs Graph::dgrad(Dgrad::Inputs inputs, Dgrad const& user_options) {
+inline Conv_dgrad::Outputs Graph::conv_dgrad(Conv_dgrad::Inputs inputs, Conv_dgrad const& user_options) {
 
     // Copy over the options from the user
-    auto options = std::make_shared<Dgrad>(user_options);
+    auto options = std::make_shared<Conv_dgrad>(user_options);
 
     // Make required output tensors
     options->outputs.DX = output_tensor(options->get_name() + "_output");
@@ -376,10 +376,10 @@ inline Genstats::Outputs Graph::genstats(Genstats::Inputs inputs, Genstats const
     return options->outputs;
 }
 
-inline std::shared_ptr<Tensor> Graph::wgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> x, Wgrad const& user_options) {
+inline std::shared_ptr<Tensor> Graph::conv_wgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> x, Conv_wgrad const& user_options) {
 
     // Copy over the options from the user
-    auto options = std::make_shared<Wgrad>(user_options);
+    auto options = std::make_shared<Conv_wgrad>(user_options);
 
     // Make required output tensors
     options->outputs.DW = output_tensor(options->get_name() + "_output");
@@ -393,10 +393,10 @@ inline std::shared_ptr<Tensor> Graph::wgrad(std::shared_ptr<Tensor> dy, std::sha
     return options->outputs.DW;
 }
 
-inline Wgrad::Outputs Graph::wgrad(Wgrad::Inputs inputs, Wgrad const& user_options) {
+inline Conv_wgrad::Outputs Graph::conv_wgrad(Conv_wgrad::Inputs inputs, Conv_wgrad const& user_options) {
 
     // Copy over the options from the user
-    auto options = std::make_shared<Wgrad>(user_options);
+    auto options = std::make_shared<Conv_wgrad>(user_options);
 
     // Make required output tensors
     options->outputs.DW = output_tensor(options->get_name() + "_output");
@@ -560,9 +560,9 @@ inline error_t Graph::run_graph_rules() const {
         // Only contains checks for
         // Section 3.3.1 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-single-op-engine
         std::unordered_set<Operation::Tag> const supported_tags = {
-                                                Operation::Tag::Conv
-                                                , Operation::Tag::Wgrad
-                                                , Operation::Tag::Dgrad
+                                                Operation::Tag::Conv_fprop
+                                                , Operation::Tag::Conv_wgrad
+                                                , Operation::Tag::Conv_dgrad
                                                 , Operation::Tag::BN
                                                 , Operation::Tag::Pointwise
                                             };
@@ -634,7 +634,7 @@ inline error_t Graph::run_graph_rules() const {
     // Section 3.3.2 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#runtime-fusion-engine
     
     // Check if g1 can be applied
-    if ((device_version < 80) && ((entrance_node_tag != Operation::Tag::Conv) && (entrance_node_tag != Operation::Tag::Matmul))) {
+    if ((device_version < 80) && ((entrance_node_tag != Operation::Tag::Conv_fprop) && (entrance_node_tag != Operation::Tag::Matmul))) {
         getLogger() << "Device version insufficient" << std::endl;
         return error_t::UNSUPPORTED_GRAPH_FORMAT;
     }
@@ -664,7 +664,7 @@ inline error_t Graph::run_graph_rules() const {
         switch (state) {
             case Graph_parser_state::G1_PROCESS:
             case Graph_parser_state::G1_PROCESS_POINTWISE: {
-                if (tag_ == Operation::Tag::Conv || tag_ == Operation::Tag::Matmul) {
+                if (tag_ == Operation::Tag::Conv_fprop || tag_ == Operation::Tag::Matmul) {
                     state = Graph_parser_state::G2_START;
                 // } else if ((tag_ == Operation::Tag::Resample_Fwd) || (tag_ == Operation::Tag::Resample_Bwd)) {
                 //     actual_g2_pattern.push_back(tag_);
@@ -731,16 +731,16 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 flat_node.sub_nodes.push_back(bn_finalize_node);
                 break;
             }
-            case Operation::Tag::Conv: {
+            case Operation::Tag::Conv_fprop: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the conv node named " << node->get_name() << std::endl;
-                auto conv_node = std::make_shared<ConvolutionNode>(node->get_name(), std::static_pointer_cast<Convolution>(node));
+                auto conv_node = std::make_shared<ConvolutionNode>(node->get_name(), std::static_pointer_cast<Conv_fprop>(node));
                 conv_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(conv_node);
                 break;
             }
-            case Operation::Tag::Dgrad: {
+            case Operation::Tag::Conv_dgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the dgrad node named " << node->get_name() << std::endl;
-                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), std::static_pointer_cast<Dgrad>(node));
+                auto dgrad_node = std::make_shared<DgradNode>(node->get_name(), std::static_pointer_cast<Conv_dgrad>(node));
                 dgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(dgrad_node);
                 break;
@@ -754,7 +754,7 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
             }
             case Operation::Tag::Matmul: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the matmul node named " << node->get_name() << std::endl;
-                auto matmul_node = std::make_shared<MatMulNode>(node->get_name(), std::static_pointer_cast<Matmul>(node));
+                auto matmul_node = std::make_shared<MatmulNode>(node->get_name(), std::static_pointer_cast<Matmul>(node));
                 matmul_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(matmul_node);
                 break;
@@ -781,9 +781,9 @@ inline error_t Graph::validate(cudnnHandle_t handle) {
                 break;
             }
             case Operation::Tag::Softmax:{break;}
-            case Operation::Tag::Wgrad: {
+            case Operation::Tag::Conv_wgrad: {
                 getLogger() << "[cudnn_frontend] INFO: Adding the wgrad node named " << node->get_name() << std::endl;
-                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Wgrad>(node));
+                auto wgrad_node = std::make_shared<WgradNode>(node->get_name(), std::static_pointer_cast<Conv_wgrad>(node));
                 wgrad_node->parent_node = &flat_node;
                 flat_node.sub_nodes.push_back(wgrad_node);
                 break;

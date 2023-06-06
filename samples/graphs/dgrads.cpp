@@ -37,8 +37,8 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
     auto W = graph.tensor(fe::graph::Tensor("weight").set_dim({64, 32, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
     
-    auto dgrad_options = fe::graph::Dgrad("dgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
-    auto dgrad_output = graph.dgrad(DY, W, dgrad_options);
+    auto dgrad_options = fe::graph::Conv_dgrad("dgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto dgrad_output = graph.conv_dgrad(DY, W, dgrad_options);
     dgrad_output->set_is_virtual(true);
     
     auto X = graph.tensor(fe::graph::Tensor("input").set_dim({4, 32, 16, 16}));
@@ -82,8 +82,8 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
     auto W = graph.tensor(fe::graph::Tensor("weight").set_dim({64, 32, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
     
-    auto dgrad_options = fe::graph::Dgrad("dgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
-    auto dgrad_output = graph.dgrad(DY, W, dgrad_options);
+    auto dgrad_options = fe::graph::Conv_dgrad("dgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto dgrad_output = graph.conv_dgrad(DY, W, dgrad_options);
     dgrad_output->set_is_virtual(true);
     
     auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 32, 16, 16}));

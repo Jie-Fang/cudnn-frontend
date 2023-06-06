@@ -149,14 +149,14 @@ public:
         std::vector<int64_t> const& stride,
         std::vector<int64_t> const& dilation
     ) {
-        auto props = cudnn_frontend::graph::Convolution(name)
+        auto props = cudnn_frontend::graph::Conv_fprop(name)
                         .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
                         .set_dilation(dilation);
         props.inputs.X = image_props_ptr;
         props.inputs.W = weight_props_ptr;
-        auto outputs = graph.conv(props.inputs, props);
+        auto outputs = graph.conv_fprop(props.inputs, props);
 
         return outputs.Y;
     }

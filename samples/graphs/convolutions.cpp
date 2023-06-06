@@ -37,8 +37,8 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     auto W = graph.tensor(fe::graph::Tensor("filter").set_dim({64, 32, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto conv_options = fe::graph::Convolution("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
-    auto conv_output = graph.conv(X, W, conv_options);
+    auto conv_options = fe::graph::Conv_fprop("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto conv_output = graph.conv_fprop(X, W, conv_options);
     conv_output->set_is_virtual(true);
 
     auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
@@ -111,8 +111,8 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph]") {
 
     auto DY = graph.tensor(fe::graph::Tensor("grad").set_dim({4, 64, 16, 16}));
     DY->generateStrides(CUDNN_TENSOR_NHWC);
-    auto wgrad_options = fe::graph::Wgrad("wgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
-    auto DW = graph.wgrad(DY, relu_output, wgrad_options);
+    auto wgrad_options = fe::graph::Conv_wgrad("wgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto DW = graph.conv_wgrad(DY, relu_output, wgrad_options);
 
     #if (CUDNN_VERSION < 8800)
         SKIP("ConvBNwgrad requires cudnn 8.8 and up");

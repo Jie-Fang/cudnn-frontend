@@ -224,8 +224,8 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
 
     auto W = graph.tensor(fe::graph::Tensor("weight").set_dim({32, 64, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
-    auto conv_options = fe::graph::Convolution("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
-    auto Y = graph.conv(relu_output, W, conv_options);
+    auto conv_options = fe::graph::Conv_fprop("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto Y = graph.conv_fprop(relu_output, W, conv_options);
 
     auto genstats_options = fe::graph::Genstats("genstats");
     auto [SUM, SQ_SUM] = graph.genstats(Y, genstats_options);
@@ -314,8 +314,8 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
 
     auto W = graph.tensor(fe::graph::Tensor("weight").set_dim({32, 64, 1, 1}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
-    auto conv_options = fe::graph::Convolution("conv").set_padding({0,0}).set_stride({1,1}).set_dilation({1,1});
-    auto Y = graph.conv(relu_output, W, conv_options);
+    auto conv_options = fe::graph::Conv_fprop("conv").set_padding({0,0}).set_stride({1,1}).set_dilation({1,1});
+    auto Y = graph.conv_fprop(relu_output, W, conv_options);
 
     auto genstats_options = fe::graph::Genstats("genstats");
     auto [SUM, SQ_SUM] = graph.genstats(Y, genstats_options);

@@ -180,16 +180,16 @@ public:
     enum class Tag {
         BN,
         BN_finalize,
-        Conv,
+        Conv_fprop,
         DBN_weight,
-        Dgrad,
+        Conv_dgrad,
         Genstats,
         Matmul,
         Pointwise,
         Reduction,
         Scaled_dot_product_attention,
         Softmax,
-        Wgrad,
+        Conv_wgrad,
     };
 
 protected:
@@ -315,7 +315,7 @@ public:
     }
 };
 
-class Convolution : public Operation {
+class Conv_fprop : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor> X;
@@ -336,9 +336,9 @@ public:
     bool is_stride_set = false;
     bool is_dilation_set = false;
     
-    Convolution(const std::string name) : Operation(name, Tag::Conv) {}
+    Conv_fprop(const std::string name) : Operation(name, Tag::Conv_fprop) {}
 
-    Convolution& set_compute_data_type(DataType_t const value) {
+    Conv_fprop& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
@@ -347,7 +347,7 @@ public:
         return padding;
     }
 
-    Convolution& set_padding(std::vector<int64_t> value) {
+    Conv_fprop& set_padding(std::vector<int64_t> value) {
         padding = value;
         is_padding_set = true;
         return *this;
@@ -357,7 +357,7 @@ public:
         return stride;
     }
 
-    Convolution& set_stride(std::vector<int64_t> value) {
+    Conv_fprop& set_stride(std::vector<int64_t> value) {
         stride = value;
         is_stride_set = true;
         return *this;
@@ -367,13 +367,13 @@ public:
         return dilation;
     }
 
-    Convolution& set_dilation(std::vector<int64_t> value) {
+    Conv_fprop& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         is_dilation_set = true;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Convolution& {
+    auto fill_from_context(detail::Context const& context) -> Conv_fprop& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.W->fill_from_context(context);
@@ -442,7 +442,7 @@ public:
     }
 };
 
-class Dgrad : public Operation {
+class Conv_dgrad : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor> DY;
@@ -459,9 +459,9 @@ private:
     std::vector<int64_t> dilation;
 
 public:
-    Dgrad(const std::string name) : Operation(name, Tag::Dgrad) {}
+    Conv_dgrad(const std::string name) : Operation(name, Tag::Conv_dgrad) {}
 
-    Dgrad& set_compute_data_type(DataType_t value) {
+    Conv_dgrad& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
@@ -470,7 +470,7 @@ public:
         return padding;
     }
 
-    Dgrad& set_padding(std::vector<int64_t> value) {
+    Conv_dgrad& set_padding(std::vector<int64_t> value) {
         padding = value;
         return *this;
     }
@@ -479,7 +479,7 @@ public:
         return stride;
     }
 
-    Dgrad& set_stride(std::vector<int64_t> value) {
+    Conv_dgrad& set_stride(std::vector<int64_t> value) {
         stride = value;
         return *this;
     }
@@ -488,12 +488,12 @@ public:
         return dilation;
     }
 
-    Dgrad& set_dilation(std::vector<int64_t> value) {
+    Conv_dgrad& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Dgrad& {
+    auto fill_from_context(detail::Context const& context) -> Conv_dgrad& {
         // Fill node's tensors
         inputs.DY->fill_from_context(context);
         inputs.W->fill_from_context(context);
@@ -863,7 +863,7 @@ public:
     }
 };
 
-class Wgrad : public Operation {
+class Conv_wgrad : public Operation {
 public:
     
     struct Inputs {
@@ -882,9 +882,9 @@ private:
 
 public:
 
-    Wgrad(const std::string name) : Operation(name, Tag::Wgrad) {}
+    Conv_wgrad(const std::string name) : Operation(name, Tag::Conv_wgrad) {}
 
-    Wgrad& set_compute_data_type(DataType_t value) {
+    Conv_wgrad& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
@@ -893,7 +893,7 @@ public:
         return padding;
     }
 
-    Wgrad& set_padding(std::vector<int64_t> value) {
+    Conv_wgrad& set_padding(std::vector<int64_t> value) {
         padding = value;
         return *this;
     }
@@ -902,7 +902,7 @@ public:
         return stride;
     }
 
-    Wgrad& set_stride(std::vector<int64_t> value) {
+    Conv_wgrad& set_stride(std::vector<int64_t> value) {
         stride = value;
         return *this;
     }
@@ -911,12 +911,12 @@ public:
         return dilation;
     }
 
-    Wgrad& set_dilation(std::vector<int64_t> value) {
+    Conv_wgrad& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Wgrad& {
+    auto fill_from_context(detail::Context const& context) -> Conv_wgrad& {
         // Fill node's tensors
         inputs.DY->fill_from_context(context);
         inputs.X->fill_from_context(context);
