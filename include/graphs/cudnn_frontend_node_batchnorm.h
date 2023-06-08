@@ -17,7 +17,9 @@ class BatchNormNode : public INode {
     std::shared_ptr<Batchnorm> options;
 public:
 
-    BatchNormNode(std::string const& name, std::shared_ptr<Batchnorm> const options)  : INode (name), options(options) {
+    BatchNormNode(std::string const& name, std::shared_ptr<Batchnorm> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+
         // outputs should be float type
         options->outputs.MEAN->set_data_type(DataType_t::FLOAT);
         options->outputs.INV_VARIANCE->set_data_type(DataType_t::FLOAT);
@@ -39,11 +41,6 @@ public:
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm node named " << name << "." << std::endl;
-
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());
 
         // TODO: Only inferencing from X works today.
         auto X = options->inputs.X;

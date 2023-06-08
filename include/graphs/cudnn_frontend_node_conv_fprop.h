@@ -13,7 +13,9 @@ class ConvolutionNode : public INode {
     std::shared_ptr<Conv_fprop> options;
 public:
 
-    ConvolutionNode(std::string const& name, std::shared_ptr<Conv_fprop> const options)  : INode (name), options(options) {}
+    ConvolutionNode(std::string const& name, std::shared_ptr<Conv_fprop> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+    }
 
     Type getType() override final {
         return Type::CONVOLUTION;
@@ -21,11 +23,6 @@ public:
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
-        
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
         auto X = options->inputs.X;

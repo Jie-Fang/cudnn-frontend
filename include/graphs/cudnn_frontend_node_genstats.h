@@ -12,7 +12,9 @@ namespace graph {
 class GenstatsNode : public INode {
     std::shared_ptr<Genstats> options;
 public:
-    GenstatsNode(std::string const& name, std::shared_ptr<Genstats> const options)  : INode (name), options(options) {
+    GenstatsNode(std::string const& name, std::shared_ptr<Genstats> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+        
         // outputs should be float type
         options->outputs.SUM->set_data_type(DataType_t::FLOAT);
         options->outputs.SQ_SUM->set_data_type(DataType_t::FLOAT);
@@ -23,12 +25,6 @@ public:
     }
 
     error_t infer_properties() override final {
-
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());
-
         // Only inferrencing from X works today.
         auto X = options->inputs.X;
         auto SUM = options->outputs.SUM;

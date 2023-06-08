@@ -20,7 +20,9 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Scaled_dot_product_attention> options;
     public:
 
-        ScaledDotProductAttentionNode(std::string const& name, std::shared_ptr<Scaled_dot_product_attention> const options)  : INode (name), options(options) {
+        ScaledDotProductAttentionNode(std::string const& name, std::shared_ptr<Scaled_dot_product_attention> const options, detail::Context const& context)  : INode (name, context), options(options) {
+            options->fill_from_context(get_context());
+            
             std::shared_ptr<Tensor> last_output;
 
             // User does not create tensor for scale k, so create it internally
@@ -37,9 +39,8 @@ namespace cudnn_frontend::graph {
             scale_options->inputs.IN_1 = scale;
             last_output = scale_options->outputs.OUT_0 = std::make_shared<Tensor>("after_scale_k");
             scale_options->outputs.OUT_0->set_is_virtual(true);
-            auto scale_node = std::make_shared<PointwiseNode>(scale_options->get_name(), scale_options);
+            auto scale_node = std::make_shared<PointwiseNode>(scale_options->get_name(), scale_options, get_context());
             sub_nodes.emplace_back(scale_node);
-            scale_node->parent_node = this;
 
             // Lower options to bmm1 options
             auto bmm1_options = std::make_shared<Matmul>("bmm1");
@@ -51,9 +52,8 @@ namespace cudnn_frontend::graph {
             bmm1_options->inputs.N_override = options->inputs.SEQ_LEN_K;
             last_output = bmm1_options->outputs.C = P = std::make_shared<Tensor>("P"); // A dummy underlying tensor whose properties will be filled in infer_properties()
             bmm1_options->outputs.C->set_is_virtual(true);
-            auto bmm1_node = std::make_shared<MatmulNode>(bmm1_options->get_name(), bmm1_options);
+            auto bmm1_node = std::make_shared<MatmulNode>(bmm1_options->get_name(), bmm1_options, get_context());
             sub_nodes.emplace_back(bmm1_node);
-            bmm1_node->parent_node = this;
             
             if(options->inputs.Bias) {
                 // Lower options to add options
@@ -63,9 +63,8 @@ namespace cudnn_frontend::graph {
                 add_options->inputs.IN_1 = options->inputs.Bias;
                 last_output = add_options->outputs.OUT_0 = std::make_shared<Tensor>("after_bias");
                 add_options->outputs.OUT_0->set_is_virtual(true);
-                auto add_node = std::make_shared<PointwiseNode>(add_options->get_name(), add_options);
+                auto add_node = std::make_shared<PointwiseNode>(add_options->get_name(), add_options, get_context());
                 sub_nodes.emplace_back(add_node);
-                add_node->parent_node = this;
             }
 
             // Lower options to softmax options
@@ -75,9 +74,8 @@ namespace cudnn_frontend::graph {
             if(options->get_is_inference()) {
                 last_output = softmax_options->outputs.S = std::make_shared<Tensor>("S");
                 softmax_options->outputs.S->set_is_virtual(true);
-                auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
+                auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options, get_context());
                 sub_nodes.emplace_back(softmax_node);
-                softmax_node->parent_node = this;
             }
             else {
                 // Two cases for training: dropout present or not
@@ -85,9 +83,8 @@ namespace cudnn_frontend::graph {
                 if(dropout_present) {
                     last_output = softmax_options->outputs.S = std::make_shared<Tensor>("S");
                     softmax_options->outputs.S->set_is_virtual(true);
-                    auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
+                    auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options, get_context());
                     sub_nodes.emplace_back(softmax_node);
-                    softmax_node->parent_node = this;
 
                     if(options->get_dropout_probability().has_value()) {
                         // Lower options to rng options
@@ -97,9 +94,8 @@ namespace cudnn_frontend::graph {
                             .set_bernoulli_probability(options->get_dropout_probability().value());
                         last_output = rng_options->outputs.Y = rng_output = std::make_shared<Tensor>("after_rng");
                         rng_options->outputs.Y->set_is_virtual(true);
-                        auto rng_node = std::make_shared<RngNode>(rng_options->get_name(), rng_options);
+                        auto rng_node = std::make_shared<RngNode>(rng_options->get_name(), rng_options, get_context());
                         sub_nodes.emplace_back(rng_node);
-                        rng_node->parent_node = this;
                     }
                     else {
                         last_output = options->inputs.Dropout_mask;
@@ -111,16 +107,14 @@ namespace cudnn_frontend::graph {
                     mask_options->inputs.IN_0 = softmax_options->outputs.S;
                     mask_options->inputs.IN_1 = last_output;
                     last_output = mask_options->outputs.OUT_0 = options->outputs.S;
-                    auto mask_node = std::make_shared<PointwiseNode>(mask_options->get_name(), mask_options);
+                    auto mask_node = std::make_shared<PointwiseNode>(mask_options->get_name(), mask_options, get_context());
                     sub_nodes.emplace_back(mask_node);
-                    mask_node->parent_node = this;     
                         
                 }
                 else {
                     last_output = softmax_options->outputs.S = options->outputs.S;
-                    auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options);
+                    auto softmax_node = std::make_shared<SoftmaxNode>(softmax_options->get_name(), softmax_options, get_context());
                     sub_nodes.emplace_back(softmax_node);
-                    softmax_node->parent_node = this;
                 }
 
                 // Requirement by cudnn backend as output is a special swizzled format.
@@ -136,9 +130,8 @@ namespace cudnn_frontend::graph {
             dropout_scale_options->inputs.IN_1 = dropout_scale;
             last_output = dropout_scale_options->outputs.OUT_0 = std::make_shared<Tensor>("after_dropout_scale");
             dropout_scale_options->outputs.OUT_0->set_is_virtual(true);
-            auto dropout_scale_node = std::make_shared<PointwiseNode>(dropout_scale_options->get_name(), dropout_scale_options);
+            auto dropout_scale_node = std::make_shared<PointwiseNode>(dropout_scale_options->get_name(), dropout_scale_options, get_context());
             sub_nodes.emplace_back(dropout_scale_node);
-            dropout_scale_node->parent_node = this;
 
             // Lower options to bmm2 options
             auto bmm2_options = std::make_shared<Matmul>("bmm2");
@@ -149,9 +142,8 @@ namespace cudnn_frontend::graph {
             bmm2_options->inputs.M_override = options->inputs.SEQ_LEN_Q;
             bmm2_options->inputs.K_override = options->inputs.SEQ_LEN_K;
             bmm2_options->outputs.C = options->outputs.O;
-            auto bmm2_node = std::make_shared<MatmulNode>(bmm2_options->get_name(), bmm2_options);
+            auto bmm2_node = std::make_shared<MatmulNode>(bmm2_options->get_name(), bmm2_options, get_context());
             sub_nodes.emplace_back(bmm2_node);
-            bmm2_node->parent_node = this;
         }
 
         Type getType() override final {
@@ -160,11 +152,6 @@ namespace cudnn_frontend::graph {
 
         error_t infer_properties() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node named " << name << "." << std::endl;
-
-            // Merge with ancestor's context
-            fill_missing_context();
-
-            options->fill_from_context(get_context());
 
             // Fill properties of virtual tensors
             auto const& q_dim = options->inputs.Q->get_dim();

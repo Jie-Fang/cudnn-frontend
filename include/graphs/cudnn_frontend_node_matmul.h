@@ -13,20 +13,16 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Matmul> options;
     public:
 
-        MatmulNode(std::string const& name, std::shared_ptr<Matmul> const options)  : INode (name), options(options) {}
-
+        MatmulNode(std::string const& name, std::shared_ptr<Matmul> const options, detail::Context const& context)  : INode (name, context), options(options) {
+            options->fill_from_context(get_context());
+        }
+        
         Type getType() override final {
             return Type::MATMUL;
         }
 
         error_t infer_properties() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node named " << name << "." << std::endl;
-
-            // Merge with ancestor's context
-            fill_missing_context();
-            
-            // Use context to fill in missing options
-            options->fill_from_context(get_context());
 
             // Only inferrencing from (A, B) -> C works today.
             auto a_tensor_prop = options->inputs.A;

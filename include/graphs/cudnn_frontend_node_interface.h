@@ -27,7 +27,10 @@ public:
     // A closed set of types that are allowed to be passed by value today
     using pass_by_values_t = std::variant<half, float>; 
 
+    std::string name;
 private:
+    detail::Context context;
+
     virtual error_t assignUids_() {
         return error_t::OK;
     };
@@ -80,8 +83,6 @@ protected:
         , WGRAD
     };
     Type tag;
-
-    detail::Context context;
     
     virtual error_t createTensors() {
         for(auto const& sub_node: sub_nodes) {
@@ -117,11 +118,8 @@ protected:
     }
     
 public:
-    std::string name;
-
     virtual Type getType() = 0;
 
-    INode* parent_node;
     std::vector<std::shared_ptr<INode>> sub_nodes;
 
     detail::Context& get_context() {
@@ -257,18 +255,9 @@ public:
         return status;
     }
 
-    INode(std::string const& name) : name(name), parent_node(nullptr) {}
+    INode(std::string const& name, detail::Context const& context) : name(name), context(context) {}
 
     virtual ~INode() {};
-
-    void fill_missing_context() {
-        // If no parent_node, there is no context to fill missing properties with.
-        if(parent_node == nullptr)
-            return;
-
-        parent_node->fill_missing_context();
-        context.fill_missing_properties(parent_node->context);
-    }
 };
 
 class Execution_plan_list {
@@ -490,7 +479,7 @@ protected:
     }
 
 public:
-    FlatNode(std::string const& name) : INode(name) {}
+    FlatNode(std::string const& name, detail::Context const& context) : INode(name, context) {}
 
     ~FlatNode() {};
 

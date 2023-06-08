@@ -12,7 +12,9 @@ class RngNode : public INode {
     std::shared_ptr<Rng> options;
 public:
 
-    RngNode(std::string const& name, std::shared_ptr<Rng> const options)  : INode (name), options(options) {}
+    RngNode(std::string const& name, std::shared_ptr<Rng> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+    }
 
     Type getType() override final {
         return Type::RNG;
@@ -20,11 +22,6 @@ public:
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node named " << name << "." << std::endl;
-
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());        
 
         return error_t::OK;
     }

@@ -21,21 +21,26 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Softmax> options;
     public:
 
-        SoftmaxNode(std::string const& name, std::shared_ptr<Softmax> const options)  : INode (name), options(options) {
-            // A dummy underlying tensor whose properties will be filled in infer_properties()
+        SoftmaxNode(std::string const& name, std::shared_ptr<Softmax> const options, detail::Context const& context)  : INode (name, context), options(options) {
+            options->fill_from_context(get_context());
+
+            // A dummy/virtual underlying tensor
             MAX = std::make_shared<Tensor>("MAX");
+            MAX->set_is_virtual(true);
             P_MAX = std::make_shared<Tensor>("P_MAX");
+            P_MAX->set_is_virtual(true);
             E = std::make_shared<Tensor>("E");
+            E->set_is_virtual(true);
             SUM = std::make_shared<Tensor>("SUM");
+            SUM->set_is_virtual(true);
 
             // Lower options to max options
             auto max_options = std::make_shared<Reduction>("max");
             max_options->set_mode(ReductionMode_t::MAX);
             max_options->inputs.X = options->inputs.P;
             max_options->outputs.Y = MAX;
-            auto max_node = std::make_shared<ReductionNode>(max_options->get_name(), max_options);
+            auto max_node = std::make_shared<ReductionNode>(max_options->get_name(), max_options, get_context());
             sub_nodes.emplace_back(max_node);
-            max_node->parent_node = this;
 
             // Lower options to sub options
             auto sub_options = std::make_shared<Pointwise>("sub");
@@ -43,27 +48,24 @@ namespace cudnn_frontend::graph {
             sub_options->inputs.IN_0 = options->inputs.P;
             sub_options->inputs.IN_1 = max_options->outputs.Y;
             sub_options->outputs.OUT_0 = P_MAX;
-            auto sub_node = std::make_shared<PointwiseNode>(sub_options->get_name(), sub_options);
+            auto sub_node = std::make_shared<PointwiseNode>(sub_options->get_name(), sub_options, get_context());
             sub_nodes.emplace_back(sub_node);
-            sub_node->parent_node = this;
 
             // Lower options to exp options
             auto exp_options = std::make_shared<Pointwise>("exp");
             exp_options->set_mode(PointwiseMode_t::EXP);
             exp_options->inputs.IN_0 = sub_options->outputs.OUT_0;
             exp_options->outputs.OUT_0 = E;
-            auto exp_node = std::make_shared<PointwiseNode>(exp_options->get_name(), exp_options);
+            auto exp_node = std::make_shared<PointwiseNode>(exp_options->get_name(), exp_options, get_context());
             sub_nodes.emplace_back(exp_node);
-            exp_node->parent_node = this;
 
             // Lower options to sum options
             auto sum_options = std::make_shared<Reduction>("sum");
             sum_options->set_mode(ReductionMode_t::ADD);
             sum_options->inputs.X = exp_options->outputs.OUT_0;
             sum_options->outputs.Y = SUM;
-            auto sum_node = std::make_shared<ReductionNode>(sum_options->get_name(), sum_options);
+            auto sum_node = std::make_shared<ReductionNode>(sum_options->get_name(), sum_options, get_context());
             sub_nodes.emplace_back(sum_node);
-            sum_node->parent_node = this;
 
             // Lower options to div options
             auto div_options = std::make_shared<Pointwise>("div");
@@ -71,9 +73,8 @@ namespace cudnn_frontend::graph {
             div_options->inputs.IN_0 = exp_options->outputs.OUT_0;
             div_options->inputs.IN_1 = sum_options->outputs.Y;
             div_options->outputs.OUT_0 = options->outputs.S;
-            auto div_node = std::make_shared<PointwiseNode>(div_options->get_name(), div_options);
+            auto div_node = std::make_shared<PointwiseNode>(div_options->get_name(), div_options, get_context());
             sub_nodes.emplace_back(div_node);
-            div_node->parent_node = this;
         }
 
         Type getType() override final {
@@ -82,11 +83,6 @@ namespace cudnn_frontend::graph {
 
         error_t infer_properties() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node named " << name << "." << std::endl;
-
-            // Merge with ancestor's context
-            fill_missing_context();
-
-            options->fill_from_context(get_context());
 
             // Fill properties of virtual tensors
             auto const& p_dim = options->inputs.P->get_dim();
@@ -97,21 +93,18 @@ namespace cudnn_frontend::graph {
             // MAX
             MAX->set_dim({b, h, s_q, 1})
              .set_stride({h * s_q, s_q, 1, 1})
-             .set_is_virtual(true)
              .fill_from_context(get_context());
             // P_MAX
             P_MAX->set_dim({b, h, s_q, s_kv})
              .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-             .set_is_virtual(true);
+             .fill_from_context(get_context());
             // E
             E->set_dim({b, h, s_q, s_kv})
              .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-             .set_is_virtual(true)
              .fill_from_context(get_context());
             // SUM
             SUM->set_dim({b, h, s_q, 1})
              .set_stride({h * s_q, s_q, 1, 1})
-             .set_is_virtual(true)
              .fill_from_context(get_context());
 
             // Infer dims and strides for output tensor as matmul node has no context of mha

@@ -13,20 +13,16 @@ class PointwiseNode : public INode {
     std::shared_ptr<Pointwise> options;
 public:
 
-    PointwiseNode(std::string const& name, std::shared_ptr<Pointwise> const options)  : INode (name), options(options) {}
-
+    PointwiseNode(std::string const& name, std::shared_ptr<Pointwise> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+    }
+    
     Type getType() override final {
         return Type::POINTWISE;
     }
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node named " << name << "." << std::endl;
-        
-        // Merge with ancestor's context
-        fill_missing_context();
-            
-        // Use context to fill in missing options
-        options->fill_from_context(get_context());
         
         // Only inferrencing from IN_0 to OUT_0 works today.
         auto in_0_tensor = options->inputs.IN_0;

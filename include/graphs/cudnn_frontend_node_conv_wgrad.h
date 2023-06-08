@@ -13,19 +13,16 @@ class WgradNode : public INode {
     std::shared_ptr<Conv_wgrad> options;
 public:
 
-    WgradNode(std::string const& name, std::shared_ptr<Conv_wgrad> const options)  : INode (name), options(options) {}
-
+    WgradNode(std::string const& name, std::shared_ptr<Conv_wgrad> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+    }
+    
     Type getType() override final {
         return Type::WGRAD;
     }
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
-
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
         auto X = options->inputs.X;

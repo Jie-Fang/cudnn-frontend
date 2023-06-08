@@ -14,7 +14,9 @@ class DBNWeightNode : public INode {
     std::shared_ptr<DBN_weight> options;
 public:
 
-    DBNWeightNode(std::string const& name, std::shared_ptr<DBN_weight> const options)  : INode (name), options(options) {
+    DBNWeightNode(std::string const& name, std::shared_ptr<DBN_weight> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+        
         // outputs should be float type
         options->outputs.DBIAS->set_data_type(DataType_t::FLOAT);
         options->outputs.DSCALE->set_data_type(DataType_t::FLOAT);
@@ -29,12 +31,6 @@ public:
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
-        
-        // Merge with ancestor's context
-        fill_missing_context();
-            
-        // Use context to fill in missing options
-        options->fill_from_context(get_context());
 
         // TODO: Only inferencing from DY works today.
         auto DY = options->inputs.DY;

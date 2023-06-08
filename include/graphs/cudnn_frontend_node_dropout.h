@@ -12,19 +12,16 @@ class ReductionNode : public INode {
     std::shared_ptr<Reduction> options;
 public:
 
-    ReductionNode(std::string const& name, std::shared_ptr<Reduction> const options)  : INode (name), options(options) {}
-
+    ReductionNode(std::string const& name, std::shared_ptr<Reduction> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+    }
+    
     Type getType() override final {
         return Type::REDUCTION;
     }
 
     error_t infer_properties() override final {
 
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());
-        
         // Only inferrencing from IN_0 to OUT_0 works today.
         auto x_tensor = options->inputs.X;
         auto y_tensor = options->outputs.Y;

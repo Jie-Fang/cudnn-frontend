@@ -747,7 +747,7 @@ public:
     } outputs;
 
 private:
-    RngDistribution_t distribution;
+    RngDistribution_t distribution = RngDistribution_t::NOT_SET;
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
 
@@ -819,14 +819,14 @@ public:
 
 private:
     bool is_inference;
-    float scale_k;
+    float scale_k = 1.f;
     bool use_causal_masking;
     std::optional<float> dropout_probability;
     std::optional<int64_t> seed;
-    float dropout_scale;
+    float dropout_scale = 1.f;
     
 public:
-    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false), scale_k(1.f) , dropout_scale(1.f) {}
+    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
 
     bool get_is_inference() const {
         return is_inference;

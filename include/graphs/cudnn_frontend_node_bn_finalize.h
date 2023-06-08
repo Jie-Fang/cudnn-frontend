@@ -14,7 +14,9 @@ class BatchNormFinalizeNode : public INode {
     std::shared_ptr<BN_finalize> options;
 public:
 
-    BatchNormFinalizeNode(std::string const& name, std::shared_ptr<BN_finalize> const options)  : INode (name), options(options) {}
+    BatchNormFinalizeNode(std::string const& name, std::shared_ptr<BN_finalize> const options, detail::Context const& context)  : INode (name, context), options(options) {
+        options->fill_from_context(get_context());
+    }
 
     Type getType() override final {
         return Type::BN_FINALIZE;
@@ -22,12 +24,7 @@ public:
 
     error_t infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
-
-        // Merge with ancestor's context
-        fill_missing_context();
-
-        options->fill_from_context(get_context());
-
+        
         // TODO: Only inferencing from SUM works today.
         auto SUM = options->inputs.SUM;
         auto const sum_tensor_dim = SUM->get_dim();
