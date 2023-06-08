@@ -7,6 +7,7 @@
 #include "cudnn_frontend_node_interface.h"
 
 #include "graphs/cudnn_frontend_node_pointwise.h"
+#include "graphs/cudnn_frontend_node_reduction.h"
 
 namespace cudnn_frontend::graph {
 
@@ -18,12 +19,12 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Tensor> E;
         std::shared_ptr<Tensor> SUM;
 
-        std::shared_ptr<Softmax> options;
+        Softmax options;
     public:
 
-        SoftmaxNode(std::string const& name, std::shared_ptr<Softmax> const options, detail::Context const& context)  : INode (name, context), options(options) {
-            options->fill_from_context(get_context());
-
+        SoftmaxNode(std::string const& name, Softmax&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+            options.fill_from_context(get_context());
+            
             // A dummy/virtual underlying tensor
             MAX = std::make_shared<Tensor>("MAX");
             MAX->set_is_virtual(true);
@@ -35,46 +36,46 @@ namespace cudnn_frontend::graph {
             SUM->set_is_virtual(true);
 
             // Lower options to max options
-            auto max_options = std::make_shared<Reduction>("max");
-            max_options->set_mode(ReductionMode_t::MAX);
-            max_options->inputs.X = options->inputs.P;
-            max_options->outputs.Y = MAX;
-            auto max_node = std::make_shared<ReductionNode>(max_options->get_name(), max_options, get_context());
-            sub_nodes.emplace_back(max_node);
+            auto max_options = Reduction("max");
+            max_options.set_mode(ReductionMode_t::MAX);
+            max_options.inputs.X = options.inputs.P;
+            max_options.outputs.Y = MAX;
+            auto max_node = std::make_unique<ReductionNode>(max_options.get_name(), std::move(max_options), get_context());
+            sub_nodes.emplace_back(std::move(max_node));
 
             // Lower options to sub options
-            auto sub_options = std::make_shared<Pointwise>("sub");
-            sub_options->set_mode(PointwiseMode_t::SUB);
-            sub_options->inputs.IN_0 = options->inputs.P;
-            sub_options->inputs.IN_1 = max_options->outputs.Y;
-            sub_options->outputs.OUT_0 = P_MAX;
-            auto sub_node = std::make_shared<PointwiseNode>(sub_options->get_name(), sub_options, get_context());
-            sub_nodes.emplace_back(sub_node);
+            auto sub_options = Pointwise("sub");
+            sub_options.set_mode(PointwiseMode_t::SUB);
+            sub_options.inputs.IN_0 = options.inputs.P;
+            sub_options.inputs.IN_1 = MAX;
+            sub_options.outputs.OUT_0 = P_MAX;
+            auto sub_node = std::make_unique<PointwiseNode>(sub_options.get_name(), std::move(sub_options), get_context());
+            sub_nodes.emplace_back(std::move(sub_node));
 
             // Lower options to exp options
-            auto exp_options = std::make_shared<Pointwise>("exp");
-            exp_options->set_mode(PointwiseMode_t::EXP);
-            exp_options->inputs.IN_0 = sub_options->outputs.OUT_0;
-            exp_options->outputs.OUT_0 = E;
-            auto exp_node = std::make_shared<PointwiseNode>(exp_options->get_name(), exp_options, get_context());
-            sub_nodes.emplace_back(exp_node);
+            auto exp_options = Pointwise("exp");
+            exp_options.set_mode(PointwiseMode_t::EXP);
+            exp_options.inputs.IN_0 = P_MAX;
+            exp_options.outputs.OUT_0 = E;
+            auto exp_node = std::make_unique<PointwiseNode>(exp_options.get_name(), std::move(exp_options), get_context());
+            sub_nodes.emplace_back(std::move(exp_node));
 
             // Lower options to sum options
-            auto sum_options = std::make_shared<Reduction>("sum");
-            sum_options->set_mode(ReductionMode_t::ADD);
-            sum_options->inputs.X = exp_options->outputs.OUT_0;
-            sum_options->outputs.Y = SUM;
-            auto sum_node = std::make_shared<ReductionNode>(sum_options->get_name(), sum_options, get_context());
-            sub_nodes.emplace_back(sum_node);
+            auto sum_options = Reduction("sum");
+            sum_options.set_mode(ReductionMode_t::ADD);
+            sum_options.inputs.X = E;
+            sum_options.outputs.Y = SUM;
+            auto sum_node = std::make_unique<ReductionNode>(sum_options.get_name(), std::move(sum_options), get_context());
+            sub_nodes.emplace_back(std::move(sum_node));
 
             // Lower options to div options
-            auto div_options = std::make_shared<Pointwise>("div");
-            div_options->set_mode(PointwiseMode_t::DIV);
-            div_options->inputs.IN_0 = exp_options->outputs.OUT_0;
-            div_options->inputs.IN_1 = sum_options->outputs.Y;
-            div_options->outputs.OUT_0 = options->outputs.S;
-            auto div_node = std::make_shared<PointwiseNode>(div_options->get_name(), div_options, get_context());
-            sub_nodes.emplace_back(div_node);
+            auto div_options = Pointwise("div");
+            div_options.set_mode(PointwiseMode_t::DIV);
+            div_options.inputs.IN_0 = E;
+            div_options.inputs.IN_1 = SUM;
+            div_options.outputs.OUT_0 = options.outputs.S;
+            auto div_node = std::make_unique<PointwiseNode>(div_options.get_name(), std::move(div_options), get_context());
+            sub_nodes.emplace_back(std::move(div_node));
         }
 
         Type getType() override final {
@@ -85,7 +86,7 @@ namespace cudnn_frontend::graph {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node named " << name << "." << std::endl;
 
             // Fill properties of virtual tensors
-            auto const& p_dim = options->inputs.P->get_dim();
+            auto const& p_dim = options.inputs.P->get_dim();
             auto b = p_dim[0];
             auto h = p_dim[1];
             auto s_q = p_dim[2];
@@ -108,7 +109,7 @@ namespace cudnn_frontend::graph {
              .fill_from_context(get_context());
 
             // Infer dims and strides for output tensor as matmul node has no context of mha
-            options->outputs.S
+            options.outputs.S
                 ->set_dim({b, h, s_q, s_kv})
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
                 .fill_from_context(get_context());

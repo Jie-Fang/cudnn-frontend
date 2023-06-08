@@ -323,14 +323,7 @@ public:
         cudnnDestroy(handle);
         return;
     }
-
-    friend std::ostream& operator<<(std::ostream& os, const PyGraph& props);
 };
-
-inline std::ostream& operator<<(std::ostream& os, const PyGraph& props) {
-    os << props.graph;
-    return os;
-}
 
 std::vector<int64_t>
 default_vector(void) {
@@ -414,11 +407,6 @@ void init_pygraph_submodule(py::module_ &m) {
         )
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
-        .def("execute", &PyGraph::execute)
-        .def("__repr__", [](PyGraph const& graph){
-            std::ostringstream out;
-            out << graph;
-            return out.str();
-        });
+        .def("execute", &PyGraph::execute);
     m.def("get_cudnn_version", []()->size_t {return cudnnGetVersion();});
 }

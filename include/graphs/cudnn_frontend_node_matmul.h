@@ -10,11 +10,11 @@
 namespace cudnn_frontend::graph {
 
     class MatmulNode : public INode {
-        std::shared_ptr<Matmul> options;
+        Matmul options;
     public:
 
-        MatmulNode(std::string const& name, std::shared_ptr<Matmul> const options, detail::Context const& context)  : INode (name, context), options(options) {
-            options->fill_from_context(get_context());
+        MatmulNode(std::string const& name, Matmul&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+            options.fill_from_context(get_context());
         }
         
         Type getType() override final {
@@ -25,9 +25,9 @@ namespace cudnn_frontend::graph {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node named " << name << "." << std::endl;
 
             // Only inferrencing from (A, B) -> C works today.
-            auto a_tensor_prop = options->inputs.A;
-            auto b_tensor_prop = options->inputs.B;
-            auto c_tensor_prop = options->outputs.C;
+            auto a_tensor_prop = options.inputs.A;
+            auto b_tensor_prop = options.inputs.B;
+            auto c_tensor_prop = options.outputs.C;
             
             auto const a_tensor_dim = a_tensor_prop->get_dim();
             auto const b_tensor_dim = b_tensor_prop->get_dim();
@@ -56,12 +56,12 @@ namespace cudnn_frontend::graph {
         }
 
         error_t assignUids_() override final {
-            options->inputs.A->set_uid(ICudnn::create_new_uid());
-            options->inputs.B->set_uid(ICudnn::create_new_uid());
-            if(options->inputs.M_override)options->inputs.M_override->set_uid(ICudnn::create_new_uid());
-            if(options->inputs.N_override)options->inputs.N_override->set_uid(ICudnn::create_new_uid());
-            if(options->inputs.K_override)options->inputs.K_override->set_uid(ICudnn::create_new_uid());
-            options->outputs.C->set_uid(ICudnn::create_new_uid());
+            options.inputs.A->set_uid(ICudnn::create_new_uid());
+            options.inputs.B->set_uid(ICudnn::create_new_uid());
+            if(options.inputs.M_override)options.inputs.M_override->set_uid(ICudnn::create_new_uid());
+            if(options.inputs.N_override)options.inputs.N_override->set_uid(ICudnn::create_new_uid());
+            if(options.inputs.K_override)options.inputs.K_override->set_uid(ICudnn::create_new_uid());
+            options.outputs.C->set_uid(ICudnn::create_new_uid());
             return error_t::OK;
         }
 
@@ -69,11 +69,11 @@ namespace cudnn_frontend::graph {
 
             getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode tensors at node name " << name << std::endl;
 
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.A));
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.B));
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.C));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.A));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.B));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.C));
             
-            for(auto const& tensor: {options->inputs.M_override, options->inputs.N_override, options->inputs.K_override}) {
+            for(auto const& tensor: {options.inputs.M_override, options.inputs.N_override, options.inputs.K_override}) {
                 if(tensor) {
                     CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor));
                 }
@@ -93,39 +93,39 @@ namespace cudnn_frontend::graph {
 
             // matmul descriptor
             auto matmul_descriptor = cudnn_frontend::MatMulDescBuilder()
-                                                            .setComputeType(options->get_compute_data_type())
+                                                            .setComputeType(options.get_compute_data_type())
                                                             .build();
 
-            if(options->inputs.N_override) {
+            if(options.inputs.N_override) {
                 // Create the matmul operation.
                 auto matmul_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR)
-                                                .setaMatDesc(*tensors.at(options->inputs.A->get_uid()))
-                                                .setbMatDesc(*tensors.at(options->inputs.B->get_uid()))
-                                                .setcMatDesc(*tensors.at(options->outputs.C->get_uid()))
+                                                .setaMatDesc(*tensors.at(options.inputs.A->get_uid()))
+                                                .setbMatDesc(*tensors.at(options.inputs.B->get_uid()))
+                                                .setcMatDesc(*tensors.at(options.outputs.C->get_uid()))
                                                 .setmatmulDesc(matmul_descriptor)
-                                                .setmOverrideDesc(*tensors.at(options->inputs.M_override->get_uid()))
-                                                .setnOverrideDesc(*tensors.at(options->inputs.N_override->get_uid()))
+                                                .setmOverrideDesc(*tensors.at(options.inputs.M_override->get_uid()))
+                                                .setnOverrideDesc(*tensors.at(options.inputs.N_override->get_uid()))
                                                 .build();
                 operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
             }
-            else if(options->inputs.K_override) {
+            else if(options.inputs.K_override) {
                 // Create the matmul operation.
                 auto matmul_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR)
-                                                .setaMatDesc(*tensors.at(options->inputs.A->get_uid()))
-                                                .setbMatDesc(*tensors.at(options->inputs.B->get_uid()))
-                                                .setcMatDesc(*tensors.at(options->outputs.C->get_uid()))
+                                                .setaMatDesc(*tensors.at(options.inputs.A->get_uid()))
+                                                .setbMatDesc(*tensors.at(options.inputs.B->get_uid()))
+                                                .setcMatDesc(*tensors.at(options.outputs.C->get_uid()))
                                                 .setmatmulDesc(matmul_descriptor)
-                                                .setmOverrideDesc(*tensors.at(options->inputs.M_override->get_uid()))
-                                                .setkOverrideDesc(*tensors.at(options->inputs.K_override->get_uid()))
+                                                .setmOverrideDesc(*tensors.at(options.inputs.M_override->get_uid()))
+                                                .setkOverrideDesc(*tensors.at(options.inputs.K_override->get_uid()))
                                                 .build();
                 operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
             }
             else {
                 // Create the matmul operation.
                 auto matmul_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR)
-                                                .setaMatDesc(*tensors.at(options->inputs.A->get_uid()))
-                                                .setbMatDesc(*tensors.at(options->inputs.B->get_uid()))
-                                                .setcMatDesc(*tensors.at(options->outputs.C->get_uid()))
+                                                .setaMatDesc(*tensors.at(options.inputs.A->get_uid()))
+                                                .setbMatDesc(*tensors.at(options.inputs.B->get_uid()))
+                                                .setcMatDesc(*tensors.at(options.outputs.C->get_uid()))
                                                 .setmatmulDesc(matmul_descriptor)
                                                 .build();
                 operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
@@ -133,12 +133,12 @@ namespace cudnn_frontend::graph {
         
             // Push all real tensors as required for operation execution.
             auto const& tensors_involved_in_operation = {
-                options->inputs.A
-                , options->inputs.B
-                , options->inputs.M_override
-                , options->inputs.N_override
-                , options->inputs.K_override
-                , options->outputs.C
+                options.inputs.A
+                , options.inputs.B
+                , options.inputs.M_override
+                , options.inputs.N_override
+                , options.inputs.K_override
+                , options.outputs.C
             };
             for(auto const& tensor: tensors_involved_in_operation) {
                 if(tensor && tensor->get_is_virtual() == false) {

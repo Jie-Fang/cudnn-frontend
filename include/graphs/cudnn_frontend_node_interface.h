@@ -27,11 +27,19 @@ public:
     // A closed set of types that are allowed to be passed by value today
     using pass_by_values_t = std::variant<half, float>; 
 
+    using allowed_nodes_t = std::variant<
+
+                            >;
+
     std::string name;
 private:
     detail::Context context;
 
     virtual error_t assignUids_() {
+        return error_t::OK;
+    };
+    
+    virtual error_t validate_node() const {
         return error_t::OK;
     };
 
@@ -80,6 +88,7 @@ protected:
         , REDUCTION
         , RESAMPLE
         , RNG
+        , SCALED_DOT_PRODUCT_ATTENTION
         , WGRAD
     };
     Type tag;
@@ -117,10 +126,9 @@ protected:
         return error_t::OK;
     }
     
+    std::vector<std::unique_ptr<INode>> sub_nodes;
 public:
     virtual Type getType() = 0;
-
-    std::vector<std::shared_ptr<INode>> sub_nodes;
 
     detail::Context& get_context() {
         return context;
@@ -137,7 +145,8 @@ public:
         return error_t::OK;
     }
 
-    virtual error_t validate() const {
+    error_t validate() const {
+        // First validate sub nodes
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->validate();
             if(status != error_t::OK) {
@@ -145,6 +154,14 @@ public:
                 return status;
             }
         }
+
+        // Now validate self
+        auto status = validate_node();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to validate in " << name << std::endl;
+            return status;
+        }
+
         return error_t::OK;
     }
 
@@ -427,94 +444,6 @@ class Execution_plan_list {
             return 0;
         }
         return 0;
-    }
-
-};
-
-class FlatNode : public INode {
-
-protected:
-    std::vector<std::string> operation_names;
-
-    Type
-    getType() override {
-        return Type::COMPOSITE;
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning FlatNode..." << std::endl;
-
-        // Currently just make one large graph of operations from all sub nodes.
-        for (auto node : sub_nodes) {
-            getLogger() << "Getting the operation from " << name << std::endl;
-            for (auto &operation : node->get_operations()) {
-                operation_names.push_back(operation.first);
-            }
-        }
-
-        getLogger() << "Operation Graph has " << operation_names.size() << " operations." << std::endl;
-
-        auto status = create_cudnn_operation_graphs(handle, {operation_names});
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
-            return status;
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: Partitioned FlatNode." << std::endl;
-        return error_t::OK;
-    }
-
-    error_t createExecutionPlans(cudnnHandle_t handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Creating Execution Plans..." << std::endl;
-
-        (void)handle;
-        // auto status = create_cudnn_execution_plan(handle);
-        // if(status != error_t::OK) {
-        //     getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
-        //     return status;
-        // }
-
-        getLogger() << "[cudnn_frontend] INFO: Created Execution Plans." << std::endl;
-        return error_t::OK;
-    }
-
-public:
-    FlatNode(std::string const& name, detail::Context const& context) : INode(name, context) {}
-
-    ~FlatNode() {};
-
-    error_t
-    set_executor(Execution_plan_list const &plan_list) {
-        execution_plans.emplace_back(plan_list.get_candidate());
-        return error_t::OK;
-    }
-
-    error_t
-    get_engine_configs(HeurMode_t mode, Execution_plan_list &plan_list) {
-        getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
-
-        switch (mode) {
-        case HeurMode_t::HEUR_MODE_A:
-            if(mode_a_engine_configs.size() == 0){return error_t::HEURISTIC_QUERY_FAILED;}
-            plan_list.set_tag(mode_a_engine_configs.begin()->first);
-            plan_list.set_engine_configs(mode_a_engine_configs.begin()->second);
-            break;
-        case HeurMode_t::HEUR_MODE_B:
-            if(mode_b_engine_configs.size() == 0){return error_t::HEURISTIC_QUERY_FAILED;}
-            plan_list.set_tag(mode_b_engine_configs.begin()->first);
-            plan_list.set_engine_configs(mode_b_engine_configs.begin()->second);
-            break;
-        case HeurMode_t::HEUR_MODE_FALLBACK:
-            if(fallback_engine_configs.size() == 0){return error_t::HEURISTIC_QUERY_FAILED;}
-            plan_list.set_tag(fallback_engine_configs.begin()->first);
-            plan_list.set_engine_configs(fallback_engine_configs.begin()->second);
-            break;
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: Querying engine config properties." << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(plan_list.query_properties());
-
-        return error_t::OK;
     }
 
 };

@@ -11,18 +11,18 @@ namespace cudnn_frontend {
 namespace graph {
 
 class DBNWeightNode : public INode {
-    std::shared_ptr<DBN_weight> options;
+    DBN_weight options;
 public:
 
-    DBNWeightNode(std::string const& name, std::shared_ptr<DBN_weight> const options, detail::Context const& context)  : INode (name, context), options(options) {
-        options->fill_from_context(get_context());
+    DBNWeightNode(std::string const& name, DBN_weight&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        options.fill_from_context(get_context());
         
         // outputs should be float type
-        options->outputs.DBIAS->set_data_type(DataType_t::FLOAT);
-        options->outputs.DSCALE->set_data_type(DataType_t::FLOAT);
-        options->outputs.EQ_BIAS->set_data_type(DataType_t::FLOAT);
-        options->outputs.EQ_SCALE_DY->set_data_type(DataType_t::FLOAT);
-        options->outputs.EQ_SCALE_X->set_data_type(DataType_t::FLOAT);
+        options.outputs.DBIAS->set_data_type(DataType_t::FLOAT);
+        options.outputs.DSCALE->set_data_type(DataType_t::FLOAT);
+        options.outputs.EQ_BIAS->set_data_type(DataType_t::FLOAT);
+        options.outputs.EQ_SCALE_DY->set_data_type(DataType_t::FLOAT);
+        options.outputs.EQ_SCALE_X->set_data_type(DataType_t::FLOAT);
     }
 
     Type getType() override final {
@@ -33,10 +33,10 @@ public:
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
 
         // TODO: Only inferencing from DY works today.
-        auto DY = options->inputs.DY;
+        auto DY = options.inputs.DY;
         auto const dy_tensor_dim = DY->get_dim();
 
-        auto X = options->inputs.X;
+        auto X = options.inputs.X;
         auto x_tensor_dim = X->get_dim();
         if(x_tensor_dim.empty()) {
             x_tensor_dim.resize(dy_tensor_dim.size());
@@ -49,25 +49,25 @@ public:
                 T->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
             }
         };
-        infer_per_channel_tensors(options->inputs.MEAN);
-        infer_per_channel_tensors(options->inputs.INV_VARIANCE);
-        infer_per_channel_tensors(options->inputs.SCALE);
-        infer_per_channel_tensors(options->outputs.DBIAS);
-        infer_per_channel_tensors(options->outputs.DSCALE);
-        infer_per_channel_tensors(options->outputs.EQ_BIAS);
-        infer_per_channel_tensors(options->outputs.EQ_SCALE_DY);
-        infer_per_channel_tensors(options->outputs.EQ_SCALE_X);
+        infer_per_channel_tensors(options.inputs.MEAN);
+        infer_per_channel_tensors(options.inputs.INV_VARIANCE);
+        infer_per_channel_tensors(options.inputs.SCALE);
+        infer_per_channel_tensors(options.outputs.DBIAS);
+        infer_per_channel_tensors(options.outputs.DSCALE);
+        infer_per_channel_tensors(options.outputs.EQ_BIAS);
+        infer_per_channel_tensors(options.outputs.EQ_SCALE_DY);
+        infer_per_channel_tensors(options.outputs.EQ_SCALE_X);
 
         return error_t::OK;
     }
     
-    error_t validate() const override final {
+    error_t validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating DBNWeightNode..." << std::endl;
 
-        auto DY = options->inputs.DY;
+        auto DY = options.inputs.DY;
         auto const dy_tensor_dim = DY->get_dim();
 
-        auto X = options->inputs.X;
+        auto X = options.inputs.X;
         auto const x_tensor_dim = X->get_dim();
         if(dy_tensor_dim != x_tensor_dim) {
             auto status = error_t::SHAPE_DEDUCTION_FAILED;
@@ -83,30 +83,30 @@ public:
             }
             return error_t::OK;
         };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.DBIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.DSCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.EQ_BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.EQ_SCALE_DY));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options->outputs.EQ_SCALE_X));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.INV_VARIANCE));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DBIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DSCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_BIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_SCALE_DY));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_SCALE_X));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated DBNWeightNode." << std::endl;
         return error_t::OK;
     }
 
     error_t assignUids_() override final {
-        options->inputs.X->set_uid(ICudnn::create_new_uid());
-        options->inputs.DY->set_uid(ICudnn::create_new_uid());
-        options->inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        options->inputs.MEAN->set_uid(ICudnn::create_new_uid());
-        options->inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        options->outputs.DSCALE->set_uid(ICudnn::create_new_uid());
-        options->outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        options->outputs.EQ_SCALE_DY->set_uid(ICudnn::create_new_uid());
-        options->outputs.EQ_SCALE_X->set_uid(ICudnn::create_new_uid());
-        options->outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
+        options.inputs.X->set_uid(ICudnn::create_new_uid());
+        options.inputs.DY->set_uid(ICudnn::create_new_uid());
+        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
+        options.inputs.MEAN->set_uid(ICudnn::create_new_uid());
+        options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
+        options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
+        options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
+        options.outputs.EQ_SCALE_DY->set_uid(ICudnn::create_new_uid());
+        options.outputs.EQ_SCALE_X->set_uid(ICudnn::create_new_uid());
+        options.outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 
@@ -114,16 +114,16 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.DY));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.DSCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.DBIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.EQ_BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.EQ_SCALE_DY));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.EQ_SCALE_X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_BIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE_DY));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE_X));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode tensors." << std::endl;
 
@@ -141,27 +141,27 @@ public:
         // Create the batchnorm operation.
         auto batchnorm_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR)
                                         .setComputeType(CUDNN_DATA_FLOAT)
-                                        .setEqScalesAndBias(*(tensors.at(options->outputs.EQ_SCALE_DY->get_uid())), *(tensors.at(options->outputs.EQ_SCALE_X->get_uid())), *(tensors.at(options->outputs.EQ_BIAS->get_uid())))
-                                        .setSavedMeanAndInvVar(*(tensors.at(options->inputs.MEAN->get_uid())), *(tensors.at(options->inputs.INV_VARIANCE->get_uid())))
-                                        .setScale(*(tensors.at(options->inputs.SCALE->get_uid())))
-                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
-                                        .setdyDesc(*(tensors.at(options->inputs.DY->get_uid())))
-                                        .setDScaleAndDBias(*(tensors.at(options->outputs.DSCALE->get_uid())), *(tensors.at(options->outputs.DBIAS->get_uid())))
+                                        .setEqScalesAndBias(*(tensors.at(options.outputs.EQ_SCALE_DY->get_uid())), *(tensors.at(options.outputs.EQ_SCALE_X->get_uid())), *(tensors.at(options.outputs.EQ_BIAS->get_uid())))
+                                        .setSavedMeanAndInvVar(*(tensors.at(options.inputs.MEAN->get_uid())), *(tensors.at(options.inputs.INV_VARIANCE->get_uid())))
+                                        .setScale(*(tensors.at(options.inputs.SCALE->get_uid())))
+                                        .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
+                                        .setdyDesc(*(tensors.at(options.inputs.DY->get_uid())))
+                                        .setDScaleAndDBias(*(tensors.at(options.outputs.DSCALE->get_uid())), *(tensors.at(options.outputs.DBIAS->get_uid())))
                                         .build();
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(batchnorm_operation)));
         
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
-            options->inputs.X
-            , options->inputs.DY
-            , options->inputs.MEAN
-            , options->inputs.INV_VARIANCE
-            , options->inputs.SCALE
-            , options->outputs.DBIAS
-            , options->outputs.DSCALE
-            , options->outputs.EQ_BIAS
-            , options->outputs.EQ_SCALE_DY
-            , options->outputs.EQ_SCALE_X
+            options.inputs.X
+            , options.inputs.DY
+            , options.inputs.MEAN
+            , options.inputs.INV_VARIANCE
+            , options.inputs.SCALE
+            , options.outputs.DBIAS
+            , options.outputs.DSCALE
+            , options.outputs.EQ_BIAS
+            , options.outputs.EQ_SCALE_DY
+            , options.outputs.EQ_SCALE_X
         };
         for(auto const& tensor: tensors_involved_in_operation) {
             if(tensor && tensor->get_is_virtual() == false) {

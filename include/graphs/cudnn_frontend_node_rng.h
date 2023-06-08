@@ -9,11 +9,11 @@
 namespace cudnn_frontend::graph {
 
 class RngNode : public INode {
-    std::shared_ptr<Rng> options;
+    Rng options;
 public:
 
-    RngNode(std::string const& name, std::shared_ptr<Rng> const options, detail::Context const& context)  : INode (name, context), options(options) {
-        options->fill_from_context(get_context());
+    RngNode(std::string const& name, Rng&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        options.fill_from_context(get_context());
     }
 
     Type getType() override final {
@@ -27,14 +27,14 @@ public:
     }
 
     error_t assignUids_() override final {
-        options->outputs.Y->set_uid(ICudnn::create_new_uid());
+        options.outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 
     error_t createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Building RngNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.Y));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built RngNode tensors." << std::endl;
 
@@ -49,23 +49,23 @@ public:
         try {
         #endif
 
-            if(options->get_distribution() == RngDistribution_t::BERNOULLI) {
+            if(options.get_distribution() == RngDistribution_t::BERNOULLI) {
                 auto rng_descriptor = cudnn_frontend::RngDescBuilder()
-                                                    .setRngDistribution(options->get_distribution())
-                                                    .setBernoulliDistProbability(options->get_bernoulli_probability().value())
+                                                    .setRngDistribution(options.get_distribution())
+                                                    .setBernoulliDistProbability(options.get_bernoulli_probability().value())
                                                     .build();
                 
                 auto Rng_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
-                                                .setyDesc(*(tensors.at(options->outputs.Y->get_uid())))
+                                                .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                                                 .setRngDesc(rng_descriptor)
-                                                .setSeed(options->get_seed().value())
+                                                .setSeed(options.get_seed().value())
                                                 .build();
                 operations.emplace(name, std::make_shared<Operation_v8>(std::move(Rng_operation)));
             }
 
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
-            options->outputs.Y
+            options.outputs.Y
         };
         auto& tensors_in_operation = tensors_in_operations[name];
         for(auto const& tensor: tensors_involved_in_operation) {

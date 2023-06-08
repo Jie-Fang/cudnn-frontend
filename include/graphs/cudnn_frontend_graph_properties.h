@@ -636,7 +636,7 @@ public:
         return *this;
     }
 
-    NormFwdPhase_t get_forward_phase() {
+    NormFwdPhase_t get_forward_phase() const {
         return forward_phase;
     }
 

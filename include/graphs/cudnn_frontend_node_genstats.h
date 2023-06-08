@@ -10,14 +10,14 @@ namespace cudnn_frontend {
 namespace graph {
 
 class GenstatsNode : public INode {
-    std::shared_ptr<Genstats> options;
+    Genstats options;
 public:
-    GenstatsNode(std::string const& name, std::shared_ptr<Genstats> const options, detail::Context const& context)  : INode (name, context), options(options) {
-        options->fill_from_context(get_context());
+    GenstatsNode(std::string const& name, Genstats&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        options.fill_from_context(get_context());
         
         // outputs should be float type
-        options->outputs.SUM->set_data_type(DataType_t::FLOAT);
-        options->outputs.SQ_SUM->set_data_type(DataType_t::FLOAT);
+        options.outputs.SUM->set_data_type(DataType_t::FLOAT);
+        options.outputs.SQ_SUM->set_data_type(DataType_t::FLOAT);
     }
 
     Type getType() override final {
@@ -26,9 +26,9 @@ public:
 
     error_t infer_properties() override final {
         // Only inferrencing from X works today.
-        auto X = options->inputs.X;
-        auto SUM = options->outputs.SUM;
-        auto SQ_SUM = options->outputs.SQ_SUM;
+        auto X = options.inputs.X;
+        auto SUM = options.outputs.SUM;
+        auto SQ_SUM = options.outputs.SQ_SUM;
         
         auto const x_tensor_dim = X->get_dim();
         auto sum_tensor_dim = SUM->get_dim();
@@ -62,18 +62,18 @@ public:
     }
 
     error_t assignUids_() override final {
-        options->inputs.X->set_uid(ICudnn::create_new_uid());
-        options->outputs.SUM->set_uid(ICudnn::create_new_uid());
-        options->outputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
+        options.inputs.X->set_uid(ICudnn::create_new_uid());
+        options.outputs.SUM->set_uid(ICudnn::create_new_uid());
+        options.outputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 
     error_t createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Building GenstatsNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.SUM));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.SQ_SUM));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.SUM));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.SQ_SUM));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built GenstatsNode tensors." << std::endl;
 
@@ -89,19 +89,19 @@ public:
         #endif
 
         auto genstats_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
+                                        .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
                                         .setGenStatsMode(CUDNN_GENSTATS_SUM_SQSUM)
-                                        .setSumDesc(*(tensors.at(options->outputs.SUM->get_uid())))
-                                        .setSqSumDesc(*(tensors.at(options->outputs.SQ_SUM->get_uid())))
+                                        .setSumDesc(*(tensors.at(options.outputs.SUM->get_uid())))
+                                        .setSqSumDesc(*(tensors.at(options.outputs.SQ_SUM->get_uid())))
                                         .build();
         
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(genstats_operation)));
 
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
-            options->inputs.X
-            , options->outputs.SUM
-            , options->outputs.SQ_SUM
+            options.inputs.X
+            , options.outputs.SUM
+            , options.outputs.SQ_SUM
         };
         auto& tensors_in_operation = tensors_in_operations[name];
         for(auto const& tensor: tensors_involved_in_operation) {

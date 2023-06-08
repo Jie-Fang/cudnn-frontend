@@ -10,11 +10,11 @@
 namespace cudnn_frontend::graph {
 
 class ConvolutionNode : public INode {
-    std::shared_ptr<Conv_fprop> options;
+    Conv_fprop options;
 public:
 
-    ConvolutionNode(std::string const& name, std::shared_ptr<Conv_fprop> const options, detail::Context const& context)  : INode (name, context), options(options) {
-        options->fill_from_context(get_context());
+    ConvolutionNode(std::string const& name, Conv_fprop&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        options.fill_from_context(get_context());
     }
 
     Type getType() override final {
@@ -25,9 +25,9 @@ public:
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto X = options->inputs.X;
-        auto W = options->inputs.W;
-        auto Y = options->outputs.Y;
+        auto X = options.inputs.X;
+        auto W = options.inputs.W;
+        auto Y = options.outputs.Y;
         
         auto const x_tensor_dim = X->get_dim();
         auto const w_tensor_dim = W->get_dim();
@@ -40,9 +40,9 @@ public:
 
         if(y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
-            auto const& padding = options->get_padding();
-            auto const& stride = options->get_stride();
-            auto const& dilation = options->get_dilation();
+            auto const& padding = options.get_padding();
+            auto const& stride = options.get_stride();
+            auto const& dilation = options.get_dilation();
             // N
             y_tensor_dim[0] = x_tensor_dim[0];
             // PQ
@@ -64,9 +64,9 @@ public:
     }
 
     error_t assignUids_() override final {
-        options->inputs.X->set_uid(ICudnn::create_new_uid());
-        options->inputs.W->set_uid(ICudnn::create_new_uid());
-        options->outputs.Y->set_uid(ICudnn::create_new_uid());
+        options.inputs.X->set_uid(ICudnn::create_new_uid());
+        options.inputs.W->set_uid(ICudnn::create_new_uid());
+        options.outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 
@@ -74,9 +74,9 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "../include/graphs/cudnn_frontend_node_convolution.hionNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.W));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.Y));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.W));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
@@ -92,22 +92,22 @@ public:
         #endif
 
         // convolution descriptor
-        int64_t const spatial_dim_count = options->get_padding().size();
+        int64_t const spatial_dim_count = options.get_padding().size();
         auto convolution_descriptor = cudnn_frontend::ConvDescBuilder()
-                                                        .setComputeType(options->get_compute_data_type())
+                                                        .setComputeType(options.get_compute_data_type())
                                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                                         .setSpatialDimCount(spatial_dim_count)
-                                                        .setSpatialStride(spatial_dim_count, options->get_stride().data())
-                                                        .setPrePadding(spatial_dim_count, options->get_padding().data())
-                                                        .setPostPadding(spatial_dim_count, options->get_padding().data())
-                                                        .setDilation(spatial_dim_count, options->get_dilation().data())
+                                                        .setSpatialStride(spatial_dim_count, options.get_stride().data())
+                                                        .setPrePadding(spatial_dim_count, options.get_padding().data())
+                                                        .setPostPadding(spatial_dim_count, options.get_padding().data())
+                                                        .setDilation(spatial_dim_count, options.get_dilation().data())
                                                         .build();
 
         // Create the convolution operation.
         auto convolution_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
-                                        .setwDesc(*(tensors.at(options->inputs.W->get_uid())))
-                                        .setyDesc(*(tensors.at(options->outputs.Y->get_uid())))
+                                        .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
+                                        .setwDesc(*(tensors.at(options.inputs.W->get_uid())))
+                                        .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                                         .setcDesc(convolution_descriptor)
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
@@ -116,9 +116,9 @@ public:
 
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
-            options->inputs.X
-            , options->inputs.W
-            , options->outputs.Y
+            options.inputs.X
+            , options.inputs.W
+            , options.outputs.Y
         };
         for(auto const& tensor: tensors_involved_in_operation) {
             if(tensor && tensor->get_is_virtual() == false) {

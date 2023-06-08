@@ -9,11 +9,11 @@
 namespace cudnn_frontend::graph {
 
 class ReductionNode : public INode {
-    std::shared_ptr<Reduction> options;
+    Reduction options;
 public:
 
-    ReductionNode(std::string const& name, std::shared_ptr<Reduction> const options, detail::Context const& context)  : INode (name, context), options(options) {
-        options->fill_from_context(get_context());
+    ReductionNode(std::string const& name, Reduction&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        options.fill_from_context(get_context());
     }
     
     Type getType() override final {
@@ -23,8 +23,8 @@ public:
     error_t infer_properties() override final {
 
         // Only inferrencing from IN_0 to OUT_0 works today.
-        auto x_tensor = options->inputs.X;
-        auto y_tensor = options->outputs.Y;
+        auto x_tensor = options.inputs.X;
+        auto y_tensor = options.outputs.Y;
         
         auto const& x_tensor_dim = x_tensor->get_dim();
         auto y_tensor_dim = y_tensor->get_dim();
@@ -42,16 +42,16 @@ public:
     }
 
     error_t assignUids_() override final {
-        options->inputs.X->set_uid(ICudnn::create_new_uid());
-        options->outputs.Y->set_uid(ICudnn::create_new_uid());
+        options.inputs.X->set_uid(ICudnn::create_new_uid());
+        options.outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }
 
     error_t createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Building ReductionNode tensors..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options->outputs.Y));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ReductionNode tensors." << std::endl;
 
@@ -67,13 +67,13 @@ public:
         #endif
 
         auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
-                                                        .setComputeType(options->get_compute_data_type())
-                                                        .setReductionOp(options->get_mode().value())
+                                                        .setComputeType(options.get_compute_data_type())
+                                                        .setReductionOp(options.get_mode().value())
                                                         .build();
 
         auto reduction_operation = cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR)
-                                        .setxDesc(*(tensors.at(options->inputs.X->get_uid())))
-                                        .setyDesc(*(tensors.at(options->outputs.Y->get_uid())))
+                                        .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
+                                        .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                                         .setreductionDesc(reduction_descriptor)
                                         .build();
         
@@ -81,8 +81,8 @@ public:
 
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
-            options->inputs.X
-            , options->outputs.Y
+            options.inputs.X
+            , options.outputs.Y
         };
         auto& tensors_in_operation = tensors_in_operations[name];
         for(auto const& tensor: tensors_involved_in_operation) {
