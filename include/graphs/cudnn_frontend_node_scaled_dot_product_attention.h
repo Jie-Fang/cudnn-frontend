@@ -96,7 +96,7 @@ namespace cudnn_frontend::graph {
                 less_than_row_options.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_row_options.inputs.IN_0 = row_index;
                 less_than_row_options.inputs.IN_1 = options.inputs.SEQ_LEN_Q;
-                row_index = less_than_row_options.outputs.OUT_0 = std::make_shared<Tensor>("less_than_row");
+                auto less_than_row = less_than_row_options.outputs.OUT_0 = std::make_shared<Tensor>("less_than_row");
                 less_than_row_options.outputs.OUT_0->set_is_virtual(true);
                 auto less_than_row_node = std::make_unique<PointwiseNode>(less_than_row_options.get_name(), std::move(less_than_row_options), get_context());
                 sub_nodes.emplace_back(std::move(less_than_row_node));
@@ -106,21 +106,43 @@ namespace cudnn_frontend::graph {
                 less_than_col_options.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_col_options.inputs.IN_0 = col_index;
                 less_than_col_options.inputs.IN_1 = options.inputs.SEQ_LEN_K;
-                col_index = less_than_col_options.outputs.OUT_0 = std::make_shared<Tensor>("less_than_col");
+                auto less_than_col = less_than_col_options.outputs.OUT_0 = std::make_shared<Tensor>("less_than_col");
                 less_than_col_options.outputs.OUT_0->set_is_virtual(true);
                 auto less_than_col_node = std::make_unique<PointwiseNode>(less_than_col_options.get_name(), std::move(less_than_col_options), get_context());
                 sub_nodes.emplace_back(std::move(less_than_col_node));
 
                 // Lower options to logical and options
-                Pointwise logical_and_options("logical_and");
+                Pointwise logical_and_options("padding_logical_and");
                 logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
-                logical_and_options.inputs.IN_0 = row_index;
-                logical_and_options.inputs.IN_1 = col_index;
-                auto mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor>("logical_and");
+                logical_and_options.inputs.IN_0 = less_than_row;
+                logical_and_options.inputs.IN_1 = less_than_col;
+                auto mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor>("padding_logical_and");
                 logical_and_options.outputs.OUT_0->set_is_virtual(true);
                 auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), get_context());
                 sub_nodes.emplace_back(std::move(logical_and_node));
-                
+
+                if(options.get_causal_masking()) {
+                    // Lower options to greater than options
+                    Pointwise greater_than_options("greater_than");
+                    greater_than_options.set_mode(PointwiseMode_t::CMP_GE);
+                    greater_than_options.inputs.IN_0 = row_index;
+                    greater_than_options.inputs.IN_1 = col_index;
+                    auto row_greater_col = greater_than_options.outputs.OUT_0 = std::make_shared<Tensor>("greater_than");
+                    greater_than_options.outputs.OUT_0->set_is_virtual(true);
+                    auto greater_than_node = std::make_unique<PointwiseNode>(greater_than_options.get_name(), std::move(greater_than_options), get_context());
+                    sub_nodes.emplace_back(std::move(greater_than_node));
+
+                    // Lower options to logical and options
+                    Pointwise logical_and_options("causal_logical_and");
+                    logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
+                    logical_and_options.inputs.IN_0 = mask;
+                    logical_and_options.inputs.IN_1 = row_greater_col;
+                    mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor>("causal_logical_and");
+                    logical_and_options.outputs.OUT_0->set_is_virtual(true);
+                    auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), get_context());
+                    sub_nodes.emplace_back(std::move(logical_and_node));
+                }
+
                 // Lower options to binary select options
                 Pointwise binary_select_options("binary_select");
                 binary_select_options.set_mode(PointwiseMode_t::BINARY_SELECT);

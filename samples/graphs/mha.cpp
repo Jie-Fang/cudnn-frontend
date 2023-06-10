@@ -55,6 +55,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_padding_masking()
+                                                    .set_causal_masking()
                                                     .set_scale_k(0.5f)
                                                     .set_dropout_probability(dropout_probability)
                                                     .set_seed(seed);
