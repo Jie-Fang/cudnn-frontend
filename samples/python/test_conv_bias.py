@@ -43,11 +43,10 @@ def test_conv_bias_relu():
 
     graph.build()
 
-    workspace = graph.tensor(name = "workspace")
-    workspacae_gpu = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
     Y_actual = torch.zeros_like(Y_expected)
-    graph.execute({X: X_gpu, W: W_gpu, B: B_gpu, Y: Y_actual, workspace: workspacae_gpu})
+    graph.execute({X: X_gpu, W: W_gpu, B: B_gpu, Y: Y_actual}, workspace)
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
     
@@ -74,11 +73,10 @@ def test_conv_relu():
 
     graph.build()
 
-    workspace = graph.tensor(name = "workspace")
-    workspacae_gpu = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
     Y_actual = torch.zeros_like(Y_expected)
-    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual, workspace: workspacae_gpu})
+    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual}, workspace)
 
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)

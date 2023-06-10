@@ -89,9 +89,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     float EXP_AVG_scalar = 0.001;
     int64_t nhw = 64;
 
-    auto workspace = graph.tensor(fe::graph::Tensor("workspace"));
-    Surface<int8_t> workspace_tensor(graph.get_workspace_size(), false);
-
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {sum, Sum_tensor.devPtr}
         , {sq_sum, Sq_sum_tensor.devPtr}
@@ -108,9 +106,8 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
         , {accum_count, &nhw}
         , {eq_scale, eq_scale_tensor.devPtr}
         , {eq_bias, eq_bias_tensor.devPtr}
-        , {workspace, workspace_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
 
     cudnnDestroy(handle);
 }
@@ -174,9 +171,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     Surface<half> A_tensor(4*32*16*16, false);
     Surface<half> Y_tensor(4*32*16*16, false);
 
-    auto workspace = graph.tensor(fe::graph::Tensor("workspace"));
-    Surface<int8_t> workspace_tensor(graph.get_workspace_size(), false);
-
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, X_tensor.devPtr}
         , {mean, Mean_tensor.devPtr}
@@ -189,9 +184,8 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         , {bias, Bias_tensor.devPtr}
         , {A, A_tensor.devPtr}
         , {Y, Y_tensor.devPtr}
-        , {workspace, workspace_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
 
     cudnnDestroy(handle);
 }

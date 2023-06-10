@@ -63,12 +63,11 @@ def test_conv_genstats():
     sq_sum_dev = torch.zeros_like(sq_sum_expected)
     Y_actual   = torch.zeros_like(Y_expected)
 
-    workspace = graph.tensor(name = "workspace")
-    workspacae_gpu = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
     print("Executing Kernel")
 
-    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual, SUM : sum_dev, SQ_SUM : sq_sum_dev, S : scale, B : bias, workspace: workspacae_gpu})
+    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual, SUM : sum_dev, SQ_SUM : sq_sum_dev, S : scale, B : bias}, workspace)
 
     # Compare
     torch.testing.assert_close(sum_expected,       sum_dev, atol=0.5, rtol=1e-2)

@@ -60,13 +60,14 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> dx_tensor(4*32*16*16, false);
 
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {DY, dy_tensor.devPtr}
         , {W, w_tensor.devPtr}
         , {X, x_tensor.devPtr}
         , {DX, dx_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }
 
@@ -148,8 +149,7 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
     Surface<float> eq_scale_x_tensor(1*32*1*1, false);
     Surface<float> eq_bias_tensor(1*32*1*1, false);
 
-    auto workspace = graph.tensor(fe::graph::Tensor("workspace"));
-    Surface<int8_t> workspace_tensor(graph.get_workspace_size(), false);
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {DY, dy_tensor.devPtr}
         , {W, w_tensor.devPtr}
@@ -164,8 +164,7 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
         , {eq_scale_dy, eq_scale_dy_tensor.devPtr}
         , {eq_scale_x, eq_scale_x_tensor.devPtr}
         , {drelu_output, drelu_output_tensor.devPtr}
-        , {workspace, workspace_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }

@@ -307,17 +307,19 @@ public:
         return graph.get_workspace_size();
     }
 
-    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack) {
+    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack, py::object workspace) {
         cudnnHandle_t handle;
         cudnnCreate(&handle);
 
         std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void *> var_pack_;
-        for (auto item : var_pack) {
-            var_pack_.insert(std::make_pair(item.first, extract_data_pointer(item.second)));
+        for (auto const& [tensor, pyobject] : var_pack) {
+            var_pack_.emplace(tensor, extract_data_pointer(pyobject));
         }
 
+        void* workspace_ptr = extract_data_pointer(workspace);
+
         // TODO: Probably concatenate in a macro?
-        auto status = graph.execute(handle, var_pack_);
+        auto status = graph.execute(handle, var_pack_, workspace_ptr);
         throw_if(status != cudnn_frontend::error_t::OK, status, "Graph execution failed");
         
         cudnnDestroy(handle);

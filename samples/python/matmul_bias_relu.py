@@ -33,7 +33,8 @@ W_gpu = cp.asarray(W_cpu)
 B_gpu = cp.asarray(B_cpu)
 Y_gpu = cp.full([4,16,16], 0, dtype=cp.half)
 
-graph.execute({image : X_gpu, weight :  W_gpu, bias :  B_gpu, relu :  Y_gpu})
+workspace = cp.empty(graph.get_workspace_size(), dtype=cp.uint8)
+graph.execute({image : X_gpu, weight :  W_gpu, bias :  B_gpu, relu :  Y_gpu}, workspace)
 
 Y_actual = cp.asnumpy(Y_gpu)
 

@@ -76,6 +76,7 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     Surface<half> b_tensor(4*16*32, false);
     Surface<half> y_tensor(4*16*32, false);
 
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {Y, w_tensor.devPtr}
@@ -83,6 +84,6 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
         , {B, b_tensor.devPtr}
         , {O, y_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }

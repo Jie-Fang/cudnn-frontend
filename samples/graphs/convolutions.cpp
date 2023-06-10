@@ -71,6 +71,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     Surface<half> b_tensor(64, false);
     Surface<half> y_tensor(4*64*16*16, false);
 
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {W, w_tensor.devPtr}
@@ -78,7 +79,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
         , {B, b_tensor.devPtr}
         , {Y, y_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }
 
@@ -137,9 +138,6 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     Surface<float> sum_tensor(32, false);
     Surface<float> sq_sum_tensor(32, false);
 
-    auto workspace = graph.tensor(fe::graph::Tensor("workspace"));
-    Surface<int8_t> workspace_tensor(graph.get_workspace_size(), false);
-
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {S, s_tensor.devPtr}
@@ -148,9 +146,9 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
         , {Y, y_tensor.devPtr}
         , {SUM, sum_tensor.devPtr}
         , {SQ_SUM, sq_sum_tensor.devPtr}
-        , {workspace, workspace_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }
 
@@ -231,9 +229,7 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     Surface<float> sum_tensor(32, false);
     Surface<float> sq_sum_tensor(32, false);
 
-    auto workspace = graph.tensor(fe::graph::Tensor("workspace"));
-    Surface<int8_t> workspace_tensor(graph.get_workspace_size(), false);
-
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {S, s_tensor.devPtr}
@@ -246,8 +242,7 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
         , {Y, y_tensor.devPtr}
         , {SUM, sum_tensor.devPtr}
         , {SQ_SUM, sq_sum_tensor.devPtr}
-        , {workspace, workspace_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack));
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }

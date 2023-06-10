@@ -113,7 +113,8 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
         variant_pack[inputs.Bias] = bTensor.devPtr;
     }
     
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
+    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
 
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -204,7 +205,8 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
         variant_pack[inputs.Bias] = bTensor.devPtr;
     }
     
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
+    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
 
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -298,7 +300,8 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
         variant_pack[inputs.Bias] = bTensor.devPtr;
     }
     
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack));
+    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
 
     checkCudaErr(cudaDeviceSynchronize());
 

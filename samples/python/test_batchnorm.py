@@ -63,21 +63,21 @@ def test_bn():
     saved_inv_var_actual = torch.zeros_like(scale_gpu)
     Y_actual = torch.zeros_like(Y_expected)
 
-    workspace = graph.tensor(name = "workspace")
-    workspacae_gpu = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
-    graph.execute({X : x_gpu
-                , scale : scale_gpu
-                , bias : bias_gpu
-                , in_running_mean: running_mean_gpu
-                , in_running_var: running_var_gpu
-                , out_running_mean: running_mean_gpu
-                , out_running_var: running_var_gpu
-                , saved_mean : saved_mean_actual
-                , saved_inv_var : saved_inv_var_actual
-                , Y : Y_actual
-                , workspace: workspacae_gpu})
-    
+    graph.execute({
+                    X : x_gpu
+                    , scale : scale_gpu
+                    , bias : bias_gpu
+                    , in_running_mean: running_mean_gpu
+                    , in_running_var: running_var_gpu
+                    , out_running_mean: running_mean_gpu
+                    , out_running_var: running_var_gpu
+                    , saved_mean : saved_mean_actual
+                    , saved_inv_var : saved_inv_var_actual
+                    , Y : Y_actual
+                }, workspace)
+        
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
 
