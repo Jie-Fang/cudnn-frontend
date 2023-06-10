@@ -820,7 +820,8 @@ public:
 private:
     bool is_inference;
     float scale_k = 1.f;
-    bool use_causal_masking;
+    bool causal_masking = false;
+    bool padding_masking = false;
     std::optional<float> dropout_probability;
     std::optional<int64_t> seed;
     float dropout_scale = 1.f;
@@ -836,6 +837,24 @@ public:
         is_inference = value;
         return *this;
     }
+    
+    bool get_padding_masking() const {
+        return padding_masking;
+    }
+
+    Scaled_dot_product_attention& set_padding_masking(){
+        padding_masking = true;
+        return *this;
+    }
+    
+    bool get_causal_masking() const {
+        return causal_masking;
+    }
+
+    Scaled_dot_product_attention& set_causal_masking(){
+        causal_masking = true;
+        return *this;
+    }
 
     float get_scale_k() const {
         return scale_k;
@@ -843,11 +862,6 @@ public:
 
     Scaled_dot_product_attention& set_scale_k(float const value){
         scale_k = value;
-        return *this;
-    }
-
-    Scaled_dot_product_attention& set_masking(bool const use_causal) {
-        use_causal_masking = use_causal;
         return *this;
     }
 

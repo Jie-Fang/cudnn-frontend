@@ -18,6 +18,7 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Tensor> P;
         std::shared_ptr<Tensor> scale;
         std::shared_ptr<Tensor> dropout_scale;
+        std::shared_ptr<Tensor> negative_inf;
 
         Scaled_dot_product_attention options;
     public:
@@ -33,6 +34,8 @@ namespace cudnn_frontend::graph {
             scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
             dropout_scale = std::make_shared<Tensor>("dropout_scale");
             dropout_scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
+            negative_inf = std::make_shared<Tensor>("negative_inf");
+            negative_inf->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
             
             // Lower options to scale options
             auto scale_options = Pointwise("scale_k");
@@ -67,6 +70,68 @@ namespace cudnn_frontend::graph {
                 add_options.outputs.OUT_0->set_is_virtual(true);
                 auto add_node = std::make_unique<PointwiseNode>(add_options.get_name(), std::move(add_options), get_context());
                 sub_nodes.emplace_back(std::move(add_node));
+            }
+
+            if(options.get_padding_masking()) {
+                // Lower options to generate row index options
+                Pointwise row_index_options("row_index");
+                row_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
+                row_index_options.inputs.IN_0 = last_output;
+                auto row_index = row_index_options.outputs.OUT_0 = std::make_shared<Tensor>("row_index");
+                row_index_options.outputs.OUT_0->set_is_virtual(true);
+                auto row_index_node = std::make_unique<PointwiseNode>(row_index_options.get_name(), std::move(row_index_options), get_context());
+                sub_nodes.emplace_back(std::move(row_index_node));
+
+                // Lower options to generate col index options
+                Pointwise col_index_options("col_index");
+                col_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
+                col_index_options.inputs.IN_0 = last_output;
+                auto col_index = col_index_options.outputs.OUT_0 = std::make_shared<Tensor>("col_index");
+                col_index_options.outputs.OUT_0->set_is_virtual(true);
+                auto col_index_node = std::make_unique<PointwiseNode>(col_index_options.get_name(), std::move(col_index_options), get_context());
+                sub_nodes.emplace_back(std::move(col_index_node));
+
+                // Lower options to less than row options
+                Pointwise less_than_row_options("less_than_row");
+                less_than_row_options.set_mode(PointwiseMode_t::CMP_LT);
+                less_than_row_options.inputs.IN_0 = row_index;
+                less_than_row_options.inputs.IN_1 = options.inputs.SEQ_LEN_Q;
+                row_index = less_than_row_options.outputs.OUT_0 = std::make_shared<Tensor>("less_than_row");
+                less_than_row_options.outputs.OUT_0->set_is_virtual(true);
+                auto less_than_row_node = std::make_unique<PointwiseNode>(less_than_row_options.get_name(), std::move(less_than_row_options), get_context());
+                sub_nodes.emplace_back(std::move(less_than_row_node));
+                
+                // Lower options to less than col options
+                Pointwise less_than_col_options("less_than_col");
+                less_than_col_options.set_mode(PointwiseMode_t::CMP_LT);
+                less_than_col_options.inputs.IN_0 = col_index;
+                less_than_col_options.inputs.IN_1 = options.inputs.SEQ_LEN_K;
+                col_index = less_than_col_options.outputs.OUT_0 = std::make_shared<Tensor>("less_than_col");
+                less_than_col_options.outputs.OUT_0->set_is_virtual(true);
+                auto less_than_col_node = std::make_unique<PointwiseNode>(less_than_col_options.get_name(), std::move(less_than_col_options), get_context());
+                sub_nodes.emplace_back(std::move(less_than_col_node));
+
+                // Lower options to logical and options
+                Pointwise logical_and_options("logical_and");
+                logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
+                logical_and_options.inputs.IN_0 = row_index;
+                logical_and_options.inputs.IN_1 = col_index;
+                auto mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor>("logical_and");
+                logical_and_options.outputs.OUT_0->set_is_virtual(true);
+                auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), get_context());
+                sub_nodes.emplace_back(std::move(logical_and_node));
+                
+                // Lower options to binary select options
+                Pointwise binary_select_options("binary_select");
+                binary_select_options.set_mode(PointwiseMode_t::BINARY_SELECT);
+                binary_select_options.inputs.IN_0 = last_output;
+                binary_select_options.inputs.IN_1 = negative_inf;
+                binary_select_options.inputs.IN_2 = mask;
+                last_output = binary_select_options.outputs.OUT_0 = std::make_shared<Tensor>("binary_select");
+                binary_select_options.outputs.OUT_0->set_is_virtual(true);
+                auto binary_select_node = std::make_unique<PointwiseNode>(binary_select_options.get_name(), std::move(binary_select_options), get_context());
+                sub_nodes.emplace_back(std::move(binary_select_node));
+
             }
 
             // Lower options to softmax options
@@ -209,6 +274,9 @@ namespace cudnn_frontend::graph {
             
             half dropout_scale_value = options.get_dropout_scale();
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
+            
+            float negative_inf_value = std::numeric_limits<float>::min();
+            tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
 
             return error_t::OK;
         }
