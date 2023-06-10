@@ -27,10 +27,6 @@ public:
     // A closed set of types that are allowed to be passed by value today
     using pass_by_values_t = std::variant<half, float>; 
 
-    using allowed_nodes_t = std::variant<
-
-                            >;
-
     std::string name;
 private:
     detail::Context context;
@@ -346,7 +342,7 @@ class Execution_plan_list {
     }
 
     error_t
-    filter_by_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
+    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
         for (auto note : notes) {
             for (auto i = 0u; i < engine_configs.size(); i++) {
                 if (std::find(numeric_notes[i].begin(), numeric_notes[i].end(),note) != numeric_notes[i].end()) {
@@ -358,7 +354,7 @@ class Execution_plan_list {
     }
 
     error_t
-    filter_by_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
+    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
         for (auto note : notes) {
             for (auto i = 0u; i < engine_configs.size(); i++) {
                 if (std::find(behavior_notes[i].begin(), behavior_notes[i].end(),note) != behavior_notes[i].end()) {

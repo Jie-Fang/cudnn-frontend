@@ -23,28 +23,28 @@ class Plans {
     friend class Graph;
     Execution_plan_list list_of_engine_configs;
     public:
-        Plans &filter_by_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &);
-        Plans &filter_by_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &);
+        Plans &filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &);
+        Plans &filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &);
         Plans &build_plans(cudnnHandle_t);
 
         int64_t get_workspace_size();
         int64_t get_max_workspace_size();
 };
 
-inline Plans& Plans::filter_by_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
+inline Plans& Plans::filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
     // TODO: The error returned is not propagate to user.
     // Should the return value be changed to error_t too?
-    auto status = list_of_engine_configs.filter_by_behavior_notes(notes);
+    auto status = list_of_engine_configs.filter_out_behavior_notes(notes);
     if(status != error_t::OK) {
         getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl; 
     }
     return *this;
 }
 
-inline Plans& Plans::filter_by_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
+inline Plans& Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
     // TODO: The error returned is not propagate to user.
     // Should the return value be changed to error_t too?
-    auto status = list_of_engine_configs.filter_by_numeric_notes(notes);
+    auto status = list_of_engine_configs.filter_out_numeric_notes(notes);
     if(status != error_t::OK) {
         getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl; 
     }
@@ -123,7 +123,7 @@ public:
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs, Scaled_dot_product_attention);
 
-    error_t validate_node() const override final {
+    error_t is_supported() const {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating Graph..." << std::endl;
         int32_t major  = 0;
         int32_t minor  = 0;
