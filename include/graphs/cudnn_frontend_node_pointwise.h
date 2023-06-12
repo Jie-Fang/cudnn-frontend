@@ -21,7 +21,7 @@ public:
         return Type::POINTWISE;
     }
 
-    error_t infer_properties() override final {
+    error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node named " << name << "." << std::endl;
         
         // Only inferrencing from IN_0 to OUT_0 works today.
@@ -42,7 +42,7 @@ public:
         return error_t::OK;
     }
 
-    error_t validate_node() const override final {
+    error_t validate_node() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating PointwiseNode..." << std::endl;
 
         auto status = error_t::OK;
@@ -77,7 +77,7 @@ public:
         return status;
     }
 
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.inputs.IN_0->set_uid(ICudnn::create_new_uid());
         if(options.inputs.IN_1)options.inputs.IN_1->set_uid(ICudnn::create_new_uid());
         if(options.inputs.IN_2)options.inputs.IN_2->set_uid(ICudnn::create_new_uid());

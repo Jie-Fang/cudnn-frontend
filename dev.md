@@ -3,14 +3,11 @@
 ## Documentation
 
     - TODO Update error handling.
-    - TODO Add other nodes.
 
 ## Core
 
     - TODO Implement auto tuning
     - TODO Change uid to shared_ptr
-    - TODO Fix double inference calling
-    - TODO Split validate() method
     - TODO MHA python Sample
     - TODO MHA bprop python Sample
     - TODO Flash MHA bprop python Sample

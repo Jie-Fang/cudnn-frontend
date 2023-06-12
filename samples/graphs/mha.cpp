@@ -72,6 +72,9 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(fe::error_t::OK == mha_graph.validate());
+    REQUIRE(fe::error_t::OK == mha_graph.is_supported());
     REQUIRE(fe::error_t::OK == mha_graph.build(handle));
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)

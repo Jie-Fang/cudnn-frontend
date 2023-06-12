@@ -38,7 +38,7 @@ public:
         return Type::BATCHNORM;
     }
 
-    error_t infer_properties() override final {
+    error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm node named " << name << "." << std::endl;
 
         // TODO: Only inferencing from X works today.
@@ -73,7 +73,7 @@ public:
         return error_t::OK;
     }
     
-    error_t validate_node() const override final {
+    error_t validate_node() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormNode..." << std::endl;
 
         auto X = options.inputs.X;
@@ -123,7 +123,7 @@ public:
         return error_t::OK;
     }
     
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
         options.inputs.BIAS->set_uid(ICudnn::create_new_uid());

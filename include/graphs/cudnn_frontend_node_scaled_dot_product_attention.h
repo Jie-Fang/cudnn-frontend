@@ -240,7 +240,7 @@ namespace cudnn_frontend::graph {
             return Type::COMPOSITE;
         }
 
-        error_t infer_properties() override final {
+        error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node named " << name << "." << std::endl;
 
             // Fill properties of virtual tensors
@@ -272,12 +272,6 @@ namespace cudnn_frontend::graph {
                 auto const p = options.get_dropout_probability().value();
                 options.set_dropout_scale(1.f / (1.f - p));
             }
-
-            // TODO: do away this redundant code by tweaking global infer_properties
-            for(auto const& sub_node: sub_nodes) {
-                CHECK_CUDNN_FRONTEND_ERROR(sub_node->infer_properties());
-            }
-
 
             return error_t::OK;
         }

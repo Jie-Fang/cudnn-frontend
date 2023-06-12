@@ -20,13 +20,7 @@ public:
         return Type::RNG;
     }
 
-    error_t infer_properties() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node named " << name << "." << std::endl;
-
-        return error_t::OK;
-    }
-
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;
     }

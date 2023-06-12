@@ -31,18 +31,29 @@ public:
 private:
     detail::Context context;
 
-    virtual error_t assignUids_() {
+    virtual error_t assign_uids_node() {
         return error_t::OK;
     };
     
-    virtual error_t validate_node() const {
+    bool has_properties_inferred = false;
+    virtual error_t infer_properties_node() {
+        return error_t::OK;
+    };
+    
+    bool has_validation_checked = false;
+    virtual error_t validate_node() {
+        return error_t::OK;
+    };
+    
+    bool has_support_checked = false;
+    virtual error_t is_supported_node() {
         return error_t::OK;
     };
 
-    error_t assignUids() {
-        CHECK_CUDNN_FRONTEND_ERROR(assignUids_());
+    error_t assign_uids() {
+        CHECK_CUDNN_FRONTEND_ERROR(assign_uids_node());
         for(auto const& sub_node: sub_nodes) {
-            auto status = sub_node->assignUids();
+            auto status = sub_node->assign_uids();
             if(status != error_t::OK) {
                 getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create tensors in " << name << std::endl;
                 return status;
@@ -130,83 +141,134 @@ public:
         return context;
     }
 
-    virtual error_t infer_properties() {
+    error_t infer_properties() {
+        if(has_properties_inferred) {
+            return error_t::OK;
+        }
+
+        // infer_properties self
+        auto status = infer_properties_node();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer_properties in " << name << std::endl;
+            return status;
+        }
+        
+        // infer_properties sub nodes
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->infer_properties();
             if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer properties in " << name << std::endl;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer_properties in " << name << std::endl;
                 return status;
             }
         }
+
+        has_properties_inferred = true;
         return error_t::OK;
     }
 
-    error_t validate() const {
-        // First validate sub nodes
+    error_t validate() {
+        if(has_validation_checked) {
+            return error_t::OK;
+        }
+
+        auto status = infer_properties();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Validation failed in " << name << std::endl;
+            return status;
+        }
+
+        // validate self
+        status = validate_node();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Validation failed in " << name << std::endl;
+            return status;
+        }
+        
+        // validate sub nodes
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->validate();
             if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to validate in " << name << std::endl;
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Validation failed in " << name << std::endl;
                 return status;
             }
         }
 
-        // Now validate self
-        auto status = validate_node();
+        has_validation_checked = true;
+        return error_t::OK;
+    }
+    
+    error_t is_supported() {
+        if(has_support_checked) {
+            return error_t::OK;
+        }
+        
+        auto status = validate();
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to validate in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Support check failed in " << name << std::endl;
+            return status;
+        }
+        
+        // is_supported self
+        status = is_supported_node();
+        if(status != error_t::OK) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Support check failed in " << name << std::endl;
             return status;
         }
 
+        // is_supported sub nodes
+        for(auto const& sub_node: sub_nodes) {
+            auto status = sub_node->is_supported();
+            if(status != error_t::OK) {
+                getLogger() << "[cudnn_frontend] ERROR: " << status << " Support check failed in " << name << std::endl;
+                return status;
+            }
+        }
+
+        has_support_checked = true;
         return error_t::OK;
     }
 
     error_t build(cudnnHandle_t handle) {
-        auto status = infer_properties();
+        
+        auto status = is_supported();
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
             return status;
         }
 
-        status = validate();
+        status = assign_uids();
         if(status != error_t::OK) {
             getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
-            return status;
-        }
-
-        status = assignUids();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to assignUids in " << name << std::endl;
             return status;
         }
 
         status = createTensors();
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to createTensors in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createOperations();
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to createOperations in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createOperationGraphs(handle);
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to createOperationGraphs in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
             return status;
         }
 
         status = query_heuristics();
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to query Heuristics in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createExecutionPlans(handle);
         if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to buildExecutionPlans in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
             return status;
         }
 

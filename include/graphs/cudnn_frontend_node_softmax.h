@@ -82,7 +82,7 @@ namespace cudnn_frontend::graph {
             return Type::COMPOSITE;
         }
 
-        error_t infer_properties() override final {
+        error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node named " << name << "." << std::endl;
 
             // Fill properties of virtual tensors
@@ -113,12 +113,6 @@ namespace cudnn_frontend::graph {
                 ->set_dim({b, h, s_q, s_kv})
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
                 .fill_from_context(get_context());
-
-            // TODO: do away this redundant code by tweaking global infer_properties
-            for(auto const& sub_node: sub_nodes) {
-                CHECK_CUDNN_FRONTEND_ERROR(sub_node->infer_properties());
-            }
-
 
             return error_t::OK;
         }

@@ -123,8 +123,8 @@ public:
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs, Scaled_dot_product_attention);
 
-    error_t is_supported() const {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating Graph..." << std::endl;
+    error_t is_supported_node() override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Checking Graph Support..." << std::endl;
         int32_t major  = 0;
         int32_t minor  = 0;
         int32_t count  = 0;

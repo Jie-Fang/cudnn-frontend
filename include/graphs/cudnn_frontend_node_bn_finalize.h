@@ -22,7 +22,7 @@ public:
         return Type::BN_FINALIZE;
     }
 
-    error_t infer_properties() override final {
+    error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
         
         // TODO: Only inferencing from SUM works today.
@@ -64,7 +64,7 @@ public:
         return error_t::OK;
     }
     
-    error_t validate_node() const override final {
+    error_t validate_node() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormFinalizeNode..." << std::endl;
 
         auto SUM = options.inputs.SUM;
@@ -111,7 +111,7 @@ public:
         return error_t::OK;
     }
     
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.inputs.SUM->set_uid(ICudnn::create_new_uid());
         options.inputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
         options.inputs.MEAN->set_uid(ICudnn::create_new_uid());

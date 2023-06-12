@@ -24,7 +24,7 @@ public:
         return Type::GENSTATS;
     }
 
-    error_t infer_properties() override final {
+    error_t infer_properties_node() override final {
         // Only inferrencing from X works today.
         auto X = options.inputs.X;
         auto SUM = options.outputs.SUM;
@@ -61,7 +61,7 @@ public:
         return error_t::OK;
     }
 
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.outputs.SUM->set_uid(ICudnn::create_new_uid());
         options.outputs.SQ_SUM->set_uid(ICudnn::create_new_uid());

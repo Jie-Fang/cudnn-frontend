@@ -21,7 +21,7 @@ public:
         return Type::DGRAD;
     }
 
-    error_t infer_properties() override final {
+    error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node named " << name << "." << std::endl;
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
@@ -66,7 +66,7 @@ public:
         return error_t::OK;
     }
 
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.inputs.DY->set_uid(ICudnn::create_new_uid());
         options.inputs.W->set_uid(ICudnn::create_new_uid());
         options.outputs.DX->set_uid(ICudnn::create_new_uid());

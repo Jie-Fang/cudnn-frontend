@@ -20,7 +20,7 @@ public:
         return Type::REDUCTION;
     }
 
-    error_t infer_properties() override final {
+    error_t infer_properties_node() override final {
         // Only inferrencing from IN_0 to OUT_0 works today.
         auto x_tensor = options.inputs.X;
         auto y_tensor = options.outputs.Y;
@@ -40,7 +40,7 @@ public:
         return error_t::OK;
     }
 
-    error_t assignUids_() override final {
+    error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.outputs.Y->set_uid(ICudnn::create_new_uid());
         return error_t::OK;

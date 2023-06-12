@@ -21,7 +21,7 @@ namespace cudnn_frontend::graph {
             return Type::MATMUL;
         }
 
-        error_t infer_properties() override final {
+        error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node named " << name << "." << std::endl;
 
             // Only inferrencing from (A, B) -> C works today.
@@ -55,7 +55,7 @@ namespace cudnn_frontend::graph {
             return error_t::OK;
         }
 
-        error_t assignUids_() override final {
+        error_t assign_uids_node() override final {
             options.inputs.A->set_uid(ICudnn::create_new_uid());
             options.inputs.B->set_uid(ICudnn::create_new_uid());
             if(options.inputs.M_override)options.inputs.M_override->set_uid(ICudnn::create_new_uid());
