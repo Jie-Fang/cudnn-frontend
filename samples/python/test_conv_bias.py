@@ -34,12 +34,11 @@ def test_conv_bias_relu():
     B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = convert_to_cudnn_type(B_gpu.dtype))
 
     conv_output = graph.conv(name = "conv", image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
-    conv_output.set_is_virtual(True)
 
     bias_output = graph.bias(name = "bias", input = conv_output, bias = B)
-    bias_output.set_is_virtual(True)
 
     Y = graph.relu(name = "relu", input = bias_output)
+    Y.set_output(True)
 
     graph.build()
 
@@ -67,10 +66,10 @@ def test_conv_relu():
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
     
     conv_output = graph.conv(name = "conv", image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
-    conv_output.set_is_virtual(True)
 
     Y = graph.relu(name = "relu", input = conv_output)
-
+    Y.set_output(True)
+    
     graph.build()
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)

@@ -21,6 +21,10 @@ void init_properties(py::module_ &m) {
         .def("set_stride", &cudnn_frontend::graph::Tensor::set_stride)
         .def("get_is_virtual", &cudnn_frontend::graph::Tensor::get_is_virtual)
         .def("set_is_virtual", &cudnn_frontend::graph::Tensor::set_is_virtual)
+        .def("set_output", [](cudnn_frontend::graph::Tensor& self, bool const is_output){
+            self.set_is_virtual(!is_output);
+            return self;
+        }) // NOTICE THATS ITS JUST ANOTHER NAME FOR SET_IS_VIRTUAL
         .def("get_is_pass_by_value", &cudnn_frontend::graph::Tensor::get_is_pass_by_value)
         .def("set_is_pass_by_value", &cudnn_frontend::graph::Tensor::set_is_pass_by_value)
         .def("get_uid", &cudnn_frontend::graph::Tensor::get_uid)

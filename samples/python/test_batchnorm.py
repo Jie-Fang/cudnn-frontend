@@ -1,4 +1,5 @@
 import pycudnn
+import pytest
 import torch
 
 def convert_to_cudnn_type(torch_type):
@@ -13,6 +14,7 @@ class SGBN(torch.nn.Module):
     def forward(self, input, running_mean, running_var, weight, bias, eps, momentum):
         return torch.nn.functional.batch_norm(input, running_mean, running_var, weight=weight, bias=bias, training=True, momentum=momentum, eps=eps)
     
+@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8700, reason="BN not supported below cudnn 8.7")
 def test_bn():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -31,10 +33,10 @@ def test_bn():
     graph = pycudnn.pygraph("BN", io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale = graph.tensor(name = "scale")
-    bias = graph.tensor(name = "bias")
-    in_running_mean = graph.tensor(name = "in_running_mean")
-    in_running_var = graph.tensor(name = "in_running_var")
+    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride())
+    bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride())
+    in_running_mean = graph.tensor(name = "in_running_mean", dim = running_mean_gpu.size(), stride = running_mean_gpu.stride())
+    in_running_var = graph.tensor(name = "in_running_var", dim = running_var_gpu.size(), stride = running_var_gpu.stride())
 
     (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
                                                                                         , norm_forward_phase = pycudnn.norm_forward_phase.TRAINING
@@ -43,21 +45,13 @@ def test_bn():
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var
                                                                                         , epsilon = epsilon_cpu, momentum = momentum_cpu)
 
-    Y.set_is_virtual(False).set_data_type(pycudnn.data_type.HALF)
-    saved_mean.set_is_virtual(False)
-    saved_inv_var.set_is_virtual(False)
-    out_running_mean.set_is_virtual(False)
-    out_running_var.set_is_virtual(False)
+    Y.set_output(True).set_data_type(pycudnn.data_type.HALF)
+    saved_mean.set_output(True)
+    saved_inv_var.set_output(True)
+    out_running_mean.set_output(True)
+    out_running_var.set_output(True)
 
-    try:
-        graph.build()
-    except RuntimeError as err:
-        if pycudnn.get_cudnn_version() < 8700:
-            print("BN not supported below cudnn 8.7")
-            return
-        else:
-            print(f"Unexpected {err=}, {type(err)=}")
-            raise
+    graph.build()
 
     saved_mean_actual = torch.zeros_like(scale_gpu)
     saved_inv_var_actual = torch.zeros_like(scale_gpu)

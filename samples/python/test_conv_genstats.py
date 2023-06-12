@@ -51,11 +51,11 @@ def test_conv_genstats():
     B_OUT = graph.bias(name = "bias", input = S_OUT, bias = B)
     CONV_IN = graph.relu(name = "relu", input = B_OUT)
     Y = graph.conv(name = "conv", image = CONV_IN, weight = W, padding = padding, stride = stride, dilation = dilation)
-    SUM, SQ_SUM = graph.genstats(name = "genstats", input = Y)
+    Y.set_output(True)
 
-    S_OUT.set_is_virtual(True)
-    B_OUT.set_is_virtual(True)
-    CONV_IN.set_is_virtual(True)
+    SUM, SQ_SUM = graph.genstats(name = "genstats", input = Y)
+    SUM.set_output(True)
+    SQ_SUM.set_output(True)
 
     graph.build()
 

@@ -15,12 +15,11 @@ weight = graph.tensor(name = "weight", dim = [4,64,16], stride = [1024,1,64])
 bias = graph.tensor(name = "bias", dim = [4,16,16],  stride = [256,1,16])
 
 response = graph.matmul(name = "matmul", image = image, weight = weight)
-response.set_is_virtual(True)
 
 output = graph.bias(name = "bias", input = response, bias = bias)
-output.set_is_virtual(True)
 
 relu = graph.relu(name = "relu", input = output)
+relu.set_output(True)
 
 graph.build()
 

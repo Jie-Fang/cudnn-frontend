@@ -79,27 +79,21 @@ public:
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
     std::shared_ptr<cudnn_frontend::graph::Tensor>
-    insert_tensor(
+    tensor(
         std::string const& name,
-        cudnn_frontend::DataType_t const& data_type,
         std::vector<int64_t> const& dim,
         std::vector<int64_t> const& stride,
-        bool const& isVirtual,
-        bool const& isByValue
+        cudnn_frontend::DataType_t const& data_type,
+        bool const& is_virtual,
+        bool const& is_by_value
     ) {
-        auto props = cudnn_frontend::graph::Tensor(name);
-
-        if(data_type != cudnn_frontend::DataType_t::NOT_SET)
-            props.set_data_type(data_type);
+        auto props = cudnn_frontend::graph::Tensor(name)
+                            .set_data_type(data_type)
+                            .set_is_virtual(is_virtual)
+                            .set_is_pass_by_value(is_by_value)
+                            .set_dim(dim)
+                            .set_stride(stride);
         
-        if(dim.size())
-            props.set_dim(dim);
-        
-        if(stride.size())
-            props.set_stride(stride);
-        
-        props.set_is_virtual(isVirtual).set_is_pass_by_value(isByValue);
-
         return graph.tensor(props);
     }
 
@@ -156,9 +150,12 @@ public:
                         .set_dilation(dilation);
         props.inputs.X = image_props_ptr;
         props.inputs.W = weight_props_ptr;
-        auto outputs = graph.conv_fprop(props.inputs, props);
+        auto [Y] = graph.conv_fprop(props.inputs, props);
 
-        return outputs.Y;
+        // Default virtualness in python is true
+        Y->set_is_virtual(true);
+
+        return Y;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -175,9 +172,12 @@ public:
         auto props = cudnn_frontend::graph::Matmul(name).set_compute_data_type(compute_data_type);
         props.inputs.A = image_props_ptr;
         props.inputs.B = weight_props_ptr;
-        auto outputs = graph.matmul(props.inputs, props);
+        auto [C] = graph.matmul(props.inputs, props);
 
-        return outputs.C;
+        // Default virtualness in python is true
+        C->set_is_virtual(true);
+
+        return C;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -194,9 +194,12 @@ public:
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
         props.inputs.IN_0 = input_props_ptr;
         props.inputs.IN_1 = bias_props_ptr;
-        auto outputs = graph.pointwise(props.inputs, props);
+        auto [OUT_0] = graph.pointwise(props.inputs, props);
 
-        return outputs.OUT_0;
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -213,9 +216,12 @@ public:
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
         props.inputs.IN_0 = input_props_ptr;
         props.inputs.IN_1 = scale_props_ptr;
-        auto outputs = graph.pointwise(props.inputs, props);
+        auto [OUT_0] = graph.pointwise(props.inputs, props);
 
-        return outputs.OUT_0;
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -230,21 +236,29 @@ public:
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
         props.inputs.IN_0 = input_props_ptr;
-        auto outputs = graph.pointwise(props.inputs, props);
+        auto [OUT_0] = graph.pointwise(props.inputs, props);
 
-        return outputs.OUT_0;
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
     }
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2UL>
-    insert_genstat(
+    genstats(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Genstats(name).set_compute_data_type(compute_data_type);
         props.inputs.X = input_props_ptr;
-        auto outputs = graph.genstats(props.inputs.X, props);
-        return outputs;
+        auto [SUM, SQ_SUM] = graph.genstats(props.inputs.X, props);
+
+        // Default virtualness in python is true
+        SUM->set_is_virtual(true);
+        SQ_SUM->set_is_virtual(true);
+
+        return {SUM, SQ_SUM};
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -259,9 +273,12 @@ public:
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
         props.inputs.IN_0 = input_props_ptr;
-        auto outputs = graph.pointwise(props.inputs, props);
+        auto [OUT_0] = graph.pointwise(props.inputs, props);
 
-        return outputs.OUT_0;
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -276,9 +293,12 @@ public:
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
         props.inputs.IN_0 = input_props_ptr;
-        auto outputs = graph.pointwise(props.inputs, props);
+        auto [OUT_0] = graph.pointwise(props.inputs, props);
 
-        return outputs.OUT_0;
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
     }
 
     void build() {
@@ -340,11 +360,11 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("tensor", &PyGraph::insert_tensor,
+        .def("tensor", &PyGraph::tensor,
              py::arg_v("name", "test_tensor_name"),
+             py::arg{"dim"},
+             py::arg{"stride"},
              py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v{"dim", default_vector()},
-             py::arg_v{"stride", default_vector()},
              py::arg_v{"is_virtual", false},
              py::arg_v{"is_pass_by_value", false}
         )
@@ -360,8 +380,8 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("momentum", 0.1),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("genstats", &PyGraph::insert_genstat,
-             py::arg_v("name", "genstat"),
+        .def("genstats", &PyGraph::genstats,
+             py::arg_v("name", "genstats"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
