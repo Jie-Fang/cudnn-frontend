@@ -160,6 +160,35 @@ public:
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
+    // Takes image and loss properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    insert_wgrad(
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& loss_props_ptr,
+        cudnn_frontend::DataType_t const& compute_data_type,
+        std::vector<int64_t> const& padding,
+        std::vector<int64_t> const& stride,
+        std::vector<int64_t> const& dilation
+    ) {
+        auto props = cudnn_frontend::graph::Conv_wgrad(name)
+                        .set_compute_data_type(compute_data_type)
+                        .set_padding(padding)
+                        .set_stride(stride)
+                        .set_dilation(dilation);
+        props.inputs.X = image_props_ptr;
+        props.inputs.DY = loss_props_ptr;
+        auto [DW] = graph.conv_wgrad(props.inputs, props);
+
+        // Default virtualness in python is true
+        DW->set_is_virtual(true);
+
+        return DW;
+    }
+
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor>
@@ -389,6 +418,15 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("name", "conv_fprop"),
              py::arg("image"),
              py::arg("weight"),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v{"padding", default_vector()},
+             py::arg_v{"stride", default_vector()},
+             py::arg_v{"dilation", default_vector()}
+        )
+        .def("wgrad", &PyGraph::insert_wgrad,
+             py::arg_v("name", "conv_wgrad"),
+             py::arg("image"),
+             py::arg("loss"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v{"padding", default_vector()},
              py::arg_v{"stride", default_vector()},
