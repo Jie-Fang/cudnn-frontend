@@ -270,7 +270,7 @@ namespace cudnn_frontend::graph {
             // Compute dropout scale
             if(options.get_dropout_probability().has_value()) {
                 auto const p = options.get_dropout_probability().value();
-                options.set_dropout_scale(1.f / (1.f - p));
+                options.dropout_scale = (1.f / (1.f - p));
             }
 
             return error_t::OK;
@@ -288,7 +288,7 @@ namespace cudnn_frontend::graph {
             half scale_value = options.get_scale_k();
             tensor_to_pass_by_value.emplace(scale, scale_value);
             
-            half dropout_scale_value = options.get_dropout_scale();
+            half dropout_scale_value = options.dropout_scale;
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
             
             float negative_inf_value = std::numeric_limits<float>::min();

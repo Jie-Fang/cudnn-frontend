@@ -799,6 +799,7 @@ public:
 };
 
 class Scaled_dot_product_attention : public Operation {
+    friend class ScaledDotProductAttentionNode;
 public:
 
     struct Inputs {
@@ -887,12 +888,9 @@ public:
         dropout_probability = probability;
         return *this;
     }
-
-    float get_dropout_scale() const {
-        return dropout_scale;
-    }
     
-    Scaled_dot_product_attention& set_dropout_scale(float const scale) {
+    Scaled_dot_product_attention& set_dropout(std::shared_ptr<Tensor> mask, float const scale) {
+        inputs.Dropout_mask = mask;
         dropout_scale = scale;
         return *this;
     }
