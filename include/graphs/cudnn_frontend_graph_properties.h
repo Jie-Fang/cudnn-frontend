@@ -824,7 +824,7 @@ private:
     bool causal_masking = false;
     bool padding_masking = false;
     std::optional<float> dropout_probability;
-    std::optional<int64_t> seed;
+    int64_t seed;
     float dropout_scale = 1.f;
     
 public:
@@ -871,21 +871,9 @@ public:
         return *this;
     }
 
-    std::optional<int64_t> get_seed() const {
-        return seed;
-    }
-
-    Scaled_dot_product_attention& set_seed(std::optional<int64_t> value) {
-        seed = value;
-        return *this;
-    }
-
-    std::optional<float> get_dropout_probability() const {
-        return dropout_probability;
-    }
-
-    Scaled_dot_product_attention& set_dropout_probability(float const probability) {
+    Scaled_dot_product_attention& set_dropout(float const probability, int64_t const seed_) {
         dropout_probability = probability;
+        seed = seed_;
         return *this;
     }
     

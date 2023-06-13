@@ -168,7 +168,7 @@ namespace cudnn_frontend::graph {
             }
             else {
                 // Two cases for training: dropout present or not
-                bool const dropout_present = options.get_dropout_probability().has_value() || options.inputs.Dropout_mask;
+                bool const dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
                 if(dropout_present) {
                     last_output = softmax_options.outputs.S = std::make_shared<Tensor>("S");
                     softmax_options.outputs.S->set_is_virtual(true);
@@ -176,12 +176,12 @@ namespace cudnn_frontend::graph {
                     sub_nodes.emplace_back(std::move(softmax_node));
 
                     std::shared_ptr<Tensor> mask_output;
-                    if(options.get_dropout_probability().has_value()) {
+                    if(options.dropout_probability.has_value()) {
                         // Lower options to rng options
                         auto rng_options = Rng("rng");
                         rng_options.set_distribution(RngDistribution_t::BERNOULLI)
-                            .set_seed(options.get_seed())
-                            .set_bernoulli_probability(options.get_dropout_probability().value());
+                            .set_seed(options.seed)
+                            .set_bernoulli_probability(options.dropout_probability.value());
                         mask_output = rng_options.outputs.Y = rng_output = std::make_shared<Tensor>("after_rng");
                         rng_options.outputs.Y->set_is_virtual(true);
                         auto rng_node = std::make_unique<RngNode>(rng_options.get_name(), std::move(rng_options), get_context());
@@ -268,8 +268,8 @@ namespace cudnn_frontend::graph {
             options.outputs.O->set_dim({b,h,s_q,d}).set_stride({s_q*h*d,d,h*d,1});
 
             // Compute dropout scale
-            if(options.get_dropout_probability().has_value()) {
-                auto const p = options.get_dropout_probability().value();
+            if(options.dropout_probability.has_value()) {
+                auto const p = options.dropout_probability.value();
                 options.dropout_scale = (1.f / (1.f - p));
             }
 

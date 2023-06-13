@@ -56,8 +56,8 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
                                                     .set_padding_masking()
                                                     .set_causal_masking()
                                                     .set_scale_k(0.5f)
-                                                    .set_dropout_probability(dropout_probability)
-                                                    .set_seed(seed);
+                                                    .set_dropout(dropout_probability, seed);
+                                                    
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
