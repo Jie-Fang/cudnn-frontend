@@ -864,6 +864,11 @@ public:
         scale_k = value;
         return *this;
     }
+    
+    Scaled_dot_product_attention& set_bias(std::shared_ptr<Tensor> bias){
+        inputs.Bias = bias;
+        return *this;
+    }
 
     std::optional<int64_t> get_seed() const {
         return seed;

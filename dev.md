@@ -5,12 +5,11 @@
     - TODO Update error handling.
 
 ## Core
-
+    - RENAME all properties structures to have _attributes as suffix
+    - CI disable cudnn backend in containers
     - TODO Implement auto tuning
     - TODO Change uid to shared_ptr
-    - TODO MHA python Sample
     - TODO MHA bprop python Sample
-    - TODO Flash MHA bprop python Sample
     - TODO Flash MHA bprop python Sample
 
 ## Samples
