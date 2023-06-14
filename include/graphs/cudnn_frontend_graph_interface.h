@@ -741,11 +741,7 @@ inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul options) {
 inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention(Scaled_dot_product_attention::Inputs inputs, Scaled_dot_product_attention options) {    
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
-
-    std::shared_ptr<Tensor> S;
-    if(options.get_is_inference() == false) {
-        S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
-    }
+    auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
 
     // Set inputs
     options.inputs = inputs;

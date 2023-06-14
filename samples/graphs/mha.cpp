@@ -53,11 +53,11 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_bias(bias)
-                                                    .set_padding_masking()
-                                                    .set_causal_masking()
+                                                    .use_padding_mask()
+                                                    .use_causal_mask()
                                                     .set_scale_k(0.5f)
                                                     .set_dropout(dropout_probability, seed);
-                                                    
+
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
@@ -149,7 +149,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_bias(bias)
-                                                    .set_padding_masking()
+                                                    .use_padding_mask()
                                                     .set_scale_k(0.5f);
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 

@@ -821,8 +821,8 @@ public:
 private:
     bool is_inference;
     float scale_k = 1.f;
-    bool causal_masking = false;
-    bool padding_masking = false;
+    bool padding_mask = false;
+    bool causal_mask = false;
     std::optional<float> dropout_probability;
     int64_t seed;
     float dropout_scale = 1.f;
@@ -830,35 +830,19 @@ private:
 public:
     Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
 
-    bool get_is_inference() const {
-        return is_inference;
-    }
-
     Scaled_dot_product_attention& set_is_inference(bool const value){
         is_inference = value;
         return *this;
     }
-    
-    bool get_padding_masking() const {
-        return padding_masking;
-    }
 
-    Scaled_dot_product_attention& set_padding_masking(){
-        padding_masking = true;
+    Scaled_dot_product_attention& use_padding_mask(){
+        padding_mask = true;
         return *this;
     }
     
-    bool get_causal_masking() const {
-        return causal_masking;
-    }
-
-    Scaled_dot_product_attention& set_causal_masking(){
-        causal_masking = true;
+    Scaled_dot_product_attention& use_causal_mask(){
+        causal_mask = true;
         return *this;
-    }
-
-    float get_scale_k() const {
-        return scale_k;
     }
 
     Scaled_dot_product_attention& set_scale_k(float const value){

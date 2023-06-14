@@ -72,7 +72,7 @@ namespace cudnn_frontend::graph {
                 sub_nodes.emplace_back(std::move(add_node));
             }
 
-            if(options.get_padding_masking()) {
+            if(options.padding_mask) {
                 // Lower options to generate row index options
                 Pointwise row_index_options("row_index");
                 row_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
@@ -121,7 +121,7 @@ namespace cudnn_frontend::graph {
                 auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), get_context());
                 sub_nodes.emplace_back(std::move(logical_and_node));
 
-                if(options.get_causal_masking()) {
+                if(options.causal_mask) {
                     // Lower options to greater than options
                     Pointwise greater_than_options("greater_than");
                     greater_than_options.set_mode(PointwiseMode_t::CMP_GE);
@@ -160,7 +160,7 @@ namespace cudnn_frontend::graph {
             auto softmax_options = Softmax("softmax");
             softmax_options.inputs.P = last_output;
             // Use tensor provided by Graph when real S
-            if(options.get_is_inference()) {
+            if(options.is_inference) {
                 last_output = softmax_options.outputs.S = std::make_shared<Tensor>("S");
                 softmax_options.outputs.S->set_is_virtual(true);
                 auto softmax_node = std::make_unique<SoftmaxNode>(softmax_options.get_name(), std::move(softmax_options), get_context());
@@ -285,7 +285,7 @@ namespace cudnn_frontend::graph {
         }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
-            half scale_value = options.get_scale_k();
+            half scale_value = options.scale_k;
             tensor_to_pass_by_value.emplace(scale, scale_value);
             
             half dropout_scale_value = options.dropout_scale;
