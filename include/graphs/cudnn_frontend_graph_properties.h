@@ -190,6 +190,7 @@ public:
         Reduction,
         Rng,
         Scaled_dot_product_attention,
+        Scaled_dot_product_flash_attention,
         Softmax,
     };
 
@@ -740,6 +741,8 @@ class Rng : public Operation {
 public:
     
     struct Inputs {
+        std::shared_ptr<Tensor> Seed;
+        std::shared_ptr<Tensor> Offset;
     } inputs;
 
     struct Outputs {
@@ -788,6 +791,8 @@ public:
 
     auto fill_from_context(detail::Context const& context) -> Rng& {
         // Fill node's tensors
+        inputs.Seed->fill_from_context(context);
+        inputs.Offset->fill_from_context(context);
         outputs.Y->fill_from_context(context);
 
         // Fill this node
@@ -889,7 +894,79 @@ public:
     }
 };
 
+class Scaled_dot_product_flash_attention : public Operation {
+    friend class ScaledDotProductFlashAttentionNode;
+public:
+
+    struct Inputs {
+        std::shared_ptr<Tensor> Q;
+        std::shared_ptr<Tensor> K;
+        std::shared_ptr<Tensor> V;
+        std::shared_ptr<Tensor> Seed;
+        std::shared_ptr<Tensor> Offset;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor> O;
+        std::shared_ptr<Tensor> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
+    } outputs;
+
+private:
+    bool is_inference;
+    float scale_k = 1.f;
+    bool causal_mask = false;
+    std::optional<float> dropout_probability;
+    float dropout_scale = 1.f;
+    
+public:
+    Scaled_dot_product_flash_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
+
+    Scaled_dot_product_flash_attention& set_is_inference(bool const value){
+        is_inference = value;
+        return *this;
+    }
+    
+    Scaled_dot_product_flash_attention& use_causal_mask(){
+        causal_mask = true;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention& set_scale_k(float const value){
+        scale_k = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention& set_dropout(float const probability, std::shared_ptr<Tensor> seed, std::shared_ptr<Tensor> offset) {
+        dropout_probability = probability;
+        inputs.Seed = seed;
+        inputs.Offset = offset;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention& set_compute_data_type(DataType_t const value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention& fill_from_context(detail::Context const& context) {
+        // Fill node's tensors
+        inputs.Q->fill_from_context(context);
+        inputs.K->fill_from_context(context);
+        inputs.V->fill_from_context(context);
+        outputs.O->fill_from_context(context);
+
+        // Fill this node
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
 class Softmax : public Operation {
+    friend class SoftmaxNode;
+    friend class ScaledDotProductAttentionNode;
+    friend class ScaledDotProductFlashAttentionNode;
 public:
 
     struct Inputs {
@@ -897,18 +974,16 @@ public:
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor> S; // softmax output dumped when in forward training mode. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
 private:
-    bool is_inference;
+    bool is_inference = false;
+    bool use_stats = false;
 
 public:
     Softmax(const std::string name) : Operation(name, Tag::Softmax) {}
-
-    bool get_is_inference() const {
-        return is_inference;
-    }
 
     Softmax& set_is_inference(bool const value){
         is_inference = value;

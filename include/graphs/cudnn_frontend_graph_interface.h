@@ -14,6 +14,7 @@
 #include "graphs/cudnn_frontend_node_reduction.h"
 #include "graphs/cudnn_frontend_node_rng.h"
 #include "graphs/cudnn_frontend_node_scaled_dot_product_attention.h"
+#include "graphs/cudnn_frontend_node_scaled_dot_product_flash_attention.h"
 
 #include "graphs/cudnn_frontend_graph_helpers.h"
 
@@ -221,6 +222,7 @@ public:
     Pointwise::Outputs pointwise(Pointwise::Inputs, Pointwise);
     
     Scaled_dot_product_attention::Outputs scaled_dot_product_attention(Scaled_dot_product_attention::Inputs, Scaled_dot_product_attention);
+    Scaled_dot_product_flash_attention::Outputs scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention::Inputs, Scaled_dot_product_flash_attention);
 
     error_t is_supported_node() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Checking Graph Support..." << std::endl;
@@ -749,6 +751,21 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), get_context()));
 
     return {.S = S, .O = O};
+}
+
+inline Scaled_dot_product_flash_attention::Outputs Graph::scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention::Inputs inputs, Scaled_dot_product_flash_attention options) {    
+    // Make required output tensors
+    auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
+    auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "_softmax_output");
+
+    // Set inputs
+    options.inputs.Q = inputs.Q;
+    options.inputs.K = inputs.K;
+    options.inputs.V = inputs.V;
+
+    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(options.get_name(), std::move(options), get_context()));
+
+    return {.O = O, .Stats = Stats};
 }
 
 } // namespace cudnn_frontend::graph

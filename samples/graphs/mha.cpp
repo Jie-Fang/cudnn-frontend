@@ -25,6 +25,92 @@
 
 #include <cudnn_frontend.h>
 
+TEST_CASE("Flash", "[graph][mha][flash][forward]") {
+    int64_t b = 1;  // batch size
+    int64_t h = 2;  // head dim
+    int64_t s_q = 2048; // q tensor is padded to this seq length
+    int64_t s_kv = 2048; // k and v tensor is padded to this seq length
+    int64_t d = 128;  // hidden dim
+    bool is_inference = false;
+    float dropout_probability = 0.2f;
+
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph mha_graph("mha");
+    mha_graph.set_io_data_type(fe::DataType_t::HALF)
+             .set_intermediate_data_type(fe::DataType_t::FLOAT)
+             .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    fe::graph::Scaled_dot_product_flash_attention::Inputs inputs;
+    inputs.Q = mha_graph.tensor(fe::graph::Tensor("Q").set_dim({b, h, s_q , d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
+    inputs.K = mha_graph.tensor(fe::graph::Tensor("K").set_dim({b, h, d   , s_kv}).set_stride({3*h*d, 3*d, 1      , 3*b*h*d}));
+    inputs.V = mha_graph.tensor(fe::graph::Tensor("V").set_dim({b, h, s_kv, d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
+
+    auto seed = mha_graph.tensor(fe::graph::Tensor("Seed").set_dim({1,1,1,1}).set_stride({1,1,1,1}));
+    auto offset = mha_graph.tensor(fe::graph::Tensor("Offset").set_dim({1,1,1,1}).set_stride({1,1,1,1}));
+    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention("mha")
+                                                    .set_is_inference(is_inference)
+                                                    .use_causal_mask()
+                                                    .set_scale_k(0.5f)
+                                                    .set_dropout(dropout_probability, seed, offset);
+
+    auto outputs = mha_graph.scaled_dot_product_flash_attention(inputs, scaled_dot_product_flash_attention_options);
+
+    #if (CUDNN_VERSION < 8900)
+        SKIP("MHA Graph requires cudnn 8.9 and up");
+        return;
+    #endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("MHA Graph requires Hopper or above arch.");
+        return;
+    }
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(fe::error_t::OK == mha_graph.validate());
+    REQUIRE(fe::error_t::OK == mha_graph.is_supported());
+    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
+                    .build_plans(handle);
+
+    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+
+    //// Build variant pack
+    Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
+    Surface<half> oTensor(b * s_q * h * d, false);
+    void* devPtrQ = qkvTensor.devPtr;
+    void* devPtrK = (qkvTensor.devPtr + d);
+    void* devPtrV = (qkvTensor.devPtr + 2 * d);
+    void* devPtrO = oTensor.devPtr;
+
+    int64_t scaleSize = 1;
+    int64_t seed_value = 123456;
+    Surface<int64_t> dropoutSeed(scaleSize, false, seed_value);
+    Surface<int64_t> dropoutOffset(scaleSize, false, (int64_t)1);
+    
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+        {inputs.Q, devPtrQ}
+        , {inputs.K, devPtrK}
+        , {inputs.V, devPtrV}
+        , {seed, dropoutSeed.devPtr}
+        , {offset, dropoutOffset.devPtr}
+        , {outputs.O, devPtrO}
+    };
+
+    Surface<float> statsTensor(b * h * s_q * 1, false);
+    if(is_inference == false) {
+        variant_pack[outputs.Stats] = statsTensor.devPtr;
+    }
+    
+    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
+
+    checkCudaErr(cudaDeviceSynchronize());
+
+    cudnnDestroy(handle);
+}
+
 TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward]") {
     int64_t b = 32;  // batch size
     int64_t h = 16;  // head dim

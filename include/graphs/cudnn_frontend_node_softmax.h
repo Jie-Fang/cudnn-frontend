@@ -18,6 +18,7 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Tensor> P_MAX;
         std::shared_ptr<Tensor> E;
         std::shared_ptr<Tensor> SUM;
+        std::shared_ptr<Tensor> LOG;
 
         Softmax options;
     public:
@@ -34,6 +35,10 @@ namespace cudnn_frontend::graph {
             E->set_is_virtual(true);
             SUM = std::make_shared<Tensor>("SUM");
             SUM->set_is_virtual(true);
+            if(options.use_stats) {
+                LOG = std::make_shared<Tensor>("LOG");
+                LOG->set_is_virtual(true); 
+            }
 
             // Lower options to max options
             auto max_options = Reduction("max");
@@ -60,7 +65,7 @@ namespace cudnn_frontend::graph {
             auto exp_node = std::make_unique<PointwiseNode>(exp_options.get_name(), std::move(exp_options), get_context());
             sub_nodes.emplace_back(std::move(exp_node));
 
-            // Lower options to sum options
+            // Lower options to reduce sum options
             auto sum_options = Reduction("sum");
             sum_options.set_mode(ReductionMode_t::ADD);
             sum_options.inputs.X = E;
@@ -68,12 +73,34 @@ namespace cudnn_frontend::graph {
             auto sum_node = std::make_unique<ReductionNode>(sum_options.get_name(), std::move(sum_options), get_context());
             sub_nodes.emplace_back(std::move(sum_node));
 
+            // Another path to add when in flash attention mode.
+            if(options.use_stats) {
+                // Lower options to log options
+                auto log_options = Pointwise("log");
+                log_options.set_mode(PointwiseMode_t::LOG);
+                log_options.inputs.IN_0 = SUM;
+                log_options.outputs.OUT_0 = LOG;
+                auto log_node = std::make_unique<PointwiseNode>(log_options.get_name(), std::move(log_options), get_context());
+                sub_nodes.emplace_back(std::move(log_node));
+
+                // Lower options to add options
+                auto add_options = Pointwise("add_stats");
+                add_options.set_mode(PointwiseMode_t::ADD);
+                add_options.inputs.IN_0 = MAX;
+                add_options.inputs.IN_1 = LOG;
+                add_options.outputs.OUT_0 = options.outputs.Stats;
+                auto add_node = std::make_unique<PointwiseNode>(add_options.get_name(), std::move(add_options), get_context());
+                sub_nodes.emplace_back(std::move(add_node));
+            }
+
             // Lower options to div options
             auto div_options = Pointwise("div");
             div_options.set_mode(PointwiseMode_t::DIV);
             div_options.inputs.IN_0 = E;
             div_options.inputs.IN_1 = SUM;
             div_options.outputs.OUT_0 = options.outputs.S;
+            // Softmax output only non-virutal when non-flash version and in forward training mode
+            div_options.outputs.OUT_0->set_is_virtual((!options.is_inference) || (options.use_stats));
             auto div_node = std::make_unique<PointwiseNode>(div_options.get_name(), std::move(div_options), get_context());
             sub_nodes.emplace_back(std::move(div_node));
         }
