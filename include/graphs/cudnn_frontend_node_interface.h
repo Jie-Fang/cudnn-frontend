@@ -335,7 +335,6 @@ class Execution_plan_list {
     std::vector<std::vector<cudnnBackendNumericalNote_t>> behavior_notes;
 
     std::vector<std::shared_ptr<ExecutionPlan>>           execution_plans;
-    std::shared_ptr<ExecutionPlan>           candidate = nullptr;
 
     std::vector<bool> filtered_indices;
 
@@ -343,8 +342,15 @@ class Execution_plan_list {
     void set_tag(std::string const &tag) {operation_tag = tag;}
     void set_engine_configs(EngineConfigList list) {engine_configs= list;}
 
-    std::shared_ptr<ExecutionPlan> const &
-    get_candidate() const {return candidate;}
+    std::shared_ptr<ExecutionPlan> const
+    get_candidate() const {
+        return (execution_plans.size() ?  execution_plans.front() : nullptr);
+    }
+
+    std::vector<std::shared_ptr<ExecutionPlan>> &
+    get_execution_plans() {
+        return execution_plans;
+    }
 
     error_t query_properties() {
         numeric_notes.reserve(engine_configs.size());
@@ -459,9 +465,6 @@ class Execution_plan_list {
             getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
 
             execution_plans.push_back(std::make_shared<ExecutionPlan>(std::move(plan)));
-            if (candidate == nullptr) {
-                candidate = execution_plans.front();
-            }
 
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             } catch (cudnn_frontend::cudnnException &e) {
@@ -471,7 +474,7 @@ class Execution_plan_list {
             #endif
         }
 
-        if (candidate == nullptr) {
+        if (execution_plans.empty()) {
             return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
         }
         return error_t::OK;
@@ -488,8 +491,8 @@ class Execution_plan_list {
 
     int64_t
     get_workspace_size() {
-        if (candidate) {
-            candidate->getWorkspaceSize();
+        if (execution_plans.size()) {
+            execution_plans.front()->getWorkspaceSize();
         } else {
             return 0;
         }

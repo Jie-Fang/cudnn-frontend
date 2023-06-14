@@ -63,15 +63,13 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
-
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
     Surface<half> s_tensor(64, false);
     Surface<half> b_tensor(64, false);
     Surface<half> y_tensor(4*64*16*16, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    Surface<int8_t> workspace(plans.get_max_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {W, w_tensor.devPtr}
@@ -79,6 +77,10 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
         , {B, b_tensor.devPtr}
         , {Y, y_tensor.devPtr}
     };
+
+    REQUIRE(fe::error_t::OK == plans.autotune(handle, variant_pack, workspace.devPtr));
+    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+
     REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }
