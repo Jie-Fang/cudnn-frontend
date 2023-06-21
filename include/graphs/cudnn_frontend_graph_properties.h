@@ -791,8 +791,8 @@ public:
 
     auto fill_from_context(detail::Context const& context) -> Rng& {
         // Fill node's tensors
-        inputs.Seed->fill_from_context(context);
-        inputs.Offset->fill_from_context(context);
+        if(inputs.Seed)inputs.Seed->fill_from_context(context);
+        if(inputs.Offset)inputs.Offset->fill_from_context(context);
         outputs.Y->fill_from_context(context);
 
         // Fill this node

@@ -117,7 +117,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     int64_t s_q = 512; // q tensor is padded to this seq length
     int64_t s_kv = 512; // k and v tensor is padded to this seq length
     int64_t d = 64;  // hidden dim
-    bool is_inference = true;
+    bool is_inference = false;
     float dropout_probability = 0.2f;
     int64_t seed = 123456;
 

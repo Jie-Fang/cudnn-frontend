@@ -330,6 +330,80 @@ public:
         return OUT_0;
     }
 
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2>
+    scaled_dot_product_attention(
+        std::string const& name
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& q
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& v
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& seq_len_q
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& seq_len_k
+        , bool const is_inference
+        , float const scale_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias
+        , bool const use_padding_mask
+        , bool const use_causal_mask
+        , py::object const dropout
+        , cudnn_frontend::DataType_t const& compute_data_type
+    ) {
+        auto scaled_dot_product_attention_options = cudnn_frontend::graph::Scaled_dot_product_attention("mha")
+                                                    .set_is_inference(is_inference)
+                                                    .set_scale_k(scale_k)
+                                                    .set_compute_data_type(compute_data_type);
+
+        if(use_padding_mask) {
+            scaled_dot_product_attention_options.use_padding_mask();
+        }
+
+        if(use_causal_mask) {
+            scaled_dot_product_attention_options.use_causal_mask();
+        }
+
+        if(bias) {
+            scaled_dot_product_attention_options.set_bias(bias);
+        }
+
+        if (py::isinstance<py::tuple>(dropout)) {
+            py::tuple dropout_tuple = dropout.cast<py::tuple>();
+            if (dropout_tuple.size() != 2) {
+                throw std::runtime_error("dropout must be a tuple of two floats or a tuple of cudnn tensor and a float");
+            }
+
+            if (py::isinstance<py::float_>(dropout_tuple[0]) && py::isinstance<py::int_>(dropout_tuple[1])) {
+                auto const dropout_probability = dropout_tuple[0].cast<float>();
+                auto const seed = dropout_tuple[1].cast<int32_t>();
+
+                scaled_dot_product_attention_options.set_dropout(dropout_probability, seed);                
+            } else if (py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor>>(dropout_tuple[0]) && py::isinstance<py::float_>(dropout_tuple[1])) {
+                auto const dropout_mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor>>();
+                auto const dropout_scale = dropout_tuple[1].cast<float>();
+
+                scaled_dot_product_attention_options.set_dropout(dropout_mask, dropout_scale);
+            } else {
+                throw std::runtime_error("dropout must be a tuple of two floats or two shared_ptr references");
+            }
+        }
+        else if (dropout.is(py::none())) {
+            // Still fine as user does not want any kind of dropout
+        } else {
+            throw std::runtime_error("dropout must be a tuple of two floats or a tuple of cudnn tensor and a float");
+        }
+
+        scaled_dot_product_attention_options.inputs.Q = q;
+        scaled_dot_product_attention_options.inputs.K = k;
+        scaled_dot_product_attention_options.inputs.V = v;
+        scaled_dot_product_attention_options.inputs.SEQ_LEN_Q = seq_len_q;
+        scaled_dot_product_attention_options.inputs.SEQ_LEN_K = seq_len_k;
+        
+        auto [S, O] = graph.scaled_dot_product_attention(scaled_dot_product_attention_options.inputs, scaled_dot_product_attention_options);
+
+        // Default virtualness in python is true
+        S->set_is_virtual(true);
+        O->set_is_virtual(true);
+
+        return {S, O};
+    }
+
     void build() {
         cudnnHandle_t handle;
         cudnnCreate(&handle);
@@ -465,8 +539,24 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
+        .def("scaled_dot_product_attention", &PyGraph::scaled_dot_product_attention,
+             py::arg_v("name", "scaled_dot_product_attention"),
+             py::arg("q"),
+             py::arg("k"),
+             py::arg("v"),
+             py::arg("seq_len_q"),
+             py::arg("seq_len_k"),
+             py::arg("is_inference"),
+             py::arg_v("scale_k", 1.f),
+             py::arg_v("bias", nullptr),
+             py::arg_v("use_padding_mask", false),
+             py::arg_v("use_causal_mask", false),
+             py::arg_v("dropout", py::none()),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        )
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute);
-    m.def("get_cudnn_version", []()->size_t {return cudnnGetVersion();});
+
+
 }

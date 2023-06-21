@@ -746,7 +746,11 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
     auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
 
     // Set inputs
-    options.inputs = inputs;
+    options.inputs.Q = inputs.Q;
+    options.inputs.K = inputs.K;
+    options.inputs.V = inputs.V;
+    options.inputs.SEQ_LEN_Q = inputs.SEQ_LEN_Q;
+    options.inputs.SEQ_LEN_K = inputs.SEQ_LEN_K;
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), get_context()));
 
