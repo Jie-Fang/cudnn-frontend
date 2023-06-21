@@ -914,6 +914,8 @@ public:
 private:
     bool is_inference;
     float scale_k = 1.f;
+    bool padding_mask = false;
+    bool alibi_mask = false;
     bool causal_mask = false;
     std::optional<float> dropout_probability;
     float dropout_scale = 1.f;
@@ -923,6 +925,16 @@ public:
 
     Scaled_dot_product_flash_attention& set_is_inference(bool const value){
         is_inference = value;
+        return *this;
+    }
+    
+    Scaled_dot_product_flash_attention& use_padding_mask(){
+        padding_mask = true;
+        return *this;
+    }
+    
+    Scaled_dot_product_flash_attention& use_alibi_mask(){
+        alibi_mask = true;
         return *this;
     }
     
