@@ -754,7 +754,7 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.S = S, .O = O};
+    return {.O = O, .S = S};
 }
 
 inline Scaled_dot_product_flash_attention::Outputs Graph::scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention::Inputs inputs, Scaled_dot_product_flash_attention options) {    

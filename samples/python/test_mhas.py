@@ -53,7 +53,7 @@ def test_scale_dot_product_attention_with_dropout_rng():
     SEQ_LEN_Q = graph.tensor(name = "SEQ_LEN_Q", dim = SEQ_LEN_Q_gpu.size(), stride = SEQ_LEN_Q_gpu.stride(), data_type = convert_to_cudnn_type(SEQ_LEN_Q_gpu.dtype))
     SEQ_LEN_K = graph.tensor(name = "SEQ_LEN_K", dim = SEQ_LEN_K_gpu.size(), stride = SEQ_LEN_K_gpu.stride(), data_type = convert_to_cudnn_type(SEQ_LEN_K_gpu.dtype))
     Bias = graph.tensor(name = "Bias", dim = Bias_gpu.size(), stride = Bias_gpu.stride(), data_type = convert_to_cudnn_type(Bias_gpu.dtype))
-    S, O = graph.scaled_dot_product_attention(name = "scaled_dot_product_attention"
+    O, S = graph.scaled_dot_product_attention(name = "scaled_dot_product_attention"
                                               , q = Q, k = K, v = V, seq_len_q = SEQ_LEN_Q, seq_len_k = SEQ_LEN_K
                                               , is_inference = False
                                               , scale_k = 0.5

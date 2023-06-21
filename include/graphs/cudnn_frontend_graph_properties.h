@@ -819,8 +819,8 @@ public:
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
         std::shared_ptr<Tensor> O;
+        std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
     } outputs;
 
 private:

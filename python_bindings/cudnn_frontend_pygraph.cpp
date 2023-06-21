@@ -395,13 +395,13 @@ public:
         scaled_dot_product_attention_options.inputs.SEQ_LEN_Q = seq_len_q;
         scaled_dot_product_attention_options.inputs.SEQ_LEN_K = seq_len_k;
         
-        auto [S, O] = graph.scaled_dot_product_attention(scaled_dot_product_attention_options.inputs, scaled_dot_product_attention_options);
+        auto [O, S] = graph.scaled_dot_product_attention(scaled_dot_product_attention_options.inputs, scaled_dot_product_attention_options);
 
         // Default virtualness in python is true
         S->set_is_virtual(true);
         O->set_is_virtual(true);
 
-        return {S, O};
+        return {O, S};
     }
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2>
