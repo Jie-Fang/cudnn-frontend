@@ -101,8 +101,8 @@ def test_scale_dot_product_flash_attention():
     K_gpu = torch.as_strided(qkv_gpu, shape_K, stride_K, storage_offset=offset_K)
     V_gpu = torch.as_strided(qkv_gpu, shape_V, stride_V, storage_offset=offset_V)
 
-    Seed_gpu = torch.full((1,1,1,1), 123456, dtype=torch.int64, device="cuda")
-    Offset_gpu = torch.full((1,1,1,1), 1, dtype=torch.int64, device="cuda")
+    Seed_gpu = torch.full((1,1,1,1), 123456, dtype=torch.int32, device="cuda")
+    Offset_gpu = torch.full((1,1,1,1), 1, dtype=torch.int32, device="cuda")
     
     # Cudnn graph
     graph = pycudnn.pygraph("mha", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
@@ -125,7 +125,7 @@ def test_scale_dot_product_flash_attention():
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
     O_actual = torch.zeros(b * s_q * h * d, dtype=torch.float16, device="cuda")
-    Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float16, device="cuda")
+    Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float32, device="cuda")
 
     graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, Seed: Seed_gpu, Offset: Offset_gpu
                    , O: O_actual, Stats: Stats_actual}
@@ -133,3 +133,4 @@ def test_scale_dot_product_flash_attention():
 
 if __name__ == "__main__":
     test_scale_dot_product_attention_with_dropout_rng()
+    test_scale_dot_product_flash_attention()

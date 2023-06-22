@@ -299,11 +299,10 @@ public:
         // Add pass_by_value data pointers to tensor_uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during execute
         for(auto& [tensor, value]: tensor_to_pass_by_value) {
-            void* value_ptr = nullptr;
-            if((value_ptr = std::get_if<half>(&value))) {
+            if(half* value_ptr = std::get_if<half>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), value_ptr);
             }
-            else if((value_ptr = std::get_if<float>(&value))) {
+            else if(float* value_ptr = std::get_if<float>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), value_ptr);
             }
             else {

@@ -31,7 +31,7 @@ namespace cudnn_frontend::graph {
             // User does not create tensor for scale k, so create it internally
             // Data type is i/o type
             scale = std::make_shared<Tensor>("scale_k");
-            scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
+            scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
             dropout_scale = std::make_shared<Tensor>("dropout_scale");
             dropout_scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
             negative_inf = std::make_shared<Tensor>("negative_inf");
@@ -77,11 +77,11 @@ namespace cudnn_frontend::graph {
 
                 // Lower options to greater than options
                 Pointwise greater_than_options("greater_than");
-                greater_than_options.set_mode(PointwiseMode_t::CMP_GE);
+                greater_than_options.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
                 greater_than_options.inputs.IN_0 = row_index;
                 greater_than_options.inputs.IN_1 = col_index;
                 auto row_greater_col = greater_than_options.outputs.OUT_0 = std::make_shared<Tensor>("greater_than");
-                greater_than_options.outputs.OUT_0->set_is_virtual(true);
+                greater_than_options.outputs.OUT_0->set_is_virtual(true).set_data_type(DataType_t::BOOLEAN);
                 auto greater_than_node = std::make_unique<PointwiseNode>(greater_than_options.get_name(), std::move(greater_than_options), get_context());
                 sub_nodes.emplace_back(std::move(greater_than_node));
 
@@ -181,7 +181,7 @@ namespace cudnn_frontend::graph {
 
             // Infer dims and strides for output tensor as matmul node has no context of mha
             // TODO: Rethink whether mha node needs to set it?
-            options.outputs.O->set_dim({b,h,s_q,d}).set_stride({b*h*d,d,h*d,1});
+            options.outputs.O->set_dim({b,h,s_q,d}).set_stride({h*d,d,b*h*d,1});
 
             // Compute dropout scale
             if(options.dropout_probability.has_value()) {
@@ -201,11 +201,9 @@ namespace cudnn_frontend::graph {
         }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
-            half scale_value = options.scale_k;
-            tensor_to_pass_by_value.emplace(scale, scale_value);
+            tensor_to_pass_by_value.emplace(scale, options.scale_k);
             
-            half dropout_scale_value = options.dropout_scale;
-            tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
+            tensor_to_pass_by_value.emplace(dropout_scale, (half)options.dropout_scale);
             
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
