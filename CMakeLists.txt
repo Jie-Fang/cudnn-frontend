@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.17)
 project(cudnn_frontend VERSION 0.9)
 
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
+option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." ON)
 
 add_library(cudnn_frontend INTERFACE)
 
@@ -14,11 +15,11 @@ target_include_directories(
 
 target_compile_features(cudnn_frontend INTERFACE cxx_std_17)
 
-if (${CUDNN_FRONTEND_BUILD_SAMPLES})
+if (CUDNN_FRONTEND_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
 
-if ( NOT SKIP_EXPORT_PYTHON_BINDINGS )
+if (CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS)
     add_subdirectory(pybind11)
     add_subdirectory(python_bindings)
 endif()
