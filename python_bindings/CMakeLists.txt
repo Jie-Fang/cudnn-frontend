@@ -16,19 +16,6 @@ FetchContent_MakeAvailable(dlpack)
 # Find cudnn
 include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
-# Find Python
-find_package(Python COMPONENTS Interpreter REQUIRED)
-
-# detect virtualenv and set Pip args accordingly
-if(DEFINED ENV{VIRTUAL_ENV} OR DEFINED ENV{CONDA_PREFIX})
-set(_pip_args)
-else()
-set(_pip_args "--user")
-endif()
-
-# install cuda-python PyPI Python package using pip
-execute_process(COMMAND ${Python_EXECUTABLE} -m pip install ${_pip_args} cuda-python)
-
 pybind11_add_module(
     pycudnn
     

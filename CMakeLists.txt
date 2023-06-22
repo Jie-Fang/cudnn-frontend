@@ -15,7 +15,7 @@ target_include_directories(
 target_compile_features(cudnn_frontend INTERFACE cxx_std_17)
 
 if (${CUDNN_FRONTEND_BUILD_SAMPLES})
-add_subdirectory(samples)
+    add_subdirectory(samples)
 endif()
 
 if ( NOT SKIP_EXPORT_PYTHON_BINDINGS )

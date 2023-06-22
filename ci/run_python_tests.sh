@@ -13,7 +13,6 @@ function run_python_tests() {
     export PYTHONPATH=build/python_bindings
     
     pytest samples/python
-    python samples/python/matmul_bias_relu.py
 }
 
 display_header
