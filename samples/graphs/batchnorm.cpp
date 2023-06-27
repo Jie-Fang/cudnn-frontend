@@ -197,19 +197,29 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
+    auto DY = graph.tensor(fe::graph::Tensor("DY").set_dim({4,32,16,16}));
+    DY->generateStrides(CUDNN_TENSOR_NHWC);
+
+    auto input_mask = graph.tensor(fe::graph::Tensor("Mask").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::BOOLEAN));
+    input_mask->generateStrides(CUDNN_TENSOR_NHWC);
+
+    auto mul_options = fe::graph::Pointwise("drelu").set_mode(fe::PointwiseMode_t::MUL);
+    auto DX_drelu = graph.pointwise(DY, input_mask, mul_options);
+
+    // NOTE: Toggle DADD output by toggling DX_DRELU virtualness
+    bool is_dx_drelu_virtual = true;
+    DX_drelu->set_is_virtual(is_dx_drelu_virtual);
+
     fe::graph::DBN::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor("X").set_dim({4,32,16,16}));
     X->generateStrides(CUDNN_TENSOR_NHWC);
     
-    auto DY = graph.tensor(fe::graph::Tensor("DY").set_dim({4,32,16,16}));
-    DY->generateStrides(CUDNN_TENSOR_NHWC);
-
     auto scale = graph.tensor(fe::graph::Tensor("scale").set_data_type(fe::DataType_t::FLOAT));
     auto mean = graph.tensor(fe::graph::Tensor("mean").set_data_type(fe::DataType_t::FLOAT));
     auto inv_variance = graph.tensor(fe::graph::Tensor("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
     inputs.X = X;
-    inputs.DY = DY;
+    inputs.DY = DX_drelu;
     inputs.SCALE = scale;
     inputs.MEAN = mean;
     inputs.INV_VARIANCE = inv_variance;
@@ -220,7 +230,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     dscale->set_is_virtual(false);
     dbias->set_is_virtual(false);
 
-    #if (CUDNN_VERSION < 8700)
+    #if (CUDNN_VERSION < 8900)
         SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
     #endif
 
@@ -234,6 +244,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     REQUIRE(fe::error_t::OK == graph.set_executor(plans));
 
     Surface<half> X_tensor(4*32*16*16, false);
+    Surface<int8_t> Mask_tensor(4*32*16*16 / 8, false);
     Surface<half> DY_tensor(4*32*16*16, false);
     Surface<float> Mean_tensor(32, false);
     Surface<float> Inv_variance_tensor(32, false);
@@ -245,6 +256,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
         {X, X_tensor.devPtr}
+        , {input_mask, Mask_tensor.devPtr}
         , {DY, DY_tensor.devPtr}
         , {scale, DX_tensor.devPtr}
         , {mean, Mean_tensor.devPtr}
@@ -254,6 +266,13 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
         , {dbias, Dbias_tensor.devPtr}
         , {DX, DX_tensor.devPtr}
     };
+
+    // If is_dx_drelu_virtual, DADD output required
+    Surface<half> DADD_tensor(4*32*16*16, false);
+    if(false == is_dx_drelu_virtual) {
+        variant_pack[DX_drelu] = DADD_tensor.devPtr;
+    }
+
     REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
 
     cudnnDestroy(handle);

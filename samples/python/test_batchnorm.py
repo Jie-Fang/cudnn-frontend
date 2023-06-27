@@ -7,6 +7,10 @@ def convert_to_cudnn_type(torch_type):
         return pycudnn.data_type.HALF
     elif torch_type == torch.float32:
         return pycudnn.data_type.FLOAT
+    elif torch_type == torch.bool:
+        return pycudnn.data_type.BOOLEAN
+    elif torch_type == torch.uint8:
+        return pycudnn.data_type.UINT8
     else:
         raise ValueError("Unsupported tensor data type.")
 
@@ -75,10 +79,11 @@ def test_bn():
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8700, reason="DBN not supported below cudnn 8.7")
-def test_dbn():
+@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
+def test_drelu_dadd_dbn():
     # Tensors
     N, C, H, W = 4, 16, 56, 56
+
     x_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     scale_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     mean_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
@@ -86,7 +91,11 @@ def test_dbn():
     dy_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
 
     # Cudnn code
-    graph = pycudnn.pygraph("DBN", intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph("DBN", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+
+    # Bool type is not supported by dlpack
+    x_mask_gpu = torch.randint(0, 2, [N, int(C / 8), H, W], requires_grad=False, device="cuda", dtype=torch.uint8).to(memory_format=torch.channels_last)
+    X_mask = graph.tensor(name = "X_mask", dim = [N, C, H, W], stride = x_gpu.stride(), data_type = pycudnn.data_type.BOOLEAN)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     DY = graph.tensor(name = "DY", dim = dy_gpu.size(), stride = dy_gpu.stride(), data_type = convert_to_cudnn_type(dy_gpu.dtype))
@@ -94,8 +103,16 @@ def test_dbn():
     mean = graph.tensor(name = "mean", dim = mean_gpu.size(), stride = mean_gpu.stride(), data_type = convert_to_cudnn_type(mean_gpu.dtype))
     inv_variance = graph.tensor(name = "inv_variance", dim = inv_variance_gpu.size(), stride = inv_variance_gpu.stride(), data_type = convert_to_cudnn_type(inv_variance_gpu.dtype))
     
+    DX_drelu = graph.scale(name = "drelu"
+                         , input = DY
+                         , scale = X_mask)
+    
+    # NOTE: Toggle DADD output to dump to gmem
+    should_dump_dx_drelu = False
+    DX_drelu.set_output(should_dump_dx_drelu)
+
     (DX, DScale, DBias) = graph.batchnorm_backward(name = "DBN"
-                                                    , grad = DY
+                                                    , grad = DX_drelu
                                                     , input = X
                                                     , scale = scale
                                                     , mean = mean
@@ -114,8 +131,9 @@ def test_dbn():
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
-    graph.execute({
+    device_buffers = {
                     X : x_gpu
+                    , X_mask : x_mask_gpu
                     , DY : dy_gpu
                     , scale : scale_gpu
                     , mean : mean_gpu
@@ -123,8 +141,12 @@ def test_dbn():
                     , DX : DX_actual
                     , DScale : DScale_actual
                     , DBias : DBias_actual
-                }, workspace)
+                }
+    if should_dump_dx_drelu is True:
+        DX_drelu_actual = torch.zeros_like(dy_gpu)
+        device_buffers[DX_drelu] = DX_drelu_actual
+    graph.execute(device_buffers, workspace)
         
 if __name__ == "__main__":
     test_bn()
-    test_dbn()
+    test_drelu_dadd_dbn()

@@ -258,7 +258,7 @@ public:
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor>
-    insert_scale(
+    scale(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
@@ -623,7 +623,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("bias"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("scale", &PyGraph::insert_scale,
+        .def("scale", &PyGraph::scale,
              py::arg_v("name", "scale"),
              py::arg("input"),
              py::arg("scale"),
