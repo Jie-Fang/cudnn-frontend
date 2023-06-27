@@ -189,3 +189,72 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 
     cudnnDestroy(handle);
 }
+
+TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph("DBN_Add_Relu");
+    graph.set_io_data_type(fe::DataType_t::HALF)
+         .set_intermediate_data_type(fe::DataType_t::FLOAT)
+         .set_compute_data_type(fe::DataType_t::FLOAT);
+    
+    fe::graph::DBN::Inputs inputs;
+    auto X = graph.tensor(fe::graph::Tensor("X").set_dim({4,32,16,16}));
+    X->generateStrides(CUDNN_TENSOR_NHWC);
+    
+    auto DY = graph.tensor(fe::graph::Tensor("DY").set_dim({4,32,16,16}));
+    DY->generateStrides(CUDNN_TENSOR_NHWC);
+
+    auto scale = graph.tensor(fe::graph::Tensor("scale").set_data_type(fe::DataType_t::FLOAT));
+    auto mean = graph.tensor(fe::graph::Tensor("mean").set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance = graph.tensor(fe::graph::Tensor("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+
+    inputs.X = X;
+    inputs.DY = DY;
+    inputs.SCALE = scale;
+    inputs.MEAN = mean;
+    inputs.INV_VARIANCE = inv_variance;
+    
+    auto DBN_options = fe::graph::DBN("DBN").set_epsilon(1.0e-5);
+    auto [DX, dscale, dbias] = graph.batchnorm_backward(inputs, DBN_options);
+    DX->set_is_virtual(false);
+    dscale->set_is_virtual(false);
+    dbias->set_is_virtual(false);
+
+    #if (CUDNN_VERSION < 8700)
+        SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+    #endif
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    
+    REQUIRE(fe::error_t::OK == graph.build(handle));
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK)
+                    .build_plans(handle);
+
+    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+
+    Surface<half> X_tensor(4*32*16*16, false);
+    Surface<half> DY_tensor(4*32*16*16, false);
+    Surface<float> Mean_tensor(32, false);
+    Surface<float> Inv_variance_tensor(32, false);
+    Surface<float> Scale_tensor(32, false);
+    Surface<float> Dscale_tensor(32, false);
+    Surface<float> Dbias_tensor(32, false);
+    Surface<half> DX_tensor(4*32*16*16, false);
+
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+        {X, X_tensor.devPtr}
+        , {DY, DY_tensor.devPtr}
+        , {scale, DX_tensor.devPtr}
+        , {mean, Mean_tensor.devPtr}
+        , {inv_variance, Inv_variance_tensor.devPtr}
+        , {scale, Scale_tensor.devPtr}
+        , {dscale, Dscale_tensor.devPtr}
+        , {dbias, Dbias_tensor.devPtr}
+        , {DX, DX_tensor.devPtr}
+    };
+    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+
+    cudnnDestroy(handle);
+}

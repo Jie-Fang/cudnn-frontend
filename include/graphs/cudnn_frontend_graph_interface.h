@@ -7,6 +7,7 @@
 #include "graphs/cudnn_frontend_node_conv_fprop.h"
 #include "graphs/cudnn_frontend_node_conv_dgrad.h"
 #include "graphs/cudnn_frontend_node_conv_wgrad.h"
+#include "graphs/cudnn_frontend_node_dbn.h"
 #include "graphs/cudnn_frontend_node_dbn_weight.h"
 #include "graphs/cudnn_frontend_node_genstats.h"
 #include "graphs/cudnn_frontend_node_matmul.h"
@@ -209,6 +210,8 @@ public:
 
     std::array<std::shared_ptr<Tensor>, 5> dbn_weight(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, std::shared_ptr<Tensor>, DBN_weight);
     DBN_weight::Outputs dbn_weight(DBN_weight::Inputs, DBN_weight);
+
+    DBN::Outputs batchnorm_backward(DBN::Inputs, DBN);
 
     std::array<std::shared_ptr<Tensor>, 2> genstats(std::shared_ptr<Tensor>, Genstats);
     Genstats::Outputs genstats(Genstats::Inputs, Genstats);
@@ -533,6 +536,20 @@ inline Batchnorm::Outputs Graph::batchnorm(Batchnorm::Inputs inputs, Batchnorm o
     options.inputs = inputs;
 
     sub_nodes.emplace_back(std::make_unique<BatchNormNode>(options.get_name(), std::move(options), get_context()));
+
+    return return_outputs;
+}
+
+inline DBN::Outputs Graph::batchnorm_backward(DBN::Inputs inputs, DBN options) {
+    
+    // Set outputs
+    options.make_outputs([this](std::string const &name){return output_tensor(name);});
+    auto return_outputs = options.outputs;
+
+    // Set inputs
+    options.inputs = inputs;
+
+    sub_nodes.emplace_back(std::make_unique<DBNNode>(options.get_name(), std::move(options), get_context()));
 
     return return_outputs;
 }

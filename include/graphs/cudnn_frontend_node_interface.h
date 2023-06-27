@@ -87,6 +87,7 @@ protected:
         , BATCHNORM
         , BN_FINALIZE
         , CONVOLUTION
+        , DBN
         , DBN_WEIGHT
         , DGRAD
         , GENSTATS

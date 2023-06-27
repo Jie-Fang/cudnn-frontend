@@ -389,6 +389,61 @@ public:
     }
 };
 
+class DBN : public Operation {
+public:
+    struct Inputs {
+        std::shared_ptr<Tensor> DY;
+        std::shared_ptr<Tensor> X;
+        std::shared_ptr<Tensor> SCALE;
+        std::shared_ptr<Tensor> MEAN;
+        std::shared_ptr<Tensor> INV_VARIANCE;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor> DX;
+        std::shared_ptr<Tensor> DSCALE;
+        std::shared_ptr<Tensor> DBIAS;
+    } outputs;
+
+    std::optional<float> epsilon;
+
+    DBN(const std::string name) : Operation(name, Tag::BN) {}
+    
+    DBN& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    DBN& set_epsilon(float const value) {
+        epsilon = value;
+        return *this;
+    }
+
+    void make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
+        outputs.DX = output_tensor(name + "_DX_output");
+        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
+        outputs.DBIAS = output_tensor(name + "_DBIAS_output");
+    }
+
+    auto fill_from_context(detail::Context const& context) -> DBN& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.DY->fill_from_context(context);
+        inputs.MEAN->fill_from_context(context);
+        inputs.INV_VARIANCE->fill_from_context(context);
+        
+        outputs.DX->fill_from_context(context);
+        outputs.DSCALE->fill_from_context(context);
+        outputs.DBIAS->fill_from_context(context);
+
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
 class DBN_weight : public Operation {
 public:
     struct Inputs {
