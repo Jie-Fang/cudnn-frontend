@@ -129,6 +129,28 @@ public:
         return {Y, mean, inv_var, next_running_mean, next_running_var};
     }
 
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor>>
+    batchnorm_backward(
+        std::string const& name,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& grad_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& mean_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& inv_variance_props_ptr,
+        cudnn_frontend::DataType_t const& compute_data_type
+    ) {
+        auto props = cudnn_frontend::graph::DBN(name)
+                        .set_compute_data_type(compute_data_type);
+        props.inputs.X = input_props_ptr;
+        props.inputs.DY = grad_props_ptr;
+        props.inputs.SCALE = scale_props_ptr;
+        props.inputs.MEAN = mean_props_ptr;
+        props.inputs.INV_VARIANCE = inv_variance_props_ptr;
+        
+        auto [DX, DScale, DBias] = graph.batchnorm_backward(props.inputs, props);
+        return {DX, DScale, DBias};
+    }
+
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
@@ -555,6 +577,15 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("in_running_var"),
              py::arg_v("epsilon", 1.0e-5),
              py::arg_v("momentum", 0.1),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        )
+        .def("batchnorm_backward", &PyGraph::batchnorm_backward,
+             py::arg_v("name", "batchnorm_backward"),
+             py::arg("grad"),
+             py::arg("input"),
+             py::arg("scale"),
+             py::arg("mean"),
+             py::arg("inv_variance"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("genstats", &PyGraph::genstats,

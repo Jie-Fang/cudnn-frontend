@@ -18,7 +18,7 @@ class SGBN(torch.nn.Module):
 def test_bn():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
-    x_gpu = torch.randn(N, C, H, H, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    x_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     scale_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     bias_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     running_mean_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
@@ -74,6 +74,57 @@ def test_bn():
         
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
+    
+@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8700, reason="DBN not supported below cudnn 8.7")
+def test_dbn():
+    # Tensors
+    N, C, H, W = 4, 16, 56, 56
+    x_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    scale_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    mean_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    inv_variance_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    dy_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
 
+    # Cudnn code
+    graph = pycudnn.pygraph("DBN", intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+
+    X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
+    DY = graph.tensor(name = "DY", dim = dy_gpu.size(), stride = dy_gpu.stride(), data_type = convert_to_cudnn_type(dy_gpu.dtype))
+    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
+    mean = graph.tensor(name = "mean", dim = mean_gpu.size(), stride = mean_gpu.stride(), data_type = convert_to_cudnn_type(mean_gpu.dtype))
+    inv_variance = graph.tensor(name = "inv_variance", dim = inv_variance_gpu.size(), stride = inv_variance_gpu.stride(), data_type = convert_to_cudnn_type(inv_variance_gpu.dtype))
+    
+    (DX, DScale, DBias) = graph.batchnorm_backward(name = "DBN"
+                                                    , grad = DY
+                                                    , input = X
+                                                    , scale = scale
+                                                    , mean = mean
+                                                    , inv_variance = inv_variance
+                                                )
+
+    DX.set_output(True)
+    DScale.set_output(True)
+    DBias.set_output(True)
+
+    graph.build()
+
+    DScale_actual = torch.zeros_like(scale_gpu)
+    DBias_actual = torch.zeros_like(scale_gpu)
+    DX_actual = torch.zeros_like(dy_gpu)
+
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+
+    graph.execute({
+                    X : x_gpu
+                    , DY : dy_gpu
+                    , scale : scale_gpu
+                    , mean : mean_gpu
+                    , inv_variance : inv_variance_gpu
+                    , DX : DX_actual
+                    , DScale : DScale_actual
+                    , DBias : DBias_actual
+                }, workspace)
+        
 if __name__ == "__main__":
     test_bn()
+    test_dbn()

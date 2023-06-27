@@ -19,7 +19,7 @@ public:
 
         options.outputs.DBIAS->set_data_type(DataType_t::FLOAT);
         options.outputs.DSCALE->set_data_type(DataType_t::FLOAT);
-        options.outputs.DX->set_data_type(DataType_t::FLOAT);
+        options.outputs.DX->set_data_type(options.inputs.DY->get_data_type());
 
         // User does not create tensor for epsilon/momentum, so create it internally
         // Data type is i/o type
