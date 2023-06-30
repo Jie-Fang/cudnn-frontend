@@ -939,13 +939,13 @@ public:
 };
 
 class Scaled_dot_product_flash_attention : public Operation {
-    friend class ScaledDotProductFlashAttentionNode;
 public:
 
     struct Inputs {
         std::shared_ptr<Tensor> Q;
         std::shared_ptr<Tensor> K;
         std::shared_ptr<Tensor> V;
+        std::shared_ptr<Tensor> Scale_k;
         std::shared_ptr<Tensor> Seed;
         std::shared_ptr<Tensor> Offset;
     } inputs;
@@ -955,16 +955,13 @@ public:
         std::shared_ptr<Tensor> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
-private:
     bool is_inference;
-    float scale_k = 1.f;
     bool padding_mask = false;
     bool alibi_mask = false;
     bool causal_mask = false;
     std::optional<float> dropout_probability;
     float dropout_scale = 1.f;
     
-public:
     Scaled_dot_product_flash_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
 
     Scaled_dot_product_flash_attention& set_is_inference(bool const value){
@@ -987,8 +984,8 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& set_scale_k(float const value){
-        scale_k = value;
+    Scaled_dot_product_flash_attention& set_scale_k(std::shared_ptr<Tensor> value){
+        inputs.Scale_k = value;
         return *this;
     }
 

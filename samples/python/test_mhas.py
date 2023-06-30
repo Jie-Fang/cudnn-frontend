@@ -101,6 +101,7 @@ def test_scale_dot_product_flash_attention():
     K_gpu = torch.as_strided(qkv_gpu, shape_K, stride_K, storage_offset=offset_K)
     V_gpu = torch.as_strided(qkv_gpu, shape_V, stride_V, storage_offset=offset_V)
 
+    Scale_k_cpu = torch.full((1,1,1,1), 0.5, dtype=torch.float32, device="cpu")
     Seed_gpu = torch.full((1,1,1,1), 123456, dtype=torch.int32, device="cuda")
     Offset_gpu = torch.full((1,1,1,1), 1, dtype=torch.int32, device="cuda")
     
@@ -109,12 +110,13 @@ def test_scale_dot_product_flash_attention():
     Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
     K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
+    Scale_k = graph.tensor(name = "Scale_k", dim = Scale_k_cpu.size(), stride = Scale_k_cpu.stride(), data_type = convert_to_cudnn_type(Scale_k_cpu.dtype), is_pass_by_value = True)
     Seed = graph.tensor(name = "Seed", dim = Seed_gpu.size(), stride = Seed_gpu.stride(), data_type = convert_to_cudnn_type(Seed_gpu.dtype))
     Offset = graph.tensor(name = "Offset", dim = Offset_gpu.size(), stride = Offset_gpu.stride(), data_type = convert_to_cudnn_type(Offset_gpu.dtype))
     O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                               , q = Q, k = K, v = V
                                               , is_inference = False
-                                              , scale_k = 0.5
+                                              , scale_k = Scale_k
                                               , use_padding_mask = True
                                               , use_causal_mask = True
                                               , dropout = (0.2, Seed, Offset)
@@ -128,6 +130,7 @@ def test_scale_dot_product_flash_attention():
     Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float32, device="cuda")
 
     graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, Seed: Seed_gpu, Offset: Offset_gpu
+                , Scale_k: Scale_k_cpu
                    , O: O_actual, Stats: Stats_actual}
                    , workspace)
 

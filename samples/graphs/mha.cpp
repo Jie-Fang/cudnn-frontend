@@ -45,12 +45,14 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     inputs.K = mha_graph.tensor(fe::graph::Tensor("K").set_dim({b, h, d   , s_kv}).set_stride({3*h*d, 3*d, 1      , 3*b*h*d}));
     inputs.V = mha_graph.tensor(fe::graph::Tensor("V").set_dim({b, h, s_kv, d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
 
+    auto scale_k = mha_graph.tensor(fe::graph::Tensor("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
+
     auto seed = mha_graph.tensor(fe::graph::Tensor("Seed").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto offset = mha_graph.tensor(fe::graph::Tensor("Offset").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention("mha")
                                                     .set_is_inference(is_inference)
                                                     .use_causal_mask()
-                                                    .set_scale_k(0.5f)
+                                                    .set_scale_k(scale_k)
                                                     .set_dropout(dropout_probability, seed, offset);
 
     auto outputs = mha_graph.scaled_dot_product_flash_attention(inputs, scaled_dot_product_flash_attention_options);
@@ -84,6 +86,8 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     void* devPtrV = (qkvTensor.devPtr + 2 * d);
     void* devPtrO = oTensor.devPtr;
 
+    float scale_k_cpu = 0.5f;
+
     int32_t scaleSize = 1;
     int32_t seed_value = 123456;
     Surface<int32_t> dropoutSeed(scaleSize, false, seed_value);
@@ -93,6 +97,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
         {inputs.Q, devPtrQ}
         , {inputs.K, devPtrK}
         , {inputs.V, devPtrV}
+        , {scale_k, &scale_k_cpu}
         , {seed, dropoutSeed.devPtr}
         , {offset, dropoutOffset.devPtr}
         , {outputs.O, devPtrO}

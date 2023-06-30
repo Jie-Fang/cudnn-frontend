@@ -433,7 +433,7 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& k
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& v
         , bool const is_inference
-        , float const scale_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_k
         , bool const use_padding_mask
         , bool const use_alibi_mask
         , bool const use_causal_mask
@@ -665,7 +665,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("k"),
              py::arg("v"),
              py::arg("is_inference"),
-             py::arg_v("scale_k", 1.f),
+             py::arg_v("scale_k", nullptr),
              py::arg_v("use_padding_mask", false),
              py::arg_v("use_alibi_mask", false),
              py::arg_v("use_causal_mask", false),
