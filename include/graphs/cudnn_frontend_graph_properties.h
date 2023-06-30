@@ -848,12 +848,12 @@ public:
 };
 
 class Scaled_dot_product_attention : public Operation {
-    friend class ScaledDotProductAttentionNode;
 public:
 
     struct Inputs {
         std::shared_ptr<Tensor> Q;
         std::shared_ptr<Tensor> K;
+        std::shared_ptr<Tensor> Scale_k;
         std::shared_ptr<Tensor> Bias;  // Optional bias after bmm1
         std::shared_ptr<Tensor> V;
         std::shared_ptr<Tensor> SEQ_LEN_Q;
@@ -867,9 +867,7 @@ public:
         std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
     } outputs;
 
-private:
     bool is_inference;
-    float scale_k = 1.f;
     bool padding_mask = false;
     bool causal_mask = false;
     std::optional<float> dropout_probability;
@@ -894,8 +892,8 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_attention& set_scale_k(float const value){
-        scale_k = value;
+    Scaled_dot_product_attention& set_scale_k(std::shared_ptr<Tensor> value){
+        inputs.Scale_k = value;
         return *this;
     }
     

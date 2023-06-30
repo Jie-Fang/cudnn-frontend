@@ -361,7 +361,7 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& seq_len_q
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& seq_len_k
         , bool const is_inference
-        , float const scale_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_k
         , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias
         , bool const use_padding_mask
         , bool const use_causal_mask
@@ -652,7 +652,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("seq_len_q"),
              py::arg("seq_len_k"),
              py::arg("is_inference"),
-             py::arg_v("scale_k", 1.f),
+             py::arg_v("scale_k", nullptr),
              py::arg_v("bias", nullptr),
              py::arg_v("use_padding_mask", false),
              py::arg_v("use_causal_mask", false),

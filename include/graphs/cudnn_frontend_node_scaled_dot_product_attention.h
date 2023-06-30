@@ -16,7 +16,6 @@ namespace cudnn_frontend::graph {
     class ScaledDotProductAttentionNode : public INode {
         std::shared_ptr<Tensor> rng_output;
         std::shared_ptr<Tensor> P;
-        std::shared_ptr<Tensor> scale;
         std::shared_ptr<Tensor> dropout_scale;
         std::shared_ptr<Tensor> negative_inf;
 
@@ -30,22 +29,26 @@ namespace cudnn_frontend::graph {
 
             // User does not create tensor for scale k, so create it internally
             // Data type is i/o type
-            scale = std::make_shared<Tensor>("scale_k");
-            scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
             dropout_scale = std::make_shared<Tensor>("dropout_scale");
             dropout_scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
             negative_inf = std::make_shared<Tensor>("negative_inf");
             negative_inf->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
             
-            // Lower options to scale options
-            auto scale_options = Pointwise("scale_k");
-            scale_options.set_mode(PointwiseMode_t::MUL);
-            scale_options.inputs.IN_0 = options.inputs.K;
-            scale_options.inputs.IN_1 = scale;
-            last_output = scale_options.outputs.OUT_0 = std::make_shared<Tensor>("after_scale_k");
-            scale_options.outputs.OUT_0->set_is_virtual(true);
-            auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), get_context());
-            sub_nodes.emplace_back(std::move(scale_node));
+            // Optional scale
+            if(options.inputs.Scale_k) {
+                // Lower options to scale options
+                auto scale_options = Pointwise("scale_k");
+                scale_options.set_mode(PointwiseMode_t::MUL);
+                scale_options.inputs.IN_0 = options.inputs.K;
+                scale_options.inputs.IN_1 = options.inputs.Scale_k;
+                last_output = scale_options.outputs.OUT_0 = std::make_shared<Tensor>("after_scale_k");
+                scale_options.outputs.OUT_0->set_is_virtual(true);
+                auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), get_context());
+                sub_nodes.emplace_back(std::move(scale_node));
+            }
+            else {
+                last_output = options.inputs.K;
+            }
 
             // Lower options to bmm1 options
             auto bmm1_options = Matmul("bmm1");
@@ -285,9 +288,6 @@ namespace cudnn_frontend::graph {
         }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
-            half scale_value = options.scale_k;
-            tensor_to_pass_by_value.emplace(scale, scale_value);
-            
             half dropout_scale_value = options.dropout_scale;
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
             

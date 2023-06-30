@@ -43,6 +43,7 @@ def test_scale_dot_product_attention_with_dropout_rng():
     SEQ_LEN_Q_gpu = torch.full((b,1,1,1), 32, dtype=torch.int32, device="cuda")
     SEQ_LEN_K_gpu = torch.full((b,1,1,1), 32, dtype=torch.int32, device="cuda")
 
+    Scale_k_cpu = torch.full((1,1,1,1), 0.5, dtype=torch.float16, device="cpu")
     Bias_gpu = torch.empty((1, h, s_q, s_kv), dtype=torch.float16, device="cuda")
     
     # Cudnn graph
@@ -52,11 +53,12 @@ def test_scale_dot_product_attention_with_dropout_rng():
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
     SEQ_LEN_Q = graph.tensor(name = "SEQ_LEN_Q", dim = SEQ_LEN_Q_gpu.size(), stride = SEQ_LEN_Q_gpu.stride(), data_type = convert_to_cudnn_type(SEQ_LEN_Q_gpu.dtype))
     SEQ_LEN_K = graph.tensor(name = "SEQ_LEN_K", dim = SEQ_LEN_K_gpu.size(), stride = SEQ_LEN_K_gpu.stride(), data_type = convert_to_cudnn_type(SEQ_LEN_K_gpu.dtype))
+    Scale_k = graph.tensor(name = "Scale_k", dim = Scale_k_cpu.size(), stride = Scale_k_cpu.stride(), data_type = convert_to_cudnn_type(Scale_k_cpu.dtype), is_pass_by_value = True)
     Bias = graph.tensor(name = "Bias", dim = Bias_gpu.size(), stride = Bias_gpu.stride(), data_type = convert_to_cudnn_type(Bias_gpu.dtype))
     O, S = graph.scaled_dot_product_attention(name = "scaled_dot_product_attention"
                                               , q = Q, k = K, v = V, seq_len_q = SEQ_LEN_Q, seq_len_k = SEQ_LEN_K
                                               , is_inference = False
-                                              , scale_k = 0.5
+                                              , scale_k = Scale_k
                                               , bias = Bias
                                               , use_padding_mask = True
                                               , use_causal_mask = True
@@ -71,6 +73,7 @@ def test_scale_dot_product_attention_with_dropout_rng():
     S_actual = torch.zeros(b * h * s_q * s_kv, dtype=torch.float16, device="cuda")
 
     graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, SEQ_LEN_Q: SEQ_LEN_Q_gpu, SEQ_LEN_K: SEQ_LEN_K_gpu
+                   , Scale_k: Scale_k_cpu
                    , Bias: Bias_gpu
                    , O: O_actual, S: S_actual}
                    , workspace)
@@ -130,7 +133,7 @@ def test_scale_dot_product_flash_attention():
     Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float32, device="cuda")
 
     graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, Seed: Seed_gpu, Offset: Offset_gpu
-                , Scale_k: Scale_k_cpu
+                   , Scale_k: Scale_k_cpu
                    , O: O_actual, Stats: Stats_actual}
                    , workspace)
 
