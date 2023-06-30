@@ -110,8 +110,8 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_mean_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_var_props_ptr,
-        float const epsilon,
-        float const momentum,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& epsilon,
+        std::shared_ptr<cudnn_frontend::graph::Tensor>& momentum,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Batchnorm(name)
@@ -575,8 +575,8 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("bias"),
              py::arg("in_running_mean"),
              py::arg("in_running_var"),
-             py::arg_v("epsilon", 1.0e-5),
-             py::arg_v("momentum", 0.1),
+             py::arg("epsilon"),
+             py::arg("momentum"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("batchnorm_backward", &PyGraph::batchnorm_backward,

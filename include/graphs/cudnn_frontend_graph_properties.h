@@ -397,6 +397,7 @@ public:
         std::shared_ptr<Tensor> SCALE;
         std::shared_ptr<Tensor> MEAN;
         std::shared_ptr<Tensor> INV_VARIANCE;
+        std::shared_ptr<Tensor> EPSILON;
     } inputs;
 
     struct Outputs {
@@ -405,8 +406,6 @@ public:
         std::shared_ptr<Tensor> DBIAS;
     } outputs;
 
-    std::optional<float> epsilon;
-
     DBN(const std::string name) : Operation(name, Tag::BN) {}
     
     DBN& set_compute_data_type(DataType_t value) {
@@ -414,8 +413,8 @@ public:
         return *this;
     }
 
-    DBN& set_epsilon(float const value) {
-        epsilon = value;
+    DBN& set_epsilon(std::shared_ptr<Tensor> epsilon) {
+        inputs.EPSILON = epsilon;
         return *this;
     }
 
@@ -432,6 +431,8 @@ public:
         inputs.DY->fill_from_context(context);
         inputs.MEAN->fill_from_context(context);
         inputs.INV_VARIANCE->fill_from_context(context);
+        
+        if(inputs.EPSILON)inputs.EPSILON->fill_from_context(context);
         
         outputs.DX->fill_from_context(context);
         outputs.DSCALE->fill_from_context(context);
@@ -669,6 +670,8 @@ public:
         std::shared_ptr<Tensor> BIAS;
         std::shared_ptr<Tensor> PREV_RUNNING_MEAN;
         std::shared_ptr<Tensor> PREV_RUNNING_VAR;
+        std::shared_ptr<Tensor> EPSILON;
+        std::shared_ptr<Tensor> MOMENTUM;
     } inputs;
 
     struct Outputs {
@@ -678,22 +681,14 @@ public:
         std::shared_ptr<Tensor> NEXT_RUNNING_MEAN;
         std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
     } outputs;
-private:
-    NormFwdPhase_t forward_phase;
-    std::optional<float> epsilon;
-    std::optional<float> momentum;
 
-public:
+    NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    Batchnorm(const std::string name) : Operation(name, Tag::BN), forward_phase(NormFwdPhase_t::NOT_SET) {}
+    Batchnorm(const std::string name) : Operation(name, Tag::BN) {}
     
     Batchnorm& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
-    }
-
-    NormFwdPhase_t get_forward_phase() const {
-        return forward_phase;
     }
 
     Batchnorm& set_forward_phase(NormFwdPhase_t const value) {
@@ -701,21 +696,13 @@ public:
         return *this;
     }
 
-    std::optional<float> get_epsilon() {
-        return epsilon;
-    }
-
-    Batchnorm& set_epsilon(float const value) {
-        epsilon = value;
+    Batchnorm& set_epsilon(std::shared_ptr<Tensor>& value) {
+        inputs.EPSILON = value;
         return *this;
     }
 
-    std::optional<float> get_momentum() {
-        return momentum;
-    }
-
-    Batchnorm& set_momentum(float const value) {
-        momentum = value;
+    Batchnorm& set_momentum(std::shared_ptr<Tensor>& value) {
+        inputs.MOMENTUM = value;
         return *this;
     }
 
@@ -734,6 +721,8 @@ public:
         inputs.BIAS->fill_from_context(context);
         inputs.PREV_RUNNING_MEAN->fill_from_context(context);
         inputs.PREV_RUNNING_VAR->fill_from_context(context);
+        inputs.EPSILON->fill_from_context(context);
+        inputs.MOMENTUM->fill_from_context(context);
         
         outputs.Y->fill_from_context(context);
         outputs.MEAN->fill_from_context(context);

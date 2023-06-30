@@ -27,11 +27,12 @@ def test_bn():
     bias_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     running_mean_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     running_var_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
-    epsilon_cpu = 1.0e-5
-    momentum_cpu = 0.1
+
+    epsilon_cpu = torch.full((1, 1, 1, 1), 1e-03, requires_grad=False, device="cpu", dtype=torch.float32)
+    momentum_cpu = torch.full((1, 1, 1, 1), 0.1, requires_grad=False, device="cpu", dtype=torch.float32)
 
     model = SGBN().eval().to("cuda")
-    Y_expected = model(x_gpu, running_mean_gpu, running_var_gpu, scale_gpu, bias_gpu, epsilon_cpu, momentum_cpu)
+    Y_expected = model(x_gpu, running_mean_gpu, running_var_gpu, scale_gpu, bias_gpu, epsilon_cpu.item(), momentum_cpu.item())
 
     # Cudnn code
     graph = pycudnn.pygraph("BN", io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
@@ -41,19 +42,21 @@ def test_bn():
     bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride())
     in_running_mean = graph.tensor(name = "in_running_mean", dim = running_mean_gpu.size(), stride = running_mean_gpu.stride())
     in_running_var = graph.tensor(name = "in_running_var", dim = running_var_gpu.size(), stride = running_var_gpu.stride())
-
+    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride())
+    momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride())
+    
     (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
                                                                                         , norm_forward_phase = pycudnn.norm_forward_phase.TRAINING
                                                                                         , input = X
                                                                                         , scale = scale, bias = bias
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var
-                                                                                        , epsilon = epsilon_cpu, momentum = momentum_cpu)
+                                                                                        , epsilon = epsilon, momentum = momentum)
 
     Y.set_output(True).set_data_type(pycudnn.data_type.HALF)
-    saved_mean.set_output(True)
-    saved_inv_var.set_output(True)
-    out_running_mean.set_output(True)
-    out_running_var.set_output(True)
+    saved_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    saved_inv_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    out_running_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    out_running_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
 
     graph.build()
 
@@ -69,6 +72,8 @@ def test_bn():
                     , bias : bias_gpu
                     , in_running_mean: running_mean_gpu
                     , in_running_var: running_var_gpu
+                    , epsilon: epsilon_cpu
+                    , momentum: momentum_cpu
                     , out_running_mean: running_mean_gpu
                     , out_running_var: running_var_gpu
                     , saved_mean : saved_mean_actual

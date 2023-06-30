@@ -11,27 +11,11 @@ namespace cudnn_frontend {
 namespace graph {
 
 class BatchNormNode : public INode {
-    std::shared_ptr<Tensor> epsilon;
-    std::shared_ptr<Tensor> momentum;
 public:
     Batchnorm options;
 
     BatchNormNode(std::string const& name, Batchnorm&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
-
-        // outputs should be float type
-        options.outputs.MEAN->set_data_type(DataType_t::FLOAT);
-        options.outputs.INV_VARIANCE->set_data_type(DataType_t::FLOAT);
-        options.outputs.NEXT_RUNNING_MEAN->set_data_type(DataType_t::FLOAT);
-        options.outputs.NEXT_RUNNING_VAR->set_data_type(DataType_t::FLOAT);
-
-        // User does not create tensor for epsilon/momentum, so create it internally
-        // Data type is i/o type
-        epsilon = std::make_shared<Tensor>("epsilon");
-        epsilon->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
-
-        momentum = std::make_shared<Tensor>("momentum");
-        momentum->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
     }
 
     Type getType() override final {
@@ -70,11 +54,29 @@ public:
         infer_per_channel_tensors(options.inputs.SCALE);
         infer_per_channel_tensors(options.inputs.BIAS);
 
+        // Set scalar tensors
+        auto infer_scalar_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor>& T) {
+            auto tensor_dim = T->get_dim();
+            if(tensor_dim.empty()) {
+                tensor_dim.resize(x_tensor_dim.size(), 1);
+                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            }
+        };
+        infer_scalar_tensors(options.inputs.EPSILON);
+        infer_scalar_tensors(options.inputs.MOMENTUM);
+
         return error_t::OK;
     }
     
     error_t validate_node() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormNode..." << std::endl;
+
+        // Norm forward phase should be set
+        if(options.forward_phase == NormFwdPhase_t::NOT_SET) {
+            auto status = error_t::ATTRIBUTE_NOT_SET;
+            getLogger() << "[cudnn_frontend] ERROR: " << status << " Forward phase not set of batchnorm node named " << name << "." << std::endl;
+            return status;
+        }
 
         auto X = options.inputs.X;
         auto const x_tensor_dim = X->get_dim();
@@ -116,8 +118,8 @@ public:
             }
             return error_t::OK;
         };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(epsilon));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(momentum));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.EPSILON));
+        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.MOMENTUM));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormNode." << std::endl;
         return error_t::OK;
@@ -129,8 +131,8 @@ public:
         options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
         options.inputs.PREV_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
         options.inputs.PREV_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        epsilon->set_uid(ICudnn::create_new_uid());
-        momentum->set_uid(ICudnn::create_new_uid());
+        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
+        options.inputs.MOMENTUM->set_uid(ICudnn::create_new_uid());
         options.outputs.Y->set_uid(ICudnn::create_new_uid());
         options.outputs.MEAN->set_uid(ICudnn::create_new_uid());
         options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
@@ -146,8 +148,8 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_VAR));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(epsilon));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(momentum));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MOMENTUM));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.BIAS));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
@@ -172,14 +174,14 @@ public:
         // Create the batchnorm operation.
         auto batchnorm_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
                                         .setNormalizationMode(NormMode_t::BATCH_NORM)
-                                        .setNormFwdPhase(options.get_forward_phase())
+                                        .setNormFwdPhase(options.forward_phase)
                                         .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
                                         .setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())), *(tensors.at(options.outputs.INV_VARIANCE->get_uid())))
                                         .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())), *(tensors.at(options.inputs.BIAS->get_uid())))
                                         .setPrevRunningMeanAndVar(*(tensors.at(options.inputs.PREV_RUNNING_MEAN->get_uid())), *(tensors.at(options.inputs.PREV_RUNNING_VAR->get_uid())))
                                         .setNextRunningMeanAndVar(*(tensors.at(options.outputs.NEXT_RUNNING_MEAN->get_uid())), *(tensors.at(options.outputs.NEXT_RUNNING_VAR->get_uid())))
-                                        .setEpsilonTensor(*(tensors.at(epsilon->get_uid())))
-                                        .setExpDecayFactorTensor(*(tensors.at(momentum->get_uid())))
+                                        .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
+                                        .setExpDecayFactorTensor(*(tensors.at(options.inputs.MOMENTUM->get_uid())))
                                         .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                                         .build();
         operations.emplace(name, std::make_shared<Operation_v8>(std::move(batchnorm_operation)));
@@ -189,8 +191,8 @@ public:
             options.inputs.X
             , options.inputs.PREV_RUNNING_MEAN
             , options.inputs.PREV_RUNNING_VAR
-            , epsilon
-            , momentum
+            , options.inputs.EPSILON
+            , options.inputs.MOMENTUM
             , options.inputs.SCALE
             , options.inputs.BIAS
             , options.outputs.Y
@@ -221,16 +223,6 @@ public:
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
-    }
-
-    virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
-        float epsilon_value = options.get_epsilon().value();
-        tensor_to_pass_by_value.emplace(epsilon, epsilon_value);
-
-        float momentum_value = options.get_momentum().value();
-        tensor_to_pass_by_value.emplace(momentum, momentum_value);
-
         return error_t::OK;
     }
 };

@@ -132,10 +132,18 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     inputs.BIAS = bias;
     inputs.PREV_RUNNING_MEAN = prev_running_mean;
     inputs.PREV_RUNNING_VAR = prev_running_var;
+
+    auto epsilon = graph.tensor(fe::graph::Tensor("epsilon").set_data_type(fe::DataType_t::FLOAT));
+    auto momentum = graph.tensor(fe::graph::Tensor("momentum").set_data_type(fe::DataType_t::FLOAT));
     
-    auto batchnorm_options = fe::graph::Batchnorm("batchnorm").set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(1.0e-5).set_momentum(0.1);
+    auto batchnorm_options = fe::graph::Batchnorm("batchnorm").set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon).set_momentum(momentum);
     auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(inputs, batchnorm_options);
     bn_output->set_is_virtual(true);
+
+    mean->set_data_type(fe::DataType_t::FLOAT);
+    inv_variance->set_data_type(fe::DataType_t::FLOAT);
+    next_running_mean->set_data_type(fe::DataType_t::FLOAT);
+    next_running_var->set_data_type(fe::DataType_t::FLOAT);
     
     auto A = graph.tensor(fe::graph::Tensor("A").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::HALF));
     A->generateStrides(CUDNN_TENSOR_NHWC);
@@ -168,6 +176,8 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     Surface<float> Next_running_var_tensor(32, false);
     Surface<float> Scale_tensor(32, false);
     Surface<float> Bias_tensor(32, false);
+    float epsilon_cpu = 1e-05;
+    float momentum_cpu = 1e-01;
     Surface<half> A_tensor(4*32*16*16, false);
     Surface<half> Y_tensor(4*32*16*16, false);
 
@@ -182,6 +192,8 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         , {next_running_var, Next_running_var_tensor.devPtr}
         , {scale, Scale_tensor.devPtr}
         , {bias, Bias_tensor.devPtr}
+        , {epsilon, &epsilon_cpu}
+        , {momentum, &momentum_cpu}
         , {A, A_tensor.devPtr}
         , {Y, Y_tensor.devPtr}
     };
@@ -223,8 +235,10 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     inputs.SCALE = scale;
     inputs.MEAN = mean;
     inputs.INV_VARIANCE = inv_variance;
-    
-    auto DBN_options = fe::graph::DBN("DBN").set_epsilon(1.0e-5);
+
+    auto epsilon = graph.tensor(fe::graph::Tensor("epsilon").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::FLOAT));
+
+    auto DBN_options = fe::graph::DBN("DBN").set_epsilon(epsilon);
     auto [DX, dscale, dbias] = graph.batchnorm_backward(inputs, DBN_options);
     DX->set_is_virtual(false);
     dscale->set_is_virtual(false);

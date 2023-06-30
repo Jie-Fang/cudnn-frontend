@@ -298,7 +298,7 @@ public:
                 // Hardcoded inside operation
 
                 // The attribute CUDNN_ATTR_OPERATION_NORM_FWD_PHASE for the norm forward operation must be set to CUDNN_NORM_FWD_TRAINING.
-                if(bn_options.get_forward_phase() != NormFwdPhase_t::TRAINING) {
+                if(bn_options.forward_phase != NormFwdPhase_t::TRAINING) {
                     break;
                 }
 
@@ -533,7 +533,11 @@ inline Batchnorm::Outputs Graph::batchnorm(Batchnorm::Inputs inputs, Batchnorm o
     auto return_outputs = options.outputs;
 
     // Set inputs
-    options.inputs = inputs;
+    options.inputs.X = inputs.X;
+    options.inputs.SCALE = inputs.SCALE;
+    options.inputs.BIAS = inputs.BIAS;
+    options.inputs.PREV_RUNNING_MEAN = inputs.PREV_RUNNING_MEAN;
+    options.inputs.PREV_RUNNING_VAR = inputs.PREV_RUNNING_VAR;
 
     sub_nodes.emplace_back(std::make_unique<BatchNormNode>(options.get_name(), std::move(options), get_context()));
 
