@@ -25,7 +25,7 @@ public:
     }
 protected:
 
-    std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
+    inline static std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
 
     std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation_v8>> operations;
     std::unordered_map<std::string, std::vector<uid_t>> tensors_in_operations;
@@ -72,7 +72,7 @@ protected:
             auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(cudnn_operations.size(), cudnn_operations.data()).build();
 
             operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
-            getLogger() << "[cudnn_frontend] INFO: " << " Successfully built Operation Graphs." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Successfully built Operation Graphs." << std::endl;
 
             // Push variant pack tensors required for this operation graph
             std::unordered_set<uid_t> variant_pack_for_operation_graph;

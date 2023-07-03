@@ -89,9 +89,6 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0));
         
         auto const port_count = get_pointwise_mode_port_count(options.get_mode().value());
         if(port_count >= 3) {
@@ -102,6 +99,9 @@ public:
             getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors T:" << std::endl;
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_2));
         }
+
+        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0));
 
         return error_t::OK;
     }

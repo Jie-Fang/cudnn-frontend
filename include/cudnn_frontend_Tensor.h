@@ -57,7 +57,7 @@ class Tensor_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
-           << " Datatype: " << data_type << " Id: " << std::to_string(id) << " Alignment: " << alignment
+           << " Datatype: " << data_type << " Id: " << std::to_string(id)
            << " nDims " << nDims << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
         ss << " Dim [ ";
         for (auto i = 0; i < nDims; i++) {
@@ -74,8 +74,9 @@ class Tensor_v8 : public BackendDescriptor {
             ss << btensor_strA[i];
         }
         ss << " ]";
-        ss << " isVirtual: " << std::to_string(isVirtual);
-        ss << " isByValue: " << std::to_string(isByValue);
+        ss << " isVirtual: " << isVirtual
+            << " isByValue: " << isByValue
+            << " Alignment: " << alignment;
 #if (CUDNN_VERSION >= 8300)
         ss << " reorder_type: " << reorder_type;
 #endif
@@ -498,7 +499,7 @@ class TensorBuilder_v8 {
             set_error_and_throw_exception(&m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR cudnnFinalize failed");
             return std::move(m_tensor);
         }
-        getLogger() << "[cudnn_frontend] " << m_tensor << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << m_tensor << std::endl;
         return std::move(m_tensor);
     }
 
