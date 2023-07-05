@@ -342,6 +342,10 @@ public:
     }
 };
 
+inline std::ostream& operator<<(std::ostream& os, const INode& node) {
+    node.print(os, 0);
+    return os;
+}
 
 class Execution_plan_list {
 

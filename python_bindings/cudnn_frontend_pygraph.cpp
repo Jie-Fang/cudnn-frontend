@@ -63,10 +63,10 @@ char* extract_data_pointer(py::object obj) {
 
 // This class is only meant direct pythonic API calls to c++ Graph class.
 class PyGraph {
+public:
     // This Graph class is the sole structure which implicitly makes PyGraph own all tensors, nodes, and cudnn descriptors.
     cudnn_frontend::graph::Graph graph;
 
-public:
     PyGraph(std::string const &name,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
@@ -674,7 +674,10 @@ void init_pygraph_submodule(py::module_ &m) {
         )
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
-        .def("execute", &PyGraph::execute);
-
-
+        .def("execute", &PyGraph::execute)
+        .def("__repr__", [](PyGraph const& pygraph){
+            std::stringstream ss;
+            ss << pygraph.graph;
+            return ss.str();
+        });
 }
