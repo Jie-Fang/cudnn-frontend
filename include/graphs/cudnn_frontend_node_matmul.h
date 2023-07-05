@@ -163,6 +163,29 @@ namespace cudnn_frontend::graph {
 
         error_t createExecutionPlans(cudnnHandle_t) override final {
             return error_t::OK;
+        }        
+
+        void print(std::ostream& os, size_t depth) const override final {
+            os << std::string(depth, '\t') << "{\n";
+            
+            os << std::string(depth + 1, '\t') << "name: " << name << ",\n";
+            
+            os << std::string(depth + 1, '\t') << "inputs: [\n";
+            os << std::string(depth + 2, '\t') << "A: " << *(options.inputs.A) << ",\n";
+            os << std::string(depth + 2, '\t') << "B: " << *(options.inputs.B) << ",\n";
+            if(options.inputs.M_override)
+                os << std::string(depth + 2, '\t') << "M_override: " << *(options.inputs.M_override) << ",\n";
+            if(options.inputs.N_override)
+                os << std::string(depth + 2, '\t') << "N_override: " << *(options.inputs.N_override) << ",\n";
+            if(options.inputs.K_override)
+                os << std::string(depth + 2, '\t') << "K_override: " << *(options.inputs.K_override) << ",\n";
+            os << std::string(depth + 1, '\t') << "],\n";
+            
+            os << std::string(depth + 1, '\t') << "outputs: [\n";
+            os << std::string(depth + 2, '\t') << "C: " << *(options.outputs.C) << ",\n";
+            os << std::string(depth + 1, '\t') << "],\n";
+            
+            os << std::string(depth, '\t') << "}\n";
         }
     };
 

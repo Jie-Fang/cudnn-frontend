@@ -780,8 +780,8 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
 
 inline Scaled_dot_product_flash_attention::Outputs Graph::scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention::Inputs inputs, Scaled_dot_product_flash_attention options) {    
     // Make required output tensors
-    auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
-    auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "_softmax_output");
+    auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
+    auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
 
     // Set inputs
     options.inputs.Q = inputs.Q;

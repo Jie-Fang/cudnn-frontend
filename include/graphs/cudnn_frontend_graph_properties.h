@@ -153,25 +153,28 @@ public:
         return *this;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Tensor& props);
+    void print(std::ostream& os) const {
+        os << "{" 
+        << " name: " << name << ","
+        << " data_type: " << data_type << ","
+        << " dim: [";
+        for(size_t i = 0; i < dim.size(); ++i) {
+            os << dim[i] << ",";
+        }
+        os << "],"
+        << " stride: [";
+        for(size_t i = 0; i < stride.size(); ++i) {
+            os << stride[i] << ",";
+        }
+        os << "],"
+        << " is_virtual: " << is_virtual << ","
+        << " is_pass_by_value: " << is_pass_by_value
+        << "}";
+    }
 };
 
-inline std::ostream& operator<<(std::ostream& os, const Tensor& props) {
-    os << "{" 
-    << " name: '" << props.get_name() << "',"
-    << " dim: [";
-    for(size_t i = 0; i < props.get_dim().size(); ++i) {
-        os << props.get_dim()[i] << ",";
-    }
-    os << "],"
-    << " stride: [";
-    for(size_t i = 0; i < props.get_stride().size(); ++i) {
-        os << props.get_stride()[i] << ",";
-    }
-    os << "],"
-    << " is_virtual: " << props.get_is_virtual() << ","
-    << " is_pass_by_value: " << props.get_is_pass_by_value() << ","
-    << "}";
+inline std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
+    tensor.print(os);
     return os;
 }
 

@@ -72,7 +72,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     REQUIRE(fe::error_t::OK == mha_graph.validate());
     REQUIRE(fe::error_t::OK == mha_graph.is_supported());
     REQUIRE(fe::error_t::OK == mha_graph.build(handle));
-
+    
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 

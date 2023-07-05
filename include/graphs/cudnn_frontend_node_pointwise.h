@@ -193,6 +193,26 @@ public:
     error_t createExecutionPlans(cudnnHandle_t) override final {
         return error_t::OK;
     }
+
+    void print(std::ostream& os, size_t depth) const override final {
+        os << std::string(depth, '\t') << "{\n";
+        
+        os << std::string(depth + 1, '\t') << "name: " << name << ",\n";
+        
+        os << std::string(depth + 1, '\t') << "inputs: [\n";
+        os << std::string(depth + 2, '\t') << "IN_0: " << *(options.inputs.IN_0) << ",\n";
+        if(options.inputs.IN_1)
+            os << std::string(depth + 2, '\t') << "IN_1: " << *(options.inputs.IN_1) << ",\n";
+        if(options.inputs.IN_2)
+            os << std::string(depth + 2, '\t') << "IN_2: " << *(options.inputs.IN_2) << ",\n";
+        os << std::string(depth + 1, '\t') << "],\n";
+        
+        os << std::string(depth + 1, '\t') << "outputs: [\n";
+        os << std::string(depth + 2, '\t') << "OUT_0: " << *(options.outputs.OUT_0) << ",\n";
+        os << std::string(depth + 1, '\t') << "],\n";
+        
+        os << std::string(depth, '\t') << "}\n";
+    }
 };
 
 } // namespace cudnn_frontend::graph

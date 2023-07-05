@@ -76,7 +76,7 @@ private:
             }
         }
         return error_t::OK;
-    }  
+    }
 
 protected:
     // Type of each node. Nodes can either be a composite (value COMPOSITE) or
@@ -325,7 +325,23 @@ public:
     INode(std::string const& name, detail::Context const& context) : name(name), context(context) {}
 
     virtual ~INode() {};
+
+    virtual void print(std::ostream& os, size_t depth) const {
+        os << std::string(depth, '\t') << "{\n";
+
+        os << std::string(depth + 1, '\t') << "name: " << name << ",\n";
+        
+        os << std::string(depth + 1, '\t') << "nodes: [\n";
+        for(auto const& sub_node: sub_nodes) {
+            sub_node->print(os, depth + 2);
+            os << ",";
+        }
+        os << std::string(depth + 1, '\t') << "],\n";
+
+        os << std::string(depth, '\t') << "}\n";
+    }
 };
+
 
 class Execution_plan_list {
 

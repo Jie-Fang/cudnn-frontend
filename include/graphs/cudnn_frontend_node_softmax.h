@@ -152,5 +152,4 @@ namespace cudnn_frontend::graph {
             return error_t::OK;
         }
     };
-
 } // namespace cudnn_frontend::graph
