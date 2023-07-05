@@ -20,6 +20,5 @@ if (CUDNN_FRONTEND_BUILD_SAMPLES)
 endif()
 
 if (CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS)
-    add_subdirectory(pybind11)
     add_subdirectory(python_bindings)
 endif()

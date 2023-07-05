@@ -13,6 +13,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(dlpack)
 
+FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11
+    GIT_TAG        v2.10.4
+)
+FetchContent_MakeAvailable(pybind11)
+
 # Find cudnn
 include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
