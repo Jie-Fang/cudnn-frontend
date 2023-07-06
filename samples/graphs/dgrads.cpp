@@ -48,12 +48,12 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> dy_tensor(4*64*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
@@ -67,7 +67,7 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
         , {X, x_tensor.devPtr}
         , {DX, dx_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }
 
@@ -128,12 +128,12 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> dy_tensor(4*64*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
@@ -165,6 +165,6 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
         , {eq_scale_x, eq_scale_x_tensor.devPtr}
         , {drelu_output, drelu_output_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

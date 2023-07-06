@@ -33,9 +33,9 @@ namespace cudnn_frontend::graph {
             auto const b_tensor_dim = b_tensor_prop->get_dim();
             auto c_tensor_dim = c_tensor_prop->get_dim();
             if(a_tensor_dim.size() != b_tensor_dim.size()) {
-                auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensions mismatch at A and B ports of " << name << " " << a_tensor_dim.size() << ":" << b_tensor_dim.size() << "." << std::endl;
-                return status;
+                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at A and B ports of " + name;
+                return {status, message};
             }
             
             if(c_tensor_dim.empty()) {
@@ -46,13 +46,13 @@ namespace cudnn_frontend::graph {
                 c_tensor_prop->set_dim(c_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
             } else {
                 if(a_tensor_dim.size() != c_tensor_dim.size()) {
-                    auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                    getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at A and C ports of " << name << "." << std::endl;
-                    return status;
+                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at A and C ports of " + name;
+                return {status, message};
                 }
             }
 
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t assign_uids_node() override final {
@@ -62,7 +62,7 @@ namespace cudnn_frontend::graph {
             if(options.inputs.N_override)options.inputs.N_override->set_uid(ICudnn::create_new_uid());
             if(options.inputs.K_override)options.inputs.K_override->set_uid(ICudnn::create_new_uid());
             options.outputs.C->set_uid(ICudnn::create_new_uid());
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createTensors() override final {
@@ -80,7 +80,7 @@ namespace cudnn_frontend::graph {
             }
             getLogger() << "[cudnn_frontend] INFO: " << "Built MatmulNode tensors at node name " << name << std::endl;
 
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
         
         error_t createOperations() override final {
@@ -154,15 +154,15 @@ namespace cudnn_frontend::graph {
             }
             #endif
             
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createOperationGraphs(cudnnHandle_t) override final {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createExecutionPlans(cudnnHandle_t) override final {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }        
 
         void print(std::ostream& os, size_t depth) const override final {

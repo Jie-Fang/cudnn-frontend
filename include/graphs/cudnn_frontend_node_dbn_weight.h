@@ -58,7 +58,7 @@ public:
         infer_per_channel_tensors(options.outputs.EQ_SCALE_DY);
         infer_per_channel_tensors(options.outputs.EQ_SCALE_X);
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t validate_node() override final {
@@ -70,18 +70,18 @@ public:
         auto X = options.inputs.X;
         auto const x_tensor_dim = X->get_dim();
         if(dy_tensor_dim != x_tensor_dim) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at DY and X ports of " << name << "." << std::endl;
-            return status;
+            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DY ports of " + name;
+            return {status, message};
         }
         
-        auto validate_per_channel_tensors = [&dy_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+        auto validate_per_channel_tensors = [this, &dy_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+            error_t status = {error_code_t::OK, ""};
             if(dy_tensor_dim[1] != T->get_dim()[1]) {
-                auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at DY and Y ports." << std::endl;
-                return status;
+                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
+                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at Y and DY ports of " + name;
             }
-            return error_t::OK;
+            return status;
         };
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.INV_VARIANCE));
@@ -93,7 +93,7 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_SCALE_X));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated DBNWeightNode." << std::endl;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t assign_uids_node() override final {
@@ -107,7 +107,7 @@ public:
         options.outputs.EQ_SCALE_DY->set_uid(ICudnn::create_new_uid());
         options.outputs.EQ_SCALE_X->set_uid(ICudnn::create_new_uid());
         options.outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -127,7 +127,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t createOperations() override final {
@@ -177,15 +177,15 @@ public:
         }
         #endif
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 };
 

@@ -14,6 +14,8 @@
 
 namespace cudnn_frontend {
 
+using op_graph_to_engine_configs = std::unordered_map<std::string, EngineConfigList>;
+
 class ICudnn {
 public:
     using uid_t = int64_t;
@@ -43,7 +45,7 @@ protected:
     error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor> const& props) {
         // Check whether tensor already created
         if(tensors.find(props->get_uid()) != tensors.end()) {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         // Create new backend tensor
@@ -59,7 +61,7 @@ protected:
                         .build();
         tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
         
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t create_cudnn_operation_graphs(cudnnHandle_t handle, std::vector<std::vector<std::string>> const& sub_graphs) {
@@ -82,7 +84,7 @@ protected:
             }
             variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
         }
-	    return error_t::OK;
+	    return {error_code_t::OK, ""};
     }
 
     error_t query_heuristics() {
@@ -124,7 +126,7 @@ protected:
             mode_b_engine_configs.emplace(op_graph->getTag(), mode_b_configs);
             fallback_engine_configs.emplace(op_graph->getTag(), fallback_configs);
         }
-	    return error_t::OK;
+	    return {error_code_t::OK, ""};
     }
 
     error_t create_cudnn_execution_plan(cudnnHandle_t handle) {
@@ -146,7 +148,7 @@ protected:
                     // If last config, return error
                     // or else continue to the next config
                     if (i == filtered_configs.second.size() - 1) {
-                        return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+                        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "No successful plan built."};
                     }
                     continue;
                 }
@@ -165,7 +167,7 @@ protected:
                     // The last config didn't work (E.g. all configs didn't work)
                     getLogger() << "[cudnn_frontend] ERROR: " << "Config " << i << " failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
                     if (i == filtered_configs.second.size() - 1) {
-                        return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+                        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "All plan creation failed"};
                     }
                     continue;
                 }
@@ -173,7 +175,7 @@ protected:
             }
         }
 
-	    return error_t::OK;
+	    return {error_code_t::OK, ""};
     }
 
 public:
@@ -203,8 +205,8 @@ public:
             std::vector<uid_t> uids;
             for(auto const& uid: variant_pack_uid) {
                 if (auto search = tensor_uid_to_pointer_map.find(uid); search == tensor_uid_to_pointer_map.end()) {
-                    getLogger() << "[cudnn_frontend] ERROR: " << uid << " does not exist in variant pack." << std::endl;
-                    return error_t::INVALID_VARIANT_PACK;
+                    std::string message = "[cudnn_frontend] ERROR: " + std::to_string(uid) + " does not exist in variant pack.";
+                    return {error_code_t::INVALID_VARIANT_PACK, message};
                 }
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
                 uids.push_back(uid);
@@ -215,20 +217,20 @@ public:
                                 .setWorkspacePointer(workspace_ptr)
                                 .build();
             if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
-                getLogger() << "[cudnn_frontend] ERROR: Variant pack creation failed with " << variant_pack.get_error() << std::endl;
-                return error_t::INVALID_VARIANT_PACK; 
+                std::string message = "[cudnn_frontend] ERROR: Variant pack creation failed with " + std::string(variant_pack.get_error());
+                return {error_code_t::INVALID_VARIANT_PACK, message}; 
             }
             getLogger() << "[cudnn_frontend] INFO: Built variant pack for " << execution_plan->getTag() << "..." << std::endl;
 
             auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
             if (status != CUDNN_STATUS_SUCCESS) {
-                getLogger() << "[cudnn_frontend] ERROR: Graph execution failed." << std::endl;
-                return error_t::GRAPH_EXECUTION_FAILED; 
+                std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
+                return {error_code_t::GRAPH_EXECUTION_FAILED, message}; 
             }
             getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
         }
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
 };

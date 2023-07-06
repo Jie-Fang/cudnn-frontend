@@ -121,7 +121,7 @@ class Plans {
             cudaEventDestroy(stop);
 
             getLogger() << "Autotuned " << successful_plan_count << " plans." << std::endl;
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         std::function<error_t(Plans *, cudnnHandle_t , std::unordered_map<std::shared_ptr<Tensor>, void *>, void *, void *)> autotune_impl = &Plans::autotune_default_impl;
@@ -134,9 +134,9 @@ class Plans {
 
 inline Plans& Plans::filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
     // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_t too?
+    // Should the return value be changed to error_code_t too?
     auto status = list_of_engine_configs.filter_out_behavior_notes(notes);
-    if(status != error_t::OK) {
+    if(status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl; 
     }
     return *this;
@@ -144,9 +144,9 @@ inline Plans& Plans::filter_out_behavior_notes(std::vector<cudnnBackendBehaviorN
 
 inline Plans& Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
     // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_t too?
+    // Should the return value be changed to error_code_t too?
     auto status = list_of_engine_configs.filter_out_numeric_notes(notes);
-    if(status != error_t::OK) {
+    if(status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl; 
     }
     return *this;
@@ -154,9 +154,9 @@ inline Plans& Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalN
 
 inline Plans& Plans::build_plans(cudnnHandle_t h){
     // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_t too?
+    // Should the return value be changed to error_code_t too?
     auto status = list_of_engine_configs.build_plans(h);
-    if(status != error_t::OK) {
+    if(status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Plan building failed." << std::endl; 
     }
     return *this;
@@ -235,27 +235,29 @@ public:
         int32_t device = 0;
 
         if (cudaGetDeviceCount(&count) != cudaSuccess) {
-            return error_t::INVALID_CUDA_DEVICE;
+            return {error_code_t::INVALID_CUDA_DEVICE, "[cudnn_frontend] Error: cudaGetDeviceCount failed"};
         }
         if (count == 0 || cudaGetDevice(&device) != cudaSuccess) {
-            return error_t::INVALID_CUDA_DEVICE;
+            return {error_code_t::INVALID_CUDA_DEVICE,"[cudnn_frontend] Error: cudaGetDevice failed"};
         }
         if (cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device) != cudaSuccess) {
-            return error_t::INVALID_CUDA_DEVICE;
+            return {error_code_t::INVALID_CUDA_DEVICE, "[cudnn_frontend] Error: cudaDevAttrComputeCapabilityMajor failed"};
         }
         if (cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device) != cudaSuccess) {
-            return error_t::INVALID_CUDA_DEVICE;
+            return {error_code_t::INVALID_CUDA_DEVICE, "[cudnn_frontend] Error: cudaDevAttrComputeCapabilityMinor failed"};
         }
         auto device_version = (major * 10) + (minor * 1);
 
         auto cudnn_version = cudnnGetVersion();
-        RETURN_CUDNN_FRONTEND_ERROR_IF(device_version < 70, error_t::UNSUPPORTED_GRAPH_FORMAT);
+        error_t device_version_error = {error_code_t::UNSUPPORTED_GRAPH_FORMAT, "Unsupported device version"};
+        error_t no_error  = {error_code_t::OK, ""};
+        RETURN_CUDNN_FRONTEND_ERROR_IF(device_version < 70, device_version_error );
 
         bool is_supported = false;
 
         // No rules for cudnn 8.9.0 and below.
         // Instead will be performed by backend.
-        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_version <= 8900, error_t::OK);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_version <= 8900, no_error);
 
         auto const entrance_node_tag = sub_nodes.front()->getType();
 
@@ -269,7 +271,7 @@ public:
                                                     , INode::Type::BATCHNORM
                                                     , INode::Type::POINTWISE
                                                 };
-            RETURN_CUDNN_FRONTEND_ERROR_IF(supported_tags.find(entrance_node_tag) != supported_tags.end(), error_t::OK);
+            RETURN_CUDNN_FRONTEND_ERROR_IF(supported_tags.find(entrance_node_tag) != supported_tags.end(), no_error);
         }
         
         // Only contains checks for
@@ -319,27 +321,27 @@ public:
                     break;
                 }
                 
-                return error_t::OK;
+                return {error_code_t::OK, ""};
                 break;
             }
             case INode::Type::SCALED_DOT_PRODUCT_ATTENTION: {
                 // Only contains checks for
                 // Section 3.3.3.3
-                return error_t::OK;
+                return {error_code_t::OK, ""};
             }
             default: {
                 break;
             }
         }
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_supported, error_t::OK);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_supported, no_error);
 
         // Section 3.3.4 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#compile-specialized-engine
         // Section 3.3.2 https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#runtime-fusion-engine
         
         // Check if g1 can be applied
         if ((device_version < 80) && ((entrance_node_tag != INode::Type::CONVOLUTION) && (entrance_node_tag != INode::Type::MATMUL))) {
-            getLogger() << "Device version insufficient" << std::endl;
-            return error_t::UNSUPPORTED_GRAPH_FORMAT;
+            std::string message = "[cudnn_frontend] Error: Device version insufficient";
+            return {error_code_t::UNSUPPORTED_GRAPH_FORMAT, message};
         }
 
         std::set<INode::Type> g1_supported_pattern = {/*Operation::Tag::Concat, Operation::Tag::Signal */INode::Type::POINTWISE};
@@ -400,8 +402,8 @@ public:
         }
 
         // TODO
-        if (is_supported == false) {return error_t::OK;}
-        return error_t::OK;
+        if (is_supported == false) {return {error_code_t::OK, ""};}
+        return {error_code_t::OK, ""};
     }
 
     Plans
@@ -409,11 +411,11 @@ public:
 
     error_t set_executor(Plans const & plan) {
         if (plan.list_of_engine_configs.get_candidate() == nullptr) {
-            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "[cudnn_frontend] ERROR: No validate candidate for plan execution"};
         }
         execution_plans.emplace_back(plan.list_of_engine_configs.get_candidate());
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t get_engine_configs(HeurMode_t mode, Execution_plan_list &plan_list) {
@@ -421,17 +423,23 @@ public:
 
         switch (mode) {
         case HeurMode_t::HEUR_MODE_A:
-            if(mode_a_engine_configs.size() == 0){return error_t::HEURISTIC_QUERY_FAILED;}
+            if(mode_a_engine_configs.size() == 0){
+                return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_a"};
+            }
             plan_list.set_tag(mode_a_engine_configs.begin()->first);
             plan_list.set_engine_configs(mode_a_engine_configs.begin()->second);
             break;
         case HeurMode_t::HEUR_MODE_B:
-            if(mode_b_engine_configs.size() == 0){return error_t::HEURISTIC_QUERY_FAILED;}
+            if(mode_b_engine_configs.size() == 0){
+                return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_b"};
+            }
             plan_list.set_tag(mode_b_engine_configs.begin()->first);
             plan_list.set_engine_configs(mode_b_engine_configs.begin()->second);
             break;
         case HeurMode_t::HEUR_MODE_FALLBACK:
-            if(fallback_engine_configs.size() == 0){return error_t::HEURISTIC_QUERY_FAILED;}
+            if(fallback_engine_configs.size() == 0){
+                return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_fallback"};
+            }
             plan_list.set_tag(fallback_engine_configs.begin()->first);
             plan_list.set_engine_configs(fallback_engine_configs.begin()->second);
             break;
@@ -440,7 +448,7 @@ public:
         getLogger() << "[cudnn_frontend] INFO: Querying engine config properties." << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(plan_list.query_properties());
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t handle) override final {
@@ -457,13 +465,13 @@ public:
         getLogger() << "Operation Graph has " << operation_names.size() << " operations." << std::endl;
 
         auto status = create_cudnn_operation_graphs(handle, {operation_names});
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: " << status.get_code() << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
             return status;
         }
 
         getLogger() << "[cudnn_frontend] INFO: Partitioned FlatNode." << std::endl;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t handle) override final {
@@ -471,22 +479,22 @@ public:
 
         (void)handle;
         // auto status = create_cudnn_execution_plan(handle);
-        // if(status != error_t::OK) {
+        // if(status != error_code_t::OK) {
         //     getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
         //     return status;
         // }
 
         getLogger() << "[cudnn_frontend] INFO: Created Execution Plans." << std::endl;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 };
 
 inline Plans Graph::get_execution_plan_list(HeurMode_t mode) {
     Plans plan_list;
     // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_t too?
+    // Should the return value be changed to error_code_t too?
     auto status = get_engine_configs(mode, plan_list.list_of_engine_configs);
-    if(status != error_t::OK) {
+    if(status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl; 
     }
     return plan_list;

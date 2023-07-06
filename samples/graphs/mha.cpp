@@ -69,14 +69,14 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
-    REQUIRE(fe::error_t::OK == mha_graph.validate());
-    REQUIRE(fe::error_t::OK == mha_graph.is_supported());
-    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+    REQUIRE(mha_graph.validate().is_good());
+    REQUIRE(mha_graph.is_supported().is_good());
+    REQUIRE(mha_graph.build(handle).is_good());
     
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+    REQUIRE(mha_graph.set_executor(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -109,7 +109,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -164,14 +164,14 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
-    REQUIRE(fe::error_t::OK == mha_graph.validate());
-    REQUIRE(fe::error_t::OK == mha_graph.is_supported());
-    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+    REQUIRE(mha_graph.validate().is_good());
+    REQUIRE(mha_graph.is_supported().is_good());
+    REQUIRE(mha_graph.build(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+    REQUIRE(mha_graph.set_executor(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -210,7 +210,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -259,12 +259,12 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+    REQUIRE(mha_graph.build(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+    REQUIRE(mha_graph.set_executor(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -303,7 +303,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     checkCudaErr(cudaDeviceSynchronize());
 
@@ -351,12 +351,12 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == mha_graph.build(handle));
+    REQUIRE(mha_graph.build(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == mha_graph.set_executor(plans));
+    REQUIRE(mha_graph.set_executor(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -392,7 +392,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
-    REQUIRE(fe::error_t::OK == mha_graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     checkCudaErr(cudaDeviceSynchronize());
 

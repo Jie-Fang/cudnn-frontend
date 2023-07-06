@@ -61,7 +61,7 @@ public:
         infer_scalars(options.inputs.EXP_AVG);
         infer_scalars(options.inputs.ACCUM_COUNT);
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t validate_node() override final {
@@ -71,13 +71,14 @@ public:
         auto const sum_tensor_dim = SUM->get_dim();
 
         auto validate_per_channel_tensors = [this, &sum_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+            error_t status = {error_code_t::OK, ""};
             auto tensor_dim = T->get_dim();
             if(sum_tensor_dim != tensor_dim) {
-                auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at SUM and Y ports of " << name << "." << std::endl;
+                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
+                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at SUM and Y ports of " + name + ".";
                 return status;
             }
-            return error_t::OK;
+            return status;
         };
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SQ_SUM));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
@@ -92,23 +93,24 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR));
 
         auto validate_scalars = [] (std::shared_ptr<Tensor> const& T) {
+            error_t status = {error_code_t::OK, ""};
             auto tensor_dim = T->get_dim();
             bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {
                 return element == 1;
             });
             if(!allOnes) {
-                auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at SUM and Y ports." << std::endl;
+                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
+                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at SUM and Y ports.";
                 return status;
             }
-            return error_t::OK;
+            return status;
         };
         CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.EPSILON));
         CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.EXP_AVG));
         CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.ACCUM_COUNT));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormFinalizeNode." << std::endl;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t assign_uids_node() override final {
@@ -127,7 +129,7 @@ public:
         options.outputs.EQ_SCALE->set_uid(ICudnn::create_new_uid());
         options.outputs.NEXT_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
         options.outputs.NEXT_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -153,7 +155,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built BatchNormFinalizeNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t createOperations() override final {
@@ -213,15 +215,15 @@ public:
         }
         #endif
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 };
 

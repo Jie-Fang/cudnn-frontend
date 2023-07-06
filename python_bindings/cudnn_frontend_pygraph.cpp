@@ -18,45 +18,45 @@ using namespace pybind11::literals;
 
 // Raise C++ exceptions corresponding to C++ FE error codes.
 // Pybinds will automatically convert C++ exceptions to pythpn exceptions.
-void throw_if(bool const cond, cudnn_frontend::error_t const error_code, std::string const& error_msg) {
+void throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::string const& error_msg) {
     if(cond == false)
         return;
 
     switch(error_code) {
-        case cudnn_frontend::error_t::OK:
+        case cudnn_frontend::error_code_t::OK:
             return;
-        case cudnn_frontend::error_t::ATTRIBUTE_NOT_SET:
+        case cudnn_frontend::error_code_t::ATTRIBUTE_NOT_SET:
             throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_t::SHAPE_DEDUCTION_FAILED:
+        case cudnn_frontend::error_code_t::SHAPE_DEDUCTION_FAILED:
             throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_t::INVALID_TENSOR_NAME:
+        case cudnn_frontend::error_code_t::INVALID_TENSOR_NAME:
             throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_t::INVALID_VARIANT_PACK:
+        case cudnn_frontend::error_code_t::INVALID_VARIANT_PACK:
             throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
+        case cudnn_frontend::error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
             throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_t::GRAPH_EXECUTION_FAILED:
+        case cudnn_frontend::error_code_t::GRAPH_EXECUTION_FAILED:
             throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_t::HEURISTIC_QUERY_FAILED:
+        case cudnn_frontend::error_code_t::HEURISTIC_QUERY_FAILED:
             throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_t::INVALID_CUDA_DEVICE:
+        case cudnn_frontend::error_code_t::INVALID_CUDA_DEVICE:
             throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_t::UNSUPPORTED_GRAPH_FORMAT:
+        case cudnn_frontend::error_code_t::UNSUPPORTED_GRAPH_FORMAT:
             throw std::runtime_error(error_msg);
     }
 }
 
 char* extract_data_pointer(py::object obj) {
-    throw_if(!py::hasattr(obj, "__dlpack__"), cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Object does not have the __dlpack__() method");
+    throw_if(!py::hasattr(obj, "__dlpack__"), cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Object does not have the __dlpack__() method");
 
     py::capsule capsule = obj.attr("__dlpack__")();
-    throw_if(capsule.is_none(), cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Failed to retrieve the DLPack capsule.");
+    throw_if(capsule.is_none(), cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Failed to retrieve the DLPack capsule.");
 
     DLManagedTensor *managed = static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
-    throw_if(managed == nullptr, cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
+    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
 
     DLDeviceType device_type = managed->dl_tensor.device.device_type;
-    throw_if(device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged, cudnn_frontend::error_t::INVALID_VARIANT_PACK, "Invalid device type.");
+    throw_if(device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid device type.");
 
     return (char *)managed->dl_tensor.data + managed->dl_tensor.byte_offset;
 }
@@ -504,18 +504,18 @@ public:
         cudnnHandle_t handle;
         cudnnCreate(&handle);
         auto status = graph.build(handle);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Backend graph building failed.");
+        throw_if(status.is_bad(), status.get_code(), status.get_message());
 
         auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
         status = graph.set_executor(plans);
-        if (status != cudnn_frontend::error_t::OK) {
+        if (status.is_bad()) {
             auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
                         .build_plans(handle);
 
             status = graph.set_executor(plans);
-            throw_if(status != cudnn_frontend::error_t::OK, status, "Backend Plan building failed.");
+            throw_if(status.is_bad(), status.get_code(), status.get_message());
         }
         cudnnDestroy(handle);
 
@@ -539,7 +539,7 @@ public:
 
         // TODO: Probably concatenate in a macro?
         auto status = graph.execute(handle, var_pack_, workspace_ptr);
-        throw_if(status != cudnn_frontend::error_t::OK, status, "Graph execution failed");
+        throw_if(status.is_bad(), status.get_code(), status.get_message());
         
         cudnnDestroy(handle);
         return;

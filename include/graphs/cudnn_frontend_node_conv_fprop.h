@@ -33,9 +33,9 @@ public:
         auto const w_tensor_dim = W->get_dim();
         auto y_tensor_dim = Y->get_dim();
         if(x_tensor_dim.size() != w_tensor_dim.size()) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-            getLogger() << "[cudnn_frontend] ERROR: " << status << "  Tensor dimensionality mismatch at X and W ports of " << name << "." << std::endl;
-            return status;
+            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and W ports of " + name ;
+            return {status, message};
         }
 
         if(y_tensor_dim.empty()) {
@@ -54,20 +54,20 @@ public:
             Y->set_dim(y_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
         } else {
             if(x_tensor_dim.size() != y_tensor_dim.size()) {
-                auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
-                return status;
+                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name ;
+                return {status, message};
             }
         }
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.inputs.W->set_uid(ICudnn::create_new_uid());
         options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -80,7 +80,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
@@ -134,15 +134,15 @@ public:
         }
         #endif
         
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 };
 

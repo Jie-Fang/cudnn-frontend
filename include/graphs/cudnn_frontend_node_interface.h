@@ -32,50 +32,48 @@ private:
     detail::Context context;
 
     virtual error_t assign_uids_node() {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     };
     
     bool has_properties_inferred = false;
     virtual error_t infer_properties_node() {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     };
     
     bool has_validation_checked = false;
     virtual error_t validate_node() {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     };
     
     bool has_support_checked = false;
     virtual error_t is_supported_node() {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     };
 
     error_t assign_uids() {
         CHECK_CUDNN_FRONTEND_ERROR(assign_uids_node());
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->assign_uids();
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create tensors in " << name << std::endl;
+            if(status.is_bad()) {
                 return status;
             }
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>&) {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t gather_pass_by_value_tensors(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) {
         CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(tensor_to_pass_by_value));
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->gather_pass_by_value_tensors(tensor_to_pass_by_value);
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to gather pass by value tensors in " << name << std::endl;
+            if(status.get_code() != error_code_t::OK) {
                 return status;
             }
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
 protected:
@@ -104,12 +102,11 @@ protected:
     virtual error_t createTensors() {
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->createTensors();
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create tensors in " << name << std::endl;
+            if(status.get_code() != error_code_t::OK) {
                 return status;
             }
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     virtual error_t createOperationGraphs(cudnnHandle_t) = 0;
@@ -118,8 +115,7 @@ protected:
     virtual error_t createOperations() {
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->createOperations();
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create operation for " << name << " in " << name << std::endl;
+            if(status.is_bad()) {
                 return status;
             }
 
@@ -131,7 +127,7 @@ protected:
                 tensors_in_operations.emplace(item.first, item.second);
             }
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     std::vector<std::unique_ptr<INode>> sub_nodes;
@@ -144,136 +140,133 @@ public:
 
     error_t infer_properties() {
         if(has_properties_inferred) {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         // infer_properties self
         auto status = infer_properties_node();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer_properties in " << name << std::endl;
+        if(status.is_bad()) {
             return status;
         }
         
         // infer_properties sub nodes
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->infer_properties();
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to infer_properties in " << name << std::endl;
+            if(status.is_bad()) {
                 return status;
             }
         }
 
         has_properties_inferred = true;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t validate() {
         if(has_validation_checked) {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         auto status = infer_properties();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Validation failed in " << name << std::endl;
+        if(status.is_bad()) {
             return status;
         }
 
         // validate self
         status = validate_node();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Validation failed in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Validation failed in " << name << std::endl;
             return status;
         }
         
         // validate sub nodes
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->validate();
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Validation failed in " << name << std::endl;
+            if(status.is_bad()) {
+                getLogger() << "[cudnn_frontend] ERROR: Validation failed in " << name << std::endl;
                 return status;
             }
         }
 
         has_validation_checked = true;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t is_supported() {
         if(has_support_checked) {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
         
         auto status = validate();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Support check failed in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Support check failed in " << name << std::endl;
             return status;
         }
         
         // is_supported self
         status = is_supported_node();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Support check failed in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Support check failed in " << name << std::endl;
             return status;
         }
 
         // is_supported sub nodes
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->is_supported();
-            if(status != error_t::OK) {
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Support check failed in " << name << std::endl;
+            if(status.is_bad()) {
+                getLogger() << "[cudnn_frontend] ERROR: Support check failed in " << name << std::endl;
                 return status;
             }
         }
 
         has_support_checked = true;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t build(cudnnHandle_t handle) {
         
         auto status = is_supported();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
         status = assign_uids();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createTensors();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createOperations();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createOperationGraphs(handle);
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
         status = query_heuristics();
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
         status = createExecutionPlans(handle);
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to build in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
         }
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     int64_t get_workspace_size() const {
@@ -292,8 +285,8 @@ public:
 
         std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t> tensor_to_pass_by_value;
         auto status = gather_pass_by_value_tensors(tensor_to_pass_by_value);
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to gather_pass_by_value_tensors in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to gather_pass_by_value_tensors in " << name << std::endl;
             return status;
         }
 
@@ -307,15 +300,15 @@ public:
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), value_ptr);
             }
             else {
-                status = error_t::INVALID_VARIANT_PACK;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Unexpected type for pass by value tensor in " << name << std::endl;
+                status.code = error_code_t::INVALID_VARIANT_PACK;
+                status.err_msg = "[cudnn_frontend] ERROR: Unexpected type for pass by value tensor in " + name;
                 return status;
             }
         }
         
         status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace);
-        if(status != error_t::OK) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Execution failed in " << name << std::endl;
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Execution failed in " << name << std::endl;
             return status;
         }
         
@@ -389,7 +382,7 @@ class Execution_plan_list {
                                         1,
                                         &elem_count,
                                         &extractedEngine_);
-            if (status != CUDNN_STATUS_SUCCESS) {return error_t::HEURISTIC_QUERY_FAILED;}
+            if (status != CUDNN_STATUS_SUCCESS) {return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Engine failed."};}
 
             status = cudnnBackendGetAttribute(extractedEngine_,
                                 CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
@@ -397,7 +390,7 @@ class Execution_plan_list {
                                 CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
                                 &elem_count,
                                 nullptr);
-            if (status != CUDNN_STATUS_SUCCESS) {return error_t::HEURISTIC_QUERY_FAILED;}
+            if (status != CUDNN_STATUS_SUCCESS) {return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed"};}
             numerics.resize(static_cast<size_t>(elem_count));
             status = cudnnBackendGetAttribute(extractedEngine_,
                                 CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
@@ -405,15 +398,14 @@ class Execution_plan_list {
                                 CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
                                 &elem_count,
                                 numerics.data());
-            if (status != CUDNN_STATUS_SUCCESS) {return error_t::HEURISTIC_QUERY_FAILED;}
-#if (CUDNN_VERSION >= 8200)
+            if (status != CUDNN_STATUS_SUCCESS) {return {error_code_t::HEURISTIC_QUERY_FAILED,"Heuristic query Numerical Notes failed"};}
             status = cudnnBackendGetAttribute(extractedEngine_,
                                     CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
                                     CUDNN_TYPE_BEHAVIOR_NOTE,
                                     CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
                                     &elem_count,
                                     nullptr);
-            if (status != CUDNN_STATUS_SUCCESS) {return error_t::HEURISTIC_QUERY_FAILED;}
+            if (status != CUDNN_STATUS_SUCCESS) {return {error_code_t::HEURISTIC_QUERY_FAILED,"Heuristic query Behavior Note failed"};}
             behavior.resize(static_cast<size_t>(elem_count));
             status = cudnnBackendGetAttribute(extractedEngine_,
                                     CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
@@ -421,12 +413,11 @@ class Execution_plan_list {
                                     CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
                                     &elem_count,
                                     behavior.data());
-            if (status != CUDNN_STATUS_SUCCESS) {return error_t::HEURISTIC_QUERY_FAILED;}
-#endif
+            if (status != CUDNN_STATUS_SUCCESS) {return {error_code_t::HEURISTIC_QUERY_FAILED,"Heuristic query Behavior Notes failed"};}
             numeric_notes.emplace_back(numerics);
             behavior_notes.emplace_back(behavior);
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t
@@ -438,7 +429,7 @@ class Execution_plan_list {
                 }
             }
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t
@@ -450,7 +441,7 @@ class Execution_plan_list {
                 }
             }
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     EngineConfigList
@@ -495,9 +486,9 @@ class Execution_plan_list {
         }
 
         if (execution_plans.empty()) {
-            return error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "[cudnn_frontend] Error: No execution plans built successfully."};
         }
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     int64_t

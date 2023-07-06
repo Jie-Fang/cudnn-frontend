@@ -33,48 +33,46 @@ public:
             out_0_tensor->set_dim(in_0_tensor->get_dim()).set_stride(in_0_tensor->get_stride());
         } else {
             if(out_0_tensor_dim.size() != in_0_tensor->get_dim().size()) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
-                return status;
+                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name;
+                return {status, message};
             }
         }
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t validate_node() override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating PointwiseNode..." << std::endl;
 
-        auto status = error_t::OK;
-
         // Ensure that ports are matched to tensors in accordance with port count.
         // X and Y should always be present.
         auto X = options.inputs.IN_0;
         if(X == nullptr) {
-            status = error_t::ATTRIBUTE_NOT_SET;
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " X port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
-            return status;
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR:  X port of pointwise node named " + name + " not mapped to a tensor.";
+            return {status, message};
         }
 
         auto Y = options.outputs.OUT_0;
         if(Y == nullptr) {
-            status = error_t::ATTRIBUTE_NOT_SET;
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Y port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
-            return status;
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR:  Y port of pointwise node named " + name + " not mapped to a tensor.";
+            return {status, message};
         }
 
         auto const port_count = get_pointwise_mode_port_count(options.get_mode().value());
         if(port_count >= 3) {
             auto B = options.inputs.IN_1;
             if(B == nullptr) {
-                status = error_t::ATTRIBUTE_NOT_SET;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " B port of pointwise node named " << name << " not mapped to a tensor." << std::endl;
-                return status;
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR:  B port of pointwise node named " + name + " not mapped to a tensor.";
+                return {status, message};
             }
         }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated PointwiseNode." << std::endl;
-        return status;
+        return {error_code_t::OK, ""};
     }
 
     error_t assign_uids_node() override final {
@@ -82,7 +80,7 @@ public:
         if(options.inputs.IN_1)options.inputs.IN_1->set_uid(ICudnn::create_new_uid());
         if(options.inputs.IN_2)options.inputs.IN_2->set_uid(ICudnn::create_new_uid());
         options.outputs.OUT_0->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -103,7 +101,7 @@ public:
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0));
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
 
@@ -183,15 +181,15 @@ public:
         }
         #endif
         
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     void print(std::ostream& os, size_t depth) const override final {

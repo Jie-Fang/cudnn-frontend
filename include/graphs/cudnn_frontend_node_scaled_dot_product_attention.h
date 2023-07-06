@@ -276,15 +276,15 @@ namespace cudnn_frontend::graph {
                 options.dropout_scale = (1.f / (1.f - p));
             }
 
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createOperationGraphs(cudnnHandle_t) override final {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createExecutionPlans(cudnnHandle_t) override final {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
@@ -294,7 +294,7 @@ namespace cudnn_frontend::graph {
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
 
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
     };

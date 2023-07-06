@@ -32,19 +32,19 @@ public:
             y_tensor->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
         } else {
             if(y_tensor_dim.size() != x_tensor_dim.size()) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
+            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                getLogger() << "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
                 return status;
             }
         }
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -55,7 +55,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built ReductionNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
@@ -99,15 +99,15 @@ public:
         }
         #endif
         
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 };
 

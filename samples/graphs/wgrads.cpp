@@ -38,12 +38,12 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(fe::error_code_t::OK == graph.build(handle));
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(fe::error_code_t::OK == graph.set_executor(plans));
 
     Surface<half> x_tensor(4*64*16*16, false);
     Surface<half> s_tensor(64, false);
@@ -59,6 +59,6 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
         , {DY, dy_tensor.devPtr}
         , {DW, dw_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(fe::error_code_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
     cudnnDestroy(handle);
 }

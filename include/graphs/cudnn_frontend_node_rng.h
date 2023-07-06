@@ -24,7 +24,7 @@ public:
         if(options.inputs.Seed)options.inputs.Seed->set_uid(ICudnn::create_new_uid());
         if(options.inputs.Offset)options.inputs.Offset->set_uid(ICudnn::create_new_uid());
         options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -36,7 +36,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built RngNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
@@ -93,15 +93,15 @@ public:
         }
         #endif
         
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     void print(std::ostream& os, size_t depth) const override final {

@@ -10,9 +10,7 @@
 
 namespace cudnn_frontend {
 
-using op_graph_to_engine_configs = std::unordered_map<std::string, EngineConfigList>;
-
-enum class [[nodiscard]] error_t {
+enum class [[nodiscard]] error_code_t {
     OK
     , ATTRIBUTE_NOT_SET
     , SHAPE_DEDUCTION_FAILED
@@ -25,59 +23,97 @@ enum class [[nodiscard]] error_t {
     , INVALID_CUDA_DEVICE
 };
 
+typedef struct error_object {
+    error_code_t code;
+    std::string err_msg;
+    error_object() : code(error_code_t::OK), err_msg("") {};
+    error_object(error_code_t err, std::string msg) : code(err), err_msg(msg) {};
+
+    error_code_t
+    get_code() {
+        return code;
+    }
+
+    std::string
+    get_message() {
+        return err_msg;
+    }
+
+    bool
+    is_good() const {
+        return code == error_code_t::OK;
+    } 
+
+
+    bool
+    is_bad() const {
+        return !is_good();
+    }
+
+
+} error_t;
+
+
 #define CHECK_CUDNN_FRONTEND_ERROR(x) do { \
-  error_t retval = (x); \
-  if (retval != error_t::OK) { \
-    getLogger() << "[cudnn_frontend] ERROR: " << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
-    return retval; \
+  if (x.is_bad()) { \
+    getLogger() << "[cudnn_frontend] ERROR: " << #x << " code " << x.get_code() << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+    return x; \
   } \
 } while (0)
 
-#define RETURN_CUDNN_FRONTEND_ERROR_IF(x, retval) do { \
-  if (x) { \
-    if (retval == error_t::OK) { \
-        getLogger() << "[cudnn_frontend] INFO: "  << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+#define RETURN_CUDNN_FRONTEND_ERROR_IF(cond, retval) do { \
+  if (cond) { \
+    if (retval.get_code() == error_code_t::OK) { \
+        getLogger() << "[cudnn_frontend] INFO: "  << #cond << " returned " << retval.get_code() << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
     } else { \
-        getLogger() << "[cudnn_frontend] ERROR: " << #x << " returned " << retval << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
+        getLogger() << "[cudnn_frontend] ERROR: " << #cond << " returned " << retval.get_code() << " at " << __FILE__ << ":" <<  __LINE__ << std::endl; \
     } \
-    return retval; \
+    return {retval}; \
   } \
 } while (0)
 
-static inline std::ostream& operator<<(std::ostream& os, const error_t& mode) {
+static inline std::ostream& operator<<(std::ostream& os, const error_code_t& mode) {
     switch (mode)
     {
-        case error_t::OK:
+        case error_code_t::OK:
             os << "OK";
             break;
-        case error_t::ATTRIBUTE_NOT_SET:
+        case error_code_t::ATTRIBUTE_NOT_SET:
             os << "ATTRIBUTE_NOT_SET";
             break;
-        case error_t::SHAPE_DEDUCTION_FAILED:
+        case error_code_t::SHAPE_DEDUCTION_FAILED:
             os << "SHAPE_DEDUCTION_FAILED";
             break;
-        case error_t::INVALID_TENSOR_NAME:
+        case error_code_t::INVALID_TENSOR_NAME:
             os << "INVALID_TENSOR_NAME";
             break;
-        case error_t::INVALID_VARIANT_PACK:
+        case error_code_t::INVALID_VARIANT_PACK:
             os << "INVALID_VARIANT_PACK";
             break;
-        case error_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
+        case error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
             os << "GRAPH_EXECUTION_PLAN_CREATION_FAILED";
             break;
-        case error_t::GRAPH_EXECUTION_FAILED:
+        case error_code_t::GRAPH_EXECUTION_FAILED:
             os << "GRAPH_EXECUTION_FAILED";
             break;
-        case error_t::HEURISTIC_QUERY_FAILED:
+        case error_code_t::HEURISTIC_QUERY_FAILED:
             os << "HEURISTIC_QUERY_FAILED";
             break;
-        case error_t::INVALID_CUDA_DEVICE:
+        case error_code_t::INVALID_CUDA_DEVICE:
             os << "INVALID_CUDA_DEVICE";
             break;
-        case error_t::UNSUPPORTED_GRAPH_FORMAT:
+        case error_code_t::UNSUPPORTED_GRAPH_FORMAT:
             os << "UNSUPPORTED_GRAPH_FORMAT";
             break;
     }
+    return os;
+}
+
+
+static inline
+std::ostream &
+operator << (std::ostream &os, cudnn_frontend::error_object & err) {
+    os << err.get_code() << err.get_message();
     return os;
 }
 

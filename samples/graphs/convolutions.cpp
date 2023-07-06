@@ -58,7 +58,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
@@ -78,10 +78,10 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
         , {Y, y_tensor.devPtr}
     };
 
-    REQUIRE(fe::error_t::OK == plans.autotune(handle, variant_pack, workspace.devPtr));
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(plans.autotune(handle, variant_pack, workspace.devPtr).is_good());
+    REQUIRE(graph.set_executor(plans).is_good());
 
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }
 
@@ -125,12 +125,12 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> x_tensor(4*64*16*16, false);
     Surface<half> s_tensor(64, false);
@@ -150,7 +150,7 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
         , {SQ_SUM, sq_sum_tensor.devPtr}
     };
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }
 
@@ -212,12 +212,12 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> x_tensor(4*64*16*16, false);
     Surface<half> s_tensor(64, false);
@@ -245,6 +245,6 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
         , {SUM, sum_tensor.devPtr}
         , {SQ_SUM, sq_sum_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

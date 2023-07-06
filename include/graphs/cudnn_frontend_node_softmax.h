@@ -141,15 +141,15 @@ namespace cudnn_frontend::graph {
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
                 .fill_from_context(get_context());
 
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createOperationGraphs(cudnnHandle_t) override final {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
 
         error_t createExecutionPlans(cudnnHandle_t) override final {
-            return error_t::OK;
+            return {error_code_t::OK, ""};
         }
     };
 } // namespace cudnn_frontend::graph

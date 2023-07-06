@@ -66,7 +66,7 @@ public:
         infer_per_channel_tensors(options.outputs.DSCALE);
         infer_per_channel_tensors(options.outputs.DBIAS);
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t validate_node() override final {
@@ -78,26 +78,26 @@ public:
         auto DY = options.inputs.DY;
         auto const dy_tensor_dim = DY->get_dim();
         if(x_tensor_dim != dy_tensor_dim) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and DY ports of " << name << "." << std::endl;
-            return status;
+            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DY ports of " + name;
+            return {status, message};
         }
         
         auto DX = options.outputs.DX;
         auto const dx_tensor_dim = DX->get_dim();
         if(x_tensor_dim != dx_tensor_dim) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-            getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and DX ports of " << name << "." << std::endl;
-            return status;
+            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DX ports of " + name;
+            return {status, message};
         }
 
         auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+            error_t status = {error_code_t::OK, ""};
             if(x_tensor_dim[1] != T->get_dim()[1]) {
-                auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
-                return status;
+                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
+                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name;
             }
-            return error_t::OK;
+            return status;
         };
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.INV_VARIANCE));
@@ -111,16 +111,16 @@ public:
         //         return element == 1;
         //     });
         //     if(!allOnes) {
-        //         auto status = error_t::SHAPE_DEDUCTION_FAILED;
+        //         auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
         //         getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
         //         return status;
         //     }
-        //     return error_t::OK;
+        //     return {error_code_t::OK, ""};
         // };
         // CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(epsilon));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated DBNNode." << std::endl;
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t assign_uids_node() override final {
@@ -133,7 +133,7 @@ public:
         options.outputs.DX->set_uid(ICudnn::create_new_uid());
         options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
         options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -152,7 +152,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built DBNNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
     
     error_t createOperations() override final {
@@ -202,22 +202,22 @@ public:
         }
         #endif
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
-    // virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
+    // virtual error_code_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
     //     float epsilon_value = options.get_epsilon().value();
     //     tensor_to_pass_by_value.emplace(epsilon, epsilon_value);
 
-    //     return error_t::OK;
+    //     return {error_code_t::OK, ""};
     // }
 };
 

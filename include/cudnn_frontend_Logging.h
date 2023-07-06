@@ -90,4 +90,5 @@ operator << (std::ostream &os, const BackendDescriptor & desc) {
     if (isLoggingEnabled()) {os << desc.describe();}
     return os;
 }
+
 }

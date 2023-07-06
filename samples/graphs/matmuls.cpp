@@ -60,7 +60,7 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     #if (CUDNN_VERSION >= 8500)
-        REQUIRE(fe::error_t::OK == graph.build(handle));
+        REQUIRE(graph.build(handle).is_good());
     #else
         SKIP("Cudnn 8.4.1 and below did not support matmul epilogue fusion with Column Major layout");
     #endif
@@ -68,7 +68,7 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> x_tensor(4*16*64, false);
     Surface<half> w_tensor(4*64*32, false);
@@ -84,6 +84,6 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
         , {B, b_tensor.devPtr}
         , {O, y_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

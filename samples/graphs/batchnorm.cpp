@@ -67,11 +67,11 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<float> Sum_tensor(32, false);
     Surface<float> Sq_sum_tensor(32, false);
@@ -107,7 +107,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
         , {eq_scale, eq_scale_tensor.devPtr}
         , {eq_bias, eq_bias_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     cudnnDestroy(handle);
 }
@@ -161,11 +161,11 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> X_tensor(4*32*16*16, false);
     Surface<float> Mean_tensor(32, false);
@@ -197,7 +197,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         , {A, A_tensor.devPtr}
         , {Y, Y_tensor.devPtr}
     };
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     cudnnDestroy(handle);
 }
@@ -251,11 +251,11 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     
-    REQUIRE(fe::error_t::OK == graph.build(handle));
+    REQUIRE(graph.build(handle).is_good());
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> X_tensor(4*32*16*16, false);
     Surface<int8_t> Mask_tensor(4*32*16*16 / 8, false);
@@ -287,7 +287,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
         variant_pack[DX_drelu] = DADD_tensor.devPtr;
     }
 
-    REQUIRE(fe::error_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     cudnnDestroy(handle);
 }

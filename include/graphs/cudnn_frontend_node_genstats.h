@@ -40,9 +40,9 @@ public:
             SUM->set_dim(sum_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
         } else {
             if(x_tensor_dim.size() != sum_tensor_dim.size()) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and SUM ports of " << name << "." << std::endl;
-                return status;
+                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and SUM ports of " + name;
+                return {status, message};
             }
         }
         
@@ -52,20 +52,20 @@ public:
             SQ_SUM->set_dim(sq_sum_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
         } else {
             if(x_tensor_dim.size() != sq_sum_tensor_dim.size()) {
-            auto status = error_t::SHAPE_DEDUCTION_FAILED;
-                getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and SQ_SUM ports of " << name << "." << std::endl;
-                return status;
+                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
+                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and SQSUM ports of " + name;
+                return {status, message};
             }
         }
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.outputs.SUM->set_uid(ICudnn::create_new_uid());
         options.outputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createTensors() override final {
@@ -77,7 +77,7 @@ public:
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built GenstatsNode tensors." << std::endl;
 
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
@@ -118,15 +118,15 @@ public:
         }
         #endif
         
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createOperationGraphs(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 
     error_t createExecutionPlans(cudnnHandle_t) override final {
-        return error_t::OK;
+        return {error_code_t::OK, ""};
     }
 };
 
