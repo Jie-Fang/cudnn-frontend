@@ -350,6 +350,22 @@ enum class HeurMode_t {
     HEUR_MODE_FALLBACK,
 };
 
+static inline std::ostream& operator<<(std::ostream& os, const HeurMode_t& mode) {
+    switch (mode) {
+        case HeurMode_t::HEUR_MODE_A:
+            os << "HEUR_MODE_A";
+            break;
+        case HeurMode_t::HEUR_MODE_B:
+            os << "HEUR_MODE_B";
+            break;
+        case HeurMode_t::HEUR_MODE_FALLBACK:
+            os << "HEUR_MODE_FALLBACK";
+            break;
+    }
+    return os;
+}
+
+
 enum class DataType_t {
     NOT_SET,
 

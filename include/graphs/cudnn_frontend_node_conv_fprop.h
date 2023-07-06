@@ -141,9 +141,6 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t createExecutionPlans(cudnnHandle_t) override final {
-        return {error_code_t::OK, ""};
-    }
 };
 
 } // namespace cudnn_frontend::graph

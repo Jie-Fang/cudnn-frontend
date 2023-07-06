@@ -209,16 +209,6 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t createExecutionPlans(cudnnHandle_t) override final {
-        return {error_code_t::OK, ""};
-    }
-
-    // virtual error_code_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {
-    //     float epsilon_value = options.get_epsilon().value();
-    //     tensor_to_pass_by_value.emplace(epsilon, epsilon_value);
-
-    //     return {error_code_t::OK, ""};
-    // }
 };
 
 } // namespace graph

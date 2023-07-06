@@ -24,6 +24,7 @@ add_executable(
     graphs/dgrads.cpp
     graphs/matmuls.cpp
     graphs/batchnorm.cpp
+    graphs/wgrads.cpp
 
     conv_sample.cpp 
     test_list.cpp 

@@ -36,9 +36,8 @@ protected:
     std::vector<std::shared_ptr<ExecutionPlan>>        execution_plans;
 
 
-    op_graph_to_engine_configs  mode_a_engine_configs;
-    op_graph_to_engine_configs  mode_b_engine_configs;
-    op_graph_to_engine_configs  fallback_engine_configs;
+    op_graph_to_engine_configs engine_configs;
+
     // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
@@ -87,50 +86,59 @@ protected:
 	    return {error_code_t::OK, ""};
     }
 
-    error_t query_heuristics() {
+    error_t query_heuristics(HeurMode_t mode) {
         for(auto const& op_graph: operation_graphs) {
             getLogger() << "[cudnn_frontend] INFO: " << " Getting plan from heuristics for " << op_graph->getTag() << " ..." << std::endl;
 
-            cudnn_frontend::EngineConfigList mode_a_configs;
-            cudnn_frontend::EngineConfigList mode_b_configs;
-            cudnn_frontend::EngineConfigList fallback_configs;
-            auto statuses =
-                cudnn_frontend::get_heuristics_list<1>({"heuristics_mode_a"}, *op_graph, allowAllConfig, mode_a_configs, true);
+            cudnn_frontend::EngineConfigList configs;
 
-            getLogger() << "[cudnn_frontend] INFO: " << "mode_a get_heuristics_list statuses: ";
-            for (size_t i = 0 ; i < statuses.size(); i++) {
-                getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+            switch(mode) {
+                case HeurMode_t::HEUR_MODE_A: {
+                    auto statuses =
+                        cudnn_frontend::get_heuristics_list<1>({"heuristics_mode_a"}, *op_graph, allowAllConfig, configs, true);
+
+                    getLogger() << "[cudnn_frontend] INFO: " << "mode_a get_heuristics_list statuses: ";
+                    for (size_t i = 0 ; i < statuses.size(); i++) {
+                        getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+                    }
+                    getLogger() << std::endl;
+                    break;
+                }
+                case HeurMode_t::HEUR_MODE_B: {
+                    auto statuses =
+                        cudnn_frontend::get_heuristics_list<1>({"heuristics_mode_b"}, *op_graph, allowAllConfig, configs, true);
+
+                    getLogger() << "[cudnn_frontend] INFO: " << "mode_b get_heuristics_list statuses: ";
+                    for (size_t i = 0 ; i < statuses.size(); i++) {
+                        getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+                    }
+                    getLogger() << std::endl;
+                    break;
+                }
+                case HeurMode_t::HEUR_MODE_FALLBACK: {
+                    auto statuses =
+                        cudnn_frontend::get_heuristics_list<1>({"heuristics_fallback"}, *op_graph, allowAllConfig, configs, true);
+
+                    getLogger() << "[cudnn_frontend] INFO: " << "fallback get_heuristics_list statuses: ";
+                    for (size_t i = 0 ; i < statuses.size(); i++) {
+                        getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+                    }
+                    getLogger() << std::endl;
+                    break;
+                }
             }
-            getLogger() << std::endl;
-            statuses =
-                cudnn_frontend::get_heuristics_list<1>({"heuristics_mode_b"}, *op_graph, allowAllConfig, mode_b_configs, true);
 
-            getLogger() << "[cudnn_frontend] INFO: " << "mode_b get_heuristics_list statuses: ";
-            for (size_t i = 0 ; i < statuses.size(); i++) {
-                getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+            getLogger() << "[cudnn_frontend] INFO: " << "Mode " << mode << " config list has " << configs.size() << " configurations." << std::endl;
+
+            if (configs.size() > 0) { 
+                engine_configs.emplace(op_graph->getTag(), configs);
             }
-            getLogger() << std::endl;
-            statuses =
-                cudnn_frontend::get_heuristics_list<1>({"heuristics_fallback"}, *op_graph, allowAllConfig, fallback_configs, true);
-
-            getLogger() << "[cudnn_frontend] INFO: " << "fallback get_heuristics_list statuses: ";
-            for (size_t i = 0 ; i < statuses.size(); i++) {
-                getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
-            }
-            getLogger() << std::endl;
-
-            getLogger() << "[cudnn_frontend] INFO: " << "Mode A config list has " << mode_a_configs.size() << " configurations." << std::endl;
-            getLogger() << "[cudnn_frontend] INFO: " << "Mode B config list has " << mode_b_configs.size() << " configurations." << std::endl;
-            getLogger() << "[cudnn_frontend] INFO: " << "Fallback config list has " << fallback_configs.size() << " configurations." << std::endl;
-            mode_a_engine_configs.emplace(op_graph->getTag(), mode_a_configs);
-            mode_b_engine_configs.emplace(op_graph->getTag(), mode_b_configs);
-            fallback_engine_configs.emplace(op_graph->getTag(), fallback_configs);
         }
 	    return {error_code_t::OK, ""};
     }
 
     error_t create_cudnn_execution_plan(cudnnHandle_t handle) {
-        for(auto const& filtered_configs: mode_a_engine_configs) {
+        for(auto const& filtered_configs: engine_configs) {
             for (size_t i = 0; i < filtered_configs.second.size(); i++) {
                 getLogger() << "[cudnn_frontend] INFO: " << "Trying config: " << i << std::endl;
 

@@ -1,3 +1,30 @@
+/*
+ * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+#include <catch2/catch_test_macros.hpp>
+#include "../helpers.h"
+
+#include <cudnn_frontend.h>
+
 TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     namespace fe = cudnn_frontend;
     fe::graph::Graph graph("wgrad");
@@ -38,12 +65,12 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(fe::error_code_t::OK == graph.build(handle));
+    REQUIRE(graph.build_operation_graph(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(fe::error_code_t::OK == graph.set_executor(plans));
+    REQUIRE(graph.set_executor(plans).is_good());
 
     Surface<half> x_tensor(4*64*16*16, false);
     Surface<half> s_tensor(64, false);
@@ -59,6 +86,6 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
         , {DY, dy_tensor.devPtr}
         , {DW, dw_tensor.devPtr}
     };
-    REQUIRE(fe::error_code_t::OK == graph.execute(handle, variant_pack, workspace.devPtr));
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

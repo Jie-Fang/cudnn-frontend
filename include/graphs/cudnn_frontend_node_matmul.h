@@ -160,11 +160,7 @@ namespace cudnn_frontend::graph {
         error_t createOperationGraphs(cudnnHandle_t) override final {
             return {error_code_t::OK, ""};
         }
-
-        error_t createExecutionPlans(cudnnHandle_t) override final {
-            return {error_code_t::OK, ""};
-        }        
-
+   
         void print(std::ostream& os, size_t depth) const override final {
             os << std::string(depth, '\t') << "{\n";
             

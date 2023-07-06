@@ -195,10 +195,6 @@ namespace cudnn_frontend::graph {
         error_t createOperationGraphs(cudnnHandle_t) override final {
             return {error_code_t::OK, ""};
         }
-
-        error_t createExecutionPlans(cudnnHandle_t) override final {
-            return {error_code_t::OK, ""};
-        }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) override {            
             tensor_to_pass_by_value.emplace(dropout_scale, (half)options.dropout_scale);

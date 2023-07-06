@@ -66,6 +66,8 @@ class PyGraph {
 public:
     // This Graph class is the sole structure which implicitly makes PyGraph own all tensors, nodes, and cudnn descriptors.
     cudnn_frontend::graph::Graph graph;
+    cudnnHandle_t handle;
+
 
     PyGraph(std::string const &name,
             cudnn_frontend::DataType_t io_data_type,
@@ -74,7 +76,12 @@ public:
                 graph.set_compute_data_type(compute_data_type)
                      .set_intermediate_data_type(intermediate_data_type)
                      .set_io_data_type(io_data_type);
-            }
+        cudnnCreate(&handle);
+    }
+    
+    ~PyGraph() {
+        cudnnDestroy(handle);
+    }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
@@ -501,9 +508,7 @@ public:
     }
 
     void build() {
-        cudnnHandle_t handle;
-        cudnnCreate(&handle);
-        auto status = graph.build(handle);
+        auto status = graph.build_operation_graph(handle);
         throw_if(status.is_bad(), status.get_code(), status.get_message());
 
         auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
@@ -517,8 +522,6 @@ public:
             status = graph.set_executor(plans);
             throw_if(status.is_bad(), status.get_code(), status.get_message());
         }
-        cudnnDestroy(handle);
-
         return;
     }
 
@@ -527,8 +530,6 @@ public:
     }
 
     void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack, py::object workspace) {
-        cudnnHandle_t handle;
-        cudnnCreate(&handle);
 
         std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void *> var_pack_;
         for (auto const& [tensor, pyobject] : var_pack) {
@@ -541,7 +542,6 @@ public:
         auto status = graph.execute(handle, var_pack_, workspace_ptr);
         throw_if(status.is_bad(), status.get_code(), status.get_message());
         
-        cudnnDestroy(handle);
         return;
     }
 };

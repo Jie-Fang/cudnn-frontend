@@ -48,7 +48,7 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(graph.build(handle).is_good());
+    REQUIRE(graph.build_operation_graph(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
@@ -128,7 +128,7 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
-    REQUIRE(graph.build(handle).is_good());
+    REQUIRE(graph.build_operation_graph(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);

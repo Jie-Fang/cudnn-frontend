@@ -110,7 +110,6 @@ protected:
     }
 
     virtual error_t createOperationGraphs(cudnnHandle_t) = 0;
-    virtual error_t createExecutionPlans(cudnnHandle_t) = 0;
 
     virtual error_t createOperations() {
         for(auto const& sub_node: sub_nodes) {
@@ -222,7 +221,7 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t build(cudnnHandle_t handle) {
+    error_t build_operation_graph(cudnnHandle_t handle) {
         
         auto status = is_supported();
         if(status.is_bad()) {
@@ -249,18 +248,6 @@ public:
         }
 
         status = createOperationGraphs(handle);
-        if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
-            return status;
-        }
-
-        status = query_heuristics();
-        if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
-            return status;
-        }
-
-        status = createExecutionPlans(handle);
         if(status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;

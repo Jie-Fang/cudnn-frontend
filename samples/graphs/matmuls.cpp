@@ -60,7 +60,7 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     #if (CUDNN_VERSION >= 8500)
-        REQUIRE(graph.build(handle).is_good());
+        REQUIRE(graph.build_operation_graph(handle).is_good());
     #else
         SKIP("Cudnn 8.4.1 and below did not support matmul epilogue fusion with Column Major layout");
     #endif

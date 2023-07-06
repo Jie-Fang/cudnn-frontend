@@ -418,34 +418,16 @@ public:
         return {error_code_t::OK, ""};
     }
     
-    error_t get_engine_configs(HeurMode_t mode, Execution_plan_list &plan_list) {
+    error_t get_engine_configs(Execution_plan_list &plan_list) {
         getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
 
-        switch (mode) {
-        case HeurMode_t::HEUR_MODE_A:
-            if(mode_a_engine_configs.size() == 0){
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_a"};
-            }
-            plan_list.set_tag(mode_a_engine_configs.begin()->first);
-            plan_list.set_engine_configs(mode_a_engine_configs.begin()->second);
-            break;
-        case HeurMode_t::HEUR_MODE_B:
-            if(mode_b_engine_configs.size() == 0){
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_b"};
-            }
-            plan_list.set_tag(mode_b_engine_configs.begin()->first);
-            plan_list.set_engine_configs(mode_b_engine_configs.begin()->second);
-            break;
-        case HeurMode_t::HEUR_MODE_FALLBACK:
-            if(fallback_engine_configs.size() == 0){
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_fallback"};
-            }
-            plan_list.set_tag(fallback_engine_configs.begin()->first);
-            plan_list.set_engine_configs(fallback_engine_configs.begin()->second);
-            break;
+        if(engine_configs.size() == 0){
+            return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_a"};
         }
+        plan_list.set_tag(engine_configs.begin()->first);
+        plan_list.set_engine_configs(engine_configs.begin()->second);
 
-        getLogger() << "[cudnn_frontend] INFO: Querying engine config properties." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Querying engine config properties for cfg_count " << engine_configs.begin()->second.size() << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(plan_list.query_properties());
 
         return {error_code_t::OK, ""};
@@ -474,26 +456,20 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t createExecutionPlans(cudnnHandle_t handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Creating Execution Plans..." << std::endl;
-
-        (void)handle;
-        // auto status = create_cudnn_execution_plan(handle);
-        // if(status != error_code_t::OK) {
-        //     getLogger() << "[cudnn_frontend] ERROR: " << status << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
-        //     return status;
-        // }
-
-        getLogger() << "[cudnn_frontend] INFO: Created Execution Plans." << std::endl;
-        return {error_code_t::OK, ""};
-    }
 };
 
 inline Plans Graph::get_execution_plan_list(HeurMode_t mode) {
     Plans plan_list;
     // TODO: The error returned is not propagate to user.
     // Should the return value be changed to error_code_t too?
-    auto status = get_engine_configs(mode, plan_list.list_of_engine_configs);
+   
+    auto status = query_heuristics(mode);
+    if(status.is_bad()) {
+        getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+        return plan_list;
+    }
+
+    status = get_engine_configs(plan_list.list_of_engine_configs);
     if(status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl; 
     }
