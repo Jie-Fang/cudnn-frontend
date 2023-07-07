@@ -441,7 +441,6 @@ public:
     }
 
     error_t createOperationGraphs(cudnnHandle_t handle) override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Partitioning FlatNode..." << std::endl;
 
         // Currently just make one large graph of operations from all sub nodes.
         for (auto const& node : sub_nodes) {
@@ -484,17 +483,17 @@ inline Plans Graph::get_execution_plan_list(HeurMode_t mode) {
 }
 
 inline Graph& Graph::set_intermediate_data_type(DataType_t const type) {
-    get_context().set_intermediate_data_type(type);
+    context.set_intermediate_data_type(type);
     return *this;
 }
 
 inline Graph& Graph::set_io_data_type(DataType_t const type) {
-    get_context().set_io_data_type(type);
+    context.set_io_data_type(type);
     return *this;
 }
 
 inline Graph& Graph::set_compute_data_type(DataType_t const type) {
-    get_context().set_compute_data_type(type);
+    context.set_compute_data_type(type);
     return *this;
 }
 
@@ -512,7 +511,7 @@ inline BN_finalize_attributes::Outputs Graph::bn_finalize(BN_finalize_attributes
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(options.get_name(), std::move(options), context));
 
     return return_outputs;
 }
@@ -530,7 +529,7 @@ inline Batchnorm_attributes::Outputs Graph::batchnorm(Batchnorm_attributes::Inpu
     options.inputs.PREV_RUNNING_MEAN = inputs.PREV_RUNNING_MEAN;
     options.inputs.PREV_RUNNING_VAR = inputs.PREV_RUNNING_VAR;
 
-    sub_nodes.emplace_back(std::make_unique<BatchNormNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<BatchNormNode>(options.get_name(), std::move(options), context));
 
     return return_outputs;
 }
@@ -544,7 +543,7 @@ inline DBN_attributes::Outputs Graph::batchnorm_backward(DBN_attributes::Inputs 
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<DBNNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<DBNNode>(options.get_name(), std::move(options), context));
 
     return return_outputs;
 }
@@ -559,7 +558,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::conv_fprop(std::shared_ptr<Tens
     options.inputs.X = x;
     options.inputs.W = w;
 
-    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(options.get_name(), std::move(options), context));
 
     return Y;
 }
@@ -571,7 +570,7 @@ inline Conv_fprop_attributes::Outputs Graph::conv_fprop(Conv_fprop_attributes::I
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(options.get_name(), std::move(options), context));
 
     return Conv_fprop_attributes::Outputs{Y};
 }
@@ -588,7 +587,7 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::dbn_weight(std::
     options.inputs.MEAN = mean;
     options.inputs.INV_VARIANCE = inv_variance;
 
-    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(options.get_name(), std::move(options), context));
 
     return {return_outputs.DSCALE, return_outputs.DBIAS, return_outputs.EQ_SCALE_DY, return_outputs.EQ_SCALE_X, return_outputs.EQ_BIAS};
 }
@@ -601,7 +600,7 @@ inline DBN_weight_attributes::Outputs Graph::dbn_weight(DBN_weight_attributes::I
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(options.get_name(), std::move(options), context));
 
     return return_outputs;
 }
@@ -614,7 +613,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::conv_dgrad(std::shared_ptr<Tens
     options.inputs.DY = dy;
     options.inputs.W = w;
 
-    sub_nodes.emplace_back(std::make_unique<DgradNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<DgradNode>(options.get_name(), std::move(options), context));
 
     return DX;
 }
@@ -626,7 +625,7 @@ inline Conv_dgrad_attributes::Outputs Graph::conv_dgrad(Conv_dgrad_attributes::I
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<DgradNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<DgradNode>(options.get_name(), std::move(options), context));
 
     return Conv_dgrad_attributes::Outputs{DX};
 }
@@ -639,7 +638,7 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::genstats(std::sh
     // Set inputs
     options.inputs.X = x;
 
-    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(options.get_name(), std::move(options), context));
 
     return {SUM, SQ_SUM};
 }
@@ -652,7 +651,7 @@ inline Genstats_attributes::Outputs Graph::genstats(Genstats_attributes::Inputs 
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(options.get_name(), std::move(options), context));
 
     return Genstats_attributes::Outputs{SUM,SQ_SUM};
 }
@@ -665,7 +664,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::conv_wgrad(std::shared_ptr<Tens
     options.inputs.X = x;
     options.inputs.DY = dy;
 
-    sub_nodes.emplace_back(std::make_unique<WgradNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<WgradNode>(options.get_name(), std::move(options), context));
 
     return DW;
 }
@@ -677,7 +676,7 @@ inline Conv_wgrad_attributes::Outputs Graph::conv_wgrad(Conv_wgrad_attributes::I
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<WgradNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<WgradNode>(options.get_name(), std::move(options), context));
 
     return Conv_wgrad_attributes::Outputs{DW};
 }
@@ -688,7 +687,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::pointwise(std::shared_ptr<Tenso
     // Set inputs
     options.inputs.IN_0 = a;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), context));
 
     return OUT_0;
 }
@@ -700,7 +699,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::pointwise(std::shared_ptr<Tenso
     options.inputs.IN_0 = a;
     options.inputs.IN_1 = b;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), context));
 
     return OUT_0;
 }
@@ -713,7 +712,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::pointwise(std::shared_ptr<Tenso
     options.inputs.IN_1 = b;
     options.inputs.IN_2 = c;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), context));
 
     return OUT_0;
 }
@@ -724,7 +723,7 @@ inline Pointwise_attributes::Outputs Graph::pointwise(Pointwise_attributes::Inpu
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), context));
 
     return Pointwise_attributes::Outputs{OUT_0};
 }
@@ -736,7 +735,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::matmul(std::shared_ptr<Tensor_a
     options.inputs.A = a;
     options.inputs.B = b;
 
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<MatmulNode>(options.get_name(), std::move(options), context));
 
     return C;
 }
@@ -747,7 +746,7 @@ inline Matmul_attributes::Outputs Graph::matmul(Matmul_attributes::Inputs inputs
     // Set inputs
     options.inputs = inputs;
 
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<MatmulNode>(options.get_name(), std::move(options), context));
 
     return Matmul_attributes::Outputs{C};
 }
@@ -764,7 +763,7 @@ inline Scaled_dot_product_attention_attributes::Outputs Graph::scaled_dot_produc
     options.inputs.SEQ_LEN_Q = inputs.SEQ_LEN_Q;
     options.inputs.SEQ_LEN_K = inputs.SEQ_LEN_K;
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), context));
 
     return Scaled_dot_product_attention_attributes::Outputs{O,S};
 }
@@ -779,7 +778,7 @@ inline Scaled_dot_product_flash_attention_attributes::Outputs Graph::scaled_dot_
     options.inputs.K = inputs.K;
     options.inputs.V = inputs.V;
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(options.get_name(), std::move(options), get_context()));
+    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(options.get_name(), std::move(options), context));
 
     return Scaled_dot_product_flash_attention_attributes::Outputs{O,Stats};
 }

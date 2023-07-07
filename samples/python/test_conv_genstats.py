@@ -54,8 +54,8 @@ def test_conv_genstats():
     Y.set_output(True)
 
     SUM, SQ_SUM = graph.genstats(name = "genstats", input = Y)
-    SUM.set_output(True)
-    SQ_SUM.set_output(True)
+    SUM.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    SQ_SUM.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
 
     graph.check_support()
     

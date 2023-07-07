@@ -29,8 +29,9 @@ public:
     using pass_by_values_t = std::variant<half, float>; 
 
     std::string name;
-private:
+    
     detail::Context context;
+private:
 
     virtual error_t assign_uids_node() {
         return {error_code_t::OK, ""};
@@ -133,10 +134,6 @@ protected:
     std::vector<std::unique_ptr<INode>> sub_nodes;
 public:
     virtual Type getType() = 0;
-
-    detail::Context& get_context() {
-        return context;
-    }
 
     error_t infer_properties() {
         if(has_properties_inferred) {

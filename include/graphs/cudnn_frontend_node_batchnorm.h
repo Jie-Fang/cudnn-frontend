@@ -14,9 +14,7 @@ class BatchNormNode : public INode {
 public:
     Batchnorm_attributes options;
 
-    BatchNormNode(std::string const& name, Batchnorm_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-    }
+    BatchNormNode(std::string const& name, Batchnorm_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::BATCHNORM;
@@ -24,6 +22,8 @@ public:
 
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm node named " << name << "." << std::endl;
+
+        options.fill_from_context(context);
 
         // TODO: Only inferencing from X works today.
         auto X = options.inputs.X;

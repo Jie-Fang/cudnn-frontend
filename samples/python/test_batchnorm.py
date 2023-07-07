@@ -116,7 +116,7 @@ def test_drelu_dadd_dbn():
     
     # NOTE: Toggle DADD output to dump to gmem
     should_dump_dx_drelu = False
-    DX_drelu.set_output(should_dump_dx_drelu)
+    DX_drelu.set_output(should_dump_dx_drelu).set_data_type(pycudnn.data_type.HALF)
 
     (DX, DScale, DBias) = graph.batchnorm_backward(name = "DBN"
                                                     , grad = DX_drelu
@@ -127,8 +127,8 @@ def test_drelu_dadd_dbn():
                                                 )
 
     DX.set_output(True)
-    DScale.set_output(True)
-    DBias.set_output(True)
+    DScale.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    DBias.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
 
     graph.check_support()
 

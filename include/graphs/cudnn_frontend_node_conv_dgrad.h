@@ -13,9 +13,7 @@ class DgradNode : public INode {
     Conv_dgrad_attributes options;
 public:
 
-    DgradNode(std::string const& name, Conv_dgrad_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-    }
+    DgradNode(std::string const& name, Conv_dgrad_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::DGRAD;
@@ -23,6 +21,8 @@ public:
 
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node named " << name << "." << std::endl;
+        
+        options.fill_from_context(context);
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
         auto DX = options.outputs.DX;

@@ -13,9 +13,7 @@ class PointwiseNode : public INode {
 public:
     Pointwise_attributes options;
 
-    PointwiseNode(std::string const& name, Pointwise_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-    }
+    PointwiseNode(std::string const& name, Pointwise_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
     
     Type getType() override final {
         return Type::POINTWISE;
@@ -23,6 +21,8 @@ public:
 
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node named " << name << "." << std::endl;
+        
+        options.fill_from_context(context);
         
         // Only inferrencing from IN_0 to OUT_0 works today.
         auto in_0_tensor = options.inputs.IN_0;

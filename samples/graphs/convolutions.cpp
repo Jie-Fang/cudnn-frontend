@@ -120,6 +120,9 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     auto genstats_options = fe::graph::Genstats_attributes("genstats");
     auto [SUM, SQ_SUM] = graph.genstats(Y, genstats_options);
 
+    SUM->set_data_type(fe::DataType_t::FLOAT);
+    SQ_SUM->set_data_type(fe::DataType_t::FLOAT);
+
     #if (CUDNN_VERSION < 8800)
         SKIP("ConvBNFprop requires cudnn 8.8 and up");
     #endif
@@ -208,6 +211,9 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     auto genstats_options = fe::graph::Genstats_attributes("genstats");
     auto [SUM, SQ_SUM] = graph.genstats(Y, genstats_options);
 
+    SUM->set_data_type(fe::DataType_t::FLOAT);
+    SQ_SUM->set_data_type(fe::DataType_t::FLOAT);
+    
     #if (CUDNN_VERSION < 8900)
         SKIP("DBARCS requires cudnn 8.9 and up");
     #endif

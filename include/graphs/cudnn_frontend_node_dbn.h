@@ -15,11 +15,6 @@ public:
     DBN_attributes options;
 
     DBNNode(std::string const& name, DBN_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-
-        options.outputs.DBIAS->set_data_type(DataType_t::FLOAT);
-        options.outputs.DSCALE->set_data_type(DataType_t::FLOAT);
-
         // User does not create tensor for epsilon/momentum, so create it internally
         // Data type is i/o type
         // epsilon = std::make_shared<Tensor_attributes>("epsilon");
@@ -32,6 +27,8 @@ public:
 
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DBN node named " << name << "." << std::endl;
+        
+        options.fill_from_context(context);
 
         // TODO: Only inferencing from X works today.
         auto X = options.inputs.X;

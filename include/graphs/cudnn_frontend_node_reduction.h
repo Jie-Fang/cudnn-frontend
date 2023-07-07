@@ -12,15 +12,16 @@ class ReductionNode : public INode {
     Reduction_attributes options;
 public:
 
-    ReductionNode(std::string const& name, Reduction_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-    }
+    ReductionNode(std::string const& name, Reduction_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
     
     Type getType() override final {
         return Type::REDUCTION;
     }
 
     error_t infer_properties_node() override final {
+        
+        options.fill_from_context(context);
+        
         // Only inferrencing from IN_0 to OUT_0 works today.
         auto x_tensor = options.inputs.X;
         auto y_tensor = options.outputs.Y;

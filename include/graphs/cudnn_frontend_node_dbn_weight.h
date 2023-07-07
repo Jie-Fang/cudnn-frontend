@@ -14,16 +14,7 @@ class DBNWeightNode : public INode {
     DBN_weight_attributes options;
 public:
 
-    DBNWeightNode(std::string const& name, DBN_weight_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-        
-        // outputs should be float type
-        options.outputs.DBIAS->set_data_type(DataType_t::FLOAT);
-        options.outputs.DSCALE->set_data_type(DataType_t::FLOAT);
-        options.outputs.EQ_BIAS->set_data_type(DataType_t::FLOAT);
-        options.outputs.EQ_SCALE_DY->set_data_type(DataType_t::FLOAT);
-        options.outputs.EQ_SCALE_X->set_data_type(DataType_t::FLOAT);
-    }
+    DBNWeightNode(std::string const& name, DBN_weight_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::DBN_WEIGHT;
@@ -31,6 +22,8 @@ public:
 
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
+        
+        options.fill_from_context(context);
 
         // TODO: Only inferencing from DY works today.
         auto DY = options.inputs.DY;

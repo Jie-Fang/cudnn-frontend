@@ -224,7 +224,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     // NOTE: Toggle DADD output by toggling DX_DRELU virtualness
     bool is_dx_drelu_virtual = true;
-    DX_drelu->set_is_virtual(is_dx_drelu_virtual);
+    DX_drelu->set_is_virtual(is_dx_drelu_virtual).set_data_type(fe::DataType_t::HALF);
 
     fe::graph::DBN_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes("X").set_dim({4,32,16,16}));
@@ -245,8 +245,8 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto DBN_options = fe::graph::DBN_attributes("DBN").set_epsilon(epsilon);
     auto [DX, dscale, dbias] = graph.batchnorm_backward(inputs, DBN_options);
     DX->set_is_virtual(false);
-    dscale->set_is_virtual(false);
-    dbias->set_is_virtual(false);
+    dscale->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
+    dbias->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");

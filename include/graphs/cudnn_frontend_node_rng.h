@@ -12,9 +12,7 @@ class RngNode : public INode {
     Rng_attributes options;
 public:
 
-    RngNode(std::string const& name, Rng_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-    }
+    RngNode(std::string const& name, Rng_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::RNG;

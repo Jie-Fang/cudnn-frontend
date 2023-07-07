@@ -13,9 +13,7 @@ class ConvolutionNode : public INode {
 public:
     Conv_fprop_attributes options;
 
-    ConvolutionNode(std::string const& name, Conv_fprop_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-    }
+    ConvolutionNode(std::string const& name, Conv_fprop_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::CONVOLUTION;
@@ -23,6 +21,8 @@ public:
 
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node named " << name << "." << std::endl;
+        
+        options.fill_from_context(context);
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
         auto X = options.inputs.X;

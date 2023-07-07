@@ -12,19 +12,16 @@ namespace graph {
 class GenstatsNode : public INode {
     Genstats_attributes options;
 public:
-    GenstatsNode(std::string const& name, Genstats_attributes&& options_, detail::Context const& context) : INode (name, context), options(std::move(options_)) {
-        options.fill_from_context(get_context());
-        
-        // outputs should be float type
-        options.outputs.SUM->set_data_type(DataType_t::FLOAT);
-        options.outputs.SQ_SUM->set_data_type(DataType_t::FLOAT);
-    }
+    GenstatsNode(std::string const& name, Genstats_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::GENSTATS;
     }
 
     error_t infer_properties_node() override final {
+        
+        options.fill_from_context(context);
+        
         // Only inferrencing from X works today.
         auto X = options.inputs.X;
         auto SUM = options.outputs.SUM;
