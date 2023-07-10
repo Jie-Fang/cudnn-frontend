@@ -20,6 +20,15 @@ target_include_directories(
 
 target_compile_features(cudnn_frontend INTERFACE cxx_std_17)
 
+include(FetchContent)
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
+    GIT_TAG v3.11.2
+)
+FetchContent_MakeAvailable(json)
+target_link_libraries(cudnn_frontend INTERFACE nlohmann_json::nlohmann_json)
+
 if (CUDNN_FRONTEND_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()

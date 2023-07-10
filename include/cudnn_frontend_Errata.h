@@ -20,7 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "contrib/nlohmann/json/json.hpp"
+#include "nlohmann/json.hpp"
 
 #include "../include/cudnn_frontend_Logging.h"
 
