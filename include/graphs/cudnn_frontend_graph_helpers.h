@@ -172,12 +172,6 @@ namespace detail {
             return *this;
         }
     };
-
-    static inline std::ostream& operator<<(std::ostream& os, const Context& context) {
-        os << "compute_data_type: " << context.get_compute_data_type() << ", intermediate_data_type: " << context.get_intermediate_data_type() << ", io_data_type: " << context.get_io_data_type() << std::endl;
-        return os;
-    }
-
 } // namespace detail
 
 } // namespace cudnn_frontend

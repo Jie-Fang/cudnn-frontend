@@ -27,6 +27,16 @@ protected:
     uid_t uid;
 
 public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor
+                                    , name
+                                    , data_type
+                                    , dim
+                                    , stride
+                                    , is_virtual
+                                    , is_pass_by_value
+                                    , reordering_type
+                                    , uid)
+    
     bool is_dim_set = false;
     bool is_stride_set = false;
     bool is_virtual_set = false;
@@ -152,29 +162,10 @@ public:
         }
         return *this;
     }
-
-    void print(std::ostream& os) const {
-        os << "{" 
-        << " name: " << name << ","
-        << " data_type: " << data_type << ","
-        << " dim: [";
-        for(size_t i = 0; i < dim.size(); ++i) {
-            os << dim[i] << ",";
-        }
-        os << "],"
-        << " stride: [";
-        for(size_t i = 0; i < stride.size(); ++i) {
-            os << stride[i] << ",";
-        }
-        os << "],"
-        << " is_virtual: " << is_virtual << ","
-        << " is_pass_by_value: " << is_pass_by_value
-        << "}";
-    }
 };
 
 inline std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
-    tensor.print(os);
+    os << json{tensor};
     return os;
 }
 

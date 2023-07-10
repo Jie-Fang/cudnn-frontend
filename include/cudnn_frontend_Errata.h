@@ -20,15 +20,11 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "nlohmann/json.hpp"
-
 #include "../include/cudnn_frontend_Logging.h"
 
 #include <cstdlib>
 #include <fstream>
 #pragma once
-
-using json = nlohmann::json;
 
 namespace cudnn_frontend {
 

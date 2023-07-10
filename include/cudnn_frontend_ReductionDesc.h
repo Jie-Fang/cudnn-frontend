@@ -52,7 +52,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_REDUCTION_DESCRIPTOR :"
-           << " Math precision " << compute_type << " Reduction mode " << reduction_mode;
+           << " Math precision " << json{compute_type} << " Reduction mode " << reduction_mode;
         return ss.str();
     }
 

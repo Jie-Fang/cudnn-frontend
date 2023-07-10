@@ -25,6 +25,9 @@
 #include <string>
 #include <vector>
 
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
+
 #include "cudnn_backend_base.h"
 #include "cudnn_frontend_Logging.h"
 
@@ -216,6 +219,12 @@ enum class TensorReordering_t {
     F16x16,
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( TensorReordering_t, {
+    {TensorReordering_t::NONE, "NONE"},
+    {TensorReordering_t::INT8x32, "INT8x32"},
+    {TensorReordering_t::F16x16, "F16x16"},
+})
+
 enum class ResampleMode_t{
     NOT_SET,
 
@@ -386,6 +395,25 @@ enum class DataType_t {
     FAST_FLOAT_FOR_FP8,
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( DataType_t, {
+    {DataType_t::NOT_SET, nullptr},
+    {DataType_t::FLOAT, "FLOAT"},
+    {DataType_t::DOUBLE, "DOUBLE"},
+    {DataType_t::HALF, "HALF"},
+    {DataType_t::INT8, "INT8"},
+    {DataType_t::INT32, "INT32"},
+    {DataType_t::INT8x4, "INT8x4"},
+    {DataType_t::UINT8, "UINT8"},
+    {DataType_t::UINT8x4, "UINT8x4"},
+    {DataType_t::INT8x32, "INT8x32"},
+    {DataType_t::BFLOAT16, "BFLOAT16"},
+    {DataType_t::INT64, "INT64"},
+    {DataType_t::BOOLEAN, "BOOLEAN"},
+    {DataType_t::FP8_E4M3, "FP8_E4M3"},
+    {DataType_t::FP8_E5M2, "FP8_E5M2"},
+    {DataType_t::FAST_FLOAT_FOR_FP8, "FAST_FLOAT_FOR_FP8"},
+})
+
 enum class ReductionMode_t {
     NOT_SET,
 
@@ -484,60 +512,6 @@ static inline std::ostream& operator<<(std::ostream& os, const RngDistribution_t
             os << "NORMAL";
             break;
         case RngDistribution_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-    }
-    return os;
-}
-
-static inline std::ostream& operator<<(std::ostream& os, const DataType_t& mode) {
-    switch (mode) {
-        case DataType_t::FLOAT:
-            os << "FLOAT";
-            break;
-        case DataType_t::DOUBLE:
-            os << "DOUBLE";
-            break;
-        case DataType_t::HALF:
-            os << "HALF";
-            break;
-        case DataType_t::INT8:
-            os << "INT8";
-            break;
-        case DataType_t::INT32:
-            os << "INT32";
-            break;
-        case DataType_t::INT8x4:
-            os << "INT8x4";
-            break;
-        case DataType_t::UINT8:
-            os << "UINT8";
-            break;
-        case DataType_t::UINT8x4:
-            os << "UINT8x4";
-            break;
-        case DataType_t::INT8x32:
-            os << "INT8x32";
-            break;
-        case DataType_t::BFLOAT16:
-            os << "BFLOAT16";
-            break;
-        case DataType_t::INT64:
-            os << "INT64";
-            break;
-        case DataType_t::BOOLEAN:
-            os << "BOOLEAN";
-            break;
-        case DataType_t::FP8_E4M3:
-            os << "FP8_E4M3";
-            break;
-        case DataType_t::FP8_E5M2:
-            os << "FP8_E5M2";
-            break;
-        case DataType_t::FAST_FLOAT_FOR_FP8:
-            os << "FAST_FLOAT_FOR_FP8";
-            break;
-        case DataType_t::NOT_SET:
             os << "NOT_SET";
             break;
     }
@@ -887,22 +861,6 @@ static inline std::ostream& operator<<(std::ostream& os, const NormFwdPhase_t& m
         default:
             os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
 #endif
-    }
-    return os;
-} 
-
-static inline std::ostream& operator<<(std::ostream& os, const TensorReordering_t& mode) {
-    switch (mode)
-    {
-        case TensorReordering_t::INT8x32:
-            os << "INT8x32";
-            break;
-        case TensorReordering_t::F16x16:
-            os << "F16x16";
-            break;
-        case TensorReordering_t::NONE:
-            os << "NONE";
-            break;
     }
     return os;
 } 

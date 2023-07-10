@@ -53,7 +53,7 @@ class ResampleDesc_v8 : public BackendDescriptor {
 #if (CUDNN_VERSION >= 8500)
         char sep = ',';
         ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: "
-           << "Compute Type: " << computeType
+           << "Compute Type: " << json{computeType}
            << ", Resample Mode: " << resample_mode
            << ", Spatial Dimensions: " << spatialDim 
            << ", Nan Propagation: " << std::to_string(nanOpt)
