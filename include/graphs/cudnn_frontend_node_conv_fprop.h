@@ -10,8 +10,8 @@
 namespace cudnn_frontend::graph {
 
 class ConvolutionNode : public INode {
-    Conv_fprop options;
 public:
+    Conv_fprop options;
 
     ConvolutionNode(std::string const& name, Conv_fprop&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
@@ -141,6 +141,9 @@ public:
         return {error_code_t::OK, ""};
     }
 
+    virtual void serialize(json& j) const override final {
+        j = options;
+    }
 };
 
 } // namespace cudnn_frontend::graph

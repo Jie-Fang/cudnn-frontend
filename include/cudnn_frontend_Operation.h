@@ -409,7 +409,7 @@ class OperationBuilder_v8 {
         auto status = CUDNN_STATUS_SUCCESS;
 
         std::stringstream ss;
-        ss << m_operation.pointwise_mode;
+        ss << json{m_operation.pointwise_mode};
         m_operation.operationTag = ss.str();
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),

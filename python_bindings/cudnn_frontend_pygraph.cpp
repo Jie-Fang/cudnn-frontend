@@ -677,7 +677,7 @@ void init_pygraph_submodule(py::module_ &m) {
         .def("execute", &PyGraph::execute)
         .def("__repr__", [](PyGraph const& pygraph){
             std::stringstream ss;
-            ss << pygraph.graph;
+            ss << json{pygraph.graph};
             return ss.str();
         });
 }

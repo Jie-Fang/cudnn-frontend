@@ -28,6 +28,42 @@
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
+// Specialization of nlohmann::adl_serializer for std::optional<T>
+template<typename T>
+struct nlohmann::adl_serializer<std::optional<T>> {
+    static void to_json(json& j, const std::optional<T>& opt) {
+        if (opt.has_value())
+            j = *opt;
+        else
+            j = nullptr;
+    }
+
+    static void from_json(const json& j, std::optional<T>& opt) {
+        if (!j.is_null())
+            opt = j.get<T>();
+        else
+            opt.reset();
+    }
+};
+
+// Specialization of nlohmann::adl_serializer for std::shared_ptr<T>
+template<typename T>
+struct nlohmann::adl_serializer<std::shared_ptr<T>> {
+    static void to_json(json& j, const std::shared_ptr<T>& ptr) {
+        if (ptr)
+            j = *ptr;
+        else
+            j = nullptr;
+    }
+
+    static void from_json(const json& j, std::shared_ptr<T>& ptr) {
+        if (!j.is_null())
+            ptr = std::make_shared<T>(j.get<T>());
+        else
+            ptr.reset();
+    }
+};
+
 #include "cudnn_backend_base.h"
 #include "cudnn_frontend_Logging.h"
 
@@ -353,6 +389,60 @@ enum class PointwiseMode_t {
     RECIPROCAL,
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( PointwiseMode_t, {
+    {PointwiseMode_t::NOT_SET, nullptr},
+    {PointwiseMode_t::ADD, "ADD"},
+    {PointwiseMode_t::MUL, "MUL"},
+    {PointwiseMode_t::SQRT, "SQRT"},
+    {PointwiseMode_t::MAX, "MAX"},
+    {PointwiseMode_t::MIN, "MIN"},
+    {PointwiseMode_t::RELU_FWD, "RELU_FWD"},
+    {PointwiseMode_t::TANH_FWD, "TANH_FWD"},
+    {PointwiseMode_t::SIGMOID_FWD, "SIGMOID_FWD"},
+    {PointwiseMode_t::ELU_FWD, "ELU_FWD"},
+    {PointwiseMode_t::GELU_FWD, "GELU_FWD"},
+    {PointwiseMode_t::SOFTPLUS_FWD, "SOFTPLUS_FWD"},
+    {PointwiseMode_t::SWISH_FWD, "SWISH_FWD"},
+    {PointwiseMode_t::RELU_BWD, "RELU_BWD"},
+    {PointwiseMode_t::TANH_BWD, "TANH_BWD"},
+    {PointwiseMode_t::SIGMOID_BWD, "SIGMOID_BWD"},
+    {PointwiseMode_t::ELU_BWD, "ELU_BWD"},
+    {PointwiseMode_t::GELU_BWD, "GELU_BWD"},
+    {PointwiseMode_t::SOFTPLUS_BWD, "SOFTPLUS_BWD"},
+    {PointwiseMode_t::SWISH_BWD, "SWISH_BWD"},
+    {PointwiseMode_t::ERF, "ERF"},
+    {PointwiseMode_t::IDENTITY, "IDENTITY"},
+    {PointwiseMode_t::GELU_APPROX_TANH_BWD, "GELU_APPROX_TANH_BWD"},
+    {PointwiseMode_t::GELU_APPROX_TANH_FWD, "GELU_APPROX_TANH_FWD"},
+    {PointwiseMode_t::GEN_INDEX, "GEN_INDEX"},
+    {PointwiseMode_t::BINARY_SELECT, "BINARY_SELECT"},
+    {PointwiseMode_t::EXP, "EXP"},
+    {PointwiseMode_t::LOG, "LOG"},
+    {PointwiseMode_t::NEG, "NEG"},
+    {PointwiseMode_t::MOD, "MOD"},
+    {PointwiseMode_t::POW, "POW"},
+    {PointwiseMode_t::ABS, "ABS"},
+    {PointwiseMode_t::CEIL, "CEIL"},
+    {PointwiseMode_t::COS, "COS"},
+    {PointwiseMode_t::FLOOR, "FLOOR"},
+    {PointwiseMode_t::RSQRT, "RSQRT"},
+    {PointwiseMode_t::SIN, "SIN"},
+    {PointwiseMode_t::LOGICAL_NOT, "LOGICAL_NOT"},
+    {PointwiseMode_t::TAN, "TAN"},
+    {PointwiseMode_t::SUB, "SUB"},
+    {PointwiseMode_t::ADD_SQUARE, "ADD_SQUARE"},
+    {PointwiseMode_t::DIV, "DIV"},
+    {PointwiseMode_t::CMP_EQ, "CMP_EQ"},
+    {PointwiseMode_t::CMP_NEQ, "CMP_NEQ"},
+    {PointwiseMode_t::CMP_GT, "CMP_GT"},
+    {PointwiseMode_t::CMP_GE, "CMP_GE"},
+    {PointwiseMode_t::CMP_LT, "CMP_LT"},
+    {PointwiseMode_t::CMP_LE, "CMP_LE"},
+    {PointwiseMode_t::LOGICAL_AND, "LOGICAL_AND"},
+    {PointwiseMode_t::LOGICAL_OR, "LOGICAL_OR"},
+    {PointwiseMode_t::RECIPROCAL, "RECIPROCAL"},
+})
+
 enum class HeurMode_t {
     HEUR_MODE_A,
     HEUR_MODE_B,
@@ -427,6 +517,19 @@ enum class ReductionMode_t {
     NORM2,
     MUL_NO_ZEROS
 };
+
+NLOHMANN_JSON_SERIALIZE_ENUM( ReductionMode_t, {
+    {ReductionMode_t::NOT_SET, nullptr},
+    {ReductionMode_t::ADD, "ADD"},
+    {ReductionMode_t::MUL, "MUL"},
+    {ReductionMode_t::MIN, "MIN"},
+    {ReductionMode_t::MAX, "MAX"},
+    {ReductionMode_t::AMAX, "AMAX"},
+    {ReductionMode_t::AVG, "AVG"},
+    {ReductionMode_t::NORM1, "NORM1"},
+    {ReductionMode_t::NORM2, "NORM2"},
+    {ReductionMode_t::MUL_NO_ZEROS, "MUL_NO_ZEROS"},
+})
 
 enum class RngDistribution_t {
     NOT_SET,
@@ -512,165 +615,6 @@ static inline std::ostream& operator<<(std::ostream& os, const RngDistribution_t
             os << "NORMAL";
             break;
         case RngDistribution_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-    }
-    return os;
-}
-
-static inline std::ostream& operator<<(std::ostream& os, const PointwiseMode_t& mode) {
-    switch (mode) {
-        case PointwiseMode_t::ADD:
-            os << "ADD";
-            break;
-        case PointwiseMode_t::MUL:
-            os << "MUL";
-            break;
-        case PointwiseMode_t::SQRT:
-            os << "SQRT";
-            break;
-        case PointwiseMode_t::MAX:
-            os << "MAX";
-            break;
-        case PointwiseMode_t::MIN:
-            os << "MIN";
-            break;
-        case PointwiseMode_t::RELU_FWD:
-            os << "RELU_FWD";
-            break;
-        case PointwiseMode_t::TANH_FWD:
-            os << "TANH_FWD";
-            break;
-        case PointwiseMode_t::SIGMOID_FWD:
-            os << "SIGMOID_FWD";
-            break;
-        case PointwiseMode_t::ELU_FWD:
-            os << "ELU_FWD";
-            break;
-        case PointwiseMode_t::GELU_FWD:
-            os << "GELU_FWD";
-            break;
-        case PointwiseMode_t::SOFTPLUS_FWD:
-            os << "SOFTPLUS_FWD";
-            break;
-        case PointwiseMode_t::SWISH_FWD:
-            os << "SWISH_FWD";
-            break;
-        case PointwiseMode_t::RELU_BWD:
-            os << "RELU_BWD";
-            break;
-        case PointwiseMode_t::TANH_BWD:
-            os << "TANH_BWD";
-            break;
-        case PointwiseMode_t::SIGMOID_BWD:
-            os << "SIGMOID_BWD";
-            break;
-        case PointwiseMode_t::ELU_BWD:
-            os << "ELU_BWD";
-            break;
-        case PointwiseMode_t::GELU_BWD:
-            os << "GELU_BWD";
-            break;
-        case PointwiseMode_t::SOFTPLUS_BWD:
-            os << "SOFTPLUS_BWD";
-            break;
-        case PointwiseMode_t::SWISH_BWD:
-            os << "SWISH_BWD";
-            break;
-        case PointwiseMode_t::ERF:
-            os << "ERF";
-            break;
-        case PointwiseMode_t::IDENTITY:
-            os << "IDENTITY";
-            break;
-        case PointwiseMode_t::GELU_APPROX_TANH_BWD:
-            os << "GELU_APPROX_TANH_BWD";
-            break;
-        case PointwiseMode_t::GELU_APPROX_TANH_FWD:
-            os << "GELU_APPROX_TANH_FWD";
-            break;
-        case PointwiseMode_t::GEN_INDEX:
-            os << "GEN_INDEX";
-            break;
-        case PointwiseMode_t::BINARY_SELECT:
-            os << "BINARY_SELECT";
-            break;
-        case PointwiseMode_t::EXP:
-            os << "EXP";
-            break;
-        case PointwiseMode_t::LOG:
-            os << "LOG";
-            break;
-        case PointwiseMode_t::NEG:
-            os << "NEG";
-            break;
-        case PointwiseMode_t::MOD:
-            os << "MOD";
-            break;
-        case PointwiseMode_t::POW:
-            os << "POW";
-            break;
-        case PointwiseMode_t::ABS:
-            os << "ABS";
-            break;
-        case PointwiseMode_t::CEIL:
-            os << "CEIL";
-            break;
-        case PointwiseMode_t::COS:
-            os << "COS";
-            break;
-        case PointwiseMode_t::FLOOR:
-            os << "FLOOR";
-            break;
-        case PointwiseMode_t::RSQRT:
-            os << "RSQRT";
-            break;
-        case PointwiseMode_t::SIN:
-            os << "SIN";
-            break;
-        case PointwiseMode_t::LOGICAL_NOT:
-            os << "LOGICAL_NOT";
-            break;
-        case PointwiseMode_t::TAN:
-            os << "TAN";
-            break;
-        case PointwiseMode_t::SUB:
-            os << "SUB";
-            break;
-        case PointwiseMode_t::ADD_SQUARE:
-            os << "ADD_SQUARE";
-            break;
-        case PointwiseMode_t::DIV:
-            os << "DIV";
-            break;
-        case PointwiseMode_t::CMP_EQ:
-            os << "CMP_EQ";
-            break;
-        case PointwiseMode_t::CMP_NEQ:
-            os << "CMP_NEQ";
-            break;
-        case PointwiseMode_t::CMP_GT:
-            os << "CMP_GT";
-            break;
-        case PointwiseMode_t::CMP_GE:
-            os << "CMP_GE";
-            break;
-        case PointwiseMode_t::CMP_LT:
-            os << "CMP_LT";
-            break;
-        case PointwiseMode_t::CMP_LE:
-            os << "CMP_LE";
-            break;
-        case PointwiseMode_t::LOGICAL_AND:
-            os << "LOGICAL_AND";
-            break;
-        case PointwiseMode_t::LOGICAL_OR:
-            os << "LOGICAL_OR";
-            break;
-        case PointwiseMode_t::RECIPROCAL:
-            os << "RECIPROCAL";
-            break;
-        case PointwiseMode_t::NOT_SET:
             os << "NOT_SET";
             break;
     }

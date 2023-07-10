@@ -27,7 +27,7 @@
 
 TEST_CASE("CSBR Graph", "[conv][graph]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("conv");
+    fe::graph::Graph graph("conv_graph");
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);

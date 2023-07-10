@@ -105,20 +105,8 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    void print(std::ostream& os, size_t depth) const override final {
-        os << std::string(depth, '\t') << "{\n";
-        
-        os << std::string(depth + 1, '\t') << "name: " << name << ",\n";
-        
-        os << std::string(depth + 1, '\t') << "inputs: [\n";
-        os << std::string(depth + 2, '\t') << "X: " << *(options.inputs.X) << ",\n";
-        os << std::string(depth + 1, '\t') << "],\n";
-        
-        os << std::string(depth + 1, '\t') << "outputs: [\n";
-        os << std::string(depth + 2, '\t') << "Y: " << *(options.outputs.Y) << ",\n";
-        os << std::string(depth + 1, '\t') << "],\n";
-        
-        os << std::string(depth, '\t') << "}\n";
+    virtual void serialize(json& j) const override final {
+        j = options;
     }
 };
 

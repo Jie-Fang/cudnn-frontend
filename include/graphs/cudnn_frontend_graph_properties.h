@@ -71,7 +71,8 @@ public:
         size_t initialProduct = 1;
         return std::accumulate(dim.begin(), dim.end(), initialProduct, std::multiplies<int64_t>());
     }
-
+    
+    Tensor() = default;
     Tensor(const std::string &name) : name(name) {}
 
     std::string get_name() const {
@@ -196,6 +197,7 @@ protected:
     Tag tag;
 public:
 
+    Operation(Tag t) : tag(t) {}
     Operation(const std::string name, Tag t) : name(name), tag(t) {}
 
     std::string const
@@ -322,16 +324,30 @@ public:
         std::shared_ptr<Tensor> Y;
     } outputs;
 
-private:
     std::vector<int64_t> padding  = {};
     std::vector<int64_t> stride   = {};
     std::vector<int64_t> dilation = {};
 
-public:
     bool is_padding_set = false;
     bool is_stride_set = false;
     bool is_dilation_set = false;
-    
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , X
+                                    , W)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop
+                                    , name
+                                    , inputs
+                                    , outputs
+                                    , padding
+                                    , stride
+                                    , dilation)
+
+    Conv_fprop() : Operation(Tag::Conv_fprop) {}
     Conv_fprop(const std::string name) : Operation(name, Tag::Conv_fprop) {}
 
     Conv_fprop& set_compute_data_type(DataType_t const value) {
@@ -573,6 +589,21 @@ public:
         std::shared_ptr<Tensor> C;
     } outputs;
 
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , A
+                                    , B
+                                    , M_override
+                                    , N_override
+                                    , K_override)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , C)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul
+                                , name
+                                , inputs
+                                , outputs)
+                                
     Matmul(const std::string name) : Operation(name, Tag::Matmul) {}
 
     Matmul& set_compute_data_type(DataType_t value) {
@@ -610,12 +641,25 @@ public:
         std::shared_ptr<Tensor> OUT_0;
     } outputs;
 
-private:
     std::optional<PointwiseMode_t> mode;
     std::optional<int64_t> axis;
 
-public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , IN_0
+                                    , IN_1
+                                    , IN_2)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , OUT_0)
 
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise
+                                    , name
+                                    , inputs
+                                    , outputs
+                                    , mode
+                                    , axis)
+
+    Pointwise() : Operation(Tag::Pointwise) {}
     Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {}
 
     Pointwise& set_compute_data_type(DataType_t const value) {
@@ -742,10 +786,20 @@ public:
         std::shared_ptr<Tensor> Y;
     } outputs;
 
-private:
     std::optional<ReductionMode_t> mode;
+    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , X)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , Y)
 
-public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction
+                                , name
+                                , inputs
+                                , outputs
+                                , mode)
+
     Reduction(const std::string name) : Operation(name, Tag::Reduction) {}
 
     std::optional<ReductionMode_t> get_mode() const {
@@ -787,12 +841,25 @@ public:
         std::shared_ptr<Tensor> Y;
     } outputs;
 
-private:
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
+    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , Seed
+                                    , Offset)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , Y)
 
-public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng
+                                , name
+                                , inputs
+                                , outputs
+                                , distribution
+                                , seed
+                                , bernoulli_probability)
+
     Rng(const std::string name) : Operation(name, Tag::Rng) {}
 
     RngDistribution_t get_distribution() const {

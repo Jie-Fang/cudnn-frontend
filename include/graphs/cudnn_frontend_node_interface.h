@@ -98,7 +98,7 @@ protected:
         , WGRAD
     };
     Type tag;
-    
+
     virtual error_t createTensors() {
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->createTensors();
@@ -128,7 +128,7 @@ protected:
         }
         return {error_code_t::OK, ""};
     }
-    
+
     std::vector<std::unique_ptr<INode>> sub_nodes;
 public:
     virtual Type getType() = 0;
@@ -304,27 +304,24 @@ public:
 
     INode(std::string const& name, detail::Context const& context) : name(name), context(context) {}
 
-    virtual ~INode() {};
-
-    virtual void print(std::ostream& os, size_t depth) const {
-        os << std::string(depth, '\t') << "{\n";
-
-        os << std::string(depth + 1, '\t') << "name: " << name << ",\n";
-        
-        os << std::string(depth + 1, '\t') << "nodes: [\n";
+    virtual void serialize(json& j) const {
+        j["name"] = name;
+        j["sub_nodes"];
         for(auto const& sub_node: sub_nodes) {
-            sub_node->print(os, depth + 2);
-            os << ",";
+            json j_sub_node;
+            sub_node->serialize(j_sub_node);
+            j["sub_nodes"].push_back(j_sub_node);
         }
-        os << std::string(depth + 1, '\t') << "],\n";
+    };
 
-        os << std::string(depth, '\t') << "}\n";
-    }
+    virtual ~INode() {};
 };
 
-inline std::ostream& operator<<(std::ostream& os, const INode& node) {
-    node.print(os, 0);
-    return os;
+static void to_json(json& j, const INode& p) {
+    j["name"] = p.name;
+    json node;
+    p.serialize(node);
+    j["sub_nodes"] = node;
 }
 
 class Execution_plan_list {
