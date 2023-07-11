@@ -70,7 +70,7 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(graph.set_executor(plans).is_good());
+    REQUIRE(graph.set_execution_plans(plans).is_good());
 
     Surface<half> x_tensor(4*64*16*16, false);
     Surface<half> s_tensor(64, false);

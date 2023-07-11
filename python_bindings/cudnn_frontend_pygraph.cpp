@@ -514,12 +514,12 @@ public:
         auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-        status = graph.set_executor(plans);
+        status = graph.set_execution_plans(plans);
         if (status.is_bad()) {
             auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK)
                         .build_plans(handle);
 
-            status = graph.set_executor(plans);
+            status = graph.set_execution_plans(plans);
             throw_if(status.is_bad(), status.get_code(), status.get_message());
         }
         return;

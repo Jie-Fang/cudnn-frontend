@@ -76,7 +76,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(mha_graph.set_executor(plans).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -171,7 +171,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(mha_graph.set_executor(plans).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -264,7 +264,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(mha_graph.set_executor(plans).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -356,7 +356,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(mha_graph.set_executor(plans).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);

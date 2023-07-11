@@ -409,7 +409,7 @@ public:
     Plans
     get_execution_plan_list(HeurMode_t mode);
 
-    error_t set_executor(Plans const & plan) {
+    error_t set_execution_plans(Plans const & plan) {
         if (plan.list_of_engine_configs.get_candidate() == nullptr) {
             return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "[cudnn_frontend] ERROR: No validate candidate for plan execution"};
         }
