@@ -12,9 +12,9 @@ namespace graph {
 
 class DBNNode : public INode {
 public:
-    DBN options;
+    DBN_attributes options;
 
-    DBNNode(std::string const& name, DBN&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    DBNNode(std::string const& name, DBN_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
 
         options.outputs.DBIAS->set_data_type(DataType_t::FLOAT);

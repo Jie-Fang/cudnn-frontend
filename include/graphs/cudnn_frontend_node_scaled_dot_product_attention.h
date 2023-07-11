@@ -19,10 +19,10 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Tensor_attributes> dropout_scale;
         std::shared_ptr<Tensor_attributes> negative_inf;
 
-        Scaled_dot_product_attention options;
+        Scaled_dot_product_attention_attributes options;
     public:
 
-        ScaledDotProductAttentionNode(std::string const& name, Scaled_dot_product_attention&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        ScaledDotProductAttentionNode(std::string const& name, Scaled_dot_product_attention_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
             options.fill_from_context(get_context());
             
             std::shared_ptr<Tensor_attributes> last_output;
@@ -37,7 +37,7 @@ namespace cudnn_frontend::graph {
             // Optional scale
             if(options.inputs.Scale_k) {
                 // Lower options to scale options
-                auto scale_options = Pointwise("scale_k");
+                auto scale_options = Pointwise_attributes("scale_k");
                 scale_options.set_mode(PointwiseMode_t::MUL);
                 scale_options.inputs.IN_0 = options.inputs.K;
                 scale_options.inputs.IN_1 = options.inputs.Scale_k;
@@ -51,7 +51,7 @@ namespace cudnn_frontend::graph {
             }
 
             // Lower options to bmm1 options
-            auto bmm1_options = Matmul("bmm1");
+            auto bmm1_options = Matmul_attributes("bmm1");
             bmm1_options.inputs.A = options.inputs.Q;
             // Requirement by cudnn backend to take in bmm1 bType as i/o type.
             last_output->set_data_type(DataType_t::HALF);
@@ -65,7 +65,7 @@ namespace cudnn_frontend::graph {
             
             if(options.inputs.Bias) {
                 // Lower options to add options
-                Pointwise add_options("bias");
+                Pointwise_attributes add_options("bias");
                 add_options.set_mode(PointwiseMode_t::ADD);
                 add_options.inputs.IN_0 = last_output;
                 add_options.inputs.IN_1 = options.inputs.Bias;
@@ -77,7 +77,7 @@ namespace cudnn_frontend::graph {
 
             if(options.padding_mask) {
                 // Lower options to generate row index options
-                Pointwise row_index_options("row_index");
+                Pointwise_attributes row_index_options("row_index");
                 row_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
                 row_index_options.inputs.IN_0 = last_output;
                 auto row_index = row_index_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("row_index");
@@ -86,7 +86,7 @@ namespace cudnn_frontend::graph {
                 sub_nodes.emplace_back(std::move(row_index_node));
 
                 // Lower options to generate col index options
-                Pointwise col_index_options("col_index");
+                Pointwise_attributes col_index_options("col_index");
                 col_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
                 col_index_options.inputs.IN_0 = last_output;
                 auto col_index = col_index_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("col_index");
@@ -95,7 +95,7 @@ namespace cudnn_frontend::graph {
                 sub_nodes.emplace_back(std::move(col_index_node));
 
                 // Lower options to less than row options
-                Pointwise less_than_row_options("less_than_row");
+                Pointwise_attributes less_than_row_options("less_than_row");
                 less_than_row_options.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_row_options.inputs.IN_0 = row_index;
                 less_than_row_options.inputs.IN_1 = options.inputs.SEQ_LEN_Q;
@@ -105,7 +105,7 @@ namespace cudnn_frontend::graph {
                 sub_nodes.emplace_back(std::move(less_than_row_node));
                 
                 // Lower options to less than col options
-                Pointwise less_than_col_options("less_than_col");
+                Pointwise_attributes less_than_col_options("less_than_col");
                 less_than_col_options.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_col_options.inputs.IN_0 = col_index;
                 less_than_col_options.inputs.IN_1 = options.inputs.SEQ_LEN_K;
@@ -115,7 +115,7 @@ namespace cudnn_frontend::graph {
                 sub_nodes.emplace_back(std::move(less_than_col_node));
 
                 // Lower options to logical and options
-                Pointwise logical_and_options("padding_logical_and");
+                Pointwise_attributes logical_and_options("padding_logical_and");
                 logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
                 logical_and_options.inputs.IN_0 = less_than_row;
                 logical_and_options.inputs.IN_1 = less_than_col;
@@ -126,7 +126,7 @@ namespace cudnn_frontend::graph {
 
                 if(options.causal_mask) {
                     // Lower options to greater than options
-                    Pointwise greater_than_options("greater_than");
+                    Pointwise_attributes greater_than_options("greater_than");
                     greater_than_options.set_mode(PointwiseMode_t::CMP_GE);
                     greater_than_options.inputs.IN_0 = row_index;
                     greater_than_options.inputs.IN_1 = col_index;
@@ -136,7 +136,7 @@ namespace cudnn_frontend::graph {
                     sub_nodes.emplace_back(std::move(greater_than_node));
 
                     // Lower options to logical and options
-                    Pointwise logical_and_options_for_causal("causal_logical_and");
+                    Pointwise_attributes logical_and_options_for_causal("causal_logical_and");
                     logical_and_options_for_causal.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
                     logical_and_options_for_causal.inputs.IN_0 = mask;
                     logical_and_options_for_causal.inputs.IN_1 = row_greater_col;
@@ -147,7 +147,7 @@ namespace cudnn_frontend::graph {
                 }
 
                 // Lower options to binary select options
-                Pointwise binary_select_options("binary_select");
+                Pointwise_attributes binary_select_options("binary_select");
                 binary_select_options.set_mode(PointwiseMode_t::BINARY_SELECT);
                 binary_select_options.inputs.IN_0 = last_output;
                 binary_select_options.inputs.IN_1 = negative_inf;
@@ -160,7 +160,7 @@ namespace cudnn_frontend::graph {
             }
 
             // Lower options to softmax options
-            auto softmax_options = Softmax("softmax");
+            auto softmax_options = Softmax_attributes("softmax");
             softmax_options.inputs.P = last_output;
             // Use tensor provided by Graph when real S
             if(options.is_inference) {
@@ -181,7 +181,7 @@ namespace cudnn_frontend::graph {
                     std::shared_ptr<Tensor_attributes> mask_output;
                     if(options.dropout_probability.has_value()) {
                         // Lower options to rng options
-                        auto rng_options = Rng("rng");
+                        auto rng_options = Rng_attributes("rng");
                         rng_options.set_distribution(RngDistribution_t::BERNOULLI)
                             .set_seed(options.seed)
                             .set_bernoulli_probability(options.dropout_probability.value());
@@ -195,7 +195,7 @@ namespace cudnn_frontend::graph {
                     }
 
                     // Lower options to mask options
-                    auto mask_options = Pointwise("mask");
+                    auto mask_options = Pointwise_attributes("mask");
                     mask_options.set_mode(PointwiseMode_t::MUL);
                     mask_options.inputs.IN_0 = last_output;
                     mask_options.inputs.IN_1 = mask_output;
@@ -217,7 +217,7 @@ namespace cudnn_frontend::graph {
             // Inference or not, dropout or not, always put a scale.
             // Default value 1.f. Will have no perf impact
             // Lower options to dropout_scale options
-            auto dropout_scale_options = Pointwise("dropout_scale");
+            auto dropout_scale_options = Pointwise_attributes("dropout_scale");
             dropout_scale_options.set_mode(PointwiseMode_t::MUL);
             dropout_scale_options.inputs.IN_0 = last_output;
             dropout_scale_options.inputs.IN_1 = dropout_scale;
@@ -227,7 +227,7 @@ namespace cudnn_frontend::graph {
             sub_nodes.emplace_back(std::move(dropout_scale_node));
 
             // Lower options to bmm2 options
-            auto bmm2_options = Matmul("bmm2");
+            auto bmm2_options = Matmul_attributes("bmm2");
             // Requirement by cudnn backend to take in bmm2 aType as i/o type.
             last_output->set_data_type(DataType_t::HALF);
             bmm2_options.inputs.A = last_output;

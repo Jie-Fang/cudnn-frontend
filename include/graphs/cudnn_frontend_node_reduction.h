@@ -9,10 +9,10 @@
 namespace cudnn_frontend::graph {
 
 class ReductionNode : public INode {
-    Reduction options;
+    Reduction_attributes options;
 public:
 
-    ReductionNode(std::string const& name, Reduction&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    ReductionNode(std::string const& name, Reduction_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
     

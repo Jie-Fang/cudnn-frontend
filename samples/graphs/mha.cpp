@@ -40,7 +40,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Scaled_dot_product_flash_attention::Inputs inputs;
+    fe::graph::Scaled_dot_product_flash_attention_attributes::Inputs inputs;
     inputs.Q = mha_graph.tensor(fe::graph::Tensor_attributes("Q").set_dim({b, h, s_q , d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
     inputs.K = mha_graph.tensor(fe::graph::Tensor_attributes("K").set_dim({b, h, d   , s_kv}).set_stride({3*h*d, 3*d, 1      , 3*b*h*d}));
     inputs.V = mha_graph.tensor(fe::graph::Tensor_attributes("V").set_dim({b, h, s_kv, d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
@@ -49,7 +49,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
 
     auto seed = mha_graph.tensor(fe::graph::Tensor_attributes("Seed").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto offset = mha_graph.tensor(fe::graph::Tensor_attributes("Offset").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
-    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention("mha")
+    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .use_causal_mask()
                                                     .set_scale_k(scale_k)
@@ -132,7 +132,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Scaled_dot_product_attention::Inputs inputs;
+    fe::graph::Scaled_dot_product_attention_attributes::Inputs inputs;
     inputs.Q = mha_graph.tensor(fe::graph::Tensor_attributes("Q").set_dim({b,h,s_q,d}).set_stride({s_q*3*h*d,d,3*h*d,1}));
     inputs.K = mha_graph.tensor(fe::graph::Tensor_attributes("K").set_dim({b,h,d,s_kv}).set_stride({s_kv*3*h*d,d,1,3*h*d}));
     inputs.V = mha_graph.tensor(fe::graph::Tensor_attributes("V").set_dim({b,h,s_kv,d}).set_stride({s_kv*3*h*d,d,3*h*d,1}));
@@ -142,7 +142,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto scale_k = mha_graph.tensor(fe::graph::Tensor_attributes("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_bias(bias)
                                                     .use_padding_mask()
@@ -231,7 +231,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Scaled_dot_product_attention::Inputs inputs;
+    fe::graph::Scaled_dot_product_attention_attributes::Inputs inputs;
     inputs.Q = mha_graph.tensor(fe::graph::Tensor_attributes("Q").set_dim({b,h,s_q,d}).set_stride({s_q*3*h*d,d,3*h*d,1}));
     inputs.K = mha_graph.tensor(fe::graph::Tensor_attributes("K").set_dim({b,h,d,s_kv}).set_stride({s_kv*3*h*d,d,1,3*h*d}));
     inputs.V = mha_graph.tensor(fe::graph::Tensor_attributes("V").set_dim({b,h,s_kv,d}).set_stride({s_kv*3*h*d,d,3*h*d,1}));
@@ -241,7 +241,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto scale_k = mha_graph.tensor(fe::graph::Tensor_attributes("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
     
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_bias(bias)
                                                     .use_padding_mask()
@@ -324,7 +324,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Scaled_dot_product_attention::Inputs inputs;
+    fe::graph::Scaled_dot_product_attention_attributes::Inputs inputs;
     inputs.Q = mha_graph.tensor(fe::graph::Tensor_attributes("Q").set_dim({b,h,s_q,d}).set_stride({s_q*3*h*d,d,3*h*d,1}));
     inputs.K = mha_graph.tensor(fe::graph::Tensor_attributes("K").set_dim({b,h,d,s_kv}).set_stride({s_kv*3*h*d,d,1,3*h*d}));
     inputs.V = mha_graph.tensor(fe::graph::Tensor_attributes("V").set_dim({b,h,s_kv,d}).set_stride({s_kv*3*h*d,d,3*h*d,1}));
@@ -334,7 +334,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     auto dropout_mask = mha_graph.tensor(fe::graph::Tensor_attributes("Dropout_mask").set_dim({b,h,s_q,s_kv}).set_stride({s_q*s_kv*h,s_q*s_kv,s_kv,1}));
     float dropout_scale = 0.5f;
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention("mha")
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_dropout(dropout_mask, dropout_scale);
                                                     

@@ -9,10 +9,10 @@
 namespace cudnn_frontend::graph {
 
 class RngNode : public INode {
-    Rng options;
+    Rng_attributes options;
 public:
 
-    RngNode(std::string const& name, Rng&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    RngNode(std::string const& name, Rng_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
 

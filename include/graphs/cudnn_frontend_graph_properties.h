@@ -65,13 +65,6 @@ public:
         return 0;
     }
     
-    size_t 
-    get_tensor_size()
-    {
-        size_t initialProduct = 1;
-        return std::accumulate(dim.begin(), dim.end(), initialProduct, std::multiplies<int64_t>());
-    }
-    
     Tensor_attributes() = default;
     Tensor_attributes(const std::string &name) : name(name) {}
 
@@ -165,11 +158,6 @@ public:
     }
 };
 
-inline std::ostream& operator<<(std::ostream& os, const Tensor_attributes& tensor) {
-    os << json{tensor};
-    return os;
-}
-
 class Operation {
 public:
     enum class Tag {
@@ -178,6 +166,7 @@ public:
         Conv_fprop,
         Conv_dgrad,
         Conv_wgrad,
+        DBN,
         DBN_weight,
         Genstats,
         Matmul,
@@ -216,7 +205,7 @@ public:
     virtual ~Operation() = default;
 };
 
-class BN_finalize : public Operation {
+class BN_finalize_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> SUM;
@@ -258,15 +247,15 @@ public:
                                     , NEXT_RUNNING_MEAN
                                     , NEXT_RUNNING_VAR)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize_attributes
                                     , name
                                     , inputs
                                     , outputs)
 
-    BN_finalize() : Operation(Tag::BN_finalize) {}
-    BN_finalize(const std::string name) : Operation(name, Tag::BN_finalize) {}
+    BN_finalize_attributes() : Operation(Tag::BN_finalize) {}
+    BN_finalize_attributes(const std::string name) : Operation(name, Tag::BN_finalize) {}
 
-    BN_finalize& set_compute_data_type(DataType_t value) {
+    BN_finalize_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
@@ -279,7 +268,7 @@ public:
         outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");
     }
 
-    auto fill_from_context(detail::Context const& context) -> BN_finalize& {
+    auto fill_from_context(detail::Context const& context) -> BN_finalize_attributes& {
         // Fill node's tensors
         inputs.SUM->fill_from_context(context);
         inputs.SQ_SUM->fill_from_context(context);
@@ -306,7 +295,7 @@ public:
     }
 };
 
-class Genstats : public Operation {
+class Genstats_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> X;
@@ -324,20 +313,20 @@ public:
                                     , SUM
                                     , SQ_SUM)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes
                                     , name
                                     , inputs
                                     , outputs)
 
-    Genstats() : Operation(Tag::Genstats) {}
-    Genstats(const std::string name) : Operation(name, Tag::Genstats) {}
+    Genstats_attributes() : Operation(Tag::Genstats) {}
+    Genstats_attributes(const std::string name) : Operation(name, Tag::Genstats) {}
 
-    Genstats& set_compute_data_type(DataType_t value) {
+    Genstats_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Genstats& {
+    auto fill_from_context(detail::Context const& context) -> Genstats_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         outputs.SUM->fill_from_context(context);
@@ -351,7 +340,7 @@ public:
     }
 };
 
-class Conv_fprop : public Operation {
+class Conv_fprop_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> X;
@@ -377,7 +366,7 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , Y)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes
                                     , name
                                     , inputs
                                     , outputs
@@ -385,10 +374,10 @@ public:
                                     , stride
                                     , dilation)
 
-    Conv_fprop() : Operation(Tag::Conv_fprop) {}
-    Conv_fprop(const std::string name) : Operation(name, Tag::Conv_fprop) {}
+    Conv_fprop_attributes() : Operation(Tag::Conv_fprop) {}
+    Conv_fprop_attributes(const std::string name) : Operation(name, Tag::Conv_fprop) {}
 
-    Conv_fprop& set_compute_data_type(DataType_t const value) {
+    Conv_fprop_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
@@ -397,7 +386,7 @@ public:
         return padding;
     }
 
-    Conv_fprop& set_padding(std::vector<int64_t> value) {
+    Conv_fprop_attributes& set_padding(std::vector<int64_t> value) {
         padding = value;
         is_padding_set = true;
         return *this;
@@ -407,7 +396,7 @@ public:
         return stride;
     }
 
-    Conv_fprop& set_stride(std::vector<int64_t> value) {
+    Conv_fprop_attributes& set_stride(std::vector<int64_t> value) {
         stride = value;
         is_stride_set = true;
         return *this;
@@ -417,13 +406,13 @@ public:
         return dilation;
     }
 
-    Conv_fprop& set_dilation(std::vector<int64_t> value) {
+    Conv_fprop_attributes& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         is_dilation_set = true;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Conv_fprop& {
+    auto fill_from_context(detail::Context const& context) -> Conv_fprop_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.W->fill_from_context(context);
@@ -437,7 +426,7 @@ public:
     }
 };
 
-class DBN : public Operation {
+class DBN_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> DY;
@@ -467,20 +456,20 @@ public:
                                     , DSCALE
                                     , DBIAS)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_attributes
                                     , name
                                     , inputs
                                     , outputs)
 
-    DBN() : Operation(Tag::BN) {}
-    DBN(const std::string name) : Operation(name, Tag::BN) {}
+    DBN_attributes() : Operation(Tag::DBN) {}
+    DBN_attributes(const std::string name) : Operation(name, Tag::DBN) {}
     
-    DBN& set_compute_data_type(DataType_t value) {
+    DBN_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    DBN& set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
+    DBN_attributes& set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
         return *this;
     }
@@ -491,7 +480,7 @@ public:
         outputs.DBIAS = output_tensor(name + "_DBIAS_output");
     }
 
-    auto fill_from_context(detail::Context const& context) -> DBN& {
+    auto fill_from_context(detail::Context const& context) -> DBN_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
@@ -512,7 +501,7 @@ public:
     }
 };
 
-class DBN_weight : public Operation {
+class DBN_weight_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> X;
@@ -544,15 +533,15 @@ public:
                                     , EQ_SCALE_X
                                     , EQ_BIAS)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes
                                     , name
                                     , inputs
                                     , outputs)
 
-    DBN_weight() : Operation(Tag::DBN_weight) {}
-    DBN_weight(const std::string name) : Operation(name, Tag::DBN_weight) {}
+    DBN_weight_attributes() : Operation(Tag::DBN_weight) {}
+    DBN_weight_attributes(const std::string name) : Operation(name, Tag::DBN_weight) {}
 
-    DBN_weight& set_compute_data_type(DataType_t value) {
+    DBN_weight_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
@@ -566,7 +555,7 @@ public:
         outputs.EQ_BIAS = output_tensor(name + "_eq_bias_output");
     }
 
-    auto fill_from_context(detail::Context const& context) -> DBN_weight& {
+    auto fill_from_context(detail::Context const& context) -> DBN_weight_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.MEAN->fill_from_context(context);
@@ -587,7 +576,7 @@ public:
     }
 };
 
-class Conv_dgrad : public Operation {
+class Conv_dgrad_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> DY;
@@ -609,7 +598,7 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , DX)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes
                                 , name
                                 , inputs
                                 , outputs
@@ -617,10 +606,10 @@ public:
                                 , stride
                                 , dilation)
 
-    Conv_dgrad() : Operation(Tag::Conv_dgrad) {}
-    Conv_dgrad(const std::string name) : Operation(name, Tag::Conv_dgrad) {}
+    Conv_dgrad_attributes() : Operation(Tag::Conv_dgrad) {}
+    Conv_dgrad_attributes(const std::string name) : Operation(name, Tag::Conv_dgrad) {}
 
-    Conv_dgrad& set_compute_data_type(DataType_t value) {
+    Conv_dgrad_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
@@ -629,7 +618,7 @@ public:
         return padding;
     }
 
-    Conv_dgrad& set_padding(std::vector<int64_t> value) {
+    Conv_dgrad_attributes& set_padding(std::vector<int64_t> value) {
         padding = value;
         return *this;
     }
@@ -638,7 +627,7 @@ public:
         return stride;
     }
 
-    Conv_dgrad& set_stride(std::vector<int64_t> value) {
+    Conv_dgrad_attributes& set_stride(std::vector<int64_t> value) {
         stride = value;
         return *this;
     }
@@ -647,12 +636,12 @@ public:
         return dilation;
     }
 
-    Conv_dgrad& set_dilation(std::vector<int64_t> value) {
+    Conv_dgrad_attributes& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Conv_dgrad& {
+    auto fill_from_context(detail::Context const& context) -> Conv_dgrad_attributes& {
         // Fill node's tensors
         inputs.DY->fill_from_context(context);
         inputs.W->fill_from_context(context);
@@ -666,7 +655,7 @@ public:
     }
 };
 
-class Matmul : public Operation {
+class Matmul_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> A;
@@ -690,19 +679,20 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , C)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes
                                 , name
                                 , inputs
                                 , outputs)
                                 
-    Matmul(const std::string name) : Operation(name, Tag::Matmul) {}
+    Matmul_attributes() : Operation(Tag::Matmul) {}
+    Matmul_attributes(const std::string name) : Operation(name, Tag::Matmul) {}
 
-    Matmul& set_compute_data_type(DataType_t value) {
+    Matmul_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Matmul& {
+    auto fill_from_context(detail::Context const& context) -> Matmul_attributes& {
         // Fill node's tensors
         inputs.A->fill_from_context(context);
         inputs.B->fill_from_context(context);
@@ -720,7 +710,7 @@ public:
     }
 };
 
-class Pointwise : public Operation {
+class Pointwise_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> IN_0;
@@ -743,17 +733,17 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , OUT_0)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes
                                     , name
                                     , inputs
                                     , outputs
                                     , mode
                                     , axis)
 
-    Pointwise() : Operation(Tag::Pointwise) {}
-    Pointwise(const std::string name) : Operation(name, Tag::Pointwise) {}
+    Pointwise_attributes() : Operation(Tag::Pointwise) {}
+    Pointwise_attributes(const std::string name) : Operation(name, Tag::Pointwise) {}
 
-    Pointwise& set_compute_data_type(DataType_t const value) {
+    Pointwise_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
@@ -762,7 +752,7 @@ public:
         return mode;
     }
 
-    Pointwise& set_mode(PointwiseMode_t const value) {
+    Pointwise_attributes& set_mode(PointwiseMode_t const value) {
         mode = value;
         return *this;
     }
@@ -771,12 +761,12 @@ public:
         return axis;
     }
 
-    Pointwise& set_axis(int64_t const axis) {
+    Pointwise_attributes& set_axis(int64_t const axis) {
         this->axis = axis;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Pointwise& {
+    auto fill_from_context(detail::Context const& context) -> Pointwise_attributes& {
         // Fill node's tensors
         inputs.IN_0->fill_from_context(context);
         if(inputs.IN_1)inputs.IN_1->fill_from_context(context);
@@ -791,7 +781,7 @@ public:
     }
 };
 
-class Batchnorm : public Operation {
+class Batchnorm_attributes : public Operation {
 public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> X;
@@ -829,31 +819,31 @@ public:
                                     , NEXT_RUNNING_MEAN
                                     , NEXT_RUNNING_VAR)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes
                                     , name
                                     , inputs
                                     , outputs
                                     , forward_phase)
 
-    Batchnorm() : Operation(Tag::BN) {}
-    Batchnorm(const std::string name) : Operation(name, Tag::BN) {}
+    Batchnorm_attributes() : Operation(Tag::BN) {}
+    Batchnorm_attributes(const std::string name) : Operation(name, Tag::BN) {}
     
-    Batchnorm& set_compute_data_type(DataType_t value) {
+    Batchnorm_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    Batchnorm& set_forward_phase(NormFwdPhase_t const value) {
+    Batchnorm_attributes& set_forward_phase(NormFwdPhase_t const value) {
         forward_phase = value;
         return *this;
     }
 
-    Batchnorm& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
+    Batchnorm_attributes& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
         return *this;
     }
 
-    Batchnorm& set_momentum(std::shared_ptr<Tensor_attributes>& value) {
+    Batchnorm_attributes& set_momentum(std::shared_ptr<Tensor_attributes>& value) {
         inputs.MOMENTUM = value;
         return *this;
     }
@@ -866,7 +856,7 @@ public:
         outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Batchnorm& {
+    auto fill_from_context(detail::Context const& context) -> Batchnorm_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
@@ -889,7 +879,7 @@ public:
     }
 };
 
-class Reduction : public Operation {
+class Reduction_attributes : public Operation {
 public:
     
     struct Inputs {
@@ -908,29 +898,30 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , Y)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes
                                 , name
                                 , inputs
                                 , outputs
                                 , mode)
 
-    Reduction(const std::string name) : Operation(name, Tag::Reduction) {}
+    Reduction_attributes() : Operation(Tag::Reduction) {}
+    Reduction_attributes(const std::string name) : Operation(name, Tag::Reduction) {}
 
     std::optional<ReductionMode_t> get_mode() const {
         return mode;
     }
 
-    Reduction& set_mode(ReductionMode_t value) {
+    Reduction_attributes& set_mode(ReductionMode_t value) {
         mode = value;
         return *this;
     }
     
-    Reduction& set_compute_data_type(DataType_t value) {
+    Reduction_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Reduction& {
+    auto fill_from_context(detail::Context const& context) -> Reduction_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         outputs.Y->fill_from_context(context);
@@ -943,7 +934,7 @@ public:
     }
 };
 
-class Rng : public Operation {
+class Rng_attributes : public Operation {
 public:
     
     struct Inputs {
@@ -966,7 +957,7 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , Y)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng_attributes
                                 , name
                                 , inputs
                                 , outputs
@@ -974,13 +965,14 @@ public:
                                 , seed
                                 , bernoulli_probability)
 
-    Rng(const std::string name) : Operation(name, Tag::Rng) {}
+    Rng_attributes() : Operation(Tag::Rng) {}
+    Rng_attributes(const std::string name) : Operation(name, Tag::Rng) {}
 
     RngDistribution_t get_distribution() const {
         return distribution;
     }
 
-    Rng& set_distribution(RngDistribution_t value) {
+    Rng_attributes& set_distribution(RngDistribution_t value) {
         distribution = value;
         return *this;
     }
@@ -989,7 +981,7 @@ public:
         return seed;
     }
 
-    Rng& set_seed(std::optional<int64_t> value) {
+    Rng_attributes& set_seed(std::optional<int64_t> value) {
         seed = value;
         return *this;
     }
@@ -998,17 +990,17 @@ public:
         return bernoulli_probability;
     }
 
-    Rng& set_bernoulli_probability(std::optional<double> value) {
+    Rng_attributes& set_bernoulli_probability(std::optional<double> value) {
         bernoulli_probability = value;
         return *this;
     }
     
-    Rng& set_compute_data_type(DataType_t value) {
+    Rng_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Rng& {
+    auto fill_from_context(detail::Context const& context) -> Rng_attributes& {
         // Fill node's tensors
         if(inputs.Seed)inputs.Seed->fill_from_context(context);
         if(inputs.Offset)inputs.Offset->fill_from_context(context);
@@ -1022,7 +1014,7 @@ public:
     }
 };
 
-class Scaled_dot_product_attention : public Operation {
+class Scaled_dot_product_attention_attributes : public Operation {
 public:
 
     struct Inputs {
@@ -1050,51 +1042,52 @@ public:
     float dropout_scale = 1.f;
     
 public:
-    Scaled_dot_product_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
+    Scaled_dot_product_attention_attributes() : Operation(Tag::Scaled_dot_product_attention), is_inference(false) {}
+    Scaled_dot_product_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
 
-    Scaled_dot_product_attention& set_is_inference(bool const value){
+    Scaled_dot_product_attention_attributes& set_is_inference(bool const value){
         is_inference = value;
         return *this;
     }
 
-    Scaled_dot_product_attention& use_padding_mask(){
+    Scaled_dot_product_attention_attributes& use_padding_mask(){
         padding_mask = true;
         return *this;
     }
     
-    Scaled_dot_product_attention& use_causal_mask(){
+    Scaled_dot_product_attention_attributes& use_causal_mask(){
         causal_mask = true;
         return *this;
     }
 
-    Scaled_dot_product_attention& set_scale_k(std::shared_ptr<Tensor_attributes> value){
+    Scaled_dot_product_attention_attributes& set_scale_k(std::shared_ptr<Tensor_attributes> value){
         inputs.Scale_k = value;
         return *this;
     }
     
-    Scaled_dot_product_attention& set_bias(std::shared_ptr<Tensor_attributes> bias){
+    Scaled_dot_product_attention_attributes& set_bias(std::shared_ptr<Tensor_attributes> bias){
         inputs.Bias = bias;
         return *this;
     }
 
-    Scaled_dot_product_attention& set_dropout(float const probability, int64_t const seed_) {
+    Scaled_dot_product_attention_attributes& set_dropout(float const probability, int64_t const seed_) {
         dropout_probability = probability;
         seed = seed_;
         return *this;
     }
     
-    Scaled_dot_product_attention& set_dropout(std::shared_ptr<Tensor_attributes> mask, float const scale) {
+    Scaled_dot_product_attention_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask, float const scale) {
         inputs.Dropout_mask = mask;
         dropout_scale = scale;
         return *this;
     }
 
-    Scaled_dot_product_attention& set_compute_data_type(DataType_t const value) {
+    Scaled_dot_product_attention_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
 
-    Scaled_dot_product_attention& fill_from_context(detail::Context const& context) {
+    Scaled_dot_product_attention_attributes& fill_from_context(detail::Context const& context) {
         // Fill node's tensors
         inputs.Q->fill_from_context(context);
         inputs.K->fill_from_context(context);
@@ -1111,7 +1104,7 @@ public:
     }
 };
 
-class Scaled_dot_product_flash_attention : public Operation {
+class Scaled_dot_product_flash_attention_attributes : public Operation {
 public:
 
     struct Inputs {
@@ -1135,46 +1128,47 @@ public:
     std::optional<float> dropout_probability;
     float dropout_scale = 1.f;
     
-    Scaled_dot_product_flash_attention(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
+    Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
+    Scaled_dot_product_flash_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
 
-    Scaled_dot_product_flash_attention& set_is_inference(bool const value){
+    Scaled_dot_product_flash_attention_attributes& set_is_inference(bool const value){
         is_inference = value;
         return *this;
     }
     
-    Scaled_dot_product_flash_attention& use_padding_mask(){
+    Scaled_dot_product_flash_attention_attributes& use_padding_mask(){
         padding_mask = true;
         return *this;
     }
     
-    Scaled_dot_product_flash_attention& use_alibi_mask(){
+    Scaled_dot_product_flash_attention_attributes& use_alibi_mask(){
         alibi_mask = true;
         return *this;
     }
     
-    Scaled_dot_product_flash_attention& use_causal_mask(){
+    Scaled_dot_product_flash_attention_attributes& use_causal_mask(){
         causal_mask = true;
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& set_scale_k(std::shared_ptr<Tensor_attributes> value){
+    Scaled_dot_product_flash_attention_attributes& set_scale_k(std::shared_ptr<Tensor_attributes> value){
         inputs.Scale_k = value;
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& set_dropout(float const probability, std::shared_ptr<Tensor_attributes> seed, std::shared_ptr<Tensor_attributes> offset) {
+    Scaled_dot_product_flash_attention_attributes& set_dropout(float const probability, std::shared_ptr<Tensor_attributes> seed, std::shared_ptr<Tensor_attributes> offset) {
         dropout_probability = probability;
         inputs.Seed = seed;
         inputs.Offset = offset;
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& set_compute_data_type(DataType_t const value) {
+    Scaled_dot_product_flash_attention_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& fill_from_context(detail::Context const& context) {
+    Scaled_dot_product_flash_attention_attributes& fill_from_context(detail::Context const& context) {
         // Fill node's tensors
         inputs.Q->fill_from_context(context);
         inputs.K->fill_from_context(context);
@@ -1189,7 +1183,7 @@ public:
     }
 };
 
-class Softmax : public Operation {
+class Softmax_attributes : public Operation {
     friend class SoftmaxNode;
     friend class ScaledDotProductAttentionNode;
     friend class ScaledDotProductFlashAttentionNode;
@@ -1209,19 +1203,20 @@ private:
     bool use_stats = false;
 
 public:
-    Softmax(const std::string name) : Operation(name, Tag::Softmax) {}
+    Softmax_attributes() : Operation(Tag::Softmax) {}
+    Softmax_attributes(const std::string name) : Operation(name, Tag::Softmax) {}
 
-    Softmax& set_is_inference(bool const value){
+    Softmax_attributes& set_is_inference(bool const value){
         is_inference = value;
         return *this;
     }
 
-    Softmax& set_compute_data_type(DataType_t const value) {
+    Softmax_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
     }
 
-    Softmax& fill_from_context(detail::Context const& context) {
+    Softmax_attributes& fill_from_context(detail::Context const& context) {
         // Fill node's tensors
         inputs.P->fill_from_context(context);
         outputs.S->fill_from_context(context);
@@ -1234,7 +1229,7 @@ public:
     }
 };
 
-class Conv_wgrad : public Operation {
+class Conv_wgrad_attributes : public Operation {
 public:
     
     struct Inputs {
@@ -1257,7 +1252,7 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , DW)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes
                                 , name
                                 , inputs
                                 , outputs
@@ -1265,10 +1260,10 @@ public:
                                 , stride
                                 , dilation)
 
-    Conv_wgrad() : Operation(Tag::Conv_wgrad) {}
-    Conv_wgrad(const std::string name) : Operation(name, Tag::Conv_wgrad) {}
+    Conv_wgrad_attributes() : Operation(Tag::Conv_wgrad) {}
+    Conv_wgrad_attributes(const std::string name) : Operation(name, Tag::Conv_wgrad) {}
 
-    Conv_wgrad& set_compute_data_type(DataType_t value) {
+    Conv_wgrad_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
@@ -1277,7 +1272,7 @@ public:
         return padding;
     }
 
-    Conv_wgrad& set_padding(std::vector<int64_t> value) {
+    Conv_wgrad_attributes& set_padding(std::vector<int64_t> value) {
         padding = value;
         return *this;
     }
@@ -1286,7 +1281,7 @@ public:
         return stride;
     }
 
-    Conv_wgrad& set_stride(std::vector<int64_t> value) {
+    Conv_wgrad_attributes& set_stride(std::vector<int64_t> value) {
         stride = value;
         return *this;
     }
@@ -1295,12 +1290,12 @@ public:
         return dilation;
     }
 
-    Conv_wgrad& set_dilation(std::vector<int64_t> value) {
+    Conv_wgrad_attributes& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Conv_wgrad& {
+    auto fill_from_context(detail::Context const& context) -> Conv_wgrad_attributes& {
         // Fill node's tensors
         inputs.DY->fill_from_context(context);
         inputs.X->fill_from_context(context);

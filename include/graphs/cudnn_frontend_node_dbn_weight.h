@@ -11,10 +11,10 @@ namespace cudnn_frontend {
 namespace graph {
 
 class DBNWeightNode : public INode {
-    DBN_weight options;
+    DBN_weight_attributes options;
 public:
 
-    DBNWeightNode(std::string const& name, DBN_weight&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    DBNWeightNode(std::string const& name, DBN_weight_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
         
         // outputs should be float type

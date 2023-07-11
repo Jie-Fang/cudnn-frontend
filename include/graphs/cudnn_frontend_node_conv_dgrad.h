@@ -10,10 +10,10 @@
 namespace cudnn_frontend::graph {
 
 class DgradNode : public INode {
-    Conv_dgrad options;
+    Conv_dgrad_attributes options;
 public:
 
-    DgradNode(std::string const& name, Conv_dgrad&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    DgradNode(std::string const& name, Conv_dgrad_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
 

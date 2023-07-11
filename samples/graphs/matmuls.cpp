@@ -38,23 +38,23 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     X->generateStrides(CUDNN_TENSOR_NHWC);
     Y->generateStrides(CUDNN_TENSOR_NHWC);
     
-    fe::graph::Matmul matmul("matmul");
+    fe::graph::Matmul_attributes matmul("matmul");
     auto Z = graph.matmul(X, Y, matmul);
     Z->set_is_virtual(true);
 
-    auto scale_options = fe::graph::Pointwise("pw_scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto scale_options = fe::graph::Pointwise_attributes("pw_scale").set_mode(fe::PointwiseMode_t::MUL);
     auto S = graph.tensor(fe::graph::Tensor_attributes("scale").set_dim({4, 16, 32}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
     auto scale_output = graph.pointwise(Z, S, scale_options);
     scale_output->set_is_virtual(true);
 
-    auto bias_options = fe::graph::Pointwise("pw_bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto bias_options = fe::graph::Pointwise_attributes("pw_bias").set_mode(fe::PointwiseMode_t::ADD);
     auto B = graph.tensor(fe::graph::Tensor_attributes("bias").set_dim({4, 16, 32}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
 
-    auto relu_options = fe::graph::Pointwise("pw_relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise_attributes("pw_relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto O = graph.pointwise(bias_output, relu_options);
 
     cudnnHandle_t handle;

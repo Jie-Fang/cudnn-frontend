@@ -11,9 +11,9 @@ namespace cudnn_frontend::graph {
 
 class ConvolutionNode : public INode {
 public:
-    Conv_fprop options;
+    Conv_fprop_attributes options;
 
-    ConvolutionNode(std::string const& name, Conv_fprop&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    ConvolutionNode(std::string const& name, Conv_fprop_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
 

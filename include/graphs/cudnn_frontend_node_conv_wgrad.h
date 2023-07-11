@@ -10,10 +10,10 @@
 namespace cudnn_frontend::graph {
 
 class WgradNode : public INode {
-    Conv_wgrad options;
+    Conv_wgrad_attributes options;
 public:
 
-    WgradNode(std::string const& name, Conv_wgrad&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    WgradNode(std::string const& name, Conv_wgrad_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
     

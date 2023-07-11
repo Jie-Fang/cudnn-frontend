@@ -11,10 +11,10 @@ namespace cudnn_frontend {
 namespace graph {
 
 class BatchNormFinalizeNode : public INode {
-    BN_finalize options;
+    BN_finalize_attributes options;
 public:
 
-    BatchNormFinalizeNode(std::string const& name, BN_finalize&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    BatchNormFinalizeNode(std::string const& name, BN_finalize_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
 

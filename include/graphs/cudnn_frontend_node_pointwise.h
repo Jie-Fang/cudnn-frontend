@@ -11,9 +11,9 @@ namespace cudnn_frontend::graph {
 
 class PointwiseNode : public INode {
 public:
-    Pointwise options;
+    Pointwise_attributes options;
 
-    PointwiseNode(std::string const& name, Pointwise&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    PointwiseNode(std::string const& name, Pointwise_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
     

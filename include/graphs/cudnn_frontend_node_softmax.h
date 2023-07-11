@@ -20,10 +20,10 @@ namespace cudnn_frontend::graph {
         std::shared_ptr<Tensor_attributes> SUM;
         std::shared_ptr<Tensor_attributes> LOG;
 
-        Softmax options;
+        Softmax_attributes options;
     public:
 
-        SoftmaxNode(std::string const& name, Softmax&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        SoftmaxNode(std::string const& name, Softmax_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
             options.fill_from_context(get_context());
             
             // A dummy/virtual underlying tensor
@@ -41,7 +41,7 @@ namespace cudnn_frontend::graph {
             }
 
             // Lower options to max options
-            auto max_options = Reduction("max");
+            auto max_options = Reduction_attributes("max");
             max_options.set_mode(ReductionMode_t::MAX);
             max_options.inputs.X = options.inputs.P;
             max_options.outputs.Y = MAX;
@@ -49,7 +49,7 @@ namespace cudnn_frontend::graph {
             sub_nodes.emplace_back(std::move(max_node));
 
             // Lower options to sub options
-            auto sub_options = Pointwise("sub");
+            auto sub_options = Pointwise_attributes("sub");
             sub_options.set_mode(PointwiseMode_t::SUB);
             sub_options.inputs.IN_0 = options.inputs.P;
             sub_options.inputs.IN_1 = MAX;
@@ -58,7 +58,7 @@ namespace cudnn_frontend::graph {
             sub_nodes.emplace_back(std::move(sub_node));
 
             // Lower options to exp options
-            auto exp_options = Pointwise("exp");
+            auto exp_options = Pointwise_attributes("exp");
             exp_options.set_mode(PointwiseMode_t::EXP);
             exp_options.inputs.IN_0 = P_MAX;
             exp_options.outputs.OUT_0 = E;
@@ -66,7 +66,7 @@ namespace cudnn_frontend::graph {
             sub_nodes.emplace_back(std::move(exp_node));
 
             // Lower options to reduce sum options
-            auto sum_options = Reduction("sum");
+            auto sum_options = Reduction_attributes("sum");
             sum_options.set_mode(ReductionMode_t::ADD);
             sum_options.inputs.X = E;
             sum_options.outputs.Y = SUM;
@@ -76,7 +76,7 @@ namespace cudnn_frontend::graph {
             // Another path to add when in flash attention mode.
             if(options.use_stats) {
                 // Lower options to log options
-                auto log_options = Pointwise("log");
+                auto log_options = Pointwise_attributes("log");
                 log_options.set_mode(PointwiseMode_t::LOG);
                 log_options.inputs.IN_0 = SUM;
                 log_options.outputs.OUT_0 = LOG;
@@ -84,7 +84,7 @@ namespace cudnn_frontend::graph {
                 sub_nodes.emplace_back(std::move(log_node));
 
                 // Lower options to add options
-                auto add_options = Pointwise("add_stats");
+                auto add_options = Pointwise_attributes("add_stats");
                 add_options.set_mode(PointwiseMode_t::ADD);
                 add_options.inputs.IN_0 = MAX;
                 add_options.inputs.IN_1 = LOG;
@@ -94,7 +94,7 @@ namespace cudnn_frontend::graph {
             }
 
             // Lower options to div options
-            auto div_options = Pointwise("div");
+            auto div_options = Pointwise_attributes("div");
             div_options.set_mode(PointwiseMode_t::DIV);
             div_options.inputs.IN_0 = E;
             div_options.inputs.IN_1 = SUM;

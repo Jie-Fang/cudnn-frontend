@@ -10,10 +10,10 @@
 namespace cudnn_frontend::graph {
 
     class MatmulNode : public INode {
-        Matmul options;
+        Matmul_attributes options;
     public:
 
-        MatmulNode(std::string const& name, Matmul&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+        MatmulNode(std::string const& name, Matmul_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
             options.fill_from_context(get_context());
         }
         

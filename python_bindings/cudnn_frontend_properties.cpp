@@ -31,7 +31,7 @@ void init_properties(py::module_ &m) {
         .def("set_uid", &cudnn_frontend::graph::Tensor_attributes::set_uid)
         .def("__repr__", [](cudnn_frontend::graph::Tensor_attributes const& props){
             std::ostringstream out;
-            out << props;
+            out << json{props};
             return out.str();
         });
 }

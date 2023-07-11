@@ -12,9 +12,9 @@ namespace graph {
 
 class BatchNormNode : public INode {
 public:
-    Batchnorm options;
+    Batchnorm_attributes options;
 
-    BatchNormNode(std::string const& name, Batchnorm&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    BatchNormNode(std::string const& name, Batchnorm_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
     }
 

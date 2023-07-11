@@ -10,9 +10,9 @@ namespace cudnn_frontend {
 namespace graph {
 
 class GenstatsNode : public INode {
-    Genstats options;
+    Genstats_attributes options;
 public:
-    GenstatsNode(std::string const& name, Genstats&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {
+    GenstatsNode(std::string const& name, Genstats_attributes&& options_, detail::Context const& context) : INode (name, context), options(std::move(options_)) {
         options.fill_from_context(get_context());
         
         // outputs should be float type

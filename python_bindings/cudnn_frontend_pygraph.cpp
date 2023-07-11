@@ -121,7 +121,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Batchnorm(name)
+        auto props = cudnn_frontend::graph::Batchnorm_attributes(name)
                         .set_forward_phase(forward_phase)
                         .set_compute_data_type(compute_data_type)
                         .set_epsilon(epsilon)
@@ -146,7 +146,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& inv_variance_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::DBN(name)
+        auto props = cudnn_frontend::graph::DBN_attributes(name)
                         .set_compute_data_type(compute_data_type);
         props.inputs.X = input_props_ptr;
         props.inputs.DY = grad_props_ptr;
@@ -172,7 +172,7 @@ public:
         std::vector<int64_t> const& stride,
         std::vector<int64_t> const& dilation
     ) {
-        auto props = cudnn_frontend::graph::Conv_fprop(name)
+        auto props = cudnn_frontend::graph::Conv_fprop_attributes(name)
                         .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
@@ -201,7 +201,7 @@ public:
         std::vector<int64_t> const& stride,
         std::vector<int64_t> const& dilation
     ) {
-        auto props = cudnn_frontend::graph::Conv_wgrad(name)
+        auto props = cudnn_frontend::graph::Conv_wgrad_attributes(name)
                         .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
@@ -227,7 +227,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Matmul(name).set_compute_data_type(compute_data_type);
+        auto props = cudnn_frontend::graph::Matmul_attributes(name).set_compute_data_type(compute_data_type);
         props.inputs.A = image_props_ptr;
         props.inputs.B = weight_props_ptr;
         auto [C] = graph.matmul(props.inputs, props);
@@ -249,7 +249,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
+        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
         props.inputs.IN_0 = input_props_ptr;
         props.inputs.IN_1 = bias_props_ptr;
         auto [OUT_0] = graph.pointwise(props.inputs, props);
@@ -271,7 +271,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
+        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
         props.inputs.IN_0 = input_props_ptr;
         props.inputs.IN_1 = scale_props_ptr;
         auto [OUT_0] = graph.pointwise(props.inputs, props);
@@ -292,7 +292,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
         props.inputs.IN_0 = input_props_ptr;
         auto [OUT_0] = graph.pointwise(props.inputs, props);
 
@@ -308,7 +308,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Genstats(name).set_compute_data_type(compute_data_type);
+        auto props = cudnn_frontend::graph::Genstats_attributes(name).set_compute_data_type(compute_data_type);
         props.inputs.X = input_props_ptr;
         auto [SUM, SQ_SUM] = graph.genstats(props.inputs.X, props);
 
@@ -329,7 +329,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
+        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
         props.inputs.IN_0 = input_props_ptr;
         auto [OUT_0] = graph.pointwise(props.inputs, props);
 
@@ -349,7 +349,7 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
+        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
         props.inputs.IN_0 = input_props_ptr;
         auto [OUT_0] = graph.pointwise(props.inputs, props);
 
@@ -375,7 +375,7 @@ public:
         , py::object const dropout
         , cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto scaled_dot_product_attention_options = cudnn_frontend::graph::Scaled_dot_product_attention("mha")
+        auto scaled_dot_product_attention_options = cudnn_frontend::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_scale_k(scale_k)
                                                     .set_compute_data_type(compute_data_type);
@@ -447,7 +447,7 @@ public:
         , py::object const dropout
         , cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto scaled_dot_product_flash_attention_options = cudnn_frontend::graph::Scaled_dot_product_flash_attention("mha")
+        auto scaled_dot_product_flash_attention_options = cudnn_frontend::graph::Scaled_dot_product_flash_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_scale_k(scale_k)
                                                     .set_compute_data_type(compute_data_type);
