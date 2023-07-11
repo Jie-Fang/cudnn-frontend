@@ -11,7 +11,7 @@ class MBGraphModule:
     def __init__(self, cudnn_graph):
         self.cudnn_graph = cudnn_graph
         self.variant_pack = {}
-        self.debug = True
+        self.debug = False
 
     def add_gemm(self, x, w):
         b1, m1, k1 = x.size()
@@ -29,7 +29,7 @@ class MBGraphModule:
         self.variant_pack[weight] = w.data_ptr()
 
         gemm_output = self.cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight, compute_data_type = pycudnn.data_type.FLOAT)
-        
+        gemm_output.set_data_type (pycudnn.data_type.FLOAT)
         # DEBUG
         if self.debug:
             gemm_output.set_stride([m1*n1, 1, m1])
@@ -66,6 +66,104 @@ def convert_to_cudnn_type(torch_type):
 
     return
 
+@pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [([16, 32, 64, 128], [16,32,64,])])
+def test_gemm_more_explicit(in_dim, expected_gemm_out_dim):
+    # Can put this in fixture:
+    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+
+
+    B, M, N, K = in_dim
+    x = torch.randn(B, M, K, device="cuda", dtype=torch.float16)
+    w = torch.randn(B, K, N, device="cuda", dtype=torch.float16)
+
+    image = cudnn_graph.tensor(name = "image", dim = x.size(), stride = x.stride(), data_type = convert_to_cudnn_type(x.dtype))
+    weight = cudnn_graph.tensor(name = "weight", dim = w.size(), stride = w.stride(), data_type = convert_to_cudnn_type(w.dtype))
+
+    variant_pack = {}
+    variant_pack[image] = x
+    variant_pack[weight] = w
+
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight, compute_data_type = pycudnn.data_type.FLOAT)
+    gemm_output.set_data_type (pycudnn.data_type.HALF)
+    # DEBUG
+    col_major_C = False
+    if col_major_C:
+        gemm_output.set_stride([M*N, 1, M])
+    else:
+        gemm_output.set_stride([M*N, N, 1])
+
+
+    Y = gemm_output
+    Y.set_output(True)
+
+    output = torch.zeros([B,M,N], dtype=torch.float16, device='cuda')
+
+    variant_pack[Y] = output
+
+    cudnn_graph.build()
+    print(cudnn_graph)
+
+    workspace = torch.empty(cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    # Compare output with a reference implementation
+    cudnn_graph.execute(variant_pack, workspace)
+
+
+    pyt_out = torch.transpose(torch.bmm(x, w), 1, 2)
+    torch.testing.assert_close(output, pyt_out)
+
+@pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [([16, 32, 64, 128], [16,32,64,])])
+def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
+    # Can put this in fixture:
+    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+
+    B, M, N, K = in_dim
+    x = torch.randn(B, M, K, device="cuda", dtype=torch.float16)
+    w = torch.randn(B, K, N, device="cuda", dtype=torch.float16)
+
+    image = cudnn_graph.tensor(name = "image", dim = x.size(), stride = x.stride(), data_type = convert_to_cudnn_type(x.dtype))
+    weight = cudnn_graph.tensor(name = "weight", dim = w.size(), stride = w.stride(), data_type = convert_to_cudnn_type(w.dtype))
+
+    variant_pack = {}
+    variant_pack[image] = x
+    variant_pack[weight] = w
+
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight, compute_data_type = pycudnn.data_type.FLOAT)
+    gemm_output.set_data_type (pycudnn.data_type.HALF)
+    # DEBUG
+    col_major_C = True
+    if col_major_C:
+        gemm_output.set_stride([M*N, 1, M])
+    else:
+        gemm_output.set_stride([M*N, N, 1])
+
+    gemm_output.set_is_virtual(True)
+
+    activation_output = cudnn_graph.relu(name = "relu", input = gemm_output, compute_data_type = pycudnn.data_type.FLOAT)
+    
+    # DEBUG
+    if col_major_C:
+        activation_output.set_stride([M*N, 1, M])
+    else:
+        activation_output.set_stride([M*N, N, 1])
+
+    Y = activation_output
+    Y.set_output(True)
+
+    output = torch.zeros([B,M,N], dtype=torch.float16, device='cuda')
+
+    variant_pack[Y] = activation_output
+
+    cudnn_graph.build()
+    print(cudnn_graph)
+
+    workspace = torch.empty(cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    # Compare output with a reference implementation
+    cudnn_graph.execute(variant_pack, workspace)
+
+
+    pyt_out = torch.transpose(torch.bmm(x, w), 1, 2)
+    torch.testing.assert_close(output, pyt_out)
+
 # Make backend testing optional and allow for "checkpoint"
 @pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [([16, 32, 64, 128], [16,32,64,])])
 def test_gemm_relu_explicit(in_dim, expected_gemm_out_dim):
@@ -81,7 +179,7 @@ def test_gemm_relu_explicit(in_dim, expected_gemm_out_dim):
     Y = mb_graph.add_relu()
     Y.set_output(True)
 
-    output = torch.zeros(mb_graph.problem_size, dtype=torch.float, device='cuda')
+    output = torch.zeros(mb_graph.problem_size, dtype=torch.float16, device='cuda')
 
     mb_graph.variant_pack[mb_graph.last_output] = output.data_ptr()
 
@@ -95,6 +193,39 @@ def test_gemm_relu_explicit(in_dim, expected_gemm_out_dim):
 
     # Check expected shapes
     assert expected_gemm_out_dim == gemm_output.get_dim()
+
+    # Compare output with a reference implementation
+    mb_graph.cudnn_graph.execute(mb_graph.variant_pack)
+    pyt_out = torch.bmm(x, w)
+    pyt_out = F.relu(pyt_out)
+    torch.testing.assert_close(output, pyt_out)
+
+# Make backend testing optional and allow for "checkpoint"
+@pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [([16, 32, 64, 128], [16,32,64,])])
+def test_gemm_explicit(in_dim, expected_gemm_out_dim):
+    # Can put this in fixture:
+    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    mb_graph = MBGraphModule(cudnn_graph)
+
+    B, M, N, K = in_dim
+    x = torch.randn(B, M, K, device="cuda", dtype=torch.float16)
+    w = torch.randn(B, K, N, device="cuda", dtype=torch.float16)
+
+    Y = mb_graph.add_gemm(x,w)
+    Y.set_output(True)
+
+    output = torch.zeros(mb_graph.problem_size, dtype=torch.float16, device='cuda')
+
+    mb_graph.variant_pack[mb_graph.last_output] = output.data_ptr()
+
+    print("Output strides: ", mb_graph.last_output.get_stride())
+
+    print(mb_graph.cudnn_graph)
+
+    mb_graph.cudnn_graph.build()
+
+    # Check expected shapes
+    assert expected_gemm_out_dim == Y.get_dim()
 
     # Compare output with a reference implementation
     mb_graph.cudnn_graph.execute(mb_graph.variant_pack)
@@ -137,7 +268,10 @@ def test_conv_relu():
 
     Y_actual = torch.zeros(*conv_output.get_dim(), dtype=torch.float16, device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
 
-    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual}, workspace)
+    variant_pack = {X: X_gpu, W: W_gpu, Y: Y_actual}
+    print(graph)
+
+    graph.execute(variant_pack, workspace)
 
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
@@ -146,6 +280,8 @@ def test_conv_relu():
 
 
 if __name__ == "__main__":
-    test_conv_relu()
-    test_gemm_relu_explicit([16, 32, 64, 128], [16,32,64,])
+    #test_conv_relu()
+    #test_gemm_relu_explicit([16, 32, 64, 128], [16,32,64,])
+    #test_gemm_more_explicit([16, 32, 64, 128], [16,32,64,])
+    test_gemm_relu_more_explicit([16, 32, 64, 128], [16,32,64,])
     
