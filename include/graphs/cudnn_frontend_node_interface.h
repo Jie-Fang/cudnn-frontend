@@ -318,10 +318,7 @@ public:
 };
 
 static void to_json(json& j, const INode& p) {
-    j["name"] = p.name;
-    json node;
-    p.serialize(node);
-    j["sub_nodes"] = node;
+    p.serialize(j);
 }
 
 class Execution_plan_list {

@@ -128,7 +128,7 @@ protected:
                 }
             }
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Mode " << mode << " config list has " << configs.size() << " configurations." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Mode " << json{mode} << " config list has " << configs.size() << " configurations." << std::endl;
 
             if (configs.size() > 0) { 
                 engine_configs.emplace(op_graph->getTag(), configs);

@@ -221,6 +221,10 @@ public:
     error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
+    
+    virtual void serialize(json& j) const override final {
+        j = options;
+    }
 
 };
 

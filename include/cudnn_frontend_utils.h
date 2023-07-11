@@ -271,6 +271,15 @@ enum class ResampleMode_t{
     MAXPOOL,
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( ResampleMode_t, {
+    {ResampleMode_t::NOT_SET, nullptr},
+    {ResampleMode_t::AVGPOOL_EXCLUDE_PADDING, "AVGPOOL_EXCLUDE_PADDING"},
+    {ResampleMode_t::AVGPOOL_INCLUDE_PADDING, "AVGPOOL_INCLUDE_PADDING"},
+    {ResampleMode_t::BILINEAR, "BILINEAR"},
+    {ResampleMode_t::NEAREST, "NEAREST"},
+    {ResampleMode_t::MAXPOOL, "MAXPOOL"},
+})
+
 enum class PaddingMode_t{
     NOT_SET,
 
@@ -279,12 +288,25 @@ enum class PaddingMode_t{
     ZERO_PAD
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( PaddingMode_t, {
+    {PaddingMode_t::NOT_SET, nullptr},
+    {PaddingMode_t::EDGE_VAL_PAD, "EDGE_VAL_PAD"},
+    {PaddingMode_t::NEG_INF_PAD, "NEG_INF_PAD"},
+    {PaddingMode_t::ZERO_PAD, "ZERO_PAD"},
+})
+
 enum class NormFwdPhase_t {
     NOT_SET,
 
     INFERENCE,
     TRAINING
 };
+
+NLOHMANN_JSON_SERIALIZE_ENUM( NormFwdPhase_t, {
+    {NormFwdPhase_t::NOT_SET, nullptr},
+    {NormFwdPhase_t::INFERENCE, "INFERENCE"},
+    {NormFwdPhase_t::TRAINING, "TRAINING"},
+})
 
 enum class DescriptorType_t {
     NOT_SET,
@@ -333,6 +355,14 @@ enum class NormMode_t {
     BATCH_NORM,
     GROUP_NORM,
 };
+
+NLOHMANN_JSON_SERIALIZE_ENUM( NormMode_t, {
+    {NormMode_t::NOT_SET, nullptr},
+    {NormMode_t::LAYER_NORM, "LAYER_NORM"},
+    {NormMode_t::INSTANCE_NORM, "INSTANCE_NORM"},
+    {NormMode_t::BATCH_NORM, "BATCH_NORM"},
+    {NormMode_t::GROUP_NORM, "GROUP_NORM"},
+})
 
 enum class PointwiseMode_t {
     NOT_SET,
@@ -449,21 +479,11 @@ enum class HeurMode_t {
     HEUR_MODE_FALLBACK,
 };
 
-static inline std::ostream& operator<<(std::ostream& os, const HeurMode_t& mode) {
-    switch (mode) {
-        case HeurMode_t::HEUR_MODE_A:
-            os << "HEUR_MODE_A";
-            break;
-        case HeurMode_t::HEUR_MODE_B:
-            os << "HEUR_MODE_B";
-            break;
-        case HeurMode_t::HEUR_MODE_FALLBACK:
-            os << "HEUR_MODE_FALLBACK";
-            break;
-    }
-    return os;
-}
-
+NLOHMANN_JSON_SERIALIZE_ENUM( HeurMode_t, {
+    {HeurMode_t::HEUR_MODE_A, "HEUR_MODE_A"},
+    {HeurMode_t::HEUR_MODE_B, "HEUR_MODE_B"},
+    {HeurMode_t::HEUR_MODE_FALLBACK, "HEUR_MODE_FALLBACK"},
+})
 
 enum class DataType_t {
     NOT_SET,
@@ -539,6 +559,13 @@ enum class RngDistribution_t {
     NORMAL,
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( RngDistribution_t, {
+    {RngDistribution_t::NOT_SET, nullptr},
+    {RngDistribution_t::BERNOULLI, "BERNOULLI"},
+    {RngDistribution_t::UNIFORM, "UNIFORM"},
+    {RngDistribution_t::NORMAL, "NORMAL"},
+})
+
 static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
     switch (mode) {
         case PointwiseMode_t::NOT_SET:
@@ -601,81 +628,6 @@ static int64_t get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
             return 4;
     }
     return -1;
-}
-
-static inline std::ostream& operator<<(std::ostream& os, const RngDistribution_t& mode) {
-    switch (mode) {
-        case RngDistribution_t::BERNOULLI:
-            os << "BERNOULLI";
-            break;
-        case RngDistribution_t::UNIFORM:
-            os << "UNIFORM";
-            break;
-        case RngDistribution_t::NORMAL:
-            os << "NORMAL";
-            break;
-        case RngDistribution_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-    }
-    return os;
-}
-
-static inline std::ostream& operator<<(std::ostream& os, const NormMode_t& mode) {
-    switch (mode) {
-        case NormMode_t::LAYER_NORM:
-            os << "LAYER_NORM";
-            break;
-        case NormMode_t::INSTANCE_NORM:
-            os << "INSTANCE_NORM";
-            break;
-        case NormMode_t::BATCH_NORM:
-            os << "BATCH_NORM";
-            break;
-        case NormMode_t::GROUP_NORM:
-            os << "GROUP_NORM";
-            break;
-        case NormMode_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-    }
-    return os;
-}
-
-static inline std::ostream& operator<<(std::ostream& os, const ReductionMode_t& mode) {
-    switch (mode) {
-        case ReductionMode_t::ADD:
-            os << "ADD";
-            break;
-        case ReductionMode_t::MUL:
-            os << "MUL";
-            break;
-        case ReductionMode_t::MIN:
-            os << "MIN";
-            break;
-        case ReductionMode_t::MAX:
-            os << "MAX";
-            break;
-        case ReductionMode_t::AMAX:
-            os << "AMAX";
-            break;
-        case ReductionMode_t::AVG:
-            os << "AVG";
-            break;
-        case ReductionMode_t::NORM1:
-            os << "NORM1";
-            break;
-        case ReductionMode_t::NORM2:
-            os << "NORM2";
-            break;
-        case ReductionMode_t::MUL_NO_ZEROS:
-            os << "MUL_NO_ZEROS";
-            break;
-        case ReductionMode_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-    }
-    return os;
 }
 
 static inline std::ostream& operator<<(std::ostream& os, const DescriptorType_t& mode) {
@@ -785,78 +737,6 @@ static inline std::ostream& operator<<(std::ostream& os, const DescriptorType_t&
         case DescriptorType_t::NOT_SET:
             os << "NOT_SET";
             break;
-    }
-    return os;
-} 
-
-static inline std::ostream& operator<<(std::ostream& os, const NormFwdPhase_t& mode) {
-    switch (mode)
-    {
-        case NormFwdPhase_t::INFERENCE:
-            os << "INFERENCE";
-            break;
-        case NormFwdPhase_t::TRAINING:
-            os << "TRAINING";
-            break;
-        case NormFwdPhase_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            os << "CUDNN_TENSOR_REORDERING_MODE_UNKNOWN";
-#endif
-    }
-    return os;
-} 
-
-static inline std::ostream& operator<<(std::ostream& os, const ResampleMode_t& mode) {
-    switch (mode)
-    {
-        case ResampleMode_t::AVGPOOL_EXCLUDE_PADDING:
-            os << "AVGPOOL_EXCLUDE_PADDING";
-            break;
-        case ResampleMode_t::AVGPOOL_INCLUDE_PADDING:
-            os << "AVGPOOL_INCLUDE_PADDING";
-            break;
-        case ResampleMode_t::BILINEAR:
-            os << "BILINEAR";
-            break; 
-        case ResampleMode_t::NEAREST:
-            os << "NEAREST";
-            break; 
-        case ResampleMode_t::MAXPOOL:
-            os << "MAXPOOL";
-            break; 
-        case ResampleMode_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            os << "CUDNN_TENSOR_RESAMPLE_MODE_UNKNOWN";
-#endif
-    }
-    return os;
-} 
-
-static inline std::ostream& operator<<(std::ostream& os, const PaddingMode_t& mode) {
-    switch (mode)
-    {
-        case PaddingMode_t::ZERO_PAD:
-            os << "ZERO_PAD";
-            break;
-        case PaddingMode_t::NEG_INF_PAD:
-            os << "NEG_INF_PAD";
-            break;
-        case PaddingMode_t::EDGE_VAL_PAD:
-            os << "EDGE_VAL_PAD";
-            break; 
-        case PaddingMode_t::NOT_SET:
-            os << "NOT_SET";
-            break;
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            os << "CUDNN_TENSOR_PADDING_MODE_UNKNOWN";
-#endif
     }
     return os;
 } 

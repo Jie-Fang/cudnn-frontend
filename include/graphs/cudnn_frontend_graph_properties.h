@@ -239,6 +239,31 @@ public:
         std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
     } outputs;
 
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , SUM
+                                    , SQ_SUM
+                                    , MEAN
+                                    , INV_VARIANCE
+                                    , SCALE
+                                    , BIAS
+                                    , PREV_RUNNING_MEAN
+                                    , PREV_RUNNING_VAR
+                                    , EPSILON
+                                    , EXP_AVG
+                                    , ACCUM_COUNT)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , EQ_SCALE
+                                    , EQ_BIAS
+                                    , NEXT_RUNNING_MEAN
+                                    , NEXT_RUNNING_VAR)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize
+                                    , name
+                                    , inputs
+                                    , outputs)
+
+    BN_finalize() : Operation(Tag::BN_finalize) {}
     BN_finalize(const std::string name) : Operation(name, Tag::BN_finalize) {}
 
     BN_finalize& set_compute_data_type(DataType_t value) {
@@ -292,6 +317,19 @@ public:
         std::shared_ptr<Tensor> SQ_SUM;
     } outputs;
 
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , X)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , SUM
+                                    , SQ_SUM)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats
+                                    , name
+                                    , inputs
+                                    , outputs)
+
+    Genstats() : Operation(Tag::Genstats) {}
     Genstats(const std::string name) : Operation(name, Tag::Genstats) {}
 
     Genstats& set_compute_data_type(DataType_t value) {
@@ -416,6 +454,25 @@ public:
         std::shared_ptr<Tensor> DBIAS;
     } outputs;
 
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , DY
+                                    , X
+                                    , SCALE
+                                    , MEAN
+                                    , INV_VARIANCE
+                                    , EPSILON)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , DX
+                                    , DSCALE
+                                    , DBIAS)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN
+                                    , name
+                                    , inputs
+                                    , outputs)
+
+    DBN() : Operation(Tag::BN) {}
     DBN(const std::string name) : Operation(name, Tag::BN) {}
     
     DBN& set_compute_data_type(DataType_t value) {
@@ -472,7 +529,27 @@ public:
         std::shared_ptr<Tensor> EQ_SCALE_X;
         std::shared_ptr<Tensor> EQ_BIAS;
     } outputs;
-    
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , X
+                                    , MEAN
+                                    , INV_VARIANCE
+                                    , SCALE
+                                    , DY)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , DSCALE
+                                    , DBIAS
+                                    , EQ_SCALE_DY
+                                    , EQ_SCALE_X
+                                    , EQ_BIAS)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight
+                                    , name
+                                    , inputs
+                                    , outputs)
+
+    DBN_weight() : Operation(Tag::DBN_weight) {}
     DBN_weight(const std::string name) : Operation(name, Tag::DBN_weight) {}
 
     DBN_weight& set_compute_data_type(DataType_t value) {
@@ -521,12 +598,26 @@ public:
         std::shared_ptr<Tensor> DX;
     } outputs;
 
-private:
     std::vector<int64_t> padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , DY
+                                    , W)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , DX)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad
+                                , name
+                                , inputs
+                                , outputs
+                                , padding
+                                , stride
+                                , dilation)
+
+    Conv_dgrad() : Operation(Tag::Conv_dgrad) {}
     Conv_dgrad(const std::string name) : Operation(name, Tag::Conv_dgrad) {}
 
     Conv_dgrad& set_compute_data_type(DataType_t value) {
@@ -722,6 +813,29 @@ public:
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , X
+                                    , SCALE
+                                    , BIAS
+                                    , PREV_RUNNING_MEAN
+                                    , PREV_RUNNING_VAR
+                                    , EPSILON
+                                    , MOMENTUM)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , Y
+                                    , MEAN
+                                    , INV_VARIANCE
+                                    , NEXT_RUNNING_MEAN
+                                    , NEXT_RUNNING_VAR)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm
+                                    , name
+                                    , inputs
+                                    , outputs
+                                    , forward_phase)
+
+    Batchnorm() : Operation(Tag::BN) {}
     Batchnorm(const std::string name) : Operation(name, Tag::BN) {}
     
     Batchnorm& set_compute_data_type(DataType_t value) {
@@ -1132,13 +1246,26 @@ public:
         std::shared_ptr<Tensor> DW;
     } outputs;
 
-private:
     std::vector<int64_t> padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
+    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , DY
+                                    , X)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , DW)
 
-public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad
+                                , name
+                                , inputs
+                                , outputs
+                                , padding
+                                , stride
+                                , dilation)
 
+    Conv_wgrad() : Operation(Tag::Conv_wgrad) {}
     Conv_wgrad(const std::string name) : Operation(name, Tag::Conv_wgrad) {}
 
     Conv_wgrad& set_compute_data_type(DataType_t value) {
