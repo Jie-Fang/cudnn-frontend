@@ -34,7 +34,18 @@ class Plans {
 
         Plans &filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &);
         Plans &filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &);
-        Plans &build_plans(cudnnHandle_t);
+        Plans &filter_out_workspace_greater_than(int64_t const workspace) {
+            list_of_engine_configs.set_max_workspace_allowed(workspace);
+            return *this;
+        }
+
+        error_t build_all_plans(cudnnHandle_t);
+
+        inline error_t 
+        check_support(cudnnHandle_t h){
+            auto status = list_of_engine_configs.check_support(h);
+            return status;
+        }
 
         int64_t get_workspace_size();
         int64_t get_max_workspace_size();
@@ -152,15 +163,11 @@ inline Plans& Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalN
     return *this;
 }
 
-inline Plans& Plans::build_plans(cudnnHandle_t h){
-    // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_code_t too?
-    auto status = list_of_engine_configs.build_plans(h);
-    if(status.is_bad()) {
-        getLogger() << "[cudnn_frontend] ERROR: Plan building failed." << std::endl; 
-    }
-    return *this;
+inline error_t Plans::build_all_plans(cudnnHandle_t h){
+    auto status = list_of_engine_configs.build_all_plans(h);
+    return status;
 }
+
 
 inline int64_t Plans::get_max_workspace_size(){
     return list_of_engine_configs.get_max_workspace_size();

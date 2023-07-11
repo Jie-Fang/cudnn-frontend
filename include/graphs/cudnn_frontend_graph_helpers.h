@@ -17,6 +17,7 @@ enum class [[nodiscard]] error_code_t {
     , SHAPE_DEDUCTION_FAILED
     , INVALID_TENSOR_NAME
     , INVALID_VARIANT_PACK
+    , GRAPH_NOT_SUPPORTED
     , GRAPH_EXECUTION_PLAN_CREATION_FAILED
     , GRAPH_EXECUTION_FAILED
     , HEURISTIC_QUERY_FAILED
@@ -90,6 +91,9 @@ static inline std::ostream& operator<<(std::ostream& os, const error_code_t& mod
             break;
         case error_code_t::INVALID_VARIANT_PACK:
             os << "INVALID_VARIANT_PACK";
+            break;
+        case error_code_t::GRAPH_NOT_SUPPORTED:
+            os << "GRAPH_NOT_SUPPORTED";
             break;
         case error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
             os << "GRAPH_EXECUTION_PLAN_CREATION_FAILED";

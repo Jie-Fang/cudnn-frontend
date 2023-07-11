@@ -73,8 +73,9 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     REQUIRE(mha_graph.is_supported().is_good());
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    
+    REQUIRE(plans.check_support(handle).is_good());
 
     REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
@@ -168,8 +169,9 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     REQUIRE(mha_graph.is_supported().is_good());
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    
+    REQUIRE(plans.check_support(handle).is_good());
 
     REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
@@ -261,8 +263,9 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    
+    REQUIRE(plans.check_support(handle).is_good());
 
     REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
@@ -353,8 +356,9 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    
+    REQUIRE(plans.check_support(handle).is_good());
 
     REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 

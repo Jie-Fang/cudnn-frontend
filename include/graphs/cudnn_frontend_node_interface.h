@@ -3,9 +3,10 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <variant>
+#include <limits>
 
 #include <cuda_fp16.h>
-#include <variant>
 
 #include "cudnn_frontend_Tensor.h"
 #include "cudnn_frontend_Operation.h"
@@ -331,6 +332,7 @@ class Execution_plan_list {
     std::vector<std::shared_ptr<ExecutionPlan>>           execution_plans;
 
     std::vector<bool> filtered_indices;
+    int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
     public:
     void set_tag(std::string const &tag) {operation_tag = tag;}
@@ -424,6 +426,12 @@ class Execution_plan_list {
         }
         return {error_code_t::OK, ""};
     }
+    
+    error_t
+    set_max_workspace_allowed(int64_t const workspace_allowed) {
+        max_workspace_allowed = workspace_allowed;
+        return {error_code_t::OK, ""};
+    }
 
     EngineConfigList
     get_filtered_engine_configs() {
@@ -439,7 +447,8 @@ class Execution_plan_list {
     }
 
     error_t
-    build_plans(cudnnHandle_t handle) {
+    check_support(cudnnHandle_t handle) {
+        error_t status = {error_code_t::OK, ""};
         auto configs = get_filtered_engine_configs();
         for (auto &config: configs) {
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
@@ -456,7 +465,10 @@ class Execution_plan_list {
             getLogger() << "[cudnn_frontend] INFO: " << "Config succeeded! Plan has built!" << std::endl;
             getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
 
-            execution_plans.push_back(std::make_shared<ExecutionPlan>(std::move(plan)));
+            if (plan.getWorkspaceSize() <= max_workspace_allowed) {
+                execution_plans.push_back(std::make_shared<ExecutionPlan>(std::move(plan)));
+                return status;
+            }
 
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             } catch (cudnn_frontend::cudnnException &e) {
@@ -468,6 +480,42 @@ class Execution_plan_list {
 
         if (execution_plans.empty()) {
             return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "[cudnn_frontend] Error: No execution plans built successfully."};
+        }
+        return status;
+    }
+
+    error_t
+    build_all_plans(cudnnHandle_t handle) {
+        auto configs = get_filtered_engine_configs();
+        for (auto &config: configs) {
+            #ifndef NV_CUDNN_DISABLE_EXCEPTION
+            try {
+            #endif
+            auto plan = cudnn_frontend::ExecutionPlanBuilder()
+                            .setHandle(handle)
+                            .setEngineConfig(config, operation_tag)
+                            .build();
+            if (plan.get_status() != CUDNN_STATUS_SUCCESS) {
+                getLogger() << "[cudnn_frontend] ERROR: " << "Config failed with " << plan.get_error() << std::endl;
+                continue;
+            }
+            getLogger() << "[cudnn_frontend] INFO: " << "Config succeeded! Plan has built!" << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
+
+            if (plan.getWorkspaceSize() <= max_workspace_allowed) {
+                execution_plans.push_back(std::make_shared<ExecutionPlan>(std::move(plan)));
+            }
+
+            #ifndef NV_CUDNN_DISABLE_EXCEPTION
+            } catch (cudnn_frontend::cudnnException &e) {
+                getLogger() << "[cudnn_frontend] ERROR: " << "Config failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
+                continue;
+            }
+            #endif
+        }
+
+        if (execution_plans.empty()) {
+            return {error_code_t::GRAPH_NOT_SUPPORTED, "[cudnn_frontend] Error: No execution plans finalized successfully. Hence, not supported."};
         }
         return {error_code_t::OK, ""};
     }

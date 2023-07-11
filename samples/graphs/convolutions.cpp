@@ -60,8 +60,9 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    
+    REQUIRE(plans.check_support(handle).is_good());
 
     Surface<half> x_tensor(4*32*16*16, false);
     Surface<half> w_tensor(64*32*3*3, false);
@@ -127,8 +128,9 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+
+    REQUIRE(plans.check_support(handle).is_good());
 
     REQUIRE(graph.set_execution_plans(plans).is_good());
 
@@ -213,20 +215,17 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
         SKIP("DBARCS requires hopper and above architecture.");
     }
 
-    if(check_device_arch_newer_than("hopper") == false) {
-        SKIP("DBARCS requires Hopper and up");
-    }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
-                    .build_plans(handle);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
-    if(graph.set_executor(plans).is_good() == false) {
-        auto fallback_plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK)
-                .build_plans(handle);
-        REQUIRE(graph.set_executor(fallback_plans).is_good());
+    auto status = plans.check_support(handle);
+
+    if(status.is_bad()) {
+        auto fallback_plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+        REQUIRE(fallback_plans.check_support(handle).is_good());
     }
 
     Surface<half> x_tensor(4*64*16*16, false);
