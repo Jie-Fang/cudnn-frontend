@@ -209,6 +209,9 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     #if (CUDNN_VERSION < 8900)
         SKIP("DBARCS requires cudnn 8.9 and up");
     #endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("DBARCS requires hopper and above architecture.");
+    }
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
