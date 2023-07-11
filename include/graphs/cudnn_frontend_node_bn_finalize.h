@@ -30,7 +30,7 @@ public:
         auto const sum_tensor_dim = SUM->get_dim();
 
         // Set channel length tensors
-        auto infer_per_channel_tensors = [&sum_tensor_dim] (std::shared_ptr<Tensor>& T) {
+        auto infer_per_channel_tensors = [&sum_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             if(tensor_dim.empty()) {
                 tensor_dim = sum_tensor_dim;
@@ -50,7 +50,7 @@ public:
         infer_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR);
 
         // Set scalars
-        auto infer_scalars = [&sum_tensor_dim] (std::shared_ptr<Tensor>& T) {
+        auto infer_scalars = [&sum_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             if(tensor_dim.empty()) {
                 tensor_dim.resize(sum_tensor_dim.size(), 1);
@@ -70,7 +70,7 @@ public:
         auto SUM = options.inputs.SUM;
         auto const sum_tensor_dim = SUM->get_dim();
 
-        auto validate_per_channel_tensors = [this, &sum_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+        auto validate_per_channel_tensors = [this, &sum_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
             error_t status = {error_code_t::OK, ""};
             auto tensor_dim = T->get_dim();
             if(sum_tensor_dim != tensor_dim) {
@@ -92,7 +92,7 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR));
 
-        auto validate_scalars = [] (std::shared_ptr<Tensor> const& T) {
+        auto validate_scalars = [] (std::shared_ptr<Tensor_attributes> const& T) {
             error_t status = {error_code_t::OK, ""};
             auto tensor_dim = T->get_dim();
             bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](auto element) {

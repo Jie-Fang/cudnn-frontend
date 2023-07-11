@@ -22,7 +22,7 @@ public:
 
         // User does not create tensor for epsilon/momentum, so create it internally
         // Data type is i/o type
-        // epsilon = std::make_shared<Tensor>("epsilon");
+        // epsilon = std::make_shared<Tensor_attributes>("epsilon");
         // epsilon->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
     }
 
@@ -52,7 +52,7 @@ public:
         }
 
         // Set channel length tensors
-        auto infer_per_channel_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor>& T) {
+        auto infer_per_channel_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
@@ -91,7 +91,7 @@ public:
             return {status, message};
         }
 
-        auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+        auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
             error_t status = {error_code_t::OK, ""};
             if(x_tensor_dim[1] != T->get_dim()[1]) {
                 status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
@@ -105,7 +105,7 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DSCALE));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DBIAS));
 
-        // auto validate_scalars = [this] (std::shared_ptr<Tensor> const& T) {
+        // auto validate_scalars = [this] (std::shared_ptr<Tensor_attributes> const& T) {
         //     auto tensor_dim = T->get_dim();
         //     bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {
         //         return element == 1;

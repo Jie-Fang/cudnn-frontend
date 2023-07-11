@@ -85,7 +85,7 @@ public:
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     tensor(
         std::string const& name,
         std::vector<int64_t> const& dim,
@@ -94,7 +94,7 @@ public:
         bool const& is_virtual,
         bool const& is_by_value
     ) {
-        auto props = cudnn_frontend::graph::Tensor(name)
+        auto props = cudnn_frontend::graph::Tensor_attributes(name)
                             .set_data_type(data_type)
                             .set_is_virtual(is_virtual)
                             .set_is_pass_by_value(is_by_value)
@@ -108,17 +108,17 @@ public:
     // the underlying object.
     // Takes all tensor properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor>>
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     batchnorm(
         std::string const& name,
         cudnn_frontend::NormFwdPhase_t const forward_phase,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& X_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_mean_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& in_running_var_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& epsilon,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& momentum,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& X_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_mean_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_var_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Batchnorm(name)
@@ -136,14 +136,14 @@ public:
         return {Y, mean, inv_var, next_running_mean, next_running_var};
     }
 
-    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor>>
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     batchnorm_backward(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& grad_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& mean_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& inv_variance_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& grad_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& mean_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& inv_variance_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::DBN(name)
@@ -162,11 +162,11 @@ public:
     // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_conv(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type,
         std::vector<int64_t> const& padding,
         std::vector<int64_t> const& stride,
@@ -191,11 +191,11 @@ public:
     // the underlying object.
     // Takes image and loss properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_wgrad(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& loss_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type,
         std::vector<int64_t> const& padding,
         std::vector<int64_t> const& stride,
@@ -220,11 +220,11 @@ public:
     // the underlying object.
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_matmul(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& image_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& weight_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Matmul(name).set_compute_data_type(compute_data_type);
@@ -242,11 +242,11 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_bias(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& bias_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
@@ -264,11 +264,11 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     scale(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
@@ -286,10 +286,10 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_relu(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
@@ -302,10 +302,10 @@ public:
         return OUT_0;
     }
 
-    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2UL>
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2UL>
     genstats(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Genstats(name).set_compute_data_type(compute_data_type);
@@ -323,10 +323,10 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_elu(
         std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
@@ -343,10 +343,10 @@ public:
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
-    std::shared_ptr<cudnn_frontend::graph::Tensor>
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     insert_gelu(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& input_props_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_data_type
     ) {
         auto props = cudnn_frontend::graph::Pointwise(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
@@ -359,17 +359,17 @@ public:
         return OUT_0;
     }
 
-    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2>
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     scaled_dot_product_attention(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& q
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& k
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& v
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& seq_len_q
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& seq_len_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_k
         , bool const is_inference
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_k
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& bias
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
         , bool const use_padding_mask
         , bool const use_causal_mask
         , py::object const dropout
@@ -403,8 +403,8 @@ public:
                 auto const seed = dropout_tuple[1].cast<int32_t>();
 
                 scaled_dot_product_attention_options.set_dropout(dropout_probability, seed);                
-            } else if (py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor>>(dropout_tuple[0]) && py::isinstance<py::float_>(dropout_tuple[1])) {
-                auto const dropout_mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor>>();
+            } else if (py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(dropout_tuple[0]) && py::isinstance<py::float_>(dropout_tuple[1])) {
+                auto const dropout_mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
                 auto const dropout_scale = dropout_tuple[1].cast<float>();
 
                 scaled_dot_product_attention_options.set_dropout(dropout_mask, dropout_scale);
@@ -433,14 +433,14 @@ public:
         return {O, S};
     }
 
-    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor>, 2>
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(
         std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& q
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& k
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& v
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v
         , bool const is_inference
-        , std::shared_ptr<cudnn_frontend::graph::Tensor>& scale_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_k
         , bool const use_padding_mask
         , bool const use_alibi_mask
         , bool const use_causal_mask
@@ -471,8 +471,8 @@ public:
             }
             if(py::isinstance<py::float_>(dropout_tuple[0])) {
                 auto const probability = dropout_tuple[0].cast<float>();
-                auto const seed = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor>>();
-                auto const offset = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor>>();
+                auto const seed = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                auto const offset = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
 
                 if(!seed) {
                     throw std::runtime_error("Incorrect type detected for seed tensor");
@@ -529,9 +529,9 @@ public:
         return graph.get_workspace_size();
     }
 
-    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, py::object> var_pack, py::object workspace) {
+    void execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object> var_pack, py::object workspace) {
 
-        std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor>, void *> var_pack_;
+        std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void *> var_pack_;
         for (auto const& [tensor, pyobject] : var_pack) {
             var_pack_.emplace(tensor, extract_data_pointer(pyobject));
         }

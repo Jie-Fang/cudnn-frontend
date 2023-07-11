@@ -44,7 +44,7 @@ public:
         }
 
         // Set channel length tensors
-        auto infer_per_channel_tensors = [&dy_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+        auto infer_per_channel_tensors = [&dy_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
             if(T->get_dim().empty()) {
                 T->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
             }
@@ -75,7 +75,7 @@ public:
             return {status, message};
         }
         
-        auto validate_per_channel_tensors = [this, &dy_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+        auto validate_per_channel_tensors = [this, &dy_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
             error_t status = {error_code_t::OK, ""};
             if(dy_tensor_dim[1] != T->get_dim()[1]) {
                 status.code = error_code_t::SHAPE_DEDUCTION_FAILED;

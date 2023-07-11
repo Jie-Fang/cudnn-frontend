@@ -14,7 +14,7 @@ namespace graph {
 
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
-class Tensor {
+class Tensor_attributes {
 protected:
     std::string name;
     DataType_t data_type = DataType_t::NOT_SET;
@@ -27,7 +27,7 @@ protected:
     uid_t uid;
 
 public:
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor_attributes
                                     , name
                                     , data_type
                                     , dim
@@ -72,14 +72,14 @@ public:
         return std::accumulate(dim.begin(), dim.end(), initialProduct, std::multiplies<int64_t>());
     }
     
-    Tensor() = default;
-    Tensor(const std::string &name) : name(name) {}
+    Tensor_attributes() = default;
+    Tensor_attributes(const std::string &name) : name(name) {}
 
     std::string get_name() const {
         return name;
     }
 
-    auto set_name(std::string const& value) -> Tensor& {
+    auto set_name(std::string const& value) -> Tensor_attributes& {
         name = value;
         return *this;
     }
@@ -88,7 +88,7 @@ public:
         return data_type;
     }
 
-    auto set_data_type(DataType_t const value) -> Tensor& {
+    auto set_data_type(DataType_t const value) -> Tensor_attributes& {
         data_type = value;
         return *this;
     }
@@ -97,7 +97,7 @@ public:
         return dim;
     }
 
-    auto set_dim(std::vector<int64_t> const& value) -> Tensor& {
+    auto set_dim(std::vector<int64_t> const& value) -> Tensor_attributes& {
         dim = value;
         is_dim_set = true;
         return *this;
@@ -107,7 +107,7 @@ public:
         return stride;
     }
 
-    auto set_stride(std::vector<int64_t> const& value) -> Tensor& {
+    auto set_stride(std::vector<int64_t> const& value) -> Tensor_attributes& {
         stride = value;
         is_stride_set = true;
         return *this;
@@ -117,7 +117,7 @@ public:
         return is_virtual;
     }
 
-    auto set_is_virtual(bool const value) -> Tensor& {
+    auto set_is_virtual(bool const value) -> Tensor_attributes& {
         is_virtual = value;
         is_virtual_set = true;
         return *this;
@@ -127,7 +127,7 @@ public:
         return is_pass_by_value;
     }
 
-    auto set_is_pass_by_value(bool const value) -> Tensor& {
+    auto set_is_pass_by_value(bool const value) -> Tensor_attributes& {
         is_pass_by_value = value;
         is_pass_by_value_set = true;
         return *this;
@@ -137,7 +137,7 @@ public:
         return reordering_type;
     }
 
-    auto set_reordering_type(TensorReordering_t const value) -> Tensor& {
+    auto set_reordering_type(TensorReordering_t const value) -> Tensor_attributes& {
         reordering_type = value;
         return *this;
     }
@@ -146,13 +146,13 @@ public:
         return uid;
     }
 
-    auto set_uid(uid_t value) -> Tensor& {
+    auto set_uid(uid_t value) -> Tensor_attributes& {
         uid = value;
         is_uid_set = true;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Tensor& {
+    auto fill_from_context(detail::Context const& context) -> Tensor_attributes& {
         if(get_data_type() == DataType_t::NOT_SET) {
             if(get_is_virtual()) {
                 set_data_type(context.get_intermediate_data_type());
@@ -165,7 +165,7 @@ public:
     }
 };
 
-inline std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
+inline std::ostream& operator<<(std::ostream& os, const Tensor_attributes& tensor) {
     os << json{tensor};
     return os;
 }
@@ -219,24 +219,24 @@ public:
 class BN_finalize : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> SUM;
-        std::shared_ptr<Tensor> SQ_SUM;
-        std::shared_ptr<Tensor> MEAN;
-        std::shared_ptr<Tensor> INV_VARIANCE;
-        std::shared_ptr<Tensor> SCALE;
-        std::shared_ptr<Tensor> BIAS;
-        std::shared_ptr<Tensor> PREV_RUNNING_MEAN;
-        std::shared_ptr<Tensor> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor> EPSILON;
-        std::shared_ptr<Tensor> EXP_AVG;
-        std::shared_ptr<Tensor> ACCUM_COUNT;
+        std::shared_ptr<Tensor_attributes> SUM;
+        std::shared_ptr<Tensor_attributes> SQ_SUM;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> PREV_RUNNING_MEAN;
+        std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+        std::shared_ptr<Tensor_attributes> EXP_AVG;
+        std::shared_ptr<Tensor_attributes> ACCUM_COUNT;
     } inputs;
         
     struct Outputs {
-        std::shared_ptr<Tensor> EQ_SCALE;
-        std::shared_ptr<Tensor> EQ_BIAS;
-        std::shared_ptr<Tensor> NEXT_RUNNING_MEAN;
-        std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
+        std::shared_ptr<Tensor_attributes> EQ_SCALE;
+        std::shared_ptr<Tensor_attributes> EQ_BIAS;
+        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN;
+        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR;
     } outputs;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -272,7 +272,7 @@ public:
     }
 
     void
-    make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
+    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.EQ_SCALE = output_tensor(name + "_EQ_SCALE_output");
         outputs.EQ_BIAS = output_tensor(name + "_EQ_BIAS_output");
         outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
@@ -309,12 +309,12 @@ public:
 class Genstats : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> X;
+        std::shared_ptr<Tensor_attributes> X;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> SUM;
-        std::shared_ptr<Tensor> SQ_SUM;
+        std::shared_ptr<Tensor_attributes> SUM;
+        std::shared_ptr<Tensor_attributes> SQ_SUM;
     } outputs;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -354,12 +354,12 @@ public:
 class Conv_fprop : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> X;
-        std::shared_ptr<Tensor> W;
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> W;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> Y;
+        std::shared_ptr<Tensor_attributes> Y;
     } outputs;
 
     std::vector<int64_t> padding  = {};
@@ -440,18 +440,18 @@ public:
 class DBN : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> DY;
-        std::shared_ptr<Tensor> X;
-        std::shared_ptr<Tensor> SCALE;
-        std::shared_ptr<Tensor> MEAN;
-        std::shared_ptr<Tensor> INV_VARIANCE;
-        std::shared_ptr<Tensor> EPSILON;
+        std::shared_ptr<Tensor_attributes> DY;
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> EPSILON;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> DX;
-        std::shared_ptr<Tensor> DSCALE;
-        std::shared_ptr<Tensor> DBIAS;
+        std::shared_ptr<Tensor_attributes> DX;
+        std::shared_ptr<Tensor_attributes> DSCALE;
+        std::shared_ptr<Tensor_attributes> DBIAS;
     } outputs;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -480,12 +480,12 @@ public:
         return *this;
     }
 
-    DBN& set_epsilon(std::shared_ptr<Tensor> epsilon) {
+    DBN& set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
         return *this;
     }
 
-    void make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
+    void make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.DX = output_tensor(name + "_DX_output");
         outputs.DSCALE = output_tensor(name + "_DSCALE_output");
         outputs.DBIAS = output_tensor(name + "_DBIAS_output");
@@ -515,19 +515,19 @@ public:
 class DBN_weight : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> X;
-        std::shared_ptr<Tensor> MEAN;
-        std::shared_ptr<Tensor> INV_VARIANCE;
-        std::shared_ptr<Tensor> SCALE;
-        std::shared_ptr<Tensor> DY;
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> DY;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> DSCALE;
-        std::shared_ptr<Tensor> DBIAS;
-        std::shared_ptr<Tensor> EQ_SCALE_DY;
-        std::shared_ptr<Tensor> EQ_SCALE_X;
-        std::shared_ptr<Tensor> EQ_BIAS;
+        std::shared_ptr<Tensor_attributes> DSCALE;
+        std::shared_ptr<Tensor_attributes> DBIAS;
+        std::shared_ptr<Tensor_attributes> EQ_SCALE_DY;
+        std::shared_ptr<Tensor_attributes> EQ_SCALE_X;
+        std::shared_ptr<Tensor_attributes> EQ_BIAS;
     } outputs;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -558,7 +558,7 @@ public:
     }
 
     void
-    make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
+    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.DSCALE = output_tensor(name + "_dscale_output");
         outputs.DBIAS = output_tensor(name + "_dbias_output");
         outputs.EQ_SCALE_DY = output_tensor(name + "_eq_scale_dy_output");
@@ -590,12 +590,12 @@ public:
 class Conv_dgrad : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> DY;
-        std::shared_ptr<Tensor> W;
+        std::shared_ptr<Tensor_attributes> DY;
+        std::shared_ptr<Tensor_attributes> W;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> DX;
+        std::shared_ptr<Tensor_attributes> DX;
     } outputs;
 
     std::vector<int64_t> padding;
@@ -669,15 +669,15 @@ public:
 class Matmul : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> A;
-        std::shared_ptr<Tensor> B;
-        std::shared_ptr<Tensor> M_override;
-        std::shared_ptr<Tensor> N_override;
-        std::shared_ptr<Tensor> K_override;
+        std::shared_ptr<Tensor_attributes> A;
+        std::shared_ptr<Tensor_attributes> B;
+        std::shared_ptr<Tensor_attributes> M_override;
+        std::shared_ptr<Tensor_attributes> N_override;
+        std::shared_ptr<Tensor_attributes> K_override;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> C;
+        std::shared_ptr<Tensor_attributes> C;
     } outputs;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -723,13 +723,13 @@ public:
 class Pointwise : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> IN_0;
-        std::shared_ptr<Tensor> IN_1;
-        std::shared_ptr<Tensor> IN_2;
+        std::shared_ptr<Tensor_attributes> IN_0;
+        std::shared_ptr<Tensor_attributes> IN_1;
+        std::shared_ptr<Tensor_attributes> IN_2;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> OUT_0;
+        std::shared_ptr<Tensor_attributes> OUT_0;
     } outputs;
 
     std::optional<PointwiseMode_t> mode;
@@ -794,21 +794,21 @@ public:
 class Batchnorm : public Operation {
 public:
     struct Inputs {
-        std::shared_ptr<Tensor> X;
-        std::shared_ptr<Tensor> SCALE;
-        std::shared_ptr<Tensor> BIAS;
-        std::shared_ptr<Tensor> PREV_RUNNING_MEAN;
-        std::shared_ptr<Tensor> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor> EPSILON;
-        std::shared_ptr<Tensor> MOMENTUM;
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> PREV_RUNNING_MEAN;
+        std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+        std::shared_ptr<Tensor_attributes> MOMENTUM;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> Y;
-        std::shared_ptr<Tensor> MEAN;
-        std::shared_ptr<Tensor> INV_VARIANCE;
-        std::shared_ptr<Tensor> NEXT_RUNNING_MEAN;
-        std::shared_ptr<Tensor> NEXT_RUNNING_VAR;
+        std::shared_ptr<Tensor_attributes> Y;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN;
+        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR;
     } outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
@@ -848,17 +848,17 @@ public:
         return *this;
     }
 
-    Batchnorm& set_epsilon(std::shared_ptr<Tensor>& value) {
+    Batchnorm& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
         return *this;
     }
 
-    Batchnorm& set_momentum(std::shared_ptr<Tensor>& value) {
+    Batchnorm& set_momentum(std::shared_ptr<Tensor_attributes>& value) {
         inputs.MOMENTUM = value;
         return *this;
     }
 
-    void make_outputs(std::function<std::shared_ptr<Tensor>(std::string const &)> output_tensor) {
+    void make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.Y = output_tensor(name + "_Y_output");
         outputs.MEAN = output_tensor(name + "_MEAN_output");;
         outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");;
@@ -893,11 +893,11 @@ class Reduction : public Operation {
 public:
     
     struct Inputs {
-        std::shared_ptr<Tensor> X;
+        std::shared_ptr<Tensor_attributes> X;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> Y;
+        std::shared_ptr<Tensor_attributes> Y;
     } outputs;
 
     std::optional<ReductionMode_t> mode;
@@ -947,12 +947,12 @@ class Rng : public Operation {
 public:
     
     struct Inputs {
-        std::shared_ptr<Tensor> Seed;
-        std::shared_ptr<Tensor> Offset;
+        std::shared_ptr<Tensor_attributes> Seed;
+        std::shared_ptr<Tensor_attributes> Offset;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> Y;
+        std::shared_ptr<Tensor_attributes> Y;
     } outputs;
 
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
@@ -1026,20 +1026,20 @@ class Scaled_dot_product_attention : public Operation {
 public:
 
     struct Inputs {
-        std::shared_ptr<Tensor> Q;
-        std::shared_ptr<Tensor> K;
-        std::shared_ptr<Tensor> Scale_k;
-        std::shared_ptr<Tensor> Bias;  // Optional bias after bmm1
-        std::shared_ptr<Tensor> V;
-        std::shared_ptr<Tensor> SEQ_LEN_Q;
-        std::shared_ptr<Tensor> SEQ_LEN_K;
-        std::shared_ptr<Tensor> Mask;
-        std::shared_ptr<Tensor> Dropout_mask;
+        std::shared_ptr<Tensor_attributes> Q;
+        std::shared_ptr<Tensor_attributes> K;
+        std::shared_ptr<Tensor_attributes> Scale_k;
+        std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
+        std::shared_ptr<Tensor_attributes> V;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> Mask;
+        std::shared_ptr<Tensor_attributes> Dropout_mask;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> O;
-        std::shared_ptr<Tensor> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor_attributes> O;
+        std::shared_ptr<Tensor_attributes> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
     } outputs;
 
     bool is_inference;
@@ -1067,12 +1067,12 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_attention& set_scale_k(std::shared_ptr<Tensor> value){
+    Scaled_dot_product_attention& set_scale_k(std::shared_ptr<Tensor_attributes> value){
         inputs.Scale_k = value;
         return *this;
     }
     
-    Scaled_dot_product_attention& set_bias(std::shared_ptr<Tensor> bias){
+    Scaled_dot_product_attention& set_bias(std::shared_ptr<Tensor_attributes> bias){
         inputs.Bias = bias;
         return *this;
     }
@@ -1083,7 +1083,7 @@ public:
         return *this;
     }
     
-    Scaled_dot_product_attention& set_dropout(std::shared_ptr<Tensor> mask, float const scale) {
+    Scaled_dot_product_attention& set_dropout(std::shared_ptr<Tensor_attributes> mask, float const scale) {
         inputs.Dropout_mask = mask;
         dropout_scale = scale;
         return *this;
@@ -1115,17 +1115,17 @@ class Scaled_dot_product_flash_attention : public Operation {
 public:
 
     struct Inputs {
-        std::shared_ptr<Tensor> Q;
-        std::shared_ptr<Tensor> K;
-        std::shared_ptr<Tensor> V;
-        std::shared_ptr<Tensor> Scale_k;
-        std::shared_ptr<Tensor> Seed;
-        std::shared_ptr<Tensor> Offset;
+        std::shared_ptr<Tensor_attributes> Q;
+        std::shared_ptr<Tensor_attributes> K;
+        std::shared_ptr<Tensor_attributes> V;
+        std::shared_ptr<Tensor_attributes> Scale_k;
+        std::shared_ptr<Tensor_attributes> Seed;
+        std::shared_ptr<Tensor_attributes> Offset;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> O;
-        std::shared_ptr<Tensor> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor_attributes> O;
+        std::shared_ptr<Tensor_attributes> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
     bool is_inference;
@@ -1157,12 +1157,12 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& set_scale_k(std::shared_ptr<Tensor> value){
+    Scaled_dot_product_flash_attention& set_scale_k(std::shared_ptr<Tensor_attributes> value){
         inputs.Scale_k = value;
         return *this;
     }
 
-    Scaled_dot_product_flash_attention& set_dropout(float const probability, std::shared_ptr<Tensor> seed, std::shared_ptr<Tensor> offset) {
+    Scaled_dot_product_flash_attention& set_dropout(float const probability, std::shared_ptr<Tensor_attributes> seed, std::shared_ptr<Tensor_attributes> offset) {
         dropout_probability = probability;
         inputs.Seed = seed;
         inputs.Offset = offset;
@@ -1196,12 +1196,12 @@ class Softmax : public Operation {
 public:
 
     struct Inputs {
-        std::shared_ptr<Tensor> P;
+        std::shared_ptr<Tensor_attributes> P;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> S; // softmax output dumped when in forward training mode. Users first need to check whether its nullptr.
-        std::shared_ptr<Tensor> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor_attributes> S; // softmax output dumped when in forward training mode. Users first need to check whether its nullptr.
+        std::shared_ptr<Tensor_attributes> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
 private:
@@ -1238,12 +1238,12 @@ class Conv_wgrad : public Operation {
 public:
     
     struct Inputs {
-        std::shared_ptr<Tensor> DY;
-        std::shared_ptr<Tensor> X;
+        std::shared_ptr<Tensor_attributes> DY;
+        std::shared_ptr<Tensor_attributes> X;
     } inputs;
 
     struct Outputs {
-        std::shared_ptr<Tensor> DW;
+        std::shared_ptr<Tensor_attributes> DW;
     } outputs;
 
     std::vector<int64_t> padding;

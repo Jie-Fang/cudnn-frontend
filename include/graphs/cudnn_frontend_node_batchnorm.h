@@ -37,7 +37,7 @@ public:
         }
 
         // Set channel length tensors
-        auto infer_per_channel_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor>& T) {
+        auto infer_per_channel_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
@@ -55,7 +55,7 @@ public:
         infer_per_channel_tensors(options.inputs.BIAS);
 
         // Set scalar tensors
-        auto infer_scalar_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor>& T) {
+        auto infer_scalar_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
@@ -88,7 +88,7 @@ public:
             return {error_code_t::SHAPE_DEDUCTION_FAILED, message};
         }
 
-        auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor> const& T) {
+        auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
             error_t status = {error_code_t::OK, ""};
             if(x_tensor_dim[1] != T->get_dim()[1]) {
                 status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
@@ -106,7 +106,7 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SCALE));
         CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.BIAS));
 
-        auto validate_scalars = [this] (std::shared_ptr<Tensor> const& T) {
+        auto validate_scalars = [this] (std::shared_ptr<Tensor_attributes> const& T) {
             error_t status = {error_code_t::OK, ""};
             auto tensor_dim = T->get_dim();
             bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](auto element) {

@@ -14,11 +14,11 @@ namespace cudnn_frontend::graph {
     class SoftmaxNode : public INode {
         // TODO: Just storing the virtual tensors here, but look for potentially better ideas?
         // Otherwise this node is not owner of it anymore
-        std::shared_ptr<Tensor> MAX;
-        std::shared_ptr<Tensor> P_MAX;
-        std::shared_ptr<Tensor> E;
-        std::shared_ptr<Tensor> SUM;
-        std::shared_ptr<Tensor> LOG;
+        std::shared_ptr<Tensor_attributes> MAX;
+        std::shared_ptr<Tensor_attributes> P_MAX;
+        std::shared_ptr<Tensor_attributes> E;
+        std::shared_ptr<Tensor_attributes> SUM;
+        std::shared_ptr<Tensor_attributes> LOG;
 
         Softmax options;
     public:
@@ -27,16 +27,16 @@ namespace cudnn_frontend::graph {
             options.fill_from_context(get_context());
             
             // A dummy/virtual underlying tensor
-            MAX = std::make_shared<Tensor>("MAX");
+            MAX = std::make_shared<Tensor_attributes>("MAX");
             MAX->set_is_virtual(true);
-            P_MAX = std::make_shared<Tensor>("P_MAX");
+            P_MAX = std::make_shared<Tensor_attributes>("P_MAX");
             P_MAX->set_is_virtual(true);
-            E = std::make_shared<Tensor>("E");
+            E = std::make_shared<Tensor_attributes>("E");
             E->set_is_virtual(true);
-            SUM = std::make_shared<Tensor>("SUM");
+            SUM = std::make_shared<Tensor_attributes>("SUM");
             SUM->set_is_virtual(true);
             if(options.use_stats) {
-                LOG = std::make_shared<Tensor>("LOG");
+                LOG = std::make_shared<Tensor_attributes>("LOG");
                 LOG->set_is_virtual(true); 
             }
 

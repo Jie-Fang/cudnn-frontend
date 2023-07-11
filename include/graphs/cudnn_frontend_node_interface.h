@@ -61,11 +61,11 @@ private:
         return {error_code_t::OK, ""};
     }
 
-    virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>&) {
+    virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&) {
         return {error_code_t::OK, ""};
     }
 
-    error_t gather_pass_by_value_tensors(std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t>& tensor_to_pass_by_value) {
+    error_t gather_pass_by_value_tensors(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) {
         CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(tensor_to_pass_by_value));
         for(auto const& sub_node: sub_nodes) {
             auto status = sub_node->gather_pass_by_value_tensors(tensor_to_pass_by_value);
@@ -264,13 +264,13 @@ public:
         return current_workspace_size;
     }
 
-    error_t execute(cudnnHandle_t handle, std::unordered_map<std::shared_ptr<Tensor>, void*> const& tensor_to_pointer_map, void* workspace) {
+    error_t execute(cudnnHandle_t handle, std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map, void* workspace) {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
             tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
         }
 
-        std::unordered_map<std::shared_ptr<Tensor>, pass_by_values_t> tensor_to_pass_by_value;
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t> tensor_to_pass_by_value;
         auto status = gather_pass_by_value_tensors(tensor_to_pass_by_value);
         if(status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Failed to gather_pass_by_value_tensors in " << name << std::endl;

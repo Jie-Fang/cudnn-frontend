@@ -32,22 +32,22 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 32, 16, 16}));
+    auto X = graph.tensor(fe::graph::Tensor_attributes("image").set_dim({4, 32, 16, 16}));
     X->generateStrides(CUDNN_TENSOR_NHWC);
-    auto W = graph.tensor(fe::graph::Tensor("filter").set_dim({64, 32, 3, 3}));
+    auto W = graph.tensor(fe::graph::Tensor_attributes("filter").set_dim({64, 32, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
 
     auto conv_options = fe::graph::Conv_fprop("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto conv_output = graph.conv_fprop(X, W, conv_options);
     conv_output->set_is_virtual(true);
 
-    auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
+    auto S = graph.tensor(fe::graph::Tensor_attributes("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
     auto scale_options = fe::graph::Pointwise("scale").set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(conv_output, S, scale_options);
     scale_output->set_is_virtual(true);
 
-    auto B = graph.tensor(fe::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
+    auto B = graph.tensor(fe::graph::Tensor_attributes("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
     auto bias_options = fe::graph::Pointwise("bias").set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
@@ -70,7 +70,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     Surface<half> y_tensor(4*64*16*16, false);
 
     Surface<int8_t> workspace(plans.get_max_workspace_size(), false);
-    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {W, w_tensor.devPtr}
         , {S, s_tensor.devPtr}
@@ -92,16 +92,16 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
          .set_intermediate_data_type(fe::DataType_t::HALF)
          .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 64, 16, 16}));
+    auto X = graph.tensor(fe::graph::Tensor_attributes("image").set_dim({4, 64, 16, 16}));
     X->generateStrides(CUDNN_TENSOR_NHWC);
-    auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
+    auto S = graph.tensor(fe::graph::Tensor_attributes("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
 
     auto scale_options = fe::graph::Pointwise("scale").set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(X, S, scale_options);
     scale_output->set_is_virtual(true);
 
-    auto B = graph.tensor(fe::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
+    auto B = graph.tensor(fe::graph::Tensor_attributes("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
     auto bias_options = fe::graph::Pointwise("bias").set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
@@ -111,7 +111,7 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     auto relu_output = graph.pointwise(bias_output, relu_options);
     relu_output->set_is_virtual(true);
 
-    auto W = graph.tensor(fe::graph::Tensor("weight").set_dim({32, 64, 3, 3}));
+    auto W = graph.tensor(fe::graph::Tensor_attributes("weight").set_dim({32, 64, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
     auto conv_options = fe::graph::Conv_fprop("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto Y = graph.conv_fprop(relu_output, W, conv_options);
@@ -140,7 +140,7 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     Surface<float> sum_tensor(32, false);
     Surface<float> sq_sum_tensor(32, false);
 
-    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {S, s_tensor.devPtr}
         , {B, b_tensor.devPtr}
@@ -161,31 +161,31 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
          .set_intermediate_data_type(fe::DataType_t::HALF)
          .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    auto X = graph.tensor(fe::graph::Tensor("image").set_dim({4, 64, 16, 16}));
+    auto X = graph.tensor(fe::graph::Tensor_attributes("image").set_dim({4, 64, 16, 16}));
     X->generateStrides(CUDNN_TENSOR_NHWC);
-    auto S = graph.tensor(fe::graph::Tensor("scale").set_dim({1, 64, 1, 1}));
+    auto S = graph.tensor(fe::graph::Tensor_attributes("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
 
     auto scale_options = fe::graph::Pointwise("scale").set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(X, S, scale_options);
     scale_output->set_is_virtual(true);
 
-    auto B = graph.tensor(fe::graph::Tensor("bias").set_dim({1, 64, 1, 1}));
+    auto B = graph.tensor(fe::graph::Tensor_attributes("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
     auto bias_options = fe::graph::Pointwise("bias").set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
 
-    auto DUAL_X = graph.tensor(fe::graph::Tensor("dual_image").set_dim({4, 64, 16, 16}));
+    auto DUAL_X = graph.tensor(fe::graph::Tensor_attributes("dual_image").set_dim({4, 64, 16, 16}));
     DUAL_X->generateStrides(CUDNN_TENSOR_NHWC);
-    auto DUAL_S = graph.tensor(fe::graph::Tensor("dual_scale").set_dim({1, 64, 1, 1}));
+    auto DUAL_S = graph.tensor(fe::graph::Tensor_attributes("dual_scale").set_dim({1, 64, 1, 1}));
     DUAL_S->generateStrides(CUDNN_TENSOR_NHWC);
 
     auto dual_scale_options = fe::graph::Pointwise("dual_scale").set_mode(fe::PointwiseMode_t::MUL);
     auto dual_scale_output = graph.pointwise(DUAL_X, DUAL_S, dual_scale_options);
     dual_scale_output->set_is_virtual(true);
 
-    auto DUAL_B = graph.tensor(fe::graph::Tensor("dual_bias").set_dim({1, 64, 1, 1}));
+    auto DUAL_B = graph.tensor(fe::graph::Tensor_attributes("dual_bias").set_dim({1, 64, 1, 1}));
     DUAL_B->generateStrides(CUDNN_TENSOR_NHWC);
     auto dual_bias_options = fe::graph::Pointwise("dual_bias").set_mode(fe::PointwiseMode_t::ADD);
     auto dual_bias_output = graph.pointwise(dual_scale_output, DUAL_B, dual_bias_options);
@@ -198,7 +198,7 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     auto relu_options = fe::graph::Pointwise("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto relu_output = graph.pointwise(add_output, relu_options);
 
-    auto W = graph.tensor(fe::graph::Tensor("weight").set_dim({32, 64, 1, 1}));
+    auto W = graph.tensor(fe::graph::Tensor_attributes("weight").set_dim({32, 64, 1, 1}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
     auto conv_options = fe::graph::Conv_fprop("conv").set_padding({0,0}).set_stride({1,1}).set_dilation({1,1});
     auto Y = graph.conv_fprop(relu_output, W, conv_options);
@@ -235,7 +235,7 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     Surface<float> sq_sum_tensor(32, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
-    std::unordered_map<std::shared_ptr<fe::graph::Tensor>, void*> variant_pack = {
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}
         , {S, s_tensor.devPtr}
         , {B, b_tensor.devPtr}

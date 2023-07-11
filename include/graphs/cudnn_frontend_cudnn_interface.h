@@ -41,7 +41,7 @@ protected:
     // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
-    error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor> const& props) {
+    error_t create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props) {
         // Check whether tensor already created
         if(tensors.find(props->get_uid()) != tensors.end()) {
             return {error_code_t::OK, ""};
