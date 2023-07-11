@@ -136,14 +136,14 @@ namespace cudnn_frontend::graph {
                     sub_nodes.emplace_back(std::move(greater_than_node));
 
                     // Lower options to logical and options
-                    Pointwise logical_and_options("causal_logical_and");
-                    logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
-                    logical_and_options.inputs.IN_0 = mask;
-                    logical_and_options.inputs.IN_1 = row_greater_col;
-                    mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor>("causal_logical_and");
-                    logical_and_options.outputs.OUT_0->set_is_virtual(true);
-                    auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), get_context());
-                    sub_nodes.emplace_back(std::move(logical_and_node));
+                    Pointwise logical_and_options_for_causal("causal_logical_and");
+                    logical_and_options_for_causal.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
+                    logical_and_options_for_causal.inputs.IN_0 = mask;
+                    logical_and_options_for_causal.inputs.IN_1 = row_greater_col;
+                    mask = logical_and_options_for_causal.outputs.OUT_0 = std::make_shared<Tensor>("causal_logical_and");
+                    logical_and_options_for_causal.outputs.OUT_0->set_is_virtual(true);
+                    auto logical_and_node_for_causal = std::make_unique<PointwiseNode>(logical_and_options_for_causal.get_name(), std::move(logical_and_options_for_causal), get_context());
+                    sub_nodes.emplace_back(std::move(logical_and_node_for_causal));
                 }
 
                 // Lower options to binary select options

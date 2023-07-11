@@ -85,8 +85,8 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     Surface<float> Bias_tensor(32, false);
     Surface<float> eq_scale_tensor(32, false);
     Surface<float> eq_bias_tensor(32, false);
-    float EPS_scalar = 0.001;
-    float EXP_AVG_scalar = 0.001;
+    float EPS_scalar = 0.001f;
+    float EXP_AVG_scalar = 0.001f;
     int64_t nhw = 64;
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
@@ -176,8 +176,8 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     Surface<float> Next_running_var_tensor(32, false);
     Surface<float> Scale_tensor(32, false);
     Surface<float> Bias_tensor(32, false);
-    float epsilon_cpu = 1e-05;
-    float momentum_cpu = 1e-01;
+    float epsilon_cpu = 1e-05f;
+    float momentum_cpu = 1e-01f;
     Surface<half> A_tensor(4*32*16*16, false);
     Surface<half> Y_tensor(4*32*16*16, false);
 

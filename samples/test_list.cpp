@@ -3298,7 +3298,7 @@ TEST_CASE("Batch normalization", "[frontend][fusion][bn]") {
 
     auto size_calculator = 
         [](int64_t *arr) {
-            return std::accumulate(arr, arr + 4, 1, std::multiplies<int>());
+            return std::accumulate(arr, arr + 4, 1LL, std::multiplies<int64_t>());
         };
 
     Surface<half> input(size_calculator(tensorDims), false);

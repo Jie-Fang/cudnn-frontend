@@ -95,7 +95,7 @@ public:
         auto validate_scalars = [] (std::shared_ptr<Tensor> const& T) {
             error_t status = {error_code_t::OK, ""};
             auto tensor_dim = T->get_dim();
-            bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {
+            bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](auto element) {
                 return element == 1;
             });
             if(!allOnes) {

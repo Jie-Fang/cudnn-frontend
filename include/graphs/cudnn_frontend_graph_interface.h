@@ -566,7 +566,7 @@ inline Conv_fprop::Outputs Graph::conv_fprop(Conv_fprop::Inputs inputs, Conv_fpr
 
     sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.Y = Y};
+    return Conv_fprop::Outputs{Y};
 }
 
 inline std::array<std::shared_ptr<Tensor>, 5> Graph::dbn_weight(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> mean, std::shared_ptr<Tensor> inv_variance, std::shared_ptr<Tensor> scale, DBN_weight options) {
@@ -621,7 +621,7 @@ inline Conv_dgrad::Outputs Graph::conv_dgrad(Conv_dgrad::Inputs inputs, Conv_dgr
 
     sub_nodes.emplace_back(std::make_unique<DgradNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.DX = DX};
+    return Conv_dgrad::Outputs{DX};
 }
 
 inline std::array<std::shared_ptr<Tensor>, 2> Graph::genstats(std::shared_ptr<Tensor> x, Genstats options) {
@@ -647,7 +647,7 @@ inline Genstats::Outputs Graph::genstats(Genstats::Inputs inputs, Genstats optio
 
     sub_nodes.emplace_back(std::make_unique<GenstatsNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.SUM = SUM, .SQ_SUM = SQ_SUM};
+    return Genstats::Outputs{SUM,SQ_SUM};
 }
 
 inline std::shared_ptr<Tensor> Graph::conv_wgrad(std::shared_ptr<Tensor> dy, std::shared_ptr<Tensor> x, Conv_wgrad options) {
@@ -672,7 +672,7 @@ inline Conv_wgrad::Outputs Graph::conv_wgrad(Conv_wgrad::Inputs inputs, Conv_wgr
 
     sub_nodes.emplace_back(std::make_unique<WgradNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.DW = DW};
+    return Conv_wgrad::Outputs{DW};
 }
 
 inline std::shared_ptr<Tensor> Graph::pointwise(std::shared_ptr<Tensor> a, Pointwise options) {
@@ -719,7 +719,7 @@ inline Pointwise::Outputs Graph::pointwise(Pointwise::Inputs inputs, Pointwise o
 
     sub_nodes.emplace_back(std::make_unique<PointwiseNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.OUT_0 = OUT_0};
+    return Pointwise::Outputs{OUT_0};
 }
 
 inline std::shared_ptr<Tensor> Graph::matmul(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b, Matmul options) {
@@ -742,7 +742,7 @@ inline Matmul::Outputs Graph::matmul(Matmul::Inputs inputs, Matmul options) {
 
     sub_nodes.emplace_back(std::make_unique<MatmulNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.C = C};
+    return Matmul::Outputs{C};
 }
 
 inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention(Scaled_dot_product_attention::Inputs inputs, Scaled_dot_product_attention options) {    
@@ -759,7 +759,7 @@ inline Scaled_dot_product_attention::Outputs Graph::scaled_dot_product_attention
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.O = O, .S = S};
+    return Scaled_dot_product_attention::Outputs{O,S};
 }
 
 inline Scaled_dot_product_flash_attention::Outputs Graph::scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention::Inputs inputs, Scaled_dot_product_flash_attention options) {    
@@ -774,7 +774,7 @@ inline Scaled_dot_product_flash_attention::Outputs Graph::scaled_dot_product_fla
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(options.get_name(), std::move(options), get_context()));
 
-    return {.O = O, .Stats = Stats};
+    return Scaled_dot_product_flash_attention::Outputs{O,Stats};
 }
 
 } // namespace cudnn_frontend::graph
