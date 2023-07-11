@@ -3,7 +3,12 @@ cmake_minimum_required(VERSION 3.17)
 project(cudnn_frontend VERSION 0.9)
 
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
+
+if(MSVC OR MSYS OR MINGW)
+option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." OFF)
+else()
 option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." ON)
+endif()
 
 add_library(cudnn_frontend INTERFACE)
 
