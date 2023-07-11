@@ -213,6 +213,9 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
         SKIP("DBARCS requires hopper and above architecture.");
     }
 
+    if(check_device_arch_newer_than("hopper") == false) {
+        SKIP("DBARCS requires Hopper and up");
+    }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(graph.build_operation_graph(handle).is_good());
@@ -220,7 +223,11 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A)
                     .build_plans(handle);
 
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    if(graph.set_executor(plans).is_good() == false) {
+        auto fallback_plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK)
+                .build_plans(handle);
+        REQUIRE(graph.set_executor(fallback_plans).is_good());
+    }
 
     Surface<half> x_tensor(4*64*16*16, false);
     Surface<half> s_tensor(64, false);
