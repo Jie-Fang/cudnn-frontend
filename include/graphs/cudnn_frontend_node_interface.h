@@ -162,7 +162,13 @@ public:
     
     error_t build_operation_graph(cudnnHandle_t handle) {
 
-        auto status = assign_uids();
+        auto status = validate();
+        if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+            return status;
+        }
+
+        status = assign_uids();
         if(status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;
