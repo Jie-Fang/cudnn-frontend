@@ -31,28 +31,18 @@ public:
         auto sum_tensor_dim = SUM->get_dim();
         auto sq_sum_tensor_dim = SQ_SUM->get_dim();
         
+        // Only infer dims and strides if user did not set them
         if(sum_tensor_dim.empty()) {
             sum_tensor_dim.resize(x_tensor_dim.size(), 1);
             sum_tensor_dim[1] = x_tensor_dim[1];
             SUM->set_dim(sum_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
-        } else {
-            if(x_tensor_dim.size() != sum_tensor_dim.size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and SUM ports of " + name;
-                return {status, message};
-            }
         }
         
+        // Only infer dims and strides if user did not set them
         if(sq_sum_tensor_dim.empty()) {
             sq_sum_tensor_dim.resize(x_tensor_dim.size(), 1);
             sq_sum_tensor_dim[1] = x_tensor_dim[1];
             SQ_SUM->set_dim(sq_sum_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
-        } else {
-            if(x_tensor_dim.size() != sq_sum_tensor_dim.size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and SQSUM ports of " + name;
-                return {status, message};
-            }
         }
 
         return {error_code_t::OK, ""};

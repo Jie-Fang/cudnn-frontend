@@ -36,6 +36,7 @@ public:
 
         auto DY = options.inputs.DY;
         auto dy_tensor_dim = DY->get_dim();
+        // Only infer dims and strides if user did not set them
         if(dy_tensor_dim.empty()) {
             dy_tensor_dim.resize(x_tensor_dim.size());
             DY->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -43,6 +44,7 @@ public:
         
         auto DX = options.outputs.DX;
         auto dx_tensor_dim = DX->get_dim();
+        // Only infer dims and strides if user did not set them
         if(dx_tensor_dim.empty()) {
             dx_tensor_dim.resize(x_tensor_dim.size());
             DX->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -51,6 +53,7 @@ public:
         // Set channel length tensors
         auto infer_per_channel_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
+            // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
                 tensor_dim[1] = x_tensor_dim[1];
@@ -65,61 +68,7 @@ public:
 
         return {error_code_t::OK, ""};
     }
-    
-    error_t validate_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating DBNNode..." << std::endl;
 
-        auto X = options.inputs.X;
-        auto const x_tensor_dim = X->get_dim();
-
-        auto DY = options.inputs.DY;
-        auto const dy_tensor_dim = DY->get_dim();
-        if(x_tensor_dim != dy_tensor_dim) {
-            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DY ports of " + name;
-            return {status, message};
-        }
-        
-        auto DX = options.outputs.DX;
-        auto const dx_tensor_dim = DX->get_dim();
-        if(x_tensor_dim != dx_tensor_dim) {
-            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DX ports of " + name;
-            return {status, message};
-        }
-
-        auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
-            error_t status = {error_code_t::OK, ""};
-            if(x_tensor_dim[1] != T->get_dim()[1]) {
-                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
-                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name;
-            }
-            return status;
-        };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DSCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DBIAS));
-
-        // auto validate_scalars = [this] (std::shared_ptr<Tensor_attributes> const& T) {
-        //     auto tensor_dim = T->get_dim();
-        //     bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](float const element) {
-        //         return element == 1;
-        //     });
-        //     if(!allOnes) {
-        //         auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-        //         getLogger() << "[cudnn_frontend] ERROR: " << status << " Tensor dimensionality mismatch at X and Y ports of " << name << "." << std::endl;
-        //         return status;
-        //     }
-        //     return {error_code_t::OK, ""};
-        // };
-        // CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(epsilon));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated DBNNode." << std::endl;
-        return {error_code_t::OK, ""};
-    }
-    
     error_t assign_uids_node() override final {
         options.inputs.X->set_uid(ICudnn::create_new_uid());
         options.inputs.DY->set_uid(ICudnn::create_new_uid());

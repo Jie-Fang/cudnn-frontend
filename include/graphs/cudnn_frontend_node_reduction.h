@@ -28,14 +28,9 @@ public:
         
         auto const& x_tensor_dim = x_tensor->get_dim();
         auto y_tensor_dim = y_tensor->get_dim();
+        // Only infer dims and strides if user did not set them
         if(y_tensor_dim.empty()) {
             y_tensor->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
-        } else {
-            if(y_tensor_dim.size() != x_tensor_dim.size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name;
-                return {status, message};
-            }
         }
 
         return {error_code_t::OK, ""};

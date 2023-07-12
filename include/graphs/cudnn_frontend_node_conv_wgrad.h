@@ -32,12 +32,8 @@ public:
         auto const x_tensor_dim = X->get_dim();
         auto const dy_tensor_dim = DY->get_dim();
         auto dw_tensor_dim = DW->get_dim();
-        if(x_tensor_dim.size() != dy_tensor_dim.size()) {
-            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DY ports of " + name;
-            return {status, message};
-        }
 
+        // Only infer dims and strides if user did not set them
         if(dw_tensor_dim.empty()) {
             dw_tensor_dim.resize(x_tensor_dim.size());
             auto const& padding = options.get_padding();
@@ -55,12 +51,6 @@ public:
                 dw_tensor_dim[dim] = (x_tensor_dim[dim] + 2*padding[dim - 2] - (dy_tensor_dim[dim] - 1) * stride[dim - 2] - 1) / dilation[dim-2] + 1;
             }
             DW->set_dim(dw_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
-        } else {
-            if(x_tensor_dim.size() != dw_tensor_dim.size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DW ports of " + name;
-                return {status, message};
-            }
         }
 
         return {error_code_t::OK, ""};

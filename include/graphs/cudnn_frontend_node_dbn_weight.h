@@ -31,6 +31,7 @@ public:
 
         auto X = options.inputs.X;
         auto x_tensor_dim = X->get_dim();
+        // Only infer dims and strides if user did not set them
         if(x_tensor_dim.empty()) {
             x_tensor_dim.resize(dy_tensor_dim.size());
             X->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -38,8 +39,12 @@ public:
 
         // Set channel length tensors
         auto infer_per_channel_tensors = [&dy_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
+            auto tensor_dim = T->get_dim();
+            // Only infer dims and strides if user did not set them
             if(T->get_dim().empty()) {
-                T->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                tensor_dim.resize(dy_tensor_dim.size(), 1);
+                tensor_dim[1] = dy_tensor_dim[1];
+                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
             }
         };
         infer_per_channel_tensors(options.inputs.MEAN);
@@ -51,41 +56,6 @@ public:
         infer_per_channel_tensors(options.outputs.EQ_SCALE_DY);
         infer_per_channel_tensors(options.outputs.EQ_SCALE_X);
 
-        return {error_code_t::OK, ""};
-    }
-    
-    error_t validate_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating DBNWeightNode..." << std::endl;
-
-        auto DY = options.inputs.DY;
-        auto const dy_tensor_dim = DY->get_dim();
-
-        auto X = options.inputs.X;
-        auto const x_tensor_dim = X->get_dim();
-        if(dy_tensor_dim != x_tensor_dim) {
-            auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and DY ports of " + name;
-            return {status, message};
-        }
-        
-        auto validate_per_channel_tensors = [this, &dy_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
-            error_t status = {error_code_t::OK, ""};
-            if(dy_tensor_dim[1] != T->get_dim()[1]) {
-                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
-                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at Y and DY ports of " + name;
-            }
-            return status;
-        };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DBIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.DSCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_SCALE_DY));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_SCALE_X));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated DBNWeightNode." << std::endl;
         return {error_code_t::OK, ""};
     }
 

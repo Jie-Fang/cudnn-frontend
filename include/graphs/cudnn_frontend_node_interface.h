@@ -37,13 +37,12 @@ private:
         return {error_code_t::OK, ""};
     };
     
-    bool has_properties_inferred = false;
     virtual error_t infer_properties_node() {
         return {error_code_t::OK, ""};
     };
     
     bool has_validation_checked = false;
-    virtual error_t validate_node() {
+    virtual error_t validate_node() const {
         return {error_code_t::OK, ""};
     };
 
@@ -130,46 +129,24 @@ protected:
 public:
     virtual Type getType() = 0;
 
-    error_t infer_properties() {
-        if(has_properties_inferred) {
-            return {error_code_t::OK, ""};
-        }
-
-        // infer_properties self
-        auto status = infer_properties_node();
-        if(status.is_bad()) {
-            return status;
-        }
-        
-        // infer_properties sub nodes
-        for(auto const& sub_node: sub_nodes) {
-            status = sub_node->infer_properties();
-            if(status.is_bad()) {
-                return status;
-            }
-        }
-
-        has_properties_inferred = true;
-        return {error_code_t::OK, ""};
-    }
-
     error_t validate() {
         if(has_validation_checked) {
             return {error_code_t::OK, ""};
         }
 
-        auto status = infer_properties();
-        if(status.is_bad()) {
-            return status;
-        }
-
         // validate self
-        status = validate_node();
+        auto status = validate_node();
         if(status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Validation failed in " << name << std::endl;
             return status;
         }
-        
+
+        // infer_properties self
+        status = infer_properties_node();
+        if(status.is_bad()) {
+            return status;
+        }
+
         // validate sub nodes
         for(auto const& sub_node: sub_nodes) {
             status = sub_node->validate();

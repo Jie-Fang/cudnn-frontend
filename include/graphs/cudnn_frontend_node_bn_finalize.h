@@ -25,13 +25,13 @@ public:
         
         options.fill_from_context(context);
         
-        // TODO: Only inferencing from SUM works today.
         auto SUM = options.inputs.SUM;
         auto const sum_tensor_dim = SUM->get_dim();
 
         // Set channel length tensors
         auto infer_per_channel_tensors = [&sum_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
+            // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim = sum_tensor_dim;
                 T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -52,6 +52,7 @@ public:
         // Set scalars
         auto infer_scalars = [&sum_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
+            // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim.resize(sum_tensor_dim.size(), 1);
                 T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -63,56 +64,7 @@ public:
 
         return {error_code_t::OK, ""};
     }
-    
-    error_t validate_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormFinalizeNode..." << std::endl;
 
-        auto SUM = options.inputs.SUM;
-        auto const sum_tensor_dim = SUM->get_dim();
-
-        auto validate_per_channel_tensors = [this, &sum_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
-            error_t status = {error_code_t::OK, ""};
-            auto tensor_dim = T->get_dim();
-            if(sum_tensor_dim != tensor_dim) {
-                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
-                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at SUM and Y ports of " + name + ".";
-                return status;
-            }
-            return status;
-        };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SQ_SUM));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.PREV_RUNNING_MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.PREV_RUNNING_VAR));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.EQ_SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR));
-
-        auto validate_scalars = [] (std::shared_ptr<Tensor_attributes> const& T) {
-            error_t status = {error_code_t::OK, ""};
-            auto tensor_dim = T->get_dim();
-            bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](auto element) {
-                return element == 1;
-            });
-            if(!allOnes) {
-                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
-                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at SUM and Y ports.";
-                return status;
-            }
-            return status;
-        };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.EXP_AVG));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.ACCUM_COUNT));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormFinalizeNode." << std::endl;
-        return {error_code_t::OK, ""};
-    }
-    
     error_t assign_uids_node() override final {
         options.inputs.SUM->set_uid(ICudnn::create_new_uid());
         options.inputs.SQ_SUM->set_uid(ICudnn::create_new_uid());

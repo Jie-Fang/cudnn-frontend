@@ -29,49 +29,11 @@ public:
         auto out_0_tensor = options.outputs.OUT_0;
         
         auto out_0_tensor_dim = out_0_tensor->get_dim();
+        // Only infer dims and strides if user did not set them
         if(out_0_tensor_dim.empty()) {
             out_0_tensor->set_dim(in_0_tensor->get_dim()).set_stride(in_0_tensor->get_stride());
-        } else {
-            if(out_0_tensor_dim.size() != in_0_tensor->get_dim().size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name;
-                return {status, message};
-            }
         }
 
-        return {error_code_t::OK, ""};
-    }
-
-    error_t validate_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating PointwiseNode..." << std::endl;
-
-        // Ensure that ports are matched to tensors in accordance with port count.
-        // X and Y should always be present.
-        auto X = options.inputs.IN_0;
-        if(X == nullptr) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR:  X port of pointwise node named " + name + " not mapped to a tensor.";
-            return {status, message};
-        }
-
-        auto Y = options.outputs.OUT_0;
-        if(Y == nullptr) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR:  Y port of pointwise node named " + name + " not mapped to a tensor.";
-            return {status, message};
-        }
-
-        auto const port_count = get_pointwise_mode_port_count(options.get_mode().value());
-        if(port_count >= 3) {
-            auto B = options.inputs.IN_1;
-            if(B == nullptr) {
-                auto status = error_code_t::ATTRIBUTE_NOT_SET;
-                std::string message = "[cudnn_frontend] ERROR:  B port of pointwise node named " + name + " not mapped to a tensor.";
-                return {status, message};
-            }
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Validated PointwiseNode." << std::endl;
         return {error_code_t::OK, ""};
     }
 

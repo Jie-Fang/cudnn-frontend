@@ -22,7 +22,26 @@ namespace cudnn_frontend::graph {
     public:
         Scaled_dot_product_flash_attention_attributes options;
 
-        ScaledDotProductFlashAttentionNode(std::string const& name, Scaled_dot_product_flash_attention_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {            
+        ScaledDotProductFlashAttentionNode(std::string const& name, Scaled_dot_product_flash_attention_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+
+        Type getType() override final {
+            return Type::COMPOSITE;
+        }
+
+        error_t infer_properties_node() override final {
+            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node named " << name << "." << std::endl;
+
+            options.fill_from_context(context);
+
+            // Gather dims to fill properties of virtual tensors
+            auto const& q_dim = options.inputs.Q->get_dim();
+            auto b = q_dim[0];
+            auto h = q_dim[1];
+            auto s_q = q_dim[2];
+            auto d = q_dim[3];
+            auto const& k_dim = options.inputs.K->get_dim();
+            auto s_kv = k_dim[3];
+
             std::shared_ptr<Tensor_attributes> last_output;
 
             // User does not create tensor for scale k, so create it internally
@@ -40,6 +59,11 @@ namespace cudnn_frontend::graph {
             bmm1_options.outputs.C->set_is_virtual(true);
             auto bmm1_node = std::make_unique<MatmulNode>(bmm1_options.get_name(), std::move(bmm1_options), context);
             sub_nodes.emplace_back(std::move(bmm1_node));
+            // Set dims and strides for output of bmm1 as user never sets them
+            last_output->set_is_virtual(true)
+                .set_dim({b, h, s_q, s_kv})
+                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
+                .fill_from_context(context);
             
             // Optional scale
             if(options.inputs.Scale_k) {
@@ -107,15 +131,24 @@ namespace cudnn_frontend::graph {
             sub_nodes.emplace_back(std::move(softmax_node));
 
             // Lower options to rng options
+            auto const p = options.dropout_probability.value();
+
+            auto mask_output = std::make_shared<Tensor_attributes>();
+            mask_output->set_is_virtual(true)
+                .set_dim({b, h, s_q, s_kv})
+                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+
             auto rng_options = Rng_attributes("rng");
             rng_options.set_distribution(RngDistribution_t::BERNOULLI)
-                .set_bernoulli_probability(options.dropout_probability.value());
+                .set_bernoulli_probability(p);
             rng_options.inputs.Seed = options.inputs.Seed;
             rng_options.inputs.Offset = options.inputs.Offset;
-            auto mask_output = rng_options.outputs.Y = rng_output = std::make_shared<Tensor_attributes>();
-            rng_options.outputs.Y->set_is_virtual(true);
+            rng_options.outputs.Y = mask_output;
             auto rng_node = std::make_unique<RngNode>(rng_options.get_name(), std::move(rng_options), context);
             sub_nodes.emplace_back(std::move(rng_node));
+
+            // Compute dropout scale
+            options.dropout_scale = (1.f / (1.f - p));
 
             // Lower options to mask options
             auto mask_options = Pointwise_attributes("mask");
@@ -148,45 +181,11 @@ namespace cudnn_frontend::graph {
             bmm2_options.outputs.C = options.outputs.O;
             auto bmm2_node = std::make_unique<MatmulNode>(bmm2_options.get_name(), std::move(bmm2_options), context);
             sub_nodes.emplace_back(std::move(bmm2_node));
-        }
 
-        Type getType() override final {
-            return Type::COMPOSITE;
-        }
-
-        error_t infer_properties_node() override final {
-            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node named " << name << "." << std::endl;
-        
-            options.fill_from_context(context);
-
-            // Fill properties of virtual tensors
-            auto const& q_dim = options.inputs.Q->get_dim();
-            auto b = q_dim[0];
-            auto h = q_dim[1];
-            auto s_q = q_dim[2];
-            auto d = q_dim[3];
-            // P
-            auto const& k_dim = options.inputs.K->get_dim();
-            auto s_kv = k_dim[3];
-            after_bmm1->set_dim({b, h, s_q, s_kv})
-             .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-             .fill_from_context(context);
-             
-            // rng_output
-            // kickstarting rng Y and subsequant MUL infer_properties
-            if(rng_output) {
-                rng_output->set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
-            }
-
-            // Infer dims and strides for output tensor as matmul node has no context of mha
-            // TODO: Rethink whether mha node needs to set it?
-            options.outputs.O->set_dim({b,h,s_q,d}).set_stride({h*d,d,b*h*d,1});
-
-            // Compute dropout scale
-            if(options.dropout_probability.has_value()) {
-                auto const p = options.dropout_probability.value();
-                options.dropout_scale = (1.f / (1.f - p));
+            // Set dims and strides if user did not
+            if(options.outputs.O->get_dim().empty()) {
+                // TODO: mha node needs to set it?
+                options.outputs.O->set_dim({b,h,s_q,d}).set_stride({h*d,d,b*h*d,1});
             }
 
             return {error_code_t::OK, ""};

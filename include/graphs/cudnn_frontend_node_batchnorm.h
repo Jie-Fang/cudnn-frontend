@@ -25,12 +25,12 @@ public:
 
         options.fill_from_context(context);
 
-        // TODO: Only inferencing from X works today.
         auto X = options.inputs.X;
         auto const x_tensor_dim = X->get_dim();
 
         auto Y = options.outputs.Y;
         auto y_tensor_dim = Y->get_dim();
+        // Only infer dims and strides if user did not set them
         if(y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
             Y->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -39,6 +39,7 @@ public:
         // Set channel length tensors
         auto infer_per_channel_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
+            // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
                 tensor_dim[1] = x_tensor_dim[1];
@@ -57,6 +58,7 @@ public:
         // Set scalar tensors
         auto infer_scalar_tensors = [&x_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
+            // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
                 T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
@@ -68,7 +70,7 @@ public:
         return {error_code_t::OK, ""};
     }
     
-    error_t validate_node() override final {
+    error_t validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormNode..." << std::endl;
 
         // Norm forward phase should be set
@@ -77,50 +79,6 @@ public:
             std::string message = "[cudnn_frontend] ERROR: Forward phase not set of batchnorm node named " + name + ".";
             return {status, message};
         }
-
-        auto X = options.inputs.X;
-        auto const x_tensor_dim = X->get_dim();
-
-        auto Y = options.outputs.Y;
-        auto const y_tensor_dim = Y->get_dim();
-        if(x_tensor_dim != y_tensor_dim) {
-            std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name + ".";
-            return {error_code_t::SHAPE_DEDUCTION_FAILED, message};
-        }
-
-        auto validate_per_channel_tensors = [this, &x_tensor_dim] (std::shared_ptr<Tensor_attributes> const& T) {
-            error_t status = {error_code_t::OK, ""};
-            if(x_tensor_dim[1] != T->get_dim()[1]) {
-                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
-                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name + ".";
-            }
-            return status;
-        };
-
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.PREV_RUNNING_MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.PREV_RUNNING_VAR));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_per_channel_tensors(options.inputs.BIAS));
-
-        auto validate_scalars = [this] (std::shared_ptr<Tensor_attributes> const& T) {
-            error_t status = {error_code_t::OK, ""};
-            auto tensor_dim = T->get_dim();
-            bool allOnes = std::all_of(tensor_dim.begin(), tensor_dim.end(), [](auto element) {
-                return element == 1;
-            });
-            if(!allOnes) {
-                status.code = error_code_t::SHAPE_DEDUCTION_FAILED;
-                status.err_msg = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at X and Y ports of " + name + ".";
-                return status;
-            }
-            return status;
-        };
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(validate_scalars(options.inputs.MOMENTUM));
 
         getLogger() << "[cudnn_frontend] INFO: " << "Validated BatchNormNode." << std::endl;
         return {error_code_t::OK, ""};

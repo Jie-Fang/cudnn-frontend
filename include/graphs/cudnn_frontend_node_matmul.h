@@ -32,24 +32,14 @@ namespace cudnn_frontend::graph {
             auto const a_tensor_dim = a_tensor_prop->get_dim();
             auto const b_tensor_dim = b_tensor_prop->get_dim();
             auto c_tensor_dim = c_tensor_prop->get_dim();
-            if(a_tensor_dim.size() != b_tensor_dim.size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at A and B ports of " + name;
-                return {status, message};
-            }
             
+            // Only infer dims and strides if user did not set them
             if(c_tensor_dim.empty()) {
                 c_tensor_dim.resize(a_tensor_dim.size());
                 c_tensor_dim[0] = a_tensor_dim[0]; // B
                 c_tensor_dim[1] = a_tensor_dim[1]; // M
                 c_tensor_dim[2] = b_tensor_dim[2]; // N
                 c_tensor_prop->set_dim(c_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
-            } else {
-                if(a_tensor_dim.size() != c_tensor_dim.size()) {
-                auto status = error_code_t::SHAPE_DEDUCTION_FAILED;
-                std::string message = "[cudnn_frontend] ERROR: Tensor dimensionality mismatch at A and C ports of " + name;
-                return {status, message};
-                }
             }
 
             return {error_code_t::OK, ""};
