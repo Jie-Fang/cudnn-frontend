@@ -27,6 +27,25 @@ namespace cudnn_frontend::graph {
         Type getType() override final {
             return Type::COMPOSITE;
         }
+        
+        error_t validate_node() const override final {
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating ScaledDotProductFlashAttentionNode..." << std::endl;
+
+            if(options.is_inference.has_value() == false) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: is_infernece attribute not set.";
+                return {status, message};
+            }
+
+            if(options.dropout_probability.has_value() && options.dropout_probability.value() == 1) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
+                return {status, message};
+            }
+
+            getLogger() << "[cudnn_frontend] INFO: " << "Validated ScaledDotProductFlashAttentionNode." << std::endl;
+            return {error_code_t::OK, ""};
+        }
 
         error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node named " << name << "." << std::endl;

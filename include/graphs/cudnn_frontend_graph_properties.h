@@ -1033,7 +1033,7 @@ public:
         std::shared_ptr<Tensor_attributes> S; // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
     } outputs;
 
-    bool is_inference;
+    std::optional<bool> is_inference;
     bool padding_mask = false;
     bool causal_mask = false;
     std::optional<float> dropout_probability;
@@ -1120,15 +1120,15 @@ public:
         std::shared_ptr<Tensor_attributes> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
-    bool is_inference;
+    std::optional<bool> is_inference;
     bool padding_mask = false;
     bool alibi_mask = false;
     bool causal_mask = false;
     std::optional<float> dropout_probability;
     float dropout_scale = 1.f;
     
-    Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
-    Scaled_dot_product_flash_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention), is_inference(false) {}
+    Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
+    Scaled_dot_product_flash_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention) {}
 
     Scaled_dot_product_flash_attention_attributes& set_is_inference(bool const value){
         is_inference = value;
@@ -1183,9 +1183,6 @@ public:
 };
 
 class Softmax_attributes : public Operation {
-    friend class SoftmaxNode;
-    friend class ScaledDotProductAttentionNode;
-    friend class ScaledDotProductFlashAttentionNode;
 public:
 
     struct Inputs {
@@ -1197,11 +1194,9 @@ public:
         std::shared_ptr<Tensor_attributes> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
-private:
-    bool is_inference = false;
+    std::optional<bool> is_inference;
     bool use_stats = false;
 
-public:
     Softmax_attributes() : Operation(Tag::Softmax) {}
     Softmax_attributes(const std::string name) : Operation(name, Tag::Softmax) {}
 
