@@ -14,7 +14,6 @@
 namespace cudnn_frontend::graph {
 
     class ScaledDotProductAttentionNode : public INode {
-        std::shared_ptr<Tensor_attributes> dropout_scale;
         std::shared_ptr<Tensor_attributes> negative_inf;
 
     public:
@@ -68,9 +67,6 @@ namespace cudnn_frontend::graph {
             std::shared_ptr<Tensor_attributes> last_output;
 
             // User does not create tensor for scale k, so create it internally
-            // Data type is i/o type
-            dropout_scale = std::make_shared<Tensor_attributes>();
-            dropout_scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
             negative_inf = std::make_shared<Tensor_attributes>();
             negative_inf->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
             
@@ -209,7 +205,7 @@ namespace cudnn_frontend::graph {
             auto softmax_options = Softmax_attributes("softmax");
             softmax_options.inputs.P = last_output;
             // Use tensor provided by Graph when real S
-            if(options.is_inference) {
+            if(options.is_inference.value() == true) {
                 last_output = softmax_options.outputs.S = std::make_shared<Tensor_attributes>();
                 softmax_options.outputs.S->set_is_virtual(true);
                 auto softmax_node = std::make_unique<SoftmaxNode>(softmax_options.get_name(), std::move(softmax_options), context);
@@ -271,10 +267,18 @@ namespace cudnn_frontend::graph {
             // Inference or not, dropout or not, always put a scale.
             // Default value 1.f. Will have no perf impact
             // Lower options to dropout_scale options
+            if((options.is_inference.value() == true) || (options.dropout_probability.has_value())) {
+                // Data type is i/o type
+                options.inputs.Dropout_scale = std::make_shared<Tensor_attributes>();
+                options.inputs.Dropout_scale->set_dim({1,1,1,1})
+                    .set_stride({1,1,1,1})
+                    .set_is_pass_by_value(true)
+                    .set_data_type(options.inputs.Q->get_data_type());
+            }
             auto dropout_scale_options = Pointwise_attributes("dropout_scale");
             dropout_scale_options.set_mode(PointwiseMode_t::MUL);
             dropout_scale_options.inputs.IN_0 = last_output;
-            dropout_scale_options.inputs.IN_1 = dropout_scale;
+            dropout_scale_options.inputs.IN_1 = options.inputs.Dropout_scale;
             last_output = dropout_scale_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
             dropout_scale_options.outputs.OUT_0->set_is_virtual(true);
             auto dropout_scale_node = std::make_unique<PointwiseNode>(dropout_scale_options.get_name(), std::move(dropout_scale_options), context);
@@ -307,7 +311,7 @@ namespace cudnn_frontend::graph {
 
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {
             half dropout_scale_value = options.dropout_scale;
-            tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
+            tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
             
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);

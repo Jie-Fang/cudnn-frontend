@@ -338,7 +338,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     inputs.SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
 
     auto dropout_mask = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Dropout_mask").set_dim({b,h,s_q,s_kv}).set_stride({s_q*s_kv*h,s_q*s_kv,s_kv,1}));
-    float dropout_scale = 0.5f;
+    auto dropout_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Dropout_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
 
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
@@ -376,6 +376,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     void* devPtrK = (qkvTensor.devPtr + h * d);
     void* devPtrV = (qkvTensor.devPtr + 2 * h * d);
     void* devPtrO = oTensor.devPtr;
+    float dropout_scale_value = 0.5f;
 
     Surface<int32_t> devActualSeqlenQ(b, false);
     Surface<int32_t> devActualSeqlenK(b, false);
@@ -392,6 +393,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
         , {inputs.SEQ_LEN_Q, devActualSeqlenQ.devPtr}
         , {inputs.SEQ_LEN_K, devActualSeqlenK.devPtr}
         , {dropout_mask, dropoutMaskTensor.devPtr}
+        , {dropout_scale, &dropout_scale_value}
         , {inputs.V, devPtrV}
         , {outputs.O, devPtrO}
     };

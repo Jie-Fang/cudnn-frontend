@@ -1026,6 +1026,7 @@ public:
         std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
         std::shared_ptr<Tensor_attributes> Mask;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
+        std::shared_ptr<Tensor_attributes> Dropout_scale;
     } inputs;
 
     struct Outputs {
@@ -1075,9 +1076,9 @@ public:
         return *this;
     }
     
-    Scaled_dot_product_attention_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask, float const scale) {
+    Scaled_dot_product_attention_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
         inputs.Dropout_mask = mask;
-        dropout_scale = scale;
+        inputs.Dropout_scale = scale;
         return *this;
     }
 

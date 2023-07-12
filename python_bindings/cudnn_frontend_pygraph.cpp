@@ -397,7 +397,7 @@ public:
         if (py::isinstance<py::tuple>(dropout)) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
             if (dropout_tuple.size() != 2) {
-                throw std::runtime_error("dropout must be a tuple of two floats or a tuple of cudnn tensor and a float");
+                throw std::runtime_error("dropout must be a tuple of float and int (probability, seed) or a tuple of two cudnn tensors (mask, scale).");
             }
 
             if (py::isinstance<py::float_>(dropout_tuple[0]) && py::isinstance<py::int_>(dropout_tuple[1])) {
@@ -405,19 +405,19 @@ public:
                 auto const seed = dropout_tuple[1].cast<int32_t>();
 
                 scaled_dot_product_attention_options.set_dropout(dropout_probability, seed);                
-            } else if (py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(dropout_tuple[0]) && py::isinstance<py::float_>(dropout_tuple[1])) {
+            } else if (py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(dropout_tuple[0]) && py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(dropout_tuple[1])) {
                 auto const dropout_mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
-                auto const dropout_scale = dropout_tuple[1].cast<float>();
+                auto const dropout_scale = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
 
                 scaled_dot_product_attention_options.set_dropout(dropout_mask, dropout_scale);
             } else {
-                throw std::runtime_error("dropout must be a tuple of two floats or two shared_ptr references");
+                throw std::runtime_error("dropout must be a tuple of float and int (probability, seed) or a tuple of two cudnn tensors (mask, scale).");
             }
         }
         else if (dropout.is(py::none())) {
             // Still fine as user does not want any kind of dropout
         } else {
-            throw std::runtime_error("dropout must be a tuple of two floats or a tuple of cudnn tensor and a float");
+            throw std::runtime_error("dropout must be a tuple of float and int (probability, seed) or a tuple of two cudnn tensors (mask, scale).");
         }
 
         scaled_dot_product_attention_options.inputs.Q = q;
