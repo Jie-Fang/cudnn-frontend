@@ -162,12 +162,22 @@ class TestGraph:
         for node in self.nodes:
             node.clearMetaData()
 
+    def markImplicitOutputNodes(self):
+        for node in self.nodes:
+            if node.isOutputNode():
+                print ("Setting {} as output".format(node.name))
+                node.pyCudnnTensor.set_output(True)
+
+
     def buildPyCudnnGraph(self):
         print("Setting up graph")
         graph = pycudnn.pygraph(self.graph_name, io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
         self.clearNodeMetaData()
         for node in self.entrance_nodes:
             node.buildPycudnnTreeRecursive(graph)
+
+        print ("Setting implicit output nodes")
+        self.markImplicitOutputNodes()
 
         print("Building graph")
         graph.build()
@@ -178,6 +188,9 @@ class TestGraph:
         variant_pack = {}
         for node in self.entrance_nodes:
             variant_pack[node.pyCudnnTensor] = node.getValue()
+
+
+        
 
         for node in self.nodes:
             if node.isOutputNode():
@@ -216,12 +229,12 @@ def test_conv_relu():
     graph.execute(variant_pack, workspace)
     Y_actual = testGraph.output_tensors[-1]
 
-    print (Y_actual)
+    #print (Y_actual)
 
     # TODO(@mbreughe): hard coded for now
     Y_expected = testGraph.getReference()
 
-    print(Y_expected)
+    #print(Y_expected)
    
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
