@@ -46,11 +46,6 @@ private:
     virtual error_t validate_node() {
         return {error_code_t::OK, ""};
     };
-    
-    bool has_support_checked = false;
-    virtual error_t is_supported_node() {
-        return {error_code_t::OK, ""};
-    };
 
     error_t assign_uids() {
         CHECK_CUDNN_FRONTEND_ERROR(assign_uids_node());
@@ -188,46 +183,9 @@ public:
         return {error_code_t::OK, ""};
     }
     
-    error_t is_supported() {
-        if(has_support_checked) {
-            return {error_code_t::OK, ""};
-        }
-        
-        auto status = validate();
-        if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Support check failed in " << name << std::endl;
-            return status;
-        }
-        
-        // is_supported self
-        status = is_supported_node();
-        if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Support check failed in " << name << std::endl;
-            return status;
-        }
-
-        // is_supported sub nodes
-        for(auto const& sub_node: sub_nodes) {
-            status = sub_node->is_supported();
-            if(status.is_bad()) {
-                getLogger() << "[cudnn_frontend] ERROR: Support check failed in " << name << std::endl;
-                return status;
-            }
-        }
-
-        has_support_checked = true;
-        return {error_code_t::OK, ""};
-    }
-
     error_t build_operation_graph(cudnnHandle_t handle) {
-        
-        auto status = is_supported();
-        if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
-            return status;
-        }
 
-        status = assign_uids();
+        auto status = assign_uids();
         if(status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
             return status;

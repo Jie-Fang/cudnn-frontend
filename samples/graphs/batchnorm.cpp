@@ -67,6 +67,9 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.validate().is_good());
+
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
@@ -163,8 +166,10 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     
+    REQUIRE(graph.validate().is_good());
+
     REQUIRE(graph.build_operation_graph(handle).is_good());
-    
+
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
     
     REQUIRE(plans.check_support(handle).is_good());
@@ -255,7 +260,10 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     
+    REQUIRE(graph.validate().is_good());
+
     REQUIRE(graph.build_operation_graph(handle).is_good());
+
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
     
     REQUIRE(plans.check_support(handle).is_good());

@@ -518,7 +518,10 @@ public:
         
         is_built = true;
         
-        auto status = graph.build_operation_graph(handle);
+        auto status = graph.validate();
+        throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+        status = graph.build_operation_graph(handle);
         throw_if(status.is_bad(), status.get_code(), status.get_message());
 
         auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A);

@@ -70,7 +70,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     checkCudnnErr(cudnnCreate(&handle));
 
     REQUIRE(mha_graph.validate().is_good());
-    REQUIRE(mha_graph.is_supported().is_good());
+
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
@@ -166,7 +166,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     checkCudnnErr(cudnnCreate(&handle));
 
     REQUIRE(mha_graph.validate().is_good());
-    REQUIRE(mha_graph.is_supported().is_good());
+
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
@@ -261,6 +261,9 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(mha_graph.validate().is_good());
+
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
@@ -354,6 +357,9 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(mha_graph.validate().is_good());
+
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);

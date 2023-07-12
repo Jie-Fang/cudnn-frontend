@@ -65,6 +65,9 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.validate().is_good());
+
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
