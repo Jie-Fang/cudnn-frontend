@@ -66,7 +66,6 @@ public:
     }
     
     Tensor_attributes() = default;
-    Tensor_attributes(const std::string &name) : name(name) {}
 
     std::string get_name() const {
         return name;

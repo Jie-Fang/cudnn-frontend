@@ -33,8 +33,8 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
         
-    auto X = graph.tensor(fe::graph::Tensor_attributes("image").set_dim({4, 16, 64}));
-    auto Y = graph.tensor(fe::graph::Tensor_attributes("filter").set_dim({4, 64, 32}));
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({4, 16, 64}));
+    auto Y = graph.tensor(fe::graph::Tensor_attributes().set_name("filter").set_dim({4, 64, 32}));
     X->generateStrides(CUDNN_TENSOR_NHWC);
     Y->generateStrides(CUDNN_TENSOR_NHWC);
     
@@ -43,13 +43,13 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     Z->set_is_virtual(true);
 
     auto scale_options = fe::graph::Pointwise_attributes("pw_scale").set_mode(fe::PointwiseMode_t::MUL);
-    auto S = graph.tensor(fe::graph::Tensor_attributes("scale").set_dim({4, 16, 32}));
+    auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({4, 16, 32}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
     auto scale_output = graph.pointwise(Z, S, scale_options);
     scale_output->set_is_virtual(true);
 
     auto bias_options = fe::graph::Pointwise_attributes("pw_bias").set_mode(fe::PointwiseMode_t::ADD);
-    auto B = graph.tensor(fe::graph::Tensor_attributes("bias").set_dim({4, 16, 32}));
+    auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({4, 16, 32}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);

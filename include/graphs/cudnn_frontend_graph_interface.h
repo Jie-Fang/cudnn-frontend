@@ -183,7 +183,8 @@ private:
 
     std::shared_ptr<Tensor_attributes>
     output_tensor(std::string const &name) {
-        auto tensor = std::make_shared<Tensor_attributes>(name);
+        auto tensor = std::make_shared<Tensor_attributes>();
+        tensor->set_name(name);
         tensors.emplace(tensor);
         return tensor;
     }

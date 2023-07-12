@@ -25,16 +25,16 @@ namespace cudnn_frontend::graph {
 
         SoftmaxNode(std::string const& name, Softmax_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {            
             // A dummy/virtual underlying tensor
-            MAX = std::make_shared<Tensor_attributes>("MAX");
+            MAX = std::make_shared<Tensor_attributes>();
             MAX->set_is_virtual(true);
-            P_MAX = std::make_shared<Tensor_attributes>("P_MAX");
+            P_MAX = std::make_shared<Tensor_attributes>();
             P_MAX->set_is_virtual(true);
-            E = std::make_shared<Tensor_attributes>("E");
+            E = std::make_shared<Tensor_attributes>();
             E->set_is_virtual(true);
-            SUM = std::make_shared<Tensor_attributes>("SUM");
+            SUM = std::make_shared<Tensor_attributes>();
             SUM->set_is_virtual(true);
             if(options.use_stats) {
-                LOG = std::make_shared<Tensor_attributes>("LOG");
+                LOG = std::make_shared<Tensor_attributes>();
                 LOG->set_is_virtual(true); 
             }
 

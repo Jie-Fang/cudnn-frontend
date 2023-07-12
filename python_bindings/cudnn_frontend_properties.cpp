@@ -11,8 +11,9 @@ using namespace pybind11::literals;
 
 void init_properties(py::module_ &m) {
     py::class_<cudnn_frontend::graph::Tensor_attributes, std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(m, "tensor")
-        .def(py::init<std::string const &>())
+        .def(py::init<>())
         .def("get_name", &cudnn_frontend::graph::Tensor_attributes::get_name)
+        .def("set_name", &cudnn_frontend::graph::Tensor_attributes::set_name)
         .def("get_data_type", &cudnn_frontend::graph::Tensor_attributes::get_data_type)
         .def("set_data_type", &cudnn_frontend::graph::Tensor_attributes::set_data_type)
         .def("get_dim", &cudnn_frontend::graph::Tensor_attributes::get_dim)

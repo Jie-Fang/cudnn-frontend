@@ -95,7 +95,8 @@ public:
         bool const& is_virtual,
         bool const& is_by_value
     ) {
-        auto props = cudnn_frontend::graph::Tensor_attributes(name)
+        auto props = cudnn_frontend::graph::Tensor_attributes()
+                            .set_name(name)
                             .set_data_type(data_type)
                             .set_is_virtual(is_virtual)
                             .set_is_pass_by_value(is_by_value)

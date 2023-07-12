@@ -27,9 +27,9 @@ namespace cudnn_frontend::graph {
 
             // User does not create tensor for scale k, so create it internally
             // Data type is i/o type
-            dropout_scale = std::make_shared<Tensor_attributes>("dropout_scale");
+            dropout_scale = std::make_shared<Tensor_attributes>();
             dropout_scale->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true);
-            negative_inf = std::make_shared<Tensor_attributes>("negative_inf");
+            negative_inf = std::make_shared<Tensor_attributes>();
             negative_inf->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
             
             // Optional scale
@@ -39,7 +39,7 @@ namespace cudnn_frontend::graph {
                 scale_options.set_mode(PointwiseMode_t::MUL);
                 scale_options.inputs.IN_0 = options.inputs.K;
                 scale_options.inputs.IN_1 = options.inputs.Scale_k;
-                last_output = scale_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("after_scale_k");
+                last_output = scale_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 scale_options.outputs.OUT_0->set_is_virtual(true);
                 auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), context);
                 sub_nodes.emplace_back(std::move(scale_node));
@@ -56,7 +56,7 @@ namespace cudnn_frontend::graph {
             bmm1_options.inputs.B = last_output;
             bmm1_options.inputs.M_override = options.inputs.SEQ_LEN_Q;
             bmm1_options.inputs.N_override = options.inputs.SEQ_LEN_K;
-            last_output = bmm1_options.outputs.C = P = std::make_shared<Tensor_attributes>("P"); // A dummy underlying tensor whose properties will be filled in infer_properties()
+            last_output = bmm1_options.outputs.C = P = std::make_shared<Tensor_attributes>(); // A dummy underlying tensor whose properties will be filled in infer_properties()
             bmm1_options.outputs.C->set_is_virtual(true);
             auto bmm1_node = std::make_unique<MatmulNode>(bmm1_options.get_name(), std::move(bmm1_options), context);
             sub_nodes.emplace_back(std::move(bmm1_node));
@@ -67,7 +67,7 @@ namespace cudnn_frontend::graph {
                 add_options.set_mode(PointwiseMode_t::ADD);
                 add_options.inputs.IN_0 = last_output;
                 add_options.inputs.IN_1 = options.inputs.Bias;
-                last_output = add_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("after_bias");
+                last_output = add_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 add_options.outputs.OUT_0->set_is_virtual(true);
                 auto add_node = std::make_unique<PointwiseNode>(add_options.get_name(), std::move(add_options), context);
                 sub_nodes.emplace_back(std::move(add_node));
@@ -78,7 +78,7 @@ namespace cudnn_frontend::graph {
                 Pointwise_attributes row_index_options("row_index");
                 row_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
                 row_index_options.inputs.IN_0 = last_output;
-                auto row_index = row_index_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("row_index");
+                auto row_index = row_index_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 row_index_options.outputs.OUT_0->set_is_virtual(true);
                 auto row_index_node = std::make_unique<PointwiseNode>(row_index_options.get_name(), std::move(row_index_options), context);
                 sub_nodes.emplace_back(std::move(row_index_node));
@@ -87,7 +87,7 @@ namespace cudnn_frontend::graph {
                 Pointwise_attributes col_index_options("col_index");
                 col_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
                 col_index_options.inputs.IN_0 = last_output;
-                auto col_index = col_index_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("col_index");
+                auto col_index = col_index_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 col_index_options.outputs.OUT_0->set_is_virtual(true);
                 auto col_index_node = std::make_unique<PointwiseNode>(col_index_options.get_name(), std::move(col_index_options), context);
                 sub_nodes.emplace_back(std::move(col_index_node));
@@ -97,7 +97,7 @@ namespace cudnn_frontend::graph {
                 less_than_row_options.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_row_options.inputs.IN_0 = row_index;
                 less_than_row_options.inputs.IN_1 = options.inputs.SEQ_LEN_Q;
-                auto less_than_row = less_than_row_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("less_than_row");
+                auto less_than_row = less_than_row_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 less_than_row_options.outputs.OUT_0->set_is_virtual(true);
                 auto less_than_row_node = std::make_unique<PointwiseNode>(less_than_row_options.get_name(), std::move(less_than_row_options), context);
                 sub_nodes.emplace_back(std::move(less_than_row_node));
@@ -107,7 +107,7 @@ namespace cudnn_frontend::graph {
                 less_than_col_options.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_col_options.inputs.IN_0 = col_index;
                 less_than_col_options.inputs.IN_1 = options.inputs.SEQ_LEN_K;
-                auto less_than_col = less_than_col_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("less_than_col");
+                auto less_than_col = less_than_col_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 less_than_col_options.outputs.OUT_0->set_is_virtual(true);
                 auto less_than_col_node = std::make_unique<PointwiseNode>(less_than_col_options.get_name(), std::move(less_than_col_options), context);
                 sub_nodes.emplace_back(std::move(less_than_col_node));
@@ -117,7 +117,7 @@ namespace cudnn_frontend::graph {
                 logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
                 logical_and_options.inputs.IN_0 = less_than_row;
                 logical_and_options.inputs.IN_1 = less_than_col;
-                auto mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("padding_logical_and");
+                auto mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 logical_and_options.outputs.OUT_0->set_is_virtual(true);
                 auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), context);
                 sub_nodes.emplace_back(std::move(logical_and_node));
@@ -128,7 +128,7 @@ namespace cudnn_frontend::graph {
                     greater_than_options.set_mode(PointwiseMode_t::CMP_GE);
                     greater_than_options.inputs.IN_0 = row_index;
                     greater_than_options.inputs.IN_1 = col_index;
-                    auto row_greater_col = greater_than_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("greater_than");
+                    auto row_greater_col = greater_than_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                     greater_than_options.outputs.OUT_0->set_is_virtual(true);
                     auto greater_than_node = std::make_unique<PointwiseNode>(greater_than_options.get_name(), std::move(greater_than_options), context);
                     sub_nodes.emplace_back(std::move(greater_than_node));
@@ -138,7 +138,7 @@ namespace cudnn_frontend::graph {
                     logical_and_options.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
                     logical_and_options.inputs.IN_0 = mask;
                     logical_and_options.inputs.IN_1 = row_greater_col;
-                    mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("causal_logical_and");
+                    mask = logical_and_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                     logical_and_options.outputs.OUT_0->set_is_virtual(true);
                     auto logical_and_node = std::make_unique<PointwiseNode>(logical_and_options.get_name(), std::move(logical_and_options), context);
                     sub_nodes.emplace_back(std::move(logical_and_node));
@@ -150,7 +150,7 @@ namespace cudnn_frontend::graph {
                 binary_select_options.inputs.IN_0 = last_output;
                 binary_select_options.inputs.IN_1 = negative_inf;
                 binary_select_options.inputs.IN_2 = mask;
-                last_output = binary_select_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("binary_select");
+                last_output = binary_select_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 binary_select_options.outputs.OUT_0->set_is_virtual(true);
                 auto binary_select_node = std::make_unique<PointwiseNode>(binary_select_options.get_name(), std::move(binary_select_options), context);
                 sub_nodes.emplace_back(std::move(binary_select_node));
@@ -162,7 +162,7 @@ namespace cudnn_frontend::graph {
             softmax_options.inputs.P = last_output;
             // Use tensor provided by Graph when real S
             if(options.is_inference) {
-                last_output = softmax_options.outputs.S = std::make_shared<Tensor_attributes>("S");
+                last_output = softmax_options.outputs.S = std::make_shared<Tensor_attributes>();
                 softmax_options.outputs.S->set_is_virtual(true);
                 auto softmax_node = std::make_unique<SoftmaxNode>(softmax_options.get_name(), std::move(softmax_options), context);
                 sub_nodes.emplace_back(std::move(softmax_node));
@@ -171,7 +171,7 @@ namespace cudnn_frontend::graph {
                 // Two cases for training: dropout present or not
                 bool const dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
                 if(dropout_present) {
-                    last_output = softmax_options.outputs.S = std::make_shared<Tensor_attributes>("S");
+                    last_output = softmax_options.outputs.S = std::make_shared<Tensor_attributes>();
                     softmax_options.outputs.S->set_is_virtual(true);
                     auto softmax_node = std::make_unique<SoftmaxNode>(softmax_options.get_name(), std::move(softmax_options), context);
                     sub_nodes.emplace_back(std::move(softmax_node));
@@ -183,7 +183,7 @@ namespace cudnn_frontend::graph {
                         rng_options.set_distribution(RngDistribution_t::BERNOULLI)
                             .set_seed(options.seed)
                             .set_bernoulli_probability(options.dropout_probability.value());
-                        mask_output = rng_options.outputs.Y = rng_output = std::make_shared<Tensor_attributes>("after_rng");
+                        mask_output = rng_options.outputs.Y = rng_output = std::make_shared<Tensor_attributes>();
                         rng_options.outputs.Y->set_is_virtual(true);
                         auto rng_node = std::make_unique<RngNode>(rng_options.get_name(), std::move(rng_options), context);
                         sub_nodes.emplace_back(std::move(rng_node));
@@ -219,7 +219,7 @@ namespace cudnn_frontend::graph {
             dropout_scale_options.set_mode(PointwiseMode_t::MUL);
             dropout_scale_options.inputs.IN_0 = last_output;
             dropout_scale_options.inputs.IN_1 = dropout_scale;
-            last_output = dropout_scale_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>("after_dropout_scale");
+            last_output = dropout_scale_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
             dropout_scale_options.outputs.OUT_0->set_is_virtual(true);
             auto dropout_scale_node = std::make_unique<PointwiseNode>(dropout_scale_options.get_name(), std::move(dropout_scale_options), context);
             sub_nodes.emplace_back(std::move(dropout_scale_node));
