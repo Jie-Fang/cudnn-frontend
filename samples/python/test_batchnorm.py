@@ -58,6 +58,8 @@ def test_bn():
     out_running_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
     out_running_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
 
+    graph.check_support()
+
     graph.build()
 
     saved_mean_actual = torch.zeros_like(scale_gpu)
@@ -127,6 +129,8 @@ def test_drelu_dadd_dbn():
     DX.set_output(True)
     DScale.set_output(True)
     DBias.set_output(True)
+
+    graph.check_support()
 
     graph.build()
 

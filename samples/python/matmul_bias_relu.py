@@ -21,6 +21,8 @@ output = graph.bias(name = "bias", input = response, bias = bias)
 relu = graph.relu(name = "relu", input = output)
 relu.set_output(True)
 
+graph.check_support()
+
 graph.build()
 
 X_cpu = np.full([4,16,64], 1, dtype=np.half)

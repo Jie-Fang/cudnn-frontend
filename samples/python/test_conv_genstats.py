@@ -57,6 +57,8 @@ def test_conv_genstats():
     SUM.set_output(True)
     SQ_SUM.set_output(True)
 
+    graph.check_support()
+    
     graph.build()
 
     sum_dev    = torch.zeros_like(sum_expected)

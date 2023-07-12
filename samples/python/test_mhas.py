@@ -66,6 +66,7 @@ def test_scale_dot_product_attention_with_dropout_rng():
                                               )
     O.set_output(True)
     S.set_output(True)
+    graph.check_support()
     graph.build()
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
@@ -126,6 +127,7 @@ def test_scale_dot_product_flash_attention():
                                               )
     O.set_output(True)
     Stats.set_output(True)
+    graph.check_support()
     graph.build()
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 

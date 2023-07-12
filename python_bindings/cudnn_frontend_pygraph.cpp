@@ -67,12 +67,13 @@ public:
     // This Graph class is the sole structure which implicitly makes PyGraph own all tensors, nodes, and cudnn descriptors.
     cudnn_frontend::graph::Graph graph;
     cudnnHandle_t handle;
+    bool is_built;
 
 
     PyGraph(std::string const &name,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
-            cudnn_frontend::DataType_t compute_data_type) : graph(name) {
+            cudnn_frontend::DataType_t compute_data_type) : graph(name) ,handle(nullptr), is_built(false) {
                 graph.set_compute_data_type(compute_data_type)
                      .set_intermediate_data_type(intermediate_data_type)
                      .set_io_data_type(io_data_type);
@@ -507,7 +508,15 @@ public:
         return {O, Stats};
     }
 
+    void check_support() {
+        build();
+    }
+
     void build() {
+        if (is_built) {return;}
+        
+        is_built = true;
+        
         auto status = graph.build_operation_graph(handle);
         throw_if(status.is_bad(), status.get_code(), status.get_message());
 
@@ -673,6 +682,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
         .def("build", &PyGraph::build)
+        .def("check_support", &PyGraph::check_support)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute)
         .def("__repr__", [](PyGraph const& pygraph){

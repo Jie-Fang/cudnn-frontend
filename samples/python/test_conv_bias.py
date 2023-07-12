@@ -39,6 +39,8 @@ def test_conv_bias_relu():
 
     Y = graph.relu(name = "relu", input = bias_output)
     Y.set_output(True)
+    
+    graph.check_support()
 
     graph.build()
 
@@ -69,6 +71,8 @@ def test_conv_relu():
 
     Y = graph.relu(name = "relu", input = conv_output)
     Y.set_output(True)
+    
+    graph.check_support()
     
     graph.build()
 
