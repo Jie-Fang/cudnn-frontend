@@ -1136,7 +1136,6 @@ public:
     bool alibi_mask = false;
     bool causal_mask = false;
     std::optional<float> dropout_probability;
-    float dropout_scale = 1.f;
     
     Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
     Scaled_dot_product_flash_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention) {}

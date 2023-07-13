@@ -168,59 +168,61 @@ namespace cudnn_frontend::graph {
             auto softmax_node = std::make_unique<SoftmaxNode>(softmax_options.get_name(), std::move(softmax_options), context);
             sub_nodes.emplace_back(std::move(softmax_node));
 
-            // Lower options to rng options
-            auto rng_output = std::make_shared<Tensor_attributes>();
-            rng_output->set_is_virtual(true)
-                // Hard coding dims and strides as rng output can no inputs to infer it from.
-                .set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            // Two cases for training: dropout present or not
+            bool const dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
+            if(dropout_present) {
+                // Lower options to rng options
+                auto rng_output = std::make_shared<Tensor_attributes>();
+                rng_output->set_is_virtual(true)
+                    // Hard coding dims and strides as rng output can no inputs to infer it from.
+                    .set_dim({b, h, s_q, s_kv})
+                    .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
-            auto rng_options = Rng_attributes("rng");
-            rng_options.set_distribution(RngDistribution_t::BERNOULLI)
-                .set_bernoulli_probability(options.dropout_probability.value());
-            rng_options.inputs.Seed = options.inputs.Seed;
-            rng_options.inputs.Offset = options.inputs.Offset;
-            rng_options.outputs.Y = rng_output;
-            auto rng_node = std::make_unique<RngNode>(rng_options.get_name(), std::move(rng_options), context);
-            sub_nodes.emplace_back(std::move(rng_node));
+                auto rng_options = Rng_attributes("rng");
+                rng_options.set_distribution(RngDistribution_t::BERNOULLI)
+                    .set_bernoulli_probability(options.dropout_probability.value());
+                rng_options.inputs.Seed = options.inputs.Seed;
+                rng_options.inputs.Offset = options.inputs.Offset;
+                rng_options.outputs.Y = rng_output;
+                auto rng_node = std::make_unique<RngNode>(rng_options.get_name(), std::move(rng_options), context);
+                sub_nodes.emplace_back(std::move(rng_node));
 
-            // Lower options to mask options
-            auto dropout_mask_output = std::make_shared<Tensor_attributes>();
-            dropout_mask_output->set_is_virtual(true);
+                // Lower options to mask options
+                auto dropout_mask_output = std::make_shared<Tensor_attributes>();
+                dropout_mask_output->set_is_virtual(true);
 
-            auto mask_options = Pointwise_attributes("mask");
-            mask_options.set_mode(PointwiseMode_t::MUL);
-            mask_options.inputs.IN_0 = last_output;
-            mask_options.inputs.IN_1 = rng_output;
-            last_output = mask_options.outputs.OUT_0 = dropout_mask_output;
-            auto mask_node = std::make_unique<PointwiseNode>(mask_options.get_name(), std::move(mask_options), context);
-            sub_nodes.emplace_back(std::move(mask_node));
+                auto mask_options = Pointwise_attributes("mask");
+                mask_options.set_mode(PointwiseMode_t::MUL);
+                mask_options.inputs.IN_0 = last_output;
+                mask_options.inputs.IN_1 = rng_output;
+                last_output = mask_options.outputs.OUT_0 = dropout_mask_output;
+                auto mask_node = std::make_unique<PointwiseNode>(mask_options.get_name(), std::move(mask_options), context);
+                sub_nodes.emplace_back(std::move(mask_node));
 
-            // Inference or not, dropout or not, always put a scale.
-            // Default value 1.f. Will have no perf impact
-            // Lower options to dropout_scale options
-            auto dropout_scale_output = std::make_shared<Tensor_attributes>();
-            dropout_scale_output->set_is_virtual(true)
-                // Requirement by cudnn backend to take in bmm2 aType as i/o type.
-                .set_data_type(options.inputs.Q->get_data_type());
+                // Lower options to dropout_scale options
+                auto dropout_scale_output = std::make_shared<Tensor_attributes>();
+                dropout_scale_output->set_is_virtual(true);
 
-            dropout_scale = std::make_shared<Tensor_attributes>();
-            dropout_scale->set_dim({1,1,1,1})
-                .set_stride({1,1,1,1})
-                .set_is_pass_by_value(true)
-                // Hard code data type float as FE itself will place value in variant pack later
-                .set_data_type(DataType_t::FLOAT);
+                dropout_scale = std::make_shared<Tensor_attributes>();
+                dropout_scale->set_dim({1,1,1,1})
+                    .set_stride({1,1,1,1})
+                    .set_is_pass_by_value(true)
+                    // Hard code data type float as FE itself will place value in variant pack later
+                    .set_data_type(DataType_t::FLOAT);
 
-
-            auto dropout_scale_options = Pointwise_attributes("dropout_scale");
-            dropout_scale_options.set_mode(PointwiseMode_t::MUL);
-            dropout_scale_options.inputs.IN_0 = last_output;
-            dropout_scale_options.inputs.IN_1 = dropout_scale;
-            last_output = dropout_scale_options.outputs.OUT_0 = dropout_scale_output;
-            auto dropout_scale_node = std::make_unique<PointwiseNode>(dropout_scale_options.get_name(), std::move(dropout_scale_options), context);
-            sub_nodes.emplace_back(std::move(dropout_scale_node));
+                auto dropout_scale_options = Pointwise_attributes("dropout_scale");
+                dropout_scale_options.set_mode(PointwiseMode_t::MUL);
+                dropout_scale_options.inputs.IN_0 = last_output;
+                dropout_scale_options.inputs.IN_1 = dropout_scale;
+                last_output = dropout_scale_options.outputs.OUT_0 = dropout_scale_output;
+                auto dropout_scale_node = std::make_unique<PointwiseNode>(dropout_scale_options.get_name(), std::move(dropout_scale_options), context);
+                sub_nodes.emplace_back(std::move(dropout_scale_node));
+            }
 
             // Lower options to bmm2 options
+            // Requirement by cudnn backend to take in bmm2 aType as i/o type.
+            last_output->set_data_type(options.inputs.Q->get_data_type());
+
             auto bmm2_options = Matmul_attributes("bmm2");
             bmm2_options.inputs.A = last_output;
             bmm2_options.inputs.B = options.inputs.V;
@@ -242,8 +244,10 @@ namespace cudnn_frontend::graph {
         }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {            
-            options.dropout_scale = (1.f / (options.dropout_probability.value()));
-            tensor_to_pass_by_value.emplace(dropout_scale, options.dropout_scale);
+            if(options.dropout_probability.has_value()) {
+                float dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
+                tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
+            }
             
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
