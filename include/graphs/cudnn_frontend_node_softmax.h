@@ -20,6 +20,19 @@ class SoftmaxNode : public INode {
         Type getType() override final {
             return Type::COMPOSITE;
         }
+        
+        error_t validate_node() const override final {
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating SoftmaxNode..." << std::endl;
+
+            if(options.is_inference.has_value() == false) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: is_infernece attribute not set.";
+                return {status, message};
+            }
+
+            getLogger() << "[cudnn_frontend] INFO: " << "Validated SoftmaxNode." << std::endl;
+            return {error_code_t::OK, ""};
+        }
 
         error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node named " << name << "." << std::endl;
@@ -31,60 +44,50 @@ class SoftmaxNode : public INode {
             auto b = p_dim[0];
             auto h = p_dim[1];
             auto s_q = p_dim[2];
-            auto s_kv = p_dim[3];
-
+            
             // Lower options to max options
             auto max_output = std::make_shared<Tensor_attributes>();
             max_output->set_is_virtual(true)
+                // Reduction today has no dim inferencing logic today. Hence, hardcoding output dim here.
                 .set_dim({b, h, s_q, 1})
-                .set_stride({h * s_q, s_q, 1, 1})
-                .fill_from_context(context);;
+                .set_stride({h * s_q, s_q, 1, 1});
 
             auto max_options = Reduction_attributes("max");
             max_options.set_mode(ReductionMode_t::MAX);
             max_options.inputs.X = options.inputs.P;
             max_options.outputs.Y = max_output;
-
             auto max_node = std::make_unique<ReductionNode>(max_options.get_name(), std::move(max_options), context);
             sub_nodes.emplace_back(std::move(max_node));
 
             // Lower options to sub options
             auto sub_output = std::make_shared<Tensor_attributes>();
-            sub_output->set_is_virtual(true)
-                .set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-                .fill_from_context(context);
+            sub_output->set_is_virtual(true);
 
             auto sub_options = Pointwise_attributes("sub");
             sub_options.set_mode(PointwiseMode_t::SUB);
             sub_options.inputs.IN_0 = options.inputs.P;
             sub_options.inputs.IN_1 = max_output;
             sub_options.outputs.OUT_0 = sub_output;
-
             auto sub_node = std::make_unique<PointwiseNode>(sub_options.get_name(), std::move(sub_options), context);
             sub_nodes.emplace_back(std::move(sub_node));
 
             // Lower options to exp options
             auto exp_output = std::make_shared<Tensor_attributes>();
-            exp_output->set_is_virtual(true)
-                .set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-                .fill_from_context(context);
+            exp_output->set_is_virtual(true);
 
             auto exp_options = Pointwise_attributes("exp");
             exp_options.set_mode(PointwiseMode_t::EXP);
             exp_options.inputs.IN_0 = sub_output;
             exp_options.outputs.OUT_0 = exp_output;
-
             auto exp_node = std::make_unique<PointwiseNode>(exp_options.get_name(), std::move(exp_options), context);
             sub_nodes.emplace_back(std::move(exp_node));
 
             // Lower options to reduce sum options
             auto sum_output = std::make_shared<Tensor_attributes>();
             sum_output->set_is_virtual(true)
+                // Reduction today has no dim inferencing logic today. Hence, hardcoding output dim here.
                 .set_dim({b, h, s_q, 1})
-                .set_stride({h * s_q, s_q, 1, 1})
-                .fill_from_context(context);
+                .set_stride({h * s_q, s_q, 1, 1});
 
             auto sum_options = Reduction_attributes("sum");
             sum_options.set_mode(ReductionMode_t::ADD);
@@ -117,17 +120,11 @@ class SoftmaxNode : public INode {
             }
 
             // Lower options to div options
-            options.outputs.S->set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1})
-                .fill_from_context(context);
-
             auto div_options = Pointwise_attributes("div");
             div_options.set_mode(PointwiseMode_t::DIV);
             div_options.inputs.IN_0 = exp_output;
             div_options.inputs.IN_1 = sum_output;
             div_options.outputs.OUT_0 = options.outputs.S;
-            // Softmax output only non-virutal when non-flash version and in forward training mode
-            div_options.outputs.OUT_0->set_is_virtual((!options.is_inference) || (options.use_stats));
             auto div_node = std::make_unique<PointwiseNode>(div_options.get_name(), std::move(div_options), context);
             sub_nodes.emplace_back(std::move(div_node));
             
