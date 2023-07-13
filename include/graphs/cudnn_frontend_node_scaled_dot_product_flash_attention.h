@@ -161,7 +161,6 @@ namespace cudnn_frontend::graph {
 
             auto softmax_options = Softmax_attributes("softmax");
             softmax_options.use_stats = true; // As this is flash attention
-            softmax_options.is_inference = options.is_inference;
             softmax_options.inputs.P = last_output;
             last_output = softmax_options.outputs.S = softmax_output;
             softmax_options.outputs.Stats = options.outputs.Stats;
@@ -248,7 +247,7 @@ namespace cudnn_frontend::graph {
                 float dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
                 tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
             }
-            
+
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
 

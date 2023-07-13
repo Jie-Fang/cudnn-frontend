@@ -57,7 +57,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
     auto outputs = mha_graph.scaled_dot_product_flash_attention(inputs, scaled_dot_product_flash_attention_options);
 
-    outputs.Stats->set_data_type(fe::DataType_t::FLOAT);
+    outputs.Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -147,7 +147,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     auto outputs = mha_graph.scaled_dot_product_flash_attention(inputs, scaled_dot_product_flash_attention_options);
 
-    outputs.Stats->set_data_type(fe::DataType_t::FLOAT);
+    outputs.Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");

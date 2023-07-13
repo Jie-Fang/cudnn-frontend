@@ -1230,16 +1230,10 @@ public:
         std::shared_ptr<Tensor_attributes> Stats; // softmax stats dumped when in forward training mode. Users first need to check whether its nullptr.
     } outputs;
 
-    std::optional<bool> is_inference;
-    bool use_stats = false;
+    std::optional<bool> use_stats;
 
     Softmax_attributes() : Operation(Tag::Softmax) {}
     Softmax_attributes(const std::string name) : Operation(name, Tag::Softmax) {}
-
-    Softmax_attributes& set_is_inference(bool const value){
-        is_inference = value;
-        return *this;
-    }
 
     Softmax_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;

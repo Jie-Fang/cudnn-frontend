@@ -24,9 +24,9 @@ class SoftmaxNode : public INode {
         error_t validate_node() const override final {
             getLogger() << "[cudnn_frontend] INFO: " << "Validating SoftmaxNode..." << std::endl;
 
-            if(options.is_inference.has_value() == false) {
+            if(options.use_stats.has_value() == false) {
                 auto status = error_code_t::ATTRIBUTE_NOT_SET;
-                std::string message = "[cudnn_frontend] ERROR: is_infernece attribute not set.";
+                std::string message = "[cudnn_frontend] ERROR: use_stats attribute not set.";
                 return {status, message};
             }
 
@@ -44,7 +44,7 @@ class SoftmaxNode : public INode {
             auto b = p_dim[0];
             auto h = p_dim[1];
             auto s_q = p_dim[2];
-            
+
             // Lower options to max options
             auto max_output = std::make_shared<Tensor_attributes>();
             max_output->set_is_virtual(true)
@@ -97,7 +97,7 @@ class SoftmaxNode : public INode {
             sub_nodes.emplace_back(std::move(sum_node));
 
             // Another path to add when in flash attention mode.
-            if(options.use_stats) {
+            if(options.use_stats.value()) {
                 // Lower options to log options
                 auto log_output = std::make_shared<Tensor_attributes>();
                 log_output->set_is_virtual(true);

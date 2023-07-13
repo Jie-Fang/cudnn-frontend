@@ -204,7 +204,6 @@ namespace cudnn_frontend::graph {
             // Lower options to softmax options
             auto softmax_options = Softmax_attributes("softmax");
             softmax_options.use_stats = false; // As this is non-flash attention
-            softmax_options.is_inference = options.is_inference;
             softmax_options.inputs.P = last_output;
             // Use tensor provided by Graph when real S
             if(options.is_inference.value() == true) {
