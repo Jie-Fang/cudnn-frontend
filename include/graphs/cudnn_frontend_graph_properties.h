@@ -1050,13 +1050,13 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_attention_attributes& use_padding_mask(){
-        padding_mask = true;
+    Scaled_dot_product_attention_attributes& set_padding_mask(bool const value){
+        padding_mask = value;
         return *this;
     }
     
-    Scaled_dot_product_attention_attributes& use_causal_mask(){
-        causal_mask = true;
+    Scaled_dot_product_attention_attributes& set_causal_mask(bool const value){
+        causal_mask = value;
         return *this;
     }
 
@@ -1087,6 +1087,11 @@ public:
         return *this;
     }
 
+    Scaled_dot_product_attention_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
     Scaled_dot_product_attention_attributes& fill_from_context(detail::Context const& context) {
         // Fill node's tensors
         inputs.Q->fill_from_context(context);
@@ -1111,9 +1116,14 @@ public:
         std::shared_ptr<Tensor_attributes> Q;
         std::shared_ptr<Tensor_attributes> K;
         std::shared_ptr<Tensor_attributes> V;
+        std::shared_ptr<Tensor_attributes> SEQ_Q;
+        std::shared_ptr<Tensor_attributes> SEQ_K;
         std::shared_ptr<Tensor_attributes> Scale_k;
+        std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
         std::shared_ptr<Tensor_attributes> Offset;
+        std::shared_ptr<Tensor_attributes> Dropout_mask;
+        std::shared_ptr<Tensor_attributes> Dropout_scale;
     } inputs;
 
     struct Outputs {
@@ -1136,23 +1146,38 @@ public:
         return *this;
     }
     
-    Scaled_dot_product_flash_attention_attributes& use_padding_mask(){
-        padding_mask = true;
+    Scaled_dot_product_flash_attention_attributes& set_padding_mask(bool const value){
+        padding_mask = value;
         return *this;
     }
     
-    Scaled_dot_product_flash_attention_attributes& use_alibi_mask(){
-        alibi_mask = true;
+    Scaled_dot_product_flash_attention_attributes& set_alibi_mask(bool const value){
+        alibi_mask = value;
         return *this;
     }
     
-    Scaled_dot_product_flash_attention_attributes& use_causal_mask(){
-        causal_mask = true;
+    Scaled_dot_product_flash_attention_attributes& set_causal_mask(bool const value){
+        causal_mask = value;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_attributes& set_scale_k(std::shared_ptr<Tensor_attributes> value){
         inputs.Scale_k = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes& set_bias(std::shared_ptr<Tensor_attributes> value){
+        inputs.Bias = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes& set_seq_q(std::shared_ptr<Tensor_attributes> value){
+        inputs.SEQ_Q = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes& set_seq_k(std::shared_ptr<Tensor_attributes> value){
+        inputs.SEQ_K = value;
         return *this;
     }
 
@@ -1162,9 +1187,20 @@ public:
         inputs.Offset = offset;
         return *this;
     }
+    
+    Scaled_dot_product_flash_attention_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
+        inputs.Dropout_mask = mask;
+        inputs.Dropout_scale = scale;
+        return *this;
+    }
 
     Scaled_dot_product_flash_attention_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes& set_name(std::string const& value) {
+        name = value;
         return *this;
     }
 

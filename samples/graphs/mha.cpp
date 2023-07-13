@@ -51,7 +51,7 @@ TEST_CASE("Flash", "[graph][mha][flash][forward]") {
     auto offset = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Offset").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
-                                                    .use_causal_mask()
+                                                    .set_causal_mask(true)
                                                     .set_scale_k(scale_k)
                                                     .set_dropout(dropout_probability, seed, offset);
 
@@ -146,8 +146,8 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_bias(bias)
-                                                    .use_padding_mask()
-                                                    .use_causal_mask()
+                                                    .set_padding_mask(true)
+                                                    .set_causal_mask(true)
                                                     .set_scale_k(scale_k)
                                                     .set_dropout(dropout_probability, seed);
 
@@ -246,7 +246,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_bias(bias)
-                                                    .use_padding_mask()
+                                                    .set_padding_mask(true)
                                                     .set_scale_k(scale_k);
     auto outputs = mha_graph.scaled_dot_product_attention(inputs, scaled_dot_product_attention_options);
 

@@ -371,8 +371,7 @@ public:
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     scaled_dot_product_attention(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q
@@ -382,59 +381,60 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
         , bool const use_padding_mask
         , bool const use_causal_mask
-        , py::object const dropout
+        , py::object const& dropout
         , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto scaled_dot_product_attention_options = cudnn_frontend::graph::Scaled_dot_product_attention_attributes("mha")
+        auto attributes = cudnn_frontend::graph::Scaled_dot_product_attention_attributes()
                                                     .set_is_inference(is_inference)
                                                     .set_scale_k(scale_k)
+                                                    .set_bias(bias)
+                                                    .set_padding_mask(use_padding_mask)
+                                                    .set_causal_mask(use_causal_mask)
                                                     .set_compute_data_type(compute_data_type);
-
-        if(use_padding_mask) {
-            scaled_dot_product_attention_options.use_padding_mask();
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("tensor name can only be str type.");
+            }
         }
 
-        if(use_causal_mask) {
-            scaled_dot_product_attention_options.use_causal_mask();
-        }
-
-        if(bias) {
-            scaled_dot_product_attention_options.set_bias(bias);
-        }
-
-        if (py::isinstance<py::tuple>(dropout)) {
+        if (!dropout.is_none()) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
-            if (dropout_tuple.size() != 2) {
-                throw std::runtime_error("dropout must be a tuple of float and int (probability, seed) or a tuple of two cudnn tensors (mask, scale).");
+            if ((!dropout_tuple) || dropout_tuple.size() != 2) {
+                throw std::runtime_error("dropout must be a tuple of (float probability, int seed) or a tuple of (mask tensor, scale tensor).");
             }
 
             if (py::isinstance<py::float_>(dropout_tuple[0]) && py::isinstance<py::int_>(dropout_tuple[1])) {
                 auto const dropout_probability = dropout_tuple[0].cast<float>();
                 auto const seed = dropout_tuple[1].cast<int32_t>();
 
-                scaled_dot_product_attention_options.set_dropout(dropout_probability, seed);                
-            } else if (py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(dropout_tuple[0]) && py::isinstance<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(dropout_tuple[1])) {
-                auto const dropout_mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
-                auto const dropout_scale = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
-
-                scaled_dot_product_attention_options.set_dropout(dropout_mask, dropout_scale);
+                attributes.set_dropout(dropout_probability, seed);                
             } else {
-                throw std::runtime_error("dropout must be a tuple of float and int (probability, seed) or a tuple of two cudnn tensors (mask, scale).");
+                auto const dropout_mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if(!dropout_mask) {
+                    throw std::runtime_error("dropout mask must be a cudnn_tensor.");
+                }
+
+                auto const dropout_scale = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if(!dropout_scale) {
+                    throw std::runtime_error("dropout scale must be a cudnn_tensor.");
+                }
+
+                attributes.set_dropout(dropout_mask, dropout_scale);
             }
         }
-        else if (dropout.is(py::none())) {
-            // Still fine as user does not want any kind of dropout
-        } else {
-            throw std::runtime_error("dropout must be a tuple of float and int (probability, seed) or a tuple of two cudnn tensors (mask, scale).");
-        }
 
-        scaled_dot_product_attention_options.inputs.Q = q;
-        scaled_dot_product_attention_options.inputs.K = k;
-        scaled_dot_product_attention_options.inputs.V = v;
-        scaled_dot_product_attention_options.inputs.SEQ_LEN_Q = seq_len_q;
-        scaled_dot_product_attention_options.inputs.SEQ_LEN_K = seq_len_k;
+        attributes.inputs.Q = q;
+        attributes.inputs.K = k;
+        attributes.inputs.V = v;
+        attributes.inputs.SEQ_LEN_Q = seq_len_q;
+        attributes.inputs.SEQ_LEN_K = seq_len_k;
         
-        auto [O, S] = graph.scaled_dot_product_attention(scaled_dot_product_attention_options.inputs, scaled_dot_product_attention_options);
+        auto [O, S] = graph.scaled_dot_product_attention(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         S->set_is_virtual(true);
@@ -445,70 +445,80 @@ public:
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_q
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_k
         , bool const is_inference
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_k
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
         , bool const use_padding_mask
         , bool const use_alibi_mask
         , bool const use_causal_mask
-        , py::object const dropout
+        , py::object const& dropout
         , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto scaled_dot_product_flash_attention_options = cudnn_frontend::graph::Scaled_dot_product_flash_attention_attributes("mha")
+        auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_attributes()
                                                     .set_is_inference(is_inference)
+                                                    .set_seq_q(seq_q)
+                                                    .set_seq_k(seq_k)
                                                     .set_scale_k(scale_k)
+                                                    .set_bias(bias)
+                                                    .set_padding_mask(use_padding_mask)
+                                                    .set_alibi_mask(use_alibi_mask)
+                                                    .set_causal_mask(use_causal_mask)
                                                     .set_compute_data_type(compute_data_type);
-
-        if(use_padding_mask) {
-            scaled_dot_product_flash_attention_options.use_padding_mask();
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("tensor name can only be str type.");
+            }
         }
 
-        if(use_alibi_mask) {
-            scaled_dot_product_flash_attention_options.use_alibi_mask();
-        }
-
-        if(use_causal_mask) {
-            scaled_dot_product_flash_attention_options.use_causal_mask();
-        }
-
-        if (py::isinstance<py::tuple>(dropout)) {
+        if (!dropout.is_none()) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
-            if (dropout_tuple.size() != 3) {
-                throw std::runtime_error("dropout must be a tuple of float probability, a seed tensor, and an offset tensor");
+            if ((!dropout_tuple) || (dropout_tuple.size() != 3 && dropout_tuple.size() != 2)) {
+                throw std::runtime_error("dropout must be a tuple of (float probability, a seed tensor, and an offset tensor) or (mask tensor, scale tensor)");
             }
             if(py::isinstance<py::float_>(dropout_tuple[0])) {
                 auto const probability = dropout_tuple[0].cast<float>();
                 auto const seed = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
-                auto const offset = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
-
                 if(!seed) {
-                    throw std::runtime_error("Incorrect type detected for seed tensor");
+                    throw std::runtime_error("dropout seed must be a cudnn_tensor.");
                 }
+
+                auto const offset = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
                 if(!offset) {
-                    throw std::runtime_error("Incorrect type detected for offset tensor");
+                    throw std::runtime_error("dropout offset must be a cudnn_tensor.");
                 }
     
-                scaled_dot_product_flash_attention_options.set_dropout(probability, seed, offset);
+                attributes.set_dropout(probability, seed, offset);
             }
             else {
-                throw std::runtime_error("Dropout expects first tuple element to be probability in float.");
+                auto const mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if(!mask) {
+                    throw std::runtime_error("dropout mask must be a cudnn_tensor.");
+                }
+                
+                auto const scale = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if(!scale) {
+                    throw std::runtime_error("dropout scale must be a cudnn_tensor.");
+                }
+
+                attributes.set_dropout(mask, scale);
             }
-            
-        }
-        else if (dropout.is(py::none())) {
-            // Still fine as user does not want any kind of dropout
-        } else {
-            throw std::runtime_error("dropout must be a tuple of float probability, a seed tensor, and an offset tensor");
         }
 
-        scaled_dot_product_flash_attention_options.inputs.Q = q;
-        scaled_dot_product_flash_attention_options.inputs.K = k;
-        scaled_dot_product_flash_attention_options.inputs.V = v;
+        attributes.inputs.Q = q;
+        attributes.inputs.K = k;
+        attributes.inputs.V = v;
         
-        auto [O, Stats] = graph.scaled_dot_product_flash_attention(scaled_dot_product_flash_attention_options.inputs, scaled_dot_product_flash_attention_options);
+        auto [O, Stats] = graph.scaled_dot_product_flash_attention(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         Stats->set_is_virtual(true);
@@ -679,33 +689,36 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("scaled_dot_product_attention", &PyGraph::scaled_dot_product_attention,
-             py::arg_v("name", "scaled_dot_product_attention"),
-             py::arg("q"),
-             py::arg("k"),
-             py::arg("v"),
-             py::arg("seq_len_q"),
-             py::arg("seq_len_k"),
-             py::arg("is_inference"),
-             py::arg_v("scale_k", nullptr),
-             py::arg_v("bias", nullptr),
-             py::arg_v("use_padding_mask", false),
-             py::arg_v("use_causal_mask", false),
-             py::arg_v("dropout", py::none()),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("scaled_dot_product_attention", &PyGraph::scaled_dot_product_attention
+             , py::arg("q")
+             , py::arg("k")
+             , py::arg("v")
+             , py::arg("seq_len_q")
+             , py::arg("seq_len_k")
+             , py::arg("is_inference")
+             , py::arg_v("scale_k", nullptr)
+             , py::arg_v("bias", nullptr)
+             , py::arg_v("use_padding_mask", false)
+             , py::arg_v("use_causal_mask", false)
+             , py::arg_v("dropout", py::none())
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
         )
-        .def("scaled_dot_product_flash_attention", &PyGraph::scaled_dot_product_flash_attention,
-             py::arg_v("name", "scaled_dot_product_flash_attention"),
-             py::arg("q"),
-             py::arg("k"),
-             py::arg("v"),
-             py::arg("is_inference"),
-             py::arg_v("scale_k", nullptr),
-             py::arg_v("use_padding_mask", false),
-             py::arg_v("use_alibi_mask", false),
-             py::arg_v("use_causal_mask", false),
-             py::arg_v("dropout", py::none()),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("scaled_dot_product_flash_attention", &PyGraph::scaled_dot_product_flash_attention
+             , py::arg("q")
+             , py::arg("k")
+             , py::arg("v")
+             , py::arg_v("seq_q", nullptr)
+             , py::arg_v("seq_k", nullptr)
+             , py::arg("is_inference")
+             , py::arg_v("scale_k", nullptr)
+             , py::arg_v("bias", nullptr)
+             , py::arg_v("use_padding_mask", false)
+             , py::arg_v("use_alibi_mask", false)
+             , py::arg_v("use_causal_mask", false)
+             , py::arg_v("dropout", py::none())
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
         )
         .def("build", &PyGraph::build)
         .def("check_support", &PyGraph::check_support)
