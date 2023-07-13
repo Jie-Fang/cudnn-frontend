@@ -96,6 +96,21 @@ namespace cudnn_frontend::graph {
                 auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), context);
                 sub_nodes.emplace_back(std::move(scale_node));
             }
+            
+            // Optional bias
+            if(options.inputs.Bias) {
+                // Lower options to add options
+                auto bias_output = std::make_shared<Tensor_attributes>();
+                bias_output->set_is_virtual(true);
+
+                Pointwise_attributes add_options("bias");
+                add_options.set_mode(PointwiseMode_t::ADD);
+                add_options.inputs.IN_0 = last_output;
+                add_options.inputs.IN_1 = options.inputs.Bias;
+                last_output = add_options.outputs.OUT_0 = bias_output;
+                auto add_node = std::make_unique<PointwiseNode>(add_options.get_name(), std::move(add_options), context);
+                sub_nodes.emplace_back(std::move(add_node));
+            }
 
             if(options.causal_mask) {
                 // Lower options to generate row index options
