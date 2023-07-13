@@ -88,20 +88,28 @@ public:
     // the underlying object.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     tensor(
-        std::string const& name,
         std::vector<int64_t> const& dim,
         std::vector<int64_t> const& stride,
         cudnn_frontend::DataType_t const& data_type,
         bool const& is_virtual,
-        bool const& is_by_value
+        bool const& is_pass_by_value,
+        py::object const& name
     ) {
         auto props = cudnn_frontend::graph::Tensor_attributes()
-                            .set_name(name)
                             .set_data_type(data_type)
                             .set_is_virtual(is_virtual)
-                            .set_is_pass_by_value(is_by_value)
+                            .set_is_pass_by_value(is_pass_by_value)
                             .set_dim(dim)
                             .set_stride(stride);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                props.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("tensor name can only be str type.");
+            }
+        }
         
         return graph.tensor(props);
     }
@@ -572,13 +580,27 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("tensor", &PyGraph::tensor,
-             py::arg_v("name", "test_tensor_name"),
-             py::arg{"dim"},
-             py::arg{"stride"},
-             py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v{"is_virtual", false},
-             py::arg_v{"is_pass_by_value", false}
+        .def("tensor", &PyGraph::tensor
+             , py::arg{"dim"}
+             , py::arg{"stride"}
+             , py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v{"is_virtual", false}
+             , py::arg_v{"is_pass_by_value", false}
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Create a tensor.
+
+                Args:
+                    dim (List[int]): The dimensions of the tensor.
+                    stride (List[int]): The strides of the tensor.
+                    data_type (pycudnn.data_type): The data type of the tensor. Default is pycudnn.data_type.NOT_SET.
+                    is_virtual (bool): Flag indicating if the tensor is virtual. Default is False.
+                    is_pass_by_value (bool): Flag indicating if the tensor is passed by value. Default is False.
+                    name (Optional[str]): The name of the tensor.
+
+                Returns:
+                    cudnn_tensor: The created tensor.
+            )pbdoc"
         )
         .def("batchnorm", &PyGraph::batchnorm,
              py::arg_v("name", "batch_norm"),
