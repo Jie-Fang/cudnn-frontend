@@ -232,8 +232,8 @@ public:
     std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
     Pointwise_attributes::Outputs pointwise(Pointwise_attributes::Inputs, Pointwise_attributes);
     
-    Scaled_dot_product_attention_attributes::Outputs scaled_dot_product_attention(Scaled_dot_product_attention_attributes::Inputs, Scaled_dot_product_attention_attributes);
-    Scaled_dot_product_flash_attention_attributes::Outputs scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention_attributes::Inputs, Scaled_dot_product_flash_attention_attributes);
+    Scaled_dot_product_attention_attributes::Outputs scaled_dot_product_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_attention_attributes);
+    Scaled_dot_product_flash_attention_attributes::Outputs scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_flash_attention_attributes);
 
     Plans
     get_execution_plan_list(HeurMode_t mode);
@@ -572,36 +572,34 @@ inline Matmul_attributes::Outputs Graph::matmul(Matmul_attributes::Inputs inputs
     return Matmul_attributes::Outputs{C};
 }
 
-inline Scaled_dot_product_attention_attributes::Outputs Graph::scaled_dot_product_attention(Scaled_dot_product_attention_attributes::Inputs inputs, Scaled_dot_product_attention_attributes options) {    
+inline Scaled_dot_product_attention_attributes::Outputs Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_attention_attributes options) {    
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
     auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
 
     // Set inputs
-    options.inputs.Q = inputs.Q;
-    options.inputs.K = inputs.K;
-    options.inputs.V = inputs.V;
-    options.inputs.SEQ_LEN_Q = inputs.SEQ_LEN_Q;
-    options.inputs.SEQ_LEN_K = inputs.SEQ_LEN_K;
+    options.inputs.Q = q;
+    options.inputs.K = k;
+    options.inputs.V = v;
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(options.get_name(), std::move(options), context));
 
-    return Scaled_dot_product_attention_attributes::Outputs{O,S};
+    return Scaled_dot_product_attention_attributes::Outputs{O, S};
 }
 
-inline Scaled_dot_product_flash_attention_attributes::Outputs Graph::scaled_dot_product_flash_attention(Scaled_dot_product_flash_attention_attributes::Inputs inputs, Scaled_dot_product_flash_attention_attributes options) {    
+inline Scaled_dot_product_flash_attention_attributes::Outputs Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_flash_attention_attributes options) {    
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
     auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
 
     // Set inputs
-    options.inputs.Q = inputs.Q;
-    options.inputs.K = inputs.K;
-    options.inputs.V = inputs.V;
+    options.inputs.Q = q;
+    options.inputs.K = k;
+    options.inputs.V = v;
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(options.get_name(), std::move(options), context));
 
-    return Scaled_dot_product_flash_attention_attributes::Outputs{O,Stats};
+    return Scaled_dot_product_flash_attention_attributes::Outputs{O, Stats};
 }
 
 } // namespace cudnn_frontend::graph

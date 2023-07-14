@@ -1050,6 +1050,16 @@ public:
         return *this;
     }
 
+    Scaled_dot_product_attention_attributes& set_seq_len_q(std::shared_ptr<Tensor_attributes> value){
+        inputs.SEQ_LEN_Q = value;
+        return *this;
+    }
+
+    Scaled_dot_product_attention_attributes& set_seq_len_k(std::shared_ptr<Tensor_attributes> value){
+        inputs.SEQ_LEN_K = value;
+        return *this;
+    }
+
     Scaled_dot_product_attention_attributes& set_padding_mask(bool const value){
         padding_mask = value;
         return *this;
@@ -1116,8 +1126,8 @@ public:
         std::shared_ptr<Tensor_attributes> Q;
         std::shared_ptr<Tensor_attributes> K;
         std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> SEQ_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
         std::shared_ptr<Tensor_attributes> Scale_k;
         std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
@@ -1170,13 +1180,13 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_flash_attention_attributes& set_seq_q(std::shared_ptr<Tensor_attributes> value){
-        inputs.SEQ_Q = value;
+    Scaled_dot_product_flash_attention_attributes& set_seq_len_q(std::shared_ptr<Tensor_attributes> value){
+        inputs.SEQ_LEN_Q = value;
         return *this;
     }
 
-    Scaled_dot_product_flash_attention_attributes& set_seq_k(std::shared_ptr<Tensor_attributes> value){
-        inputs.SEQ_K = value;
+    Scaled_dot_product_flash_attention_attributes& set_seq_len_k(std::shared_ptr<Tensor_attributes> value){
+        inputs.SEQ_LEN_K = value;
         return *this;
     }
 

@@ -428,13 +428,10 @@ public:
             }
         }
 
-        attributes.inputs.Q = q;
-        attributes.inputs.K = k;
-        attributes.inputs.V = v;
         attributes.inputs.SEQ_LEN_Q = seq_len_q;
         attributes.inputs.SEQ_LEN_K = seq_len_k;
         
-        auto [O, S] = graph.scaled_dot_product_attention(attributes.inputs, attributes);
+        auto [O, S] = graph.scaled_dot_product_attention(q, k, v, attributes);
 
         // Default virtualness in python is true
         S->set_is_virtual(true);
@@ -462,8 +459,8 @@ public:
     ) {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_attributes()
                                                     .set_is_inference(is_inference)
-                                                    .set_seq_q(seq_q)
-                                                    .set_seq_k(seq_k)
+                                                    .set_seq_len_q(seq_q)
+                                                    .set_seq_len_k(seq_k)
                                                     .set_scale_k(scale_k)
                                                     .set_bias(bias)
                                                     .set_padding_mask(use_padding_mask)
@@ -513,12 +510,8 @@ public:
                 attributes.set_dropout(mask, scale);
             }
         }
-
-        attributes.inputs.Q = q;
-        attributes.inputs.K = k;
-        attributes.inputs.V = v;
         
-        auto [O, Stats] = graph.scaled_dot_product_flash_attention(attributes.inputs, attributes);
+        auto [O, Stats] = graph.scaled_dot_product_flash_attention(q, k, v, attributes);
 
         // Default virtualness in python is true
         Stats->set_is_virtual(true);
