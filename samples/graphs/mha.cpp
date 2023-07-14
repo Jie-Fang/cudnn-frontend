@@ -54,8 +54,12 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
                                                     .set_scale_k(scale_k)
-                                                    .set_bias(bias)
                                                     .set_dropout(dropout_probability, seed, offset);
+
+    // Optional bias in flash attention is only supported 8.9.3 onwards
+    #if (CUDNN_VERSION >= 8930)
+        scaled_dot_product_flash_attention_options.set_bias(bias);
+    #endif
 
     auto outputs = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
 
@@ -157,7 +161,8 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     outputs.Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
 
-    #if (CUDNN_VERSION < 8900)
+    // No dropout in flash attention only supported 8.9.3 onwards.
+    #if (CUDNN_VERSION < 8930)
         SKIP("MHA Graph requires cudnn 8.9 and up");
         return;
     #endif

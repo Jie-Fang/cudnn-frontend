@@ -55,6 +55,10 @@ namespace cudnn_frontend::graph {
         error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node named " << name << "." << std::endl;
 
+            // DO NOT REMOVE
+            // input data type is needed for:
+            // - aType of bmm2
+            // - dropout scale in pre 8.9.3 
             options.fill_from_context(context);
 
             // Gather dims to fill properties of virtual tensors
@@ -221,8 +225,8 @@ namespace cudnn_frontend::graph {
                 dropout_scale->set_dim({1,1,1,1})
                     .set_stride({1,1,1,1})
                     .set_is_pass_by_value(true)
-                    // Hard code data type float as FE itself will place value in variant pack later
-                    .set_data_type(DataType_t::FLOAT);
+                    // Hard code data type input type as FE itself will place value in variant pack later
+                    .set_data_type(options.inputs.Q->get_data_type());
 
                 auto dropout_scale_options = Pointwise_attributes("dropout_scale");
                 dropout_scale_options.set_mode(PointwiseMode_t::MUL);
@@ -259,7 +263,7 @@ namespace cudnn_frontend::graph {
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {            
             if(options.dropout_probability.has_value()) {
-                float dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
+                half dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
                 tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
             }
 
