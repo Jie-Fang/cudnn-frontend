@@ -52,8 +52,3 @@ def test_conv_relu_as_dict(params):
 
     # Compare with reference
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
-    
-
-
-if __name__ == "__main__":
-    test_conv_relu    ([16,128,256,256], [128,128,3,3], [1,1], [1,1], [1,1], [16, 128, 256, 256])
