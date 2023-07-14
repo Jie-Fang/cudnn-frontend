@@ -30,6 +30,30 @@ def test_conv_relu(in_dim, filter_dim, padding, stride, dilation, expected_conv_
     # Compare with reference
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
 
+def test_conv_relu_as_dict(params):
+    testGraph = TestGraph()
+    X = testGraph.addTensor(params["in_dim"])
+    W = testGraph.addTensor(params["filter_dim"])
+    
+    conv_out = testGraph.addOperation(Convolution(image = X, weight = W, padding = params["padding"], stride = params["stride"], dilation = params["dilation"]))
+    Y = testGraph.addOperation(ReLU(input = conv_out))
+
+    graph, variant_pack, workspace = testGraph.buildPyCudnnGraph()
+
+    # Front-end test: check shape inferencing
+    assert params["expected_conv_out_dim"] == conv_out.pyCudnnTensor.get_dim()
+
+    print(graph)
+    
+    graph.execute(variant_pack, workspace)
+    Y_actual = testGraph.output_tensors[-1]
+
+    Y_expected = testGraph.getReference()[-1]
+
+    # Compare with reference
+    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
+    
+
 
 if __name__ == "__main__":
     test_conv_relu    ([16,128,256,256], [128,128,3,3], [1,1], [1,1], [1,1], [16, 128, 256, 256])
