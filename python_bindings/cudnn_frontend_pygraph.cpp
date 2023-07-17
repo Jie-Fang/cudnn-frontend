@@ -173,7 +173,7 @@ public:
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_conv(
+    conv(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
@@ -202,7 +202,7 @@ public:
     // Takes image and loss properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_wgrad(
+    wgrad(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss_props_ptr,
@@ -231,7 +231,7 @@ public:
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_matmul(
+    matmul(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
@@ -253,7 +253,7 @@ public:
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_bias(
+    bias(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_props_ptr,
@@ -297,7 +297,7 @@ public:
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_relu(
+    relu(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
@@ -334,7 +334,7 @@ public:
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_elu(
+    elu(
         std::string const& name,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
@@ -354,7 +354,7 @@ public:
     // Takes input properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    insert_gelu(
+    gelu(
         std::string const& name
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr
         , cudnn_frontend::DataType_t const& compute_data_type
@@ -631,7 +631,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("conv", &PyGraph::insert_conv,
+        .def("conv", &PyGraph::conv,
              py::arg_v("name", "conv_fprop"),
              py::arg("image"),
              py::arg("weight"),
@@ -640,7 +640,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
         )
-        .def("wgrad", &PyGraph::insert_wgrad,
+        .def("wgrad", &PyGraph::wgrad,
              py::arg_v("name", "conv_wgrad"),
              py::arg("image"),
              py::arg("loss"),
@@ -649,13 +649,13 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()}
         )
-        .def("matmul", &PyGraph::insert_matmul,
+        .def("matmul", &PyGraph::matmul,
              py::arg_v("name", "matmul"),
              py::arg("image"),
              py::arg("weight"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("bias", &PyGraph::insert_bias,
+        .def("bias", &PyGraph::bias,
              py::arg_v("name", "bias"),
              py::arg("input"),
              py::arg("bias"),
@@ -667,17 +667,17 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("scale"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("relu", &PyGraph::insert_relu,
+        .def("relu", &PyGraph::relu,
              py::arg_v("name", "relu"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("elu", &PyGraph::insert_elu,
+        .def("elu", &PyGraph::elu,
              py::arg_v("name", "elu"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("insert_gelu", &PyGraph::insert_gelu,
+        .def("gelu", &PyGraph::gelu,
              py::arg_v("name", "gelu"),
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
