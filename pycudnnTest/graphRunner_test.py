@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from utils import TestGraph, TestTensor, Convolution, ReLU
+from utils import TestGraph, TestTensor
 
 # Dictionaries defined in test_conv_relu.json
 def test_conv_relu(params):
@@ -10,7 +10,7 @@ def test_conv_relu(params):
     W = testGraph.addTensor(params["filter_dim"])
     
     conv_out = testGraph.conv(image = X, weight = W, padding = params["padding"], stride = params["stride"], dilation = params["dilation"])
-    Y = testGraph.addOperation(ReLU(input = conv_out))
+    Y = testGraph.relu(input = conv_out)
 
     graph, variant_pack, workspace = testGraph.buildPyCudnnGraph()
 

@@ -59,52 +59,49 @@ class TestNode:
             for node in self.consumerNodes:
                 node.runRefTreeRecursive()
 
-class Convolution(TestNode):
+class Operation(TestNode):
     # All this function needs to do is: 
     #   * add the correct producers
     #   * store the rest of the kwargs
     #   * store the pycudnn function to call
-    def __init__(self, kwargs):
-        # TBD change default name
+    def __init__(self, kwargs, pyCudnnOp, refFunc, name):
+        # TBD Fix default name
         # Take into account that kwargs has a name already
-        super().__init__("Conv_Node")
+        super().__init__(name)
         self.kwargs = kwargs
         # DOes .values() make an unnecessary copy?
         for v in self.kwargs.values():
-            if type(v) is TestTensor:
+            if isinstance(v, TestNode):
+                print("Node {} is adding producer {}".format(name, v.name))
                 self.addProducerNode(v)
+        
+        self.pyCudnnOp = pyCudnnOp
+        self.refFunc = refFunc
 
     def genPyCudnnNode(self, pyCudnnGraph):
         # Besides input tensors, all kwargs can just be passed through to the pycudnn method.
         # For the input tensor we need to extract the TestTensor's pycudnn tensor.
         # Therefore: copy all kwargs, except for TestTensors
-        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not type(self.kwargs[x]) is TestTensor}
+        # TODO(@mbreughe) Avoid copying these kwargs twice (ref and pycudnn). Let's do this in the init function once
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestNode)}
         for x in self.kwargs:
-            if type(self.kwargs[x]) is TestTensor:
+            if isinstance(self.kwargs[x], TestNode):
                 new_kwargs[x] = self.kwargs[x].pyCudnnTensor
 
-        # Once we make this a function pointer, we no longer need the convolution class
-        self.pyCudnnTensor = pyCudnnGraph.conv(**new_kwargs)
+        self.pyCudnnTensor = self.pyCudnnOp(pyCudnnGraph, **new_kwargs)
 
-    # While the arguments in pytorch look very similar, we should probably explicitly build up the function call
-    # We should pass in a Reference object/function pointer to the TestNode, instead of hard coding the call here.
-    # This will also allow us to dial in arbirtary ref test code
     def genRef(self):
-        self.data = torch.nn.functional.conv2d(self.kwargs['image'].data, self.kwargs['weight'].data, bias = None, padding=self.kwargs["padding"], stride=self.kwargs["stride"], dilation=self.kwargs["dilation"])
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestNode)}
+        for x in self.kwargs:
+            if isinstance(self.kwargs[x], TestNode):
+                new_kwargs[x] = self.kwargs[x].data
+        self.data = self.refFunc(new_kwargs)
         
+def refConv_torch(kwargs):
+    return torch.nn.functional.conv2d(kwargs['image'].data, kwargs['weight'].data, bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
 
-class ReLU(TestNode):
-    def __init__(self, input):
-        super().__init__("RELU_NODE")
-        self.input = input
-        self.addProducerNode(input)
-        self.pyCudnnTensor = None
-
-    def genPyCudnnNode(self, pyCudnnGraph):
-        self.pyCudnnTensor = pyCudnnGraph.relu(name = self.name, input = self.input.pyCudnnTensor)
-
-    def genRef(self):
-        self.data = torch.nn.functional.relu(self.input.data)
+def refReLU_torch(kwargs):
+    return torch.nn.functional.relu(kwargs["input"])
 
 @dataclass
 class TestTensor(TestNode):
@@ -164,7 +161,12 @@ class TestGraph:
         self.output_tensors = []
 
     def conv(self, **kwargs):
-        node = Convolution(kwargs)
+        node = Operation(kwargs, pycudnn.pygraph.conv, refConv_torch, name = "conv")
+        self.nodes.append(node)
+        return node
+
+    def relu(self, **kwargs):
+        node = Operation(kwargs, pycudnn.pygraph.relu, refReLU_torch, name = "relu")
         self.nodes.append(node)
         return node
 
