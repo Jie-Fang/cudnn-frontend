@@ -9,7 +9,7 @@ def test_conv_relu(params):
     X = testGraph.addTensor(params["in_dim"])
     W = testGraph.addTensor(params["filter_dim"])
     
-    conv_out = testGraph.addOperation(Convolution(image = X, weight = W, padding = params["padding"], stride = params["stride"], dilation = params["dilation"]))
+    conv_out = testGraph.conv(image = X, weight = W, padding = params["padding"], stride = params["stride"], dilation = params["dilation"])
     Y = testGraph.addOperation(ReLU(input = conv_out))
 
     graph, variant_pack, workspace = testGraph.buildPyCudnnGraph()

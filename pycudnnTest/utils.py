@@ -2,6 +2,7 @@ import pycudnn
 import torch
 from typing import Any
 from dataclasses import dataclass, asdict, field
+import copy
 
 class TestNode:
     __test__ = False
@@ -59,22 +60,37 @@ class TestNode:
                 node.runRefTreeRecursive()
 
 class Convolution(TestNode):
-    def __init__(self, image, weight, padding = [0,0], stride = [1,1], dilation = [1,1]):
+    # All this function needs to do is: 
+    #   * add the correct producers
+    #   * store the rest of the kwargs
+    #   * store the pycudnn function to call
+    def __init__(self, kwargs):
         # TBD change default name
+        # Take into account that kwargs has a name already
         super().__init__("Conv_Node")
-        self.image = image
-        self.weight = weight
-        self.addProducerNode(image)
-        self.addProducerNode(weight)
-        self.padding = padding
-        self.stride = stride
-        self.dilation = dilation
+        self.kwargs = kwargs
+        # DOes .values() make an unnecessary copy?
+        for v in self.kwargs.values():
+            if type(v) is TestTensor:
+                self.addProducerNode(v)
 
     def genPyCudnnNode(self, pyCudnnGraph):
-        self.pyCudnnTensor = pyCudnnGraph.conv(name = self.name, image = self.image.pyCudnnTensor, weight = self.weight.pyCudnnTensor, padding = self.padding, stride = self.stride, dilation = self.dilation)
+        # Besides input tensors, all kwargs can just be passed through to the pycudnn method.
+        # For the input tensor we need to extract the TestTensor's pycudnn tensor.
+        # Therefore: copy all kwargs, except for TestTensors
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not type(self.kwargs[x]) is TestTensor}
+        for x in self.kwargs:
+            if type(self.kwargs[x]) is TestTensor:
+                new_kwargs[x] = self.kwargs[x].pyCudnnTensor
 
+        # Once we make this a function pointer, we no longer need the convolution class
+        self.pyCudnnTensor = pyCudnnGraph.conv(**new_kwargs)
+
+    # While the arguments in pytorch look very similar, we should probably explicitly build up the function call
+    # We should pass in a Reference object/function pointer to the TestNode, instead of hard coding the call here.
+    # This will also allow us to dial in arbirtary ref test code
     def genRef(self):
-        self.data = torch.nn.functional.conv2d(self.image.data, self.weight.data, bias = None, padding=self.padding, stride=self.stride, dilation=self.dilation)
+        self.data = torch.nn.functional.conv2d(self.kwargs['image'].data, self.kwargs['weight'].data, bias = None, padding=self.kwargs["padding"], stride=self.kwargs["stride"], dilation=self.kwargs["dilation"])
         
 
 class ReLU(TestNode):
@@ -82,6 +98,7 @@ class ReLU(TestNode):
         super().__init__("RELU_NODE")
         self.input = input
         self.addProducerNode(input)
+        self.pyCudnnTensor = None
 
     def genPyCudnnNode(self, pyCudnnGraph):
         self.pyCudnnTensor = pyCudnnGraph.relu(name = self.name, input = self.input.pyCudnnTensor)
@@ -145,6 +162,11 @@ class TestGraph:
         self.entrance_nodes = []
         self.graph_name = "TestGraph"
         self.output_tensors = []
+
+    def conv(self, **kwargs):
+        node = Convolution(kwargs)
+        self.nodes.append(node)
+        return node
 
     # Add name field and create name -> uid mapping. May help with debugging
     # Should we limit this to input tensors only?
