@@ -5,9 +5,9 @@ project(cudnn_frontend VERSION 0.9)
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
 
 if(MSVC OR MSYS OR MINGW)
-option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." OFF)
+    option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." OFF)
 else()
-option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." ON)
+    option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." ON)
 endif()
 
 add_library(cudnn_frontend INTERFACE)
@@ -19,15 +19,6 @@ target_include_directories(
 )
 
 target_compile_features(cudnn_frontend INTERFACE cxx_std_17)
-
-include(FetchContent)
-FetchContent_Declare(
-    json
-    GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
-    GIT_TAG v3.11.2
-)
-FetchContent_MakeAvailable(json)
-target_link_libraries(cudnn_frontend INTERFACE nlohmann_json::nlohmann_json)
 
 if (CUDNN_FRONTEND_BUILD_SAMPLES)
     add_subdirectory(samples)

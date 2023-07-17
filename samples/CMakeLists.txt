@@ -61,7 +61,6 @@ else()
         -Wno-unused-function
     )
 endif()
-target_include_directories(samples PRIVATE "resnet_block/include")
 
 target_link_libraries(
     samples
