@@ -168,6 +168,62 @@ def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
     pyt_out = torch.transpose(torch.bmm(x, w), 1, 2)
     torch.testing.assert_close(output, pyt_out)
 
+@pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [([1, 16, 16, 16], [1,16,16,])
+#,([16, 32, 64, 128], [16,32,64,]) # fails
+])
+def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
+    # Can put this in fixture:
+    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+
+    B, M, N, K = in_dim
+    x = torch.randn(B, M, K, device="cuda", dtype=torch.float16)
+    w = torch.randn(B, K, N, device="cuda", dtype=torch.float16)
+    b = torch.randn(B, M, N, device="cuda", dtype=torch.float16)
+
+    # Here we need to set the strides explicitly
+    # image = cudnn_graph.tensor(name = "image", dim = x.size(), stride = [M*K, 1, M])
+    # weight = cudnn_graph.tensor(name = "weight", dim = w.size(), stride = [K*N, 1, K])
+    # bias = cudnn_graph.tensor(name = "bias", dim = b.size(), stride = [M*N, 1, M])
+
+    image = cudnn_graph.tensor(name = "image", dim = x.size(), stride = [M*K, M, 1])
+    weight = cudnn_graph.tensor(name = "weight", dim = w.size(), stride = [K*N, N, 1])
+    bias = cudnn_graph.tensor(name = "bias", dim = b.size(), stride = [M*N, 1, M])
+
+    variant_pack = {}
+    variant_pack[image] = x
+    variant_pack[weight] = w
+    variant_pack[bias] = b
+
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight)
+
+    gemm_output.set_is_virtual(True)
+
+    bias_out = cudnn_graph.bias(name = "bias", input = gemm_output, bias = bias)
+    activation_output = cudnn_graph.relu(name = "relu", input = bias_out)
+    activation_output.set_output(True)
+
+    Y = activation_output
+    Y.set_output(True)
+
+    output = torch.zeros([B,M,N], dtype=torch.float16, device='cuda')
+
+    variant_pack[activation_output] = output
+
+    cudnn_graph.build()
+    print(cudnn_graph)
+
+    workspace = torch.empty(cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    # Compare output with a reference implementation
+    cudnn_graph.execute(variant_pack, workspace)
+
+
+    pyt_out = torch.transpose(torch.bmm(x, w), 1, 2)
+    pyt_out = torch.add(pyt_out, b)
+    pyt_out = torch.nn.functional.relu(pyt_out)
+
+    torch.testing.assert_close(output, pyt_out)
+
+
 # Make backend testing optional and allow for "checkpoint"
 @pytest.mark.skip(reason="This test will likely dissapear anyway")
 @pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [([16, 32, 64, 128], [16,32,64,])])
