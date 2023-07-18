@@ -6,8 +6,8 @@ from utils import TestGraph, TestTensor
 # Dictionaries defined in test_conv_relu.json
 def test_conv_relu(params):
     testGraph = TestGraph()
-    X = testGraph.addTensor(params["in_dim"])
-    W = testGraph.addTensor(params["filter_dim"])
+    X = testGraph.tensor(dim=params["in_dim"])
+    W = testGraph.tensor(dim=params["filter_dim"])
     
     conv_out = testGraph.conv(image = X, weight = W, padding = params["padding"], stride = params["stride"], dilation = params["dilation"])
     Y = testGraph.relu(input = conv_out)

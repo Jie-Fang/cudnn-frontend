@@ -4,6 +4,15 @@ from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
 
+class PytorchReference:
+    @staticmethod
+    def conv(kwargs):
+        return torch.nn.functional.conv2d(kwargs['image'].data, kwargs['weight'].data, bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+
+    @staticmethod
+    def relu(kwargs):
+        return torch.nn.functional.relu(kwargs["input"])
+
 class TestNode:
     __test__ = False
     def __init__(self, name):
@@ -96,35 +105,30 @@ class Operation(TestNode):
             if isinstance(self.kwargs[x], TestNode):
                 new_kwargs[x] = self.kwargs[x].data
         self.data = self.refFunc(new_kwargs)
-        
-def refConv_torch(kwargs):
-    return torch.nn.functional.conv2d(kwargs['image'].data, kwargs['weight'].data, bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
-
-def refReLU_torch(kwargs):
-    return torch.nn.functional.relu(kwargs["input"])
 
 @dataclass
 class TestTensor(TestNode):
     __test__ = False
-    UID: str
-    #dataType: str
-    # TODO(mbreughe): Assume NHWC layout
-    layout: str
-    dim: list = field(default=None)
-    isVirtual: bool = field(default=False)
-    data: Any = field(default = None)
 
-    def __init__(self, UID, dim):
-        super().__init__("Tensor_{}".format(UID))
-        self.UID = UID
-        self.dim = dim
+    def __init__(self, kwargs, name):
+        super().__init__(name)
+        self.kwargs = kwargs
         self.pyCudnnTensor = None
+        self.data = None
+        # TODO(mbreughe): Assume NHWC layout for now
         self.layout = "NHWC"
+        # Use fp16 by default
+        # TODO(@mbreughe): use pycudnn convention instead (like extracting it from the pycudnn graph)
+        if not "data_type" in self.kwargs:
+            self.data_type(pycudnn.data_type.HALF)
+    
+    def data_type(self, data_type):
+        self.kwargs["data_type"] = data_type
 
     def instantiateRandomTensor(self):
         if self.data is None:
-            # TBD specify data type
-            self.data = torch.randn(self.dim, requires_grad=False, device="cuda", dtype=torch.float16)
+            self.data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.kwargs["data_type"]))
+            
             if self.layout == "NHWC":
                 self.data = self.data.to(memory_format=torch.channels_last)
     
@@ -134,6 +138,8 @@ class TestTensor(TestNode):
 
     def genPyCudnnNode(self, pyCudnnGraph):
         self.instantiateRandomTensor()
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs}
+        print(type(pyCudnnGraph))
         self.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.data.size(), stride = self.data.stride(), data_type = convert_to_cudnn_type(self.data.dtype))
 
     def genRef(self):
@@ -150,6 +156,16 @@ def convert_to_cudnn_type(torch_type):
 
     return
 
+def convert_to_torch_type(cudnn_type):
+    if cudnn_type == pycudnn.data_type.HALF:
+        return torch.float16
+    elif cudnn_type == pycudnn.data_type.FLOAT:
+        return torch.float32
+    else:
+        raise ValueError("Unsupported tensor data type.")
+
+    return
+
 class TestGraph:
     __test__ = False
     uid_counter = 0
@@ -161,28 +177,56 @@ class TestGraph:
         self.output_tensors = []
 
     def conv(self, **kwargs):
-        node = Operation(kwargs, pycudnn.pygraph.conv, refConv_torch, name = "conv")
-        self.nodes.append(node)
-        return node
+        return self.createAndAddOperation(kwargs, pycudnn.pygraph.conv)
 
     def relu(self, **kwargs):
-        node = Operation(kwargs, pycudnn.pygraph.relu, refReLU_torch, name = "relu")
-        self.nodes.append(node)
-        return node
+        return self.createAndAddOperation(kwargs, pycudnn.pygraph.relu)
 
-    # Add name field and create name -> uid mapping. May help with debugging
-    # Should we limit this to input tensors only?
-    def addTensor(self, dim):
-        testTensor = TestTensor(UID=TestGraph.uid_counter, dim = dim)
-        TestGraph.uid_counter += 1
+    def tensor(self, **kwargs):
+        # Create a name if none provided
+        if "name" in kwargs:
+            name = kwargs["name"]
+        else:
+            name = TestGraph.createUniqueName("Tensor")
+
+        testTensor = TestTensor(kwargs, name)
 
         self.nodes.append(testTensor)
+        # TODO(@mbreughe): we are assuming only input tensors are explicitly created
         self.entrance_nodes.append(testTensor)
         return testTensor
+    
+    @staticmethod
+    def createUniqueName(prefix):
+        name = prefix + "_{}".format(TestGraph.uid_counter)
+        TestGraph.uid_counter += 1
+        return name
 
-    # This will need to be modified if we have more than 1 output
-    def addOperation(self, node):
+
+
+    # @brief: In esssence, this function is a factory function:
+    # @param kwargs: the named arguments passed to a pycudnn function
+    # @param pyCudnnOp: the pycudnn operation (e.g., pycudnn.pygraph.conv)
+    # @return: Operation
+    # it builds an operation by:
+    #   * discovering the reference function based on the name of the pycudnn op
+    #   * creating a name
+    #   * passing through the kwargs
+    def createAndAddOperation(self, kwargs, pyCudnnOp):
+        pyCudnnOpName = pyCudnnOp.__name__
+        
+        if "name" in kwargs:
+            name = kwargs["name"]
+        else:
+            name = TestGraph.createUniqueName(pyCudnnOpName)
+
+        # Fetch the reference function from the reference framework
+        # Note that we use PytorchReference here, but we can make this arbitrary
+        refFunc = getattr(PytorchReference, pyCudnnOpName)
+        
+        node = Operation(kwargs, pyCudnnOp, refFunc, name)
         self.nodes.append(node)
+
         return node
 
     def clearNodeMetaData(self):
@@ -228,6 +272,7 @@ class TestGraph:
         return graph, variant_pack, workspace
 
     # Note: this temporarily modifies the isVisited status of the nodes
+    # TODO(@mbreughe): to preserve resources, we could consider clearing intermediate results when they are no longer needed
     def getReference(self):
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
