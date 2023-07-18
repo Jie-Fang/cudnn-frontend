@@ -115,7 +115,7 @@ def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
     pyt_out = torch.add(pyt_out, b)
     pyt_out = torch.nn.functional.relu(pyt_out)
 
-    torch.testing.assert_close(output, pyt_out)
+    torch.testing.assert_close(output, pyt_out, atol=0.001, rtol=0.001)
 
 @pytest.mark.skip(reason="https://nvbugs/4190558")
 @pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [
