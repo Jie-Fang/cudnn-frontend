@@ -12,6 +12,7 @@ function run_python_tests() {
     export CUDNN_FRONTEND_LOG_INFO=1
     export PYTHONPATH=build/python_bindings
     
+    pytest pycudnnTest -v
     pytest samples/python
 }
 
