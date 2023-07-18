@@ -44,7 +44,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     auto K = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("K").set_dim({b, h, d   , s_kv}).set_stride({3*h*d, 3*d, 1      , 3*b*h*d}));
     auto V = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("V").set_dim({b, h, s_kv, d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
 
-    auto scale_k = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
+    auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("attn_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
 
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({b, 1, s_q, s_kv}).set_stride({s_q*s_kv, s_q*s_kv, s_kv, 1}));
 
@@ -53,7 +53,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
-                                                    .set_scale_k(scale_k)
+                                                    .set_attn_scale(attn_scale)
                                                     .set_dropout(dropout_probability, seed, offset);
 
     // Optional bias in flash attention is only supported 8.9.3 onwards
@@ -95,7 +95,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     void* devPtrV = (qkvTensor.devPtr + 2 * d);
     void* devPtrO = oTensor.devPtr;
 
-    float scale_k_cpu = 0.5f;
+    float attn_scale_cpu = 0.5f;
 
     Surface<half> bTensor(b * 1 * s_q * s_kv, false);
 
@@ -108,7 +108,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         {Q, devPtrQ}
         , {K, devPtrK}
         , {V, devPtrV}
-        , {scale_k, &scale_k_cpu}
+        , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
         , {seed, dropoutSeed.devPtr}
         , {offset, dropoutOffset.devPtr}
@@ -147,14 +147,14 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
     auto K = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("K").set_dim({b, h, d   , s_kv}).set_stride({3*h*d, 3*d, 1      , 3*b*h*d}));
     auto V = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("V").set_dim({b, h, s_kv, d}).set_stride({3*h*d   , 3*d, 3*b*h*d, 1}));
 
-    auto scale_k = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
+    auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("attn_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(fe::DataType_t::FLOAT));
 
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({b, 1, s_q, s_kv}).set_stride({s_q*s_kv, s_q*s_kv, s_kv, 1}));
 
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes("mha")
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
-                                                    .set_scale_k(scale_k)
+                                                    .set_attn_scale(attn_scale)
                                                     .set_bias(bias);
 
     auto outputs = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
@@ -192,7 +192,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
     void* devPtrV = (qkvTensor.devPtr + 2 * d);
     void* devPtrO = oTensor.devPtr;
 
-    float scale_k_cpu = 0.5f;
+    float attn_scale_cpu = 0.5f;
 
     Surface<half> bTensor(b * 1 * s_q * s_kv, false);
 
@@ -200,7 +200,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
         {Q, devPtrQ}
         , {K, devPtrK}
         , {V, devPtrV}
-        , {scale_k, &scale_k_cpu}
+        , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
         , {outputs.O, devPtrO}
     };
@@ -240,7 +240,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
 
-    auto scale_k = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
+    auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("attn_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
 
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
@@ -250,7 +250,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
                                                     .set_bias(bias)
                                                     .set_padding_mask(true)
                                                     .set_causal_mask(true)
-                                                    .set_scale_k(scale_k)
+                                                    .set_attn_scale(attn_scale)
                                                     .set_dropout(dropout_probability, seed);
 
     auto outputs = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
@@ -294,7 +294,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     checkCudaErr(cudaMemcpy(devActualSeqlenK.devPtr, hostActualSeqlenK.data(), sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
     checkCudaErr(cudaDeviceSynchronize());
 
-    half scale_k_cpu = 0.5;
+    half attn_scale_cpu = 0.5;
     Surface<half> bTensor(1 * h * s_q * s_kv, false);
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
@@ -302,7 +302,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
         , {K, devPtrK}
         , {SEQ_LEN_Q, devActualSeqlenQ.devPtr}
         , {SEQ_LEN_K, devActualSeqlenK.devPtr}
-        , {scale_k, &scale_k_cpu}
+        , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
         , {V, devPtrV}
         , {outputs.O, devPtrO}
@@ -341,7 +341,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto SEQ_LEN_Q = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("SEQ_LEN_Q").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto SEQ_LEN_K = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("SEQ_LEN_K").set_dim({b,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
 
-    auto scale_k = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("scale_k").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
+    auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("attn_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
     
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
@@ -350,7 +350,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
                                                     .set_seq_len_k(SEQ_LEN_K)
                                                     .set_bias(bias)
                                                     .set_padding_mask(true)
-                                                    .set_scale_k(scale_k);
+                                                    .set_attn_scale(attn_scale);
     auto outputs = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
@@ -392,7 +392,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     checkCudaErr(cudaMemcpy(devActualSeqlenK.devPtr, hostActualSeqlenK.data(), sizeof(hostActualSeqlenK[0]) * b, cudaMemcpyHostToDevice));
     checkCudaErr(cudaDeviceSynchronize());
 
-    half scale_k_cpu = 0.5;
+    half attn_scale_cpu = 0.5;
     Surface<half> bTensor(1 * h * s_q * s_kv, false);
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
@@ -400,7 +400,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
         , {K, devPtrK}
         , {SEQ_LEN_Q, devActualSeqlenQ.devPtr}
         , {SEQ_LEN_K, devActualSeqlenK.devPtr}
-        , {scale_k, &scale_k_cpu}
+        , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
         , {V, devPtrV}
         , {outputs.O, devPtrO}

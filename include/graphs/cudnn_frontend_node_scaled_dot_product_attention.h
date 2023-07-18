@@ -71,12 +71,12 @@ namespace cudnn_frontend::graph {
             negative_inf->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
             
             // Optional scale
-            if(options.inputs.Scale_k) {
+            if(options.inputs.Attn_scale) {
                 // Lower options to scale options
-                auto scale_options = Pointwise_attributes("scale_k");
+                auto scale_options = Pointwise_attributes("attn_scale");
                 scale_options.set_mode(PointwiseMode_t::MUL);
                 scale_options.inputs.IN_0 = options.inputs.K;
-                scale_options.inputs.IN_1 = options.inputs.Scale_k;
+                scale_options.inputs.IN_1 = options.inputs.Attn_scale;
                 last_output = scale_options.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
                 scale_options.outputs.OUT_0->set_is_virtual(true);
                 auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), context);

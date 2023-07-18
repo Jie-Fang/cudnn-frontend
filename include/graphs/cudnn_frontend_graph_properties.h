@@ -1019,7 +1019,7 @@ public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> Q;
         std::shared_ptr<Tensor_attributes> K;
-        std::shared_ptr<Tensor_attributes> Scale_k;
+        std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
@@ -1070,8 +1070,8 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_attention_attributes& set_scale_k(std::shared_ptr<Tensor_attributes> value){
-        inputs.Scale_k = value;
+    Scaled_dot_product_attention_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value){
+        inputs.Attn_scale = value;
         return *this;
     }
     
@@ -1128,7 +1128,7 @@ public:
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
-        std::shared_ptr<Tensor_attributes> Scale_k;
+        std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
         std::shared_ptr<Tensor_attributes> Offset;
@@ -1170,8 +1170,8 @@ public:
         return *this;
     }
 
-    Scaled_dot_product_flash_attention_attributes& set_scale_k(std::shared_ptr<Tensor_attributes> value){
-        inputs.Scale_k = value;
+    Scaled_dot_product_flash_attention_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value){
+        inputs.Attn_scale = value;
         return *this;
     }
 

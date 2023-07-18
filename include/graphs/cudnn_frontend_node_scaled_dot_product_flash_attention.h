@@ -87,16 +87,16 @@ namespace cudnn_frontend::graph {
             sub_nodes.emplace_back(std::move(bmm1_node));
             
             // Optional scale
-            if(options.inputs.Scale_k) {
+            if(options.inputs.Attn_scale) {
                 // Lower options to scale options
-                auto scale_k_output = std::make_shared<Tensor_attributes>();
-                scale_k_output->set_is_virtual(true);
+                auto attn_scale_output = std::make_shared<Tensor_attributes>();
+                attn_scale_output->set_is_virtual(true);
 
-                auto scale_options = Pointwise_attributes("scale_k");
+                auto scale_options = Pointwise_attributes("attn_scale");
                 scale_options.set_mode(PointwiseMode_t::MUL);
                 scale_options.inputs.IN_0 = last_output;
-                scale_options.inputs.IN_1 = options.inputs.Scale_k;
-                last_output = scale_options.outputs.OUT_0 = scale_k_output;
+                scale_options.inputs.IN_1 = options.inputs.Attn_scale;
+                last_output = scale_options.outputs.OUT_0 = attn_scale_output;
                 auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), context);
                 sub_nodes.emplace_back(std::move(scale_node));
             }
