@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from utils import TestGraph, TestTensor
+from testgraph import TestGraph, TestTensor
 
 # Dictionaries defined in test_conv_relu.json
 def test_conv_relu(params):

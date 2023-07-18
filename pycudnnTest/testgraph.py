@@ -4,15 +4,26 @@ from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
 
+# @brief: Reference code
+# @details: the methods mirror pycudnn.pygraph methods and class constructors(__init__)
+# @note: we can easily replace PytorchReference by CustomReference to use a different reference framework (one LoC change in TestGraph below)
 class PytorchReference:
+    # @brief: run convolution without bias
+    # @param kwargs: these are the named parameters used in the associated pycudnn.pygraph.conv function
+    #   The only difference is that the input tensors are replaced by pytorch tensors
+    # @details: all this function needs to do is unpack the pycudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv(kwargs):
-        return torch.nn.functional.conv2d(kwargs['image'].data, kwargs['weight'].data, bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        print(type(kwargs['image']))
+        return torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
 
+    # @brief: run relu
+    # @details: unpack the pycudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
     def relu(kwargs):
         return torch.nn.functional.relu(kwargs["input"])
 
+# Base class for Tensor and Operation nodes
 class TestNode:
     __test__ = False
     def __init__(self, name):
@@ -48,14 +59,14 @@ class TestNode:
             preReqSatisfied = preReqSatisfied and node.isVisited()
         return preReqSatisfied
 
-    def genPyCudnnNode(self, pyCudnnGraph):
+    # Function that needs to be overriden by its child classes
+    def runPyCudnnCode(self, pyCudnnGraph):
         print("NOT IMPLEMENTED")
 
     def buildPycudnnTreeRecursive(self, pyCudnnGraph):
-
         if not self.isVisited() and self.isPrereqSatisfied():
             #print ("Checking {}".format(self.name))
-            self.genPyCudnnNode(pyCudnnGraph)
+            self.runPyCudnnCode(pyCudnnGraph)
             self.setVisited()
             for node in self.consumerNodes:
                 node.buildPycudnnTreeRecursive(pyCudnnGraph)
@@ -63,31 +74,33 @@ class TestNode:
     def runRefTreeRecursive(self):
         if not self.isVisited() and self.isPrereqSatisfied():
             #print ("Checking {}".format(self.name))
-            self.genRef()
+            self.runRef()
             self.setVisited()
             for node in self.consumerNodes:
                 node.runRefTreeRecursive()
 
 class Operation(TestNode):
-    # All this function needs to do is: 
+    # @param kwargs: parameters for the associated pyCudnnOp
+    # @param pyCuddnOp: pycudnn.pygraph operation (e.g., pycudnn.pygraph.conv)
+    # @param refFunc: reference function for the associated pyCudnnOp
+    # @param name: name for this Operation (could be passed by kwargs as well)
+    # @ details: All this function needs to do is: 
     #   * add the correct producers
-    #   * store the rest of the kwargs
+    #   * store the kwargs (named parameters from the associated pyCudnnOp)
     #   * store the pycudnn function to call
     def __init__(self, kwargs, pyCudnnOp, refFunc, name):
-        # TBD Fix default name
-        # Take into account that kwargs has a name already
         super().__init__(name)
         self.kwargs = kwargs
-        # DOes .values() make an unnecessary copy?
+        # TODO(@mbreughe): Does .values() make an unnecessary copy?
         for v in self.kwargs.values():
             if isinstance(v, TestNode):
-                print("Node {} is adding producer {}".format(name, v.name))
                 self.addProducerNode(v)
         
         self.pyCudnnOp = pyCudnnOp
         self.refFunc = refFunc
 
-    def genPyCudnnNode(self, pyCudnnGraph):
+    # @brief: Run the pycudnn node
+    def runPyCudnnCode(self, pyCudnnGraph):
         # Besides input tensors, all kwargs can just be passed through to the pycudnn method.
         # For the input tensor we need to extract the TestTensor's pycudnn tensor.
         # Therefore: copy all kwargs, except for TestTensors
@@ -99,22 +112,23 @@ class Operation(TestNode):
 
         self.pyCudnnTensor = self.pyCudnnOp(pyCudnnGraph, **new_kwargs)
 
-    def genRef(self):
+    def runRef(self):
         new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestNode)}
         for x in self.kwargs:
             if isinstance(self.kwargs[x], TestNode):
-                new_kwargs[x] = self.kwargs[x].data
-        self.data = self.refFunc(new_kwargs)
+                new_kwargs[x] = self.kwargs[x].ref_data
+        self.ref_data = self.refFunc(new_kwargs)
 
-@dataclass
 class TestTensor(TestNode):
     __test__ = False
 
     def __init__(self, kwargs, name):
         super().__init__(name)
         self.kwargs = kwargs
+        # The pycudnn.pygraph.tensor instance associated with TestTensor
         self.pyCudnnTensor = None
-        self.data = None
+        # The reference data for this tensor
+        self.ref_data = None
         # TODO(mbreughe): Assume NHWC layout for now
         self.layout = "NHWC"
         # Use fp16 by default
@@ -126,23 +140,21 @@ class TestTensor(TestNode):
         self.kwargs["data_type"] = data_type
 
     def instantiateRandomTensor(self):
-        if self.data is None:
-            self.data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.kwargs["data_type"]))
+        if self.ref_data is None:
+            self.ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.kwargs["data_type"]))
             
             if self.layout == "NHWC":
-                self.data = self.data.to(memory_format=torch.channels_last)
+                self.ref_data = self.ref_data.to(memory_format=torch.channels_last)
     
     def getValue(self):
         self.instantiateRandomTensor()
-        return self.data
+        return self.ref_data
 
-    def genPyCudnnNode(self, pyCudnnGraph):
+    def runPyCudnnCode(self, pyCudnnGraph):
         self.instantiateRandomTensor()
-        new_kwargs = {x: self.kwargs[x] for x in self.kwargs}
-        print(type(pyCudnnGraph))
-        self.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.data.size(), stride = self.data.stride(), data_type = convert_to_cudnn_type(self.data.dtype))
+        self.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.ref_data.size(), stride = self.ref_data.stride(), data_type = convert_to_cudnn_type(self.ref_data.dtype))
 
-    def genRef(self):
+    def runRef(self):
         return self.getValue()
     
 
@@ -166,6 +178,8 @@ def convert_to_torch_type(cudnn_type):
 
     return
 
+# @brief: TestGraph that mirrors pycudnn.pygraph
+# @details: this contains functionality to run both pycudnn code as well as a reference
 class TestGraph:
     __test__ = False
     uid_counter = 0
@@ -176,12 +190,15 @@ class TestGraph:
         self.graph_name = "TestGraph"
         self.output_tensors = []
 
+    # @brief: Add a convolution node to the graph
     def conv(self, **kwargs):
         return self.createAndAddOperation(kwargs, pycudnn.pygraph.conv)
 
+    # @brief: Add a relu to the graph
     def relu(self, **kwargs):
         return self.createAndAddOperation(kwargs, pycudnn.pygraph.relu)
 
+    # @brief: Add an input tensor to the graph
     def tensor(self, **kwargs):
         # Create a name if none provided
         if "name" in kwargs:
@@ -196,13 +213,12 @@ class TestGraph:
         self.entrance_nodes.append(testTensor)
         return testTensor
     
+    # @brief: utility function to create unique names
     @staticmethod
     def createUniqueName(prefix):
         name = prefix + "_{}".format(TestGraph.uid_counter)
         TestGraph.uid_counter += 1
         return name
-
-
 
     # @brief: In esssence, this function is a factory function:
     # @param kwargs: the named arguments passed to a pycudnn function
@@ -222,6 +238,7 @@ class TestGraph:
 
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
+        # TODO(@mbreughe): Add error handling code in case the function is not found
         refFunc = getattr(PytorchReference, pyCudnnOpName)
         
         node = Operation(kwargs, pyCudnnOp, refFunc, name)
@@ -229,32 +246,34 @@ class TestGraph:
 
         return node
 
+    # @brief: Utility function
     def clearNodeMetaData(self):
         for node in self.nodes:
             node.clearMetaData()
 
+    # @brief: Utility function to discover output nodes
     def markImplicitOutputNodes(self):
         for node in self.nodes:
             if node.isOutputNode():
                 print ("Setting {} as output".format(node.name))
                 node.pyCudnnTensor.set_output(True)
 
-
-    # Note: this temporarily modifies the isVisited status of the nodes
+    # @brief: Build the pycudnn graph and reserve workspace
+    # @note: this temporarily modifies the isVisited status of the nodes
     def buildPyCudnnGraph(self):
-        print("Setting up graph")
+        # Setting up graph
         graph = pycudnn.pygraph(self.graph_name, io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
         self.clearNodeMetaData()
         for node in self.entrance_nodes:
             node.buildPycudnnTreeRecursive(graph)
 
-        print ("Setting implicit output nodes")
+        # Setting implicit output nodes"
         self.markImplicitOutputNodes()
 
-        print("Building graph")
+        # Building graph
         graph.build()
 
-        print("Creating workspace")
+        # Creating workspace
         workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
         variant_pack = {}
@@ -271,7 +290,8 @@ class TestGraph:
         self.clearNodeMetaData()
         return graph, variant_pack, workspace
 
-    # Note: this temporarily modifies the isVisited status of the nodes
+    # @brief: Run the reference for the associated graph
+    # @note: this temporarily modifies the isVisited status of the nodes
     # TODO(@mbreughe): to preserve resources, we could consider clearing intermediate results when they are no longer needed
     def getReference(self):
         # Clear the "isVisited" status of the nodes
@@ -282,7 +302,7 @@ class TestGraph:
         output = []
         for node in self.nodes:
             if node.isOutputNode():
-                output.append(node.data)
+                output.append(node.ref_data)
 
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
