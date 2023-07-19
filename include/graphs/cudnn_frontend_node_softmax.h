@@ -6,8 +6,8 @@
 #include "cudnn_frontend_graph_helpers.h"
 #include "cudnn_frontend_node_interface.h"
 
-#include "graphs/cudnn_frontend_node_pointwise.h"
-#include "graphs/cudnn_frontend_node_reduction.h"
+#include "cudnn_frontend_node_pointwise.h"
+#include "cudnn_frontend_node_reduction.h"
 
 namespace cudnn_frontend::graph {
 

@@ -10,7 +10,7 @@
 #include "cudnn_frontend_ExecutionPlan.h"
 #include "cudnn_frontend_VariantPack.h"
 
-#include "graphs/cudnn_frontend_graph_properties.h"
+#include "cudnn_frontend_graph_properties.h"
 
 namespace cudnn_frontend {
 

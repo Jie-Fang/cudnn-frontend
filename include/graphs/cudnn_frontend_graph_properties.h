@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graphs/cudnn_frontend_graph_helpers.h"
+#include "cudnn_frontend_graph_helpers.h"
 
 namespace cudnn_frontend {
 

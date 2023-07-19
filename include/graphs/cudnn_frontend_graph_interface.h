@@ -2,22 +2,22 @@
 
 #include <unordered_map>
 
-#include "graphs/cudnn_frontend_node_batchnorm.h"
-#include "graphs/cudnn_frontend_node_bn_finalize.h"
-#include "graphs/cudnn_frontend_node_conv_fprop.h"
-#include "graphs/cudnn_frontend_node_conv_dgrad.h"
-#include "graphs/cudnn_frontend_node_conv_wgrad.h"
-#include "graphs/cudnn_frontend_node_dbn.h"
-#include "graphs/cudnn_frontend_node_dbn_weight.h"
-#include "graphs/cudnn_frontend_node_genstats.h"
-#include "graphs/cudnn_frontend_node_matmul.h"
-#include "graphs/cudnn_frontend_node_pointwise.h"
-#include "graphs/cudnn_frontend_node_reduction.h"
-#include "graphs/cudnn_frontend_node_rng.h"
-#include "graphs/cudnn_frontend_node_scaled_dot_product_attention.h"
-#include "graphs/cudnn_frontend_node_scaled_dot_product_flash_attention.h"
+#include "cudnn_frontend_node_batchnorm.h"
+#include "cudnn_frontend_node_bn_finalize.h"
+#include "cudnn_frontend_node_conv_fprop.h"
+#include "cudnn_frontend_node_conv_dgrad.h"
+#include "cudnn_frontend_node_conv_wgrad.h"
+#include "cudnn_frontend_node_dbn.h"
+#include "cudnn_frontend_node_dbn_weight.h"
+#include "cudnn_frontend_node_genstats.h"
+#include "cudnn_frontend_node_matmul.h"
+#include "cudnn_frontend_node_pointwise.h"
+#include "cudnn_frontend_node_reduction.h"
+#include "cudnn_frontend_node_rng.h"
+#include "cudnn_frontend_node_scaled_dot_product_attention.h"
+#include "cudnn_frontend_node_scaled_dot_product_flash_attention.h"
 
-#include "graphs/cudnn_frontend_graph_helpers.h"
+#include "cudnn_frontend_graph_helpers.h"
 
 namespace cudnn_frontend::graph {
 
