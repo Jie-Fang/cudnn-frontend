@@ -11,7 +11,6 @@
 namespace cudnn_frontend {
 
 namespace graph {
-
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
 class Tensor_attributes {
@@ -176,25 +175,16 @@ public:
         Scaled_dot_product_flash_attention,
         Softmax,
     };
-
-protected:
+    Tag tag;
 
     std::string name;
     DataType_t compute_data_type = DataType_t::NOT_SET;
 
-    Tag tag;
-public:
-
     Operation(Tag t) : tag(t) {}
-    Operation(const std::string name, Tag t) : name(name), tag(t) {}
 
     std::string const
     get_name() const {
         return name;
-    }
-
-    Tag get_tag() const {
-        return tag;
     }
 
     DataType_t get_compute_data_type() const {
@@ -248,10 +238,16 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs)
 
     BN_finalize_attributes() : Operation(Tag::BN_finalize) {}
+
+    BN_finalize_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
 
     BN_finalize_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -313,6 +309,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs)
 
@@ -370,6 +367,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs
                                     , padding
@@ -464,15 +462,11 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs)
 
     DBN_attributes() : Operation(Tag::DBN) {}
-    
-    DBN_attributes& set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
 
     DBN_attributes& set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
@@ -483,6 +477,16 @@ public:
         outputs.DX = output_tensor(name + "_DX_output");
         outputs.DSCALE = output_tensor(name + "_DSCALE_output");
         outputs.DBIAS = output_tensor(name + "_DBIAS_output");
+    }
+
+    DBN_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    DBN_attributes& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
     }
 
     auto fill_from_context(detail::Context const& context) -> DBN_attributes& {
@@ -540,10 +544,16 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs)
 
     DBN_weight_attributes() : Operation(Tag::DBN_weight) {}
+
+    DBN_weight_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
 
     DBN_weight_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -604,6 +614,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes
                                 , name
+                                , tag
                                 , inputs
                                 , outputs
                                 , padding
@@ -611,11 +622,6 @@ public:
                                 , dilation)
 
     Conv_dgrad_attributes() : Operation(Tag::Conv_dgrad) {}
-
-    Conv_dgrad_attributes& set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
 
     std::vector<int64_t> get_padding() const {
         return padding;
@@ -641,6 +647,16 @@ public:
 
     Conv_dgrad_attributes& set_dilation(std::vector<int64_t> value) {
         dilation = value;
+        return *this;
+    }
+
+    Conv_dgrad_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Conv_dgrad_attributes& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 
@@ -684,6 +700,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes
                                 , name
+                                , tag
                                 , inputs
                                 , outputs)
                                 
@@ -742,6 +759,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs
                                     , mode
@@ -832,17 +850,13 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes
                                     , name
+                                    , tag
                                     , inputs
                                     , outputs
                                     , forward_phase)
 
     Batchnorm_attributes() : Operation(Tag::BN) {}
     
-    Batchnorm_attributes& set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
     Batchnorm_attributes& set_forward_phase(NormFwdPhase_t const value) {
         forward_phase = value;
         return *this;
@@ -855,6 +869,16 @@ public:
 
     Batchnorm_attributes& set_momentum(std::shared_ptr<Tensor_attributes>& value) {
         inputs.MOMENTUM = value;
+        return *this;
+    }
+
+    Batchnorm_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Batchnorm_attributes& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 
@@ -910,6 +934,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes
                                 , name
+                                , tag
                                 , inputs
                                 , outputs
                                 , mode)
@@ -922,6 +947,11 @@ public:
 
     Reduction_attributes& set_mode(ReductionMode_t value) {
         mode = value;
+        return *this;
+    }
+    
+    Reduction_attributes& set_name(std::string const& value) {
+        name = value;
         return *this;
     }
     
@@ -968,6 +998,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng_attributes
                                 , name
+                                , tag
                                 , inputs
                                 , outputs
                                 , distribution
@@ -1000,6 +1031,11 @@ public:
 
     Rng_attributes& set_bernoulli_probability(std::optional<double> value) {
         bernoulli_probability = value;
+        return *this;
+    }
+    
+    Rng_attributes& set_name(std::string const& value) {
+        name = value;
         return *this;
     }
     
@@ -1251,6 +1287,11 @@ public:
 
     Softmax_attributes() : Operation(Tag::Softmax) {}
 
+    Softmax_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
     Softmax_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
         return *this;
@@ -1294,6 +1335,7 @@ public:
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes
                                 , name
+                                , tag
                                 , inputs
                                 , outputs
                                 , padding
@@ -1301,11 +1343,6 @@ public:
                                 , dilation)
 
     Conv_wgrad_attributes() : Operation(Tag::Conv_wgrad) {}
-
-    Conv_wgrad_attributes& set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
 
     std::vector<int64_t> get_padding() const {
         return padding;
@@ -1331,6 +1368,16 @@ public:
 
     Conv_wgrad_attributes& set_dilation(std::vector<int64_t> value) {
         dilation = value;
+        return *this;
+    }
+    
+    Conv_wgrad_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Conv_wgrad_attributes& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
         return *this;
     }
 

@@ -282,7 +282,7 @@ inline Plans Graph::get_execution_plan_list(HeurMode_t mode) {
    
     auto status = query_heuristics(mode);
     if(status.is_bad()) {
-        getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+        getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
         return plan_list;
     }
 

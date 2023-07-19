@@ -20,7 +20,7 @@ namespace cudnn_frontend::graph {
         }
 
         error_t infer_properties_node() override final {
-            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node named " << name << "." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node " << options.name << "..." << std::endl;
         
             options.fill_from_context(context);
 
@@ -57,7 +57,7 @@ namespace cudnn_frontend::graph {
 
         error_t createTensors() override final {
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode tensors at node name " << name << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode tensors " << options.name << "..." << std::endl;
 
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.A));
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.B));
@@ -68,14 +68,13 @@ namespace cudnn_frontend::graph {
                     CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor));
                 }
             }
-            getLogger() << "[cudnn_frontend] INFO: " << "Built MatmulNode tensors at node name " << name << std::endl;
 
             return {error_code_t::OK, ""};
         }
         
         error_t createOperations() override final {
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode operations for node name " << name << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode operations " << options.name << "..." << std::endl;
             
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             try {
@@ -152,8 +151,6 @@ namespace cudnn_frontend::graph {
 
                 operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
             }
-
-            getLogger() << "[cudnn_frontend] INFO: " << "Built MatmulNode operation for node name " << name << std::endl;
 
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             } catch (cudnn_frontend::cudnnException &e) {

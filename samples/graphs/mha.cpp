@@ -51,6 +51,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     auto seed = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Seed").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto offset = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Offset").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes()
+                                                    .set_name("flash_attention")
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
                                                     .set_attn_scale(attn_scale)
@@ -152,6 +153,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({b, 1, s_q, s_kv}).set_stride({s_q*s_kv, s_q*s_kv, s_kv, 1}));
 
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes()
+                                                    .set_name("flash_attention")
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
                                                     .set_attn_scale(attn_scale)
@@ -244,6 +246,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
 
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes()
+                                                    .set_name("non_flash_attention")
                                                     .set_is_inference(is_inference)
                                                     .set_seq_len_q(SEQ_LEN_Q)
                                                     .set_seq_len_k(SEQ_LEN_K)
@@ -345,6 +348,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
     
     auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes()
+                                                    .set_name("non_flash_attention")
                                                     .set_is_inference(is_inference)
                                                     .set_seq_len_q(SEQ_LEN_Q)
                                                     .set_seq_len_k(SEQ_LEN_K)

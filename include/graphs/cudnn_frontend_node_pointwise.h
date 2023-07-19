@@ -20,7 +20,7 @@ public:
     }
 
     error_t infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node named " << name << "." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node " << options.name << "..." << std::endl;
         
         options.fill_from_context(context);
         
@@ -47,20 +47,20 @@ public:
 
     error_t createTensors() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors X:" << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << options.name << " tensors X:" << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0));
         
         auto const port_count = get_pointwise_mode_port_count(options.get_mode().value());
         if(port_count >= 3) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors B:" << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << options.name << " tensors B:" << std::endl;
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_1));
         }
         if(port_count >= 4) {
-            getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors T:" << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << options.name << " tensors T:" << std::endl;
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_2));
         }
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << name << " tensors Y:" << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << options.name << " tensors Y:" << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0));
 
         return {error_code_t::OK, ""};
@@ -69,7 +69,7 @@ public:
 
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -157,8 +157,6 @@ public:
 
             operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
         }
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built PointwiseNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {

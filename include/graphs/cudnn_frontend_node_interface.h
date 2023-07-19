@@ -27,8 +27,6 @@ class INode: public ICudnn {
 public:
     // A closed set of types that are allowed to be passed by value today
     using pass_by_values_t = std::variant<half, float>; 
-
-    std::string name;
     
     detail::Context context;
 private:
@@ -134,13 +132,14 @@ public:
         // validate self
         auto status = validate_node();
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Validation failed in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Validation failed." << std::endl;
             return status;
         }
 
         // infer_properties self
         status = infer_properties_node();
         if(status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Infer properties failed." << std::endl;
             return status;
         }
 
@@ -148,7 +147,7 @@ public:
         for(auto const& sub_node: sub_nodes) {
             status = sub_node->validate();
             if(status.is_bad()) {
-                getLogger() << "[cudnn_frontend] ERROR: Validation failed in " << name << std::endl;
+                getLogger() << "[cudnn_frontend] ERROR: Validation failed." << std::endl;
                 return status;
             }
         }
@@ -161,31 +160,31 @@ public:
 
         auto status = validate();
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
             return status;
         }
 
         status = assign_uids();
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
             return status;
         }
 
         status = createTensors();
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
             return status;
         }
 
         status = createOperations();
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
             return status;
         }
 
         status = createOperationGraphs(handle);
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to build in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
             return status;
         }
 
@@ -209,7 +208,7 @@ public:
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t> tensor_to_pass_by_value;
         auto status = gather_pass_by_value_tensors(tensor_to_pass_by_value);
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Failed to gather_pass_by_value_tensors in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Failed to gather_pass_by_value_tensors." << std::endl;
             return status;
         }
 
@@ -224,14 +223,14 @@ public:
             }
             else {
                 status.code = error_code_t::INVALID_VARIANT_PACK;
-                status.err_msg = "[cudnn_frontend] ERROR: Unexpected type for pass by value tensor in " + name;
+                status.err_msg = "[cudnn_frontend] ERROR: Unexpected type for pass by value tensor.";
                 return status;
             }
         }
         
         status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace);
         if(status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Execution failed in " << name << std::endl;
+            getLogger() << "[cudnn_frontend] ERROR: Execution failed." << std::endl;
             return status;
         }
         
@@ -241,12 +240,11 @@ public:
     INode(detail::Context const& context): context(context) {}
 
     virtual void serialize(json& j) const {
-        j["name"] = name;
-        j["sub_nodes"];
+        j["nodes"];
         for(auto const& sub_node: sub_nodes) {
             json j_sub_node;
             sub_node->serialize(j_sub_node);
-            j["sub_nodes"].push_back(j_sub_node);
+            j["nodes"].push_back(j_sub_node);
         }
     };
 

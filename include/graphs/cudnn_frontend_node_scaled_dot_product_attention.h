@@ -26,7 +26,7 @@ namespace cudnn_frontend::graph {
         }
         
         error_t validate_node() const override final {
-            getLogger() << "[cudnn_frontend] INFO: " << "Validating ScaledDotProductAttentionNode..." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating ScaledDotProductAttentionNode " << options.name << "..." << std::endl;
 
             if(options.is_inference.has_value() == false) {
                 auto status = error_code_t::ATTRIBUTE_NOT_SET;
@@ -46,12 +46,11 @@ namespace cudnn_frontend::graph {
                 return {status, message};
             }
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Validated ScaledDotProductAttentionNode." << std::endl;
             return {error_code_t::OK, ""};
         }
 
         error_t infer_properties_node() override final {
-            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node named " << name << "." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node " << options.name << "..." << std::endl;
 
             options.fill_from_context(context);
 
@@ -74,7 +73,7 @@ namespace cudnn_frontend::graph {
             if(options.inputs.Attn_scale) {
                 // Lower options to scale options
                 Pointwise_attributes scale_attributes;
-                scale_attributes.set_mode(PointwiseMode_t::MUL);
+                scale_attributes.set_mode(PointwiseMode_t::MUL).set_name("attn_scale");
                 scale_attributes.inputs.IN_0 = options.inputs.K;
                 scale_attributes.inputs.IN_1 = options.inputs.Attn_scale;
                 last_output = scale_attributes.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
@@ -91,6 +90,7 @@ namespace cudnn_frontend::graph {
 
             // Lower options to bmm1 options
             Matmul_attributes bmm1_attributes;
+            bmm1_attributes.set_name("bmm1");
             bmm1_attributes.inputs.A = options.inputs.Q;
             bmm1_attributes.inputs.B = last_output;
             bmm1_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
@@ -108,6 +108,7 @@ namespace cudnn_frontend::graph {
             if(options.inputs.Bias) {
                 // Lower options to add options
                 Pointwise_attributes add_attributes;
+                add_attributes.set_name("bias");
                 add_attributes.set_mode(PointwiseMode_t::ADD);
                 add_attributes.inputs.IN_0 = last_output;
                 add_attributes.inputs.IN_1 = options.inputs.Bias;
@@ -120,6 +121,7 @@ namespace cudnn_frontend::graph {
             if(options.padding_mask) {
                 // Lower options to generate row index options
                 Pointwise_attributes row_index_attributes;
+                row_index_attributes.set_name("gen_row_index");
                 row_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
                 row_index_attributes.inputs.IN_0 = last_output;
                 auto row_index = row_index_attributes.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
@@ -129,6 +131,7 @@ namespace cudnn_frontend::graph {
 
                 // Lower options to generate col index options
                 Pointwise_attributes col_index_attributes;
+                col_index_attributes.set_name("gen_col_index");
                 col_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
                 col_index_attributes.inputs.IN_0 = last_output;
                 auto col_index = col_index_attributes.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
@@ -138,6 +141,7 @@ namespace cudnn_frontend::graph {
 
                 // Lower options to less than row options
                 Pointwise_attributes less_than_row_attributes;
+                less_than_row_attributes.set_name("cmp_less_than_row");
                 less_than_row_attributes.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_row_attributes.inputs.IN_0 = row_index;
                 less_than_row_attributes.inputs.IN_1 = options.inputs.SEQ_LEN_Q;
@@ -148,6 +152,7 @@ namespace cudnn_frontend::graph {
                 
                 // Lower options to less than col options
                 Pointwise_attributes less_than_col_attributes;
+                less_than_col_attributes.set_name("cmp_less_than_col");
                 less_than_col_attributes.set_mode(PointwiseMode_t::CMP_LT);
                 less_than_col_attributes.inputs.IN_0 = col_index;
                 less_than_col_attributes.inputs.IN_1 = options.inputs.SEQ_LEN_K;
@@ -158,6 +163,7 @@ namespace cudnn_frontend::graph {
 
                 // Lower options to logical and options
                 Pointwise_attributes logical_and_attributes;
+                logical_and_attributes.set_name("logical_and");
                 logical_and_attributes.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
                 logical_and_attributes.inputs.IN_0 = less_than_row;
                 logical_and_attributes.inputs.IN_1 = less_than_col;
@@ -169,6 +175,7 @@ namespace cudnn_frontend::graph {
                 if(options.causal_mask) {
                     // Lower options to greater than options
                     Pointwise_attributes greater_than_attributes;
+                    greater_than_attributes.set_name("row_greater_than_col");
                     greater_than_attributes.set_mode(PointwiseMode_t::CMP_GE);
                     greater_than_attributes.inputs.IN_0 = row_index;
                     greater_than_attributes.inputs.IN_1 = col_index;
@@ -179,6 +186,7 @@ namespace cudnn_frontend::graph {
 
                     // Lower options to logical and options
                     Pointwise_attributes logical_and_attributes;
+                    logical_and_attributes.set_name("logical_and");
                     logical_and_attributes.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
                     logical_and_attributes.inputs.IN_0 = mask;
                     logical_and_attributes.inputs.IN_1 = row_greater_col;
@@ -190,6 +198,7 @@ namespace cudnn_frontend::graph {
 
                 // Lower options to binary select options
                 Pointwise_attributes binary_select_attributes;
+                binary_select_attributes.set_name("binary_select");
                 binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
                 binary_select_attributes.inputs.IN_0 = last_output;
                 binary_select_attributes.inputs.IN_1 = negative_inf;
@@ -203,6 +212,7 @@ namespace cudnn_frontend::graph {
 
             // Lower options to softmax options
             Softmax_attributes softmax_attributes;
+            softmax_attributes.set_name("softmax");
             softmax_attributes.use_stats = false; // As this is non-flash attention
             softmax_attributes.inputs.P = last_output;
             // Use tensor provided by Graph when real S
@@ -227,6 +237,7 @@ namespace cudnn_frontend::graph {
 
                         // Lower options to rng options
                         Rng_attributes rng_attributes;
+                        rng_attributes.set_name("rng");
                         rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
                             .set_seed(options.seed)
                             .set_bernoulli_probability(p);
@@ -247,6 +258,7 @@ namespace cudnn_frontend::graph {
 
                     // Lower options to mask options
                     Pointwise_attributes mask_attributes;
+                    mask_attributes.set_name("dropout_mask_mul");
                     mask_attributes.set_mode(PointwiseMode_t::MUL);
                     mask_attributes.inputs.IN_0 = last_output;
                     mask_attributes.inputs.IN_1 = mask_output;
@@ -277,6 +289,7 @@ namespace cudnn_frontend::graph {
                     .set_data_type(options.inputs.Q->get_data_type());
             }
             Pointwise_attributes dropout_scale_attributes;
+            dropout_scale_attributes.set_name("dropout_scale");
             dropout_scale_attributes.set_mode(PointwiseMode_t::MUL);
             dropout_scale_attributes.inputs.IN_0 = last_output;
             dropout_scale_attributes.inputs.IN_1 = options.inputs.Dropout_scale;
@@ -287,6 +300,7 @@ namespace cudnn_frontend::graph {
 
             // Lower options to bmm2 options
             Matmul_attributes bmm2_attributes;
+            bmm2_attributes.set_name("bmm2");
             // Requirement by cudnn backend to take in bmm2 aType as i/o type.
             last_output->set_data_type(DataType_t::HALF);
             bmm2_attributes.inputs.A = last_output;

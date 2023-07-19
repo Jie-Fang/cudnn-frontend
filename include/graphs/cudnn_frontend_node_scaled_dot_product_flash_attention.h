@@ -28,7 +28,7 @@ namespace cudnn_frontend::graph {
         }
         
         error_t validate_node() const override final {
-            getLogger() << "[cudnn_frontend] INFO: " << "Validating ScaledDotProductFlashAttentionNode..." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating ScaledDotProductFlashAttentionNode " << options.name << "..." << std::endl;
 
             if(options.is_inference.has_value() == false) {
                 auto status = error_code_t::ATTRIBUTE_NOT_SET;
@@ -48,12 +48,11 @@ namespace cudnn_frontend::graph {
                 return {status, message};
             }
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Validated ScaledDotProductFlashAttentionNode." << std::endl;
             return {error_code_t::OK, ""};
         }
 
         error_t infer_properties_node() override final {
-            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node named " << name << "." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  " << options.name << "..." << std::endl;
 
             // DO NOT REMOVE
             // input data type is needed for:
@@ -80,6 +79,7 @@ namespace cudnn_frontend::graph {
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
             Matmul_attributes bmm1_attributes;
+            bmm1_attributes.set_name("bmm1");
             bmm1_attributes.inputs.A = options.inputs.Q;
             bmm1_attributes.inputs.B = options.inputs.K;
             last_output = bmm1_attributes.outputs.C = bmm1_output;
@@ -93,6 +93,7 @@ namespace cudnn_frontend::graph {
                 attn_scale_output->set_is_virtual(true);
 
                 Pointwise_attributes scale_attributes;
+                scale_attributes.set_name("attn_scale");
                 scale_attributes.set_mode(PointwiseMode_t::MUL);
                 scale_attributes.inputs.IN_0 = last_output;
                 scale_attributes.inputs.IN_1 = options.inputs.Attn_scale;
@@ -108,6 +109,7 @@ namespace cudnn_frontend::graph {
                 bias_output->set_is_virtual(true);
 
                 Pointwise_attributes add_attributes;
+                add_attributes.set_name("bias");
                 add_attributes.set_mode(PointwiseMode_t::ADD);
                 add_attributes.inputs.IN_0 = last_output;
                 add_attributes.inputs.IN_1 = options.inputs.Bias;
@@ -122,6 +124,7 @@ namespace cudnn_frontend::graph {
                 row_index_output->set_is_virtual(true);
 
                 Pointwise_attributes row_index_attributes;
+                row_index_attributes.set_name("gen_row_index");
                 row_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
                 row_index_attributes.inputs.IN_0 = last_output;
                 row_index_attributes.outputs.OUT_0 = row_index_output;
@@ -133,6 +136,7 @@ namespace cudnn_frontend::graph {
                 col_index_output->set_is_virtual(true);
 
                 Pointwise_attributes col_index_attributes;
+                col_index_attributes.set_name("gen_col_index");
                 col_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
                 col_index_attributes.inputs.IN_0 = last_output;
                 col_index_attributes.outputs.OUT_0 = col_index_output;
@@ -146,6 +150,7 @@ namespace cudnn_frontend::graph {
                     .set_data_type(DataType_t::BOOLEAN);
 
                 Pointwise_attributes greater_than_attributes;
+                greater_than_attributes.set_name("row_greater_than_col");
                 greater_than_attributes.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
                 greater_than_attributes.inputs.IN_0 = row_index_output;
                 greater_than_attributes.inputs.IN_1 = col_index_output;
@@ -165,6 +170,7 @@ namespace cudnn_frontend::graph {
                 causal_mask_output->set_is_virtual(true);
 
                 Pointwise_attributes binary_select_attributes;
+                binary_select_attributes.set_name("binary_select");
                 binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
                 binary_select_attributes.inputs.IN_0 = last_output;
                 binary_select_attributes.inputs.IN_1 = negative_inf;
@@ -179,6 +185,7 @@ namespace cudnn_frontend::graph {
             softmax_output->set_is_virtual(true);
 
             Softmax_attributes softmax_attributes;
+            softmax_attributes.set_name("softmax");
             softmax_attributes.use_stats = true; // As this is flash attention
             softmax_attributes.inputs.P = last_output;
             last_output = softmax_attributes.outputs.S = softmax_output;
@@ -197,6 +204,7 @@ namespace cudnn_frontend::graph {
                     .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
                 Rng_attributes rng_attributes;
+                rng_attributes.set_name("rng");
                 rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
                     .set_bernoulli_probability(options.dropout_probability.value());
                 rng_attributes.inputs.Seed = options.inputs.Seed;
@@ -210,6 +218,7 @@ namespace cudnn_frontend::graph {
                 dropout_mask_output->set_is_virtual(true);
 
                 Pointwise_attributes mask_attributes;
+                mask_attributes.set_name("dropout_mask_mul");
                 mask_attributes.set_mode(PointwiseMode_t::MUL);
                 mask_attributes.inputs.IN_0 = last_output;
                 mask_attributes.inputs.IN_1 = rng_output;
@@ -233,6 +242,7 @@ namespace cudnn_frontend::graph {
                     #endif
 
                 Pointwise_attributes dropout_scale_attributes;
+                dropout_scale_attributes.set_name("dropout_scale");
                 dropout_scale_attributes.set_mode(PointwiseMode_t::MUL);
                 dropout_scale_attributes.inputs.IN_0 = last_output;
                 dropout_scale_attributes.inputs.IN_1 = dropout_scale;
@@ -246,6 +256,7 @@ namespace cudnn_frontend::graph {
             last_output->set_data_type(options.inputs.Q->get_data_type());
 
             Matmul_attributes bmm2_attributes;
+            bmm2_attributes.set_name("bmm2");
             bmm2_attributes.inputs.A = last_output;
             bmm2_attributes.inputs.B = options.inputs.V;
             bmm2_attributes.outputs.C = options.outputs.O;

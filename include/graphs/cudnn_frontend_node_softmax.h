@@ -22,7 +22,7 @@ class SoftmaxNode : public INode {
         }
         
         error_t validate_node() const override final {
-            getLogger() << "[cudnn_frontend] INFO: " << "Validating SoftmaxNode..." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating SoftmaxNode " << options.name << "..." << std::endl;
 
             if(options.use_stats.has_value() == false) {
                 auto status = error_code_t::ATTRIBUTE_NOT_SET;
@@ -30,12 +30,11 @@ class SoftmaxNode : public INode {
                 return {status, message};
             }
 
-            getLogger() << "[cudnn_frontend] INFO: " << "Validated SoftmaxNode." << std::endl;
             return {error_code_t::OK, ""};
         }
 
         error_t infer_properties_node() override final {
-            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node named " << name << "." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node " << options.name << "." << std::endl;
 
             options.fill_from_context(context);
 
@@ -53,6 +52,7 @@ class SoftmaxNode : public INode {
                 .set_stride({h * s_q, s_q, 1, 1});
 
             auto max_options = Reduction_attributes();
+            max_options.set_name("max");
             max_options.set_mode(ReductionMode_t::MAX);
             max_options.inputs.X = options.inputs.P;
             max_options.outputs.Y = max_output;
@@ -64,6 +64,7 @@ class SoftmaxNode : public INode {
             sub_output->set_is_virtual(true);
 
             Pointwise_attributes sub_options;
+            sub_options.set_name("sub");
             sub_options.set_mode(PointwiseMode_t::SUB);
             sub_options.inputs.IN_0 = options.inputs.P;
             sub_options.inputs.IN_1 = max_output;
@@ -76,6 +77,7 @@ class SoftmaxNode : public INode {
             exp_output->set_is_virtual(true);
 
             Pointwise_attributes exp_options;
+            exp_options.set_name("exp");
             exp_options.set_mode(PointwiseMode_t::EXP);
             exp_options.inputs.IN_0 = sub_output;
             exp_options.outputs.OUT_0 = exp_output;
@@ -90,6 +92,7 @@ class SoftmaxNode : public INode {
                 .set_stride({h * s_q, s_q, 1, 1});
 
             auto sum_options = Reduction_attributes();
+            sum_options.set_name("sum");
             sum_options.set_mode(ReductionMode_t::ADD);
             sum_options.inputs.X = exp_output;
             sum_options.outputs.Y = sum_output;
@@ -103,6 +106,7 @@ class SoftmaxNode : public INode {
                 log_output->set_is_virtual(true);
 
                 auto log_options = Pointwise_attributes();
+                log_options.set_name("log");
                 log_options.set_mode(PointwiseMode_t::LOG);
                 log_options.inputs.IN_0 = sum_output;
                 log_options.outputs.OUT_0 = log_output;
@@ -111,6 +115,7 @@ class SoftmaxNode : public INode {
 
                 // Lower options to add options
                 auto add_options = Pointwise_attributes();
+                add_options.set_name("add");
                 add_options.set_mode(PointwiseMode_t::ADD);
                 add_options.inputs.IN_0 = max_output;
                 add_options.inputs.IN_1 = log_output;
@@ -121,6 +126,7 @@ class SoftmaxNode : public INode {
 
             // Lower options to div options
             auto div_options = Pointwise_attributes();
+            div_options.set_name("div");
             div_options.set_mode(PointwiseMode_t::DIV);
             div_options.inputs.IN_0 = exp_output;
             div_options.inputs.IN_1 = sum_output;

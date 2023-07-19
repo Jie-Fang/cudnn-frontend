@@ -21,7 +21,7 @@ public:
     }
 
     error_t infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node named " << name << "." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node " << options.name << "..." << std::endl;
         
         options.fill_from_context(context);
 
@@ -75,7 +75,7 @@ public:
 
     error_t createTensors() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
@@ -88,14 +88,12 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE_DY));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE_X));
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode tensors." << std::endl;
-
         return {error_code_t::OK, ""};
     }
     
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNWeightNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -134,8 +132,6 @@ public:
         }
 
         operations.push_back({std::move(batchnorm_operation), std::move(uids_in_operation)});
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {

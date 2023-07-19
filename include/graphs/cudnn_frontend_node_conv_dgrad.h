@@ -20,7 +20,7 @@ public:
     }
 
     error_t infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node named " << name << "." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node " << options.name << "..." << std::endl;
         
         options.fill_from_context(context);
 
@@ -65,20 +65,18 @@ public:
 
     error_t createTensors() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DgradNode tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DgradNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.W));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built DgradNode tensors." << std::endl;
 
         return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DgradNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DgradNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -121,8 +119,6 @@ public:
         }
 
         operations.push_back({std::move(dgrad_operation), std::move(uids_in_operation)});
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built DgradNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {

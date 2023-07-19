@@ -26,20 +26,18 @@ public:
     }
 
     error_t createTensors() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building RngNode tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building RngNode tensors " << options.name << "..." << std::endl;
 
         if(options.inputs.Seed)CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Seed));
         if(options.inputs.Offset)CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Offset));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built RngNode tensors." << std::endl;
 
         return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building RngNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building RngNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -94,8 +92,6 @@ public:
                     
                 }
             }
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built RngNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {

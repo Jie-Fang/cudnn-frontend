@@ -26,7 +26,7 @@ public:
     }
 
     error_t infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DBN node named " << name << "." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DBN node " << options.name << "..." << std::endl;
         
         options.fill_from_context(context);
 
@@ -84,7 +84,7 @@ public:
 
     error_t createTensors() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNNode tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
@@ -96,14 +96,12 @@ public:
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Built DBNNode tensors." << std::endl;
-
         return {error_code_t::OK, ""};
     }
     
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building DBNNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -142,8 +140,6 @@ public:
         }
 
         operations.push_back({std::move(DBN_operation), std::move(uids_in_operation)});
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built DBNNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {

@@ -20,7 +20,7 @@ public:
     }
 
     error_t infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << options.name << "..." << std::endl;
         
         options.fill_from_context(context);
 
@@ -62,20 +62,18 @@ public:
 
     error_t createTensors() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.W));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode tensors." << std::endl;
 
         return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building ConvolutionNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -118,8 +116,6 @@ public:
         }
 
         operations.push_back({std::move(convolution_operation), std::move(uids_in_operation)});
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built ConvolutionNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {

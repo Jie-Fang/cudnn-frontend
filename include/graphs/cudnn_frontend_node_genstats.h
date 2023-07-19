@@ -8,7 +8,7 @@
 namespace cudnn_frontend {
 
 namespace graph {
-
+    
 class GenstatsNode : public INode {
     Genstats_attributes options;
 public:
@@ -56,20 +56,18 @@ public:
     }
 
     error_t createTensors() override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building GenstatsNode tensors..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building GenstatsNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.SUM));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.SQ_SUM));
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built GenstatsNode tensors." << std::endl;
 
         return {error_code_t::OK, ""};
     }
 
     error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building GenstatsNode operations..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Building GenstatsNode operations " << options.name << "..." << std::endl;
         
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
@@ -97,8 +95,6 @@ public:
         }
 
         operations.push_back({std::move(genstats_operation), std::move(uids_in_operation)});
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Built GenstatsNode operation." << std::endl;
 
         #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException &e) {
