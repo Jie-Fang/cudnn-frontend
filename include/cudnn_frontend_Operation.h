@@ -408,9 +408,8 @@ class OperationBuilder_v8 {
     build_pointwise_op() {
         auto status = CUDNN_STATUS_SUCCESS;
 
-        std::stringstream ss;
-        ss << json{m_operation.pointwise_mode};
-        m_operation.operationTag = ss.str();
+        json j = m_operation.pointwise_mode;
+        m_operation.operationTag = j;
 
         status = cudnnBackendSetAttribute(m_operation.pointer->get_backend_descriptor(),
                 CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR,
