@@ -22,6 +22,7 @@
 
 #pragma once
 #include <exception>
+#include <optional>
 #include <string>
 #include <vector>
 
