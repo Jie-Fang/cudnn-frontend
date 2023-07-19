@@ -33,7 +33,7 @@ def test_gemm_more_explicit(in_dim, expected_gemm_out_dim):
     variant_pack[image] = x
     variant_pack[weight] = w
 
-    gemm_output = cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight, compute_data_type = pycudnn.data_type.FLOAT)
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight, compute_data_type = pycudnn.data_type.FLOAT)
     gemm_output.set_data_type (pycudnn.data_type.HALF)
     # DEBUG
     col_major_C = True
@@ -88,7 +88,7 @@ def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
     variant_pack[weight] = w
     variant_pack[bias] = b
 
-    gemm_output = cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight)
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight)
 
     gemm_output.set_is_virtual(True)
 
@@ -140,7 +140,7 @@ def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
     variant_pack[weight] = w
     variant_pack[bias] = b
 
-    gemm_output = cudnn_graph.matmul(name = "mb_matmul", image = image, weight = weight)
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight)
 
     gemm_output.set_is_virtual(True)
 
