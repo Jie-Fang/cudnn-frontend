@@ -76,7 +76,7 @@ pytest:cudnn_8.6.0.163:GA10x:
     needs:
         - ["build:cudnn_8.6.0.163: [GA10x]"]
 
-pytest:cudnn_8.6.0.163:GA10x:
+pycudnntest:cudnn_8.6.0.163:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.6.0.163: [GA10x]"]
@@ -103,7 +103,7 @@ pytest:cudnn_8.6.0.163:Ampere:
     needs:
         - ["build:cudnn_8.6.0.163: [Ampere]"]
 
-pytest:cudnn_8.6.0.163:Ampere:
+pycudnntest:cudnn_8.6.0.163:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.6.0.163: [Ampere]"]
@@ -131,7 +131,7 @@ pytest:cudnn_8.6.0.163:Hopper:
     needs:
         - ["build:cudnn_8.6.0.163: [Hopper]"]
 
-pytest:cudnn_8.6.0.163:Hopper:
+pycudnntest:cudnn_8.6.0.163:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.6.0.163: [Hopper]"]
@@ -169,7 +169,7 @@ pytest:cudnn_8.7.0.84:GA10x:
     needs:
         - ["build:cudnn_8.7.0.84: [GA10x]"]
 
-pytest:cudnn_8.7.0.84:GA10x:
+pycudnntest:cudnn_8.7.0.84:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.7.0.84_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.7.0.84: [GA10x]"]
@@ -196,7 +196,7 @@ pytest:cudnn_8.7.0.84:Ampere:
     needs:
         - ["build:cudnn_8.7.0.84: [Ampere]"]
 
-pytest:cudnn_8.7.0.84:Ampere:
+pycudnntest:cudnn_8.7.0.84:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.7.0.84_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.7.0.84: [Ampere]"]
@@ -223,7 +223,7 @@ pytest:cudnn_8.7.0.84:Hopper:
     needs:
         - ["build:cudnn_8.7.0.84: [Hopper]"]
 
-pytest:cudnn_8.7.0.84:Hopper:
+pycudnntest:cudnn_8.7.0.84:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.7.0.84_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.7.0.84: [Hopper]"]
@@ -260,7 +260,7 @@ pytest:cudnn_8.8.0.121:Ampere:
     needs:
         - ["build:cudnn_8.8.0.121: [Ampere]"]
 
-pytest:cudnn_8.8.0.121:Ampere:
+pycudnntest:cudnn_8.8.0.121:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0_cudnn_8.8.0.121_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.8.0.121: [Ampere]"]
@@ -287,7 +287,7 @@ pytest:cudnn_8.8.0.121:Hopper:
     needs:
         - ["build:cudnn_8.8.0.121: [Hopper]"]
 
-pytest:cudnn_8.8.0.121:Hopper:
+pycudnntest:cudnn_8.8.0.121:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0_cudnn_8.8.0.121_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.8.0.121: [Hopper]"]
@@ -324,7 +324,7 @@ pytest:cudnn_8.9.2.31:Ampere:
     needs:
         - ["build:cudnn_8.9.2.31: [Ampere]"]
 
-pytest:cudnn_8.9.2.31:Ampere:
+pycudnntest:cudnn_8.9.2.31:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.2.31_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.9.2.31: [Ampere]"]
@@ -351,7 +351,7 @@ pytest:cudnn_8.9.2.31:Hopper:
     needs:
         - ["build:cudnn_8.9.2.31: [Hopper]"]
 
-pytest:cudnn_8.9.2.31:Hopper:
+pycudnntest:cudnn_8.9.2.31:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.2.31_torch
     extends: .pycudnntest:template
     dependencies: ["build:cudnn_8.9.2.31: [Hopper]"]
@@ -399,7 +399,7 @@ pytest:cudnn_8.9.3_latest:Ampere:
     needs:
         - ["build:cudnn_8.9.3_latest: [Ampere]"]
 
-pytest:cudnn_8.9.3_latest:Ampere:
+pycudnntest:cudnn_8.9.3_latest:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_torch
     extends:
         - .fetch_cudnn:template
@@ -432,7 +432,7 @@ pytest:cudnn_8.9.3_latest:Hopper:
     needs:
         - ["build:cudnn_8.9.3_latest: [Hopper]"]
 
-pytest:cudnn_8.9.3_latest:Hopper:
+pycudnntest:cudnn_8.9.3_latest:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_torch
     extends:
         - .fetch_cudnn:template

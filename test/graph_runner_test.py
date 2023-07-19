@@ -12,17 +12,11 @@ def test_conv_relu(jparams):
     conv_out = testGraph.conv(image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testGraph.relu(input = conv_out)
 
-    graph, variant_pack, workspace = testGraph.buildPyCudnnGraph()
+    graph = testGraph.buildPyCudnnGraph()
 
     # Front-end test: check shape inferencing
     assert jparams["expected_conv_out_dim"] == conv_out.pyCudnnTensor.get_dim()
 
     print(graph)
-    
-    graph.execute(variant_pack, workspace)
-    Y_actual = testGraph.output_tensors[-1]
 
-    Y_expected = testGraph.getReference()[-1]
-
-    # Compare with reference
-    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
+    testGraph.referenceCheck(atol=1e-2,rtol=1e-2)

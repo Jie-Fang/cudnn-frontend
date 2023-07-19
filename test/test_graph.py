@@ -14,7 +14,6 @@ class PytorchReference:
     # @details: all this function needs to do is unpack the pycudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv(kwargs):
-        print(type(kwargs['image']))
         return torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
 
     # @brief: run relu
@@ -100,6 +99,7 @@ class Operation(TestNode):
         self.refFunc = refFunc
 
     # @brief: Run the pycudnn node
+    # TODO(@mbreughe): extended to multiple output tensors
     def runPyCudnnCode(self, pyCudnnGraph):
         # Besides input tensors, all kwargs can just be passed through to the pycudnn method.
         # For the input tensor we need to extract the TestTensor's pycudnn tensor.
@@ -258,8 +258,10 @@ class TestGraph:
                 print ("Setting {} as output".format(node.name))
                 node.pyCudnnTensor.set_output(True)
 
-    # @brief: Build the pycudnn graph and reserve workspace
+    # @brief: Build the pycudnn graph
     # @note: this temporarily modifies the isVisited status of the nodes
+    # @return the pycudnn graph
+    # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
     def buildPyCudnnGraph(self):
         # Setting up graph
         graph = pycudnn.pygraph(self.graph_name, io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
@@ -273,22 +275,11 @@ class TestGraph:
         # Building graph
         graph.build()
 
-        # Creating workspace
-        workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
-
-        variant_pack = {}
-        for node in self.entrance_nodes:
-            variant_pack[node.pyCudnnTensor] = node.getValue()
-
-        for node in self.nodes:
-            if node.isOutputNode():
-                output_tensor = torch.zeros(*node.pyCudnnTensor.get_dim(), dtype=torch.float16, device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
-                self.output_tensors.append(output_tensor)
-                variant_pack[node.pyCudnnTensor] = self.output_tensors[-1]
-
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
-        return graph, variant_pack, workspace
+
+        self.cudnn_graph = graph
+        return graph
 
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the isVisited status of the nodes
@@ -307,3 +298,32 @@ class TestGraph:
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
         return output
+    
+    # @brief: Run the pycudnn implementation and the reference, and compare
+    # @note: This assumes buildPyCudnnGraph has already been run
+    def referenceCheck(self, atol=1e-2, rtol=1e-2):
+        # Creating workspace
+        workspace = torch.empty(self.cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+
+        variant_pack = {}
+        for node in self.entrance_nodes:
+            variant_pack[node.pyCudnnTensor] = node.getValue()
+
+        for node in self.nodes:
+            if node.isOutputNode():
+                # TODO(@mbreughe): infer layout
+                output_tensor = torch.zeros(*node.pyCudnnTensor.get_dim(), dtype=convert_to_torch_type(node.pyCudnnTensor.get_data_type()), device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
+                self.output_tensors.append(output_tensor)
+                variant_pack[node.pyCudnnTensor] = self.output_tensors[-1]
+
+        # Run the pycudnn graph
+        self.cudnn_graph.execute(variant_pack, workspace)
+
+        # TODO(@mbreughe): adjust this for multiple outputs.
+        Y_actual = self.output_tensors[-1]
+
+        # Run the reference
+        Y_expected = self.getReference()[-1]
+
+        # Compare with reference
+        torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
