@@ -320,6 +320,11 @@ public:
     Genstats_attributes() : Operation(Tag::Genstats) {}
     Genstats_attributes(const std::string name) : Operation(name, Tag::Genstats) {}
 
+    Genstats_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
     Genstats_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
@@ -376,11 +381,6 @@ public:
     Conv_fprop_attributes() : Operation(Tag::Conv_fprop) {}
     Conv_fprop_attributes(const std::string name) : Operation(name, Tag::Conv_fprop) {}
 
-    Conv_fprop_attributes& set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
     std::vector<int64_t> get_padding() const {
         return padding;
     }
@@ -408,6 +408,16 @@ public:
     Conv_fprop_attributes& set_dilation(std::vector<int64_t> value) {
         dilation = value;
         is_dilation_set = true;
+        return *this;
+    }
+    
+    Conv_fprop_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Conv_fprop_attributes& set_compute_data_type(DataType_t const value) {
+        compute_data_type = value;
         return *this;
     }
 
@@ -685,6 +695,11 @@ public:
                                 
     Matmul_attributes() : Operation(Tag::Matmul) {}
     Matmul_attributes(const std::string name) : Operation(name, Tag::Matmul) {}
+    
+    Matmul_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
 
     Matmul_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -742,11 +757,6 @@ public:
     Pointwise_attributes() : Operation(Tag::Pointwise) {}
     Pointwise_attributes(const std::string name) : Operation(name, Tag::Pointwise) {}
 
-    Pointwise_attributes& set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
     std::optional<PointwiseMode_t> get_mode() const {
         return mode;
     }
@@ -762,6 +772,16 @@ public:
 
     Pointwise_attributes& set_axis(int64_t const axis) {
         this->axis = axis;
+        return *this;
+    }
+
+    Pointwise_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Pointwise_attributes& set_compute_data_type(DataType_t const value) {
+        compute_data_type = value;
         return *this;
     }
 

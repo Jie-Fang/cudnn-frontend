@@ -174,22 +174,32 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     conv(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type,
-        std::vector<int64_t> const& padding,
-        std::vector<int64_t> const& stride,
-        std::vector<int64_t> const& dilation
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_attributes_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_attributes_ptr
+        , std::vector<int64_t> const& padding
+        , std::vector<int64_t> const& stride
+        , std::vector<int64_t> const& dilation
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Conv_fprop_attributes(name)
+        auto attributes = cudnn_frontend::graph::Conv_fprop_attributes()
                         .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
                         .set_dilation(dilation);
-        props.inputs.X = image_props_ptr;
-        props.inputs.W = weight_props_ptr;
-        auto [Y] = graph.conv_fprop(props.inputs, props);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.X = image_attributes_ptr;
+        attributes.inputs.W = weight_attributes_ptr;
+        auto [Y] = graph.conv_fprop(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         Y->set_is_virtual(true);
@@ -203,22 +213,22 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     wgrad(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_attributes_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss_attributes_ptr,
         std::vector<int64_t> const& padding,
         std::vector<int64_t> const& stride,
-        std::vector<int64_t> const& dilation
+        std::vector<int64_t> const& dilation,
+        cudnn_frontend::DataType_t const& compute_data_type,
+        std::string const& name
     ) {
-        auto props = cudnn_frontend::graph::Conv_wgrad_attributes(name)
+        auto attributes = cudnn_frontend::graph::Conv_wgrad_attributes()
                         .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
                         .set_dilation(dilation);
-        props.inputs.X = image_props_ptr;
-        props.inputs.DY = loss_props_ptr;
-        auto [DW] = graph.conv_wgrad(props.inputs, props);
+        attributes.inputs.X = image_attributes_ptr;
+        attributes.inputs.DY = loss_attributes_ptr;
+        auto [DW] = graph.conv_wgrad(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         DW->set_is_virtual(true);
@@ -232,15 +242,25 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     matmul(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& A_attributes_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B_attributes_ptr,
+        cudnn_frontend::DataType_t const& compute_data_type,
+        py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Matmul_attributes(name).set_compute_data_type(compute_data_type);
-        props.inputs.A = image_props_ptr;
-        props.inputs.B = weight_props_ptr;
-        auto [C] = graph.matmul(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.A = A_attributes_ptr;
+        attributes.inputs.B = B_attributes_ptr;
+        auto [C] = graph.matmul(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         C->set_is_virtual(true);
@@ -254,15 +274,25 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     bias(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_attributes_ptr
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
-        props.inputs.IN_0 = input_props_ptr;
-        props.inputs.IN_1 = bias_props_ptr;
-        auto [OUT_0] = graph.pointwise(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.IN_0 = input_attributes_ptr;
+        attributes.inputs.IN_1 = bias_attributes_ptr;
+        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -276,15 +306,25 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     scale(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_attributes_ptr
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
-        props.inputs.IN_0 = input_props_ptr;
-        props.inputs.IN_1 = scale_props_ptr;
-        auto [OUT_0] = graph.pointwise(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.IN_0 = input_attributes_ptr;
+        attributes.inputs.IN_1 = scale_attributes_ptr;
+        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -298,13 +338,23 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     relu(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
-        props.inputs.IN_0 = input_props_ptr;
-        auto [OUT_0] = graph.pointwise(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.IN_0 = input_attributes_ptr;
+        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -314,13 +364,23 @@ public:
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2UL>
     genstats(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Genstats_attributes(name).set_compute_data_type(compute_data_type);
-        props.inputs.X = input_props_ptr;
-        auto [SUM, SQ_SUM] = graph.genstats(props.inputs.X, props);
+        auto attributes = cudnn_frontend::graph::Genstats_attributes().set_compute_data_type(compute_data_type);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.X = input_attributes_ptr;
+        auto [SUM, SQ_SUM] = graph.genstats(attributes.inputs.X, attributes);
 
         // Default virtualness in python is true
         SUM->set_is_virtual(true);
@@ -335,13 +395,23 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     elu(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attributes_ptr
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
-        props.inputs.IN_0 = input_props_ptr;
-        auto [OUT_0] = graph.pointwise(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.IN_0 = attributes_ptr;
+        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -355,13 +425,23 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     gelu(
-        std::string const& name
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
         , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Pointwise_attributes(name).set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
-        props.inputs.IN_0 = input_props_ptr;
-        auto [OUT_0] = graph.pointwise(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        attributes.inputs.IN_0 = input_attributes_ptr;
+        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -626,61 +706,160 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("inv_variance"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("genstats", &PyGraph::genstats,
-             py::arg_v("name", "genstats"),
-             py::arg("input"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("genstats", &PyGraph::genstats
+             , py::arg("input")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
         )
-        .def("conv", &PyGraph::conv,
-             py::arg_v("name", "conv_fprop"),
-             py::arg("image"),
-             py::arg("weight"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v{"padding", default_vector()},
-             py::arg_v{"stride", default_vector()},
-             py::arg_v{"dilation", default_vector()}
+        .def("conv", &PyGraph::conv
+             , py::arg("image")
+             , py::arg("weight")
+             , py::arg_v{"padding", default_vector()}
+             , py::arg_v{"stride", default_vector()}
+             , py::arg_v{"dilation", default_vector()}
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Perform convolution operation with the given inputs.
+
+                Args:
+                    image (cudnn_tensor): The image tensor.
+                    weight (cudnn_tensor): The weight tensor.
+                    padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
+                    stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
+                    dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The created tensor.
+            )pbdoc"
         )
-        .def("wgrad", &PyGraph::wgrad,
-             py::arg_v("name", "conv_wgrad"),
-             py::arg("image"),
-             py::arg("loss"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v{"padding", default_vector()},
-             py::arg_v{"stride", default_vector()},
-             py::arg_v{"dilation", default_vector()}
+        .def("wgrad", &PyGraph::wgrad
+             , py::arg("image")
+             , py::arg("loss")
+             , py::arg_v{"padding", default_vector()}
+             , py::arg_v{"stride", default_vector()}
+             , py::arg_v{"dilation", default_vector()}
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Compute weight gradients using the given inputs and loss.
+
+                Args:
+                    image (cudnn_tensor): The image tensor.
+                    loss (cudnn_tensor): The loss tensor.
+                    padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
+                    stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
+                    dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The created tensor.
+            )pbdoc"
         )
-        .def("matmul", &PyGraph::matmul,
-             py::arg_v("name", "matmul"),
-             py::arg("image"),
-             py::arg("weight"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("matmul", &PyGraph::matmul
+             , py::arg("A")
+             , py::arg("B")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Perform matrix multiplication of two tensors A and B.
+
+                Args:
+                    A (cudnn_tensor): The first tensor.
+                    B (cudnn_tensor): The second matrix tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the matrix multiplication.
+            )pbdoc"
         )
-        .def("bias", &PyGraph::bias,
-             py::arg_v("name", "bias"),
-             py::arg("input"),
-             py::arg("bias"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("bias", &PyGraph::bias
+             , py::arg("input")
+             , py::arg("bias")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Add bias to the input.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    bias (cudnn_tensor): The bias tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of adding bias to the input.
+            )pbdoc"
         )
-        .def("scale", &PyGraph::scale,
-             py::arg_v("name", "scale"),
-             py::arg("input"),
-             py::arg("scale"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("scale", &PyGraph::scale
+             , py::arg("input")
+             , py::arg("scale")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Scale the input.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    scale (cudnn_tensor): The scale tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the scaling operation.
+            )pbdoc"
         )
-        .def("relu", &PyGraph::relu,
-             py::arg_v("name", "relu"),
-             py::arg("input"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("relu", &PyGraph::relu
+             , py::arg("input")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Apply the Rectified Linear Unit (ReLU) activation function to the input.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the ReLU activation.
+            )pbdoc"
         )
-        .def("elu", &PyGraph::elu,
-             py::arg_v("name", "elu"),
-             py::arg("input"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("elu", &PyGraph::elu
+             , py::arg("input")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Apply the Exponential Linear Unit (ELU) activation function to the input.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the ELU activation.
+            )pbdoc"
         )
-        .def("gelu", &PyGraph::gelu,
-             py::arg_v("name", "gelu"),
-             py::arg("input"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("gelu", &PyGraph::gelu
+             , py::arg("input")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Apply the Gaussian Error Linear Unit (GELU) activation function to the input.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the GELU activation.
+            )pbdoc"
         )
         .def("scaled_dot_product_attention", &PyGraph::scaled_dot_product_attention
              , py::arg("q")
@@ -712,6 +891,29 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v("dropout", py::none())
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
              , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Perform scaled dot-product flash attention.
+
+                Args:
+                    q (cudnn_tensor): The query data.
+                    k (cudnn_tensor): The key data.
+                    v (cudnn_tensor): The value data.
+                    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+                    seq_len_k (Optional[cudnn_tensor]): The sequence length of the key.
+                    is_inference (bool): Whether it is an inference step or training step.
+                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+                    bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
+                    use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
+                    use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
+                    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): The name of the operation.
+
+                Returns:
+                    cudnn_tensor: The result of scaled dot-product flash attention.
+                    Optional[cudnn_tensor]: The softmax statistics in case the operation is in a training step.
+            )pbdoc"
         )
         .def("build", &PyGraph::build)
         .def("check_support", &PyGraph::check_support)
