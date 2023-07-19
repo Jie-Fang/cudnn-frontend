@@ -1,13 +1,13 @@
 import os, json
 
 def pytest_generate_tests(metafunc):
-    JSON_TEST_LIST_PARAM = "params"
+    JSON_TEST_LIST_PARAM = "jparams"
     # For functions with "params" as argument
     if JSON_TEST_LIST_PARAM in metafunc.fixturenames:
         # Find the json with the coressponding name
         # TODO(@mbreughe): make the base path a variable
         base_path = os.path.dirname(os.path.abspath(__file__))
-        filename = os.path.join(base_path, "{}.json".format(metafunc.function.__name__))
+        filename = os.path.join(base_path, "json", "{}.json".format(metafunc.function.__name__))
         if os.path.exists(filename):
             params = []
             with open(filename) as ifh:

@@ -1,21 +1,21 @@
 import pytest
 import torch
 
-from testgraph import TestGraph, TestTensor
+from test_graph import TestGraph, TestTensor
 
 # Dictionaries defined in test_conv_relu.json
-def test_conv_relu(params):
+def test_conv_relu(jparams):
     testGraph = TestGraph()
-    X = testGraph.tensor(dim=params["in_dim"])
-    W = testGraph.tensor(dim=params["filter_dim"])
+    X = testGraph.tensor(dim=jparams["in_dim"])
+    W = testGraph.tensor(dim=jparams["filter_dim"])
     
-    conv_out = testGraph.conv(image = X, weight = W, padding = params["padding"], stride = params["stride"], dilation = params["dilation"])
+    conv_out = testGraph.conv(image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testGraph.relu(input = conv_out)
 
     graph, variant_pack, workspace = testGraph.buildPyCudnnGraph()
 
     # Front-end test: check shape inferencing
-    assert params["expected_conv_out_dim"] == conv_out.pyCudnnTensor.get_dim()
+    assert jparams["expected_conv_out_dim"] == conv_out.pyCudnnTensor.get_dim()
 
     print(graph)
     
