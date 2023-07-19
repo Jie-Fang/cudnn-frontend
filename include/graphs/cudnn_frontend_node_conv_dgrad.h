@@ -13,7 +13,7 @@ class DgradNode : public INode {
     Conv_dgrad_attributes options;
 public:
 
-    DgradNode(std::string const& name, Conv_dgrad_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+    DgradNode(Conv_dgrad_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::DGRAD;
@@ -105,7 +105,6 @@ public:
                                         .setAlpha(1.f)
                                         .setBeta(0.f)
                                         .build();
-        operations.emplace(name, std::make_shared<Operation_v8>(std::move(dgrad_operation)));
 
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
@@ -113,11 +112,15 @@ public:
             , options.inputs.W
             , options.inputs.DY
         };
+        
+        std::vector<uid_t> uids_in_operation;
         for(auto const& tensor: tensors_involved_in_operation) {
             if(tensor && tensor->get_is_virtual() == false) {
-                tensors_in_operations[name].emplace_back(tensor->get_uid());
+                uids_in_operation.push_back(tensor->get_uid());
             }
         }
+
+        operations.push_back({std::move(dgrad_operation), std::move(uids_in_operation)});
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built DgradNode operation." << std::endl;
 

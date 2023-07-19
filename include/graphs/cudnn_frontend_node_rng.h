@@ -12,7 +12,7 @@ class RngNode : public INode {
     Rng_attributes options;
 public:
 
-    RngNode(std::string const& name, Rng_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+    RngNode(Rng_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::RNG;
@@ -45,6 +45,13 @@ public:
         try {
         #endif
 
+        // Push all real tensors as required for operation execution.
+        auto const& tensors_involved_in_operation = {
+            options.inputs.Seed
+            , options.inputs.Offset
+            , options.outputs.Y
+        };
+
             if(options.get_distribution() == RngDistribution_t::BERNOULLI) {
                 auto rng_descriptor = cudnn_frontend::RngDescBuilder()
                                                     .setRngDistribution(options.get_distribution())
@@ -58,7 +65,16 @@ public:
                                                     .setSeedDesc(*(tensors.at(options.inputs.Seed->get_uid())))
                                                     .setOffsetDesc(*(tensors.at(options.inputs.Offset->get_uid())))
                                                     .build();
-                    operations.emplace(name, std::make_shared<Operation_v8>(std::move(Rng_operation)));
+                    
+                    std::vector<uid_t> uids_in_operation;
+                    for(auto const& tensor: tensors_involved_in_operation) {
+                        if(tensor && tensor->get_is_virtual() == false) {
+                            uids_in_operation.push_back(tensor->get_uid());
+                        }
+                    }
+
+                    operations.push_back({std::move(Rng_operation), std::move(uids_in_operation)});
+                    
                 }
                 else {
                     auto Rng_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
@@ -66,22 +82,18 @@ public:
                                                     .setRngDesc(rng_descriptor)
                                                     .setSeed(options.get_seed().value())
                                                     .build();
-                    operations.emplace(name, std::make_shared<Operation_v8>(std::move(Rng_operation)));
+                    
+                    std::vector<uid_t> uids_in_operation;
+                    for(auto const& tensor: tensors_involved_in_operation) {
+                        if(tensor && tensor->get_is_virtual() == false) {
+                            uids_in_operation.push_back(tensor->get_uid());
+                        }
+                    }
+
+                    operations.push_back({std::move(Rng_operation), std::move(uids_in_operation)});
+                    
                 }
             }
-
-        // Push all real tensors as required for operation execution.
-        auto const& tensors_involved_in_operation = {
-            options.inputs.Seed
-            , options.inputs.Offset
-            , options.outputs.Y
-        };
-        auto& tensors_in_operation = tensors_in_operations[name];
-        for(auto const& tensor: tensors_involved_in_operation) {
-            if(tensor && tensor->get_is_virtual() == false) {
-                tensors_in_operation.emplace_back(tensor->get_uid());
-            }
-        }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built RngNode operation." << std::endl;
 

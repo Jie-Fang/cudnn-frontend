@@ -73,7 +73,7 @@ public:
     PyGraph(std::string const &name,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
-            cudnn_frontend::DataType_t compute_data_type) : graph(name) ,handle(nullptr), is_built(false) {
+            cudnn_frontend::DataType_t compute_data_type) : graph() ,handle(nullptr), is_built(false) {
                 graph.set_compute_data_type(compute_data_type)
                      .set_intermediate_data_type(intermediate_data_type)
                      .set_io_data_type(io_data_type);
@@ -131,7 +131,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::Batchnorm_attributes(name)
+        auto props = cudnn_frontend::graph::Batchnorm_attributes()
                         .set_forward_phase(forward_phase)
                         .set_compute_data_type(compute_data_type)
                         .set_epsilon(epsilon)
@@ -156,7 +156,7 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& inv_variance_props_ptr,
         cudnn_frontend::DataType_t const& compute_data_type
     ) {
-        auto props = cudnn_frontend::graph::DBN_attributes(name)
+        auto props = cudnn_frontend::graph::DBN_attributes()
                         .set_compute_data_type(compute_data_type);
         props.inputs.X = input_props_ptr;
         props.inputs.DY = grad_props_ptr;

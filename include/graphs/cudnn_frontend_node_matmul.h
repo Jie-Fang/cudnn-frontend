@@ -13,7 +13,7 @@ namespace cudnn_frontend::graph {
         Matmul_attributes options;
     public:
 
-        MatmulNode(std::string const& name, Matmul_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+        MatmulNode(Matmul_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
         
         Type getType() override final {
             return Type::MATMUL;
@@ -80,6 +80,17 @@ namespace cudnn_frontend::graph {
             #ifndef NV_CUDNN_DISABLE_EXCEPTION
             try {
             #endif
+            
+        
+            // Push all real tensors as required for operation execution.
+            auto const& tensors_involved_in_operation = {
+                options.inputs.A
+                , options.inputs.B
+                , options.inputs.M_override
+                , options.inputs.N_override
+                , options.inputs.K_override
+                , options.outputs.C
+            };
 
             // matmul descriptor
             auto matmul_descriptor = cudnn_frontend::MatMulDescBuilder()
@@ -96,7 +107,14 @@ namespace cudnn_frontend::graph {
                                                 .setmOverrideDesc(*tensors.at(options.inputs.M_override->get_uid()))
                                                 .setnOverrideDesc(*tensors.at(options.inputs.N_override->get_uid()))
                                                 .build();
-                operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
+                std::vector<uid_t> uids_in_operation;
+                for(auto const& tensor: tensors_involved_in_operation) {
+                    if(tensor && tensor->get_is_virtual() == false) {
+                        uids_in_operation.push_back(tensor->get_uid());
+                    }
+                }
+
+                operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
             }
             else if(options.inputs.K_override) {
                 // Create the matmul operation.
@@ -108,7 +126,14 @@ namespace cudnn_frontend::graph {
                                                 .setmOverrideDesc(*tensors.at(options.inputs.M_override->get_uid()))
                                                 .setkOverrideDesc(*tensors.at(options.inputs.K_override->get_uid()))
                                                 .build();
-                operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
+                std::vector<uid_t> uids_in_operation;
+                for(auto const& tensor: tensors_involved_in_operation) {
+                    if(tensor && tensor->get_is_virtual() == false) {
+                        uids_in_operation.push_back(tensor->get_uid());
+                    }
+                }
+
+                operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
             }
             else {
                 // Create the matmul operation.
@@ -118,22 +143,14 @@ namespace cudnn_frontend::graph {
                                                 .setcMatDesc(*tensors.at(options.outputs.C->get_uid()))
                                                 .setmatmulDesc(matmul_descriptor)
                                                 .build();
-                operations.emplace(name, std::make_shared<Operation_v8>(std::move(matmul_operation)));
-            }
-        
-            // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {
-                options.inputs.A
-                , options.inputs.B
-                , options.inputs.M_override
-                , options.inputs.N_override
-                , options.inputs.K_override
-                , options.outputs.C
-            };
-            for(auto const& tensor: tensors_involved_in_operation) {
-                if(tensor && tensor->get_is_virtual() == false) {
-                    tensors_in_operations[name].emplace_back(tensor->get_uid());
+                std::vector<uid_t> uids_in_operation;
+                for(auto const& tensor: tensors_involved_in_operation) {
+                    if(tensor && tensor->get_is_virtual() == false) {
+                        uids_in_operation.push_back(tensor->get_uid());
+                    }
                 }
+
+                operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
             }
 
             getLogger() << "[cudnn_frontend] INFO: " << "Built MatmulNode operation for node name " << name << std::endl;

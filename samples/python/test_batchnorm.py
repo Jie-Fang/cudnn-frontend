@@ -35,7 +35,7 @@ def test_bn():
     Y_expected = model(x_gpu, running_mean_gpu, running_var_gpu, scale_gpu, bias_gpu, epsilon_cpu.item(), momentum_cpu.item())
 
     # Cudnn code
-    graph = pycudnn.pygraph("BN", io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride())
@@ -98,7 +98,7 @@ def test_drelu_dadd_dbn():
     dy_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
 
     # Cudnn code
-    graph = pycudnn.pygraph("DBN", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
     # Bool type is not supported by dlpack
     x_mask_gpu = torch.randint(0, 2, [N, int(C / 8), H, W], requires_grad=False, device="cuda", dtype=torch.uint8).to(memory_format=torch.channels_last)

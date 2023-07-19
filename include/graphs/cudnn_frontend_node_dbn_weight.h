@@ -14,7 +14,7 @@ class DBNWeightNode : public INode {
     DBN_weight_attributes options;
 public:
 
-    DBNWeightNode(std::string const& name, DBN_weight_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+    DBNWeightNode(DBN_weight_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::DBN_WEIGHT;
@@ -111,7 +111,6 @@ public:
                                         .setdyDesc(*(tensors.at(options.inputs.DY->get_uid())))
                                         .setDScaleAndDBias(*(tensors.at(options.outputs.DSCALE->get_uid())), *(tensors.at(options.outputs.DBIAS->get_uid())))
                                         .build();
-        operations.emplace(name, std::make_shared<Operation_v8>(std::move(batchnorm_operation)));
         
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
@@ -126,11 +125,15 @@ public:
             , options.outputs.EQ_SCALE_DY
             , options.outputs.EQ_SCALE_X
         };
+        
+        std::vector<uid_t> uids_in_operation;
         for(auto const& tensor: tensors_involved_in_operation) {
             if(tensor && tensor->get_is_virtual() == false) {
-                tensors_in_operations[name].emplace_back(tensor->get_uid());
+                uids_in_operation.push_back(tensor->get_uid());
             }
         }
+
+        operations.push_back({std::move(batchnorm_operation), std::move(uids_in_operation)});
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built DBNWeightNode operation." << std::endl;
 

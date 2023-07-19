@@ -27,13 +27,13 @@ def test_conv_bias_relu():
     model = CSBR().eval().to("cuda").to(torch.float16)
     Y_expected = model(X_gpu, W_gpu, b = B_gpu, padding = padding, stride = stride, dilation = dilation)
 
-    graph = pycudnn.pygraph("conv-bias", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
     B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = convert_to_cudnn_type(B_gpu.dtype))
 
-    conv_output = graph.conv(name = "conv", image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
+    conv_output = graph.conv(image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
 
     bias_output = graph.bias(name = "bias", input = conv_output, bias = B)
 
@@ -62,12 +62,12 @@ def test_conv_relu():
     Y_expected = model(X_gpu, W_gpu, padding = padding, stride = stride, dilation = dilation)
 
     # Cudnn code
-    graph = pycudnn.pygraph("conv-bias", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
     
-    conv_output = graph.conv(name = "conv", image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
+    conv_output = graph.conv(image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
 
     Y = graph.relu(name = "relu", input = conv_output)
     Y.set_output(True)

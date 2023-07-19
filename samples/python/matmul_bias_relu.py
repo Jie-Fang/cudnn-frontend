@@ -8,7 +8,7 @@ if pycudnn.get_cudnn_version() < 8500:
     print("cudnn version does not support matmul+bias fusion for specified layout")
     exit(0)
 
-graph = pycudnn.pygraph("nvfuser", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
 image = graph.tensor(name = "image", dim = [4,16,64], stride = [1024,1,16])
 weight = graph.tensor(name = "weight", dim = [4,64,16], stride = [1024,1,64])

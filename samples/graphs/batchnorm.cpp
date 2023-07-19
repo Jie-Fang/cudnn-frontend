@@ -27,7 +27,7 @@
 
 TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("bn_finalize");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::FLOAT)
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -58,7 +58,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     inputs.EXP_AVG = exp_avg;
     inputs.ACCUM_COUNT = accum_count;
 
-    auto bn_finalize_options = fe::graph::BN_finalize_attributes("bn_finalize");
+    auto bn_finalize_options = fe::graph::BN_finalize_attributes();
     auto [eq_scale, eq_bias, next_running_mean, next_running_var] = graph.bn_finalize(inputs, bn_finalize_options);
 
     #if (CUDNN_VERSION < 8400)
@@ -119,7 +119,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
 TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("SGBN_Add_Relu");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -141,7 +141,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
     auto momentum = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_data_type(fe::DataType_t::FLOAT));
     
-    auto batchnorm_options = fe::graph::Batchnorm_attributes("batchnorm").set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon).set_momentum(momentum);
+    auto batchnorm_options = fe::graph::Batchnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon).set_momentum(momentum);
     auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(inputs, batchnorm_options);
     bn_output->set_is_virtual(true);
 
@@ -152,11 +152,11 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     
     auto A = graph.tensor(fe::graph::Tensor_attributes().set_name("A").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::HALF));
     A->generateStrides(CUDNN_TENSOR_NHWC);
-    auto add_options = fe::graph::Pointwise_attributes("add").set_mode(fe::PointwiseMode_t::ADD);
+    auto add_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto add_output = graph.pointwise(bn_output, A, add_options);
     add_output->set_is_virtual(true);
 
-    auto relu_options = fe::graph::Pointwise_attributes("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto Y = graph.pointwise(add_output, relu_options);
 
     #if (CUDNN_VERSION < 8700)
@@ -213,7 +213,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 
 TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("DBN_Add_Relu");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -224,7 +224,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto input_mask = graph.tensor(fe::graph::Tensor_attributes().set_name("Mask").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::BOOLEAN));
     input_mask->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto mul_options = fe::graph::Pointwise_attributes("drelu").set_mode(fe::PointwiseMode_t::MUL);
+    auto mul_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto DX_drelu = graph.pointwise(DY, input_mask, mul_options);
 
     // NOTE: Toggle DADD output by toggling DX_DRELU virtualness
@@ -247,7 +247,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::FLOAT));
 
-    auto DBN_options = fe::graph::DBN_attributes("DBN").set_epsilon(epsilon);
+    auto DBN_options = fe::graph::DBN_attributes().set_epsilon(epsilon);
     auto [DX, dscale, dbias] = graph.batchnorm_backward(inputs, DBN_options);
     DX->set_is_virtual(false);
     dscale->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);

@@ -115,11 +115,8 @@ protected:
             }
 
             // Roll up operations to parent node, so that parent can too partition operation graphs.
-            for (auto const &item : sub_node->get_operations()) {
-                operations.emplace(item.first, item.second);
-            }
-            for (auto const &item : sub_node->tensors_in_operations) {
-                tensors_in_operations.emplace(item.first, item.second);
+            for(auto && operation_with_uids : sub_node->operations) {
+                operations.push_back(std::move(operation_with_uids));
             }
         }
         return {error_code_t::OK, ""};
@@ -241,7 +238,7 @@ public:
         return status;
     }
 
-    INode(std::string const& name, detail::Context const& context) : name(name), context(context) {}
+    INode(detail::Context const& context): context(context) {}
 
     virtual void serialize(json& j) const {
         j["name"] = name;

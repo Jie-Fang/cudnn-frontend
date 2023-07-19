@@ -39,7 +39,7 @@ def test_conv_genstats():
     Y_expected, sum_expected, sq_sum_expected = model(scale, bias, X_gpu, W_gpu, padding = padding, stride = stride, dilation = dilation)
 
     # Cudnn code
-    graph = pycudnn.pygraph("conv-genstats", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.HALF, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.HALF, compute_data_type = pycudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
@@ -50,7 +50,7 @@ def test_conv_genstats():
     S_OUT = graph.scale(name = "scale", input = X, scale = S)
     B_OUT = graph.bias(name = "bias", input = S_OUT, bias = B)
     CONV_IN = graph.relu(name = "relu", input = B_OUT)
-    Y = graph.conv(name = "conv", image = CONV_IN, weight = W, padding = padding, stride = stride, dilation = dilation)
+    Y = graph.conv(image = CONV_IN, weight = W, padding = padding, stride = stride, dilation = dilation)
     Y.set_output(True)
 
     SUM, SQ_SUM = graph.genstats(name = "genstats", input = Y)

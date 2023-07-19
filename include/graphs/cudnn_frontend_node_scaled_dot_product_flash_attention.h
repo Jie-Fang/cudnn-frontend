@@ -21,7 +21,7 @@ namespace cudnn_frontend::graph {
     public:
         Scaled_dot_product_flash_attention_attributes options;
 
-        ScaledDotProductFlashAttentionNode(std::string const& name, Scaled_dot_product_flash_attention_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+        ScaledDotProductFlashAttentionNode(Scaled_dot_product_flash_attention_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
         Type getType() override final {
             return Type::COMPOSITE;
@@ -79,11 +79,11 @@ namespace cudnn_frontend::graph {
                 .set_dim({b, h, s_q, s_kv})
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
-            auto bmm1_options = Matmul_attributes("bmm1");
-            bmm1_options.inputs.A = options.inputs.Q;
-            bmm1_options.inputs.B = options.inputs.K;
-            last_output = bmm1_options.outputs.C = bmm1_output;
-            auto bmm1_node = std::make_unique<MatmulNode>(bmm1_options.get_name(), std::move(bmm1_options), context);
+            Matmul_attributes bmm1_attributes;
+            bmm1_attributes.inputs.A = options.inputs.Q;
+            bmm1_attributes.inputs.B = options.inputs.K;
+            last_output = bmm1_attributes.outputs.C = bmm1_output;
+            auto bmm1_node = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
             sub_nodes.emplace_back(std::move(bmm1_node));
             
             // Optional scale
@@ -92,12 +92,12 @@ namespace cudnn_frontend::graph {
                 auto attn_scale_output = std::make_shared<Tensor_attributes>();
                 attn_scale_output->set_is_virtual(true);
 
-                auto scale_options = Pointwise_attributes("attn_scale");
-                scale_options.set_mode(PointwiseMode_t::MUL);
-                scale_options.inputs.IN_0 = last_output;
-                scale_options.inputs.IN_1 = options.inputs.Attn_scale;
-                last_output = scale_options.outputs.OUT_0 = attn_scale_output;
-                auto scale_node = std::make_unique<PointwiseNode>(scale_options.get_name(), std::move(scale_options), context);
+                Pointwise_attributes scale_attributes;
+                scale_attributes.set_mode(PointwiseMode_t::MUL);
+                scale_attributes.inputs.IN_0 = last_output;
+                scale_attributes.inputs.IN_1 = options.inputs.Attn_scale;
+                last_output = scale_attributes.outputs.OUT_0 = attn_scale_output;
+                auto scale_node = std::make_unique<PointwiseNode>(std::move(scale_attributes), context);
                 sub_nodes.emplace_back(std::move(scale_node));
             }
             
@@ -107,12 +107,12 @@ namespace cudnn_frontend::graph {
                 auto bias_output = std::make_shared<Tensor_attributes>();
                 bias_output->set_is_virtual(true);
 
-                Pointwise_attributes add_options("bias");
-                add_options.set_mode(PointwiseMode_t::ADD);
-                add_options.inputs.IN_0 = last_output;
-                add_options.inputs.IN_1 = options.inputs.Bias;
-                last_output = add_options.outputs.OUT_0 = bias_output;
-                auto add_node = std::make_unique<PointwiseNode>(add_options.get_name(), std::move(add_options), context);
+                Pointwise_attributes add_attributes;
+                add_attributes.set_mode(PointwiseMode_t::ADD);
+                add_attributes.inputs.IN_0 = last_output;
+                add_attributes.inputs.IN_1 = options.inputs.Bias;
+                last_output = add_attributes.outputs.OUT_0 = bias_output;
+                auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
                 sub_nodes.emplace_back(std::move(add_node));
             }
 
@@ -121,22 +121,22 @@ namespace cudnn_frontend::graph {
                 auto row_index_output = std::make_shared<Tensor_attributes>();
                 row_index_output->set_is_virtual(true);
 
-                Pointwise_attributes row_index_options("row_index");
-                row_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-                row_index_options.inputs.IN_0 = last_output;
-                row_index_options.outputs.OUT_0 = row_index_output;
-                auto row_index_node = std::make_unique<PointwiseNode>(row_index_options.get_name(), std::move(row_index_options), context);
+                Pointwise_attributes row_index_attributes;
+                row_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
+                row_index_attributes.inputs.IN_0 = last_output;
+                row_index_attributes.outputs.OUT_0 = row_index_output;
+                auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
                 sub_nodes.emplace_back(std::move(row_index_node));
 
                 // Lower options to generate col index options
                 auto col_index_output = std::make_shared<Tensor_attributes>();
                 col_index_output->set_is_virtual(true);
 
-                Pointwise_attributes col_index_options("col_index");
-                col_index_options.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-                col_index_options.inputs.IN_0 = last_output;
-                col_index_options.outputs.OUT_0 = col_index_output;
-                auto col_index_node = std::make_unique<PointwiseNode>(col_index_options.get_name(), std::move(col_index_options), context);
+                Pointwise_attributes col_index_attributes;
+                col_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
+                col_index_attributes.inputs.IN_0 = last_output;
+                col_index_attributes.outputs.OUT_0 = col_index_output;
+                auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
                 sub_nodes.emplace_back(std::move(col_index_node));
 
                 // Lower options to greater than options
@@ -145,12 +145,12 @@ namespace cudnn_frontend::graph {
                     // Hard coding data type
                     .set_data_type(DataType_t::BOOLEAN);
 
-                Pointwise_attributes greater_than_options("greater_than");
-                greater_than_options.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
-                greater_than_options.inputs.IN_0 = row_index_output;
-                greater_than_options.inputs.IN_1 = col_index_output;
-                greater_than_options.outputs.OUT_0 = row_greater_than_col_output;
-                auto greater_than_node = std::make_unique<PointwiseNode>(greater_than_options.get_name(), std::move(greater_than_options), context);
+                Pointwise_attributes greater_than_attributes;
+                greater_than_attributes.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
+                greater_than_attributes.inputs.IN_0 = row_index_output;
+                greater_than_attributes.inputs.IN_1 = col_index_output;
+                greater_than_attributes.outputs.OUT_0 = row_greater_than_col_output;
+                auto greater_than_node = std::make_unique<PointwiseNode>(std::move(greater_than_attributes), context);
                 sub_nodes.emplace_back(std::move(greater_than_node));
 
                 // Lower options to binary select options
@@ -164,13 +164,13 @@ namespace cudnn_frontend::graph {
                 auto causal_mask_output = std::make_shared<Tensor_attributes>();
                 causal_mask_output->set_is_virtual(true);
 
-                Pointwise_attributes binary_select_options("binary_select");
-                binary_select_options.set_mode(PointwiseMode_t::BINARY_SELECT);
-                binary_select_options.inputs.IN_0 = last_output;
-                binary_select_options.inputs.IN_1 = negative_inf;
-                binary_select_options.inputs.IN_2 = row_greater_than_col_output;
-                last_output = binary_select_options.outputs.OUT_0 = causal_mask_output;
-                auto binary_select_node = std::make_unique<PointwiseNode>(binary_select_options.get_name(), std::move(binary_select_options), context);
+                Pointwise_attributes binary_select_attributes;
+                binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
+                binary_select_attributes.inputs.IN_0 = last_output;
+                binary_select_attributes.inputs.IN_1 = negative_inf;
+                binary_select_attributes.inputs.IN_2 = row_greater_than_col_output;
+                last_output = binary_select_attributes.outputs.OUT_0 = causal_mask_output;
+                auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
                 sub_nodes.emplace_back(std::move(binary_select_node));
             }
 
@@ -178,12 +178,12 @@ namespace cudnn_frontend::graph {
             auto softmax_output = std::make_shared<Tensor_attributes>();
             softmax_output->set_is_virtual(true);
 
-            auto softmax_options = Softmax_attributes("softmax");
-            softmax_options.use_stats = true; // As this is flash attention
-            softmax_options.inputs.P = last_output;
-            last_output = softmax_options.outputs.S = softmax_output;
-            softmax_options.outputs.Stats = options.outputs.Stats;
-            auto softmax_node = std::make_unique<SoftmaxNode>(softmax_options.get_name(), std::move(softmax_options), context);
+            Softmax_attributes softmax_attributes;
+            softmax_attributes.use_stats = true; // As this is flash attention
+            softmax_attributes.inputs.P = last_output;
+            last_output = softmax_attributes.outputs.S = softmax_output;
+            softmax_attributes.outputs.Stats = options.outputs.Stats;
+            auto softmax_node = std::make_unique<SoftmaxNode>(std::move(softmax_attributes), context);
             sub_nodes.emplace_back(std::move(softmax_node));
 
             // Two cases for training: dropout present or not
@@ -196,25 +196,25 @@ namespace cudnn_frontend::graph {
                     .set_dim({b, h, s_q, s_kv})
                     .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
-                auto rng_options = Rng_attributes("rng");
-                rng_options.set_distribution(RngDistribution_t::BERNOULLI)
+                Rng_attributes rng_attributes;
+                rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
                     .set_bernoulli_probability(options.dropout_probability.value());
-                rng_options.inputs.Seed = options.inputs.Seed;
-                rng_options.inputs.Offset = options.inputs.Offset;
-                rng_options.outputs.Y = rng_output;
-                auto rng_node = std::make_unique<RngNode>(rng_options.get_name(), std::move(rng_options), context);
+                rng_attributes.inputs.Seed = options.inputs.Seed;
+                rng_attributes.inputs.Offset = options.inputs.Offset;
+                rng_attributes.outputs.Y = rng_output;
+                auto rng_node = std::make_unique<RngNode>(std::move(rng_attributes), context);
                 sub_nodes.emplace_back(std::move(rng_node));
 
                 // Lower options to mask options
                 auto dropout_mask_output = std::make_shared<Tensor_attributes>();
                 dropout_mask_output->set_is_virtual(true);
 
-                auto mask_options = Pointwise_attributes("mask");
-                mask_options.set_mode(PointwiseMode_t::MUL);
-                mask_options.inputs.IN_0 = last_output;
-                mask_options.inputs.IN_1 = rng_output;
-                last_output = mask_options.outputs.OUT_0 = dropout_mask_output;
-                auto mask_node = std::make_unique<PointwiseNode>(mask_options.get_name(), std::move(mask_options), context);
+                Pointwise_attributes mask_attributes;
+                mask_attributes.set_mode(PointwiseMode_t::MUL);
+                mask_attributes.inputs.IN_0 = last_output;
+                mask_attributes.inputs.IN_1 = rng_output;
+                last_output = mask_attributes.outputs.OUT_0 = dropout_mask_output;
+                auto mask_node = std::make_unique<PointwiseNode>(std::move(mask_attributes), context);
                 sub_nodes.emplace_back(std::move(mask_node));
 
                 // Lower options to dropout_scale options
@@ -232,12 +232,12 @@ namespace cudnn_frontend::graph {
                     .set_data_type(DataType_t::FLOAT);
                     #endif
 
-                auto dropout_scale_options = Pointwise_attributes("dropout_scale");
-                dropout_scale_options.set_mode(PointwiseMode_t::MUL);
-                dropout_scale_options.inputs.IN_0 = last_output;
-                dropout_scale_options.inputs.IN_1 = dropout_scale;
-                last_output = dropout_scale_options.outputs.OUT_0 = dropout_scale_output;
-                auto dropout_scale_node = std::make_unique<PointwiseNode>(dropout_scale_options.get_name(), std::move(dropout_scale_options), context);
+                Pointwise_attributes dropout_scale_attributes;
+                dropout_scale_attributes.set_mode(PointwiseMode_t::MUL);
+                dropout_scale_attributes.inputs.IN_0 = last_output;
+                dropout_scale_attributes.inputs.IN_1 = dropout_scale;
+                last_output = dropout_scale_attributes.outputs.OUT_0 = dropout_scale_output;
+                auto dropout_scale_node = std::make_unique<PointwiseNode>(std::move(dropout_scale_attributes), context);
                 sub_nodes.emplace_back(std::move(dropout_scale_node));
             }
 
@@ -245,11 +245,11 @@ namespace cudnn_frontend::graph {
             // Requirement by cudnn backend to take in bmm2 aType as i/o type.
             last_output->set_data_type(options.inputs.Q->get_data_type());
 
-            auto bmm2_options = Matmul_attributes("bmm2");
-            bmm2_options.inputs.A = last_output;
-            bmm2_options.inputs.B = options.inputs.V;
-            bmm2_options.outputs.C = options.outputs.O;
-            auto bmm2_node = std::make_unique<MatmulNode>(bmm2_options.get_name(), std::move(bmm2_options), context);
+            Matmul_attributes bmm2_attributes;
+            bmm2_attributes.inputs.A = last_output;
+            bmm2_attributes.inputs.B = options.inputs.V;
+            bmm2_attributes.outputs.C = options.outputs.O;
+            auto bmm2_node = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
             sub_nodes.emplace_back(std::move(bmm2_node));
 
             // Set dims and strides if user did not

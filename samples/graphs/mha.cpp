@@ -35,7 +35,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     float dropout_probability = 0.2f;
 
     namespace fe = cudnn_frontend;
-    fe::graph::Graph mha_graph("mha");
+    fe::graph::Graph mha_graph;
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -50,7 +50,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
     auto seed = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Seed").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
     auto offset = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Offset").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::INT32));
-    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes("mha")
+    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes()
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
                                                     .set_attn_scale(attn_scale)
@@ -137,7 +137,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
     bool is_inference = false;
 
     namespace fe = cudnn_frontend;
-    fe::graph::Graph mha_graph("mha");
+    fe::graph::Graph mha_graph;
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -151,7 +151,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({b, 1, s_q, s_kv}).set_stride({s_q*s_kv, s_q*s_kv, s_kv, 1}));
 
-    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes("mha")
+    auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes()
                                                     .set_is_inference(is_inference)
                                                     .set_causal_mask(true)
                                                     .set_attn_scale(attn_scale)
@@ -229,7 +229,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     int64_t seed = 123456;
 
     namespace fe = cudnn_frontend;
-    fe::graph::Graph mha_graph("mha");
+    fe::graph::Graph mha_graph;
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -243,7 +243,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
     auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("attn_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes()
                                                     .set_is_inference(is_inference)
                                                     .set_seq_len_q(SEQ_LEN_Q)
                                                     .set_seq_len_k(SEQ_LEN_K)
@@ -330,7 +330,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     bool is_inference = true;
 
     namespace fe = cudnn_frontend;
-    fe::graph::Graph mha_graph("mha");
+    fe::graph::Graph mha_graph;
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -344,7 +344,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
     auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("attn_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
     auto bias = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Bias").set_dim({1,h,s_q,s_kv}).set_stride({h*s_q*s_kv,s_q*s_kv,s_kv,1}));
     
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes()
                                                     .set_is_inference(is_inference)
                                                     .set_seq_len_q(SEQ_LEN_Q)
                                                     .set_seq_len_k(SEQ_LEN_K)
@@ -428,7 +428,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     bool is_inference = false;
 
     namespace fe = cudnn_frontend;
-    fe::graph::Graph mha_graph("mha");
+    fe::graph::Graph mha_graph;
     mha_graph.set_io_data_type(fe::DataType_t::HALF)
              .set_intermediate_data_type(fe::DataType_t::FLOAT)
              .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -442,7 +442,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
     auto dropout_mask = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Dropout_mask").set_dim({b,h,s_q,s_kv}).set_stride({s_q*s_kv*h,s_q*s_kv,s_kv,1}));
     auto dropout_scale = mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Dropout_scale").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true));
 
-    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes("mha")
+    auto scaled_dot_product_attention_options = fe::graph::Scaled_dot_product_attention_attributes()
                                                     .set_is_inference(is_inference)
                                                     .set_seq_len_q(SEQ_LEN_Q)
                                                     .set_seq_len_k(SEQ_LEN_K)

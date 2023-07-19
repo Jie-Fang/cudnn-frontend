@@ -27,7 +27,7 @@
 
 TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("wgrad");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::HALF)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -37,23 +37,23 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto scale_options = fe::graph::Pointwise_attributes("scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(X, S, scale_options);
     scale_output->set_is_virtual(true);
 
     auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
-    auto bias_options = fe::graph::Pointwise_attributes("bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
     
-    auto relu_options = fe::graph::Pointwise_attributes("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto relu_output = graph.pointwise(bias_output, relu_options);
     relu_output->set_is_virtual(true);
 
     auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("grad").set_dim({4, 64, 16, 16}));
     DY->generateStrides(CUDNN_TENSOR_NHWC);
-    auto wgrad_options = fe::graph::Conv_wgrad_attributes("wgrad").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto wgrad_options = fe::graph::Conv_wgrad_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto DW = graph.conv_wgrad(DY, relu_output, wgrad_options);
 
     #if (CUDNN_VERSION < 8800)

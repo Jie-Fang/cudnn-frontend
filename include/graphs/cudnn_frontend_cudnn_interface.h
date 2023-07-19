@@ -29,12 +29,14 @@ protected:
 
     inline static std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
 
-    std::unordered_map<std::string, std::shared_ptr<cudnn_frontend::Operation_v8>> operations;
-    std::unordered_map<std::string, std::vector<uid_t>> tensors_in_operations;
+    struct operation_with_uids {
+        cudnn_frontend::Operation_v8 operation;
+        std::vector<uid_t> uids;
+    };
+    std::vector<operation_with_uids> operations;
 
     std::vector<std::shared_ptr<OperationGraph_v8>>    operation_graphs;
     std::vector<std::shared_ptr<ExecutionPlan>>        execution_plans;
-
 
     op_graph_to_engine_configs engine_configs;
 
@@ -63,26 +65,24 @@ protected:
         return {error_code_t::OK, ""};
     }
 
-    error_t create_cudnn_operation_graphs(cudnnHandle_t handle, std::vector<std::vector<std::string>> const& sub_graphs) {
+    error_t create_cudnn_operation_graphs(cudnnHandle_t handle) {
 
-        for(auto const& sub_graph: sub_graphs) {
-            std::vector<Operation const*> cudnn_operations;
-            for(auto const& operation_name: sub_graph) {
-                cudnn_operations.push_back(operations.at(operation_name).get());
-            }
-            auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(cudnn_operations.size(), cudnn_operations.data()).build();
-
-            operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
-            getLogger() << "[cudnn_frontend] INFO: Successfully built Operation Graphs." << std::endl;
-
-            // Push variant pack tensors required for this operation graph
-            std::unordered_set<uid_t> variant_pack_for_operation_graph;
-            for(auto const& operation_name: sub_graph) {
-                auto const& temp = tensors_in_operations.at(operation_name);
-                variant_pack_for_operation_graph.insert(std::begin(temp), std::end(temp));
-            }
-            variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
+        std::vector<Operation const*> cudnn_operations;
+        for(auto const& operation_with_uid: operations) {
+            cudnn_operations.push_back(&(operation_with_uid.operation));
         }
+        auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder().setHandle(handle).setOperationGraph(cudnn_operations.size(), cudnn_operations.data()).build();
+
+        operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
+        getLogger() << "[cudnn_frontend] INFO: Successfully built Operation Graphs." << std::endl;
+
+        // Push variant pack tensors required for this operation graph
+        std::unordered_set<uid_t> variant_pack_for_operation_graph;
+        for(auto const& operation_with_uid: operations) {
+            variant_pack_for_operation_graph.insert(std::begin(operation_with_uid.uids), std::end(operation_with_uid.uids));
+        }
+        variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
+
 	    return {error_code_t::OK, ""};
     }
 
@@ -187,10 +187,7 @@ protected:
     }
 
 public:
-    std::unordered_map<std::string, std::shared_ptr<Operation>> const &
-    get_operations() {
-        return operations;
-    }
+    
     
     int64_t get_cudnn_workspace_size() const {
         int64_t current_workspace_size = 0;

@@ -29,7 +29,7 @@ def test_scale_bias_relu_wgrad():
     scale  = torch.randn(1, c, 1, 1, device = "cuda", dtype = torch.float16).to(memory_format=torch.channels_last) * 0.01
     bias   = torch.randn(1, c, 1, 1, device = "cuda", dtype = torch.float16).to(memory_format=torch.channels_last) * 0.01
 
-    graph = pycudnn.pygraph("sbr-wgrad", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
 
     X  = graph.tensor(name = "X",  dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     DY = graph.tensor(name = "DY", dim = DY_gpu.size(), stride = DY_gpu.stride(), data_type = convert_to_cudnn_type(DY_gpu.dtype))

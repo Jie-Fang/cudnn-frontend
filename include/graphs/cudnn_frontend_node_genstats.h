@@ -12,7 +12,7 @@ namespace graph {
 class GenstatsNode : public INode {
     Genstats_attributes options;
 public:
-    GenstatsNode(std::string const& name, Genstats_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+    GenstatsNode(Genstats_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::GENSTATS;
@@ -82,20 +82,21 @@ public:
                                         .setSqSumDesc(*(tensors.at(options.outputs.SQ_SUM->get_uid())))
                                         .build();
         
-        operations.emplace(name, std::make_shared<Operation_v8>(std::move(genstats_operation)));
-
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
             options.inputs.X
             , options.outputs.SUM
             , options.outputs.SQ_SUM
         };
-        auto& tensors_in_operation = tensors_in_operations[name];
+        
+        std::vector<uid_t> uids_in_operation;
         for(auto const& tensor: tensors_involved_in_operation) {
             if(tensor && tensor->get_is_virtual() == false) {
-                tensors_in_operation.emplace_back(tensor->get_uid());
+                uids_in_operation.push_back(tensor->get_uid());
             }
         }
+
+        operations.push_back({std::move(genstats_operation), std::move(uids_in_operation)});
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built GenstatsNode operation." << std::endl;
 

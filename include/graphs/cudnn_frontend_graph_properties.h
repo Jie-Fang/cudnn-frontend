@@ -252,7 +252,6 @@ public:
                                     , outputs)
 
     BN_finalize_attributes() : Operation(Tag::BN_finalize) {}
-    BN_finalize_attributes(const std::string name) : Operation(name, Tag::BN_finalize) {}
 
     BN_finalize_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -318,7 +317,6 @@ public:
                                     , outputs)
 
     Genstats_attributes() : Operation(Tag::Genstats) {}
-    Genstats_attributes(const std::string name) : Operation(name, Tag::Genstats) {}
 
     Genstats_attributes& set_name(std::string const& value) {
         name = value;
@@ -379,7 +377,6 @@ public:
                                     , dilation)
 
     Conv_fprop_attributes() : Operation(Tag::Conv_fprop) {}
-    Conv_fprop_attributes(const std::string name) : Operation(name, Tag::Conv_fprop) {}
 
     std::vector<int64_t> get_padding() const {
         return padding;
@@ -471,7 +468,6 @@ public:
                                     , outputs)
 
     DBN_attributes() : Operation(Tag::DBN) {}
-    DBN_attributes(const std::string name) : Operation(name, Tag::DBN) {}
     
     DBN_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -548,7 +544,6 @@ public:
                                     , outputs)
 
     DBN_weight_attributes() : Operation(Tag::DBN_weight) {}
-    DBN_weight_attributes(const std::string name) : Operation(name, Tag::DBN_weight) {}
 
     DBN_weight_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -616,7 +611,6 @@ public:
                                 , dilation)
 
     Conv_dgrad_attributes() : Operation(Tag::Conv_dgrad) {}
-    Conv_dgrad_attributes(const std::string name) : Operation(name, Tag::Conv_dgrad) {}
 
     Conv_dgrad_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -694,7 +688,6 @@ public:
                                 , outputs)
                                 
     Matmul_attributes() : Operation(Tag::Matmul) {}
-    Matmul_attributes(const std::string name) : Operation(name, Tag::Matmul) {}
     
     Matmul_attributes& set_name(std::string const& value) {
         name = value;
@@ -755,7 +748,6 @@ public:
                                     , axis)
 
     Pointwise_attributes() : Operation(Tag::Pointwise) {}
-    Pointwise_attributes(const std::string name) : Operation(name, Tag::Pointwise) {}
 
     std::optional<PointwiseMode_t> get_mode() const {
         return mode;
@@ -845,7 +837,6 @@ public:
                                     , forward_phase)
 
     Batchnorm_attributes() : Operation(Tag::BN) {}
-    Batchnorm_attributes(const std::string name) : Operation(name, Tag::BN) {}
     
     Batchnorm_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;
@@ -924,7 +915,6 @@ public:
                                 , mode)
 
     Reduction_attributes() : Operation(Tag::Reduction) {}
-    Reduction_attributes(const std::string name) : Operation(name, Tag::Reduction) {}
 
     std::optional<ReductionMode_t> get_mode() const {
         return mode;
@@ -985,7 +975,6 @@ public:
                                 , bernoulli_probability)
 
     Rng_attributes() : Operation(Tag::Rng) {}
-    Rng_attributes(const std::string name) : Operation(name, Tag::Rng) {}
 
     RngDistribution_t get_distribution() const {
         return distribution;
@@ -1063,7 +1052,6 @@ public:
     
 public:
     Scaled_dot_product_attention_attributes() : Operation(Tag::Scaled_dot_product_attention), is_inference(false) {}
-    Scaled_dot_product_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_attention), is_inference(false) {}
 
     Scaled_dot_product_attention_attributes& set_is_inference(bool const value){
         is_inference = value;
@@ -1168,7 +1156,6 @@ public:
     std::optional<float> dropout_probability;
     
     Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
-    Scaled_dot_product_flash_attention_attributes(const std::string name) : Operation(name, Tag::Scaled_dot_product_flash_attention) {}
 
     Scaled_dot_product_flash_attention_attributes& set_is_inference(bool const value){
         is_inference = value;
@@ -1263,7 +1250,6 @@ public:
     std::optional<bool> use_stats;
 
     Softmax_attributes() : Operation(Tag::Softmax) {}
-    Softmax_attributes(const std::string name) : Operation(name, Tag::Softmax) {}
 
     Softmax_attributes& set_compute_data_type(DataType_t const value) {
         compute_data_type = value;
@@ -1315,7 +1301,6 @@ public:
                                 , dilation)
 
     Conv_wgrad_attributes() : Operation(Tag::Conv_wgrad) {}
-    Conv_wgrad_attributes(const std::string name) : Operation(name, Tag::Conv_wgrad) {}
 
     Conv_wgrad_attributes& set_compute_data_type(DataType_t value) {
         compute_data_type = value;

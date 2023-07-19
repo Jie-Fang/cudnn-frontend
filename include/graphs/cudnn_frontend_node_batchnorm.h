@@ -14,7 +14,7 @@ class BatchNormNode : public INode {
 public:
     Batchnorm_attributes options;
 
-    BatchNormNode(std::string const& name, Batchnorm_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+    BatchNormNode(Batchnorm_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::BATCHNORM;
@@ -143,7 +143,6 @@ public:
                                         .setExpDecayFactorTensor(*(tensors.at(options.inputs.MOMENTUM->get_uid())))
                                         .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                                         .build();
-        operations.emplace(name, std::make_shared<Operation_v8>(std::move(batchnorm_operation)));
         
         // Push all real tensors as required for operation execution.
         auto const& tensors_involved_in_operation = {
@@ -160,11 +159,15 @@ public:
             , options.outputs.NEXT_RUNNING_MEAN
             , options.outputs.NEXT_RUNNING_VAR
         };
+        
+        std::vector<uid_t> uids_in_operation;
         for(auto const& tensor: tensors_involved_in_operation) {
             if(tensor && tensor->get_is_virtual() == false) {
-                tensors_in_operations[name].emplace_back(tensor->get_uid());
+                uids_in_operation.push_back(tensor->get_uid());
             }
         }
+
+        operations.push_back({std::move(batchnorm_operation), std::move(uids_in_operation)});
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built BatchNormNode operation." << std::endl;
 

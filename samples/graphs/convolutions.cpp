@@ -27,7 +27,7 @@
 
 TEST_CASE("CSBR Graph", "[conv][graph]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("conv_graph");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -37,23 +37,23 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("filter").set_dim({64, 32, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto conv_options = fe::graph::Conv_fprop_attributes("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto conv_options = fe::graph::Conv_fprop_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto conv_output = graph.conv_fprop(X, W, conv_options);
     conv_output->set_is_virtual(true);
 
     auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
-    auto scale_options = fe::graph::Pointwise_attributes("scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(conv_output, S, scale_options);
     scale_output->set_is_virtual(true);
 
     auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
-    auto bias_options = fe::graph::Pointwise_attributes("bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
     
-    auto relu_options = fe::graph::Pointwise_attributes("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto Y = graph.pointwise(bias_output, relu_options);
 
     cudnnHandle_t handle;
@@ -91,7 +91,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
 TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("genstats");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::HALF)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -101,26 +101,26 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto scale_options = fe::graph::Pointwise_attributes("scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(X, S, scale_options);
     scale_output->set_is_virtual(true);
 
     auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
-    auto bias_options = fe::graph::Pointwise_attributes("bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
 
-    auto relu_options = fe::graph::Pointwise_attributes("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto relu_output = graph.pointwise(bias_output, relu_options);
     relu_output->set_is_virtual(true);
 
     auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("weight").set_dim({32, 64, 3, 3}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
-    auto conv_options = fe::graph::Conv_fprop_attributes("conv").set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
+    auto conv_options = fe::graph::Conv_fprop_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto Y = graph.conv_fprop(relu_output, W, conv_options);
 
-    auto genstats_options = fe::graph::Genstats_attributes("genstats");
+    auto genstats_options = fe::graph::Genstats_attributes();
     auto [SUM, SQ_SUM] = graph.genstats(Y, genstats_options);
 
     SUM->set_data_type(fe::DataType_t::FLOAT);
@@ -166,7 +166,7 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
 
 TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     namespace fe = cudnn_frontend;
-    fe::graph::Graph graph("genstats");
+    fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
          .set_intermediate_data_type(fe::DataType_t::HALF)
          .set_compute_data_type(fe::DataType_t::FLOAT);
@@ -176,13 +176,13 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 64, 1, 1}));
     S->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto scale_options = fe::graph::Pointwise_attributes("scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto scale_output = graph.pointwise(X, S, scale_options);
     scale_output->set_is_virtual(true);
 
     auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 64, 1, 1}));
     B->generateStrides(CUDNN_TENSOR_NHWC);
-    auto bias_options = fe::graph::Pointwise_attributes("bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
     bias_output->set_is_virtual(true);
 
@@ -191,29 +191,29 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
     auto DUAL_S = graph.tensor(fe::graph::Tensor_attributes().set_name("dual_scale").set_dim({1, 64, 1, 1}));
     DUAL_S->generateStrides(CUDNN_TENSOR_NHWC);
 
-    auto dual_scale_options = fe::graph::Pointwise_attributes("dual_scale").set_mode(fe::PointwiseMode_t::MUL);
+    auto dual_scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto dual_scale_output = graph.pointwise(DUAL_X, DUAL_S, dual_scale_options);
     dual_scale_output->set_is_virtual(true);
 
     auto DUAL_B = graph.tensor(fe::graph::Tensor_attributes().set_name("dual_bias").set_dim({1, 64, 1, 1}));
     DUAL_B->generateStrides(CUDNN_TENSOR_NHWC);
-    auto dual_bias_options = fe::graph::Pointwise_attributes("dual_bias").set_mode(fe::PointwiseMode_t::ADD);
+    auto dual_bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto dual_bias_output = graph.pointwise(dual_scale_output, DUAL_B, dual_bias_options);
     dual_bias_output->set_is_virtual(true);
 
-    auto add_options = fe::graph::Pointwise_attributes("add").set_mode(fe::PointwiseMode_t::ADD);
+    auto add_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto add_output = graph.pointwise(bias_output, dual_bias_output, add_options);
     add_output->set_is_virtual(true);
 
-    auto relu_options = fe::graph::Pointwise_attributes("relu").set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto relu_output = graph.pointwise(add_output, relu_options);
 
     auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("weight").set_dim({32, 64, 1, 1}));
     W->generateStrides(CUDNN_TENSOR_NHWC);
-    auto conv_options = fe::graph::Conv_fprop_attributes("conv").set_padding({0,0}).set_stride({1,1}).set_dilation({1,1});
+    auto conv_options = fe::graph::Conv_fprop_attributes().set_padding({0,0}).set_stride({1,1}).set_dilation({1,1});
     auto Y = graph.conv_fprop(relu_output, W, conv_options);
 
-    auto genstats_options = fe::graph::Genstats_attributes("genstats");
+    auto genstats_options = fe::graph::Genstats_attributes();
     auto [SUM, SQ_SUM] = graph.genstats(Y, genstats_options);
 
     SUM->set_data_type(fe::DataType_t::FLOAT);

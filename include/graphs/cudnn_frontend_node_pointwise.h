@@ -13,7 +13,7 @@ class PointwiseNode : public INode {
 public:
     Pointwise_attributes options;
 
-    PointwiseNode(std::string const& name, Pointwise_attributes&& options_, detail::Context const& context)  : INode (name, context), options(std::move(options_)) {}
+    PointwiseNode(Pointwise_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
     
     Type getType() override final {
         return Type::POINTWISE;
@@ -75,6 +75,15 @@ public:
         try {
         #endif
 
+
+        // Push all real tensors as required for operation execution.
+        auto const& tensors_involved_in_operation = {
+            options.inputs.IN_0
+            , options.inputs.IN_1
+            , options.inputs.IN_2
+            , options.outputs.OUT_0
+        };
+        
         auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
                                                         .setAxis(options.get_axis().value_or(-1))
                                                         .setComputeType(options.get_compute_data_type())
@@ -90,7 +99,14 @@ public:
                                             .setyDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                                             .setpwDesc(pointwise_descriptor)
                                             .build();
-            operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
+            std::vector<uid_t> uids_in_operation;
+            for(auto const& tensor: tensors_involved_in_operation) {
+                if(tensor && tensor->get_is_virtual() == false) {
+                    uids_in_operation.push_back(tensor->get_uid());
+                }
+            }
+
+            operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
         }
         else if(port_count == 3) {
             if(options.get_mode() == PointwiseMode_t::RELU_BWD) {
@@ -100,7 +116,14 @@ public:
                                                 .setdxDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                                                 .setpwDesc(pointwise_descriptor)
                                                 .build();
-                operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
+                std::vector<uid_t> uids_in_operation;
+            for(auto const& tensor: tensors_involved_in_operation) {
+                if(tensor && tensor->get_is_virtual() == false) {
+                    uids_in_operation.push_back(tensor->get_uid());
+                }
+            }
+
+            operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
             }
             else {
                 auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
@@ -109,7 +132,14 @@ public:
                                                 .setyDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                                                 .setpwDesc(pointwise_descriptor)
                                                 .build();
-                operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
+                std::vector<uid_t> uids_in_operation;
+            for(auto const& tensor: tensors_involved_in_operation) {
+                if(tensor && tensor->get_is_virtual() == false) {
+                    uids_in_operation.push_back(tensor->get_uid());
+                }
+            }
+
+            operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
             }
         }
         else if(port_count == 2) {
@@ -118,21 +148,14 @@ public:
                                             .setyDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                                             .setpwDesc(pointwise_descriptor)
                                             .build();
-            operations.emplace(name, std::make_shared<Operation_v8>(std::move(pointwise_operation)));
-        }
-
-        // Push all real tensors as required for operation execution.
-        auto const& tensors_involved_in_operation = {
-            options.inputs.IN_0
-            , options.inputs.IN_1
-            , options.inputs.IN_2
-            , options.outputs.OUT_0
-        };
-        auto& tensors_in_operation = tensors_in_operations[name];
-        for(auto const& tensor: tensors_involved_in_operation) {
-            if(tensor && tensor->get_is_virtual() == false) {
-                tensors_in_operation.emplace_back(tensor->get_uid());
+            std::vector<uid_t> uids_in_operation;
+            for(auto const& tensor: tensors_involved_in_operation) {
+                if(tensor && tensor->get_is_virtual() == false) {
+                    uids_in_operation.push_back(tensor->get_uid());
+                }
             }
+
+            operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
         }
 
         getLogger() << "[cudnn_frontend] INFO: " << "Built PointwiseNode operation." << std::endl;
