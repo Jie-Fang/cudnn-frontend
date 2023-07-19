@@ -33,9 +33,9 @@
 #include <cudnn.h>
 #include <cudnn_backend.h>
 
-#include <cudnn_frontend_EngineConfig.h>
-#include <cudnn_frontend_Engine.h>
-#include <cudnn_frontend_utils.h>
+#include "cudnn_frontend_EngineConfig.h"
+#include "cudnn_frontend_Engine.h"
+#include "cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 ///

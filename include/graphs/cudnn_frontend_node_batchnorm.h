@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cudnn_frontend_Heuristics.h>
-#include <cudnn_frontend_Logging.h>
+#include "cudnn_frontend_Heuristics.h"
+#include "cudnn_frontend_Logging.h"
 
 #include "cudnn_frontend_graph_helpers.h"
 #include "cudnn_frontend_node_interface.h"
