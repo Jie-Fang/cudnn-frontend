@@ -1,0 +1,13 @@
+{"ConvRelu1" : {
+    "tensors": [
+        {"name":"xTensor", "dataType":"half", "dim":[32,32,7,7], "layout":"NHWC"},
+        {"name":"wTensor", "dataType":"half", "dim":[256,32,1,1], "layout":"NHWC"},
+        {"name":"afterConv", "dataType":"half", "dim":[32,256,7,7], "layout":"NHWC", "isVirtual":true},
+        {"name":"afterActivation", "dataType":"half", "dim":[32,256,7,7], "layout":"NHWC"}
+    ],
+    "nodes":[
+        {"name":"conv0", "operation":"conv", "X":"xTensor", "W":"wTensor", "Y":"afterConv", "pad":[0,0], "stride":[1,1], "dilation":[1,1], "mode":"CORR", "mathPrec":"float"},
+        {"name":"relu0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"afterConv", "Y":"afterActivation", "mathPrec":"float"}
+    ],
+    "tolerances":{"rel":2.5e-3, "abs":2.5e-3}
+  }}

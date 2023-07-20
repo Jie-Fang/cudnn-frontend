@@ -79,25 +79,28 @@ class TestNode:
                 node.runRefTreeRecursive()
 
 class Operation(TestNode):
-    # @param kwargs: parameters for the associated pyCudnnOp
+    
     # @param pyCuddnOp: pycudnn.pygraph operation (e.g., pycudnn.pygraph.conv)
     # @param refFunc: reference function for the associated pyCudnnOp
     # @param name: name for this Operation (could be passed by kwargs as well)
+    def __init__(self, pyCudnnOp, refFunc, name):
+        super().__init__(name)
+        
+        self.pyCudnnOp = pyCudnnOp
+        self.refFunc = refFunc
+        self.output = TestTensor(name+"_out", self)
+
+    # @param kwargs: parameters for the associated pyCudnnOp
     # @details: All this function needs to do is: 
     #   * add the correct producers
     #   * store the kwargs (named parameters from the associated pyCudnnOp)
-    #   * store the pycudnn function to call
-    def __init__(self, kwargs, pyCudnnOp, refFunc, name):
-        super().__init__(name)
+    def setKwargs(self, kwargs):
         self.kwargs = kwargs
         # TODO(@mbreughe): Does .values() make an unnecessary copy?
         for v in self.kwargs.values():
             if isinstance(v, TestTensor):
                 self.addProducerNode(v.parent_op)
-        
-        self.pyCudnnOp = pyCudnnOp
-        self.refFunc = refFunc
-        self.output = TestTensor(name+"_out", self)
+
 
     # @brief: Run the pycudnn node
     # TODO(@mbreughe): extended to multiple output tensors
@@ -235,31 +238,38 @@ class TestGraph:
         TestGraph.uid_counter += 1
         return name
 
-    # @brief: In esssence, this function is a factory function:
+    # @brief: Create an operation, pass through the kwargs and set up dependencies
     # @param kwargs: the named arguments passed to a pycudnn function
+    # @param pyCudnnOp: the pycudnn operation (e.g., pycudnn.pygraph.conv)
+    # @return: TestTensor (the output from the added operation)
+    def createAndAddOperation(self, kwargs, pyCudnnOp):
+        if "name" in kwargs:
+            name = kwargs["name"]
+        else:
+            pyCudnnOpName = pyCudnnOp.__name__
+            name = TestGraph.createUniqueName(pyCudnnOpName)
+
+        node = TestGraph.createOperation(pyCudnnOp, name)
+        node.setKwargs(kwargs)
+        self.nodes.append(node)
+
+        return node.output
+
+    # @brief: In esssence, this function is a factory function:
     # @param pyCudnnOp: the pycudnn operation (e.g., pycudnn.pygraph.conv)
     # @return: Operation
     # it builds an operation by:
     #   * discovering the reference function based on the name of the pycudnn op
-    #   * creating a name
-    #   * passing through the kwargs
-    def createAndAddOperation(self, kwargs, pyCudnnOp):
+    @staticmethod
+    def createOperation(pyCudnnOp, name):
         pyCudnnOpName = pyCudnnOp.__name__
-        
-        if "name" in kwargs:
-            name = kwargs["name"]
-        else:
-            name = TestGraph.createUniqueName(pyCudnnOpName)
-
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
         # TODO(@mbreughe): Add error handling code in case the function is not found
         refFunc = getattr(PytorchReference, pyCudnnOpName)
         
-        node = Operation(kwargs, pyCudnnOp, refFunc, name)
-        self.nodes.append(node)
-
-        return node.output
+        node = Operation(pyCudnnOp, refFunc, name)
+        return node
 
     # @brief: Utility function
     def clearNodeMetaData(self):
@@ -332,12 +342,14 @@ class TestGraph:
                 variant_pack[node.output.pyCudnnTensor] = self.output_tensors[-1]
 
         # Run the pycudnn graph
+        print("Executing graph through pycudnn")
         self.cudnn_graph.execute(variant_pack, workspace)
 
         # TODO(@mbreughe): adjust this for multiple outputs.
         Y_actual = self.output_tensors[-1]
 
         # Run the reference
+        print("Computing reference")
         Y_expected = self.getReference()[-1]
 
         # Compare with reference
