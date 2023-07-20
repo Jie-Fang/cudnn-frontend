@@ -83,7 +83,7 @@ class Operation(TestNode):
     # @param pyCuddnOp: pycudnn.pygraph operation (e.g., pycudnn.pygraph.conv)
     # @param refFunc: reference function for the associated pyCudnnOp
     # @param name: name for this Operation (could be passed by kwargs as well)
-    # @ details: All this function needs to do is: 
+    # @details: All this function needs to do is: 
     #   * add the correct producers
     #   * store the kwargs (named parameters from the associated pyCudnnOp)
     #   * store the pycudnn function to call
@@ -92,11 +92,12 @@ class Operation(TestNode):
         self.kwargs = kwargs
         # TODO(@mbreughe): Does .values() make an unnecessary copy?
         for v in self.kwargs.values():
-            if isinstance(v, TestNode):
-                self.addProducerNode(v)
+            if isinstance(v, TestTensor):
+                self.addProducerNode(v.parent_op)
         
         self.pyCudnnOp = pyCudnnOp
         self.refFunc = refFunc
+        self.output = TestTensor(name+"_out", self)
 
     # @brief: Run the pycudnn node
     # TODO(@mbreughe): extended to multiple output tensors
@@ -105,57 +106,71 @@ class Operation(TestNode):
         # For the input tensor we need to extract the TestTensor's pycudnn tensor.
         # Therefore: copy all kwargs, except for TestTensors
         # TODO(@mbreughe) Avoid copying these kwargs twice (ref and pycudnn). Let's do this in the init function once
-        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestNode)}
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestTensor)}
         for x in self.kwargs:
-            if isinstance(self.kwargs[x], TestNode):
+            if isinstance(self.kwargs[x], TestTensor):
                 new_kwargs[x] = self.kwargs[x].pyCudnnTensor
 
-        self.pyCudnnTensor = self.pyCudnnOp(pyCudnnGraph, **new_kwargs)
+        pyCudnnTensor = self.pyCudnnOp(pyCudnnGraph, **new_kwargs)
+
+        self.output.pyCudnnTensor = pyCudnnTensor
 
     def runRef(self):
-        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestNode)}
+        new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], TestTensor)}
         for x in self.kwargs:
-            if isinstance(self.kwargs[x], TestNode):
+            if isinstance(self.kwargs[x], TestTensor):
                 new_kwargs[x] = self.kwargs[x].ref_data
-        self.ref_data = self.refFunc(new_kwargs)
+        ref_output = self.refFunc(new_kwargs)
 
-class TestTensor(TestNode):
+        self.output.ref_data = ref_output
+
+class RandomTensorGenerator(TestNode):
     __test__ = False
 
     def __init__(self, kwargs, name):
         super().__init__(name)
         self.kwargs = kwargs
-        # The pycudnn.pygraph.tensor instance associated with TestTensor
-        self.pyCudnnTensor = None
-        # The reference data for this tensor
-        self.ref_data = None
         # TODO(mbreughe): Assume NHWC layout for now
         self.layout = "NHWC"
         # Use fp16 by default
         # TODO(@mbreughe): use pycudnn convention instead (like extracting it from the pycudnn graph)
         if not "data_type" in self.kwargs:
             self.data_type(pycudnn.data_type.HALF)
+
+        self.output = TestTensor(name+"_out", self)
     
     def data_type(self, data_type):
         self.kwargs["data_type"] = data_type
 
     def instantiateRandomTensor(self):
-        if self.ref_data is None:
-            self.ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.kwargs["data_type"]))
+        if self.output.ref_data is None:
+            self.output.ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.kwargs["data_type"]))
             
             if self.layout == "NHWC":
-                self.ref_data = self.ref_data.to(memory_format=torch.channels_last)
+                self.output.ref_data = self.output.ref_data.to(memory_format=torch.channels_last)
     
     def getValue(self):
         self.instantiateRandomTensor()
-        return self.ref_data
+        return self.output.ref_data
 
     def runPyCudnnCode(self, pyCudnnGraph):
         self.instantiateRandomTensor()
-        self.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.ref_data.size(), stride = self.ref_data.stride(), data_type = convert_to_cudnn_type(self.ref_data.dtype))
+        self.output.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.output.ref_data.size(), stride = self.output.ref_data.stride(), data_type = convert_to_cudnn_type(self.output.ref_data.dtype))
 
     def runRef(self):
         return self.getValue()
+
+class TestTensor:
+    __test__ = False
+
+    def __init__(self, name, parent_op):
+        self.name = name
+        # The pycudnn.pygraph.tensor instance associated with TestTensor
+        self.pyCudnnTensor = None
+        # The reference data for this tensor
+        self.ref_data = None
+
+        self.parent_op = parent_op
     
 
 def convert_to_cudnn_type(torch_type):
@@ -206,12 +221,12 @@ class TestGraph:
         else:
             name = TestGraph.createUniqueName("Tensor")
 
-        testTensor = TestTensor(kwargs, name)
+        testTensor = RandomTensorGenerator(kwargs, name)
 
         self.nodes.append(testTensor)
-        # TODO(@mbreughe): we are assuming only input tensors are explicitly created
+        # we are assuming only input tensors are explicitly created
         self.entrance_nodes.append(testTensor)
-        return testTensor
+        return testTensor.output
     
     # @brief: utility function to create unique names
     @staticmethod
@@ -244,7 +259,7 @@ class TestGraph:
         node = Operation(kwargs, pyCudnnOp, refFunc, name)
         self.nodes.append(node)
 
-        return node
+        return node.output
 
     # @brief: Utility function
     def clearNodeMetaData(self):
@@ -256,7 +271,7 @@ class TestGraph:
         for node in self.nodes:
             if node.isOutputNode():
                 print ("Setting {} as output".format(node.name))
-                node.pyCudnnTensor.set_output(True)
+                node.output.pyCudnnTensor.set_output(True)
 
     # @brief: Build the pycudnn graph
     # @note: this temporarily modifies the isVisited status of the nodes
@@ -293,7 +308,7 @@ class TestGraph:
         output = []
         for node in self.nodes:
             if node.isOutputNode():
-                output.append(node.ref_data)
+                output.append(node.output.ref_data)
 
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
@@ -307,14 +322,14 @@ class TestGraph:
 
         variant_pack = {}
         for node in self.entrance_nodes:
-            variant_pack[node.pyCudnnTensor] = node.getValue()
+            variant_pack[node.output.pyCudnnTensor] = node.getValue()
 
         for node in self.nodes:
             if node.isOutputNode():
                 # TODO(@mbreughe): infer layout
-                output_tensor = torch.zeros(*node.pyCudnnTensor.get_dim(), dtype=convert_to_torch_type(node.pyCudnnTensor.get_data_type()), device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
+                output_tensor = torch.zeros(*node.output.pyCudnnTensor.get_dim(), dtype=convert_to_torch_type(node.output.pyCudnnTensor.get_data_type()), device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
                 self.output_tensors.append(output_tensor)
-                variant_pack[node.pyCudnnTensor] = self.output_tensors[-1]
+                variant_pack[node.output.pyCudnnTensor] = self.output_tensors[-1]
 
         # Run the pycudnn graph
         self.cudnn_graph.execute(variant_pack, workspace)
