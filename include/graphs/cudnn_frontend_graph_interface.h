@@ -207,13 +207,10 @@ public:
     BN_finalize_attributes::Outputs bn_finalize(BN_finalize_attributes::Inputs, BN_finalize_attributes);
 
     std::shared_ptr<Tensor_attributes> conv_fprop(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Conv_fprop_attributes);
-    Conv_fprop_attributes::Outputs conv_fprop(Conv_fprop_attributes::Inputs, Conv_fprop_attributes);
     
     std::shared_ptr<Tensor_attributes> conv_dgrad(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Conv_dgrad_attributes);
-    Conv_dgrad_attributes::Outputs conv_dgrad(Conv_dgrad_attributes::Inputs, Conv_dgrad_attributes);
 
     std::shared_ptr<Tensor_attributes> conv_wgrad(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Conv_wgrad_attributes);
-    Conv_wgrad_attributes::Outputs conv_wgrad(Conv_wgrad_attributes::Inputs, Conv_wgrad_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> dbn_weight(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, DBN_weight_attributes);
     DBN_weight_attributes::Outputs dbn_weight(DBN_weight_attributes::Inputs, DBN_weight_attributes);
@@ -374,18 +371,6 @@ inline std::shared_ptr<Tensor_attributes> Graph::conv_fprop(std::shared_ptr<Tens
     return Y;
 }
 
-inline Conv_fprop_attributes::Outputs Graph::conv_fprop(Conv_fprop_attributes::Inputs inputs, Conv_fprop_attributes options) {
-    // Set outputs
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "_output");
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(std::move(options), context));
-
-    return Conv_fprop_attributes::Outputs{Y};
-}
-
 inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::dbn_weight(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> mean, std::shared_ptr<Tensor_attributes> inv_variance, std::shared_ptr<Tensor_attributes> scale, DBN_weight_attributes options) {
     // Make required output tensors
     options.make_outputs([this](std::string const &name){return output_tensor(name);});
@@ -429,18 +414,6 @@ inline std::shared_ptr<Tensor_attributes> Graph::conv_dgrad(std::shared_ptr<Tens
     return DX;
 }
 
-inline Conv_dgrad_attributes::Outputs Graph::conv_dgrad(Conv_dgrad_attributes::Inputs inputs, Conv_dgrad_attributes options) {
-    // Make required output tensors
-    auto DX = options.outputs.DX = output_tensor(options.get_name() + "_output");
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<DgradNode>(std::move(options), context));
-
-    return Conv_dgrad_attributes::Outputs{DX};
-}
-
 inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::genstats(std::shared_ptr<Tensor_attributes> x, Genstats_attributes options) {
     // Set outputs
     auto SUM = options.outputs.SUM = output_tensor(options.get_name() + "_sum_output");
@@ -478,18 +451,6 @@ inline std::shared_ptr<Tensor_attributes> Graph::conv_wgrad(std::shared_ptr<Tens
     sub_nodes.emplace_back(std::make_unique<WgradNode>(std::move(options), context));
 
     return DW;
-}
-
-inline Conv_wgrad_attributes::Outputs Graph::conv_wgrad(Conv_wgrad_attributes::Inputs inputs, Conv_wgrad_attributes options) {
-    // Make required output tensors
-    auto DW = options.outputs.DW = output_tensor(options.get_name() + "_output");
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<WgradNode>(std::move(options), context));
-
-    return Conv_wgrad_attributes::Outputs{DW};
 }
 
 inline std::shared_ptr<Tensor_attributes> Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes options) {

@@ -174,8 +174,8 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     conv(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_attributes_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight_attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight
         , std::vector<int64_t> const& padding
         , std::vector<int64_t> const& stride
         , std::vector<int64_t> const& dilation
@@ -197,9 +197,7 @@ public:
             }
         }
 
-        attributes.inputs.X = image_attributes_ptr;
-        attributes.inputs.W = weight_attributes_ptr;
-        auto [Y] = graph.conv_fprop(attributes.inputs, attributes);
+        auto Y = graph.conv_fprop(image, weight, attributes);
 
         // Default virtualness in python is true
         Y->set_is_virtual(true);
@@ -213,8 +211,8 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     wgrad(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image_attributes_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss_attributes_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
         std::vector<int64_t> const& padding,
         std::vector<int64_t> const& stride,
         std::vector<int64_t> const& dilation,
@@ -226,9 +224,7 @@ public:
                         .set_padding(padding)
                         .set_stride(stride)
                         .set_dilation(dilation);
-        attributes.inputs.X = image_attributes_ptr;
-        attributes.inputs.DY = loss_attributes_ptr;
-        auto [DW] = graph.conv_wgrad(attributes.inputs, attributes);
+        auto DW = graph.conv_wgrad(loss, image, attributes);
 
         // Default virtualness in python is true
         DW->set_is_virtual(true);
