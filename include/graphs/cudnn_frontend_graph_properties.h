@@ -194,6 +194,24 @@ public:
     virtual ~Operation() = default;
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM( Operation::Tag, {
+    {Operation::Tag::BN, "BN"},
+    {Operation::Tag::BN_finalize, "BN_finalize"},
+    {Operation::Tag::Conv_fprop, "Conv_fprop"},
+    {Operation::Tag::Conv_dgrad, "Conv_dgrad"},
+    {Operation::Tag::Conv_wgrad, "Conv_wgrad"},
+    {Operation::Tag::DBN, "DBN"},
+    {Operation::Tag::DBN_weight, "DBN_weight"},
+    {Operation::Tag::Genstats, "Genstats"},
+    {Operation::Tag::Matmul, "Matmul"},
+    {Operation::Tag::Pointwise, "Pointwise"},
+    {Operation::Tag::Reduction, "Reduction"},
+    {Operation::Tag::Rng, "Rng"},
+    {Operation::Tag::Scaled_dot_product_attention, "Scaled_dot_product_attention"},
+    {Operation::Tag::Scaled_dot_product_flash_attention, "Scaled_dot_product_flash_attention"},
+    {Operation::Tag::Softmax, "Softmax"},
+})
+
 class BN_finalize_attributes : public Operation {
 public:
     struct Inputs {
