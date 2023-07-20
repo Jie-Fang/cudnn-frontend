@@ -143,6 +143,9 @@ public:
         props.inputs.PREV_RUNNING_VAR = in_running_var_props_ptr;
 
         auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(props.inputs, props);
+
+        Y->set_is_virtual(true);
+
         return {Y, mean, inv_var, next_running_mean, next_running_var};
     }
 
@@ -165,6 +168,11 @@ public:
         props.inputs.INV_VARIANCE = inv_variance_props_ptr;
         
         auto [DX, DScale, DBias] = graph.batchnorm_backward(props.inputs, props);
+
+        DX->set_is_virtual(true);
+        DScale->set_is_virtual(true);
+        DBias->set_is_virtual(true);
+
         return {DX, DScale, DBias};
     }
 
@@ -437,6 +445,35 @@ public:
         }
 
         auto OUT_0 = graph.pointwise(input, attributes);
+
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
+    }
+
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    cmp_gt(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& comparison_ptr
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
+    ) {
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                              .set_compute_data_type(compute_data_type)
+                              .set_mode(cudnn_frontend::PointwiseMode_t::CMP_GT);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        auto OUT_0 = graph.pointwise(input_attributes_ptr, comparison_ptr, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -822,6 +859,24 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Returns:
                     cudnn_tensor: The result of the ReLU activation.
+            )pbdoc"
+        )
+        .def("cmp_gt", &PyGraph::cmp_gt
+             , py::arg("input")
+             , py::arg("comparison")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Apply the Compare Greater Than Comparison to the input.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    comparison (cudnn_tensor): The comparison tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the comparison.
             )pbdoc"
         )
         .def("elu", &PyGraph::elu
