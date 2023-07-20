@@ -239,16 +239,8 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto mean = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
     auto inv_variance = graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
-    inputs.X = X;
-    inputs.DY = DX_drelu;
-    inputs.SCALE = scale;
-    inputs.MEAN = mean;
-    inputs.INV_VARIANCE = inv_variance;
-
-    auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::FLOAT));
-
-    auto DBN_options = fe::graph::DBN_attributes().set_epsilon(epsilon);
-    auto [DX, dscale, dbias] = graph.batchnorm_backward(inputs, DBN_options);
+    auto DBN_options = fe::graph::DBN_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, X, scale, DBN_options);
     DX->set_is_virtual(false);
     dscale->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
     dbias->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);

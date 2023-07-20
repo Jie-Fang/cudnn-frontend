@@ -151,24 +151,29 @@ public:
 
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     batchnorm_backward(
-        std::string const& name,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& grad_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& mean_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& inv_variance_props_ptr,
-        cudnn_frontend::DataType_t const& compute_data_type
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::DBN_attributes()
-                        .set_compute_data_type(compute_data_type);
-        props.inputs.X = input_props_ptr;
-        props.inputs.DY = grad_props_ptr;
-        props.inputs.SCALE = scale_props_ptr;
-        props.inputs.MEAN = mean_props_ptr;
-        props.inputs.INV_VARIANCE = inv_variance_props_ptr;
-        
-        auto [DX, DScale, DBias] = graph.batchnorm_backward(props.inputs, props);
+        auto attributes = cudnn_frontend::graph::DBN_attributes()
+                        .set_compute_data_type(compute_data_type)
+                        .set_saved_mean_and_inv_variance(mean, inv_variance);
 
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        auto [DX, DScale, DBias] = graph.batchnorm_backward(dy, x, scale, attributes);
+        
         DX->set_is_virtual(true);
         DScale->set_is_virtual(true);
         DBias->set_is_virtual(true);
@@ -729,14 +734,14 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("momentum"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
         )
-        .def("batchnorm_backward", &PyGraph::batchnorm_backward,
-             py::arg_v("name", "batchnorm_backward"),
-             py::arg("grad"),
-             py::arg("input"),
-             py::arg("scale"),
-             py::arg("mean"),
-             py::arg("inv_variance"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+        .def("batchnorm_backward", &PyGraph::batchnorm_backward
+             , py::arg("grad")
+             , py::arg("input")
+             , py::arg("scale")
+             , py::arg("mean")
+             , py::arg("inv_variance")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
         )
         .def("genstats", &PyGraph::genstats
              , py::arg("input")

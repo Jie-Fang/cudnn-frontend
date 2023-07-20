@@ -485,6 +485,12 @@ public:
                                     , outputs)
 
     DBN_attributes() : Operation(Tag::DBN) {}
+    
+    DBN_attributes& set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean, std::shared_ptr<Tensor_attributes> inv_variance) {
+        inputs.MEAN = mean;
+        inputs.INV_VARIANCE = inv_variance;
+        return *this;
+    }
 
     DBN_attributes& set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;

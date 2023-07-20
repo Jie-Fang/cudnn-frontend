@@ -214,7 +214,7 @@ public:
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> dbn_weight(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, DBN_weight_attributes);
 
-    DBN_attributes::Outputs batchnorm_backward(DBN_attributes::Inputs, DBN_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, DBN_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
@@ -338,18 +338,20 @@ inline Batchnorm_attributes::Outputs Graph::batchnorm(Batchnorm_attributes::Inpu
     return return_outputs;
 }
 
-inline DBN_attributes::Outputs Graph::batchnorm_backward(DBN_attributes::Inputs inputs, DBN_attributes options) {
+inline std::array<std::shared_ptr<Tensor_attributes>, 3> Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, DBN_attributes options) {
     
     // Set outputs
     options.make_outputs([this](std::string const &name){return output_tensor(name);});
     auto return_outputs = options.outputs;
 
     // Set inputs
-    options.inputs = inputs;
+    options.inputs.DY = dy;
+    options.inputs.X = x;
+    options.inputs.SCALE = scale;
 
     sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
 
-    return return_outputs;
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }
 
 inline std::shared_ptr<Tensor_attributes> Graph::conv_fprop(std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> w, Conv_fprop_attributes options) {

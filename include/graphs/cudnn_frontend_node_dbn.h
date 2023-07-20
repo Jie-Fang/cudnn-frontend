@@ -14,15 +14,22 @@ class DBNNode : public INode {
 public:
     DBN_attributes options;
 
-    DBNNode(DBN_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {
-        // User does not create tensor for epsilon/momentum, so create it internally
-        // Data type is i/o type
-        // epsilon = std::make_shared<Tensor_attributes>("epsilon");
-        // epsilon->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
-    }
+    DBNNode(DBN_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::DBN;
+    }
+
+    error_t validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating DBNNode " << options.name << "..." << std::endl;
+
+        if(!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: Either saved mean/inv_variance or epsilon required.";
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
     }
 
     error_t infer_properties_node() override final {
