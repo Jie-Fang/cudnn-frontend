@@ -8,11 +8,11 @@
 
 #include <cuda_fp16.h>
 
-#include "cudnn_frontend_Tensor.h"
-#include "cudnn_frontend_Operation.h"
-#include "cudnn_frontend_OperationGraph.h"
-#include "cudnn_frontend_ExecutionPlan.h"
-#include "cudnn_frontend_VariantPack.h"
+#include "../cudnn_frontend_Tensor.h"
+#include "../cudnn_frontend_Operation.h"
+#include "../cudnn_frontend_OperationGraph.h"
+#include "../cudnn_frontend_ExecutionPlan.h"
+#include "../cudnn_frontend_VariantPack.h"
 
 #include "cudnn_frontend_cudnn_interface.h"
 
