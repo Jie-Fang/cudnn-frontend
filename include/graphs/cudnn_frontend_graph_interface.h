@@ -213,20 +213,16 @@ public:
     std::shared_ptr<Tensor_attributes> conv_wgrad(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Conv_wgrad_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> dbn_weight(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, DBN_weight_attributes);
-    DBN_weight_attributes::Outputs dbn_weight(DBN_weight_attributes::Inputs, DBN_weight_attributes);
 
     DBN_attributes::Outputs batchnorm_backward(DBN_attributes::Inputs, DBN_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
-    Genstats_attributes::Outputs genstats(Genstats_attributes::Inputs, Genstats_attributes);
 
-    Matmul_attributes::Outputs matmul(Matmul_attributes::Inputs, Matmul_attributes);
     std::shared_ptr<Tensor_attributes> matmul(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Matmul_attributes);
     
     std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
     std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
     std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
-    Pointwise_attributes::Outputs pointwise(Pointwise_attributes::Inputs, Pointwise_attributes);
     
     Scaled_dot_product_attention_attributes::Outputs scaled_dot_product_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_attention_attributes);
     Scaled_dot_product_flash_attention_attributes::Outputs scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_flash_attention_attributes);
@@ -388,19 +384,6 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::dbn_weight(std::
     return {return_outputs.DSCALE, return_outputs.DBIAS, return_outputs.EQ_SCALE_DY, return_outputs.EQ_SCALE_X, return_outputs.EQ_BIAS};
 }
 
-inline DBN_weight_attributes::Outputs Graph::dbn_weight(DBN_weight_attributes::Inputs inputs, DBN_weight_attributes options) {
-    // Make required output tensors
-    options.make_outputs([this](std::string const &name){return output_tensor(name);});
-    auto return_outputs = options.outputs;
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(std::move(options), context));
-
-    return return_outputs;
-}
-
 inline std::shared_ptr<Tensor_attributes> Graph::conv_dgrad(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> w, Conv_dgrad_attributes options) {
     // Make required output tensors
     auto DX = options.outputs.DX = output_tensor(options.get_name() + "_output");
@@ -425,19 +408,6 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::genstats(std::sh
     sub_nodes.emplace_back(std::make_unique<GenstatsNode>(std::move(options), context));
 
     return {SUM, SQ_SUM};
-}
-
-inline Genstats_attributes::Outputs Graph::genstats(Genstats_attributes::Inputs inputs, Genstats_attributes options) {
-    // Make required output tensors
-    auto SUM = options.outputs.SUM = output_tensor(options.get_name() + "_sum_output");
-    auto SQ_SUM = options.outputs.SQ_SUM = output_tensor(options.get_name() + "_sq_sum_output");
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(std::move(options), context));
-
-    return Genstats_attributes::Outputs{SUM,SQ_SUM};
 }
 
 inline std::shared_ptr<Tensor_attributes> Graph::conv_wgrad(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> x, Conv_wgrad_attributes options) {
@@ -489,17 +459,6 @@ inline std::shared_ptr<Tensor_attributes> Graph::pointwise(std::shared_ptr<Tenso
     return OUT_0;
 }
 
-inline Pointwise_attributes::Outputs Graph::pointwise(Pointwise_attributes::Inputs inputs, Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
-
-    return Pointwise_attributes::Outputs{OUT_0};
-}
-
 inline std::shared_ptr<Tensor_attributes> Graph::matmul(std::shared_ptr<Tensor_attributes> a, std::shared_ptr<Tensor_attributes> b, Matmul_attributes options) {
     auto C = options.outputs.C = output_tensor(options.get_name() + "_output");
 
@@ -510,17 +469,6 @@ inline std::shared_ptr<Tensor_attributes> Graph::matmul(std::shared_ptr<Tensor_a
     sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(options), context));
 
     return C;
-}
-
-inline Matmul_attributes::Outputs Graph::matmul(Matmul_attributes::Inputs inputs, Matmul_attributes options) {
-    auto C = options.outputs.C = output_tensor(options.get_name() + "_output");
-
-    // Set inputs
-    options.inputs = inputs;
-
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(options), context));
-
-    return Matmul_attributes::Outputs{C};
 }
 
 inline Scaled_dot_product_attention_attributes::Outputs Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_attention_attributes options) {    

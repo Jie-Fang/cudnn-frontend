@@ -238,8 +238,8 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     matmul(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& A_attributes_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B_attributes_ptr,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& A,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B,
         cudnn_frontend::DataType_t const& compute_data_type,
         py::object const& name
     ) {
@@ -254,9 +254,7 @@ public:
             }
         }
 
-        attributes.inputs.A = A_attributes_ptr;
-        attributes.inputs.B = B_attributes_ptr;
-        auto [C] = graph.matmul(attributes.inputs, attributes);
+        auto C = graph.matmul(A, B, attributes);
 
         // Default virtualness in python is true
         C->set_is_virtual(true);
@@ -270,8 +268,8 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     bias(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
         , cudnn_frontend::DataType_t const& compute_data_type
         , py::object const& name
     ) {
@@ -286,9 +284,7 @@ public:
             }
         }
 
-        attributes.inputs.IN_0 = input_attributes_ptr;
-        attributes.inputs.IN_1 = bias_attributes_ptr;
-        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
+        auto OUT_0 = graph.pointwise(input, bias, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -302,12 +298,14 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     scale(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale
         , cudnn_frontend::DataType_t const& compute_data_type
         , py::object const& name
     ) {
-        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::MUL);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_compute_data_type(compute_data_type)
+                            .set_mode(cudnn_frontend::PointwiseMode_t::MUL);
         
         if (!name.is_none()) {
             if(py::isinstance<py::str>(name)) {
@@ -318,9 +316,7 @@ public:
             }
         }
 
-        attributes.inputs.IN_0 = input_attributes_ptr;
-        attributes.inputs.IN_1 = scale_attributes_ptr;
-        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
+        auto OUT_0 = graph.pointwise(input, scale, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -334,11 +330,13 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     relu(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
         , py::object const& name
     ) {
-        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_compute_data_type(compute_data_type)
+                            .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
         
         if (!name.is_none()) {
             if(py::isinstance<py::str>(name)) {
@@ -349,8 +347,7 @@ public:
             }
         }
 
-        attributes.inputs.IN_0 = input_attributes_ptr;
-        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
+        auto OUT_0 = graph.pointwise(input, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -360,11 +357,12 @@ public:
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2UL>
     genstats(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
         , py::object const& name
     ) {
-        auto attributes = cudnn_frontend::graph::Genstats_attributes().set_compute_data_type(compute_data_type);
+        auto attributes = cudnn_frontend::graph::Genstats_attributes()
+                            .set_compute_data_type(compute_data_type);
         
         if (!name.is_none()) {
             if(py::isinstance<py::str>(name)) {
@@ -375,8 +373,7 @@ public:
             }
         }
 
-        attributes.inputs.X = input_attributes_ptr;
-        auto [SUM, SQ_SUM] = graph.genstats(attributes.inputs.X, attributes);
+        auto [SUM, SQ_SUM] = graph.genstats(input, attributes);
 
         // Default virtualness in python is true
         SUM->set_is_virtual(true);
@@ -391,11 +388,13 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     elu(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
         , py::object const& name
     ) {
-        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_compute_data_type(compute_data_type)
+                            .set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
         
         if (!name.is_none()) {
             if(py::isinstance<py::str>(name)) {
@@ -406,8 +405,7 @@ public:
             }
         }
 
-        attributes.inputs.IN_0 = attributes_ptr;
-        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
+        auto OUT_0 = graph.pointwise(input, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
@@ -421,11 +419,13 @@ public:
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     gelu(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
         , py::object const& name
     ) {
-        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_compute_data_type(compute_data_type)
+                            .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
         
         if (!name.is_none()) {
             if(py::isinstance<py::str>(name)) {
@@ -436,8 +436,7 @@ public:
             }
         }
 
-        attributes.inputs.IN_0 = input_attributes_ptr;
-        auto [OUT_0] = graph.pointwise(attributes.inputs, attributes);
+        auto OUT_0 = graph.pointwise(input, attributes);
 
         // Default virtualness in python is true
         OUT_0->set_is_virtual(true);
