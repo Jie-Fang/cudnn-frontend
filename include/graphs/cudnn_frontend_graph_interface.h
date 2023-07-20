@@ -224,8 +224,8 @@ public:
     std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
     std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
     
-    Scaled_dot_product_attention_attributes::Outputs scaled_dot_product_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_attention_attributes);
-    Scaled_dot_product_flash_attention_attributes::Outputs scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_flash_attention_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_attention_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Scaled_dot_product_flash_attention_attributes);
 
     Plans
     get_execution_plan_list(HeurMode_t mode);
@@ -471,7 +471,7 @@ inline std::shared_ptr<Tensor_attributes> Graph::matmul(std::shared_ptr<Tensor_a
     return C;
 }
 
-inline Scaled_dot_product_attention_attributes::Outputs Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_attention_attributes options) {    
+inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_attention_attributes options) {    
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
     auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
@@ -483,10 +483,10 @@ inline Scaled_dot_product_attention_attributes::Outputs Graph::scaled_dot_produc
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(std::move(options), context));
 
-    return Scaled_dot_product_attention_attributes::Outputs{O, S};
+    return {O, S};
 }
 
-inline Scaled_dot_product_flash_attention_attributes::Outputs Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_flash_attention_attributes options) {    
+inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_flash_attention_attributes options) {
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
     auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
@@ -498,7 +498,7 @@ inline Scaled_dot_product_flash_attention_attributes::Outputs Graph::scaled_dot_
 
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(std::move(options), context));
 
-    return Scaled_dot_product_flash_attention_attributes::Outputs{O, Stats};
+    return {O, Stats};
 }
 
 } // namespace cudnn_frontend::graph

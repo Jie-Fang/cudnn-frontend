@@ -62,9 +62,9 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         scaled_dot_product_flash_attention_options.set_bias(bias);
     #endif
 
-    auto outputs = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
+    auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
 
-    outputs.Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
+    Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -113,12 +113,12 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         , {bias, bTensor.devPtr}
         , {seed, dropoutSeed.devPtr}
         , {offset, dropoutOffset.devPtr}
-        , {outputs.O, devPtrO}
+        , {O, devPtrO}
     };
 
     Surface<float> statsTensor(b * h * s_q * 1, false);
     if(is_inference == false) {
-        variant_pack[outputs.Stats] = statsTensor.devPtr;
+        variant_pack[Stats] = statsTensor.devPtr;
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
@@ -159,9 +159,9 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
                                                     .set_attn_scale(attn_scale)
                                                     .set_bias(bias);
 
-    auto outputs = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
+    auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
 
-    outputs.Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
+    Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
 
     // No dropout in flash attention only supported 8.9.3 onwards.
     #if (CUDNN_VERSION < 8930)
@@ -204,12 +204,12 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
         , {V, devPtrV}
         , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
-        , {outputs.O, devPtrO}
+        , {O, devPtrO}
     };
 
     Surface<float> statsTensor(b * h * s_q * 1, false);
     if(is_inference == false) {
-        variant_pack[outputs.Stats] = statsTensor.devPtr;
+        variant_pack[Stats] = statsTensor.devPtr;
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
@@ -256,7 +256,7 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
                                                     .set_attn_scale(attn_scale)
                                                     .set_dropout(dropout_probability, seed);
 
-    auto outputs = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
+    auto [O, S] = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -308,12 +308,12 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
         , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
         , {V, devPtrV}
-        , {outputs.O, devPtrO}
+        , {O, devPtrO}
     };
 
     Surface<half> sTensor(b * h * s_q * s_kv, false);
     if(is_inference == false) {
-        variant_pack[outputs.S] = sTensor.devPtr;
+        variant_pack[S] = sTensor.devPtr;
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
@@ -355,7 +355,7 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
                                                     .set_bias(bias)
                                                     .set_padding_mask(true)
                                                     .set_attn_scale(attn_scale);
-    auto outputs = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
+    auto [O, S] = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -407,12 +407,12 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
         , {attn_scale, &attn_scale_cpu}
         , {bias, bTensor.devPtr}
         , {V, devPtrV}
-        , {outputs.O, devPtrO}
+        , {O, devPtrO}
     };
 
     Surface<half> sTensor(b * h * s_q * s_kv, false);
     if(is_inference == false) {
-        variant_pack[outputs.S] = sTensor.devPtr;
+        variant_pack[S] = sTensor.devPtr;
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
@@ -452,7 +452,7 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
                                                     .set_seq_len_k(SEQ_LEN_K)
                                                     .set_dropout(dropout_mask, dropout_scale);
                                                     
-    auto outputs = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
+    auto [O, S] = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -503,12 +503,12 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
         , {dropout_mask, dropoutMaskTensor.devPtr}
         , {dropout_scale, &dropout_scale_value}
         , {V, devPtrV}
-        , {outputs.O, devPtrO}
+        , {O, devPtrO}
     };
 
     Surface<half> sTensor(b * h * s_q * s_kv, false);
     if(is_inference == false) {
-        variant_pack[outputs.S] = sTensor.devPtr;
+        variant_pack[S] = sTensor.devPtr;
     }
     
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
