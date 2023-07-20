@@ -238,6 +238,6 @@ def test_drelu_dadd_dbn():
     graph.execute(device_buffers, workspace)
         
 if __name__ == "__main__":
-    # test_bn()
+    test_bn()
     test_bn_relu_with_mask()
-    # test_drelu_dadd_dbn()
+    test_drelu_dadd_dbn()

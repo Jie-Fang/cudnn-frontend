@@ -46,12 +46,18 @@ typedef struct error_object {
         return code == error_code_t::OK;
     } 
 
-
     bool
     is_bad() const {
         return !is_good();
     }
 
+    bool operator== (error_code_t compare_code) {
+        return code == compare_code;
+    }
+
+    bool operator!= (error_code_t compare_code) {
+        return code != compare_code;
+    }
 
 } error_t;
 

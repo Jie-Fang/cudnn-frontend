@@ -59,7 +59,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
-    REQUIRE(graph.validate().is_good());
+    REQUIRE((graph.validate() == cudnn_frontend::error_code_t::OK));
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
