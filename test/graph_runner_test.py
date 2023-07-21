@@ -19,4 +19,15 @@ def test_conv_relu(jparams):
 
     print(graph)
 
-    testGraph.referenceCheck(atol=1e-2,rtol=1e-2)
+    # Note that the below can be replaced by testGraph.cudnnExecuteAndCompareToReference(atol=1e-2,rtol=1e-2)
+
+    # Run the pycudnn graph
+    workspace, variant_pack = testGraph.createWorkspaceAndVariantPack()
+    testGraph.cudnn_graph.execute(variant_pack, workspace)
+
+    # Run the reference
+    ref_outputs = testGraph.calcReference()
+
+    # Compare with reference
+    for Y_expected, Y_actual in zip(ref_outputs, testGraph.getOutputs()):
+        torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)

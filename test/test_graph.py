@@ -208,6 +208,9 @@ class TestGraph:
         self.graph_name = "TestGraph"
         self.output_tensors = []
 
+    def getOutputs(self):
+        return self.output_tensors
+
     # @brief: Add a convolution node to the graph
     def conv(self, **kwargs):
         return self.createAndAddOperation(kwargs, pycudnn.pygraph.conv)
@@ -309,7 +312,7 @@ class TestGraph:
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the isVisited status of the nodes
     # TODO(@mbreughe): to preserve resources, we could consider clearing intermediate results when they are no longer needed
-    def getReference(self):
+    def calcReference(self):
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
         for node in self.entrance_nodes:
@@ -324,9 +327,7 @@ class TestGraph:
         self.clearNodeMetaData()
         return output
     
-    # @brief: Run the pycudnn implementation and the reference, and compare
-    # @note: This assumes buildPyCudnnGraph has already been run
-    def referenceCheck(self, atol=1e-2, rtol=1e-2):
+    def createWorkspaceAndVariantPack(self):
         # Creating workspace
         workspace = torch.empty(self.cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
@@ -341,16 +342,21 @@ class TestGraph:
                 self.output_tensors.append(output_tensor)
                 variant_pack[node.output.pyCudnnTensor] = self.output_tensors[-1]
 
+        return (workspace, variant_pack)
+    
+    # @brief: Run the pycudnn implementation and the reference, and compare
+    # @note: This assumes buildPyCudnnGraph has already been run
+    def cudnnExecuteAndCompareToReference(self, atol=1e-2, rtol=1e-2):
+        workspace, variant_pack = self.createWorkspaceAndVariantPack()
+
         # Run the pycudnn graph
         print("Executing graph through pycudnn")
         self.cudnn_graph.execute(variant_pack, workspace)
 
-        # TODO(@mbreughe): adjust this for multiple outputs.
-        Y_actual = self.output_tensors[-1]
-
         # Run the reference
         print("Computing reference")
-        Y_expected = self.getReference()[-1]
+        ref_outputs = self.calcReference()
 
         # Compare with reference
-        torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
+        for Y_expected, Y_actual in zip(ref_outputs, self.getOutputs()):
+            torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)

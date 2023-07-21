@@ -9,20 +9,21 @@ from test_graph import TestGraph, Operation
 def runTestFromJsonDefinition(json_dict):
     testGraph = TestGraph()
 
-    tensor_list = json_dict["tensors"]
-    node_list = json_dict["nodes"]
-    input_tensors = detectInputTensors(tensor_list, node_list)
+    jtensor_list = json_dict["tensors"]
+    jnode_list = json_dict["nodes"]
+    input_tensors = detectInputTensors(jtensor_list, jnode_list)
 
     TGTensors = {}
+    # Create a TestTensor for every input tensor
     for tensor in input_tensors:
         t = testGraph.tensor(**tensor)
         TGTensors[tensor["name"]] = t
 
     TGNodes = {}
-    # Create all output tensors by adding nodes
-    for node in node_list:
+    # Create all operation nodes (without input) and their associated output tensors
+    for node in jnode_list:
         name = node["name"]
-        # Create node without input and add to the grraph
+        # Create node without input and add to the graph
         operation = createNode(node)
         testGraph.nodes.append(operation)
 
@@ -34,10 +35,10 @@ def runTestFromJsonDefinition(json_dict):
         TGTensors[output_name] = output_tensor
         TGNodes[name] = operation
 
-    # Finalize the connections
+    # Finalize the connections by adding inputs to the operation nodes
     for name, node in TGNodes.items():
         jnode = None
-        for n in node_list:
+        for n in jnode_list:
             if n["name"] == name:
                 jnode = n
         node.setKwargs(createKwargs(jnode, TGTensors))
@@ -49,7 +50,7 @@ def runTestFromJsonDefinition(json_dict):
 
     print(graph)
 
-    testGraph.referenceCheck(atol=1e-2,rtol=1e-2)
+    testGraph.cudnnExecuteAndCompareToReference(atol=1e-2,rtol=1e-2)
     
 # TODO(@mbreughe): generalize
 def createNode(node_params):
