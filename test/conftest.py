@@ -10,7 +10,7 @@ def get_python_graph_defs(path, module_name):
     if os.path.exists(filename):
         spec = importlib.util.spec_from_file_location(name="basic_tests", location=filename)
         my_module =  importlib.util.module_from_spec(spec)
-        loaded_m = spec.loader.exec_module(my_module)
+        spec.loader.exec_module(my_module)
 
     test_funcs = []
     test_names = []
@@ -21,31 +21,42 @@ def get_python_graph_defs(path, module_name):
 
     return (test_funcs, test_names)
 
-
-def pytest_generate_tests(metafunc):
-    JSON_TEST_LIST_PARAM = "jparams"
-    # For functions with "params" as argument
-    if JSON_TEST_LIST_PARAM in metafunc.fixturenames:
-        # Find the json with the coressponding name
-        # TODO(@mbreughe): make the base path a variable
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        filename = os.path.join(base_path, "json", "{}.json".format(metafunc.function.__name__))
+def createTestParamNameTuples(test_funcs, test_names, params_path):
+    tuples = []
+    test_ids = []
+    for test_name, func in zip(test_names, test_funcs):
+        filename = os.path.join(params_path, "{}.json".format(test_name))
         if os.path.exists(filename):
             params = []
             with open(filename) as ifh:
                 params = json.load(ifh)
 
-            test_ids = ["json({})".format(i) for i in range(len(params))]
+            cur_ids = ["{}[json({})]".format(test_name, i) for i in range(len(params))]
 
-            metafunc.parametrize(JSON_TEST_LIST_PARAM, params, ids=test_ids)
-        else:
-            metafunc.parametrize(JSON_TEST_LIST_PARAM, [])
+            for par in params:
+                tuples.append((func,par))
 
-    MAGIC_STR = "test_name"
-    if MAGIC_STR in metafunc.fixturenames: 
+            test_ids.extend(cur_ids)
+
+    return tuples, test_ids
+
+
+def pytest_generate_tests(metafunc):
+    JSON_TEST_LIST_PARAM = "jparams"
+    TEST_NAME_PARAM = "test_name"
+
+    # Dynamically create tests for python_graph_test by identifying all test defs in a test directory
+    if TEST_NAME_PARAM in metafunc.fixturenames and JSON_TEST_LIST_PARAM in metafunc.fixturenames: 
         base_path = os.path.dirname(os.path.abspath(__file__))
+        # TODO(@mbreughe): make this path a command line option (see https://docs.pytest.org/en/7.1.x/example/simple.html)
         module_path = os.path.join(base_path, "python_graph_defs")
         test_funcs, test_names = get_python_graph_defs(module_path, "basic_tests")
 
-        metafunc.parametrize(MAGIC_STR, test_funcs, ids=test_names)
+        # TODO(@mbreughe): make this path a command line option
+        params_path = os.path.join(base_path, "json")
+
+        # TODO(@mbreughe): Parsing all the associated json files may be time consuming
+        param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path)
+
+        metafunc.parametrize(TEST_NAME_PARAM+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
 

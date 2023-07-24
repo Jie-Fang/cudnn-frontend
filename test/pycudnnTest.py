@@ -24,6 +24,10 @@ if __name__ == "__main__":
 
         runTestFromJsonDefinition(json_tests[test_name])
     elif args.testPath.endswith(".py"):
-        pytest.main(["python_graph_test.py", "-v"])
+        pytest_cmd = ["python_graph_test.py", "-v"]
+        if args.testName is not None:
+            pytest_cmd.append("-k {}".format(args.testName))
+
+        pytest.main(pytest_cmd)
     else:
         print("Unrecognized test file {}".format(args.testPath))
