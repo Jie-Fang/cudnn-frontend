@@ -3,6 +3,8 @@ import argparse
 import json
 from json_graph_test import runTestFromJsonDefinition
 
+from python_graph_defs.basic_tests import test_conv_relu
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='pyCudnnTest')
     # TODO(@mbreughe): generalize this to a directory of python files
@@ -22,6 +24,6 @@ if __name__ == "__main__":
 
         runTestFromJsonDefinition(json_tests[test_name])
     elif args.testPath.endswith(".py"):
-        pytest.main([args.testPath])
+        pytest.main(["python_graph_test.py", "-v"])
     else:
         print("Unrecognized test file {}".format(args.testPath))

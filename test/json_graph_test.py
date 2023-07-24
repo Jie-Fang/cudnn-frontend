@@ -88,14 +88,3 @@ def detectInputTensors(tensors, nodes):
 
     input_tensors = [tensor for tensor in tensors if not tensor["name"] in output_tensors]
     return input_tensors
-
-
-if __name__ == "__main__":
-    cur_dir = os.path.dirname(os.path.abspath(__file__))
-    fname = os.path.join(cur_dir, "json/graphTests.json")
-    test_name = "ConvRelu1"
-
-    with open(fname) as ifh:
-        json_tests = json.load(ifh)
-
-    runTestFromJsonDefinition(json_tests[test_name])
