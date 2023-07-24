@@ -50,6 +50,7 @@ def runTestFromJsonDefinition(json_dict):
 
     print(graph)
 
+    # TODO(@mbreughe): read in rtol/atol from json
     testGraph.cudnnExecuteAndCompareToReference(atol=1e-2,rtol=1e-2)
     
 # TODO(@mbreughe): generalize
