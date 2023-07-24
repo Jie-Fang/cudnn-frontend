@@ -200,9 +200,9 @@ def convert_to_torch_type(cudnn_type):
 # @details: this contains functionality to run both pycudnn code as well as a reference
 class TestGraph:
     __test__ = False
-    uid_counter = 0
     # Add data types, custom test name ,etc.
     def __init__(self):
+        self.uid_counter = 0
         self.nodes = []
         self.entrance_nodes = []
         self.graph_name = "TestGraph"
@@ -225,7 +225,7 @@ class TestGraph:
         if "name" in kwargs:
             name = kwargs["name"]
         else:
-            name = TestGraph.createUniqueName("Tensor")
+            name = self.createUniqueName("Tensor")
 
         testTensor = RandomTensorGenerator(kwargs, name)
 
@@ -234,11 +234,10 @@ class TestGraph:
         self.entrance_nodes.append(testTensor)
         return testTensor.output
     
-    # @brief: utility function to create unique names
-    @staticmethod
-    def createUniqueName(prefix):
-        name = prefix + "_{}".format(TestGraph.uid_counter)
-        TestGraph.uid_counter += 1
+    # @brief: utility function to create unique names for the graph
+    def createUniqueName(self, prefix):
+        name = prefix + "_{}".format(self.uid_counter)
+        self.uid_counter += 1
         return name
 
     # @brief: Create an operation, pass through the kwargs and set up dependencies
@@ -250,7 +249,7 @@ class TestGraph:
             name = kwargs["name"]
         else:
             pyCudnnOpName = pyCudnnOp.__name__
-            name = TestGraph.createUniqueName(pyCudnnOpName)
+            name = self.createUniqueName(pyCudnnOpName)
 
         node = TestGraph.createOperation(pyCudnnOp, name)
         node.setKwargs(kwargs)
