@@ -2,9 +2,26 @@
 import torch, json
 import os
 import pycudnn
+import pytest
 
 from test_graph import TestGraph, Operation
 
+# A helper function to read json dictionaries
+@pytest.fixture
+def json_dict(request):
+    fname = request.param
+    assert os.path.exists(fname)    
+
+    with open(fname) as ifh:
+        json_tests = json.load(ifh)
+
+    return json_tests
+
+# Main entry point: it will call the json_dict fixture,
+# and use the test_name passed by the command line through conftest.py
+def test_json_graph(json_dict, test_name):
+    assert test_name in json_dict
+    runTestFromJsonDefinition(json_dict[test_name])
 
 def runTestFromJsonDefinition(json_dict):
     testGraph = TestGraph()

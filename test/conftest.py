@@ -3,6 +3,10 @@ import importlib.util
 import inspect
 
 
+def pytest_addoption(parser):
+    parser.addoption("--testName", action="store", default=None)
+    parser.addoption("--testPath", action="store", default=None)
+
 
 def get_python_graph_defs(path, module_name):
     
@@ -56,7 +60,18 @@ def pytest_generate_tests(metafunc):
         params_path = os.path.join(base_path, "json")
 
         # TODO(@mbreughe): Parsing all the associated json files may be time consuming
+        # TODO: we actually don't need to load all of them, only the ones in the file specified. 
+        # We could delay it for just-in-time discovery if there are too many tests
         param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path)
 
         metafunc.parametrize(TEST_NAME_PARAM+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
+
+
+    elif metafunc.function.__name__ == "test_json_graph":
+        id=os.path.basename(metafunc.config.getoption("testPath"))
+        # Using keyword indirect allows us to call the associated fixture
+        metafunc.parametrize("json_dict", [metafunc.config.getoption("testPath")], indirect=True, ids=[id])
+        metafunc.parametrize(TEST_NAME_PARAM, [metafunc.config.getoption("testName")])
+        
+        
 
