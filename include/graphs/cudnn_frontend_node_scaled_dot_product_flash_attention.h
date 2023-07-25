@@ -271,10 +271,6 @@ namespace cudnn_frontend::graph {
 
             return {error_code_t::OK, ""};
         }
-
-        error_t createOperationGraphs(cudnnHandle_t) override final {
-            return {error_code_t::OK, ""};
-        }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {            
             if(options.dropout_probability.has_value()) {

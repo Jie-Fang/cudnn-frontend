@@ -103,7 +103,9 @@ protected:
         return {error_code_t::OK, ""};
     }
 
-    virtual error_t createOperationGraphs(cudnnHandle_t) = 0;
+    virtual error_t createOperationGraphs(cudnnHandle_t) {
+        return {error_code_t::GRAPH_NOT_SUPPORTED, ""};
+    }
 
     virtual error_t createOperations() {
         for(auto const& sub_node: sub_nodes) {
