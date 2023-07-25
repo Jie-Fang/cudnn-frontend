@@ -10,4 +10,18 @@
         {"name":"relu0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"afterConv", "Y":"afterActivation", "mathPrec":"float"}
     ],
     "tolerances":{"rel":2.5e-3, "abs":2.5e-3}
-  }}
+  },
+  "ConvRelu2" : {
+    "tensors": [
+        {"name":"xTensor", "dataType":"half", "dim":[20,40,30,40], "layout":"NHWC"},
+        {"name":"wTensor", "dataType":"half", "dim":[54, 40, 3, 4], "layout":"NHWC"},
+        {"name":"afterConv", "dataType":"half", "dim":[20, 54, 14, 13], "layout":"NHWC", "isVirtual":true},
+        {"name":"afterActivation", "dataType":"half", "dim":[20, 54, 14, 13], "layout":"NHWC"}
+    ],
+    "nodes":[
+        {"name":"conv0", "operation":"conv", "X":"xTensor", "W":"wTensor", "Y":"afterConv", "pad":[0,1], "stride":[2,3], "dilation":[1,1], "mode":"CORR", "mathPrec":"float"},
+        {"name":"relu0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"afterConv", "Y":"afterActivation", "mathPrec":"float"}
+    ],
+    "tolerances":{"rel":2.5e-3, "abs":2.5e-3}
+  }
+}

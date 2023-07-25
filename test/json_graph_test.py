@@ -7,8 +7,10 @@ import pytest
 from test_graph import TestGraph, Operation
 
 # A helper function to read json dictionaries
-@pytest.fixture
+# @note: scope tells us that the dictionary is being loaded only once
+@pytest.fixture(scope="module")
 def json_dict(request):
+    print("I am being loaded")
     fname = request.param
     assert os.path.exists(fname)    
 
@@ -17,8 +19,9 @@ def json_dict(request):
 
     return json_tests
 
-# Main entry point: it will call the json_dict fixture,
-# and use the test_name passed by the command line through conftest.py
+# Main entry point for json defined graphs
+# @param json_dict: implicit call to a fixture using the json file name provided on the command line
+# @param test_name: the specific test to be ran
 def test_json_graph(json_dict, test_name):
     assert test_name in json_dict
     runTestFromJsonDefinition(json_dict[test_name])
