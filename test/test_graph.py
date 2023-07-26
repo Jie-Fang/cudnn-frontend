@@ -14,17 +14,27 @@ class PytorchReference:
     # @details: all this function needs to do is unpack the pycudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv(kwargs):
-        return torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
 
     # @brief: run relu
     # @details: unpack the pycudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
     def relu(kwargs):
-        return torch.nn.functional.relu(kwargs["input"])
+        return [torch.nn.functional.relu(kwargs["input"])]
     
     @staticmethod
     def batchnorm(kwargs):
-        return torch.randn(1,1,1,1, requires_grad=False, device="cuda")
+        is_training = kwargs["norm_forward_phase"] == pycudnn.norm_forward_phase.TRAINING
+        momentum = kwargs["momentum"].item()
+        epsilon=kwargs["epsilon"].item()
+        output = torch.nn.functional.batch_norm(kwargs["input"], kwargs["in_running_mean"], kwargs["in_running_var"], weight= kwargs["scale"], bias=kwargs["bias"], training=is_training, momentum=momentum, eps=epsilon)
+        
+        output = [output]
+
+        # torch's implementation only returns 1 output. 
+        # Filling out the others with an amount of None's and have the reference check deal with it
+        output.extend([None]*4)
+        return output
 
 # Base class for Tensor and Operation nodes
 class TestNode:
@@ -138,7 +148,8 @@ class Operation(TestNode):
                 new_kwargs[x] = self.kwargs[x].ref_data
         ref_output = self.refFunc(new_kwargs)
 
-        self.output.ref_data = ref_output
+        for output, ref_out in zip(self.output, ref_output):
+            output.ref_data = ref_out
 
 class RandomTensorGenerator(TestNode):
     __test__ = False
@@ -400,7 +411,8 @@ class TestGraph:
         output = []
         for node in self.nodes:
             if node.isOutputNode():
-                output.append(node.output.ref_data)
+                for out in node.output:
+                    output.append(out.ref_data)
 
         # Clear the "isVisited" status of the nodes
         self.clearNodeMetaData()
@@ -437,6 +449,19 @@ class TestGraph:
         print("Computing reference")
         ref_outputs = self.calcReference()
 
+        assert len(ref_outputs ) == len(self.getOutputs())
+
+        number_outputs_tested = 0
         # Compare with reference
         for Y_expected, Y_actual in zip(ref_outputs, self.getOutputs()):
+            # TODO (@mbreughe): Clean up this assumption:
+            # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
+            # For now, we can assume that we don't care about this output and just let the reference pass
+            # To be on the safe side, we will make sure at least one output was checked
+            if Y_expected is None:
+                continue
+            
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+            number_outputs_tested += 1
+        
+        assert number_outputs_tested >= 1

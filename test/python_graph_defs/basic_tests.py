@@ -28,10 +28,6 @@ def test_batchnorm(jparams, testGraph):
     in_running_mean = testGraph.tensor(dim=[1, C, 1, 1], data_type=pycudnn.data_type.FLOAT)
     in_running_var = testGraph.tensor(dim=[1, C, 1, 1], data_type=pycudnn.data_type.FLOAT)
 
-
-    # TODO(@mbreughe): create constants
-    #epsilon_cpu = torch.full((1, 1, 1, 1), 1e-03, requires_grad=False, device="cpu", dtype=torch.float32)
-    #momentum_cpu = torch.full((1, 1, 1, 1), 0.1, requires_grad=False, device="cpu", dtype=torch.float32)
     epsilon = testGraph.tensor_cpu_constant(1e-03, dim=[1,1,1,1], data_type=pycudnn.data_type.FLOAT)
     momentum = testGraph.tensor_cpu_constant(0.1, dim=[1,1,1,1], data_type=pycudnn.data_type.FLOAT)
 
@@ -42,5 +38,6 @@ def test_batchnorm(jparams, testGraph):
                         , in_running_mean = in_running_mean, in_running_var = in_running_var
                         , epsilon = epsilon, momentum = momentum)
     
+    # TODO: set_data_type. Also allow chaining by returning the tensor 
     #Y.set_data_type(pycudnn.data_type.HALF)
  
