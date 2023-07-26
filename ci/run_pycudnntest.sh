@@ -12,7 +12,12 @@ function run_python_tests() {
     export CUDNN_FRONTEND_LOG_INFO=1
     export PYTHONPATH=build/python_bindings
     
-    pytest test -v
+    # Graph tests from json
+    python test/pycudnnTest.py --testPath test/json_graph_defs/graphTests.json --testName ConvRelu1
+    # Python defined graph tests
+    python test/pycudnnTest.py --testPath test/python_graph_defs/basic_tests.py
+    # Explicit tests (not using test_graph)
+    pytest test/explicit_test.py
 }
 
 display_header

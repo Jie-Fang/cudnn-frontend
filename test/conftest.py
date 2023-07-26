@@ -7,7 +7,6 @@ def pytest_addoption(parser):
     parser.addoption("--testName", action="append", default=[])
     parser.addoption("--testPath", action="store", default=None)
 
-
 def get_python_graph_defs(path, module_name):
     
     filename = os.path.join(path, "{}.py".format(module_name))
@@ -31,8 +30,8 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
     tuples = []
     test_ids = []
     for test_name, func in zip(test_names, test_funcs):
-        # Only look at tests we requested
-        if not test_name in wanted_tests:
+        # If wanted_tests are specified, only look at tests we requested
+        if len(wanted_tests) > 0 and not test_name in wanted_tests:
             continue
         
         filename = os.path.join(params_path, "{}.json".format(test_name))
@@ -67,9 +66,6 @@ def pytest_generate_tests(metafunc):
         # TODO(@mbreughe): make this path a command line option
         params_path = os.path.join(base_path, "graph_input")
 
-        # TODO(@mbreughe): Parsing all the associated json files may be time consuming
-        # TODO: we actually don't need to load all of them, only the ones in the file specified. 
-        # We could delay it for just-in-time discovery if there are too many tests
         param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path, metafunc.config.getoption("testName"))
 
         metafunc.parametrize(GRAPH_PYTHON_FPTR+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
