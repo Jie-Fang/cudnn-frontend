@@ -10,13 +10,12 @@ if __name__ == "__main__":
     pct_parser.add_argument('--testPath', default="json_graph_defs/graphTests.json", 
                         help="This can be a json file or python file with graph definitions. "
                         "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py")
-    pct_parser.add_argument('--testName', default=[], action="append", help="Test Name (multiple names are allowed and recommended for performance)")
+    pct_parser.add_argument('--testName', default=[], action="append", help="Test Name (multiple names are allowed and recommended for performance). Note: in python graph mode, no name means all tests in file are executed. ")
     pct_parser.add_argument('--verbose', '-v', action="store_true", default=False, help="Verbose output")
     pct_parser.add_argument('--vverbose', '-vv', action="store_true", default=False, help="Very verbose output")
+    pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
 
     args = pct_parser.parse_args()
-
-    print(args)
 
     base_path = os.path.dirname(os.path.abspath(__file__))
     json_graph_test = os.path.join(base_path, "json_graph_test.py")
@@ -41,5 +40,8 @@ if __name__ == "__main__":
         pytest_cmd.append("-s")
     elif args.verbose:
         pytest_cmd.append("-v")
+
+    if int(args.threads) > 1:
+        pytest_cmd.extend(["-n", args.threads])
 
     pytest.main(pytest_cmd)
