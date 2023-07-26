@@ -54,7 +54,8 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
 def pytest_generate_tests(metafunc):
     JSON_TEST_LIST_PARAM = "jparams"
     JSON_DICT_PATH = "json_dict"
-    TEST_NAME_PARAM = "test_name"
+    GRAPH_PYTHON_FPTR = "graph_builder_fptr"
+    TEST_NAME_PARAM="test_name"
 
     # Dynamically create tests for python_graph_test by identifying all test defs in a test directory
     if metafunc.function.__name__ == "test_python_graph": 
@@ -71,7 +72,7 @@ def pytest_generate_tests(metafunc):
         # We could delay it for just-in-time discovery if there are too many tests
         param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path, metafunc.config.getoption("testName"))
 
-        metafunc.parametrize(TEST_NAME_PARAM+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
+        metafunc.parametrize(GRAPH_PYTHON_FPTR+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
 
 
     elif metafunc.function.__name__ == "test_json_graph":
