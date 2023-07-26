@@ -1,5 +1,6 @@
 import pytest
 import argparse
+import os
 
 from python_graph_defs.basic_tests import test_conv_relu
 
@@ -19,12 +20,16 @@ if __name__ == "__main__":
 
     # TODO(@mbreughe: add option to execute all tests ina file)
 
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    json_graph_test = os.path.join(base_path, "json_graph_test.py")
+    python_graph_test = os.path.join(base_path, "python_graph_test.py")
+
     # Graphs defined in json file
     if args.testPath.endswith(".json"):
-        pytest_cmd = ["json_graph_test.py"]
+        pytest_cmd = [json_graph_test]
     # Graphs defined in python file
     elif args.testPath.endswith(".py"):
-        pytest_cmd = ["python_graph_test.py"]
+        pytest_cmd = [python_graph_test]
     else:
         print("Unrecognized test file {}".format(args.testPath))
 
