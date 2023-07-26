@@ -132,17 +132,13 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
     auto bias = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
 
-    inputs.X = X;
-    inputs.SCALE = scale;
-    inputs.BIAS = bias;
-    inputs.PREV_RUNNING_MEAN = prev_running_mean;
-    inputs.PREV_RUNNING_VAR = prev_running_var;
-
     auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
     auto momentum = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_data_type(fe::DataType_t::FLOAT));
     
-    auto batchnorm_options = fe::graph::Batchnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon).set_momentum(momentum);
-    auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(inputs, batchnorm_options);
+    auto batchnorm_options = fe::graph::Batchnorm_attributes()
+                                .set_forward_phase(fe::NormFwdPhase_t::TRAINING)
+                                .set_epsilon(epsilon).set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
+    auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(X, scale, bias, batchnorm_options);
     bn_output->set_is_virtual(true);
 
     mean->set_data_type(fe::DataType_t::FLOAT);

@@ -202,7 +202,7 @@ public:
     
     std::shared_ptr<Tensor_attributes> tensor(Tensor_attributes const& tensor);
 
-    Batchnorm_attributes::Outputs batchnorm(Batchnorm_attributes::Inputs, Batchnorm_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Batchnorm_attributes);
 
     BN_finalize_attributes::Outputs bn_finalize(BN_finalize_attributes::Inputs, BN_finalize_attributes);
 
@@ -320,22 +320,20 @@ inline BN_finalize_attributes::Outputs Graph::bn_finalize(BN_finalize_attributes
     return return_outputs;
 }
 
-inline Batchnorm_attributes::Outputs Graph::batchnorm(Batchnorm_attributes::Inputs inputs, Batchnorm_attributes options) {
+inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::batchnorm(std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> bias, Batchnorm_attributes options) {
     
     // Set outputs
     options.make_outputs([this](std::string const &name){return output_tensor(name);});
     auto return_outputs = options.outputs;
 
     // Set inputs
-    options.inputs.X = inputs.X;
-    options.inputs.SCALE = inputs.SCALE;
-    options.inputs.BIAS = inputs.BIAS;
-    options.inputs.PREV_RUNNING_MEAN = inputs.PREV_RUNNING_MEAN;
-    options.inputs.PREV_RUNNING_VAR = inputs.PREV_RUNNING_VAR;
+    options.inputs.X = x;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS = bias;
 
     sub_nodes.emplace_back(std::make_unique<BatchNormNode>(std::move(options), context));
 
-    return return_outputs;
+    return {return_outputs.Y, return_outputs.MEAN, return_outputs.INV_VARIANCE, return_outputs.NEXT_RUNNING_MEAN, return_outputs.NEXT_RUNNING_VAR};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3> Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, DBN_attributes options) {

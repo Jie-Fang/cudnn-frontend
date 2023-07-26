@@ -43,8 +43,8 @@ def test_bn_relu_with_mask():
     bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride())
     in_running_mean = graph.tensor(name = "in_running_mean", dim = running_mean_gpu.size(), stride = running_mean_gpu.stride())
     in_running_var = graph.tensor(name = "in_running_var", dim = running_var_gpu.size(), stride = running_var_gpu.stride())
-    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride())
-    momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride())
+    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True)
+    momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride(), is_pass_by_value = True)
     comparison = graph.tensor(name = "zeros", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     
     (Y_before_relu, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
@@ -123,8 +123,8 @@ def test_bn():
     bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride())
     in_running_mean = graph.tensor(name = "in_running_mean", dim = running_mean_gpu.size(), stride = running_mean_gpu.stride())
     in_running_var = graph.tensor(name = "in_running_var", dim = running_var_gpu.size(), stride = running_var_gpu.stride())
-    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride())
-    momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride())
+    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True)
+    momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride(), is_pass_by_value = True)
     
     (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
                                                                                         , norm_forward_phase = pycudnn.norm_forward_phase.TRAINING

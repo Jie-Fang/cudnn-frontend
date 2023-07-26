@@ -886,6 +886,13 @@ public:
         return *this;
     }
 
+    Batchnorm_attributes& set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean, std::shared_ptr<Tensor_attributes>& variance, std::shared_ptr<Tensor_attributes>& momentum) {
+        inputs.PREV_RUNNING_MEAN = mean;
+        inputs.PREV_RUNNING_VAR = variance;
+        inputs.MOMENTUM = momentum;
+        return *this;
+    }
+
     Batchnorm_attributes& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
         return *this;

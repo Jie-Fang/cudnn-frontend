@@ -120,30 +120,33 @@ public:
     // does not own them and will not increse ref count.
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     batchnorm(
-        std::string const& name,
-        cudnn_frontend::NormFwdPhase_t const forward_phase,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& X_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_mean_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_var_props_ptr,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum,
-        cudnn_frontend::DataType_t const& compute_data_type
+        cudnn_frontend::NormFwdPhase_t const forward_phase
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_mean
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_var
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
     ) {
-        auto props = cudnn_frontend::graph::Batchnorm_attributes()
+        auto attributes = cudnn_frontend::graph::Batchnorm_attributes()
                         .set_forward_phase(forward_phase)
                         .set_compute_data_type(compute_data_type)
                         .set_epsilon(epsilon)
-                        .set_momentum(momentum);
-        props.inputs.X = X_props_ptr;
-        props.inputs.SCALE = scale_props_ptr;
-        props.inputs.BIAS = bias_props_ptr;
-        props.inputs.PREV_RUNNING_MEAN = in_running_mean_props_ptr;
-        props.inputs.PREV_RUNNING_VAR = in_running_var_props_ptr;
+                        .set_previous_running_stats(in_running_mean, in_running_var, momentum);
 
-        auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(props.inputs, props);
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
 
+        auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(x, scale, bias, attributes);
         Y->set_is_virtual(true);
 
         return {Y, mean, inv_var, next_running_mean, next_running_var};
@@ -778,7 +781,6 @@ void init_pygraph_submodule(py::module_ &m) {
             )pbdoc"
         )
         .def("batchnorm", &PyGraph::batchnorm,
-             py::arg_v("name", "batch_norm"),
              py::arg("norm_forward_phase"),
              py::arg("input"),
              py::arg("scale"),
@@ -787,7 +789,8 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("in_running_var"),
              py::arg("epsilon"),
              py::arg("momentum"),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("name", py::none())
         )
         .def("batchnorm_backward", &PyGraph::batchnorm_backward
              , py::arg("grad")
