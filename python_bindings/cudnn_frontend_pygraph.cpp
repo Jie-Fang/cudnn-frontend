@@ -226,6 +226,33 @@ public:
     // Takes image and loss properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    dgrad(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& filter,
+        std::vector<int64_t> const& padding,
+        std::vector<int64_t> const& stride,
+        std::vector<int64_t> const& dilation,
+        cudnn_frontend::DataType_t const& compute_data_type,
+        std::string const& name
+    ) {
+        auto attributes = cudnn_frontend::graph::Conv_dgrad_attributes()
+                        .set_compute_data_type(compute_data_type)
+                        .set_padding(padding)
+                        .set_stride(stride)
+                        .set_dilation(dilation);
+        auto DX = graph.conv_dgrad(loss, filter, attributes);
+
+        // Default virtualness in python is true
+        DX->set_is_virtual(true);
+
+        return DX;
+    }
+
+    // Returns a shared pointer as both this PyGraph class and the caller will own
+    // the underlying object.
+    // Takes image and loss properties by reference to shared pointer. This means this callee
+    // does not own them and will not increse ref count.
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     wgrad(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
@@ -844,6 +871,30 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     image (cudnn_tensor): The image tensor.
                     loss (cudnn_tensor): The loss tensor.
+                    padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
+                    stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
+                    dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The created tensor.
+            )pbdoc"
+        )
+        .def("dgrad", &PyGraph::dgrad
+             , py::arg("loss")
+             , py::arg("filter")
+             , py::arg_v{"padding", default_vector()}
+             , py::arg_v{"stride", default_vector()}
+             , py::arg_v{"dilation", default_vector()}
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Compute weight gradients using the given inputs and loss.
+
+                Args:
+                    loss (cudnn_tensor): The loss tensor.
+                    weight (cudnn_tensor): The weight tensor.
                     padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
                     stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
