@@ -154,73 +154,69 @@ class Operation(TestNode):
 class RandomTensorGenerator(TestNode):
     __test__ = False
 
-    def __init__(self, kwargs, name):
+    def __init__(self, kwargs, name, io_data_type):
         super().__init__(name)
         self.kwargs = kwargs
-        # TODO(mbreughe): Assume NHWC layout for now
-        print("DEBUG")
-        self.layout = "NCHW"
-        # Use fp16 by default
-        # TODO(@mbreughe): use pycudnn convention instead (like extracting it from the pycudnn graph)
-        if not "data_type" in self.kwargs:
-            self.data_type(pycudnn.data_type.HALF)
 
-        self.output = TestTensor(name+"_out", self)
-    
-    def data_type(self, data_type):
-        self.kwargs["data_type"] = data_type
+        self.output = [TestTensor(name+"_out", self)]
+
+        data_type = io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
+        self.output[0].set_data_type(data_type)
 
     def instantiateRandomTensor(self):
-        if self.output.ref_data is None:
-            self.output.ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.kwargs["data_type"]))
+        if self.output[0].ref_data is None:
+            self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
-            if self.layout == "NHWC":
-                self.output.ref_data = self.output.ref_data.to(memory_format=torch.channels_last)
+            if self.getLayout() == "NHWC":
+                self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
     
     def getValue(self):
         self.instantiateRandomTensor()
-        return self.output.ref_data
+        return self.output[0].ref_data
+    
+    def getLayout(self):
+        # TODO(mbreughe): Assume NCHW layout by default for now
+        return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
     def runPyCudnnCode(self, pyCudnnGraph):
         self.instantiateRandomTensor()
-        self.output.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.output.ref_data.size(), stride = self.output.ref_data.stride(), data_type = convert_to_cudnn_type(self.output.ref_data.dtype))
+        self.output[0].pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.output[0].ref_data.size(), stride = self.output[0].ref_data.stride(), data_type = self.output[0].data_type)
 
     def runRef(self):
         return self.getValue()
     
 # TODO(@mbreughe): maybe subclass this from RandomTensorGenerator
+# TODO(@mbreughe): consider putting the layout-kwargs as a separate helper function instead of setting it in the kwargs
 class ConstantTensor(TestNode):
-    def __init__(self, kwargs, name, value):
+    def __init__(self, kwargs, name, io_data_type, value):
         super().__init__(name)
         self.kwargs = kwargs
-        # TODO(mbreughe): Assume NHWC layout for now
-        print("DEBUG")
-        self.layout = "NCHW"
-        # Use fp16 by default
-        # TODO(@mbreughe): use pycudnn convention instead (like extracting it from the pycudnn graph)
-        if not "data_type" in self.kwargs:
-            self.data_type(pycudnn.data_type.HALF)
 
-        self.output = TestTensor(name+"_out", self)
+        self.output = [TestTensor(name+"_out", self)]
+
+        data_type = io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
+        self.output[0].set_data_type(data_type)
+
         self.value = value
-    
-    def data_type(self, data_type):
-        self.kwargs["data_type"] = data_type
 
     def instantiate(self):
-        if self.output.ref_data is None:
-            self.output.ref_data = torch.full(self.kwargs["dim"], self.value, requires_grad=False, device="cpu", dtype=convert_to_torch_type(self.kwargs["data_type"]))
+        if self.output[0].ref_data is None:
+            self.output[0].ref_data = torch.full(self.kwargs["dim"], self.value, requires_grad=False, device="cpu", dtype=convert_to_torch_type(self.output[0].data_type))
             
-            if self.layout == "NHWC":
-                self.output.ref_data = self.output.ref_data.to(memory_format=torch.channels_last)
+            if self.getLayout == "NHWC":
+                self.output[0].ref_data = self.output.ref_data.to(memory_format=torch.channels_last)
     
     def getValue(self):
         self.instantiate()
-        return self.output.ref_data
+        return self.output[0].ref_data
+    
+    def getLayout(self):
+        # TODO(mbreughe): Assume NCHW layout by default for now
+        return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
     def runPyCudnnCode(self, pyCudnnGraph):
         self.instantiate()
-        self.output.pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.output.ref_data.size(), stride = self.output.ref_data.stride(), data_type = convert_to_cudnn_type(self.output.ref_data.dtype))
+        self.output[0].pyCudnnTensor = pyCudnnGraph.tensor(name = self.name, dim = self.output[0].ref_data.size(), stride = self.output[0].ref_data.stride(), data_type = self.output[0].data_type)
 
     def runRef(self):
         return self.getValue()
@@ -236,6 +232,18 @@ class TestTensor:
         self.ref_data = None
 
         self.parent_op = parent_op
+
+    def set_data_type(self, data_type):
+        self.data_type = data_type
+
+        # Apply it immediately if a pycudnn tensor was already created
+        if self.pyCudnnTensor is not None:
+            self.pyCudnnTensor.set_data_type(data_type)
+
+    def apply_modifiers(self):
+        # If we ever specified a data type, apply it
+        if "data_type" in dir(self):
+            self.pyCudnnTensor.set_data_type(self.data_type)
     
 
 def convert_to_cudnn_type(torch_type):
@@ -263,12 +271,15 @@ def convert_to_torch_type(cudnn_type):
 class TestGraph:
     __test__ = False
     # Add data types, custom test name ,etc.
-    def __init__(self):
+    def __init__(self, io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT):
         self.uid_counter = 0
         self.nodes = []
         self.entrance_nodes = []
         self.graph_name = "TestGraph"
         self.output_tensors = []
+        self.io_data_type = io_data_type
+        self.intermediate_data_type = intermediate_data_type
+        self.compute_data_type = compute_data_type
 
     def getOutputs(self):
         return self.output_tensors
@@ -292,12 +303,12 @@ class TestGraph:
         else:
             name = self.createUniqueName("Tensor")
 
-        testTensor = RandomTensorGenerator(kwargs, name)
+        testTensor = RandomTensorGenerator(kwargs, name, self.io_data_type)
 
         self.nodes.append(testTensor)
         # we are assuming only input tensors are explicitly created
         self.entrance_nodes.append(testTensor)
-        return testTensor.output
+        return testTensor.output[0]
 
     def tensor_cpu_constant(self, value, **kwargs):
         # Create a name if none provided
@@ -306,10 +317,10 @@ class TestGraph:
         else:
             name = self.createUniqueName("Tensor")
 
-        node = ConstantTensor(kwargs, name, value)
+        node = ConstantTensor(kwargs, name, self.io_data_type, value)
         self.nodes.append(node)
         self.entrance_nodes.append(node)
-        return node.output
+        return node.output[0]
     
     # @brief: utility function to create unique names for the graph
     def createUniqueName(self, prefix):
@@ -371,8 +382,11 @@ class TestGraph:
                 print ("Setting {} as output".format(node.name))
                 for output in node.output:
                     output.pyCudnnTensor.set_output(True)
-                print("DEBUG -- setting data type")
-                node.output[0].pyCudnnTensor.set_data_type(pycudnn.data_type.HALF)
+
+    def apply_modifiers_to_node_output_tensors(self):
+        for node in self.nodes:
+            for tensor in node.output:
+                tensor.apply_modifiers()
 
     # @brief: Build the pycudnn graph
     # @note: this temporarily modifies the isVisited status of the nodes
@@ -380,15 +394,23 @@ class TestGraph:
     # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
     def buildPyCudnnGraph(self):
         # Setting up graph
-        graph = pycudnn.pygraph(self.graph_name, io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+        graph = pycudnn.pygraph(self.graph_name, io_data_type = self.io_data_type, intermediate_data_type = self.intermediate_data_type, compute_data_type = self.compute_data_type)
+        
+        # TODO(@mbreughe): Change this. We don't want to invoke pycudnn calls this way since we change the order
+        # a developer may have intended. It is useful when building from json graphs, but not when 
+        # manually setting up graphs. This is like building a house of cards.
         self.clearNodeMetaData()
         for node in self.entrance_nodes:
             node.buildPycudnnTreeRecursive(graph)
+        
+        # Once we constructed the pycudnn graph, it's time to apply any explicit modifiers to each node's output tensors
+        # TestGraph creates dummy output tensors to allow constructing of a graph.
+        # However, the actual output tensors are created once we call buildPycudnnTreeRecursive. This means any modifications
+        # such as Y.set_data_type(FLOAT) actually happened on the dummy tensors. Here we propogate this to the real tensors
+        self.apply_modifiers_to_node_output_tensors()
 
         # Setting implicit output nodes"
         self.markImplicitOutputNodes()
-
-        print (graph.check_support())
 
         # Building graph
         graph.build()
@@ -398,6 +420,15 @@ class TestGraph:
 
         self.cudnn_graph = graph
         return graph
+
+    def set_io_data_type(self, data_type):
+        self.io_data_type = data_type
+
+    def set_intermediate_data_type(self, data_type):
+        self.set_intermediate_data_type = data_type
+
+    def set_compute_data_type(self, data_type):
+        self.set_compute_data_type(data_type)
 
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the isVisited status of the nodes
@@ -424,7 +455,8 @@ class TestGraph:
 
         variant_pack = {}
         for node in self.entrance_nodes:
-            variant_pack[node.output.pyCudnnTensor] = node.getValue()
+            for output in node.output:
+                variant_pack[output.pyCudnnTensor] = node.getValue()
 
         for node in self.nodes:
             if node.isOutputNode():

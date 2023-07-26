@@ -5,21 +5,15 @@ import pycudnn
 from test_graph import TestGraph
 
 def test_conv_relu(jparams, testGraph):
-    X = testGraph.tensor(dim=jparams["in_dim"])
-    W = testGraph.tensor(dim=jparams["filter_dim"])
+    X = testGraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
+    W = testGraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
     
     conv_out = testGraph.conv(image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testGraph.relu(input = conv_out)
 
-def test_conv(jparams, testGraph):
-    X = testGraph.tensor(dim=jparams["in_dim"])
-    W = testGraph.tensor(dim=jparams["filter_dim"])
-    
-    conv_out = testGraph.conv(image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
-
 def test_batchnorm(jparams, testGraph):
-    #TODO (@mbreughe): change pygraph io_data_type to FLOAT !!!!!!
-
+    testGraph.set_io_data_type(pycudnn.data_type.FLOAT)
+    
     N, C, H, W = jparams["in_dim"]
     X = testGraph.tensor(dim=jparams["in_dim"], data_type=pycudnn.data_type.HALF) 
     X.layout="NHWC"
@@ -39,5 +33,5 @@ def test_batchnorm(jparams, testGraph):
                         , epsilon = epsilon, momentum = momentum)
     
     # TODO: set_data_type. Also allow chaining by returning the tensor 
-    #Y.set_data_type(pycudnn.data_type.HALF)
+    Y.set_data_type(pycudnn.data_type.HALF)
  

@@ -10,7 +10,6 @@ from test_graph import TestGraph, Operation
 # @note: scope tells us that the dictionary is being loaded only once
 @pytest.fixture(scope="module")
 def json_dict(request):
-    print("I am being loaded")
     fname = request.param
     assert os.path.exists(fname)    
 
@@ -48,7 +47,8 @@ def runTestFromJsonDefinition(json_dict):
         testGraph.nodes.append(operation)
 
         # Record it's output
-        output_tensor = operation.output
+        # TODO(@mbreughe): extend for operators with multiple nodes
+        output_tensor = operation.output[0]
         # TODO(@mbreughe): generalize output name retrieval
         output_name = node["Y"]
 
