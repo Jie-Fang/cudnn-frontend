@@ -305,6 +305,61 @@ public:
         return OUT_0;
     }
 
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    rsqrt(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
+    ) {
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_compute_data_type(compute_data_type)
+                            .set_mode(cudnn_frontend::PointwiseMode_t::RSQRT);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        auto OUT_0 = graph.pointwise(input, attributes);
+
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
+    }
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    sub(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& a
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& b
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , py::object const& name
+    ) {
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_compute_data_type(compute_data_type)
+                            .set_mode(cudnn_frontend::PointwiseMode_t::SUB);
+        
+        if (!name.is_none()) {
+            if(py::isinstance<py::str>(name)) {
+                attributes.set_name(name.cast<std::string>());
+            }
+            else {
+                throw std::invalid_argument("operation name can only be str type.");
+            }
+        }
+
+        auto OUT_0 = graph.pointwise(a, b, attributes);
+
+        // Default virtualness in python is true
+        OUT_0->set_is_virtual(true);
+
+        return OUT_0;
+    }
+
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
     // Takes input properties by reference to shared pointer. This means this callee
@@ -830,6 +885,40 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Returns:
                     cudnn_tensor: The result of adding bias to the input.
+            )pbdoc"
+        )
+        .def("rsqrt", &PyGraph::rsqrt
+             , py::arg("input")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Compute reciprocal square root of input tensor.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of reciprocal square root of input.
+            )pbdoc"
+        )
+        .def("sub", &PyGraph::sub
+             , py::arg("a")
+             , py::arg("b")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", py::none())
+             , R"pbdoc(
+                Computes subtraction of two tensors.
+
+                Args:
+                    a (cudnn_tensor): The tensor to subtract from.
+                    b (cudnn_tensor): The tensor to subtract with.
+                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of subtration.
             )pbdoc"
         )
         .def("scale", &PyGraph::scale
