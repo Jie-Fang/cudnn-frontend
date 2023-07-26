@@ -798,7 +798,7 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     dim (List[int]): The dimensions of the tensor.
                     stride (List[int]): The strides of the tensor.
-                    data_type (pycudnn.data_type): The data type of the tensor. Default is pycudnn.data_type.NOT_SET.
+                    data_type (cudnn.data_type): The data type of the tensor. Default is cudnn.data_type.NOT_SET.
                     is_virtual (bool): Flag indicating if the tensor is virtual. Default is False.
                     is_pass_by_value (bool): Flag indicating if the tensor is passed by value. Default is False.
                     name (Optional[str]): The name of the tensor.
@@ -850,7 +850,7 @@ void init_pygraph_submodule(py::module_ &m) {
                     padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
                     stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -874,7 +874,7 @@ void init_pygraph_submodule(py::module_ &m) {
                     padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
                     stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -916,7 +916,7 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     A (cudnn_tensor): The first tensor.
                     B (cudnn_tensor): The second matrix tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -934,7 +934,7 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     input (cudnn_tensor): The input tensor.
                     bias (cudnn_tensor): The bias tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -950,7 +950,7 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Args:
                     input (cudnn_tensor): The input tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -968,7 +968,7 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     a (cudnn_tensor): The tensor to subtract from.
                     b (cudnn_tensor): The tensor to subtract with.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -986,7 +986,7 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     input (cudnn_tensor): The input tensor.
                     scale (cudnn_tensor): The scale tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -1002,7 +1002,7 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Args:
                     input (cudnn_tensor): The input tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -1020,7 +1020,7 @@ void init_pygraph_submodule(py::module_ &m) {
                 Args:
                     input (cudnn_tensor): The input tensor.
                     comparison (cudnn_tensor): The comparison tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -1036,7 +1036,7 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Args:
                     input (cudnn_tensor): The input tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -1052,7 +1052,7 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Args:
                     input (cudnn_tensor): The input tensor.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
                 Returns:
@@ -1105,7 +1105,7 @@ void init_pygraph_submodule(py::module_ &m) {
                     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
-                    compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
                 Returns:

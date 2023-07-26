@@ -1,16 +1,16 @@
-import pycudnn
+import cudnn
 import pytest
 import torch
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
-        return pycudnn.data_type.HALF
+        return cudnn.data_type.HALF
     elif torch_type == torch.float32:
-        return pycudnn.data_type.FLOAT
+        return cudnn.data_type.FLOAT
     elif torch_type == torch.bool:
-        return pycudnn.data_type.BOOLEAN
+        return cudnn.data_type.BOOLEAN
     elif torch_type == torch.uint8:
-        return pycudnn.data_type.UINT8
+        return cudnn.data_type.UINT8
     else:
         raise ValueError("Unsupported tensor data type.")
 
@@ -18,7 +18,7 @@ class SGBN(torch.nn.Module):
     def forward(self, input, running_mean, running_var, weight, bias, eps, momentum):
         return torch.nn.functional.batch_norm(input, running_mean, running_var, weight=weight, bias=bias, training=True, momentum=momentum, eps=eps)
 
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
 def test_bn_relu_with_mask():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -36,7 +36,7 @@ def test_bn_relu_with_mask():
     Y_expected = torch.relu(Y_expected_before_relu)
 
     # Cudnn code
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.FLOAT, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride())
@@ -48,23 +48,23 @@ def test_bn_relu_with_mask():
     comparison = graph.tensor(name = "zeros", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     
     (Y_before_relu, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
-                                                                                        , norm_forward_phase = pycudnn.norm_forward_phase.TRAINING
+                                                                                        , norm_forward_phase = cudnn.norm_forward_phase.TRAINING
                                                                                         , input = X
                                                                                         , scale = scale, bias = bias
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var
                                                                                         , epsilon = epsilon, momentum = momentum)
     Y = graph.relu(name = "relu", 
                    input = Y_before_relu)
-    Y.set_output(True).set_data_type(pycudnn.data_type.HALF)
-    saved_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    saved_inv_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    out_running_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    out_running_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    Y.set_output(True).set_data_type(cudnn.data_type.HALF)
+    saved_mean.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    saved_inv_var.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    out_running_mean.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    out_running_var.set_output(True).set_data_type(cudnn.data_type.FLOAT)
     
     mask = graph.cmp_gt(name="cmp",
                         input = Y,
                         comparison = comparison)
-    mask.set_output(True).set_data_type(pycudnn.data_type.BOOLEAN)
+    mask.set_output(True).set_data_type(cudnn.data_type.BOOLEAN)
 
     graph.check_support()
     graph.build()
@@ -99,7 +99,7 @@ def test_bn_relu_with_mask():
     print("Comparing outputs")
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8700, reason="BN not supported below cudnn 8.7")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8700, reason="BN not supported below cudnn 8.7")
 def test_bn():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -116,7 +116,7 @@ def test_bn():
     Y_expected = model(x_gpu, running_mean_gpu, running_var_gpu, scale_gpu, bias_gpu, epsilon_cpu.item(), momentum_cpu.item())
 
     # Cudnn code
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.FLOAT, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.FLOAT, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride())
@@ -127,17 +127,17 @@ def test_bn():
     momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride(), is_pass_by_value = True)
     
     (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
-                                                                                        , norm_forward_phase = pycudnn.norm_forward_phase.TRAINING
+                                                                                        , norm_forward_phase = cudnn.norm_forward_phase.TRAINING
                                                                                         , input = X
                                                                                         , scale = scale, bias = bias
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var
                                                                                         , epsilon = epsilon, momentum = momentum)
 
-    Y.set_output(True).set_data_type(pycudnn.data_type.HALF)
-    saved_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    saved_inv_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    out_running_mean.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    out_running_var.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    Y.set_output(True).set_data_type(cudnn.data_type.HALF)
+    saved_mean.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    saved_inv_var.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    out_running_mean.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    out_running_var.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
     graph.check_support()
 
@@ -167,7 +167,7 @@ def test_bn():
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
 def test_drelu_dadd_dbn():
     # Tensors
     N, C, H, W = 4, 16, 56, 56
@@ -179,11 +179,11 @@ def test_drelu_dadd_dbn():
     dy_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
 
     # Cudnn code
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     # Bool type is not supported by dlpack
     x_mask_gpu = torch.randint(0, 2, [N, int(C / 8), H, W], requires_grad=False, device="cuda", dtype=torch.uint8).to(memory_format=torch.channels_last)
-    X_mask = graph.tensor(name = "X_mask", dim = [N, C, H, W], stride = x_gpu.stride(), data_type = pycudnn.data_type.BOOLEAN)
+    X_mask = graph.tensor(name = "X_mask", dim = [N, C, H, W], stride = x_gpu.stride(), data_type = cudnn.data_type.BOOLEAN)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     DY = graph.tensor(name = "DY", dim = dy_gpu.size(), stride = dy_gpu.stride(), data_type = convert_to_cudnn_type(dy_gpu.dtype))
@@ -197,7 +197,7 @@ def test_drelu_dadd_dbn():
     
     # NOTE: Toggle DADD output to dump to gmem
     should_dump_dx_drelu = False
-    DX_drelu.set_output(should_dump_dx_drelu).set_data_type(pycudnn.data_type.HALF)
+    DX_drelu.set_output(should_dump_dx_drelu).set_data_type(cudnn.data_type.HALF)
 
     (DX, DScale, DBias) = graph.batchnorm_backward(name = "DBN"
                                                     , grad = DX_drelu
@@ -208,8 +208,8 @@ def test_drelu_dadd_dbn():
                                                 )
 
     DX.set_output(True)
-    DScale.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    DBias.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    DScale.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    DBias.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
     graph.check_support()
 

@@ -24,7 +24,7 @@ FetchContent_MakeAvailable(pybind11)
 include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
 pybind11_add_module(
-    pycudnn
+    cudnn
     
     cudnn_frontend_bindings.cpp
     cudnn_frontend_pygraph.cpp
@@ -32,7 +32,7 @@ pybind11_add_module(
 )
 
 target_link_libraries(
-    pycudnn
+    cudnn
     
     PRIVATE cudnn_frontend
 
@@ -44,7 +44,7 @@ target_link_libraries(
 )
 
 set_target_properties(
-    pycudnn
+    cudnn
     PROPERTIES LINK_FLAGS "-Wl,--no-as-needed"
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib64

@@ -1,12 +1,12 @@
-import pycudnn
+import cudnn
 import pytest
 import torch
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
-        return pycudnn.data_type.HALF
+        return cudnn.data_type.HALF
     elif torch_type == torch.float32:
-        return pycudnn.data_type.FLOAT
+        return cudnn.data_type.FLOAT
     else:
         raise ValueError("Unsupported tensor data type.")
 
@@ -18,7 +18,7 @@ padding  = [1,1]
 stride   = [1,1]
 dilation = [1,1]
 
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8800, reason="requires cudnn 8.8 or higher")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="requires cudnn 8.8 or higher")
 def test_scale_bias_relu_wgrad():
     print("Running test_scale_bias_relu_wgrad")
 
@@ -29,7 +29,7 @@ def test_scale_bias_relu_wgrad():
     scale  = torch.randn(1, c, 1, 1, device = "cuda", dtype = torch.float16).to(memory_format=torch.channels_last) * 0.01
     bias   = torch.randn(1, c, 1, 1, device = "cuda", dtype = torch.float16).to(memory_format=torch.channels_last) * 0.01
 
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     X  = graph.tensor(name = "X",  dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     DY = graph.tensor(name = "DY", dim = DY_gpu.size(), stride = DY_gpu.stride(), data_type = convert_to_cudnn_type(DY_gpu.dtype))

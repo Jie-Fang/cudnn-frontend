@@ -1,14 +1,14 @@
-import pycudnn
+import cudnn
 import numpy as np
 import cupy as cp
 import sys
 print("Example 2. Executing the Matmul + bias + relu graph")
 
-if pycudnn.get_cudnn_version() < 8500:
+if cudnn.get_cudnn_version() < 8500:
     print("cudnn version does not support matmul+bias fusion for specified layout")
     exit(0)
 
-graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
 image = graph.tensor(name = "image", dim = [4,16,64], stride = [1024,1,16])
 weight = graph.tensor(name = "weight", dim = [4,64,16], stride = [1024,1,64])

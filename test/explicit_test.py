@@ -1,4 +1,4 @@
-import pycudnn
+import cudnn
 import torch
 import torch.nn.functional as F
 
@@ -6,9 +6,9 @@ import pytest
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
-        return pycudnn.data_type.HALF
+        return cudnn.data_type.HALF
     elif torch_type == torch.float32:
-        return pycudnn.data_type.FLOAT
+        return cudnn.data_type.FLOAT
     else:
         raise ValueError("Unsupported tensor data type.")
 
@@ -19,7 +19,7 @@ def convert_to_cudnn_type(torch_type):
 ])
 def test_gemm_more_explicit(in_dim, expected_gemm_out_dim):
     # Can put this in fixture:
-    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    cudnn_graph = cudnn.pygraph("cudnn_graph", io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
 
     B, M, N, K = in_dim
@@ -33,8 +33,8 @@ def test_gemm_more_explicit(in_dim, expected_gemm_out_dim):
     variant_pack[image] = x
     variant_pack[weight] = w
 
-    gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight, compute_data_type = pycudnn.data_type.FLOAT)
-    gemm_output.set_data_type (pycudnn.data_type.HALF)
+    gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight, compute_data_type = cudnn.data_type.FLOAT)
+    gemm_output.set_data_type (cudnn.data_type.HALF)
     # DEBUG
     col_major_C = True
     if col_major_C:
@@ -67,7 +67,7 @@ def test_gemm_more_explicit(in_dim, expected_gemm_out_dim):
 ])
 def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
     # Can put this in fixture:
-    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    cudnn_graph = cudnn.pygraph("cudnn_graph", io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     B, M, N, K = in_dim
     x = torch.randn(B, M, K, device="cuda", dtype=torch.float16)
@@ -124,7 +124,7 @@ def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
 ])
 def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
     # Can put this in fixture:
-    cudnn_graph = pycudnn.pygraph("cudnn_graph", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    cudnn_graph = cudnn.pygraph("cudnn_graph", io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     B, M, N, K = in_dim
     x = torch.randn(B, M, K, device="cuda", dtype=torch.float16)
@@ -187,7 +187,7 @@ def test_conv_relu():
     Y_expected = model(X_gpu, W_gpu, padding = padding, stride = stride, dilation = dilation)
 
     # Cudnn code
-    graph = pycudnn.pygraph("conv-bias", io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph("conv-bias", io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
