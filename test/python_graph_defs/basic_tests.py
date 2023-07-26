@@ -8,7 +8,7 @@ def test_conv_relu(jparams, testGraph):
     X = testGraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
     W = testGraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
     
-    conv_out = testGraph.conv(image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    conv_out = testGraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testGraph.relu(input = conv_out)
 
 def test_batchnorm(jparams, testGraph):

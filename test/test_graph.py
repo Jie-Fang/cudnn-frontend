@@ -104,8 +104,12 @@ class Operation(TestNode):
         self.refFunc = refFunc
 
         self.output = []
-        for i in range(num_outputs):
-            self.output.append(TestTensor("{}_out_{}".format(name, i), self))
+
+        if num_outputs > 1:
+            for i in range(num_outputs):
+                self.output.append(TestTensor("{}_out_{}".format(name, i), self))
+        else:
+            self.output.append(TestTensor("{}_out".format(name), self))
 
 
     # @param kwargs: parameters for the associated pyCudnnOp
@@ -420,6 +424,22 @@ class TestGraph:
 
         self.cudnn_graph = graph
         return graph
+    
+    # @brief: check whether correct shape inferencing took place
+    # @pre: buildPyCudnnGraph needs to have been invoked first
+    def frontend_check(self, expected_dims):
+        # Create a mapping of output names and their dimensions
+        node_dim_mapping = {}
+        for node in self.nodes:
+            for output_tensor in node.output:
+                node_dim_mapping[output_tensor.name] = output_tensor.pyCudnnTensor.get_dim()
+        
+        # For every output we wish to check, check it
+        for name in expected_dims:
+            print(name)
+            print(node_dim_mapping)
+            assert name in node_dim_mapping
+            assert expected_dims[name] == node_dim_mapping[name]
 
     def set_io_data_type(self, data_type):
         self.io_data_type = data_type
@@ -470,6 +490,7 @@ class TestGraph:
     
     # @brief: Run the pycudnn implementation and the reference, and compare
     # @note: This assumes buildPyCudnnGraph has already been run
+    # @pre: buildPyCudnnGraph needs to be invoked first
     def cudnnExecuteAndCompareToReference(self, atol=1e-2, rtol=1e-2):
         workspace, variant_pack = self.createWorkspaceAndVariantPack()
 
