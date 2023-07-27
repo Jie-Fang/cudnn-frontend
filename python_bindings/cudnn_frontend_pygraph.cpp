@@ -93,23 +93,15 @@ public:
         cudnn_frontend::DataType_t const& data_type,
         bool const& is_virtual,
         bool const& is_pass_by_value,
-        py::object const& name
+        std::string const& name
     ) {
         auto props = cudnn_frontend::graph::Tensor_attributes()
                             .set_data_type(data_type)
                             .set_is_virtual(is_virtual)
                             .set_is_pass_by_value(is_pass_by_value)
                             .set_dim(dim)
-                            .set_stride(stride);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                props.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("tensor name can only be str type.");
-            }
-        }
+                            .set_stride(stride)
+                            .set_name(name);
         
         return graph.tensor(props);
     }
@@ -129,22 +121,14 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Batchnorm_attributes()
                         .set_forward_phase(forward_phase)
                         .set_compute_data_type(compute_data_type)
                         .set_epsilon(epsilon)
-                        .set_previous_running_stats(in_running_mean, in_running_var, momentum);
-
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                        .set_previous_running_stats(in_running_mean, in_running_var, momentum)
+                        .set_name(name);
 
         auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(x, scale, bias, attributes);
         Y->set_is_virtual(true);
@@ -160,20 +144,12 @@ public:
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::DBN_attributes()
+                        .set_saved_mean_and_inv_variance(mean, inv_variance)
                         .set_compute_data_type(compute_data_type)
-                        .set_saved_mean_and_inv_variance(mean, inv_variance);
-
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                        .set_name(name);
 
         auto [DX, DScale, DBias] = graph.batchnorm_backward(dy, x, scale, attributes);
         
@@ -196,22 +172,14 @@ public:
         , std::vector<int64_t> const& stride
         , std::vector<int64_t> const& dilation
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Conv_fprop_attributes()
-                        .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
-                        .set_dilation(dilation);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                        .set_dilation(dilation)
+                        .set_compute_data_type(compute_data_type)
+                        .set_name(name);
 
         auto Y = graph.conv_fprop(image, weight, attributes);
 
@@ -236,10 +204,11 @@ public:
         std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Conv_dgrad_attributes()
-                        .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
-                        .set_dilation(dilation);
+                        .set_dilation(dilation)
+                        .set_compute_data_type(compute_data_type)
+                        .set_name(name);
         auto DX = graph.conv_dgrad(loss, filter, attributes);
 
         // Default virtualness in python is true
@@ -263,10 +232,11 @@ public:
         std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Conv_wgrad_attributes()
-                        .set_compute_data_type(compute_data_type)
                         .set_padding(padding)
                         .set_stride(stride)
-                        .set_dilation(dilation);
+                        .set_dilation(dilation)
+                        .set_compute_data_type(compute_data_type)
+                        .set_name(name);
         auto DW = graph.conv_wgrad(loss, image, attributes);
 
         // Default virtualness in python is true
@@ -284,18 +254,9 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& A,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B,
         cudnn_frontend::DataType_t const& compute_data_type,
-        py::object const& name
+        std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
 
         auto C = graph.matmul(A, B, attributes);
 
@@ -314,18 +275,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
-        auto attributes = cudnn_frontend::graph::Pointwise_attributes().set_compute_data_type(compute_data_type).set_mode(cudnn_frontend::PointwiseMode_t::ADD);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
+                            .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
+                            .set_compute_data_type(compute_data_type)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, bias, attributes);
 
@@ -339,20 +294,12 @@ public:
     rsqrt(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                             .set_compute_data_type(compute_data_type)
-                            .set_mode(cudnn_frontend::PointwiseMode_t::RSQRT);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_mode(cudnn_frontend::PointwiseMode_t::RSQRT)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
 
@@ -367,20 +314,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& a
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& b
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                             .set_compute_data_type(compute_data_type)
-                            .set_mode(cudnn_frontend::PointwiseMode_t::SUB);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_mode(cudnn_frontend::PointwiseMode_t::SUB)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(a, b, attributes);
 
@@ -399,20 +338,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                             .set_compute_data_type(compute_data_type)
-                            .set_mode(cudnn_frontend::PointwiseMode_t::MUL);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, scale, attributes);
 
@@ -430,20 +361,12 @@ public:
     relu(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                             .set_compute_data_type(compute_data_type)
-                            .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
 
@@ -457,19 +380,11 @@ public:
     genstats(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Genstats_attributes()
-                            .set_compute_data_type(compute_data_type);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_compute_data_type(compute_data_type)
+                            .set_name(name);
 
         auto [SUM, SQ_SUM] = graph.genstats(input, attributes);
 
@@ -488,20 +403,12 @@ public:
     elu(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                             .set_compute_data_type(compute_data_type)
-                            .set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_mode(cudnn_frontend::PointwiseMode_t::ELU_FWD)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
 
@@ -519,20 +426,12 @@ public:
     gelu(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                             .set_compute_data_type(compute_data_type)
-                            .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                            .set_mode(cudnn_frontend::PointwiseMode_t::GELU_FWD)
+                            .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
 
@@ -548,20 +447,12 @@ public:
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& comparison_ptr
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                               .set_compute_data_type(compute_data_type)
-                              .set_mode(cudnn_frontend::PointwiseMode_t::CMP_GT);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("operation name can only be str type.");
-            }
-        }
+                              .set_mode(cudnn_frontend::PointwiseMode_t::CMP_GT)
+                              .set_name(name);
 
         auto OUT_0 = graph.pointwise(input_attributes_ptr, comparison_ptr, attributes);
 
@@ -585,7 +476,7 @@ public:
         , bool const use_causal_mask
         , py::object const& dropout
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_attention_attributes()
                                                     .set_is_inference(is_inference)
@@ -593,16 +484,8 @@ public:
                                                     .set_bias(bias)
                                                     .set_padding_mask(use_padding_mask)
                                                     .set_causal_mask(use_causal_mask)
-                                                    .set_compute_data_type(compute_data_type);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("tensor name can only be str type.");
-            }
-        }
+                                                    .set_compute_data_type(compute_data_type)
+                                                    .set_name(name);
 
         if (!dropout.is_none()) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
@@ -657,7 +540,7 @@ public:
         , bool const use_causal_mask
         , py::object const& dropout
         , cudnn_frontend::DataType_t const& compute_data_type
-        , py::object const& name
+        , std::string const& name
     ) {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_attributes()
                                                     .set_is_inference(is_inference)
@@ -668,16 +551,8 @@ public:
                                                     .set_padding_mask(use_padding_mask)
                                                     .set_alibi_mask(use_alibi_mask)
                                                     .set_causal_mask(use_causal_mask)
-                                                    .set_compute_data_type(compute_data_type);
-        
-        if (!name.is_none()) {
-            if(py::isinstance<py::str>(name)) {
-                attributes.set_name(name.cast<std::string>());
-            }
-            else {
-                throw std::invalid_argument("tensor name can only be str type.");
-            }
-        }
+                                                    .set_compute_data_type(compute_data_type)
+                                                    .set_name(name);
 
         if (!dropout.is_none()) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
@@ -791,7 +666,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET)
              , py::arg_v{"is_virtual", false}
              , py::arg_v{"is_pass_by_value", false}
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Create a tensor.
 
@@ -817,7 +692,7 @@ void init_pygraph_submodule(py::module_ &m) {
              py::arg("epsilon"),
              py::arg("momentum"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v("name", py::none())
+             py::arg_v("name", "")
         )
         .def("batchnorm_backward", &PyGraph::batchnorm_backward
              , py::arg("grad")
@@ -826,12 +701,12 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg("mean")
              , py::arg("inv_variance")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
         )
         .def("genstats", &PyGraph::genstats
              , py::arg("input")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
         )
         .def("conv", &PyGraph::conv
              , py::arg("image")
@@ -840,7 +715,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v{"stride", default_vector()}
              , py::arg_v{"dilation", default_vector()}
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Perform convolution operation with the given inputs.
 
@@ -864,7 +739,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v{"stride", default_vector()}
              , py::arg_v{"dilation", default_vector()}
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Compute weight gradients using the given inputs and loss.
 
@@ -888,13 +763,13 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v{"stride", default_vector()}
              , py::arg_v{"dilation", default_vector()}
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
-                Compute weight gradients using the given inputs and loss.
+                Compute filter gradients using the given inputs and loss.
 
                 Args:
                     loss (cudnn_tensor): The loss tensor.
-                    weight (cudnn_tensor): The weight tensor.
+                    filter (cudnn_tensor): The filter tensor.
                     padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
                     stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
@@ -909,7 +784,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg("A")
              , py::arg("B")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Perform matrix multiplication of two tensors A and B.
 
@@ -927,7 +802,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg("input")
              , py::arg("bias")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Add bias to the input.
 
@@ -944,7 +819,7 @@ void init_pygraph_submodule(py::module_ &m) {
         .def("rsqrt", &PyGraph::rsqrt
              , py::arg("input")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Compute reciprocal square root of input tensor.
 
@@ -961,7 +836,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg("a")
              , py::arg("b")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Computes subtraction of two tensors.
 
@@ -979,7 +854,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg("input")
              , py::arg("scale")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Scale the input.
 
@@ -996,7 +871,7 @@ void init_pygraph_submodule(py::module_ &m) {
         .def("relu", &PyGraph::relu
              , py::arg("input")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Apply the Rectified Linear Unit (ReLU) activation function to the input.
 
@@ -1013,7 +888,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg("input")
              , py::arg("comparison")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Apply the Compare Greater Than Comparison to the input.
 
@@ -1030,7 +905,7 @@ void init_pygraph_submodule(py::module_ &m) {
         .def("elu", &PyGraph::elu
              , py::arg("input")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Apply the Exponential Linear Unit (ELU) activation function to the input.
 
@@ -1046,7 +921,7 @@ void init_pygraph_submodule(py::module_ &m) {
         .def("gelu", &PyGraph::gelu
              , py::arg("input")
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Apply the Gaussian Error Linear Unit (GELU) activation function to the input.
 
@@ -1072,7 +947,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v("use_causal_mask", false)
              , py::arg_v("dropout", py::none())
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
         )
         .def("scaled_dot_product_flash_attention", &PyGraph::scaled_dot_product_flash_attention
              , py::arg("q")
@@ -1088,7 +963,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v("use_causal_mask", false)
              , py::arg_v("dropout", py::none())
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
-             , py::arg_v("name", py::none())
+             , py::arg_v("name", "")
              , R"pbdoc(
                 Perform scaled dot-product flash attention.
 
