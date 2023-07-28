@@ -19,6 +19,30 @@ namespace cudnn_frontend::graph {
             return Type::MATMUL;
         }
 
+        error_t validate_node() const override final {
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating matmul node " << options.name << "..." << std::endl;
+
+            if(!(options.inputs.A)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: matmul A not set.";
+                return {status, message};
+            }
+
+            if(!(options.inputs.B)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: matmul B not set.";
+                return {status, message};
+            }
+
+            if(!(options.outputs.C)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: matmul C not set.";
+                return {status, message};
+            }
+
+            return {error_code_t::OK, ""};
+        }
+
         error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node " << options.name << "..." << std::endl;
         

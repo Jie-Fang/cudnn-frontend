@@ -18,6 +18,24 @@ public:
         return Type::REDUCTION;
     }
 
+    error_t validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating reduction node " << options.name << "..." << std::endl;
+
+        if(!(options.inputs.X)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: reduction input not set.";
+            return {status, message};
+        }
+
+        if(!(options.outputs.Y)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: reduction Y not set.";
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reduction node " << options.name << "..." << std::endl;
 

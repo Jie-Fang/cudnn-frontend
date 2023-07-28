@@ -744,7 +744,7 @@ public:
         std::shared_ptr<Tensor_attributes> OUT_0;
     } outputs;
 
-    std::optional<PointwiseMode_t> mode;
+    PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -764,10 +764,6 @@ public:
                                     , axis)
 
     Pointwise_attributes() : Operation(Tag::Pointwise) {}
-
-    std::optional<PointwiseMode_t> get_mode() const {
-        return mode;
-    }
 
     Pointwise_attributes& set_mode(PointwiseMode_t const value) {
         mode = value;
