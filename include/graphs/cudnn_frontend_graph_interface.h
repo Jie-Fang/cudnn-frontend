@@ -323,8 +323,17 @@ inline BN_finalize_attributes::Outputs Graph::bn_finalize(BN_finalize_attributes
 inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::batchnorm(std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> bias, Batchnorm_attributes options) {
     
     // Set outputs
-    options.make_outputs([this](std::string const &name){return output_tensor(name);});
-    auto return_outputs = options.outputs;
+    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+    auto INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR = nullptr;
+    if(options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
+        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    }
+    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
+    options.outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
 
     // Set inputs
     options.inputs.X = x;
@@ -333,7 +342,7 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::batchnorm(std::s
 
     sub_nodes.emplace_back(std::make_unique<BatchNormNode>(std::move(options), context));
 
-    return {return_outputs.Y, return_outputs.MEAN, return_outputs.INV_VARIANCE, return_outputs.NEXT_RUNNING_MEAN, return_outputs.NEXT_RUNNING_VAR};
+    return {Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3> Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, DBN_attributes options) {
@@ -489,7 +498,12 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::scaled_dot_produ
 inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_flash_attention_attributes options) {
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
-    auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
+    if(options.is_inference.has_value() && options.is_inference.value() == false) {
+        Stats = output_tensor(options.get_name() + "::Stats");
+    }
+    options.outputs.Stats = Stats;
 
     // Set inputs
     options.inputs.Q = q;

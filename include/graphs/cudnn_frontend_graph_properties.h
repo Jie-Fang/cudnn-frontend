@@ -915,10 +915,10 @@ public:
 
     void make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.Y = output_tensor(name + "_Y_output");
-        outputs.MEAN = output_tensor(name + "_MEAN_output");;
-        outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");;
-        outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");;
-        outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");;
+        outputs.MEAN = output_tensor(name + "_MEAN_output");
+        outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
+        outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
+        outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");
     }
 
     auto fill_from_context(detail::Context const& context) -> Batchnorm_attributes& {

@@ -64,7 +64,10 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
     auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
 
-    Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
+    // Check that Stats tensor is real, which is only when its training step
+    if(Stats) {
+        Stats->set_data_type(fe::DataType_t::FLOAT);
+    }
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
