@@ -47,7 +47,10 @@ public:
             }
             // K
             y_tensor_dim[1] = w_tensor_dim[0];
-            Y->set_dim(y_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            Y->set_dim(y_tensor_dim);
+        }
+        if(Y->get_stride().empty()) {
+            Y->set_stride(detail::generate_stride(Y->get_dim()));
         }
 
         return {error_code_t::OK, ""};

@@ -46,7 +46,10 @@ public:
         // Only infer dims and strides if user did not set them
         if(dy_tensor_dim.empty()) {
             dy_tensor_dim.resize(x_tensor_dim.size());
-            DY->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            DY->set_dim(x_tensor_dim);
+        }
+        if(DY->get_stride().empty()) {
+            DY->set_stride(detail::generate_stride(DY->get_dim()));
         }
         
         auto DX = options.outputs.DX;
@@ -54,7 +57,10 @@ public:
         // Only infer dims and strides if user did not set them
         if(dx_tensor_dim.empty()) {
             dx_tensor_dim.resize(x_tensor_dim.size());
-            DX->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            DX->set_dim(x_tensor_dim);
+        }
+        if(DX->get_stride().empty()) {
+            DX->set_stride(detail::generate_stride(DX->get_dim()));
         }
 
         // Set channel length tensors
@@ -64,7 +70,10 @@ public:
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
                 tensor_dim[1] = x_tensor_dim[1];
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_per_channel_tensors(options.inputs.MEAN);

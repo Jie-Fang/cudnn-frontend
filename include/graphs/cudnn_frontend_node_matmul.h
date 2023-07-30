@@ -25,13 +25,13 @@ namespace cudnn_frontend::graph {
             options.fill_from_context(context);
 
             // Only inferrencing from (A, B) -> C works today.
-            auto a_tensor_prop = options.inputs.A;
-            auto b_tensor_prop = options.inputs.B;
-            auto c_tensor_prop = options.outputs.C;
+            auto a_tensor = options.inputs.A;
+            auto b_tensor = options.inputs.B;
+            auto c_tensor = options.outputs.C;
             
-            auto const a_tensor_dim = a_tensor_prop->get_dim();
-            auto const b_tensor_dim = b_tensor_prop->get_dim();
-            auto c_tensor_dim = c_tensor_prop->get_dim();
+            auto const a_tensor_dim = a_tensor->get_dim();
+            auto const b_tensor_dim = b_tensor->get_dim();
+            auto c_tensor_dim = c_tensor->get_dim();
             
             // Only infer dims and strides if user did not set them
             if(c_tensor_dim.empty()) {
@@ -39,7 +39,10 @@ namespace cudnn_frontend::graph {
                 c_tensor_dim[0] = a_tensor_dim[0]; // B
                 c_tensor_dim[1] = a_tensor_dim[1]; // M
                 c_tensor_dim[2] = b_tensor_dim[2]; // N
-                c_tensor_prop->set_dim(c_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                c_tensor->set_dim(c_tensor_dim);
+            }
+            if(c_tensor->get_stride().empty()) {
+                c_tensor->set_stride(detail::generate_stride(c_tensor->get_dim()));
             }
 
             return {error_code_t::OK, ""};

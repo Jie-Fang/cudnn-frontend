@@ -31,7 +31,11 @@ public:
         auto out_0_tensor_dim = out_0_tensor->get_dim();
         // Only infer dims and strides if user did not set them
         if(out_0_tensor_dim.empty()) {
-            out_0_tensor->set_dim(in_0_tensor->get_dim()).set_stride(in_0_tensor->get_stride());
+            out_0_tensor->set_dim(in_0_tensor->get_dim());
+        }
+        // Special case here where input strides are being copied over
+        if(out_0_tensor->get_stride().empty()) {
+            out_0_tensor->set_stride(in_0_tensor->get_stride());
         }
 
         return {error_code_t::OK, ""};

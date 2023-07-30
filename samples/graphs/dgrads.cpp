@@ -32,17 +32,14 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
-    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("grad").set_dim({4, 64, 16, 16}));
-    DY->generateStrides(CUDNN_TENSOR_NHWC);
-    auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("weight").set_dim({64, 32, 3, 3}));
-    W->generateStrides(CUDNN_TENSOR_NHWC);
+    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("grad").set_dim({4, 64, 16, 16}).set_stride({64*16*16, 1, 64*16, 64}));
+    auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("weight").set_dim({64, 32, 3, 3}).set_stride({32*3*3, 1, 32*3, 32}));
     
     auto dgrad_options = fe::graph::Conv_dgrad_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto dgrad_output = graph.conv_dgrad(DY, W, dgrad_options);
     dgrad_output->set_is_virtual(true);
     
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({4, 32, 16, 16}));
-    X->generateStrides(CUDNN_TENSOR_NHWC);
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({4, 32, 16, 16}).set_stride({32*16*16, 1, 32*16, 32}));
     auto drelu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_BWD);
     auto DX = graph.pointwise(dgrad_output, X, drelu_options);
 
@@ -82,37 +79,30 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
-    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("grad").set_dim({4, 64, 16, 16}));
-    DY->generateStrides(CUDNN_TENSOR_NHWC);
-    auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("weight").set_dim({64, 32, 3, 3}));
-    W->generateStrides(CUDNN_TENSOR_NHWC);
+    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("grad").set_dim({4, 64, 16, 16}).set_stride({64*16*16, 1, 64*16, 64}));
+    auto W = graph.tensor(fe::graph::Tensor_attributes().set_name("weight").set_dim({64, 32, 3, 3}).set_stride({32*3*3, 1, 32*3, 32}));
     
     auto dgrad_options = fe::graph::Conv_dgrad_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto dgrad_output = graph.conv_dgrad(DY, W, dgrad_options);
     dgrad_output->set_is_virtual(true);
     
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({4, 32, 16, 16}));
-    X->generateStrides(CUDNN_TENSOR_NHWC);
-    auto M = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_dim({1, 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    M->generateStrides(CUDNN_TENSOR_NHWC);
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({4, 32, 16, 16}).set_stride({32*16*16, 1, 32*16, 32}));
+    auto M = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto mean_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto M_output = graph.pointwise(X, M, mean_options);
     M_output->set_is_virtual(true);
     
-    auto V = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    V->generateStrides(CUDNN_TENSOR_NHWC);
+    auto V = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto inv_var_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto V_output = graph.pointwise(M_output, V, inv_var_options);
     V_output->set_is_virtual(true);
     
-    auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    S->generateStrides(CUDNN_TENSOR_NHWC);
+    auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto S_output = graph.pointwise(V_output, S, scale_options);
     S_output->set_is_virtual(true);
     
-    auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    B->generateStrides(CUDNN_TENSOR_NHWC);
+    auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto B_output = graph.pointwise(S_output, B, bias_options);
     B_output->set_is_virtual(true);

@@ -34,7 +34,10 @@ public:
             // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim = sum_tensor_dim;
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_per_channel_tensors(options.inputs.SQ_SUM);
@@ -55,7 +58,10 @@ public:
             // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim.resize(sum_tensor_dim.size(), 1);
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_scalars(options.inputs.EPSILON);

@@ -50,7 +50,10 @@ public:
             for(size_t dim = 2; dim < w_tensor_dim.size(); ++dim) {
                 dx_tensor_dim[dim] = (dy_tensor_dim[dim] - 1) * stride[dim - 2] - 2*padding[dim - 2] + 1 + dilation[dim-2]*(w_tensor_dim[dim]-1);
             }
-            DX->set_dim(dx_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            DX->set_dim(dx_tensor_dim);
+        }
+        if(DX->get_stride().empty()) {
+            DX->set_stride(detail::generate_stride(DX->get_dim()));
         }
 
         return {error_code_t::OK, ""};

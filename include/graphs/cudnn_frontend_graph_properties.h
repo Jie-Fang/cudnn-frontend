@@ -37,32 +37,9 @@ public:
                                     , uid)
     
     bool is_dim_set = false;
-    bool is_stride_set = false;
     bool is_virtual_set = false;
     bool is_pass_by_value_set = false;
     bool is_uid_set = false;
-
-    int
-    generateStrides(cudnnTensorFormat_t const filterFormat) {
-        size_t const dim_count = dim.size();
-        stride.resize(dim_count);
-        if (filterFormat == CUDNN_TENSOR_NCHW) {
-            stride[dim_count - 1] = 1;
-            for (int64_t d = dim_count - 2; d >= 0; d--) {
-                stride[d] = stride[d + 1] * dim[d + 1];
-            }
-        } else {
-            // Here we assume that the format is CUDNN_TENSOR_NHWC
-            stride[1]          = 1;
-            stride[dim_count - 1] = stride[1] * dim[1];
-            for (int64_t d = dim_count - 2; d >= 2; d--) {
-                stride[d] = stride[d + 1] * dim[d + 1];
-            }
-            stride[0] = stride[2] * dim[2];
-        }
-        is_stride_set = true;
-        return 0;
-    }
     
     Tensor_attributes() = default;
 
@@ -100,7 +77,6 @@ public:
 
     auto set_stride(std::vector<int64_t> const& value) -> Tensor_attributes& {
         stride = value;
-        is_stride_set = true;
         return *this;
     }
 
@@ -373,7 +349,6 @@ public:
     std::vector<int64_t> dilation = {};
 
     bool is_padding_set = false;
-    bool is_stride_set = false;
     bool is_dilation_set = false;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -410,7 +385,6 @@ public:
 
     Conv_fprop_attributes& set_stride(std::vector<int64_t> value) {
         stride = value;
-        is_stride_set = true;
         return *this;
     }
 

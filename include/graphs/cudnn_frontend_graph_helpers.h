@@ -5,7 +5,7 @@
 
 #include <iomanip>
 #include <unordered_set>
-#include<algorithm>
+#include <algorithm>
 #include <string>
 
 
@@ -182,6 +182,20 @@ namespace detail {
             return *this;
         }
     };
+
+    // Always generates NCHW (4d/5d tensors) or Col major (matrices)
+    inline std::vector<int64_t> generate_stride(std::vector<int64_t> const& dim) {
+        std::vector<int64_t> stride(dim.size(), 1);
+
+        stride[dim.size() - 1] = stride[1] * dim[1];
+        for (int64_t d = dim.size() - 2; d >= 2; d--) {
+            stride[d] = stride[d + 1] * dim[d + 1];
+        }
+        stride[0] = stride[2] * dim[2];
+
+        return stride;
+    }
+
 } // namespace detail
 
 } // namespace cudnn_frontend

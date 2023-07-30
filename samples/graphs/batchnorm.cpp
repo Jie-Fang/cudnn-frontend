@@ -33,8 +33,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
          .set_compute_data_type(fe::DataType_t::FLOAT);
 
     fe::graph::BN_finalize_attributes::Inputs inputs;
-    auto sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1,32,1,1}));
-    sum->generateStrides(CUDNN_TENSOR_NHWC);
+    auto sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1,32,1,1}).set_stride({32,1,32,32}));
     auto sq_sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));
     auto mean = graph.tensor(fe::graph::Tensor_attributes().set_name("mean"));
     auto inv_variance = graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance"));
@@ -125,8 +124,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
     fe::graph::Batchnorm_attributes::Inputs inputs;
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}));
-    X->generateStrides(CUDNN_TENSOR_NHWC);
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
     auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean").set_data_type(fe::DataType_t::FLOAT));
     auto prev_running_var = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var").set_data_type(fe::DataType_t::FLOAT));
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
@@ -146,8 +144,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     next_running_mean->set_data_type(fe::DataType_t::FLOAT);
     next_running_var->set_data_type(fe::DataType_t::FLOAT);
     
-    auto A = graph.tensor(fe::graph::Tensor_attributes().set_name("A").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::HALF));
-    A->generateStrides(CUDNN_TENSOR_NHWC);
+    auto A = graph.tensor(fe::graph::Tensor_attributes().set_name("A").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}).set_data_type(fe::DataType_t::HALF));
     auto add_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto add_output = graph.pointwise(bn_output, A, add_options);
     add_output->set_is_virtual(true);
@@ -214,11 +211,9 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
-    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("DY").set_dim({4,32,16,16}));
-    DY->generateStrides(CUDNN_TENSOR_NHWC);
+    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("DY").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
 
-    auto input_mask = graph.tensor(fe::graph::Tensor_attributes().set_name("Mask").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::BOOLEAN));
-    input_mask->generateStrides(CUDNN_TENSOR_NHWC);
+    auto input_mask = graph.tensor(fe::graph::Tensor_attributes().set_name("Mask").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}).set_data_type(fe::DataType_t::BOOLEAN));
 
     auto mul_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto DX_drelu = graph.pointwise(DY, input_mask, mul_options);
@@ -228,8 +223,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     DX_drelu->set_is_virtual(is_dx_drelu_virtual).set_data_type(fe::DataType_t::HALF);
 
     fe::graph::DBN_attributes::Inputs inputs;
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}));
-    X->generateStrides(CUDNN_TENSOR_NHWC);
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
     
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
     auto mean = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));

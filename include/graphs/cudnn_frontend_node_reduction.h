@@ -31,7 +31,10 @@ public:
         auto y_tensor_dim = y_tensor->get_dim();
         // Only infer dims and strides if user did not set them
         if(y_tensor_dim.empty()) {
-            y_tensor->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            y_tensor->set_dim(x_tensor_dim);
+        }
+        if(y_tensor->get_stride().empty()) {
+            y_tensor->set_stride(detail::generate_stride(y_tensor->get_dim()));
         }
 
         return {error_code_t::OK, ""};
