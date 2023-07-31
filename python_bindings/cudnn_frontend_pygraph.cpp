@@ -266,14 +266,10 @@ public:
         return C;
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes input properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    bias(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
+    add(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& a
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& b
         , cudnn_frontend::DataType_t const& compute_data_type
         , std::string const& name
     ) {
@@ -282,12 +278,22 @@ public:
                             .set_compute_data_type(compute_data_type)
                             .set_name(name);
 
-        auto OUT_0 = graph.pointwise(input, bias, attributes);
+        auto c = graph.pointwise(a, b, attributes);
 
         // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
+        c->set_is_virtual(true);
 
-        return OUT_0;
+        return c;
+    }
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    bias(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , std::string const& name
+    ) {
+        return add(input, bias, compute_data_type, name);
     }
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
@@ -329,14 +335,10 @@ public:
         return OUT_0;
     }
 
-    // Returns a shared pointer as both this PyGraph class and the caller will own
-    // the underlying object.
-    // Takes input properties by reference to shared pointer. This means this callee
-    // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    scale(
-        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
-        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale
+    mul(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& a
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& b
         , cudnn_frontend::DataType_t const& compute_data_type
         , std::string const& name
     ) {
@@ -345,12 +347,22 @@ public:
                             .set_mode(cudnn_frontend::PointwiseMode_t::MUL)
                             .set_name(name);
 
-        auto OUT_0 = graph.pointwise(input, scale, attributes);
+        auto c = graph.pointwise(a, b, attributes);
 
         // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
+        c->set_is_virtual(true);
 
-        return OUT_0;
+        return c;
+    }
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    scale(
+        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input
+        , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale
+        , cudnn_frontend::DataType_t const& compute_data_type
+        , std::string const& name
+    ) {
+        return mul(input, scale, compute_data_type, name);
     }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
@@ -798,6 +810,24 @@ void init_pygraph_submodule(py::module_ &m) {
                     cudnn_tensor: The result of the matrix multiplication.
             )pbdoc"
         )
+        .def("add", &PyGraph::add
+             , py::arg("a")
+             , py::arg("b")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", "")
+             , R"pbdoc(
+                Adds two cudnn tensors.
+
+                Args:
+                    a (cudnn_tensor): The first tensor.
+                    b (cudnn_tensor): The second tensor.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of addition operation.
+            )pbdoc"
+        )
         .def("bias", &PyGraph::bias
              , py::arg("input")
              , py::arg("bias")
@@ -848,6 +878,24 @@ void init_pygraph_submodule(py::module_ &m) {
 
                 Returns:
                     cudnn_tensor: The result of subtration.
+            )pbdoc"
+        )
+        .def("mul", &PyGraph::mul
+             , py::arg("a")
+             , py::arg("b")
+             , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
+             , py::arg_v("name", "")
+             , R"pbdoc(
+                Computes elementwise multiplication of two cudnn tensors.
+
+                Args:
+                    a (cudnn_tensor): The first tensor.
+                    b (cudnn_tensor): The second tensor.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of the elementwise multiplication operation.
             )pbdoc"
         )
         .def("scale", &PyGraph::scale

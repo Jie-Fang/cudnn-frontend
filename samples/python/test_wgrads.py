@@ -36,7 +36,7 @@ def test_scale_bias_relu_wgrad():
     B  = graph.tensor(name = "B", dim = bias.size(), stride = bias.stride(), data_type = convert_to_cudnn_type(bias.dtype))
     S  = graph.tensor(name = "S", dim = scale.size(), stride = scale.stride(), data_type = convert_to_cudnn_type(scale.dtype))
 
-    scale_output = graph.scale(name = "sclae", input = X, scale = S)
+    scale_output = graph.scale(name = "scale", input = X, scale = S)
     bias_output  = graph.bias(name = "bias", input = scale_output, bias = B)
 
     relu_output  = graph.relu(name = "relu", input = bias_output)
