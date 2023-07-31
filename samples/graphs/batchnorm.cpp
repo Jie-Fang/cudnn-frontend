@@ -33,33 +33,25 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
          .set_compute_data_type(fe::DataType_t::FLOAT);
 
     fe::graph::BN_finalize_attributes::Inputs inputs;
-    auto sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1,32,1,1}));
-    sum->generateStrides(CUDNN_TENSOR_NHWC);
+    auto sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1,32,1,1}).set_stride({32,1,32,32}));
     auto sq_sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));
-    auto mean = graph.tensor(fe::graph::Tensor_attributes().set_name("mean"));
-    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance"));
     auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean"));
     auto prev_running_var = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var"));
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale"));
     auto bias = graph.tensor(fe::graph::Tensor_attributes().set_name("bias"));
     auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_is_pass_by_value(true));
-    auto exp_avg = graph.tensor(fe::graph::Tensor_attributes().set_name("exp_avg").set_is_pass_by_value(true));
+    auto momentum = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_is_pass_by_value(true));
     auto accum_count = graph.tensor(fe::graph::Tensor_attributes().set_name("accum_count").set_is_pass_by_value(true).set_data_type(fe::DataType_t::INT64));
 
-    inputs.SUM = sum;
-    inputs.SQ_SUM = sq_sum;
-    inputs.SCALE = scale;
-    inputs.BIAS = bias;
-    inputs.MEAN = mean;
-    inputs.INV_VARIANCE = inv_variance;
-    inputs.PREV_RUNNING_MEAN = prev_running_mean;
-    inputs.PREV_RUNNING_VAR = prev_running_var;
-    inputs.EPSILON = epsilon;
-    inputs.EXP_AVG = exp_avg;
-    inputs.ACCUM_COUNT = accum_count;
-
-    auto bn_finalize_options = fe::graph::BN_finalize_attributes();
-    auto [eq_scale, eq_bias, next_running_mean, next_running_var] = graph.bn_finalize(inputs, bn_finalize_options);
+    auto bn_finalize_options = fe::graph::BN_finalize_attributes()
+                                    .set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
+    auto [eq_scale, eq_bias, saved_mean, saved_inv_variance, next_running_mean, next_running_var] = graph.bn_finalize(sum, sq_sum, scale, bias, epsilon, accum_count, bn_finalize_options);
+    eq_scale->set_output(true);
+    eq_bias->set_output(true);
+    saved_mean->set_output(true);
+    saved_inv_variance->set_output(true);
+    next_running_mean->set_output(true);
+    next_running_var->set_output(true);
 
     #if (CUDNN_VERSION < 8400)
         SKIP("BNFinalize requires cudnn 8.4 and up");
@@ -91,26 +83,26 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     Surface<float> eq_scale_tensor(32, false);
     Surface<float> eq_bias_tensor(32, false);
     float EPS_scalar = 0.001f;
-    float EXP_AVG_scalar = 0.001f;
+    float MOMENTUM_scalar = 0.001f;
     int64_t nhw = 64;
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {sum, Sum_tensor.devPtr}
         , {sq_sum, Sq_sum_tensor.devPtr}
-        , {mean, Mean_tensor.devPtr}
-        , {inv_variance, Var_tensor.devPtr}
-        , {prev_running_mean, Previous_running_mean_tensor.devPtr}
-        , {prev_running_var, Previous_running_var_tensor.devPtr}
-        , {next_running_mean, Next_running_mean_tensor.devPtr}
-        , {next_running_var, Next_running_var_tensor.devPtr}
         , {scale, Scale_tensor.devPtr}
         , {bias, Bias_tensor.devPtr}
         , {epsilon, &EPS_scalar}
-        , {exp_avg, &EXP_AVG_scalar}
         , {accum_count, &nhw}
+        , {prev_running_mean, Previous_running_mean_tensor.devPtr}
+        , {prev_running_var, Previous_running_var_tensor.devPtr}
+        , {momentum, &MOMENTUM_scalar}
         , {eq_scale, eq_scale_tensor.devPtr}
         , {eq_bias, eq_bias_tensor.devPtr}
+        , {saved_mean, Mean_tensor.devPtr}
+        , {saved_inv_variance, Var_tensor.devPtr}
+        , {next_running_mean, Next_running_mean_tensor.devPtr}
+        , {next_running_var, Next_running_var_tensor.devPtr}
     };
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
@@ -125,39 +117,31 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
     fe::graph::Batchnorm_attributes::Inputs inputs;
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}));
-    X->generateStrides(CUDNN_TENSOR_NHWC);
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
     auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean").set_data_type(fe::DataType_t::FLOAT));
     auto prev_running_var = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var").set_data_type(fe::DataType_t::FLOAT));
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
     auto bias = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
 
-    inputs.X = X;
-    inputs.SCALE = scale;
-    inputs.BIAS = bias;
-    inputs.PREV_RUNNING_MEAN = prev_running_mean;
-    inputs.PREV_RUNNING_VAR = prev_running_var;
-
     auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
     auto momentum = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_data_type(fe::DataType_t::FLOAT));
     
-    auto batchnorm_options = fe::graph::Batchnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon).set_momentum(momentum);
-    auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(inputs, batchnorm_options);
-    bn_output->set_is_virtual(true);
-
-    mean->set_data_type(fe::DataType_t::FLOAT);
-    inv_variance->set_data_type(fe::DataType_t::FLOAT);
-    next_running_mean->set_data_type(fe::DataType_t::FLOAT);
-    next_running_var->set_data_type(fe::DataType_t::FLOAT);
+    auto batchnorm_options = fe::graph::Batchnorm_attributes()
+                                .set_forward_phase(fe::NormFwdPhase_t::TRAINING)
+                                .set_epsilon(epsilon).set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
+    auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(X, scale, bias, batchnorm_options);
+    mean->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    inv_variance->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    next_running_mean->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    next_running_var->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     
-    auto A = graph.tensor(fe::graph::Tensor_attributes().set_name("A").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::HALF));
-    A->generateStrides(CUDNN_TENSOR_NHWC);
+    auto A = graph.tensor(fe::graph::Tensor_attributes().set_name("A").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}).set_data_type(fe::DataType_t::HALF));
     auto add_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto add_output = graph.pointwise(bn_output, A, add_options);
-    add_output->set_is_virtual(true);
 
     auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto Y = graph.pointwise(add_output, relu_options);
+    Y->set_output(true);
 
     #if (CUDNN_VERSION < 8700)
         SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
@@ -218,40 +202,29 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
          .set_intermediate_data_type(fe::DataType_t::FLOAT)
          .set_compute_data_type(fe::DataType_t::FLOAT);
     
-    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("DY").set_dim({4,32,16,16}));
-    DY->generateStrides(CUDNN_TENSOR_NHWC);
+    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("DY").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
 
-    auto input_mask = graph.tensor(fe::graph::Tensor_attributes().set_name("Mask").set_dim({4,32,16,16}).set_data_type(fe::DataType_t::BOOLEAN));
-    input_mask->generateStrides(CUDNN_TENSOR_NHWC);
+    auto input_mask = graph.tensor(fe::graph::Tensor_attributes().set_name("Mask").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}).set_data_type(fe::DataType_t::BOOLEAN));
 
     auto mul_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto DX_drelu = graph.pointwise(DY, input_mask, mul_options);
 
     // NOTE: Toggle DADD output by toggling DX_DRELU virtualness
-    bool is_dx_drelu_virtual = true;
-    DX_drelu->set_is_virtual(is_dx_drelu_virtual).set_data_type(fe::DataType_t::HALF);
+    bool has_dadd = true;
+    DX_drelu->set_output(has_dadd).set_data_type(fe::DataType_t::HALF);
 
     fe::graph::DBN_attributes::Inputs inputs;
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}));
-    X->generateStrides(CUDNN_TENSOR_NHWC);
+    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
     
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
     auto mean = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
     auto inv_variance = graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
-    inputs.X = X;
-    inputs.DY = DX_drelu;
-    inputs.SCALE = scale;
-    inputs.MEAN = mean;
-    inputs.INV_VARIANCE = inv_variance;
-
-    auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_data_type(fe::DataType_t::FLOAT));
-
-    auto DBN_options = fe::graph::DBN_attributes().set_epsilon(epsilon);
-    auto [DX, dscale, dbias] = graph.batchnorm_backward(inputs, DBN_options);
-    DX->set_is_virtual(false);
-    dscale->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
-    dbias->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
+    auto DBN_options = fe::graph::DBN_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, X, scale, DBN_options);
+    DX->set_output(true);
+    dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    dbias->set_output(true).set_data_type(fe::DataType_t::FLOAT);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
@@ -296,7 +269,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     // If is_dx_drelu_virtual, DADD output required
     Surface<half> DADD_tensor(4*32*16*16, false);
-    if(false == is_dx_drelu_virtual) {
+    if(true == has_dadd) {
         variant_pack[DX_drelu] = DADD_tensor.devPtr;
     }
 

@@ -17,6 +17,18 @@ public:
     Type getType() override final {
         return Type::RNG;
     }
+    
+    error_t validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating RngNode " << options.name << "..." << std::endl;
+
+        if(!(options.outputs.Y)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: rng output not set.";
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
+    }
 
     error_t assign_uids_node() override final {
         if(options.inputs.Seed)options.inputs.Seed->set_uid(ICudnn::create_new_uid());
@@ -99,10 +111,6 @@ public:
         }
         #endif
         
-        return {error_code_t::OK, ""};
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
 

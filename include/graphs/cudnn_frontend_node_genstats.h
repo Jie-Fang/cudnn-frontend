@@ -35,14 +35,20 @@ public:
         if(sum_tensor_dim.empty()) {
             sum_tensor_dim.resize(x_tensor_dim.size(), 1);
             sum_tensor_dim[1] = x_tensor_dim[1];
-            SUM->set_dim(sum_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            SUM->set_dim(sum_tensor_dim);
+        }
+        if(SUM->get_stride().empty()) {
+            SUM->set_stride(detail::generate_stride(SUM->get_dim()));
         }
         
         // Only infer dims and strides if user did not set them
         if(sq_sum_tensor_dim.empty()) {
             sq_sum_tensor_dim.resize(x_tensor_dim.size(), 1);
             sq_sum_tensor_dim[1] = x_tensor_dim[1];
-            SQ_SUM->set_dim(sq_sum_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            SQ_SUM->set_dim(sq_sum_tensor_dim);
+        }
+        if(SQ_SUM->get_stride().empty()) {
+            SQ_SUM->set_stride(detail::generate_stride(SQ_SUM->get_dim()));
         }
 
         return {error_code_t::OK, ""};
@@ -102,10 +108,6 @@ public:
         }
         #endif
         
-        return {error_code_t::OK, ""};
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
     

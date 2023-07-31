@@ -5,7 +5,7 @@ import os
 from python_graph_defs.basic_tests import test_conv_relu
 
 if __name__ == "__main__":
-    pct_parser = argparse.ArgumentParser(prog='pyCudnnTest')
+    pct_parser = argparse.ArgumentParser(prog='pycudnnTest')
     # TODO(@mbreughe): generalize this to a directory of python files
     pct_parser.add_argument('--testPath', default="json_graph_defs/graphTests.json", 
                         help="This can be a json file or python file with graph definitions. "

@@ -18,6 +18,24 @@ public:
         return Type::REDUCTION;
     }
 
+    error_t validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating reduction node " << options.name << "..." << std::endl;
+
+        if(!(options.inputs.X)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: reduction input not set.";
+            return {status, message};
+        }
+
+        if(!(options.outputs.Y)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: reduction Y not set.";
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reduction node " << options.name << "..." << std::endl;
 
@@ -31,7 +49,10 @@ public:
         auto y_tensor_dim = y_tensor->get_dim();
         // Only infer dims and strides if user did not set them
         if(y_tensor_dim.empty()) {
-            y_tensor->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            y_tensor->set_dim(x_tensor_dim);
+        }
+        if(y_tensor->get_stride().empty()) {
+            y_tensor->set_stride(detail::generate_stride(y_tensor->get_dim()));
         }
 
         return {error_code_t::OK, ""};
@@ -92,10 +113,6 @@ public:
         }
         #endif
         
-        return {error_code_t::OK, ""};
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
 

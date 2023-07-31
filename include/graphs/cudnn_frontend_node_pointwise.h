@@ -19,6 +19,47 @@ public:
         return Type::POINTWISE;
     }
 
+    error_t validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating pointwise node " << options.name << "..." << std::endl;
+
+        if(options.mode == PointwiseMode_t::NOT_SET) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: pointwise mode not set.";
+            return {status, message};
+        }
+
+        if(!(options.inputs.IN_0)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: pointwise input IN_0 not set.";
+            return {status, message};
+        }
+
+        auto const port_count = get_pointwise_mode_port_count(options.mode);
+        if(port_count >= 3) {
+            if(!(options.inputs.IN_1)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: pointwise input IN_1 not set.";
+                return {status, message};
+            }
+        }
+
+        if(port_count >= 4) {
+            if(!(options.inputs.IN_2)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: pointwise input IN_2 not set.";
+                return {status, message};
+            }
+        }
+
+        if(!(options.outputs.OUT_0)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: pointwise output OUT_0 not set.";
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     error_t infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node " << options.name << "..." << std::endl;
         
@@ -31,7 +72,11 @@ public:
         auto out_0_tensor_dim = out_0_tensor->get_dim();
         // Only infer dims and strides if user did not set them
         if(out_0_tensor_dim.empty()) {
-            out_0_tensor->set_dim(in_0_tensor->get_dim()).set_stride(in_0_tensor->get_stride());
+            out_0_tensor->set_dim(in_0_tensor->get_dim());
+        }
+        // Special case here where input strides are being copied over
+        if(out_0_tensor->get_stride().empty()) {
+            out_0_tensor->set_stride(in_0_tensor->get_stride());
         }
 
         return {error_code_t::OK, ""};
@@ -50,7 +95,7 @@ public:
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << options.name << " tensors X:" << std::endl;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0));
         
-        auto const port_count = get_pointwise_mode_port_count(options.get_mode().value());
+        auto const port_count = get_pointwise_mode_port_count(options.mode);
         if(port_count >= 3) {
             getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode " << options.name << " tensors B:" << std::endl;
             CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_1));
@@ -87,10 +132,10 @@ public:
         auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
                                                         .setAxis(options.get_axis().value_or(-1))
                                                         .setComputeType(options.get_compute_data_type())
-                                                        .setMode(options.get_mode().value())
+                                                        .setMode(options.mode)
                                                         .build();
 
-        auto const port_count = get_pointwise_mode_port_count(options.get_mode().value());
+        auto const port_count = get_pointwise_mode_port_count(options.mode);
         if(port_count == 4) {
             auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
                                             .setxDesc(*(tensors.at(options.inputs.IN_0->get_uid())))
@@ -109,7 +154,7 @@ public:
             operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
         }
         else if(port_count == 3) {
-            if(options.get_mode() == PointwiseMode_t::RELU_BWD) {
+            if(options.mode == PointwiseMode_t::RELU_BWD) {
                 auto pointwise_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
                                                 .setdyDesc(*(tensors.at(options.inputs.IN_0->get_uid())))
                                                 .setxDesc(*(tensors.at(options.inputs.IN_1->get_uid())))
@@ -164,10 +209,6 @@ public:
         }
         #endif
         
-        return {error_code_t::OK, ""};
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
     

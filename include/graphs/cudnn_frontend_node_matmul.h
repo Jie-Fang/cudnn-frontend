@@ -19,19 +19,43 @@ namespace cudnn_frontend::graph {
             return Type::MATMUL;
         }
 
+        error_t validate_node() const override final {
+            getLogger() << "[cudnn_frontend] INFO: " << "Validating matmul node " << options.name << "..." << std::endl;
+
+            if(!(options.inputs.A)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: matmul A not set.";
+                return {status, message};
+            }
+
+            if(!(options.inputs.B)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: matmul B not set.";
+                return {status, message};
+            }
+
+            if(!(options.outputs.C)) {
+                auto status = error_code_t::ATTRIBUTE_NOT_SET;
+                std::string message = "[cudnn_frontend] ERROR: matmul C not set.";
+                return {status, message};
+            }
+
+            return {error_code_t::OK, ""};
+        }
+
         error_t infer_properties_node() override final {
             getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node " << options.name << "..." << std::endl;
         
             options.fill_from_context(context);
 
             // Only inferrencing from (A, B) -> C works today.
-            auto a_tensor_prop = options.inputs.A;
-            auto b_tensor_prop = options.inputs.B;
-            auto c_tensor_prop = options.outputs.C;
+            auto a_tensor = options.inputs.A;
+            auto b_tensor = options.inputs.B;
+            auto c_tensor = options.outputs.C;
             
-            auto const a_tensor_dim = a_tensor_prop->get_dim();
-            auto const b_tensor_dim = b_tensor_prop->get_dim();
-            auto c_tensor_dim = c_tensor_prop->get_dim();
+            auto const a_tensor_dim = a_tensor->get_dim();
+            auto const b_tensor_dim = b_tensor->get_dim();
+            auto c_tensor_dim = c_tensor->get_dim();
             
             // Only infer dims and strides if user did not set them
             if(c_tensor_dim.empty()) {
@@ -39,7 +63,10 @@ namespace cudnn_frontend::graph {
                 c_tensor_dim[0] = a_tensor_dim[0]; // B
                 c_tensor_dim[1] = a_tensor_dim[1]; // M
                 c_tensor_dim[2] = b_tensor_dim[2]; // N
-                c_tensor_prop->set_dim(c_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                c_tensor->set_dim(c_tensor_dim);
+            }
+            if(c_tensor->get_stride().empty()) {
+                c_tensor->set_stride(detail::generate_stride(c_tensor->get_dim()));
             }
 
             return {error_code_t::OK, ""};
@@ -158,10 +185,6 @@ namespace cudnn_frontend::graph {
             }
             #endif
             
-            return {error_code_t::OK, ""};
-        }
-
-        error_t createOperationGraphs(cudnnHandle_t) override final {
             return {error_code_t::OK, ""};
         }
 

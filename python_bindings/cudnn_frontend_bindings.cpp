@@ -16,7 +16,7 @@ void init_pygraph_submodule(py::module_ &);
 // pybinds for all properties and helpers
 void init_properties(py::module_ &);
 
-PYBIND11_MODULE(pycudnn, m)
+PYBIND11_MODULE(cudnn, m)
 {
   m.def("get_cudnn_version", &cudnnGetVersion);
 

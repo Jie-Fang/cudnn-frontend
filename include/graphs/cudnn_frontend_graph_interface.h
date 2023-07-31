@@ -184,7 +184,7 @@ private:
     std::shared_ptr<Tensor_attributes>
     output_tensor(std::string const &name) {
         auto tensor = std::make_shared<Tensor_attributes>();
-        tensor->set_name(name);
+        tensor->set_name(name).set_is_virtual(true);
         tensors.emplace(tensor);
         return tensor;
     }
@@ -202,9 +202,9 @@ public:
     
     std::shared_ptr<Tensor_attributes> tensor(Tensor_attributes const& tensor);
 
-    Batchnorm_attributes::Outputs batchnorm(Batchnorm_attributes::Inputs, Batchnorm_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Batchnorm_attributes);
 
-    BN_finalize_attributes::Outputs bn_finalize(BN_finalize_attributes::Inputs, BN_finalize_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 6> bn_finalize(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, BN_finalize_attributes);
 
     std::shared_ptr<Tensor_attributes> conv_fprop(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Conv_fprop_attributes);
     
@@ -214,7 +214,7 @@ public:
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> dbn_weight(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, DBN_weight_attributes);
 
-    DBN_attributes::Outputs batchnorm_backward(DBN_attributes::Inputs, DBN_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, DBN_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
@@ -307,49 +307,73 @@ inline std::shared_ptr<Tensor_attributes> Graph::tensor(Tensor_attributes const&
     return tensor_ptr;
 }
 
-inline BN_finalize_attributes::Outputs Graph::bn_finalize(BN_finalize_attributes::Inputs inputs, BN_finalize_attributes options) {
+inline std::array<std::shared_ptr<Tensor_attributes>, 6> Graph::bn_finalize(std::shared_ptr<Tensor_attributes> sum, std::shared_ptr<Tensor_attributes> sq_sum, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> bias, std::shared_ptr<Tensor_attributes> epsilon, std::shared_ptr<Tensor_attributes> accum_count, BN_finalize_attributes options) {
     // Set outputs
-    options.make_outputs([this](std::string const &name){return output_tensor(name);});
-    auto return_outputs = options.outputs;
+    auto EQ_SCALE = options.outputs.EQ_SCALE = output_tensor(options.get_name() + "::EQ_SCALE");
+    auto EQ_BIAS = options.outputs.EQ_BIAS = output_tensor(options.get_name() + "::EQ_BIAS");
+    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+    auto INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR = nullptr;
+    if(options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
+        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    }
+    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
+    options.outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
 
     // Set inputs
-    options.inputs = inputs;
+    options.inputs.SUM = sum;
+    options.inputs.SQ_SUM = sq_sum;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS = bias;
+    options.inputs.EPSILON = epsilon;
+    options.inputs.ACCUM_COUNT = accum_count;
 
     sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(options), context));
 
-    return return_outputs;
+    return {EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
 
-inline Batchnorm_attributes::Outputs Graph::batchnorm(Batchnorm_attributes::Inputs inputs, Batchnorm_attributes options) {
+inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::batchnorm(std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> bias, Batchnorm_attributes options) {
     
     // Set outputs
-    options.make_outputs([this](std::string const &name){return output_tensor(name);});
-    auto return_outputs = options.outputs;
+    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+    auto INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR = nullptr;
+    if(options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
+        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    }
+    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
+    options.outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
 
     // Set inputs
-    options.inputs.X = inputs.X;
-    options.inputs.SCALE = inputs.SCALE;
-    options.inputs.BIAS = inputs.BIAS;
-    options.inputs.PREV_RUNNING_MEAN = inputs.PREV_RUNNING_MEAN;
-    options.inputs.PREV_RUNNING_VAR = inputs.PREV_RUNNING_VAR;
+    options.inputs.X = x;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS = bias;
 
     sub_nodes.emplace_back(std::make_unique<BatchNormNode>(std::move(options), context));
 
-    return return_outputs;
+    return {Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
 
-inline DBN_attributes::Outputs Graph::batchnorm_backward(DBN_attributes::Inputs inputs, DBN_attributes options) {
+inline std::array<std::shared_ptr<Tensor_attributes>, 3> Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy, std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, DBN_attributes options) {
     
     // Set outputs
     options.make_outputs([this](std::string const &name){return output_tensor(name);});
     auto return_outputs = options.outputs;
 
     // Set inputs
-    options.inputs = inputs;
+    options.inputs.DY = dy;
+    options.inputs.X = x;
+    options.inputs.SCALE = scale;
 
     sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
 
-    return return_outputs;
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }
 
 inline std::shared_ptr<Tensor_attributes> Graph::conv_fprop(std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> w, Conv_fprop_attributes options) {
@@ -489,7 +513,12 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::scaled_dot_produ
 inline std::array<std::shared_ptr<Tensor_attributes>, 2> Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q, std::shared_ptr<Tensor_attributes> k, std::shared_ptr<Tensor_attributes> v, Scaled_dot_product_flash_attention_attributes options) {
     // Make required output tensors
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
-    auto Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
+    if(options.is_inference.has_value() && options.is_inference.value() == false) {
+        Stats = output_tensor(options.get_name() + "::Stats");
+    }
+    options.outputs.Stats = Stats;
 
     // Set inputs
     options.inputs.Q = q;

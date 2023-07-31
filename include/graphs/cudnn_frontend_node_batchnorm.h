@@ -32,7 +32,10 @@ public:
         // Only infer dims and strides if user did not set them
         if(y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
-            Y->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            Y->set_dim(x_tensor_dim);
+        }
+        if(Y->get_stride().empty()) {
+            Y->set_stride(detail::generate_stride(Y->get_dim()));
         }
 
         // Set channel length tensors
@@ -42,7 +45,10 @@ public:
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
                 tensor_dim[1] = x_tensor_dim[1];
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_per_channel_tensors(options.outputs.MEAN);
@@ -60,7 +66,10 @@ public:
             // Only infer dims and strides if user did not set them
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_scalar_tensors(options.inputs.EPSILON);
@@ -171,10 +180,6 @@ public:
         }
         #endif
 
-        return {error_code_t::OK, ""};
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
     

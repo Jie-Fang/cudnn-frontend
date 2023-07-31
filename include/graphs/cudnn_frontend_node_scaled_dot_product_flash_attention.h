@@ -237,7 +237,7 @@ namespace cudnn_frontend::graph {
                     // Hard code data type input type as FE itself will place value in variant pack later
                     #if CUDNN_VERSION < 8930
                     .set_data_type(options.inputs.Q->get_data_type());
-                    #elif
+                    #else
                     .set_data_type(DataType_t::FLOAT);
                     #endif
 
@@ -271,16 +271,12 @@ namespace cudnn_frontend::graph {
 
             return {error_code_t::OK, ""};
         }
-
-        error_t createOperationGraphs(cudnnHandle_t) override final {
-            return {error_code_t::OK, ""};
-        }
     
         virtual error_t pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {            
             if(options.dropout_probability.has_value()) {
                 #if CUDNN_VERSION < 8930
                 half dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
-                #elif
+                #else
                 float dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
                 #endif
                 tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);

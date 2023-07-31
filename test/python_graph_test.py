@@ -7,7 +7,7 @@ def test_python_graph(graph_builder_fptr, jparams):
     EXPECTED_KEY = "expected_dim"
     testgraph = test_graph()
     graph_builder_fptr(jparams, testgraph)
-    graph = testgraph.build_pycudnn_graph()
+    graph = testgraph.build_cudnn_graph()
 
     # Perform a front-end check if expected dimensions were specified
     if EXPECTED_KEY in jparams:

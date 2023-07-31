@@ -35,35 +35,7 @@ public:
                                     , is_pass_by_value
                                     , reordering_type
                                     , uid)
-    
-    bool is_dim_set = false;
-    bool is_stride_set = false;
-    bool is_virtual_set = false;
-    bool is_pass_by_value_set = false;
-    bool is_uid_set = false;
-
-    int
-    generateStrides(cudnnTensorFormat_t const filterFormat) {
-        size_t const dim_count = dim.size();
-        stride.resize(dim_count);
-        if (filterFormat == CUDNN_TENSOR_NCHW) {
-            stride[dim_count - 1] = 1;
-            for (int64_t d = dim_count - 2; d >= 0; d--) {
-                stride[d] = stride[d + 1] * dim[d + 1];
-            }
-        } else {
-            // Here we assume that the format is CUDNN_TENSOR_NHWC
-            stride[1]          = 1;
-            stride[dim_count - 1] = stride[1] * dim[1];
-            for (int64_t d = dim_count - 2; d >= 2; d--) {
-                stride[d] = stride[d + 1] * dim[d + 1];
-            }
-            stride[0] = stride[2] * dim[2];
-        }
-        is_stride_set = true;
-        return 0;
-    }
-    
+        
     Tensor_attributes() = default;
 
     std::string get_name() const {
@@ -90,7 +62,6 @@ public:
 
     auto set_dim(std::vector<int64_t> const& value) -> Tensor_attributes& {
         dim = value;
-        is_dim_set = true;
         return *this;
     }
 
@@ -100,7 +71,6 @@ public:
 
     auto set_stride(std::vector<int64_t> const& value) -> Tensor_attributes& {
         stride = value;
-        is_stride_set = true;
         return *this;
     }
 
@@ -110,8 +80,11 @@ public:
 
     auto set_is_virtual(bool const value) -> Tensor_attributes& {
         is_virtual = value;
-        is_virtual_set = true;
         return *this;
+    }
+
+    auto set_output(bool const value) -> Tensor_attributes& {
+        return set_is_virtual(!value);
     }
 
     bool get_is_pass_by_value() const {
@@ -120,7 +93,6 @@ public:
 
     auto set_is_pass_by_value(bool const value) -> Tensor_attributes& {
         is_pass_by_value = value;
-        is_pass_by_value_set = true;
         return *this;
     }
     
@@ -139,7 +111,6 @@ public:
 
     auto set_uid(uid_t value) -> Tensor_attributes& {
         uid = value;
-        is_uid_set = true;
         return *this;
     }
 
@@ -217,20 +188,20 @@ public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> SUM;
         std::shared_ptr<Tensor_attributes> SQ_SUM;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> SCALE;
         std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+        std::shared_ptr<Tensor_attributes> ACCUM_COUNT;
         std::shared_ptr<Tensor_attributes> PREV_RUNNING_MEAN;
         std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-        std::shared_ptr<Tensor_attributes> EXP_AVG;
-        std::shared_ptr<Tensor_attributes> ACCUM_COUNT;
+        std::shared_ptr<Tensor_attributes> MOMENTUM;
     } inputs;
         
     struct Outputs {
         std::shared_ptr<Tensor_attributes> EQ_SCALE;
         std::shared_ptr<Tensor_attributes> EQ_BIAS;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN;
         std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR;
     } outputs;
@@ -238,19 +209,19 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
                                     , SUM
                                     , SQ_SUM
-                                    , MEAN
-                                    , INV_VARIANCE
                                     , SCALE
                                     , BIAS
+                                    , EPSILON
+                                    , ACCUM_COUNT
                                     , PREV_RUNNING_MEAN
                                     , PREV_RUNNING_VAR
-                                    , EPSILON
-                                    , EXP_AVG
-                                    , ACCUM_COUNT)
+                                    , MOMENTUM)
                                     
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , EQ_SCALE
                                     , EQ_BIAS
+                                    , MEAN
+                                    , INV_VARIANCE
                                     , NEXT_RUNNING_MEAN
                                     , NEXT_RUNNING_VAR)
 
@@ -261,6 +232,13 @@ public:
                                     , outputs)
 
     BN_finalize_attributes() : Operation(Tag::BN_finalize) {}
+
+    BN_finalize_attributes& set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean, std::shared_ptr<Tensor_attributes>& variance, std::shared_ptr<Tensor_attributes>& momentum) {
+        inputs.PREV_RUNNING_MEAN = mean;
+        inputs.PREV_RUNNING_VAR = variance;
+        inputs.MOMENTUM = momentum;
+        return *this;
+    }
 
     BN_finalize_attributes& set_name(std::string const& value) {
         name = value;
@@ -276,6 +254,8 @@ public:
     make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.EQ_SCALE = output_tensor(name + "_EQ_SCALE_output");
         outputs.EQ_BIAS = output_tensor(name + "_EQ_BIAS_output");
+        outputs.MEAN = output_tensor(name + "_MEAN_output");
+        outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
         outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
         outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");
     }
@@ -284,18 +264,18 @@ public:
         // Fill node's tensors
         inputs.SUM->fill_from_context(context);
         inputs.SQ_SUM->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
         inputs.BIAS->fill_from_context(context);
         inputs.PREV_RUNNING_MEAN->fill_from_context(context);
         inputs.PREV_RUNNING_VAR->fill_from_context(context);
         inputs.EPSILON->fill_from_context(context);
-        inputs.EXP_AVG->fill_from_context(context);
+        inputs.MOMENTUM->fill_from_context(context);
         inputs.ACCUM_COUNT->fill_from_context(context);
         
         outputs.EQ_SCALE->fill_from_context(context);
         outputs.EQ_BIAS->fill_from_context(context);
+        outputs.MEAN->fill_from_context(context);
+        outputs.INV_VARIANCE->fill_from_context(context);
         outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
         outputs.NEXT_RUNNING_VAR->fill_from_context(context);
 
@@ -373,7 +353,6 @@ public:
     std::vector<int64_t> dilation = {};
 
     bool is_padding_set = false;
-    bool is_stride_set = false;
     bool is_dilation_set = false;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -410,7 +389,6 @@ public:
 
     Conv_fprop_attributes& set_stride(std::vector<int64_t> value) {
         stride = value;
-        is_stride_set = true;
         return *this;
     }
 
@@ -485,6 +463,12 @@ public:
                                     , outputs)
 
     DBN_attributes() : Operation(Tag::DBN) {}
+    
+    DBN_attributes& set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean, std::shared_ptr<Tensor_attributes> inv_variance) {
+        inputs.MEAN = mean;
+        inputs.INV_VARIANCE = inv_variance;
+        return *this;
+    }
 
     DBN_attributes& set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
@@ -764,7 +748,7 @@ public:
         std::shared_ptr<Tensor_attributes> OUT_0;
     } outputs;
 
-    std::optional<PointwiseMode_t> mode;
+    PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
@@ -784,10 +768,6 @@ public:
                                     , axis)
 
     Pointwise_attributes() : Operation(Tag::Pointwise) {}
-
-    std::optional<PointwiseMode_t> get_mode() const {
-        return mode;
-    }
 
     Pointwise_attributes& set_mode(PointwiseMode_t const value) {
         mode = value;
@@ -880,13 +860,15 @@ public:
         return *this;
     }
 
-    Batchnorm_attributes& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
+    Batchnorm_attributes& set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean, std::shared_ptr<Tensor_attributes>& variance, std::shared_ptr<Tensor_attributes>& momentum) {
+        inputs.PREV_RUNNING_MEAN = mean;
+        inputs.PREV_RUNNING_VAR = variance;
+        inputs.MOMENTUM = momentum;
         return *this;
     }
 
-    Batchnorm_attributes& set_momentum(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.MOMENTUM = value;
+    Batchnorm_attributes& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
+        inputs.EPSILON = value;
         return *this;
     }
 
@@ -902,10 +884,10 @@ public:
 
     void make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.Y = output_tensor(name + "_Y_output");
-        outputs.MEAN = output_tensor(name + "_MEAN_output");;
-        outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");;
-        outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");;
-        outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");;
+        outputs.MEAN = output_tensor(name + "_MEAN_output");
+        outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
+        outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
+        outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");
     }
 
     auto fill_from_context(detail::Context const& context) -> Batchnorm_attributes& {

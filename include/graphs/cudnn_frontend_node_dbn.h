@@ -14,15 +14,22 @@ class DBNNode : public INode {
 public:
     DBN_attributes options;
 
-    DBNNode(DBN_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {
-        // User does not create tensor for epsilon/momentum, so create it internally
-        // Data type is i/o type
-        // epsilon = std::make_shared<Tensor_attributes>("epsilon");
-        // epsilon->set_dim({1,1,1,1}).set_stride({1,1,1,1}).set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
-    }
+    DBNNode(DBN_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
 
     Type getType() override final {
         return Type::DBN;
+    }
+
+    error_t validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating DBNNode " << options.name << "..." << std::endl;
+
+        if(!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: Either saved mean/inv_variance or epsilon required.";
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
     }
 
     error_t infer_properties_node() override final {
@@ -39,7 +46,10 @@ public:
         // Only infer dims and strides if user did not set them
         if(dy_tensor_dim.empty()) {
             dy_tensor_dim.resize(x_tensor_dim.size());
-            DY->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            DY->set_dim(x_tensor_dim);
+        }
+        if(DY->get_stride().empty()) {
+            DY->set_stride(detail::generate_stride(DY->get_dim()));
         }
         
         auto DX = options.outputs.DX;
@@ -47,7 +57,10 @@ public:
         // Only infer dims and strides if user did not set them
         if(dx_tensor_dim.empty()) {
             dx_tensor_dim.resize(x_tensor_dim.size());
-            DX->set_dim(x_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            DX->set_dim(x_tensor_dim);
+        }
+        if(DX->get_stride().empty()) {
+            DX->set_stride(detail::generate_stride(DX->get_dim()));
         }
 
         // Set channel length tensors
@@ -57,7 +70,10 @@ public:
             if(tensor_dim.empty()) {
                 tensor_dim.resize(x_tensor_dim.size(), 1);
                 tensor_dim[1] = x_tensor_dim[1];
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_per_channel_tensors(options.inputs.MEAN);
@@ -147,10 +163,6 @@ public:
         }
         #endif
 
-        return {error_code_t::OK, ""};
-    }
-
-    error_t createOperationGraphs(cudnnHandle_t) override final {
         return {error_code_t::OK, ""};
     }
     

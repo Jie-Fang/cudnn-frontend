@@ -1,30 +1,30 @@
-import pycudnn
+import cudnn
 import torch
 from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
 
 # @brief: Reference code
-# @details: the methods mirror pycudnn.pygraph methods and class constructors(__init__)
+# @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
 # @note: we can easily replace PytorchReference by CustomReference to use a different reference framework (one LoC change in test_graph below)
 class PytorchReference:
     # @brief: run convolution without bias
-    # @param kwargs: these are the named parameters used in the associated pycudnn.pygraph.conv function
+    # @param kwargs: these are the named parameters used in the associated cudnn.pygraph.conv function
     #   The only difference is that the input tensors are replaced by pytorch tensors
-    # @details: all this function needs to do is unpack the pycudnn.pygraph function arguments and pass them to the pytorch equivalent
+    # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv(kwargs):
         return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
 
     # @brief: run relu
-    # @details: unpack the pycudnn.pygraph.relu parameters and pass them to the pytorch equivalent
+    # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
     def relu(kwargs):
         return [torch.nn.functional.relu(kwargs["input"])]
     
     @staticmethod
     def batchnorm(kwargs):
-        is_training = kwargs["norm_forward_phase"] == pycudnn.norm_forward_phase.TRAINING
+        is_training = kwargs["norm_forward_phase"] == cudnn.norm_forward_phase.TRAINING
         momentum = kwargs["momentum"].item()
         epsilon=kwargs["epsilon"].item()
         output = torch.nn.functional.batch_norm(kwargs["input"], kwargs["in_running_mean"], kwargs["in_running_var"], weight= kwargs["scale"], bias=kwargs["bias"], training=is_training, momentum=momentum, eps=epsilon)
@@ -73,16 +73,16 @@ class test_node:
         return prereq_satisfied
 
     # Function that needs to be overriden by its child classes
-    def run_pycudnn_code(self, pycudnn_graph):
+    def run_cudnn_code(self, cudnn_graph):
         print("NOT IMPLEMENTED")
 
-    def build_pycudnntree_recursive(self, pycudnn_graph):
+    def build_cudnntree_recursive(self, cudnn_graph):
         if not self.is_visited() and self.is_prereq_satisfied():
             #print ("Checking {}".format(self.name))
-            self.run_pycudnn_code(pycudnn_graph)
+            self.run_cudnn_code(cudnn_graph)
             self.set_visited()
             for node in self.consumer_nodes:
-                node.build_pycudnntree_recursive(pycudnn_graph)
+                node.build_cudnntree_recursive(cudnn_graph)
 
     def run_reftree_recursive(self):
         if not self.is_visited() and self.is_prereq_satisfied():
@@ -94,13 +94,13 @@ class test_node:
 
 class operation(test_node):
     
-    # @param pyCuddnOp: pycudnn.pygraph operation (e.g., pycudnn.pygraph.conv)
-    # @param ref_func: reference function for the associated pycudnn_op
+    # @param pyCuddnOp: cudnn.pygraph operation (e.g., cudnn.pygraph.conv)
+    # @param ref_func: reference function for the associated cudnn_op
     # @param name: name for this operation (could be passed by kwargs as well)
-    def __init__(self, pycudnn_op, ref_func, name, num_outputs=1):
+    def __init__(self, cudnn_op, ref_func, name, num_outputs=1):
         super().__init__(name)
         
-        self.pycudnn_op = pycudnn_op
+        self.cudnn_op = cudnn_op
         self.ref_func = ref_func
 
         self.output = []
@@ -112,10 +112,10 @@ class operation(test_node):
             self.output.append(test_tensor("{}_out".format(name), self))
 
 
-    # @param kwargs: parameters for the associated pycudnn_op
+    # @param kwargs: parameters for the associated cudnn_op
     # @details: All this function needs to do is: 
     #   * add the correct producers
-    #   * store the kwargs (named parameters from the associated pycudnn_op)
+    #   * store the kwargs (named parameters from the associated cudnn_op)
     def set_kwargs(self, kwargs):
         self.kwargs = kwargs
         # TODO(@mbreughe): Does .values() make an unnecessary copy?
@@ -123,27 +123,27 @@ class operation(test_node):
             if isinstance(v, test_tensor):
                 self.add_producer_node(v.parent_op)
 
-    # @brief: Run the pycudnn node
+    # @brief: Run the cudnn node
     # TODO(@mbreughe): extended to multiple output tensors
-    def run_pycudnn_code(self, pycudnn_graph):
-        # Besides input tensors, all kwargs can just be passed through to the pycudnn method.
-        # For the input tensor we need to extract the test_tensor's pycudnn tensor.
+    def run_cudnn_code(self, cudnn_graph):
+        # Besides input tensors, all kwargs can just be passed through to the cudnn method.
+        # For the input tensor we need to extract the test_tensor's cudnn tensor.
         # Therefore: copy all kwargs, except for test_tensors
-        # TODO(@mbreughe) Avoid copying these kwargs twice (ref and pycudnn). Let's do this in the init function once
+        # TODO(@mbreughe) Avoid copying these kwargs twice (ref and cudnn). Let's do this in the init function once
         new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], test_tensor)}
         for x in self.kwargs:
             if isinstance(self.kwargs[x], test_tensor):
-                new_kwargs[x] = self.kwargs[x].pycudnn_tensor
+                new_kwargs[x] = self.kwargs[x].cudnn_tensor
 
-        pycudnn_res = self.pycudnn_op(pycudnn_graph, **new_kwargs)
+        cudnn_res = self.cudnn_op(cudnn_graph, **new_kwargs)
 
         # in case we have multiple outputs
-        if isinstance(pycudnn_res, list):
-            assert len(pycudnn_res) == len(self.output)
-            for output, pycudnn_out in zip(self.output, pycudnn_res):
-                output.pycudnn_tensor = pycudnn_out
+        if isinstance(cudnn_res, list):
+            assert len(cudnn_res) == len(self.output)
+            for output, cudnn_out in zip(self.output, cudnn_res):
+                output.cudnn_tensor = cudnn_out
         else:
-            self.output[0].pycudnn_tensor = pycudnn_res
+            self.output[0].cudnn_tensor = cudnn_res
 
     def run_ref(self):
         new_kwargs = {x: self.kwargs[x] for x in self.kwargs if not isinstance(self.kwargs[x], test_tensor)}
@@ -182,9 +182,9 @@ class random_tensor_generator(test_node):
         # TODO(mbreughe): Assume NCHW layout by default for now
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
-    def run_pycudnn_code(self, pycudnn_graph):
+    def run_cudnn_code(self, cudnn_graph):
         self.initialize_random_tensor()
-        self.output[0].pycudnn_tensor = pycudnn_graph.tensor(name = self.name, dim = self.output[0].ref_data.size(), stride = self.output[0].ref_data.stride(), data_type = self.output[0].data_type)
+        self.output[0].cudnn_tensor = cudnn_graph.tensor(name = self.name, dim = self.output[0].ref_data.size(), stride = self.output[0].ref_data.stride(), data_type = self.output[0].data_type)
 
     def run_ref(self):
         return self.get_value()
@@ -218,9 +218,9 @@ class ConstantTensor(test_node):
         # TODO(mbreughe): Assume NCHW layout by default for now
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
-    def run_pycudnn_code(self, pycudnn_graph):
+    def run_cudnn_code(self, cudnn_graph):
         self.instantiate()
-        self.output[0].pycudnn_tensor = pycudnn_graph.tensor(name = self.name, dim = self.output[0].ref_data.size(), stride = self.output[0].ref_data.stride(), data_type = self.output[0].data_type)
+        self.output[0].cudnn_tensor = cudnn_graph.tensor(name = self.name, dim = self.output[0].ref_data.size(), stride = self.output[0].ref_data.stride(), data_type = self.output[0].data_type)
 
     def run_ref(self):
         return self.get_value()
@@ -230,8 +230,8 @@ class test_tensor:
 
     def __init__(self, name, parent_op):
         self.name = name
-        # The pycudnn.pygraph.tensor instance associated with test_tensor
-        self.pycudnn_tensor = None
+        # The cudnn.pygraph.tensor instance associated with test_tensor
+        self.cudnn_tensor = None
         # The reference data for this tensor
         self.ref_data = None
 
@@ -240,42 +240,42 @@ class test_tensor:
     def set_data_type(self, data_type):
         self.data_type = data_type
 
-        # Apply it immediately if a pycudnn tensor was already created
-        if self.pycudnn_tensor is not None:
-            self.pycudnn_tensor.set_data_type(data_type)
+        # Apply it immediately if a cudnn tensor was already created
+        if self.cudnn_tensor is not None:
+            self.cudnn_tensor.set_data_type(data_type)
 
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
         if "data_type" in dir(self):
-            self.pycudnn_tensor.set_data_type(self.data_type)
+            self.cudnn_tensor.set_data_type(self.data_type)
     
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
-        return pycudnn.data_type.HALF
+        return cudnn.data_type.HALF
     elif torch_type == torch.float32:
-        return pycudnn.data_type.FLOAT
+        return cudnn.data_type.FLOAT
     else:
         raise ValueError("Unsupported tensor data type.")
 
     return
 
 def convert_to_torch_type(cudnn_type):
-    if cudnn_type == pycudnn.data_type.HALF:
+    if cudnn_type == cudnn.data_type.HALF:
         return torch.float16
-    elif cudnn_type == pycudnn.data_type.FLOAT:
+    elif cudnn_type == cudnn.data_type.FLOAT:
         return torch.float32
     else:
         raise ValueError("Unsupported tensor data type.")
 
     return
 
-# @brief: test_graph that mirrors pycudnn.pygraph
-# @details: this contains functionality to run both pycudnn code as well as a reference
+# @brief: test_graph that mirrors cudnn.pygraph
+# @details: this contains functionality to run both cudnn code as well as a reference
 class test_graph:
     __test__ = False
     # Add data types, custom test name ,etc.
-    def __init__(self, io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT):
+    def __init__(self, io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT):
         self.uid_counter = 0
         self.nodes = []
         self.entrance_nodes = []
@@ -290,14 +290,14 @@ class test_graph:
 
     # @brief: Add a convolution node to the graph
     def conv(self, **kwargs):
-        return self.create_and_add_operation(kwargs, pycudnn.pygraph.conv)
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv)
 
     # @brief: Add a relu to the graph
     def relu(self, **kwargs):
-        return self.create_and_add_operation(kwargs, pycudnn.pygraph.relu)
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.relu)
     
     def batchnorm(self, **kwargs):
-        return self.create_and_add_operation(kwargs, pycudnn.pygraph.batchnorm)
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.batchnorm)
 
     # @brief: Add an input tensor to the graph
     def tensor(self, **kwargs):
@@ -333,21 +333,21 @@ class test_graph:
         return name
 
     # @brief: Create an operation, pass through the kwargs and set up dependencies
-    # @param kwargs: the named arguments passed to a pycudnn function
-    # @param pycudnn_op: the pycudnn operation (e.g., pycudnn.pygraph.conv)
+    # @param kwargs: the named arguments passed to a cudnn function
+    # @param cudnn_op: the cudnn operation (e.g., cudnn.pygraph.conv)
     # @return: test_tensor (the output from the added operation)
-    def create_and_add_operation(self, kwargs, pycudnn_op):
+    def create_and_add_operation(self, kwargs, cudnn_op):
         if "name" in kwargs:
             name = kwargs["name"]
         else:
-            pycudnn_opName = pycudnn_op.__name__
-            name = self.create_unique_name(pycudnn_opName)
+            cudnn_opName = cudnn_op.__name__
+            name = self.create_unique_name(cudnn_opName)
 
-        node = test_graph.create_operation(pycudnn_op, name)
+        node = test_graph.create_operation(cudnn_op, name)
         node.set_kwargs(kwargs)
         self.nodes.append(node)
 
-        # pycudnn returns either a single tensor, or a list of tensors
+        # cudnn returns either a single tensor, or a list of tensors
         # internally, we always store a list to allow for generalization
         if len(node.output) == 1:
             return node.output[0]
@@ -355,23 +355,23 @@ class test_graph:
             return node.output
 
     # @brief: In esssence, this function is a factory function:
-    # @param pycudnn_op: the pycudnn operation (e.g., pycudnn.pygraph.conv)
+    # @param cudnn_op: the cudnn operation (e.g., cudnn.pygraph.conv)
     # @return: operation
     # it builds an operation by:
-    #   * discovering the reference function based on the name of the pycudnn op
+    #   * discovering the reference function based on the name of the cudnn op
     @staticmethod
-    def create_operation(pycudnn_op, name):
-        pycudnn_opName = pycudnn_op.__name__
+    def create_operation(cudnn_op, name):
+        cudnn_opName = cudnn_op.__name__
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
         # TODO(@mbreughe): Add error handling code in case the function is not found
-        ref_func = getattr(PytorchReference, pycudnn_opName)
+        ref_func = getattr(PytorchReference, cudnn_opName)
 
         num_outputs = 1
-        if pycudnn_opName == "batchnorm":
+        if cudnn_opName == "batchnorm":
             num_outputs = 5
         
-        node = operation(pycudnn_op, ref_func, name, num_outputs)
+        node = operation(cudnn_op, ref_func, name, num_outputs)
         return node
 
     # @brief: Utility function
@@ -385,31 +385,31 @@ class test_graph:
             if node.is_output_node():
                 print ("Setting {} as output".format(node.name))
                 for output in node.output:
-                    output.pycudnn_tensor.set_output(True)
+                    output.cudnn_tensor.set_output(True)
 
     def apply_modifiers_to_node_output_tensors(self):
         for node in self.nodes:
             for tensor in node.output:
                 tensor.apply_modifiers()
 
-    # @brief: Build the pycudnn graph
+    # @brief: Build the cudnn graph
     # @note: this temporarily modifies the is_visited status of the nodes
-    # @return the pycudnn graph
+    # @return the cudnn graph
     # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
-    def build_pycudnn_graph(self):
+    def build_cudnn_graph(self):
         # Setting up graph
-        graph = pycudnn.pygraph(self.graph_name, io_data_type = self.io_data_type, intermediate_data_type = self.intermediate_data_type, compute_data_type = self.compute_data_type)
+        graph = cudnn.pygraph(self.graph_name, io_data_type = self.io_data_type, intermediate_data_type = self.intermediate_data_type, compute_data_type = self.compute_data_type)
         
-        # TODO(@mbreughe): Change this. We don't want to invoke pycudnn calls this way since we change the order
+        # TODO(@mbreughe): Change this. We don't want to invoke cudnn calls this way since we change the order
         # a developer may have intended. It is useful when building from json graphs, but not when 
         # manually setting up graphs. This is like building a house of cards.
         self.clear_node_meta_data()
         for node in self.entrance_nodes:
-            node.build_pycudnntree_recursive(graph)
+            node.build_cudnntree_recursive(graph)
         
-        # Once we constructed the pycudnn graph, it's time to apply any explicit modifiers to each node's output tensors
+        # Once we constructed the cudnn graph, it's time to apply any explicit modifiers to each node's output tensors
         # test_graph creates dummy output tensors to allow constructing of a graph.
-        # However, the actual output tensors are created once we call build_pycudnntree_recursive. This means any modifications
+        # However, the actual output tensors are created once we call build_cudnntree_recursive. This means any modifications
         # such as Y.set_data_type(FLOAT) actually happened on the dummy tensors. Here we propogate this to the real tensors
         self.apply_modifiers_to_node_output_tensors()
 
@@ -426,13 +426,13 @@ class test_graph:
         return graph
     
     # @brief: check whether correct shape inferencing took place
-    # @pre: build_pycudnn_graph needs to have been invoked first
+    # @pre: build_cudnn_graph needs to have been invoked first
     def frontend_check(self, expected_dims):
         # Create a mapping of output names and their dimensions
         node_dim_mapping = {}
         for node in self.nodes:
             for output_tensor in node.output:
-                node_dim_mapping[output_tensor.name] = output_tensor.pycudnn_tensor.get_dim()
+                node_dim_mapping[output_tensor.name] = output_tensor.cudnn_tensor.get_dim()
         
         # For every output we wish to check, check it
         for name in expected_dims:
@@ -474,26 +474,26 @@ class test_graph:
         variant_pack = {}
         for node in self.entrance_nodes:
             for output in node.output:
-                variant_pack[output.pycudnn_tensor] = node.get_value()
+                variant_pack[output.cudnn_tensor] = node.get_value()
 
         for node in self.nodes:
             if node.is_output_node():
                 for output in node.output:
                     # TODO(@mbreughe): infer layout
-                    output_tensor = torch.zeros(*output.pycudnn_tensor.get_dim(), dtype=convert_to_torch_type(output.pycudnn_tensor.get_data_type()), device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
+                    output_tensor = torch.zeros(*output.cudnn_tensor.get_dim(), dtype=convert_to_torch_type(output.cudnn_tensor.get_data_type()), device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
                     self.output_tensors.append(output_tensor)
-                    variant_pack[output.pycudnn_tensor] = self.output_tensors[-1]
+                    variant_pack[output.cudnn_tensor] = self.output_tensors[-1]
 
         return (workspace, variant_pack)
     
-    # @brief: Run the pycudnn implementation and the reference, and compare
-    # @note: This assumes build_pycudnn_graph has already been run
-    # @pre: build_pycudnn_graph needs to be invoked first
+    # @brief: Run the cudnn implementation and the reference, and compare
+    # @note: This assumes build_cudnn_graph has already been run
+    # @pre: build_cudnn_graph needs to be invoked first
     def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
         workspace, variant_pack = self.create_workspace_and_variantpack()
 
-        # Run the pycudnn graph
-        print("Executing graph through pycudnn")
+        # Run the cudnn graph
+        print("Executing graph through cudnn")
         self.cudnn_graph.execute(variant_pack, workspace)
 
         # Run the reference

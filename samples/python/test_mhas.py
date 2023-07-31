@@ -1,20 +1,20 @@
-import pycudnn
+import cudnn
 import pytest
 import torch
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
-        return pycudnn.data_type.HALF
+        return cudnn.data_type.HALF
     elif torch_type == torch.float32:
-        return pycudnn.data_type.FLOAT
+        return cudnn.data_type.FLOAT
     elif torch_type == torch.int32:
-        return pycudnn.data_type.INT32
+        return cudnn.data_type.INT32
     elif torch_type == torch.int64:
-        return pycudnn.data_type.INT64
+        return cudnn.data_type.INT64
     else:
         raise ValueError("Unsupported tensor data type.")
 
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8900, reason="requires cudnn 8.9 or higher")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_attention_with_dropout_rng():
     b = 32
     h = 16
@@ -47,7 +47,7 @@ def test_scale_dot_product_attention_with_dropout_rng():
     Bias_gpu = torch.empty((1, h, s_q, s_kv), dtype=torch.float16, device="cuda")
     
     # Cudnn graph
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
     Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
     K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
@@ -79,7 +79,7 @@ def test_scale_dot_product_attention_with_dropout_rng():
                    , O: O_actual, S: S_actual}
                    , workspace)
          
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8900, reason="requires cudnn 8.9 or higher")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_flash_attention():
     b = 1
     h = 2
@@ -110,7 +110,7 @@ def test_scale_dot_product_flash_attention():
     Offset_gpu = torch.full((1,1,1,1), 1, dtype=torch.int32, device="cuda")
     
     # Cudnn graph
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.FLOAT, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
     Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
     K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))

@@ -34,7 +34,10 @@ public:
         // Only infer dims and strides if user did not set them
         if(x_tensor_dim.empty()) {
             x_tensor_dim.resize(dy_tensor_dim.size());
-            X->set_dim(dy_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            X->set_dim(dy_tensor_dim);
+        }
+        if(X->get_stride().empty()) {
+            X->set_stride(detail::generate_stride(X->get_dim()));
         }
 
         // Set channel length tensors
@@ -44,7 +47,10 @@ public:
             if(T->get_dim().empty()) {
                 tensor_dim.resize(dy_tensor_dim.size(), 1);
                 tensor_dim[1] = dy_tensor_dim[1];
-                T->set_dim(tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+                T->set_dim(tensor_dim);
+            }
+            if(T->get_stride().empty()) {
+                T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
         infer_per_channel_tensors(options.inputs.MEAN);
@@ -142,10 +148,6 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t createOperationGraphs(cudnnHandle_t) override final {
-        return {error_code_t::OK, ""};
-    }
-    
     virtual void serialize(json& j) const override final {
         j = options;
     }

@@ -1,7 +1,7 @@
 
 import json
 import os
-import pycudnn
+import cudnn
 import pytest
 
 from test_graph import test_graph, operation
@@ -66,7 +66,7 @@ def run_test_from_json_definition(json_dict):
     # TODO(@mbreughe)
     # we can do a front-end test by using the json dimensions of the virtual tensors
 
-    graph = testGraph.build_pycudnn_graph()
+    graph = testGraph.build_cudnn_graph()
 
     print(graph)
 
@@ -77,9 +77,9 @@ def run_test_from_json_definition(json_dict):
 def create_node(node_params):
     name = node_params["name"]
     if node_params["operation"] == "conv":
-        return test_graph.create_operation(pycudnn.pygraph.conv, name)
+        return test_graph.create_operation(cudnn.pygraph.conv, name)
     elif node_params["operation"] == "pointwise":
-        return test_graph.create_operation(pycudnn.pygraph.relu, name)
+        return test_graph.create_operation(cudnn.pygraph.relu, name)
 
 # TODO(@mbreughe): generalize
 def create_kwargs(jnode, TGTensors):

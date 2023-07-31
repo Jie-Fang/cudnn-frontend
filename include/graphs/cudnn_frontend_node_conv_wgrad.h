@@ -50,7 +50,10 @@ public:
             for(size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {
                 dw_tensor_dim[dim] = (x_tensor_dim[dim] + 2*padding[dim - 2] - (dy_tensor_dim[dim] - 1) * stride[dim - 2] - 1) / dilation[dim-2] + 1;
             }
-            DW->set_dim(dw_tensor_dim).generateStrides(CUDNN_TENSOR_NHWC);
+            DW->set_dim(dw_tensor_dim);
+        }
+        if(DW->get_stride().empty()) {
+            DW->set_stride(detail::generate_stride(DW->get_dim()));
         }
 
         return {error_code_t::OK, ""};
@@ -129,10 +132,6 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t createOperationGraphs(cudnnHandle_t) override final {
-        return {error_code_t::OK, ""};
-    }
-    
     virtual void serialize(json& j) const override final {
         j = options;
     }

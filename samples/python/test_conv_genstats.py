@@ -1,12 +1,12 @@
-import pycudnn
+import cudnn
 import pytest
 import torch
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
-        return pycudnn.data_type.HALF
+        return cudnn.data_type.HALF
     elif torch_type == torch.float32:
-        return pycudnn.data_type.FLOAT
+        return cudnn.data_type.FLOAT
     else:
         raise ValueError("Unsupported tensor data type.")
 
@@ -27,7 +27,7 @@ padding  = [1,1]
 stride   = [1,1]
 dilation = [1,1]
 
-@pytest.mark.skipif(pycudnn.get_cudnn_version() < 8800, reason="requires cudnn 8.8 or higher")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="requires cudnn 8.8 or higher")
 def test_conv_genstats():
     print("Running conv genstats")
 
@@ -39,7 +39,7 @@ def test_conv_genstats():
     Y_expected, sum_expected, sq_sum_expected = model(scale, bias, X_gpu, W_gpu, padding = padding, stride = stride, dilation = dilation)
 
     # Cudnn code
-    graph = pycudnn.pygraph(io_data_type = pycudnn.data_type.HALF, intermediate_data_type = pycudnn.data_type.HALF, compute_data_type = pycudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.HALF, compute_data_type = cudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
@@ -54,8 +54,8 @@ def test_conv_genstats():
     Y.set_output(True)
 
     SUM, SQ_SUM = graph.genstats(name = "genstats", input = Y)
-    SUM.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
-    SQ_SUM.set_output(True).set_data_type(pycudnn.data_type.FLOAT)
+    SUM.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    SQ_SUM.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
     graph.check_support()
     
