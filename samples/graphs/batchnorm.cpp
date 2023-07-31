@@ -35,30 +35,17 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     fe::graph::BN_finalize_attributes::Inputs inputs;
     auto sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1,32,1,1}).set_stride({32,1,32,32}));
     auto sq_sum = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));
-    auto mean = graph.tensor(fe::graph::Tensor_attributes().set_name("mean"));
-    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance"));
     auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean"));
     auto prev_running_var = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var"));
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale"));
     auto bias = graph.tensor(fe::graph::Tensor_attributes().set_name("bias"));
     auto epsilon = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_is_pass_by_value(true));
-    auto exp_avg = graph.tensor(fe::graph::Tensor_attributes().set_name("exp_avg").set_is_pass_by_value(true));
+    auto momentum = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_is_pass_by_value(true));
     auto accum_count = graph.tensor(fe::graph::Tensor_attributes().set_name("accum_count").set_is_pass_by_value(true).set_data_type(fe::DataType_t::INT64));
 
-    inputs.SUM = sum;
-    inputs.SQ_SUM = sq_sum;
-    inputs.SCALE = scale;
-    inputs.BIAS = bias;
-    inputs.MEAN = mean;
-    inputs.INV_VARIANCE = inv_variance;
-    inputs.PREV_RUNNING_MEAN = prev_running_mean;
-    inputs.PREV_RUNNING_VAR = prev_running_var;
-    inputs.EPSILON = epsilon;
-    inputs.EXP_AVG = exp_avg;
-    inputs.ACCUM_COUNT = accum_count;
-
-    auto bn_finalize_options = fe::graph::BN_finalize_attributes();
-    auto [eq_scale, eq_bias, next_running_mean, next_running_var] = graph.bn_finalize(inputs, bn_finalize_options);
+    auto bn_finalize_options = fe::graph::BN_finalize_attributes()
+                                    .set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
+    auto [eq_scale, eq_bias, saved_mean, saved_inv_variance, next_running_mean, next_running_var] = graph.bn_finalize(sum, sq_sum, scale, bias, epsilon, accum_count, bn_finalize_options);
 
     #if (CUDNN_VERSION < 8400)
         SKIP("BNFinalize requires cudnn 8.4 and up");
@@ -90,26 +77,26 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     Surface<float> eq_scale_tensor(32, false);
     Surface<float> eq_bias_tensor(32, false);
     float EPS_scalar = 0.001f;
-    float EXP_AVG_scalar = 0.001f;
+    float MOMENTUM_scalar = 0.001f;
     int64_t nhw = 64;
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {sum, Sum_tensor.devPtr}
         , {sq_sum, Sq_sum_tensor.devPtr}
-        , {mean, Mean_tensor.devPtr}
-        , {inv_variance, Var_tensor.devPtr}
-        , {prev_running_mean, Previous_running_mean_tensor.devPtr}
-        , {prev_running_var, Previous_running_var_tensor.devPtr}
-        , {next_running_mean, Next_running_mean_tensor.devPtr}
-        , {next_running_var, Next_running_var_tensor.devPtr}
         , {scale, Scale_tensor.devPtr}
         , {bias, Bias_tensor.devPtr}
         , {epsilon, &EPS_scalar}
-        , {exp_avg, &EXP_AVG_scalar}
         , {accum_count, &nhw}
+        , {prev_running_mean, Previous_running_mean_tensor.devPtr}
+        , {prev_running_var, Previous_running_var_tensor.devPtr}
+        , {momentum, &MOMENTUM_scalar}
         , {eq_scale, eq_scale_tensor.devPtr}
         , {eq_bias, eq_bias_tensor.devPtr}
+        , {saved_mean, Mean_tensor.devPtr}
+        , {saved_inv_variance, Var_tensor.devPtr}
+        , {next_running_mean, Next_running_mean_tensor.devPtr}
+        , {next_running_var, Next_running_var_tensor.devPtr}
     };
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 

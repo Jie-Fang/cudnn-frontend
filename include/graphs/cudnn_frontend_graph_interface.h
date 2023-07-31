@@ -204,7 +204,7 @@ public:
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Batchnorm_attributes);
 
-    BN_finalize_attributes::Outputs bn_finalize(BN_finalize_attributes::Inputs, BN_finalize_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 6> bn_finalize(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, BN_finalize_attributes);
 
     std::shared_ptr<Tensor_attributes> conv_fprop(std::shared_ptr<Tensor_attributes>, std::shared_ptr<Tensor_attributes>, Conv_fprop_attributes);
     
@@ -307,17 +307,32 @@ inline std::shared_ptr<Tensor_attributes> Graph::tensor(Tensor_attributes const&
     return tensor_ptr;
 }
 
-inline BN_finalize_attributes::Outputs Graph::bn_finalize(BN_finalize_attributes::Inputs inputs, BN_finalize_attributes options) {
+inline std::array<std::shared_ptr<Tensor_attributes>, 6> Graph::bn_finalize(std::shared_ptr<Tensor_attributes> sum, std::shared_ptr<Tensor_attributes> sq_sum, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> bias, std::shared_ptr<Tensor_attributes> epsilon, std::shared_ptr<Tensor_attributes> accum_count, BN_finalize_attributes options) {
     // Set outputs
-    options.make_outputs([this](std::string const &name){return output_tensor(name);});
-    auto return_outputs = options.outputs;
+    auto EQ_SCALE = options.outputs.EQ_SCALE = output_tensor(options.get_name() + "::EQ_SCALE");
+    auto EQ_BIAS = options.outputs.EQ_BIAS = output_tensor(options.get_name() + "::EQ_BIAS");
+    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+    auto INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
+    std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR = nullptr;
+    if(options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
+        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    }
+    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
+    options.outputs.NEXT_RUNNING_VAR = NEXT_RUNNING_VAR;
 
     // Set inputs
-    options.inputs = inputs;
+    options.inputs.SUM = sum;
+    options.inputs.SQ_SUM = sq_sum;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS = bias;
+    options.inputs.EPSILON = epsilon;
+    options.inputs.ACCUM_COUNT = accum_count;
 
     sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(options), context));
 
-    return return_outputs;
+    return {EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 5> Graph::batchnorm(std::shared_ptr<Tensor_attributes> x, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> bias, Batchnorm_attributes options) {

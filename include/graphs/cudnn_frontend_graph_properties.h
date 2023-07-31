@@ -193,20 +193,20 @@ public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> SUM;
         std::shared_ptr<Tensor_attributes> SQ_SUM;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> SCALE;
         std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+        std::shared_ptr<Tensor_attributes> ACCUM_COUNT;
         std::shared_ptr<Tensor_attributes> PREV_RUNNING_MEAN;
         std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-        std::shared_ptr<Tensor_attributes> EXP_AVG;
-        std::shared_ptr<Tensor_attributes> ACCUM_COUNT;
+        std::shared_ptr<Tensor_attributes> MOMENTUM;
     } inputs;
         
     struct Outputs {
         std::shared_ptr<Tensor_attributes> EQ_SCALE;
         std::shared_ptr<Tensor_attributes> EQ_BIAS;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN;
         std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR;
     } outputs;
@@ -214,19 +214,19 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
                                     , SUM
                                     , SQ_SUM
-                                    , MEAN
-                                    , INV_VARIANCE
                                     , SCALE
                                     , BIAS
+                                    , EPSILON
+                                    , ACCUM_COUNT
                                     , PREV_RUNNING_MEAN
                                     , PREV_RUNNING_VAR
-                                    , EPSILON
-                                    , EXP_AVG
-                                    , ACCUM_COUNT)
+                                    , MOMENTUM)
                                     
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
                                     , EQ_SCALE
                                     , EQ_BIAS
+                                    , MEAN
+                                    , INV_VARIANCE
                                     , NEXT_RUNNING_MEAN
                                     , NEXT_RUNNING_VAR)
 
@@ -237,6 +237,13 @@ public:
                                     , outputs)
 
     BN_finalize_attributes() : Operation(Tag::BN_finalize) {}
+
+    BN_finalize_attributes& set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean, std::shared_ptr<Tensor_attributes>& variance, std::shared_ptr<Tensor_attributes>& momentum) {
+        inputs.PREV_RUNNING_MEAN = mean;
+        inputs.PREV_RUNNING_VAR = variance;
+        inputs.MOMENTUM = momentum;
+        return *this;
+    }
 
     BN_finalize_attributes& set_name(std::string const& value) {
         name = value;
@@ -252,6 +259,8 @@ public:
     make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const &)> output_tensor) {
         outputs.EQ_SCALE = output_tensor(name + "_EQ_SCALE_output");
         outputs.EQ_BIAS = output_tensor(name + "_EQ_BIAS_output");
+        outputs.MEAN = output_tensor(name + "_MEAN_output");
+        outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
         outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
         outputs.NEXT_RUNNING_VAR = output_tensor(name + "_NEXT_RUNNING_VAR_output");
     }
@@ -260,18 +269,18 @@ public:
         // Fill node's tensors
         inputs.SUM->fill_from_context(context);
         inputs.SQ_SUM->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
         inputs.BIAS->fill_from_context(context);
         inputs.PREV_RUNNING_MEAN->fill_from_context(context);
         inputs.PREV_RUNNING_VAR->fill_from_context(context);
         inputs.EPSILON->fill_from_context(context);
-        inputs.EXP_AVG->fill_from_context(context);
+        inputs.MOMENTUM->fill_from_context(context);
         inputs.ACCUM_COUNT->fill_from_context(context);
         
         outputs.EQ_SCALE->fill_from_context(context);
         outputs.EQ_BIAS->fill_from_context(context);
+        outputs.MEAN->fill_from_context(context);
+        outputs.INV_VARIANCE->fill_from_context(context);
         outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
         outputs.NEXT_RUNNING_VAR->fill_from_context(context);
 
@@ -865,11 +874,6 @@ public:
 
     Batchnorm_attributes& set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
-        return *this;
-    }
-
-    Batchnorm_attributes& set_momentum(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.MOMENTUM = value;
         return *this;
     }
 

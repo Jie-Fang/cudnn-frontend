@@ -41,14 +41,14 @@ public:
             }
         };
         infer_per_channel_tensors(options.inputs.SQ_SUM);
-        infer_per_channel_tensors(options.inputs.MEAN);
-        infer_per_channel_tensors(options.inputs.INV_VARIANCE);
         infer_per_channel_tensors(options.inputs.SCALE);
         infer_per_channel_tensors(options.inputs.BIAS);
         infer_per_channel_tensors(options.inputs.PREV_RUNNING_MEAN);
         infer_per_channel_tensors(options.inputs.PREV_RUNNING_VAR);
         infer_per_channel_tensors(options.outputs.EQ_BIAS);
         infer_per_channel_tensors(options.outputs.EQ_SCALE);
+        infer_per_channel_tensors(options.outputs.MEAN);
+        infer_per_channel_tensors(options.outputs.INV_VARIANCE);
         infer_per_channel_tensors(options.outputs.NEXT_RUNNING_MEAN);
         infer_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR);
 
@@ -65,7 +65,7 @@ public:
             }
         };
         infer_scalars(options.inputs.EPSILON);
-        infer_scalars(options.inputs.EXP_AVG);
+        infer_scalars(options.inputs.MOMENTUM);
         infer_scalars(options.inputs.ACCUM_COUNT);
 
         return {error_code_t::OK, ""};
@@ -74,17 +74,17 @@ public:
     error_t assign_uids_node() override final {
         options.inputs.SUM->set_uid(ICudnn::create_new_uid());
         options.inputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.MEAN->set_uid(ICudnn::create_new_uid());
-        options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
         options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
         options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
         options.inputs.PREV_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
         options.inputs.PREV_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
         options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.inputs.EXP_AVG->set_uid(ICudnn::create_new_uid());
+        options.inputs.MOMENTUM->set_uid(ICudnn::create_new_uid());
         options.inputs.ACCUM_COUNT->set_uid(ICudnn::create_new_uid());
         options.outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
         options.outputs.EQ_SCALE->set_uid(ICudnn::create_new_uid());
+        options.outputs.MEAN->set_uid(ICudnn::create_new_uid());
+        options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
         options.outputs.NEXT_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
         options.outputs.NEXT_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
         return {error_code_t::OK, ""};
@@ -96,18 +96,18 @@ public:
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SUM));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SQ_SUM));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.BIAS));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_VAR));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EXP_AVG));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MOMENTUM));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.ACCUM_COUNT));
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_BIAS));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.MEAN));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.INV_VARIANCE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_VAR));
 
@@ -129,12 +129,12 @@ public:
                                         .setSumDesc(*(tensors.at(options.inputs.SUM->get_uid())))
                                         .setSqSumDesc(*(tensors.at(options.inputs.SQ_SUM->get_uid())))
                                         .setEqScaleAndBias(*(tensors.at(options.outputs.EQ_SCALE->get_uid())), *(tensors.at(options.outputs.EQ_BIAS->get_uid())))
-                                        .setSavedMeanAndInvVar(*(tensors.at(options.inputs.MEAN->get_uid())), *(tensors.at(options.inputs.INV_VARIANCE->get_uid())))
+                                        .setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())), *(tensors.at(options.outputs.INV_VARIANCE->get_uid())))
                                         .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())), *(tensors.at(options.inputs.BIAS->get_uid())))
                                         .setPrevRunningMeanAndVar(*(tensors.at(options.inputs.PREV_RUNNING_MEAN->get_uid())), *(tensors.at(options.inputs.PREV_RUNNING_VAR->get_uid())))
                                         .setNextRunningMeanAndVar(*(tensors.at(options.outputs.NEXT_RUNNING_MEAN->get_uid())), *(tensors.at(options.outputs.NEXT_RUNNING_VAR->get_uid())))
                                         .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
-                                        .setExpDecayFactorTensor(*(tensors.at(options.inputs.EXP_AVG->get_uid())))
+                                        .setExpDecayFactorTensor(*(tensors.at(options.inputs.MOMENTUM->get_uid())))
                                         .setAccumCountTensor(*(tensors.at(options.inputs.ACCUM_COUNT->get_uid())))
                                         .build();
         
@@ -142,17 +142,17 @@ public:
         auto const& tensors_involved_in_operation = {
             options.inputs.SUM
             , options.inputs.SQ_SUM
-            , options.inputs.MEAN
-            , options.inputs.INV_VARIANCE
             , options.inputs.PREV_RUNNING_MEAN
             , options.inputs.PREV_RUNNING_VAR
             , options.inputs.EPSILON
-            , options.inputs.EXP_AVG
+            , options.inputs.MOMENTUM
             , options.inputs.ACCUM_COUNT
             , options.inputs.SCALE
             , options.inputs.BIAS
             , options.outputs.EQ_BIAS
             , options.outputs.EQ_SCALE
+            , options.outputs.MEAN
+            , options.outputs.INV_VARIANCE
             , options.outputs.NEXT_RUNNING_MEAN
             , options.outputs.NEXT_RUNNING_VAR
         };
