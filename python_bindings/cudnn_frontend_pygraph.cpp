@@ -131,8 +131,6 @@ public:
                         .set_name(name);
 
         auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(x, scale, bias, attributes);
-        Y->set_is_virtual(true);
-
         return {Y, mean, inv_var, next_running_mean, next_running_var};
     }
 
@@ -152,11 +150,6 @@ public:
                         .set_name(name);
 
         auto [DX, DScale, DBias] = graph.batchnorm_backward(dy, x, scale, attributes);
-        
-        DX->set_is_virtual(true);
-        DScale->set_is_virtual(true);
-        DBias->set_is_virtual(true);
-
         return {DX, DScale, DBias};
     }
 
@@ -182,10 +175,6 @@ public:
                         .set_name(name);
 
         auto Y = graph.conv_fprop(image, weight, attributes);
-
-        // Default virtualness in python is true
-        Y->set_is_virtual(true);
-
         return Y;
     }
 
@@ -210,10 +199,6 @@ public:
                         .set_compute_data_type(compute_data_type)
                         .set_name(name);
         auto DX = graph.conv_dgrad(loss, filter, attributes);
-
-        // Default virtualness in python is true
-        DX->set_is_virtual(true);
-
         return DX;
     }
 
@@ -238,10 +223,6 @@ public:
                         .set_compute_data_type(compute_data_type)
                         .set_name(name);
         auto DW = graph.conv_wgrad(loss, image, attributes);
-
-        // Default virtualness in python is true
-        DW->set_is_virtual(true);
-
         return DW;
     }
 
@@ -259,10 +240,6 @@ public:
         auto attributes = cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type);
 
         auto C = graph.matmul(A, B, attributes);
-
-        // Default virtualness in python is true
-        C->set_is_virtual(true);
-
         return C;
     }
 
@@ -279,10 +256,6 @@ public:
                             .set_name(name);
 
         auto c = graph.pointwise(a, b, attributes);
-
-        // Default virtualness in python is true
-        c->set_is_virtual(true);
-
         return c;
     }
 
@@ -308,10 +281,6 @@ public:
                             .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
-
-        // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
-
         return OUT_0;
     }
 
@@ -328,10 +297,6 @@ public:
                             .set_name(name);
 
         auto OUT_0 = graph.pointwise(a, b, attributes);
-
-        // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
-
         return OUT_0;
     }
 
@@ -348,10 +313,6 @@ public:
                             .set_name(name);
 
         auto c = graph.pointwise(a, b, attributes);
-
-        // Default virtualness in python is true
-        c->set_is_virtual(true);
-
         return c;
     }
 
@@ -381,10 +342,6 @@ public:
                             .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
-
-        // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
-
         return OUT_0;
     }
 
@@ -399,11 +356,6 @@ public:
                             .set_name(name);
 
         auto [SUM, SQ_SUM] = graph.genstats(input, attributes);
-
-        // Default virtualness in python is true
-        SUM->set_is_virtual(true);
-        SQ_SUM->set_is_virtual(true);
-
         return {SUM, SQ_SUM};
     }
 
@@ -423,10 +375,6 @@ public:
                             .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
-
-        // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
-
         return OUT_0;
     }
 
@@ -446,10 +394,6 @@ public:
                             .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
-
-        // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
-
         return OUT_0;
     }
 
@@ -467,10 +411,6 @@ public:
                               .set_name(name);
 
         auto OUT_0 = graph.pointwise(input_attributes_ptr, comparison_ptr, attributes);
-
-        // Default virtualness in python is true
-        OUT_0->set_is_virtual(true);
-
         return OUT_0;
     }
 
@@ -529,11 +469,6 @@ public:
         attributes.inputs.SEQ_LEN_K = seq_len_k;
         
         auto [O, S] = graph.scaled_dot_product_attention(q, k, v, attributes);
-
-        // Default virtualness in python is true
-        S->set_is_virtual(true);
-        O->set_is_virtual(true);
-
         return {O, S};
     }
 
@@ -601,11 +536,6 @@ public:
         }
         
         auto [O, Stats] = graph.scaled_dot_product_flash_attention(q, k, v, attributes);
-
-        // Default virtualness in python is true
-        Stats->set_is_virtual(true);
-        O->set_is_virtual(true);
-
         return {O, Stats};
     }
 

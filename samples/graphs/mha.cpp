@@ -63,10 +63,11 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     #endif
 
     auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
+    O->set_output(true);
 
     // Check that Stats tensor is real, which is only when its training step
     if(Stats) {
-        Stats->set_data_type(fe::DataType_t::FLOAT);
+        Stats->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     }
 
     #if (CUDNN_VERSION < 8900)
@@ -163,8 +164,12 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
                                                     .set_bias(bias);
 
     auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
+    O->set_output(true);
 
-    Stats->set_data_type(fe::DataType_t::FLOAT).set_is_virtual(is_inference);
+    // Check that Stats tensor is real, which is only when its training step
+    if(Stats) {
+        Stats->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    }
 
     // No dropout in flash attention only supported 8.9.3 onwards.
     #if (CUDNN_VERSION < 8930)
@@ -260,6 +265,8 @@ TEST_CASE("Scaled dot product Graphs with Rng", "[graph][mha][non_flash][forward
                                                     .set_dropout(dropout_probability, seed);
 
     auto [O, S] = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
+    O->set_output(true);
+    S->set_output(true);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -359,6 +366,8 @@ TEST_CASE("Scaled dot product Graphs with No Dropout", "[graph][mha][non_flash][
                                                     .set_padding_mask(true)
                                                     .set_attn_scale(attn_scale);
     auto [O, S] = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
+    O->set_output(true);
+    S->set_output(true);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");
@@ -456,6 +465,8 @@ TEST_CASE("Scaled dot product Graphs with Dropout Mask", "[graph][mha][non_flash
                                                     .set_dropout(dropout_mask, dropout_scale);
                                                     
     auto [O, S] = mha_graph.scaled_dot_product_attention(Q, K, V, scaled_dot_product_attention_options);
+    O->set_output(true);
+    S->set_output(true);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("MHA Graph requires cudnn 8.9 and up");

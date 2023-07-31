@@ -46,6 +46,12 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
     auto bn_finalize_options = fe::graph::BN_finalize_attributes()
                                     .set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
     auto [eq_scale, eq_bias, saved_mean, saved_inv_variance, next_running_mean, next_running_var] = graph.bn_finalize(sum, sq_sum, scale, bias, epsilon, accum_count, bn_finalize_options);
+    eq_scale->set_output(true);
+    eq_bias->set_output(true);
+    saved_mean->set_output(true);
+    saved_inv_variance->set_output(true);
+    next_running_mean->set_output(true);
+    next_running_var->set_output(true);
 
     #if (CUDNN_VERSION < 8400)
         SKIP("BNFinalize requires cudnn 8.4 and up");
@@ -124,20 +130,18 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
                                 .set_forward_phase(fe::NormFwdPhase_t::TRAINING)
                                 .set_epsilon(epsilon).set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
     auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] = graph.batchnorm(X, scale, bias, batchnorm_options);
-    bn_output->set_is_virtual(true);
-
-    mean->set_data_type(fe::DataType_t::FLOAT);
-    inv_variance->set_data_type(fe::DataType_t::FLOAT);
-    next_running_mean->set_data_type(fe::DataType_t::FLOAT);
-    next_running_var->set_data_type(fe::DataType_t::FLOAT);
+    mean->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    inv_variance->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    next_running_mean->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    next_running_var->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     
     auto A = graph.tensor(fe::graph::Tensor_attributes().set_name("A").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}).set_data_type(fe::DataType_t::HALF));
     auto add_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto add_output = graph.pointwise(bn_output, A, add_options);
-    add_output->set_is_virtual(true);
 
     auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto Y = graph.pointwise(add_output, relu_options);
+    Y->set_output(true);
 
     #if (CUDNN_VERSION < 8700)
         SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
@@ -206,8 +210,8 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto DX_drelu = graph.pointwise(DY, input_mask, mul_options);
 
     // NOTE: Toggle DADD output by toggling DX_DRELU virtualness
-    bool is_dx_drelu_virtual = true;
-    DX_drelu->set_is_virtual(is_dx_drelu_virtual).set_data_type(fe::DataType_t::HALF);
+    bool has_dadd = true;
+    DX_drelu->set_output(has_dadd).set_data_type(fe::DataType_t::HALF);
 
     fe::graph::DBN_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("X").set_dim({4,32,16,16}).set_stride({32*16*16, 1, 32*16, 32}));
@@ -218,9 +222,9 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     auto DBN_options = fe::graph::DBN_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
     auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, X, scale, DBN_options);
-    DX->set_is_virtual(false);
-    dscale->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
-    dbias->set_is_virtual(false).set_data_type(fe::DataType_t::FLOAT);
+    DX->set_output(true);
+    dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    dbias->set_output(true).set_data_type(fe::DataType_t::FLOAT);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
@@ -265,7 +269,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     // If is_dx_drelu_virtual, DADD output required
     Surface<half> DADD_tensor(4*32*16*16, false);
-    if(false == is_dx_drelu_virtual) {
+    if(true == has_dadd) {
         variant_pack[DX_drelu] = DADD_tensor.devPtr;
     }
 

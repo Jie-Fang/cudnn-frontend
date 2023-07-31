@@ -35,12 +35,7 @@ public:
                                     , is_pass_by_value
                                     , reordering_type
                                     , uid)
-    
-    bool is_dim_set = false;
-    bool is_virtual_set = false;
-    bool is_pass_by_value_set = false;
-    bool is_uid_set = false;
-    
+        
     Tensor_attributes() = default;
 
     std::string get_name() const {
@@ -67,7 +62,6 @@ public:
 
     auto set_dim(std::vector<int64_t> const& value) -> Tensor_attributes& {
         dim = value;
-        is_dim_set = true;
         return *this;
     }
 
@@ -86,8 +80,11 @@ public:
 
     auto set_is_virtual(bool const value) -> Tensor_attributes& {
         is_virtual = value;
-        is_virtual_set = true;
         return *this;
+    }
+
+    auto set_output(bool const value) -> Tensor_attributes& {
+        return set_is_virtual(!value);
     }
 
     bool get_is_pass_by_value() const {
@@ -96,7 +93,6 @@ public:
 
     auto set_is_pass_by_value(bool const value) -> Tensor_attributes& {
         is_pass_by_value = value;
-        is_pass_by_value_set = true;
         return *this;
     }
     
@@ -115,7 +111,6 @@ public:
 
     auto set_uid(uid_t value) -> Tensor_attributes& {
         uid = value;
-        is_uid_set = true;
         return *this;
     }
 

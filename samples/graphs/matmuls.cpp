@@ -38,20 +38,18 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     
     fe::graph::Matmul_attributes matmul;
     auto Z = graph.matmul(X, Y, matmul);
-    Z->set_is_virtual(true);
 
     auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({4, 16, 32}).set_stride({16*32, 1, 16}));
     auto scale_output = graph.pointwise(Z, S, scale_options);
-    scale_output->set_is_virtual(true);
 
     auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({4, 16, 32}).set_stride({16*32, 1, 16}));
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
-    bias_output->set_is_virtual(true);
 
     auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
     auto O = graph.pointwise(bias_output, relu_options);
+    O->set_output(true);
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));

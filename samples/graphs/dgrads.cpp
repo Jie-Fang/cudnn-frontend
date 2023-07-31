@@ -37,11 +37,11 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
     
     auto dgrad_options = fe::graph::Conv_dgrad_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto dgrad_output = graph.conv_dgrad(DY, W, dgrad_options);
-    dgrad_output->set_is_virtual(true);
     
     auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({4, 32, 16, 16}).set_stride({32*16*16, 1, 32*16, 32}));
     auto drelu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_BWD);
     auto DX = graph.pointwise(dgrad_output, X, drelu_options);
+    DX->set_output(true);
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
@@ -84,34 +84,35 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
     
     auto dgrad_options = fe::graph::Conv_dgrad_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
     auto dgrad_output = graph.conv_dgrad(DY, W, dgrad_options);
-    dgrad_output->set_is_virtual(true);
     
     auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({4, 32, 16, 16}).set_stride({32*16*16, 1, 32*16, 32}));
     auto M = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto mean_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto M_output = graph.pointwise(X, M, mean_options);
-    M_output->set_is_virtual(true);
     
     auto V = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto inv_var_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto V_output = graph.pointwise(M_output, V, inv_var_options);
-    V_output->set_is_virtual(true);
     
     auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
     auto S_output = graph.pointwise(V_output, S, scale_options);
-    S_output->set_is_virtual(true);
     
     auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("input").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}).set_data_type(fe::DataType_t::FLOAT));
     auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
     auto B_output = graph.pointwise(S_output, B, bias_options);
-    B_output->set_is_virtual(true);
 
     auto drelu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_BWD);
     auto drelu_output = graph.pointwise(dgrad_output, B_output, drelu_options);
-    
+    drelu_output->set_output(true);
+
     auto dbn_weight_options = fe::graph::DBN_weight_attributes();
     auto [dscale, dbias, eq_scale_dy, eq_scale_x, eq_bias] = graph.dbn_weight(drelu_output, X, M, V, S, dbn_weight_options);
+    dscale->set_output(true);
+    dbias->set_output(true);
+    eq_scale_dy->set_output(true);
+    eq_scale_x->set_output(true);
+    eq_bias->set_output(true);
 
     #if (CUDNN_VERSION < 8900)
         SKIP("DgradDreluBNBwdWeight requires cudnn 8.9 and up");
