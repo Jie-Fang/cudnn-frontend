@@ -1067,8 +1067,9 @@ run_f16_flash_attention_bprop(int64_t b,
          *                          dP * scaleDropout -> dPAfterDropoutScale
         *///////////////////////////////////////////////////////////////////////////////
         auto dPAfterDropoutScaleTensor = tensor_create(CUDNN_DATA_FLOAT, VIRTUAL_ID + 11, p_dim, p_stride, true, false); // is virtual
+        // needs to be bf16 (Please change)
         half1 scale_dropout = cpu_float2half_rn(static_cast<float>(1/(1 - dropout_probability)));
-        auto scaleDropoutTensor = tensor_create(CUDNN_DATA_FLOAT, D_CONST_ID, scale_dim, scale_stride, false, true); // is by value
+        auto scaleDropoutTensor = tensor_create(tensorType, D_CONST_ID, scale_dim, scale_stride, false, true); // is by value
         auto multiply_op3 = binary_pw_op_create(dPTensor, scaleDropoutTensor, dPAfterDropoutScaleTensor, multiplyDesc);
         ops.push_back(std::move(multiply_op3));
 
