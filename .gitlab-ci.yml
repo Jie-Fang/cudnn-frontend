@@ -360,6 +360,70 @@ pycudnntest:cudnn_8.9.2.31:Hopper:
     needs:
         - ["build:cudnn_8.9.2.31: [Hopper]"]
 
+build:cudnn_8.9.3.34:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    stage: build
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends: .build:template
+
+test:cudnn_8.9.3.34:Ampere:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    extends: .test:template
+    dependencies: ["build:cudnn_8.9.3.34: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.9.3.34: [Ampere]"]
+
+pytest:cudnn_8.9.3.34:Ampere:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    extends: .pytest:template
+    dependencies: ["build:cudnn_8.9.3.34: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.9.3.34: [Ampere]"]
+
+pycudnntest:cudnn_8.9.3.34:Ampere:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    extends: .pycudnntest:template
+    dependencies: ["build:cudnn_8.9.3.34: [Ampere]"]
+    tags:
+        - Ampere
+    needs:
+        - ["build:cudnn_8.9.3.34: [Ampere]"]
+
+test:cudnn_8.9.3.34:Hopper:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    extends: .test:template
+    dependencies: ["build:cudnn_8.9.3.34: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.9.3.34: [Hopper]"]
+
+pytest:cudnn_8.9.3.34:Hopper:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    extends: .pytest:template
+    dependencies: ["build:cudnn_8.9.3.34: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.9.3.34: [Hopper]"]
+
+pycudnntest:cudnn_8.9.3.34:Hopper:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    extends: .pycudnntest:template
+    dependencies: ["build:cudnn_8.9.3.34: [Hopper]"]
+    tags:
+        - Hopper
+    needs:
+        - ["build:cudnn_8.9.3.34: [Hopper]"]
+
 build:cudnn_8.9_clang:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
     stage: build
