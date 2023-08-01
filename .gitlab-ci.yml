@@ -1,8 +1,8 @@
 variables:
   JFROG_API_KEY: $JFROG_API_KEY
-  GIT_SUBMODULE_STRATEGY: recursive
 
 stages:
+    - analysis
     - build
     - cpp_tests
     - python_tests
@@ -423,6 +423,16 @@ pycudnntest:cudnn_8.9.3.34:Hopper:
         - Hopper
     needs:
         - ["build:cudnn_8.9.3.34: [Hopper]"]
+
+analysis:clang-format:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
+    stage: analysis
+    before_script:
+        - apt-get update
+        - apt-get install -y clang-format
+    allow_failure: true
+    script:
+        - ci/run_style_check_diff.sh
 
 build:cudnn_8.9_clang:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
