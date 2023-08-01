@@ -26,6 +26,12 @@ def get_python_graph_defs(path, module_name):
 
     return (test_funcs, test_names)
 
+# @param test_funcs: list of function pointers to python graph test definitions
+# @param test_names: list of names associated with each item in test_funcs
+# @param params_path: path to a directory that contains input parameters for each function in test_names
+# @param wanted_tests: list of function names that the user requested to run. Empty list means all test will be run
+# @return tuples: list of tuples of (function name, input param). -- function name will be repeated for each input param
+# @return test_ids: list of unique test names (function name + input params) for each item in tuple
 def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests):
     tuples = []
     test_ids = []
