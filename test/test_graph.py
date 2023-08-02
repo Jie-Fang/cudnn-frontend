@@ -40,6 +40,11 @@ class PytorchReference:
     def matmul(kwargs):
         output = torch.bmm(kwargs['A'], kwargs['B'])
         return [output]
+    
+    @staticmethod
+    def bias(kwargs):
+        output = torch.add(kwargs["input"], kwargs["bias"])
+        return [output]
 
 # Base class for Tensor and operation nodes
 class test_node:
@@ -332,6 +337,9 @@ class test_graph:
     
     def matmul(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.matmul)
+    
+    def bias(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
 
     # @brief: Add an input tensor to the graph
     def tensor(self, **kwargs):

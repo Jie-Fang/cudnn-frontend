@@ -53,7 +53,9 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
 
             test_ids.extend(cur_ids)
         else:
-            raise FileNotFoundError(filename)
+            error = FileNotFoundError(filename)
+            error.add_note("Please make sure your test ({}) has an associated file with input params".format(test_name))
+            raise error
 
     return tuples, test_ids
 
