@@ -38,8 +38,18 @@ def test_gemm(jparams, testgraph):
     weight = testgraph.tensor(name = "weight", dim = [B, K, N], data_type = cudnn.data_type.HALF)
 
     gemm_output = testgraph.matmul(name = "mb_matmul", A = image, B = weight, compute_data_type = cudnn.data_type.FLOAT)
-    gemm_output.set_data_type(cudnn.data_type.HALF)
+    #gemm_output.set_stride([M*N, N, 1])
+
+def test_gemm_relu(jparams, testgraph):
+    B, M, N, K = jparams["in_dim"]
+
+    image = testgraph.tensor(name = "image", dim = [B, M, K], data_type = cudnn.data_type.HALF)
+    weight = testgraph.tensor(name = "weight", dim = [B, K, N], data_type = cudnn.data_type.HALF)
+
+    gemm_output = testgraph.matmul(name = "mb_matmul", A = image, B = weight, compute_data_type = cudnn.data_type.FLOAT)
     # Make output row-major:
     gemm_output.set_stride([M*N, N, 1])
+    relu_output = testgraph.relu(input=gemm_output)
+    
 
  

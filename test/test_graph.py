@@ -285,21 +285,19 @@ def convert_to_torch_type(cudnn_type):
 
     return
 
+def is_column_major(cudnn_tensor):
+    strides = cudnn_tensor.get_stride()
+    assert len(strides) == 3
+    return strides[2] > strides[1]
+
 # @brief convert the strides of a torch_tensor to the ones of cudnn_tensor
 # @param torch_tensor: tensor created by torch
 # @param cudnn_tensor: tensor created by cudnn
 def convert_strides(torch_tensor, cudnn_tensor):
     cudnn_stride = tuple(cudnn_tensor.get_stride())
-    # Ensure we setup the correct strides
-    if len(cudnn_tensor.get_dim()) == 3:
-        if torch_tensor.stride() != cudnn_stride:
-            torch_tensor = torch.transpose(torch_tensor, 1, 2)
 
-    elif len(cudnn_tensor.get_dim()) > 3:
-        if torch_tensor.stride() != cudnn_stride:
-            torch_tensor = torch_tensor.to(memory_format=torch.channels_last)
-    
-    assert torch_tensor.stride() == cudnn_stride
+    # Ensure we setup the correct strides
+    torch_tensor = torch.as_strided(torch_tensor, torch_tensor.size(), tuple(cudnn_stride))
 
     return torch_tensor
 
@@ -518,14 +516,12 @@ class test_graph:
         for node in self.nodes:
             if node.is_output_node():
                 for output in node.output:
-                    # TODO(@mbreughe): infer layout
-                    output_tensor = torch.zeros(*output.cudnn_tensor.get_dim(), dtype=convert_to_torch_type(output.cudnn_tensor.get_data_type()), device='cuda', layout=torch.strided)
+                    output_tensor = torch.zeros(*output.cudnn_tensor.get_dim(), dtype=convert_to_torch_type(output.cudnn_tensor.get_data_type()), device='cuda')
 
                     output_tensor = convert_strides(output_tensor, output.cudnn_tensor)
 
                     self.output_tensors.append(output_tensor)
                     variant_pack[output.cudnn_tensor] = self.output_tensors[-1]
-                    print("Stride: ", output.cudnn_tensor.get_stride())
 
         return (workspace, variant_pack)
     

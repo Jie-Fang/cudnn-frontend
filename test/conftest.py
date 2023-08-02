@@ -52,6 +52,8 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
                 tuples.append((func,par))
 
             test_ids.extend(cur_ids)
+        else:
+            raise FileNotFoundError(filename)
 
     return tuples, test_ids
 
@@ -76,7 +78,7 @@ def pytest_generate_tests(metafunc):
 
         metafunc.parametrize(GRAPH_PYTHON_FPTR+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
 
-
+    # Run a test from a json dictionary
     elif metafunc.function.__name__ == "test_json_graph":
         id=os.path.basename(metafunc.config.getoption("testPath"))
         # Using keyword indirect allows us to call the associated fixture
