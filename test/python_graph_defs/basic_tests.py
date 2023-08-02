@@ -7,6 +7,16 @@ def test_conv_relu(jparams, testgraph):
     conv_out = testgraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testgraph.relu(input = conv_out)
 
+def test_conv_relu_bias_relu(jparams, testgraph):
+    X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
+    W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
+    bias = testgraph.tensor(dim=jparams["bias_dim"], layout = "NHWC")
+
+    conv_out = testgraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    relu_1 = testgraph.relu(input = conv_out)
+    bias_out = testgraph.bias(name = "bias", input = relu_1, bias = bias)
+    relu_output = testgraph.relu(input=bias_out)
+    
 def test_batchnorm(jparams, testgraph):
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)
     
