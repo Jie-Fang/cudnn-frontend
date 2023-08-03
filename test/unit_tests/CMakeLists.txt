@@ -14,17 +14,17 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 # Find cudnn
-include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/cuDNN.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 
 add_executable(
-    unittests
+    unit_tests
 
     serialize.cpp
 )
 
 if (MSVC)
     target_compile_options(
-        unittests PRIVATE
+        unit_tests PRIVATE
         /W4 /WX # warning level 3 and all warnings as errors
         /wd4100 # allow unused parameters
         /wd4458 # local hides class member (currently a problem for all inline setters)
@@ -33,7 +33,7 @@ if (MSVC)
     )
 else()
     target_compile_options(
-        unittests PRIVATE
+        unit_tests PRIVATE
         -Wall
         -Wextra
         -Werror
@@ -42,7 +42,7 @@ else()
 endif()
 
 target_link_libraries(
-    unittests
+    unit_tests
     cudnn_frontend
     Catch2::Catch2WithMain
     CUDA::cudart
@@ -52,7 +52,7 @@ target_link_libraries(
 # cuDNN dlopen's its libraries
 # Add all libraries in link line as NEEDED
 set_target_properties(
-    unittests
+    unit_tests
     PROPERTIES
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
