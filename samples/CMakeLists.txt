@@ -84,3 +84,7 @@ set_target_properties(
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+include_directories(
+    resnet_block/include
+)

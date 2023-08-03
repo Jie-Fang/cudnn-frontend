@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cudnn_frontend.h"
-#include "cudnn_frontend_resnet_block.h"
+#include "resnet_block/include/cudnn_frontend_resnet_block.h"
 #include "helpers.h"
 
 void

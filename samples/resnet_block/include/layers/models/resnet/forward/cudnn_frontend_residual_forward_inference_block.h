@@ -856,9 +856,9 @@ class ResidualForwardInferenceBlock : public IBlock {
                         #endif
 
                         auto pointwise_descriptor = pointwise_problems.at(node.problem_name);
-                        if(pointwise_descriptor->getPointWiseMode() == CUDNN_POINTWISE_IDENTITY || 
-                           pointwise_descriptor->getPointWiseMode() == CUDNN_POINTWISE_RELU_FWD || 
-                           pointwise_descriptor->getPointWiseMode() == CUDNN_POINTWISE_RSQRT) {
+                        if(pointwise_descriptor->getPointWiseMode() == cudnn_frontend::PointwiseMode_t::IDENTITY || 
+                           pointwise_descriptor->getPointWiseMode() == cudnn_frontend::PointwiseMode_t::RELU_FWD || 
+                           pointwise_descriptor->getPointWiseMode() == cudnn_frontend::PointwiseMode_t::RSQRT) {
                             // Create a Scale or Bias Node for Weight1 * Input + Bias                      
                             auto pwOp = cudnn_frontend::OperationBuilder(node.type)
                                             .setxDesc(*(tensor_map.at(node.edges[0]))) // Input tensor (output of prev conv node)
