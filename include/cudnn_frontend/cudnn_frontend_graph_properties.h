@@ -142,6 +142,7 @@ public:
         Pointwise,
         Reduction,
         Rng,
+        Reshape,
         Scaled_dot_product_attention,
         Scaled_dot_product_flash_attention,
         Softmax,
@@ -1070,6 +1071,77 @@ public:
         // Fill node's tensors
         if(inputs.Seed)inputs.Seed->fill_from_context(context);
         if(inputs.Offset)inputs.Offset->fill_from_context(context);
+        outputs.Y->fill_from_context(context);
+
+        // Fill this node
+        if(get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Reshape_attributes : public Operation {
+public:
+    
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+    } outputs;
+
+    std::vector<int64_t> dim = {};
+    std::vector<int64_t> stride = {};
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
+                                    , X)
+                                    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
+                                    , Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes
+                                , name
+                                , tag
+                                , inputs
+                                , outputs
+                                , dim
+                                , stride)
+    
+    Reshape_attributes() : Operation(Tag::Reshape) {}
+    
+    std::vector<int64_t> get_dim() const {
+        return dim;
+    }
+
+    auto set_dim(std::vector<int64_t> const& value) -> Reshape_attributes& {
+        dim = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_stride() const {
+        return stride;
+    }
+
+    auto set_stride(std::vector<int64_t> const& value) -> Reshape_attributes& {
+        stride = value;
+        return *this;
+    }
+        
+    Reshape_attributes& set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+        
+    Reshape_attributes& set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto fill_from_context(detail::Context const& context) -> Reshape_attributes& {
+
+        inputs.X->fill_from_context(context);
         outputs.Y->fill_from_context(context);
 
         // Fill this node

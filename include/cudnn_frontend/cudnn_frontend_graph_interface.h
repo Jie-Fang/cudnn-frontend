@@ -14,6 +14,7 @@
 #include "cudnn_frontend_node_pointwise.h"
 #include "cudnn_frontend_node_reduction.h"
 #include "cudnn_frontend_node_rng.h"
+#include "cudnn_frontend_node_reshape.h"
 #include "cudnn_frontend_node_scaled_dot_product_attention.h"
 #include "cudnn_frontend_node_scaled_dot_product_flash_attention.h"
 

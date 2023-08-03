@@ -87,6 +87,7 @@ protected:
         , POINTWISE
         , REDUCTION
         , RESAMPLE
+        , RESHAPE
         , RNG
         , SCALED_DOT_PRODUCT_ATTENTION
         , WGRAD
