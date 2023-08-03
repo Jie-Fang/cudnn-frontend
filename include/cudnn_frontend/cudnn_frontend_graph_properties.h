@@ -986,6 +986,8 @@ public:
     } outputs;
 
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
+    std::vector<int64_t> dim = {};
+    std::vector<int64_t> stride = {};
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
     
@@ -1002,10 +1004,30 @@ public:
                                 , inputs
                                 , outputs
                                 , distribution
+                                , dim
+                                , stride
                                 , seed
                                 , bernoulli_probability)
 
     Rng_attributes() : Operation(Tag::Rng) {}
+
+    std::vector<int64_t> get_dim() const {
+        return dim;
+    }
+
+    auto set_dim(std::vector<int64_t> const& value) -> Rng_attributes& {
+        dim = value;
+        return *this;
+    }
+
+    std::vector<int64_t> get_stride() const {
+        return stride;
+    }
+
+    auto set_stride(std::vector<int64_t> const& value) -> Rng_attributes& {
+        stride = value;
+        return *this;
+    }
 
     RngDistribution_t get_distribution() const {
         return distribution;
