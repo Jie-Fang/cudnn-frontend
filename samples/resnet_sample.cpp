@@ -66,6 +66,7 @@ void RunResidualBlock(cudnn_frontend::ResidualBlockParams const & params, cudnn_
         std::cout << residualBlock->getErrorMessage() << std::endl;
         CHECK(false);
     }
+    cudaDeviceSynchronize();
     checkCudnnErr(cudnnDestroy(handle));
 }
 

@@ -85,6 +85,8 @@ set_target_properties(
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-include_directories(
-    resnet_block/include
+set_source_files_properties(
+    resnet_test_list.cpp resnet_sample.cpp
+    PROPERTIES 
+    INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/samples/resnet_block/include"
 )
