@@ -42,3 +42,31 @@ TEST_CASE("Tensor attributes", "[tensor][serialize]") {
     
     REQUIRE(tensor_attributes_deserialized == tensor_attributes);
 }
+
+TEST_CASE("Conv fprop attributes", "[conv_fprop][serialize]") {
+    namespace fe = cudnn_frontend;
+
+    auto x = std::make_shared<fe::graph::Tensor_attributes>();
+    x->set_name("image")
+        .set_dim({4, 32, 16, 16})
+        .set_stride({32*16*16, 1, 32*16, 32})
+        .set_is_virtual(true)
+        .set_is_pass_by_value(true)
+        .set_uid(12312)
+        .set_reordering_type(fe::TensorReordering_t::F16x16)
+        .set_data_type(fe::DataType_t::HALF);
+
+    auto conv_fprop_attributes = fe::graph::Conv_fprop_attributes()
+                                    .set_name("conv_fprop")
+                                    .set_padding({1,1})
+                                    .set_stride({1,1})
+                                    .set_dilation({1,1})
+                                    .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    conv_fprop_attributes.inputs.X = x;
+
+    json j = conv_fprop_attributes;
+    auto conv_fprop_attributes_deserialized = j;
+    
+    REQUIRE(conv_fprop_attributes_deserialized == conv_fprop_attributes);
+}
