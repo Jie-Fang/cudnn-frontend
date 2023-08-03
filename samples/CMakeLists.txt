@@ -27,6 +27,8 @@ add_executable(
     cpp/wgrads.cpp
 
     conv_sample.cpp 
+    resnet_test_list.cpp
+    resnet_sample.cpp
     test_list.cpp 
     fp16_emu.cpp 
     helpers.cpp 
