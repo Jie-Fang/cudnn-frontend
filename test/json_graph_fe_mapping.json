@@ -1,0 +1,24 @@
+{
+    "pointwise": 
+        {
+            "CUDNN_POINTWISE_RELU_FWD":
+                {
+                    "operation": "relu",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {}
+                }
+        },
+    "conv":
+        {
+            "operation": "conv",
+            "input": {"X": "image", "W": "weight"},
+            "output": ["Y"],
+            "properties": {
+                "dilation": "dilation",
+                "pad": "padding",
+                "stride": "stride",
+                "name": "name"
+            }
+        }
+}
