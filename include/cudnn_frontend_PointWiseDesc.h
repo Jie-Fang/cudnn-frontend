@@ -76,7 +76,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
 
     PointWiseDesc_v8(PointWiseDesc_v8 &&from) = default;
     PointWiseDesc_v8 &
-    operator= (PointWiseDesc_v8 &&from) = default; 
+    operator=(PointWiseDesc_v8 &&from) = default;
 
     ~PointWiseDesc_v8() = default;
 
@@ -86,7 +86,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     PointWiseDesc_v8 &
     operator=(PointWiseDesc_v8 const &) = delete;
 
-    DataType_t compute_type          = DataType_t::FLOAT;
+    DataType_t compute_type               = DataType_t::FLOAT;
     PointwiseMode_t mode                  = PointwiseMode_t::NOT_SET;
     cudnnNanPropagation_t nan_propagation = CUDNN_NOT_PROPAGATE_NAN;
     double upper_clip                     = std::numeric_limits<double>::max();
@@ -96,7 +96,7 @@ class PointWiseDesc_v8 : public BackendDescriptor {
     double softplus_beta                  = 1.0;
     double swish_beta                     = 1.0;
 #if (CUDNN_VERSION >= 8400)
-    int64_t axis                          = -1;
+    int64_t axis = -1;
 #endif
 };
 
@@ -134,7 +134,7 @@ class PointWiseDescBuilder_v8 {
         return *this;
     }
 
-    //! To be deprecated. Please use setMode(PointwiseMode_t). 
+    //! To be deprecated. Please use setMode(PointwiseMode_t).
     auto
     setMode(cudnnPointwiseMode_t mode) -> PointWiseDescBuilder_v8 & {
         m_pointWiseDesc.mode = detail::convert_from_cudnn_type(mode);
@@ -148,7 +148,7 @@ class PointWiseDescBuilder_v8 {
         return *this;
     }
     /** @} */
-    
+
     // TODO Deprecate in v1.0
     auto
     setMathPrecision(cudnnDataType_t data_type_) -> PointWiseDescBuilder_v8 & {
@@ -190,7 +190,6 @@ class PointWiseDescBuilder_v8 {
         m_pointWiseDesc.swish_beta = swish_beta_;
         return *this;
     }
-    
 
     auto
     setAxis(int64_t axis_) -> PointWiseDescBuilder_v8 & {
@@ -200,7 +199,6 @@ class PointWiseDescBuilder_v8 {
 #endif
         return *this;
     }
-  
 
     //! constructs the PointWiseDesc_v8 by calling the cudnn API
     //! Throws the appropriate error message
@@ -225,10 +223,10 @@ class PointWiseDescBuilder_v8 {
             return std::move(m_pointWiseDesc);
         }
         status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
-                                            CUDNN_ATTR_POINTWISE_MODE,
-                                            CUDNN_TYPE_POINTWISE_MODE,
-                                            1,
-                                            &cudnn_pointwise_mode);
+                                          CUDNN_ATTR_POINTWISE_MODE,
+                                          CUDNN_TYPE_POINTWISE_MODE,
+                                          1,
+                                          &cudnn_pointwise_mode);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_pointWiseDesc,
@@ -322,7 +320,8 @@ class PointWiseDescBuilder_v8 {
                                               "CUDNN_ATTR_POINTWISE_RELU_LOWER_CLIP_SLOPE, Failed");
                 return std::move(m_pointWiseDesc);
             }
-        } else if (m_pointWiseDesc.mode == PointwiseMode_t::ELU_FWD || m_pointWiseDesc.mode == PointwiseMode_t::ELU_BWD) {
+        } else if (m_pointWiseDesc.mode == PointwiseMode_t::ELU_FWD ||
+                   m_pointWiseDesc.mode == PointwiseMode_t::ELU_BWD) {
             status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_POINTWISE_ELU_ALPHA,
                                               CUDNN_TYPE_DOUBLE,
@@ -363,22 +362,22 @@ class PointWiseDescBuilder_v8 {
                     "CUDNN_BACKEND_POINTWISE_DESCRIPTOR: SetAttribute CUDNN_ATTR_POINTWISE_SWISH_BETA, Failed");
                 return std::move(m_pointWiseDesc);
             }
-        } 
+        }
 #if (CUDNN_VERSION >= 8400)
-            else if (m_pointWiseDesc.mode == PointwiseMode_t::GEN_INDEX) {
-                status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
+        else if (m_pointWiseDesc.mode == PointwiseMode_t::GEN_INDEX) {
+            status = cudnnBackendSetAttribute(m_pointWiseDesc.pointer->get_backend_descriptor(),
                                               CUDNN_ATTR_POINTWISE_AXIS,
                                               CUDNN_TYPE_INT64,
                                               1,
                                               &m_pointWiseDesc.axis);
-                if (status != CUDNN_STATUS_SUCCESS) {
-                    set_error_and_throw_exception(
-                        &m_pointWiseDesc,
-                        status,
-                        "CUDNN_BACKEND_POINTWISE_DESCRIPTOR: SetAttribute CUDNN_ATTR_POINTWISE_AXIS, Failed");
-                    return std::move(m_pointWiseDesc);
-                }
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_pointWiseDesc,
+                    status,
+                    "CUDNN_BACKEND_POINTWISE_DESCRIPTOR: SetAttribute CUDNN_ATTR_POINTWISE_AXIS, Failed");
+                return std::move(m_pointWiseDesc);
             }
+        }
 #endif
 
         // Finalizing the descriptor
@@ -403,8 +402,8 @@ class PointWiseDescBuilder_v8 {
    private:
     PointWiseDesc_v8 m_pointWiseDesc;
 };
-using PointWiseDescBuilder      = PointWiseDescBuilder_v8;
-using PointWiseDesc             = PointWiseDesc_v8;
-using PointwiseDescBuilder      = PointWiseDescBuilder_v8;
-using PointwiseDesc             = PointWiseDesc_v8;
-}
+using PointWiseDescBuilder = PointWiseDescBuilder_v8;
+using PointWiseDesc        = PointWiseDesc_v8;
+using PointwiseDescBuilder = PointWiseDescBuilder_v8;
+using PointwiseDesc        = PointWiseDesc_v8;
+}  // namespace cudnn_frontend
