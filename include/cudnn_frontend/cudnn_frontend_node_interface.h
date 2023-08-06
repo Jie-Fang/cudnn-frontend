@@ -82,22 +82,22 @@ class INode : public ICudnn {
     // one of the other primitive types. Primitives types are nothing but
     // cudnn operations.
     enum class Type {
-        COMPOSITE
-        , BATCHNORM
-        , BN_FINALIZE
-        , CONVOLUTION
-        , DBN
-        , DBN_WEIGHT
-        , DGRAD
-        , GENSTATS
-        , MATMUL
-        , POINTWISE
-        , REDUCTION
-        , RESAMPLE
-        , RESHAPE
-        , RNG
-        , SCALED_DOT_PRODUCT_ATTENTION
-        , WGRAD
+        COMPOSITE,
+        BATCHNORM,
+        BN_FINALIZE,
+        CONVOLUTION,
+        DBN,
+        DBN_WEIGHT,
+        DGRAD,
+        GENSTATS,
+        MATMUL,
+        POINTWISE,
+        REDUCTION,
+        RESAMPLE,
+        RESHAPE,
+        RNG,
+        SCALED_DOT_PRODUCT_ATTENTION,
+        WGRAD
     };
     Type tag;
 
