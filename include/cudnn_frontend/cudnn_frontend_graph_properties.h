@@ -957,50 +957,52 @@ class Rng_attributes : public Operation {
     } outputs;
 
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
-    std::vector<int64_t> dim = {};
-    std::vector<int64_t> stride = {};
+    std::vector<int64_t> dim       = {};
+    std::vector<int64_t> stride    = {};
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
-    
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
-                                    , Seed
-                                    , Offset)
-                                    
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
-                                    , Y)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng_attributes
-                                , name
-                                , tag
-                                , inputs
-                                , outputs
-                                , distribution
-                                , dim
-                                , stride
-                                , seed
-                                , bernoulli_probability)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, Seed, Offset)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng_attributes,
+                                   name,
+                                   tag,
+                                   inputs,
+                                   outputs,
+                                   distribution,
+                                   dim,
+                                   stride,
+                                   seed,
+                                   bernoulli_probability)
 
     Rng_attributes() : Operation(Tag::Rng) {}
 
-    std::vector<int64_t> get_dim() const {
+    std::vector<int64_t>
+    get_dim() const {
         return dim;
     }
 
-    auto set_dim(std::vector<int64_t> const& value) -> Rng_attributes& {
+    auto
+    set_dim(std::vector<int64_t> const& value) -> Rng_attributes& {
         dim = value;
         return *this;
     }
 
-    std::vector<int64_t> get_stride() const {
+    std::vector<int64_t>
+    get_stride() const {
         return stride;
     }
 
-    auto set_stride(std::vector<int64_t> const& value) -> Rng_attributes& {
+    auto
+    set_stride(std::vector<int64_t> const& value) -> Rng_attributes& {
         stride = value;
         return *this;
     }
 
-    RngDistribution_t get_distribution() const {
+    RngDistribution_t
+    get_distribution() const {
         return distribution;
     }
 
@@ -1060,8 +1062,7 @@ class Rng_attributes : public Operation {
 };
 
 class Reshape_attributes : public Operation {
-public:
-    
+   public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> X;
     } inputs;
@@ -1070,60 +1071,58 @@ public:
         std::shared_ptr<Tensor_attributes> Y;
     } outputs;
 
-    std::vector<int64_t> dim = {};
+    std::vector<int64_t> dim    = {};
     std::vector<int64_t> stride = {};
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs
-                                    , X)
-                                    
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs
-                                    , Y)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes
-                                , name
-                                , tag
-                                , inputs
-                                , outputs
-                                , dim
-                                , stride)
-    
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, tag, inputs, outputs, dim, stride)
+
     Reshape_attributes() : Operation(Tag::Reshape) {}
-    
-    std::vector<int64_t> get_dim() const {
+
+    std::vector<int64_t>
+    get_dim() const {
         return dim;
     }
 
-    auto set_dim(std::vector<int64_t> const& value) -> Reshape_attributes& {
+    auto
+    set_dim(std::vector<int64_t> const& value) -> Reshape_attributes& {
         dim = value;
         return *this;
     }
 
-    std::vector<int64_t> get_stride() const {
+    std::vector<int64_t>
+    get_stride() const {
         return stride;
     }
 
-    auto set_stride(std::vector<int64_t> const& value) -> Reshape_attributes& {
+    auto
+    set_stride(std::vector<int64_t> const& value) -> Reshape_attributes& {
         stride = value;
         return *this;
     }
-        
-    Reshape_attributes& set_name(std::string const& value) {
+
+    Reshape_attributes&
+    set_name(std::string const& value) {
         name = value;
         return *this;
     }
-        
-    Reshape_attributes& set_compute_data_type(DataType_t value) {
+
+    Reshape_attributes&
+    set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
-    auto fill_from_context(detail::Context const& context) -> Reshape_attributes& {
-
+    auto
+    fill_from_context(detail::Context const& context) -> Reshape_attributes& {
         inputs.X->fill_from_context(context);
         outputs.Y->fill_from_context(context);
 
         // Fill this node
-        if(get_compute_data_type() == DataType_t::NOT_SET) {
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
         return *this;
