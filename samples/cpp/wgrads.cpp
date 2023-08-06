@@ -29,30 +29,38 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     namespace fe = cudnn_frontend;
     fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
-         .set_intermediate_data_type(fe::DataType_t::HALF)
-         .set_compute_data_type(fe::DataType_t::FLOAT);
+        .set_intermediate_data_type(fe::DataType_t::HALF)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({4, 64, 16, 16}).set_stride({64*16*16, 1, 64*16, 64}));
-    auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 64, 1, 1}).set_stride({64, 1, 64, 64}));
+    auto X = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("image")
+                              .set_dim({4, 64, 16, 16})
+                              .set_stride({64 * 16 * 16, 1, 64 * 16, 64}));
+    auto S = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 64, 1, 1}).set_stride({64, 1, 64, 64}));
 
     auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
-    auto scale_output = graph.pointwise(X, S, scale_options);
+    auto scale_output  = graph.pointwise(X, S, scale_options);
 
-    auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 64, 1, 1}).set_stride({64, 1, 64, 64}));
+    auto B = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 64, 1, 1}).set_stride({64, 1, 64, 64}));
     auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
-    auto bias_output = graph.pointwise(scale_output, B, bias_options);
-    
-    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
-    auto relu_output = graph.pointwise(bias_output, relu_options);
+    auto bias_output  = graph.pointwise(scale_output, B, bias_options);
 
-    auto DY = graph.tensor(fe::graph::Tensor_attributes().set_name("grad").set_dim({4, 64, 16, 16}).set_stride({64*16*16, 1, 64*16, 64}));
-    auto wgrad_options = fe::graph::Conv_wgrad_attributes().set_padding({1,1}).set_stride({1,1}).set_dilation({1,1});
-    auto DW = graph.conv_wgrad(DY, relu_output, wgrad_options);
+    auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
+    auto relu_output  = graph.pointwise(bias_output, relu_options);
+
+    auto DY            = graph.tensor(fe::graph::Tensor_attributes()
+                               .set_name("grad")
+                               .set_dim({4, 64, 16, 16})
+                               .set_stride({64 * 16 * 16, 1, 64 * 16, 64}));
+    auto wgrad_options = fe::graph::Conv_wgrad_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
+    auto DW            = graph.conv_wgrad(DY, relu_output, wgrad_options);
     DW->set_output(true);
 
-    #if (CUDNN_VERSION < 8800)
-        SKIP("ConvBNwgrad requires cudnn 8.8 and up");
-    #endif
+#if (CUDNN_VERSION < 8800)
+    SKIP("ConvBNwgrad requires cudnn 8.8 and up");
+#endif
     if (check_device_arch_newer_than("ampere") == false) {
         SKIP("ConvBNwgrad requires hopper and above architecture.");
     }
@@ -70,20 +78,18 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
 
     REQUIRE(graph.set_execution_plans(plans).is_good());
 
-    Surface<half> x_tensor(4*64*16*16, false);
+    Surface<half> x_tensor(4 * 64 * 16 * 16, false);
     Surface<half> s_tensor(64, false);
     Surface<half> b_tensor(64, false);
-    Surface<half> dy_tensor(4*64*16*16, false);
-    Surface<half> dw_tensor(64*64*3*3, false);
+    Surface<half> dy_tensor(4 * 64 * 16 * 16, false);
+    Surface<half> dw_tensor(64 * 64 * 3 * 3, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
-    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
-        {X, x_tensor.devPtr}
-        , {S, s_tensor.devPtr}
-        , {B, b_tensor.devPtr}
-        , {DY, dy_tensor.devPtr}
-        , {DW, dw_tensor.devPtr}
-    };
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {{X, x_tensor.devPtr},
+                                                                                             {S, s_tensor.devPtr},
+                                                                                             {B, b_tensor.devPtr},
+                                                                                             {DY, dy_tensor.devPtr},
+                                                                                             {DW, dw_tensor.devPtr}};
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

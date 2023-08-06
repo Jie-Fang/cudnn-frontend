@@ -58,7 +58,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
 
     ReductionDesc_v8(ReductionDesc_v8 &&from) = default;
     ReductionDesc_v8 &
-    operator= (ReductionDesc_v8 &&from) = default; 
+    operator=(ReductionDesc_v8 &&from) = default;
 
     ~ReductionDesc_v8() = default;
 
@@ -68,7 +68,7 @@ class ReductionDesc_v8 : public BackendDescriptor {
     ReductionDesc_v8 &
     operator=(ReductionDesc_v8 const &) = delete;
 
-    DataType_t compute_type     = DataType_t::NOT_SET;
+    DataType_t compute_type        = DataType_t::NOT_SET;
     ReductionMode_t reduction_mode = ReductionMode_t::NOT_SET;
 };
 
@@ -82,7 +82,8 @@ class ReductionDescBuilder_v8 {
      *  @{
      */
     //! Set Math Precision Data Type for the Reduction Operation
-    auto setComputeType(DataType_t data_type_) -> ReductionDescBuilder_v8 & {
+    auto
+    setComputeType(DataType_t data_type_) -> ReductionDescBuilder_v8 & {
         m_reductionDesc.compute_type = data_type_;
         return *this;
     }
@@ -92,11 +93,13 @@ class ReductionDescBuilder_v8 {
         return *this;
     }
     //! Set redution operator for the Reduction Operation
-    auto setReductionOp(ReductionMode_t op_) -> ReductionDescBuilder_v8 & {
+    auto
+    setReductionOp(ReductionMode_t op_) -> ReductionDescBuilder_v8 & {
         m_reductionDesc.reduction_mode = op_;
         return *this;
     }
-    auto setReductionOp(cudnnReduceTensorOp_t op_) -> ReductionDescBuilder_v8 & {
+    auto
+    setReductionOp(cudnnReduceTensorOp_t op_) -> ReductionDescBuilder_v8 & {
         m_reductionDesc.reduction_mode = detail::convert_from_cudnn_type(op_);
         return *this;
     }
@@ -188,7 +191,7 @@ class ReductionDescBuilder_v8 {
     ReductionDesc_v8 m_reductionDesc;
 };
 
-using ReductionDesc             = ReductionDesc_v8;
-using ReductionDescBuilder      = ReductionDescBuilder_v8;
+using ReductionDesc        = ReductionDesc_v8;
+using ReductionDescBuilder = ReductionDescBuilder_v8;
 
-}
+}  // namespace cudnn_frontend

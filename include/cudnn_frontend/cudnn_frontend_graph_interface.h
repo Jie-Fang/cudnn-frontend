@@ -50,8 +50,10 @@ class Plans {
         return status;
     }
 
-    int64_t get_workspace_size();
-    int64_t get_max_workspace_size();
+    int64_t
+    get_workspace_size();
+    int64_t
+    get_max_workspace_size();
 
     static error_t
     autotune_default_impl(Plans *plans,
