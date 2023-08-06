@@ -30,25 +30,29 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
 
     fe::graph::Graph graph;
     graph.set_io_data_type(fe::DataType_t::HALF)
-         .set_intermediate_data_type(fe::DataType_t::FLOAT)
-         .set_compute_data_type(fe::DataType_t::FLOAT);
-        
-    auto X = graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({4, 16, 64}).set_stride({16*64, 1, 16}));
-    auto Y = graph.tensor(fe::graph::Tensor_attributes().set_name("filter").set_dim({4, 64, 32}).set_stride({32*64, 1, 64}));
-    
+        .set_intermediate_data_type(fe::DataType_t::FLOAT)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto X = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("image").set_dim({4, 16, 64}).set_stride({16 * 64, 1, 16}));
+    auto Y = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("filter").set_dim({4, 64, 32}).set_stride({32 * 64, 1, 64}));
+
     fe::graph::Matmul_attributes matmul;
     auto Z = graph.matmul(X, Y, matmul);
 
     auto scale_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
-    auto S = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_dim({4, 16, 32}).set_stride({16*32, 1, 16}));
+    auto S             = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("scale").set_dim({4, 16, 32}).set_stride({16 * 32, 1, 16}));
     auto scale_output = graph.pointwise(Z, S, scale_options);
 
     auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
-    auto B = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({4, 16, 32}).set_stride({16*32, 1, 16}));
+    auto B =
+        graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({4, 16, 32}).set_stride({16 * 32, 1, 16}));
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
 
     auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
-    auto O = graph.pointwise(bias_output, relu_options);
+    auto O            = graph.pointwise(bias_output, relu_options);
     O->set_output(true);
 
     cudnnHandle_t handle;
@@ -59,25 +63,20 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
     auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
-    
+
     REQUIRE(plans.check_support(handle).is_good());
 
     REQUIRE(graph.set_execution_plans(plans).is_good());
 
-    Surface<half> x_tensor(4*16*64, false);
-    Surface<half> w_tensor(4*64*32, false);
-    Surface<half> s_tensor(4*16*32, false);
-    Surface<half> b_tensor(4*16*32, false);
-    Surface<half> y_tensor(4*16*32, false);
+    Surface<half> x_tensor(4 * 16 * 64, false);
+    Surface<half> w_tensor(4 * 64 * 32, false);
+    Surface<half> s_tensor(4 * 16 * 32, false);
+    Surface<half> b_tensor(4 * 16 * 32, false);
+    Surface<half> y_tensor(4 * 16 * 32, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
-        {X, x_tensor.devPtr}
-        , {Y, w_tensor.devPtr}
-        , {S, s_tensor.devPtr}
-        , {B, b_tensor.devPtr}
-        , {O, y_tensor.devPtr}
-    };
+        {X, x_tensor.devPtr}, {Y, w_tensor.devPtr}, {S, s_tensor.devPtr}, {B, b_tensor.devPtr}, {O, y_tensor.devPtr}};
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }
