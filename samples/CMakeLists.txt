@@ -27,6 +27,8 @@ add_executable(
     cpp/wgrads.cpp
 
     conv_sample.cpp 
+    resnet_test_list.cpp
+    resnet_sample.cpp
     test_list.cpp 
     fp16_emu.cpp 
     helpers.cpp 
@@ -81,4 +83,10 @@ set_target_properties(
     PROPERTIES
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+set_source_files_properties(
+    resnet_test_list.cpp resnet_sample.cpp
+    PROPERTIES 
+    INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/samples/resnet_block/include"
 )

@@ -59,8 +59,7 @@ class ConvDesc_v8 : public BackendDescriptor {
         std::stringstream ss;
         char sep = ' ';
         ss << "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR :"
-           << " Datatype: " << json{compute_type} << " Mode: " << std::to_string(mode)
-           << " Num Dimensions: " << nDims;
+           << " Datatype: " << json{compute_type} << " Mode: " << std::to_string(mode) << " Num Dimensions: " << nDims;
         ss << " PadLower [";
         for (auto i = 0; i < nDims; i++) {
             ss << sep << padLower[i];
@@ -96,7 +95,7 @@ class ConvDesc_v8 : public BackendDescriptor {
     getComputePrecision() const {
         return compute_type;
     }
-    
+
     DataType_t
     getComputeType() const {
         return compute_type;
@@ -138,14 +137,14 @@ class ConvDesc_v8 : public BackendDescriptor {
     getStride() const {
         return getSpatialStride();
     }
-    
+
    private:
     ConvDesc_v8()                    = default;
     ConvDesc_v8(ConvDesc_v8 const &) = delete;
     ConvDesc_v8 &
     operator=(ConvDesc_v8 const &) = delete;
 
-    DataType_t compute_type   = DataType_t::FLOAT;   //! Convolution operation data type
+    DataType_t compute_type             = DataType_t::FLOAT;  //! Convolution operation data type
     cudnnConvolutionMode_t mode         = CUDNN_CONVOLUTION;  //! Convolution vs cross correlation
     int64_t nDims                       = -1;                 //! number of dimensions
     int64_t padLower[CUDNN_DIM_MAX + 1] = {0};                //! d, h, w
@@ -164,13 +163,14 @@ class ConvDescBuilder_v8 {
      *  @{
      */
     //! Set Datatype for the Convolution Operation
-    auto setComputeType(DataType_t data_type) -> ConvDescBuilder_v8 & {
+    auto
+    setComputeType(DataType_t data_type) -> ConvDescBuilder_v8 & {
         m_convDesc.compute_type = data_type;
         return *this;
     }
     // To be deprecated in v1.0.
     auto
-    setComputeType(cudnnDataType_t data_type_) ->  ConvDescBuilder_v8 & {
+    setComputeType(cudnnDataType_t data_type_) -> ConvDescBuilder_v8 & {
         m_convDesc.compute_type = detail::convert_from_cudnn_type(data_type_);
         return *this;
     }
@@ -212,7 +212,6 @@ class ConvDescBuilder_v8 {
     }
     /** @} */
 
-    
     // TODO: Deprecate in v1.0
     auto
     setNDims(int64_t nDims_) -> ConvDescBuilder_v8 & {
@@ -225,7 +224,7 @@ class ConvDescBuilder_v8 {
     }
     // TODO: Deprecate in v1.0
     auto
-    setComputePrecision(cudnnDataType_t data_type_) ->  ConvDescBuilder_v8 & {
+    setComputePrecision(cudnnDataType_t data_type_) -> ConvDescBuilder_v8 & {
         return setComputeType(data_type_);
     }
     // TODO: Deprecate in v1.0
@@ -233,7 +232,7 @@ class ConvDescBuilder_v8 {
     setStrides(int64_t ndims, int64_t const *strides) -> ConvDescBuilder_v8 & {
         return setSpatialStride(ndims, strides);
     }
-    
+
     //! constructs the ConvDesc_v8 by calling the cudnn API
     //! Throws the appropriate error message
     ConvDesc_v8 &&
@@ -392,7 +391,7 @@ class ConvDescBuilder_v8 {
     ConvDesc_v8 m_convDesc;
 };
 
-using ConvDesc                  = ConvDesc_v8;
-using ConvDescBuilder           = ConvDescBuilder_v8;
+using ConvDesc        = ConvDesc_v8;
+using ConvDescBuilder = ConvDescBuilder_v8;
 
-}
+}  // namespace cudnn_frontend
