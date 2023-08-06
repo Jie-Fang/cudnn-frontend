@@ -425,11 +425,11 @@ pycudnntest:cudnn_8.9.3.34:Hopper:
         - ["build:cudnn_8.9.3.34: [Hopper]"]
 
 analysis:clang-format:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
+    image: ubuntu:jammy
     stage: analysis
     before_script:
         - apt-get update
-        - apt-get install -y clang-format
+        - apt-get install -y git clang-format
     allow_failure: true
     script:
         - ci/run_style_check_diff.sh

@@ -57,8 +57,8 @@ class Tensor_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_TENSOR_DESCRIPTOR :"
-           << " Datatype: " << json{data_type} << " Id: " << std::to_string(id)
-           << " nDims " << nDims << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
+           << " Datatype: " << json{data_type} << " Id: " << std::to_string(id) << " nDims " << nDims
+           << " VectorCount: " << vectorCount << " vectorDimension " << vectorDimension;
         ss << " Dim [ ";
         for (auto i = 0; i < nDims; i++) {
             if (i != 0) {
@@ -74,9 +74,7 @@ class Tensor_v8 : public BackendDescriptor {
             ss << btensor_strA[i];
         }
         ss << " ]";
-        ss << " isVirtual: " << isVirtual
-            << " isByValue: " << isByValue
-            << " Alignment: " << alignment;
+        ss << " isVirtual: " << isVirtual << " isByValue: " << isByValue << " Alignment: " << alignment;
 #if (CUDNN_VERSION >= 8300)
         ss << " reorder_type: " << json{reorder_type};
 #endif
@@ -106,7 +104,6 @@ class Tensor_v8 : public BackendDescriptor {
     getStride() const {
         return btensor_strA;
     }
-
 
     // TODO: Deprecate in v1.0
     int64_t const *
@@ -159,18 +156,19 @@ class Tensor_v8 : public BackendDescriptor {
     operator=(Tensor_v8 const &) = delete;
 
     DataType_t data_type                    = DataType_t::NOT_SET;  //! Datatype of the elements
-    int64_t btensor_dimA[CUDNN_DIM_MAX + 1] = {-1};              //! n, g, c, d, h, w
-    int64_t btensor_strA[CUDNN_DIM_MAX + 1] = {-1};              //! n, g, c, d, h, w
-    int64_t id                              = -1;                //! Unique id of the tensor
-    int64_t alignment                       = -1;                //! Alignment of the tensor.
+    int64_t btensor_dimA[CUDNN_DIM_MAX + 1] = {-1};                 //! n, g, c, d, h, w
+    int64_t btensor_strA[CUDNN_DIM_MAX + 1] = {-1};                 //! n, g, c, d, h, w
+    int64_t id                              = -1;                   //! Unique id of the tensor
+    int64_t alignment                       = -1;                   //! Alignment of the tensor.
     //! Certain engine config expect minimum alignment of 16B
     int64_t nDims           = -1;     //! Number of Dimensions of the tensor
     int64_t vectorDimension = -1;     //! Which dimension of the tensor is vectorized (Generally the c dim)
     int64_t vectorCount     = 1;      //! What is the vectorization count (4 or 32)
     bool isVirtual          = false;  //! Whether it is an intermediate tensor of an op graph
-    bool isByValue          = false;  //! Whether the tensor is in host memory that needs to be passed to the kernel by value
-    cudnn_frontend::TensorReordering_t reorder_type = cudnn_frontend::TensorReordering_t::NONE; //! Type of reordering in the tensor
-    std::shared_ptr<Tensor_v8> raggedOffset; //! Ragged offsets for ragged tensors
+    bool isByValue = false;  //! Whether the tensor is in host memory that needs to be passed to the kernel by value
+    cudnn_frontend::TensorReordering_t reorder_type =
+        cudnn_frontend::TensorReordering_t::NONE;  //! Type of reordering in the tensor
+    std::shared_ptr<Tensor_v8> raggedOffset;       //! Ragged offsets for ragged tensors
 };
 
 ///
@@ -183,12 +181,14 @@ class TensorBuilder_v8 {
      *  @{
      */
     //! Set Datatype for the Tensor_v8
-    auto setDataType(DataType_t data_type) -> TensorBuilder_v8 & {
+    auto
+    setDataType(DataType_t data_type) -> TensorBuilder_v8 & {
         m_tensor.data_type = data_type;
         return *this;
     }
     // To be deprecated in v1.0. Please use setDataType(DataType_t) instead.
-    auto setDataType(cudnnDataType_t data_type) -> TensorBuilder_v8 & {
+    auto
+    setDataType(cudnnDataType_t data_type) -> TensorBuilder_v8 & {
         m_tensor.data_type = detail::convert_from_cudnn_type(data_type);
         return *this;
     }
@@ -236,7 +236,7 @@ class TensorBuilder_v8 {
         return *this;
     }
 
-    auto 
+    auto
     setReorderType(cudnn_frontend::TensorReordering_t reordering_type) -> TensorBuilder_v8 & {
         m_tensor.reorder_type = reordering_type;
         return *this;
@@ -265,19 +265,21 @@ class TensorBuilder_v8 {
         return *this;
     }
 
-    // Clone parameters of another tensor. Make sure to still set the UID since UID of two tensors shouldn't be the same.
-    auto cloneFrom(Tensor_v8 const &from, int64_t newID) -> TensorBuilder_v8 & {
+    // Clone parameters of another tensor. Make sure to still set the UID since UID of two tensors shouldn't be the
+    // same.
+    auto
+    cloneFrom(Tensor_v8 const &from, int64_t newID) -> TensorBuilder_v8 & {
         m_tensor.data_type = from.data_type;
-        m_tensor.nDims      = from.nDims;
-        m_tensor.id         = newID;
+        m_tensor.nDims     = from.nDims;
+        m_tensor.id        = newID;
         std::copy(from.getDimArray(), from.getDimArray() + m_tensor.nDims, m_tensor.btensor_dimA);
         std::copy(from.getStrideArray(), from.getStrideArray() + m_tensor.nDims, m_tensor.btensor_strA);
-        m_tensor.alignment = from.alignment;
-        m_tensor.isVirtual = from.isVirtual;
-        m_tensor.isByValue = from.isByValue;
-        m_tensor.vectorCount = from.vectorCount;
+        m_tensor.alignment       = from.alignment;
+        m_tensor.isVirtual       = from.isVirtual;
+        m_tensor.isByValue       = from.isByValue;
+        m_tensor.vectorCount     = from.vectorCount;
         m_tensor.vectorDimension = from.vectorDimension;
-        m_tensor.reorder_type = from.reorder_type;
+        m_tensor.reorder_type    = from.reorder_type;
         return *this;
     }
 
@@ -335,9 +337,7 @@ class TensorBuilder_v8 {
         status = detail::convert_to_cudnn_type(m_tensor.data_type, cudnn_data_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
-                &m_tensor,
-                status,
-                "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DATA_TYPE Failed");
+                &m_tensor, status, "CUDNN_BACKEND_TENSOR_DESCRIPTOR: SetAttribute CUDNN_ATTR_TENSOR_DATA_TYPE Failed");
             return std::move(m_tensor);
         }
         status = cudnnBackendSetAttribute(m_tensor.pointer->get_backend_descriptor(),
@@ -514,7 +514,7 @@ class TensorBuilder_v8 {
     Tensor_v8 m_tensor;  //! Tensor built by the TensorBuilder class.
 };
 
-using Tensor                    = Tensor_v8;
-using TensorBuilder             = TensorBuilder_v8;
+using Tensor        = Tensor_v8;
+using TensorBuilder = TensorBuilder_v8;
 
-}
+}  // namespace cudnn_frontend

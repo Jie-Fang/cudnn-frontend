@@ -5,4 +5,6 @@
 #include "helpers.h"
 
 void
-RunResidualBlock(cudnn_frontend::ResidualBlockParams const &params, cudnn_frontend::ResidualBlockDevPtrStore* devPtrStore, const std::string &type);
+RunResidualBlock(cudnn_frontend::ResidualBlockParams const &params,
+                 cudnn_frontend::ResidualBlockDevPtrStore *devPtrStore,
+                 const std::string &type);

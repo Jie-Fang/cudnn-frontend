@@ -12,31 +12,35 @@ namespace graph {
 
 class BatchNormFinalizeNode : public INode {
     BN_finalize_attributes options;
-public:
 
-    BatchNormFinalizeNode(BN_finalize_attributes&& options_, detail::Context const& context)  : INode (context), options(std::move(options_)) {}
+   public:
+    BatchNormFinalizeNode(BN_finalize_attributes&& options_, detail::Context const& context)
+        : INode(context), options(std::move(options_)) {}
 
-    Type getType() override final {
+    Type
+    getType() override final {
         return Type::BN_FINALIZE;
     }
 
-    error_t infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node  " << options.name << "..." << std::endl;
-        
+    error_t
+    infer_properties_node() override final {
+        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node  " << options.name
+                    << "..." << std::endl;
+
         options.fill_from_context(context);
-        
-        auto SUM = options.inputs.SUM;
+
+        auto SUM                  = options.inputs.SUM;
         auto const sum_tensor_dim = SUM->get_dim();
 
         // Set channel length tensors
-        auto infer_per_channel_tensors = [&sum_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
+        auto infer_per_channel_tensors = [&sum_tensor_dim](std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             // Only infer dims and strides if user did not set them
-            if(tensor_dim.empty()) {
+            if (tensor_dim.empty()) {
                 tensor_dim = sum_tensor_dim;
                 T->set_dim(tensor_dim);
             }
-            if(T->get_stride().empty()) {
+            if (T->get_stride().empty()) {
                 T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
@@ -53,14 +57,14 @@ public:
         infer_per_channel_tensors(options.outputs.NEXT_RUNNING_VAR);
 
         // Set scalars
-        auto infer_scalars = [&sum_tensor_dim] (std::shared_ptr<Tensor_attributes>& T) {
+        auto infer_scalars = [&sum_tensor_dim](std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             // Only infer dims and strides if user did not set them
-            if(tensor_dim.empty()) {
+            if (tensor_dim.empty()) {
                 tensor_dim.resize(sum_tensor_dim.size(), 1);
                 T->set_dim(tensor_dim);
             }
-            if(T->get_stride().empty()) {
+            if (T->get_stride().empty()) {
                 T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
@@ -71,7 +75,8 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t assign_uids_node() override final {
+    error_t
+    assign_uids_node() override final {
         options.inputs.SUM->set_uid(ICudnn::create_new_uid());
         options.inputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
         options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
@@ -90,9 +95,10 @@ public:
         return {error_code_t::OK, ""};
     }
 
-    error_t createTensors() override final {
-
-        getLogger() << "[cudnn_frontend] INFO: " << "Building BatchNormFinalizeNode tensors " << options.name << "..." << std::endl;
+    error_t
+    createTensors() override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << "Building BatchNormFinalizeNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SUM));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SQ_SUM));
@@ -113,74 +119,79 @@ public:
 
         return {error_code_t::OK, ""};
     }
-    
-    error_t createOperations() override final {
 
-        getLogger() << "[cudnn_frontend] INFO: " << "Building BatchNormFinalizeNode operations " << options.name << "..." << std::endl;
-        
-        #ifndef NV_CUDNN_DISABLE_EXCEPTION
+    error_t
+    createOperations() override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << "Building BatchNormFinalizeNode operations " << options.name << "..." << std::endl;
+
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
-        #endif
+#endif
 
-        // Create the batchnorm operation.
-        auto batchnorm_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR)
-                                        .setComputeType(CUDNN_DATA_FLOAT)
-                                        .setBNFinalizeMode(CUDNN_BN_FINALIZE_STATISTICS_TRAINING)
-                                        .setSumDesc(*(tensors.at(options.inputs.SUM->get_uid())))
-                                        .setSqSumDesc(*(tensors.at(options.inputs.SQ_SUM->get_uid())))
-                                        .setEqScaleAndBias(*(tensors.at(options.outputs.EQ_SCALE->get_uid())), *(tensors.at(options.outputs.EQ_BIAS->get_uid())))
-                                        .setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())), *(tensors.at(options.outputs.INV_VARIANCE->get_uid())))
-                                        .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())), *(tensors.at(options.inputs.BIAS->get_uid())))
-                                        .setPrevRunningMeanAndVar(*(tensors.at(options.inputs.PREV_RUNNING_MEAN->get_uid())), *(tensors.at(options.inputs.PREV_RUNNING_VAR->get_uid())))
-                                        .setNextRunningMeanAndVar(*(tensors.at(options.outputs.NEXT_RUNNING_MEAN->get_uid())), *(tensors.at(options.outputs.NEXT_RUNNING_VAR->get_uid())))
-                                        .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
-                                        .setExpDecayFactorTensor(*(tensors.at(options.inputs.MOMENTUM->get_uid())))
-                                        .setAccumCountTensor(*(tensors.at(options.inputs.ACCUM_COUNT->get_uid())))
-                                        .build();
-        
-        // Push all real tensors as required for operation execution.
-        auto const& tensors_involved_in_operation = {
-            options.inputs.SUM
-            , options.inputs.SQ_SUM
-            , options.inputs.PREV_RUNNING_MEAN
-            , options.inputs.PREV_RUNNING_VAR
-            , options.inputs.EPSILON
-            , options.inputs.MOMENTUM
-            , options.inputs.ACCUM_COUNT
-            , options.inputs.SCALE
-            , options.inputs.BIAS
-            , options.outputs.EQ_BIAS
-            , options.outputs.EQ_SCALE
-            , options.outputs.MEAN
-            , options.outputs.INV_VARIANCE
-            , options.outputs.NEXT_RUNNING_MEAN
-            , options.outputs.NEXT_RUNNING_VAR
-        };
-        
-        std::vector<uid_t> uids_in_operation;
-        for(auto const& tensor: tensors_involved_in_operation) {
-            if(tensor && tensor->get_is_virtual() == false) {
-                uids_in_operation.push_back(tensor->get_uid());
+            // Create the batchnorm operation.
+            auto batchnorm_operation =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR)
+                    .setComputeType(CUDNN_DATA_FLOAT)
+                    .setBNFinalizeMode(CUDNN_BN_FINALIZE_STATISTICS_TRAINING)
+                    .setSumDesc(*(tensors.at(options.inputs.SUM->get_uid())))
+                    .setSqSumDesc(*(tensors.at(options.inputs.SQ_SUM->get_uid())))
+                    .setEqScaleAndBias(*(tensors.at(options.outputs.EQ_SCALE->get_uid())),
+                                       *(tensors.at(options.outputs.EQ_BIAS->get_uid())))
+                    .setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())),
+                                           *(tensors.at(options.outputs.INV_VARIANCE->get_uid())))
+                    .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
+                                     *(tensors.at(options.inputs.BIAS->get_uid())))
+                    .setPrevRunningMeanAndVar(*(tensors.at(options.inputs.PREV_RUNNING_MEAN->get_uid())),
+                                              *(tensors.at(options.inputs.PREV_RUNNING_VAR->get_uid())))
+                    .setNextRunningMeanAndVar(*(tensors.at(options.outputs.NEXT_RUNNING_MEAN->get_uid())),
+                                              *(tensors.at(options.outputs.NEXT_RUNNING_VAR->get_uid())))
+                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
+                    .setExpDecayFactorTensor(*(tensors.at(options.inputs.MOMENTUM->get_uid())))
+                    .setAccumCountTensor(*(tensors.at(options.inputs.ACCUM_COUNT->get_uid())))
+                    .build();
+
+            // Push all real tensors as required for operation execution.
+            auto const& tensors_involved_in_operation = {options.inputs.SUM,
+                                                         options.inputs.SQ_SUM,
+                                                         options.inputs.PREV_RUNNING_MEAN,
+                                                         options.inputs.PREV_RUNNING_VAR,
+                                                         options.inputs.EPSILON,
+                                                         options.inputs.MOMENTUM,
+                                                         options.inputs.ACCUM_COUNT,
+                                                         options.inputs.SCALE,
+                                                         options.inputs.BIAS,
+                                                         options.outputs.EQ_BIAS,
+                                                         options.outputs.EQ_SCALE,
+                                                         options.outputs.MEAN,
+                                                         options.outputs.INV_VARIANCE,
+                                                         options.outputs.NEXT_RUNNING_MEAN,
+                                                         options.outputs.NEXT_RUNNING_VAR};
+
+            std::vector<uid_t> uids_in_operation;
+            for (auto const& tensor : tensors_involved_in_operation) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_in_operation.push_back(tensor->get_uid());
+                }
             }
-        }
 
-        operations.push_back({std::move(batchnorm_operation), std::move(uids_in_operation)});
+            operations.push_back({std::move(batchnorm_operation), std::move(uids_in_operation)});
 
-        #ifndef NV_CUDNN_DISABLE_EXCEPTION
-        } catch (cudnn_frontend::cudnnException &e) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
         }
-        #endif
+#endif
 
         return {error_code_t::OK, ""};
     }
-    
-    virtual void serialize(json& j) const override final {
+
+    virtual void
+    serialize(json& j) const override final {
         j = options;
     }
-
 };
 
-} // namespace graph
+}  // namespace graph
 
-} // namespace cudnn_frontend
+}  // namespace cudnn_frontend
