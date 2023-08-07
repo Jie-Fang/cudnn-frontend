@@ -2919,6 +2919,10 @@ TEST_CASE("Back2Back Batch GEMM sample", "[frontend][fusion][back2backBatchGemm]
     std::cout << "TEST_CASE :: Sample back2back batch gemm code with backend API" << std::endl;
     INFO("TEST_CASE :: Sample back2back batch gemm code with backend API");
 
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
+
     int64_t qTensorDim[] = {32, 16, 512, 64};
     int64_t kTensorDim[] = {32, 16, 64, 512};
     int64_t sTensorDim[] = {32, 16, 512, 512};
@@ -2997,6 +3001,10 @@ TEST_CASE("Back2Back Batch GEMM sample", "[frontend][fusion][back2backBatchGemm]
 TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
     std::cout << "TEST_CASE :: MHA Fprop with backend API" << std::endl;
     INFO("TEST_CASE ::  MHA Fprop with backend API");
+
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
 
     int64_t b    = 32;   // batch size
     int64_t h    = 16;   // head dim
@@ -3120,6 +3128,10 @@ TEST_CASE("MHA Fprop sample", "[frontend][fusion][mhaFprop]") {
 TEST_CASE("MHA Bprop sample", "[frontend][fusion][mhaBprop]") {
     std::cout << "TEST_CASE :: MHA Bprop with backend API" << std::endl;
     INFO("TEST_CASE ::  MHA Bprop with backend API");
+
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
 
     int64_t b    = 32;   // batch size
     int64_t h    = 16;   // head dim
@@ -3259,6 +3271,10 @@ TEST_CASE("BF16 LLM Flash MHA Fprop sample", "[frontend][fusion][BF16LLMFprop]")
     std::cout << "TEST_CASE :: BF16 LLM Flash MHA Fprop with backend API" << std::endl;
     INFO("TEST_CASE ::  BF16 LLM Flash MHA Fprop with backend API");
 
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
+
     int64_t b    = 2;     // batch size
     int64_t h    = 12;    // head dim
     int64_t s_q  = 2048;  // q tensor is padded to this seq length
@@ -3348,6 +3364,10 @@ TEST_CASE("BF16 LLM Flash MHA Fprop sample", "[frontend][fusion][BF16LLMFprop]")
 TEST_CASE("BF16 LLM Flash MHA Bprop sample", "[frontend][fusion][BF16LLMBprop]") {
     std::cout << "TEST_CASE :: BF16 LLM Flash MHA Bprop with backend API" << std::endl;
     INFO("TEST_CASE ::  BF16 LLM Flash MHA Bprop with backend API");
+
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
 
     int64_t b    = 2;     // batch size
     int64_t h    = 12;    // head dim
@@ -3466,6 +3486,10 @@ TEST_CASE("BF16 LLM Flash MHA Bprop sample", "[frontend][fusion][BF16LLMBprop]")
 TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") {
     std::cout << "TEST_CASE :: FP8 Flash MHA Fprop with backend API" << std::endl;
     INFO("TEST_CASE :: FP8 Flash MHA Fprop with backend API");
+
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
 
     int64_t b    = 48;   // batch size
     int64_t h    = 16;   // head dim
@@ -3658,6 +3682,10 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
 TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") {
     std::cout << "TEST_CASE :: FP8 Flash MHA Bprop with backend API" << std::endl;
     INFO("TEST_CASE :: FP8 Flash MHA Bprop with backend API");
+
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires CUDA version greater than 12.0");
+#endif
 
     int64_t b    = 48;   // batch size
     int64_t h    = 16;   // head dim
