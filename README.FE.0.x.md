@@ -1,5 +1,9 @@
 # cuDNN FE 0.x API
 
+## Introduction
+FE v0.x API is wraps [cuDNN C backend API](https://docs.nvidia.com/deeplearning/cudnn/api/index.html#cudnn-backend-api) in C++ APIs.  
+For a general introduction to FE, please first refer README.md.
+
 ## Organization
 Each `cudnnBackendDescriptorType_t` documented in the enum is organized into its header file.
     - cudnn_frontend_Tensor.h         -> CUDNN_BACKEND_TENSOR_DESCRIPTOR
@@ -28,14 +32,15 @@ Each `cudnnBackendDescriptorType_t` documented in the enum is organized into its
 ### Error Handling 
     - cudnn_frontend_utils.h
 
-
 ## Samples
-Multiple samples of convolution, dgrad, wgrad and convBiasAct are added in `samples/test_list.cpp` and `samples/conv_sample.cpp`.  
-Samples of runtime fusion are added in `samples/test_list.cpp` and `samples/fusion_sample.cpp`.  
 
-Sample tests are written using the [Catch2](https://github.com/catchorg/Catch2) C++ test framework.
+Samples are meant to illustrate FE v0.x API usage to users.  
+- `samples/conv_samples.cpp` contains conv/dgrad/wgrad-fusion samples.  
+- `samples/norm_samples.cpp` contains batch normalization-fusion samples.
+- `samples/fusion_samples.cpp` contains fusion samples that use cudnn's runtime fusion engine.
+- `samples/fused_mha_samples.cpp` contains flash attention sample.
 
-
+Sample tests are written using [Catch2](https://github.com/catchorg/Catch2) test framework and are controlled by `samples/test_list.cpp`.  
     
 ## cudnnFindPlan and cudnnGetPlan:
 Prior to cuDNN V8, cuDNN provided `cudnnFindConvolution*` and `cudnnGetConvolution*` functions, which provided a way to sample all the algorithms for a given problem and study the run times. This can be further used to cache the best algorithms for a given problem.  In cuDNN V8, this has been replaced with `cudnnFindPlan` and `cudnnGetPlan`.
