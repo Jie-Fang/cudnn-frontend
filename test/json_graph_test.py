@@ -2,20 +2,58 @@ import json
 import os
 import cudnn
 import pytest
+import sys
 
 from test_graph import test_graph, operation
+
+class ImplementationError(Exception):
+    def __init__(self, reason):
+        self.reason = reason
+
+def read_json_test_dict(fname):
+    if not os.path.exists(fname):
+        raise FileNotFoundError(fname)
+
+    with open(fname) as ifh:
+        json_tests = json.load(ifh)
+    return json_tests
+
+def replace_abstract_test_params(json_test_def, abstract_params):
+    return json_test_def
+
+def run_test_from_legacy_args(json_fname, args):
+    print("RUnning from legacy")
+    kTEST_NAME = "jsonTestName"
+
+    # Parse the cudnnTest arguments
+    abstract_params = dict()
+    for kv in args.split(" -"): # note the space: this is to ensure we split something like -atol5e-3 correctly
+        kv_pair = kv.split(":")
+        assert len(kv_pair) == 2
+        k = kv_pair[0].strip("-").strip("=")
+        v = kv_pair[1].strip("-").strip("=")
+        abstract_params[k] = v
+    print (abstract_params)
+
+    json_test_name = abstract_params[kTEST_NAME]
+
+    json_tests = read_json_test_dict(json_fname)
+    
+    assert json_test_name in json_tests
+    abstract_test_dict = json_tests[json_test_name]
+    try:
+        concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
+        run_test_from_json_definition(concrete_test_dict)
+    except ImplementationError as e:
+        print("MB Unsupported: ", e.reason)
+        sys.exit(0)
 
 # A helper function to read json dictionaries
 # @note: scope tells us that the dictionary is being loaded only once
 @pytest.fixture(scope="module")
 def json_dict(request):
     fname = request.param
-    assert os.path.exists(fname)    
-
-    with open(fname) as ifh:
-        json_tests = json.load(ifh)
-
-    return json_tests
+    return read_json_test_dict(fname)
 
 # Main entry point for json defined graphs
 # @param json_dict: implicit call to a fixture using the json file name provided on the command line
@@ -24,7 +62,7 @@ def test_json_graph(json_dict, test_name):
     assert test_name in json_dict
     run_test_from_json_definition(json_dict[test_name])
 
-
+# @brief: A utility class to help parse graphRunner json graph definitions
 # @details: This is a utility class to extract infomration from a json graph definition (graphRunner json format)
 # In general its functions will be working with 1 or 2 different dictionaries:
 #   1. self.jnode the json graph definition itself, containing properties of the operation (e.g., padding, dilation, etc.), but also I/O tensor names
@@ -53,12 +91,16 @@ class Legacy_operation:
         
         operation = node[Legacy_operation.OPERATION]
 
-        # Pointwise operations are double nested since they have an operation mode
-        if operation == Legacy_operation.PW_OPERATION:
-            pw_mode = node[Legacy_operation.PW_MODE]
-            self.operation_mapping = Legacy_operation.mapping[operation][pw_mode]
-        else:
-            self.operation_mapping = Legacy_operation.mapping[operation]
+        try:
+            # Pointwise operations are double nested since they have an operation mode
+            if operation == Legacy_operation.PW_OPERATION:
+                pw_mode = node[Legacy_operation.PW_MODE]
+                self.operation_mapping = Legacy_operation.mapping[operation][pw_mode]
+            else:
+                self.operation_mapping = Legacy_operation.mapping[operation]
+        except KeyError as orig_e:
+            e = ImplementationError("Operation:[{}]".format(operation))
+            raise e
 
         # keep track of the json node
         self.jnode = node
@@ -92,6 +134,7 @@ class Legacy_operation:
 
         return input_map
 
+# @brief: main function to run json graphs
 def run_test_from_json_definition(json_dict):
     testGraph = test_graph()
 
@@ -99,6 +142,7 @@ def run_test_from_json_definition(json_dict):
     jnode_list = json_dict["nodes"]
 
     TGTensors = {}
+    # Dictionary of operation names to (test_graph operation, LegacyOperation) tuples
     Operations = {}
     # Create all pycudnn operation nodes (without input) and their associated output tensors
     for node in jnode_list:
