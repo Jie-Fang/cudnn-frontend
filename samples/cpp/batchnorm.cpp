@@ -236,7 +236,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     bool has_dadd = true;
     DX_drelu->set_output(has_dadd).set_data_type(fe::DataType_t::HALF);
 
-    fe::graph::DBN_attributes::Inputs inputs;
+    fe::graph::batchnorm_backward_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({4, 32, 16, 16})
@@ -247,7 +247,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto inv_variance =
         graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
-    auto DBN_options         = fe::graph::DBN_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto DBN_options = fe::graph::batchnorm_backward_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
     auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, X, scale, DBN_options);
     DX->set_output(true);
     dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);

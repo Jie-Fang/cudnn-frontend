@@ -77,7 +77,7 @@ def run_test_from_json_definition(json_dict):
 def create_node(node_params):
     name = node_params["name"]
     if node_params["operation"] == "conv":
-        return test_graph.create_operation(cudnn.pygraph.conv, name)
+        return test_graph.create_operation(cudnn.pygraph.conv_fprop, name)
     elif node_params["operation"] == "pointwise":
         return test_graph.create_operation(cudnn.pygraph.relu, name)
 

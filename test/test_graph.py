@@ -290,7 +290,7 @@ class test_graph:
 
     # @brief: Add a convolution node to the graph
     def conv(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv)
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_fprop)
 
     # @brief: Add a relu to the graph
     def relu(self, **kwargs):
@@ -341,6 +341,10 @@ class test_graph:
             name = kwargs["name"]
         else:
             cudnn_opName = cudnn_op.__name__
+            if cudnn_op.__name__ == "conv_fprop":
+                cudnn_opName = "conv"
+            else:
+                cudnn_opName = cudnn_op.__name__
             name = self.create_unique_name(cudnn_opName)
 
         node = test_graph.create_operation(cudnn_op, name)
@@ -362,6 +366,10 @@ class test_graph:
     @staticmethod
     def create_operation(cudnn_op, name):
         cudnn_opName = cudnn_op.__name__
+        if cudnn_op.__name__ == "conv_fprop":
+            cudnn_opName = "conv"
+        else:
+            cudnn_opName = cudnn_op.__name__
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
         # TODO(@mbreughe): Add error handling code in case the function is not found

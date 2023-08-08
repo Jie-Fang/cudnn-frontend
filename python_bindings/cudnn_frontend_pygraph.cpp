@@ -144,7 +144,7 @@ public:
         , cudnn_frontend::DataType_t const& compute_data_type
         , std::string const& name
     ) {
-        auto attributes = cudnn_frontend::graph::DBN_attributes()
+        auto attributes = cudnn_frontend::graph::batchnorm_backward_attributes()
                         .set_saved_mean_and_inv_variance(mean, inv_variance)
                         .set_compute_data_type(compute_data_type)
                         .set_name(name);
@@ -158,7 +158,7 @@ public:
     // Takes image and weight properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    conv(
+    conv_fprop(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image
         , std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight
         , std::vector<int64_t> const& padding
@@ -183,7 +183,7 @@ public:
     // Takes image and loss properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    dgrad(
+    conv_dgrad(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& filter,
         std::vector<int64_t> const& padding,
@@ -207,7 +207,7 @@ public:
     // Takes image and loss properties by reference to shared pointer. This means this callee
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    wgrad(
+    conv_wgrad(
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
         std::vector<int64_t> const& padding,
@@ -650,7 +650,7 @@ void init_pygraph_submodule(py::module_ &m) {
              , py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET)
              , py::arg_v("name", "")
         )
-        .def("conv", &PyGraph::conv
+        .def("conv_fprop", &PyGraph::conv_fprop
              , py::arg("image")
              , py::arg("weight")
              , py::arg_v{"padding", default_vector()}
@@ -674,7 +674,7 @@ void init_pygraph_submodule(py::module_ &m) {
                     cudnn_tensor: The created tensor.
             )pbdoc"
         )
-        .def("wgrad", &PyGraph::wgrad
+        .def("conv_wgrad", &PyGraph::conv_wgrad
              , py::arg("image")
              , py::arg("loss")
              , py::arg_v{"padding", default_vector()}
@@ -698,7 +698,7 @@ void init_pygraph_submodule(py::module_ &m) {
                     cudnn_tensor: The created tensor.
             )pbdoc"
         )
-        .def("dgrad", &PyGraph::dgrad
+        .def("conv_dgrad", &PyGraph::conv_dgrad
              , py::arg("loss")
              , py::arg("filter")
              , py::arg_v{"padding", default_vector()}
