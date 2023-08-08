@@ -195,16 +195,16 @@ class ScaledDotProductAttentionNode : public INode {
                 sub_nodes.emplace_back(std::move(greater_than_node));
 
                 // Lower options to logical and options
-                Pointwise_attributes logical_and_attributes;
-                logical_and_attributes.set_name("logical_and");
-                logical_and_attributes.set_mode(PointwiseMode_t::LOGICAL_AND)
+                Pointwise_attributes logical_and_attributes_1;
+                logical_and_attributes_1.set_name("logical_and");
+                logical_and_attributes_1.set_mode(PointwiseMode_t::LOGICAL_AND)
                     .set_compute_data_type(DataType_t::BOOLEAN);
-                logical_and_attributes.inputs.IN_0 = mask;
-                logical_and_attributes.inputs.IN_1 = row_greater_col;
-                mask = logical_and_attributes.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
-                logical_and_attributes.outputs.OUT_0->set_is_virtual(true);
-                auto logical_and_node = std::make_unique<PointwiseNode>(std::move(logical_and_attributes), context);
-                sub_nodes.emplace_back(std::move(logical_and_node));
+                logical_and_attributes_1.inputs.IN_0 = mask;
+                logical_and_attributes_1.inputs.IN_1 = row_greater_col;
+                mask = logical_and_attributes_1.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
+                logical_and_attributes_1.outputs.OUT_0->set_is_virtual(true);
+                auto logical_and_node_1 = std::make_unique<PointwiseNode>(std::move(logical_and_attributes_1), context);
+                sub_nodes.emplace_back(std::move(logical_and_node_1));
             }
 
             // Lower options to binary select options
