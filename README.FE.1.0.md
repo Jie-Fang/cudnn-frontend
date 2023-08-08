@@ -170,23 +170,23 @@ The API to achieve above is:
 std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes> loss,
                                                                          std::shared_ptr<Tensor_attributes> input,
                                                                          std::shared_ptr<Tensor_attributes> scale,
-                                                                         DBN_attributes);
+                                                                         batchnorm_backward_attributes);
 ```
 where the output array has tensors in order of: `[input gradient, scale gradient, bias gradient]`.
 
 DBN attributes is a lighweight structure with setters:  
 ```
-DBN_attributes&
+batchnorm_backward_attributes&
 set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> saved_mean,
                                 std::shared_ptr<Tensor_attributes> saved_inverse_variance)
                                 
-DBN_attributes&
+batchnorm_backward_attributes&
 set_epsilon(std::shared_ptr<Tensor_attributes> epsilon)
 
-DBN_attributes&
+batchnorm_backward_attributes&
 set_name(std::string const&)
 
-DBN_attributes&
+batchnorm_backward_attributes&
 set_compute_data_type(DataType_t value)
 ```
 Only setting either (saved mean and inverse_variance) or (epsilon) is necessary.

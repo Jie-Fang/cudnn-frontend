@@ -12,9 +12,10 @@ namespace graph {
 
 class DBNNode : public INode {
    public:
-    DBN_attributes options;
+    batchnorm_backward_attributes options;
 
-    DBNNode(DBN_attributes&& options_, detail::Context const& context) : INode(context), options(std::move(options_)) {}
+    DBNNode(batchnorm_backward_attributes&& options_, detail::Context const& context)
+        : INode(context), options(std::move(options_)) {}
 
     Type
     getType() override final {
