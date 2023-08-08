@@ -1,6 +1,9 @@
+#!/usr/bin/env python
+
 import pytest
 import argparse
 import os
+from json_graph_test import run_test_from_legacy_args
 
 from python_graph_defs.basic_tests import test_conv_relu
 
@@ -14,6 +17,8 @@ if __name__ == "__main__":
     pct_parser.add_argument('--verbose', '-v', action="store_true", default=False, help="Verbose output")
     pct_parser.add_argument('--vverbose', '-vv', action="store_true", default=False, help="Very verbose output")
     pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
+    pct_parser.add_argument('--graphRunnerArgs', action="store", help="Legacy cudnnTest arguments")
+    pct_parser.add_argument('--skip_pytest', '-s', action="store_true", default=False, help="Don't run through pytest. Run json graph definition straight from here.")
 
     args = pct_parser.parse_args()
 
@@ -21,8 +26,12 @@ if __name__ == "__main__":
     json_graph_test = os.path.join(base_path, "json_graph_test.py")
     python_graph_test = os.path.join(base_path, "python_graph_test.py")
 
+    # Legacy style of calling cudnnTest (from e.g., cudnn_run.py)
+    if args.skip_pytest:
+        run_test_from_legacy_args(args.testPath, args.graphRunnerArgs)
+        sys.exit(0)
     # Graphs defined in json file
-    if args.testPath.endswith(".json"):
+    elif args.testPath.endswith(".json"):
         pytest_cmd = [json_graph_test]
     # Graphs defined in python file
     elif args.testPath.endswith(".py"):
