@@ -41,7 +41,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             return {status, message};
         }
 
-        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1) {
+        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 0) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
                 "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
@@ -247,7 +247,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_stride({1, 1, 1, 1})
                 .set_is_pass_by_value(true)
 // Hard code data type input type as FE itself will place value in variant pack later
-#if CUDNN_VERSION < 8930
+#if CUDNN_VERSION < 8903
                 .set_data_type(options.inputs.Q->get_data_type());
 #else
                 .set_data_type(DataType_t::FLOAT);
@@ -275,10 +275,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto bmm2_node            = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
         sub_nodes.emplace_back(std::move(bmm2_node));
 
-        // Set dims and strides if user did not
+        // Set dims if user did not
         if (options.outputs.O->get_dim().empty()) {
-            // TODO: mha node needs to set it?
-            options.outputs.O->set_dim({b, h, s_q, d}).set_stride({h * d, d, b * h * d, 1});
+            options.outputs.O->set_dim({b, h, s_q, d});
         }
 
         return {error_code_t::OK, ""};
@@ -288,10 +287,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
     pass_by_value_tensors_(
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {
         if (options.dropout_probability.has_value()) {
-#if CUDNN_VERSION < 8930
-            half dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
+#if CUDNN_VERSION < 8903
+            half dropout_scale_value = (1.f / (options.dropout_probability.value()));
 #else
-            float dropout_scale_value = (1.f / (1 - options.dropout_probability.value()));
+            float dropout_scale_value = (1.f / (options.dropout_probability.value()));
 #endif
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
