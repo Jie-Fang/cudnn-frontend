@@ -18,6 +18,11 @@ Additionally, FE v1.0 API provides python bindings to all API through pybind11. 
 In order to include the entire library, include the cudnn_frontend header file `include/cudnn_frontend.h` into your compilation unit.
 
 ## Build:
+
+### Dependencies
+Minimum python version needed 3.6
+The python installation requires development package which can be installed by running `apt-get install python-dev`.
+
 ### C++ API
 Provide CUDA according to: https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html  
 
@@ -41,8 +46,6 @@ Skip building python bindings by providing `CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS
 Install FE python API by running: `python setup.py build`.  
 To provide a custom CUDA, export environment variable: `CUDA_PATH`.  
 To provide a custom CUDNN, export environment variable: `CUDNN_PATH`.  
-
-The python installation requires development package which can be installed by running `apt-get install python-dev`.
 
 NOTE: Only v1.0 API is exposed via python bindings.
 

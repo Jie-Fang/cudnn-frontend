@@ -209,6 +209,13 @@ class Graph : public INode {
         return tensor;
     }
 
+    // This API is still work in progress and unverified.
+    std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        Scaled_dot_product_attention_attributes);
+
    public:
     Graph() : INode(detail::Context{}) {}
 
@@ -262,7 +269,7 @@ class Graph : public INode {
     std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
-                                                                         DBN_attributes);
+                                                                         batchnorm_backward_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
@@ -279,11 +286,6 @@ class Graph : public INode {
                                                  std::shared_ptr<Tensor_attributes>,
                                                  Pointwise_attributes);
 
-    std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
-        std::shared_ptr<Tensor_attributes>,
-        std::shared_ptr<Tensor_attributes>,
-        std::shared_ptr<Tensor_attributes>,
-        Scaled_dot_product_attention_attributes);
     std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_flash_attention(
         std::shared_ptr<Tensor_attributes>,
         std::shared_ptr<Tensor_attributes>,
@@ -447,7 +449,7 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          DBN_attributes options) {
+                          batchnorm_backward_attributes options) {
     // Set outputs
     options.make_outputs([this](std::string const &name) { return output_tensor(name); });
     auto return_outputs = options.outputs;
@@ -637,10 +639,7 @@ Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (options.is_inference.has_value() && options.is_inference.value() == false) {
-        Stats = output_tensor(options.get_name() + "::Stats");
-    }
-    options.outputs.Stats = Stats;
+    Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
 
     // Set inputs
     options.inputs.Q = q;

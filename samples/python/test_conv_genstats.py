@@ -50,7 +50,7 @@ def test_conv_genstats():
     S_OUT = graph.scale(name = "scale", input = X, scale = S)
     B_OUT = graph.bias(name = "bias", input = S_OUT, bias = B)
     CONV_IN = graph.relu(name = "relu", input = B_OUT)
-    Y = graph.conv(image = CONV_IN, weight = W, padding = padding, stride = stride, dilation = dilation)
+    Y = graph.conv_fprop(image = CONV_IN, weight = W, padding = padding, stride = stride, dilation = dilation)
     Y.set_output(True)
 
     SUM, SQ_SUM = graph.genstats(name = "genstats", input = Y)

@@ -57,7 +57,7 @@ class PointwiseNode : public INode {
 
         if (!(options.outputs.OUT_0)) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: pointwise output OUT_0 not set.";
+            std::string message = "[cudnn_frontend] ERROR: pointwise output OUT_0 not set in " + options.get_name();
             return {status, message};
         }
 
