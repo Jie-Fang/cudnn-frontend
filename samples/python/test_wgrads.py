@@ -41,7 +41,7 @@ def test_scale_bias_relu_wgrad():
 
     relu_output  = graph.relu(name = "relu", input = bias_output)
 
-    wgrad_output = graph.wgrad(name = "wgrad", image = relu_output, loss = DY, padding = padding, stride = stride, dilation = dilation)
+    wgrad_output = graph.conv_wgrad(name = "wgrad", image = relu_output, loss = DY, padding = padding, stride = stride, dilation = dilation)
     wgrad_output.set_output(True)
 
     graph.check_support()
