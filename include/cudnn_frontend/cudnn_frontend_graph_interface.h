@@ -638,10 +638,7 @@ Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (options.is_inference.has_value() && options.is_inference.value() == false) {
-        Stats = output_tensor(options.get_name() + "::Stats");
-    }
-    options.outputs.Stats = Stats;
+    Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
 
     // Set inputs
     options.inputs.Q = q;

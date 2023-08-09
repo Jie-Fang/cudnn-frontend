@@ -295,8 +295,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
 
-        float negative_inf_value = std::numeric_limits<float>::min();
-        tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
+        if (options.causal_mask) {
+            float negative_inf_value = std::numeric_limits<float>::min();
+            tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
+        }
 
         return {error_code_t::OK, ""};
     }
