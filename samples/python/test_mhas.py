@@ -15,72 +15,7 @@ def convert_to_cudnn_type(torch_type):
         return cudnn.data_type.INT64
     else:
         raise ValueError("Unsupported tensor data type.")
-
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="requires cudnn 8.9 or higher")
-def test_scale_dot_product_attention_with_dropout_rng():
-    b = 32
-    h = 16
-    s_q = 512
-    s_kv = 512
-    d = 64
-
-    shape_Q = (b, h, s_q, d)
-    stride_Q = (s_q * 3 * h * d, d, 3 * h * d, 1)
-
-    shape_K = (b, h, d, s_kv)
-    stride_K = (s_kv * 3 * h * d, d, 1, 3 * h * d)
-
-    shape_V = (b, h, s_kv, d)
-    stride_V = (s_kv * 3 * h * d, d, 3 * h * d, 1)
-
-    offset_Q = 0
-    offset_K = h * d
-    offset_V = 2 * h * d
-
-    qkv_gpu = torch.empty(b * s_q * 3 * h * d, dtype=torch.float16, device="cuda")
-    Q_gpu = torch.as_strided(qkv_gpu, shape_Q, stride_Q, storage_offset=offset_Q)
-    K_gpu = torch.as_strided(qkv_gpu, shape_K, stride_K, storage_offset=offset_K)
-    V_gpu = torch.as_strided(qkv_gpu, shape_V, stride_V, storage_offset=offset_V)
-
-    SEQ_LEN_Q_gpu = torch.full((b,1,1,1), 32, dtype=torch.int32, device="cuda")
-    SEQ_LEN_K_gpu = torch.full((b,1,1,1), 32, dtype=torch.int32, device="cuda")
-
-    Attn_scale_cpu = torch.full((1,1,1,1), 0.5, dtype=torch.float16, device="cpu")
-    Bias_gpu = torch.empty((1, h, s_q, s_kv), dtype=torch.float16, device="cuda")
-    
-    # Cudnn graph
-    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
-    Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
-    K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
-    V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
-    SEQ_LEN_Q = graph.tensor(name = "SEQ_LEN_Q", dim = SEQ_LEN_Q_gpu.size(), stride = SEQ_LEN_Q_gpu.stride(), data_type = convert_to_cudnn_type(SEQ_LEN_Q_gpu.dtype))
-    SEQ_LEN_K = graph.tensor(name = "SEQ_LEN_K", dim = SEQ_LEN_K_gpu.size(), stride = SEQ_LEN_K_gpu.stride(), data_type = convert_to_cudnn_type(SEQ_LEN_K_gpu.dtype))
-    Attn_scale = graph.tensor(name = "Attn_scale", dim = Attn_scale_cpu.size(), stride = Attn_scale_cpu.stride(), data_type = convert_to_cudnn_type(Attn_scale_cpu.dtype), is_pass_by_value = True)
-    Bias = graph.tensor(name = "Bias", dim = Bias_gpu.size(), stride = Bias_gpu.stride(), data_type = convert_to_cudnn_type(Bias_gpu.dtype))
-    O, S = graph.scaled_dot_product_attention(name = "scaled_dot_product_attention"
-                                              , q = Q, k = K, v = V, seq_len_q = SEQ_LEN_Q, seq_len_k = SEQ_LEN_K
-                                              , is_inference = False
-                                              , attn_scale = Attn_scale
-                                              , bias = Bias
-                                              , use_padding_mask = True
-                                              , use_causal_mask = True
-                                              , dropout = (0.5, 123456)
-                                              )
-    O.set_output(True)
-    S.set_output(True)
-    graph.check_support()
-    graph.build()
-    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
-
-    O_actual = torch.zeros(b * s_q * h * d, dtype=torch.float16, device="cuda")
-    S_actual = torch.zeros(b * h * s_q * s_kv, dtype=torch.float16, device="cuda")
-
-    graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, SEQ_LEN_Q: SEQ_LEN_Q_gpu, SEQ_LEN_K: SEQ_LEN_K_gpu
-                   , Attn_scale: Attn_scale_cpu
-                   , Bias: Bias_gpu
-                   , O: O_actual, S: S_actual}
-                   , workspace)
-         
+      
 def perr(a, b):
     a, b = a.float(), b.float()
     diff = (a-b)
@@ -146,9 +81,8 @@ def compare_tensors(a_, b_, tensor_name):
 
     return n_errors
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="requires cudnn 8.9 or higher")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8903, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_flash_attention():
-
     b = 32
     h = 12
     s_q = 2048
@@ -308,5 +242,4 @@ def test_scale_dot_product_flash_attention():
     compare_tensors(O_cpu, O_reorg, "O") == 0
 
 if __name__ == "__main__":
-    test_scale_dot_product_attention_with_dropout_rng()
     test_scale_dot_product_flash_attention()

@@ -4,17 +4,35 @@
 FE v1.0 API is aimed to extend functionality and usage exposed by the [cuDNN C backend API](https://docs.nvidia.com/deeplearning/cudnn/api/index.html#cudnn-backend-api). Both C++ and python APIs are provided with both having functional parity.  
 For a general introduction to FE, please first refer README.md.
 
-## Samples
-
-Samples are meant to illustrate FE v1.0 API usage to users.  
-- `samples/cpp` contains samples that use C++ API.  
-- `samples/python` contains samples that use python API.
-
-C++ samples are written using [Catch2](https://github.com/catchorg/Catch2) test framework.  
-Python samples are written using [pytest](https://github.com/pytest-dev/pytest) and [pytorch](https://pytorch.org), with both requiring external installation. 
+## Workflow
+The steps involved in building and running a cudnn graph are as follows:
+- Create a cudnn graph and specify the global properties. The global properties like compute precision and input/output data type help infer properties that are not explicitly mentioned.
+- Create and add the input tensors 
+- Create and add the operation noes. The outputs of these operation are of tensor type and can be sequentially used as inputs to the next node.
+- Validate the operation graph. This step makes sure the graph is well built and does not have hanging tensors or node.
+- Build the cudnn operation graph. This step lowers the graph into cudnn dialect.
+- Get the execution plan, based on the heuristics type of your choice.
+- Filter out the plans by your custom criteria (Optional)
+- Run autotuning on the filter plan (Optional)
+- Execute the plan with the relevant data pointers.
     
 ## APIs
-FE v1.0 API follows a functional style of building a graph. Operations take in input tensors and return output tensors. This also allows composition of operations.
+FE v1.0 API follows a functional style of building a graph. Operations take in input tensors and return output tensors. This also allows composition of operations. 
+
+| Purpose                 | C++ API                                                   | Python API   |
+| ---                     | ---                                                       | ---          |
+| Create tensor           | tensor(...)                                               | tesnor(...)  |
+| Convolution Fprop       | conv_fprop <br>Conv_fprop_attributes                      | conv_fprop   |
+| Convolution Dgrad       | conv_dgrad <br>Conv_dgrad_attributes                      | conv_dgrad   |
+| Convolution Wgrad       | conv_wgrad <br>Conv_wgrad_attributes                      | conv_wgrad   |
+| Matrix Multiplication   | matmul <br> Matmul_attributes                             | matmul       |
+| Pointwise Operations    | pointwise <br> Pointwise_attributes                       | <br>- add<br>- bias<br>- rqsrt<br>- sub<br>- mul<br>- scale<br>- relu<br>- elu<br>- gelu<br>- cmp_gt       |
+| Batch Normalization     | batchnorm <br>Batchnorm_attributes                        | batchnorm    |
+| Batch Norm bprop        | batchnorm_backward <br>batchnorm_backward_attributes      | batchnorm    |
+| Generate stats of output| genstats <br>Genstats_attributes                          | genstats     |
+| BN Finalize of stats    | bn_finalize <br>BN_finalize_attributes                    | bn_finalize  |
+| Dbn weight              | dbn_weight <br>DBN_weight_attributes                      | dbn_weight   |
+| Scale dot product flash attention | scaled_dot_product_flash_attention<br> Scaled_dot_product_flash_attention_attributes | scaled_dot_product_flash_attention|
 
 ### Create Graph
 Instantiate an object of class `cudnn_frontend::graph::Graph` which will house tensors and operations.  
@@ -358,4 +376,10 @@ cudnn_frontend::graph::Graph::execute(cudnnHandle_t handle,
                                         void* workspace);
 ```
 
-## Graph Serialization
+## Samples
+Samples are meant to illustrate FE v1.0 API usage to users.  
+- `samples/cpp` contains samples that use C++ API.  
+- `samples/python` contains samples that use python API.
+
+C++ samples are written using [Catch2](https://github.com/catchorg/Catch2) test framework.  
+Python samples are written using [pytest](https://github.com/pytest-dev/pytest) and [pytorch](https://pytorch.org), with both requiring external installation. 
