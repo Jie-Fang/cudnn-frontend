@@ -20,6 +20,7 @@ In order to include the entire library, include the cudnn_frontend header file `
 ## Build:
 
 ### Dependencies
+Minimum cudnn version required is 8.5.0
 Minimum python version needed 3.6
 The python installation requires development package which can be installed by running `apt-get install python-dev`.
 
