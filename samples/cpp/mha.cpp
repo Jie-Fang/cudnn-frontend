@@ -23,9 +23,14 @@
 #include <catch2/catch_test_macros.hpp>
 #include "../helpers.h"
 
+#include <cuda_runtime_api.h>
 #include <cudnn_frontend.h>
 
 TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
+#if CUDART_VERSION < 12000
+    SKIP("Test requires cuda toolkit 12.0 or above");
+    return;
+#endif
     int64_t b                 = 1;     // batch size
     int64_t h                 = 2;     // head dim
     int64_t s_q               = 2048;  // q tensor is padded to this seq length
@@ -159,6 +164,10 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 }
 
 TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
+#if CUDART_VERSION < 12000
+    SKIP("Test requires cuda toolkit 12.0 or above");
+    return;
+#endif
     int64_t b         = 1;     // batch size
     int64_t h         = 2;     // head dim
     int64_t s_q       = 2048;  // q tensor is padded to this seq length
