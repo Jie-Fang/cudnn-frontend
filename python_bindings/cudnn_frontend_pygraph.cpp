@@ -371,6 +371,20 @@ class PyGraph {
     }
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    reduction(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+              cudnn_frontend::ReductionMode_t const mode,
+              cudnn_frontend::DataType_t const& compute_data_type,
+              std::string const& name) {
+        auto attributes = cudnn_frontend::graph::Reduction_attributes()
+                              .set_mode(mode)
+                              .set_compute_data_type(compute_data_type)
+                              .set_name(name);
+
+        auto OUT_0 = graph.reduction(input, attributes);
+        return OUT_0;
+    }
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     cmp_gt(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input_attributes_ptr,
            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& comparison_ptr,
            cudnn_frontend::DataType_t const& compute_data_type,
@@ -831,6 +845,24 @@ init_pygraph_submodule(py::module_& m) {
 
                 Returns:
                     cudnn_tensor: The result of the GELU activation.
+            )pbdoc")
+        .def("reduction",
+             &PyGraph::reduction,
+             py::arg("input"),
+             py::arg("mode"),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("name", ""),
+             R"pbdoc(
+                Reduce an input tensor along certain dimensions. These dimensions to reduce on are inferred from output tensor shape.
+
+                Args:
+                    input (cudnn_tensor): The input tensor.
+                    mode (cudnn.reduction_mode): The mode to use to reduce along a dimension.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): A name for the operation to be performed.
+
+                Returns:
+                    cudnn_tensor: The result of reduction operation.
             )pbdoc")
         .def("scaled_dot_product_flash_attention",
              &PyGraph::scaled_dot_product_flash_attention,
