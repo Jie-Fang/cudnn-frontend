@@ -6,29 +6,29 @@ For a general introduction to FE, please first refer README.md.
 
 ## Workflow
 The steps involved in building and running a cudnn graph are as follows:
-- Create a cudnn graph and specify the global properties. The global properties like compute precision and input/output data type help infer properties that are not explicitly mentioned.
-- Create and add the input tensors 
-- Create and add the operation noes. The outputs of these operation are of tensor type and can be sequentially used as inputs to the next node.
-- Validate the operation graph. This step makes sure the graph is well built and does not have hanging tensors or node.
-- Build the cudnn operation graph. This step lowers the graph into cudnn dialect.
-- Get the execution plan, based on the heuristics type of your choice.
-- Filter out the plans by your custom criteria (Optional)
-- Run autotuning on the filter plan (Optional)
-- Execute the plan with the relevant data pointers.
+1. Create a cudnn graph and specify the global properties. The global properties like compute precision and input/output data type help infer properties that are not explicitly mentioned.
+2. Create and add the input tensors 
+3. Create and add the operation nodes. The outputs of these operation are of tensor type and can be sequentially used as inputs to the next node.
+4. Validate the operation graph. This step makes sure the graph is well built and does not have hanging tensors or node.
+5. Build the cudnn operation graph. This step lowers the graph into cudnn dialect.
+6. Get the execution plan, based on the heuristics type of your choice.
+7. Filter out the plans by your custom criteria (Optional)
+8. Run autotuning on the filter plan (Optional)
+9. Execute the plan with the relevant data pointers.
     
 ## APIs
 FE v1.0 API follows a functional style of building a graph. Operations take in input tensors and return output tensors. This also allows composition of operations. 
 
 | Purpose                 | C++ API                                                   | Python API   |
 | ---                     | ---                                                       | ---          |
-| Create tensor           | tensor(...)                                               | tesnor(...)  |
+| Create tensor           | tensor(...)                                               | tensor(...)  |
 | Convolution Fprop       | conv_fprop <br>Conv_fprop_attributes                      | conv_fprop   |
 | Convolution Dgrad       | conv_dgrad <br>Conv_dgrad_attributes                      | conv_dgrad   |
 | Convolution Wgrad       | conv_wgrad <br>Conv_wgrad_attributes                      | conv_wgrad   |
 | Matrix Multiplication   | matmul <br> Matmul_attributes                             | matmul       |
-| Pointwise Operations    | pointwise <br> Pointwise_attributes                       | <br>- add<br>- bias<br>- rqsrt<br>- sub<br>- mul<br>- scale<br>- relu<br>- elu<br>- gelu<br>- cmp_gt       |
+| Pointwise Operations    | pointwise <br> Pointwise_attributes                       | - add<br>- bias<br>- rqsrt<br>- sub<br>- mul<br>- scale<br>- relu<br>- elu<br>- gelu<br>- cmp_gt       |
 | Batch Normalization     | batchnorm <br>Batchnorm_attributes                        | batchnorm    |
-| Batch Norm bprop        | batchnorm_backward <br>batchnorm_backward_attributes      | batchnorm    |
+| Batch Norm bprop        | batchnorm_backward <br>batchnorm_backward_attributes      | batchnorm_backward    |
 | Generate stats of output| genstats <br>Genstats_attributes                          | genstats     |
 | BN Finalize of stats    | bn_finalize <br>BN_finalize_attributes                    | bn_finalize  |
 | Dbn weight              | dbn_weight <br>DBN_weight_attributes                      | dbn_weight   |
@@ -43,6 +43,7 @@ Optional graph level attributes can be set on the object:
 - `cudnn_frontend::graph::Graph& set_compute_data_type(cudnn_frontend::DataType_t)`
 These attributes are meant to used as default in case they are not provided for constituent tensors and operations.
 
+Python 
 ### Define Tensors
 Users create input tensors to provide to operations within a graph. To add tensors in a graph, use:  
 `std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> cudnn_frontend::graph::tensor(cudnn_frontend::graph::Tensor_attributes)`.  
@@ -64,7 +65,7 @@ Operations return an ordered array of output tensors. Any optional outputs if no
 
 #### Batchnorm Forward
 Batchnorm operation computes:
-$$ output = scale*{input + mean \over \sqrt{variance + epsilon}} + bias $$
+$$ output = scale*{input - mean \over \sqrt{variance + epsilon}} + bias $$
 
 Optionally the operation also computes:
 $$ next\_running\_mean = (1 - momentum)*previous\_running\_mean + momentum*current\_running\_mean $$
@@ -92,6 +93,18 @@ set_name(std::string const&)
 Batchnorm_attributes&
 set_compute_data_type(DataType_t value)
 ```
+Python: 
+- batchnorm
+    - norm_forward_phase
+    - input
+    - scale
+    - bias
+    - in_running_mean
+    - in_running_var
+    - epsilon
+    - momentum
+    - compute_data_type
+    - name
 
 #### Batchnorm Finalize
 
@@ -124,6 +137,16 @@ Conv_fprop_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
+Python: 
+- conv_fprop
+    - image
+    - weight
+    - padding
+    - stride
+    - dilation
+    - compute_data_type
+    - name
+
 #### Convolution Dgrad
 Convolution dgrad computes data gradient during backpropagation.
 
@@ -152,6 +175,16 @@ Conv_dgrad_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
+Python: 
+- conv_dgrad
+    - filter
+    - loss
+    - padding
+    - stride
+    - dilation
+    - compute_data_type
+    - name
+
 #### Convolution Wgrad
 Convolution wgrad computes weight gradient during backpropagation.
 
@@ -179,6 +212,16 @@ set_name(std::string const&)
 Conv_wgrad_attributes&
 set_compute_data_type(DataType_t value)
 ```
+
+Python: 
+- conv_wgrad
+    - image
+    - loss
+    - padding
+    - stride
+    - dilation
+    - compute_data_type
+    - name
 
 #### Batchnorm Backward(DBN)
 DBN operation computes data graident, scale gradient, bias gradient during backpropagation of batchnorm forward operation.
@@ -230,6 +273,12 @@ Genstats_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
+Python:
+- genstats
+    - input
+    - compute_data_type
+    - name
+
 #### Matmul
 Matmul operation computes:
 $$ C[M, N] = A[M, K] * B[K, N] $$
@@ -250,6 +299,13 @@ set_name(std::string const&)
 Matmul_attributes&
 set_compute_data_type(DataType_t value)
 ```
+
+Python: 
+- matmul
+    - A
+    - B
+    - name
+    - compute_data_type
 
 #### Pointwise
 Pointwise performs an elementwise operation between two tensors. The operation used is controlled by pointwise mode `cudnn_frontend::PointwiseMode_t`.   
@@ -289,6 +345,54 @@ Pointwise_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
+Python:
+- add
+    - a
+    - b
+    - compute_data_type
+    - name
+- bias
+    - input
+    - bias
+    - compute_data_type
+    - name
+- rsqrt
+    - input
+    - compute_data_type
+    - name
+- sub
+    - a
+    - b
+    - compute_data_type
+    - name
+- mul
+    - a
+    - b
+    - compute_data_type
+    - name
+- scale
+    - input
+    - scale
+    - compute_data_type
+    - name
+- relu
+    - input
+    - compute_data_type
+    - name
+- gelu
+    - input
+    - compute_data_type
+    - name
+- elu
+    - input
+    - compute_data_type
+    - name
+- cmp_gt
+    - input
+    - comparison
+    - compute_data_type
+    - name
+
 #### Reduction
 Reduction operation reduces an input tensor using an operation controlled by `cudnn_frontend::ReductionMode_t`.
 The dimensions in input tensors to reduce are deduced using output tensor dimensions.
@@ -311,11 +415,61 @@ Reduction_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-#### Rng
-
-#### Scaled Dot Product Attention
-
 #### Scaled Dot Product Flash Attention
+Computes the scaled dot product attention for given Query, Key and Value tensors. Optionally, can set dropout probability, causal mask. Can optionally dump stats to be used for the bprop computation.
+
+API:
+```
+std::array<std::shared_ptr<Tensor_attributes>, 2> 
+scaled_dot_product_flash_attention
+    (std::shared_ptr<Tensor_attributes> q,
+     std::shared_ptr<Tensor_attributes> k,
+     std::shared_ptr<Tensor_attributes> v,
+     Scaled_dot_product_flash_attention_attributes options);
+```
+
+where, `Scaled_dot_product_flash_attention_attributes` controls the sub-graph in the operation
+
+```
+    Scaled_dot_product_flash_attention_attributes &
+    set_is_inference(bool const value);
+    
+    Scaled_dot_product_flash_attention_attributes &
+    set_causal_mask(bool const value);
+    
+    Scaled_dot_product_flash_attention_attributes &
+    set_bias(std::shared_ptr<Tensor_attributes> value);
+    
+    Scaled_dot_product_flash_attention_attributes &
+    set_attn_scale(std::shared_ptr<Tensor_attributes> value);
+    
+    Scaled_dot_product_flash_attention_attributes &
+    set_dropout(float const probability,
+                std::shared_ptr<Tensor_attributes> seed,
+                std::shared_ptr<Tensor_attributes> offset);
+    
+    Scaled_dot_product_flash_attention_attributes &
+    set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale);
+    
+    Scaled_dot_product_flash_attention_attributes &
+    set_compute_data_type(DataType_t value)
+```
+
+- Python
+    - q
+    - k
+    - v
+    - seq_q
+    - seq_k
+    - is_inference
+    - attn_scale
+    - bias
+    - use_padding_mask
+    - use_alibi_mask
+    - use_causal_mask
+    - dropout
+    - compute_data_type
+    - name
 
 ### Validate graph
 Validate API ensures API usage is sound, checks against dangling tensors, etc.

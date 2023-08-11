@@ -3,7 +3,7 @@
 ## Introduction
 The cuDNN FrontEnd(FE) API is a C++ header-only library that wraps the [cuDNN C backend API](https://docs.nvidia.com/deeplearning/cudnn/api/index.html#cudnn-backend-api). Both the FE and backend APIs are entry points to the same set of functionality that is commonly referred to as the "[graph API](https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#op-fusion)".
 
-While there are two entry points to the graph API (i.e. backend and frontend), and its expected that most users will use the FE API. Reasons being:
+While there are two entry points to the graph API (i.e. backend and frontend), it is expected that most users will use the FE API. Reasons being:
 
 - FE API is less verbose without loss of control. All functionality accessible through the backend API is also accessible through the FE API.
 - FE API adds functionality on top of the backend API, like errata filters and autotuning.
@@ -12,7 +12,7 @@ Also, for those using backend API, FE API source and samples can serve as refere
 
 FE v1.0 API extends the groundwork of earlier versions. In FE v1.0 API, users can describe multiple operations that form subgraph through a persistent cudnn_frontend::graph::Graph object. Unlike the FE v0.x API, users dont need to worry about specifying shapes and sizes of the intermediate virtual tensors. For detailed information of FE v1.0 API, see README.FE.v1.0.md. 
 
-Additionally, FE v1.0 API provides python bindings to all API through pybind11. Please, look at our python documentation  
+Additionally, FE v1.0 API provides python bindings to all API through pybind11. It is recommended that new users of cuDNN start with the frontend v1.0 API. See `samples/cpp` and `samples/python` for more details on its usage.
 
 ## Usage
 In order to include the entire library, include the cudnn_frontend header file `include/cudnn_frontend.h` into your compilation unit.
