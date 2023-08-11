@@ -44,6 +44,17 @@ PYBIND11_MODULE(cudnn, m) {
         .value("TRAINING", cudnn_frontend::NormFwdPhase_t::TRAINING)
         .value("NOT_SET", cudnn_frontend::NormFwdPhase_t::NOT_SET);
 
+    py::enum_<cudnn_frontend::ReductionMode_t>(m, "reduction_mode")
+        .value("ADD", cudnn_frontend::ReductionMode_t::ADD)
+        .value("MUL", cudnn_frontend::ReductionMode_t::MUL)
+        .value("MIN", cudnn_frontend::ReductionMode_t::MIN)
+        .value("MAX", cudnn_frontend::ReductionMode_t::MAX)
+        .value("AMAX", cudnn_frontend::ReductionMode_t::AMAX)
+        .value("AVG", cudnn_frontend::ReductionMode_t::AVG)
+        .value("NORM1", cudnn_frontend::ReductionMode_t::NORM1)
+        .value("NORM2", cudnn_frontend::ReductionMode_t::NORM2)
+        .value("MUL_NO_ZEROS", cudnn_frontend::ReductionMode_t::MUL_NO_ZEROS);
+
     init_pygraph_submodule(m);
     init_properties(m);
 }
