@@ -1,8 +1,16 @@
 # cuDNN FrontEnd(FE) v1.0 API
 
+## Table of Contents
+1. [Introduction](#Introduction)
+2. [Workflow](#Workflow)
+3. [APIs](#APIs)
+4. [Samples](#Samples)
+5. [Operations](#Operations)
+6. [Miscellaneous](#Miscellaneous)
+
 ## Introduction
 FE v1.0 API is aimed to extend functionality and usage exposed by the [cuDNN C backend API](https://docs.nvidia.com/deeplearning/cudnn/api/index.html#cudnn-backend-api). Both C++ and python APIs are provided with both having functional parity.  
-For a general introduction to FE, please first refer README.md.
+For a general introduction to FE, please first refer README.md
 
 ## Workflow
 The steps involved in building and running a cudnn graph are as follows:
@@ -12,8 +20,8 @@ The steps involved in building and running a cudnn graph are as follows:
 4. Validate the operation graph. This step makes sure the graph is well built and does not have hanging tensors or node.
 5. Build the cudnn operation graph. This step lowers the graph into cudnn dialect.
 6. Get the execution plan, based on the heuristics type of your choice.
-7. Filter out the plans by your custom criteria (Optional).
-8. Run autotuning on the filter plan (Optional). 
+7. [Optional] Filter out the plans by your custom criteria (Optional).
+8. [Optional] Run autotuning on the filter plan (Optional). 
 9. Set the execution plan of choice back into the graph.
 10. Execute the graph with the relevant data pointers.
     
@@ -22,7 +30,7 @@ FE v1.0 API follows a functional style of building a graph. Operations take in i
 
 | Purpose                 | C++ API                                                   | Python API   |
 | ---                     | ---                                                       | ---          |
-| Create tensor           | tensor(...)                                               | tensor(...)  |
+| Create tensor           | tensor                                                    | tensor       |
 | Convolution Fprop       | conv_fprop <br>Conv_fprop_attributes                      | conv_fprop   |
 | Convolution Dgrad       | conv_dgrad <br>Conv_dgrad_attributes                      | conv_dgrad   |
 | Convolution Wgrad       | conv_wgrad <br>Conv_wgrad_attributes                      | conv_wgrad   |
@@ -64,13 +72,101 @@ Operations take in mandatory input tensor via positional arguments. Optional inp
 
 Operations return an ordered array of output tensors. Any optional outputs if not present will have their shared pointers pointing to `std::nullptr`.
 
+Please looks at [operations](#Operations) section for more details. 
+
+### Validate graph
+Validate API ensures API usage is sound, checks against dangling tensors, etc.
+Internally, any unspecified properties like dimensions, strides, etc are inferred.
+
+```
+cudnn_frontend::error_t cudnn_frontend::graph::Graph::validate()
+```
+
+### Build cudnn backend graph
+This method creates cudnn backend descriptors for all constituents of the graph.
+
+```
+cudnn_frontend::error_t cudnn_frontend::graph::Graph::build_operation_graph(cudnnHandle_t handle)
+```
+
+### Get Execution plans
+This method returns a list of execution plans that can potentially run the FE graph.
+
+```
+cudnn_frontend::graph::Plans cudnn_frontend::graph::Graph::get_execution_plans(heur_mode_t)
+```
+
+### Filter plans
+Users can filter out plans against numerical, behavioral notes, or plans that do not provide desired functional correctness.
+
+```
+cudnn_frontend::graph::Plans& cudnn_frontend::graph::Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const&);
+cudnn_frontend::graph::Plans& cudnn_frontend::graph::Plans::filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const&);
+cudnn_frontend::graph::Plans& cudnn_frontend::graph::Plans::filter_out_workspace_greater_than(int64_t max_allowed_workspace);
+```
+
+### Check graph support
+This method guarantees that executing the graph using plans queried will succeed.
+
+```
+cudnn_frontend::error_t Plans::check_support();
+```
+
+### Autotune
+
+Autotuning provides a way to execute different execution plans for a given graph and measure their relative performance under run time conditions.
+This generally helps validate and improve upon the results provided by the heuristics.
+
+The current API to perform the autotuning on the filtered plans:
+```
+    error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> variants,
+             void *workspace,
+             void *user_impl = nullptr);
+
+```
+
+### Set Execution plans
+After checking support, filtering and/or autotuning, execution plans can be set in descending order of preference.
+
+```
+cudnn_frontend::error_t
+cudnn_frontend::graph::Graph::set_execution_plans(cudnn_frontend::::graph::Plans const&)
+```
+
+### Execute
+Executing graph requires device pointers to all input output tensors and a user alloaction device workspace pointer.
+
+```
+cudnn_frontend::error_t
+cudnn_frontend::graph::Graph::execute(cudnnHandle_t handle,
+                                        std::unordered_map<std::shared_ptr<Tensor>, void *> var_pack,
+                                        void* workspace);
+```
+
+## Samples
+Samples are meant to illustrate FE v1.0 API usage to users.  
+- `samples/cpp` contains samples that use C++ API.
+- `samples/python` contains samples that use python API.
+
+C++ samples are written using [Catch2](https://github.com/catchorg/Catch2) test framework.  
+Python samples are written using [pytest](https://github.com/pytest-dev/pytest) and [pytorch](https://pytorch.org), with both requiring external installation.
+
+## Operations
+
 #### Batchnorm Forward
 Batchnorm operation computes:
 $$ output = scale*{input - mean \over \sqrt{variance + epsilon}} + bias $$
 
 Optionally the operation also computes:
-$$ next\_running\_mean = (1 - momentum)*previous\_running\_mean + momentum*current\_running\_mean $$
-$$ next\_running\_variance = (1 - momentum)*previous\_running\_variance + momentum*current\_running\_variance $$
+```math
+next\_running\_mean = (1 - momentum)*previous\_running\_mean + momentum*current\_running\_mean
+```
+```math
+next\_running\_variance = (1 - momentum)*previous\_running\_variance + momentum*current\_running\_variance
+```
+
 
 The API to achieve above equations is:  
 ```
@@ -94,7 +190,8 @@ set_name(std::string const&)
 Batchnorm_attributes&
 set_compute_data_type(DataType_t value)
 ```
-Python: 
+
+Python API: 
 - batchnorm
     - norm_forward_phase
     - input
@@ -152,7 +249,7 @@ Conv_fprop_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-Python: 
+Python API: 
 - conv_fprop
     - image
     - weight
@@ -190,7 +287,7 @@ Conv_dgrad_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-Python: 
+Python API: 
 - conv_dgrad
     - filter
     - loss
@@ -228,7 +325,7 @@ Conv_wgrad_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-Python: 
+Python API: 
 - conv_wgrad
     - image
     - loss
@@ -286,7 +383,7 @@ Genstats_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-Python:
+Python API: 
 - genstats
     - input
     - compute_data_type
@@ -313,7 +410,7 @@ Matmul_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-Python: 
+Python API: 
 - matmul
     - A
     - B
@@ -358,7 +455,7 @@ Pointwise_attributes&
 set_compute_data_type(DataType_t value)
 ```
 
-Python:
+Python API: 
 - add
     - a
     - b
@@ -470,7 +567,7 @@ where, `Scaled_dot_product_flash_attention_attributes` controls the sub-graph in
     set_compute_data_type(DataType_t value)
 ```
 
-- Python
+Python API: 
     - q
     - k
     - v
@@ -486,86 +583,7 @@ where, `Scaled_dot_product_flash_attention_attributes` controls the sub-graph in
     - compute_data_type
     - name
 
-### Validate graph
-Validate API ensures API usage is sound, checks against dangling tensors, etc.
-Internally, any unspecified properties like dimensions, strides, etc are inferred.
-
-```
-cudnn_frontend::error_t cudnn_frontend::graph::Graph::validate()
-```
-
-### Build cudnn backend graph
-This method creates cudnn backend descriptors for all constituents of the graph.
-
-```
-cudnn_frontend::error_t cudnn_frontend::graph::Graph::build_operation_graph(cudnnHandle_t handle)
-```
-
-### Get Execution plans
-This method returns a list of execution plans that can potentially run the FE graph.
-
-```
-cudnn_frontend::graph::Plans cudnn_frontend::graph::Graph::get_execution_plans(heur_mode_t)
-```
-
-### Filter plans
-Users can filter out plans against numerical, behavioral notes, or plans that do not provide desired functional correctness.
-
-```
-cudnn_frontend::graph::Plans& cudnn_frontend::graph::Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const&);
-cudnn_frontend::graph::Plans& cudnn_frontend::graph::Plans::filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const&);
-cudnn_frontend::graph::Plans& cudnn_frontend::graph::Plans::filter_out_workspace_greater_than(int64_t max_allowed_workspace);
-```
-
-### Check graph support
-This method guarantees that executing the graph using plans queried will succeed.
-
-```
-cudnn_frontend::error_t Plans::check_support();
-```
-
-### Autotune
-
-Autotuning provides a way to execute different execution plans for a given graph and measure their relative performance under run time conditions.
-This generally helps validate and improve upon the results provided by the heuristics.
-
-The current API to perform the autotuning on the filtered plans:
-```
-    error_t
-    autotune(cudnnHandle_t handle,
-             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> variants,
-             void *workspace,
-             void *user_impl = nullptr);
-
-```
-
-### Set Execution plans
-After checking support, filtering and/or autotuning, execution plans can be set in descending order of preference.
-
-```
-cudnn_frontend::error_t
-cudnn_frontend::graph::Graph::set_execution_plans(cudnn_frontend::::graph::Plans const&)
-```
-
-### Execute
-Executing graph requires device pointers to all input output tensors and a user alloaction device workspace pointer.
-
-```
-cudnn_frontend::error_t
-cudnn_frontend::graph::Graph::execute(cudnnHandle_t handle,
-                                        std::unordered_map<std::shared_ptr<Tensor>, void *> var_pack,
-                                        void* workspace);
-```
-
-## Samples
-Samples are meant to illustrate FE v1.0 API usage to users.  
-- `samples/cpp` contains samples that use C++ API.  
-- `samples/python` contains samples that use python API.
-
-C++ samples are written using [Catch2](https://github.com/catchorg/Catch2) test framework.  
-Python samples are written using [pytest](https://github.com/pytest-dev/pytest) and [pytorch](https://pytorch.org), with both requiring external installation. 
-
-## Miscelleaneous
+## Miscellaneous
 - FE provides shadow enums which help avoid users to workaround having different enums for different cudnn versions.
 - The cudnn backend enums are changed as follows:
     - `cudnnBackend<enum_name>` -> `cudnn_frontend::<enum_name>`

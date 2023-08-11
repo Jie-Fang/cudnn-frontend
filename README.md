@@ -10,7 +10,7 @@ While there are two entry points to the graph API (i.e. backend and frontend), i
 
 Also, for those using backend API, FE API source and samples can serve as reference implementation.
 
-FE v1.0 API extends the groundwork of earlier versions. In FE v1.0 API, users can describe multiple operations that form subgraph through a persistent cudnn_frontend::graph::Graph object. Unlike the FE v0.x API, users dont need to worry about specifying shapes and sizes of the intermediate virtual tensors. For detailed information of FE v1.0 API, see README.FE.v1.0.md. 
+FE v1.0 API extends the groundwork of earlier versions and introduces a new set of APIs to further simplify the workflow. In FE v1.0 API, users can describe multiple operations that form subgraph through a persistent cudnn_frontend::graph::Graph object. Unlike the FE v0.x API, users dont need to worry about specifying shapes and sizes of the intermediate virtual tensors. For detailed information of FE v1.0 API, see README.FE.v1.0.md. 
 
 Additionally, FE v1.0 API provides python bindings to all API through pybind11. It is recommended that new users of cuDNN start with the frontend v1.0 API. See `samples/cpp` and `samples/python` for more details on its usage.
 
@@ -20,9 +20,18 @@ In order to include the entire library, include the cudnn_frontend header file `
 ## Build:
 
 ### Dependencies
-Minimum cudnn version required is 8.5.0
+With the release of v1.0, we are bumping up the minimum supported cudnn version to 8.5.0
+
 Minimum python version needed 3.6
-The python installation requires development package which can be installed by running `apt-get install python-dev`.
+The python binding compilation requires development package which can be installed by running `apt-get install python-dev`.
+
+To run the python samples, additionally, you will need the following python packages
+- pytest
+- pytorch-cuda=11.8 (or pytorch-cuda=12.1)
+- torchvision
+- torchaudio
+- pytorch
+
 
 ### C++ API
 Provide CUDA according to: https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html  
@@ -35,7 +44,7 @@ From Project Root,
 
 ```
 mkdir build; cd build
-cmake -DCUDNN_PATH=/path/to/cudnn -DCUDA_PATH=/path/to/cuda  ../
+cmake -DCUDNN_PATH=/path/to/cudnn -DCUDAToolkit_ROOT=/path/to/cuda  ../
 cmake --build . -j16
 bin/samples
 ```
@@ -43,14 +52,21 @@ bin/samples
 Skip building samples by providing `CUDNN_FRONTEND_BUILD_SAMPLES=OFF` as cmake parameter.  
 Skip building python bindings by providing `CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS=OFF` as cmake parameter.
 
+In case, you have a stale cmake cache and want to update the cudnn/cuda paths, please delete the cmake cache (or build directory and redo the above steps).
+
 ### Python API
-Install FE python API by running: `python setup.py build`.  
-To provide a custom CUDA, export environment variable: `CUDA_PATH`.  
-To provide a custom CUDNN, export environment variable: `CUDNN_PATH`.  
+Install FE python API by running: `CUDAToolkit_ROOT=/path/to/cuda CUDNN_PATH=/path/to/cudnn python setup.py build`.  
+To provide a custom CUDA, export environment variable: `CUDAToolkit_ROOT`.  
+To provide a custom CUDNN, export environment variable: `CUDNN_PATH`.
+
+```
+    pytest samples/python
+```
 
 NOTE: Only v1.0 API is exposed via python bindings.
 
-## Logging
+## Debugging
+For initial debugging, we recommend turning on the cudnn FE logging and checking for warnings and errors.
 cuDNN Frontend API logging records execution flow through cuDNN frontend API. This functionality is disabled by default, and can be enabled through methods described in this section.
 
 ### Method 1: Using Environment Variables:
@@ -62,7 +78,9 @@ cuDNN Frontend API logging records execution flow through cuDNN frontend API. Th
 
 ### Method 2: Using API calls:
 Calling `cudnn_frontend::isLoggingEnabled() = true|false` has same effect of setting the environment variable.
-Calling `cudnn_frontend::getStream() = stream_name` can be used to assign the output stream directly. 
+Calling `cudnn_frontend::getStream() = stream_name` can be used to assign the output stream directly.
+
+For further debugging, please turn on the cudnn backend logs described here https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#api-logging
 
 ## Documentation
 Documentation can be found at https://nvidia.github.io/cudnn-frontend/
@@ -72,5 +90,4 @@ No external contribution to this repository is accepted. Please create an issue 
 
 ## Feedback
 Support, resources, and information about cuDNN can be found online at https://developer.nvidia.com/cudnn. 
-
-For questions or to provide feedback, please contact cuDNN@nvidia.com.
+Also, bugs and rfes can be reported in the issues section.
