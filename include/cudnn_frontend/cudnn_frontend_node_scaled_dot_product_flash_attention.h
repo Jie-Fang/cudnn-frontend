@@ -17,6 +17,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
     std::shared_ptr<Tensor_attributes> rng_output;
     std::shared_ptr<Tensor_attributes> dropout_scale;
     std::shared_ptr<Tensor_attributes> negative_inf;
+    std::shared_ptr<Tensor_attributes> alibi_slopes;
 
    public:
     Scaled_dot_product_flash_attention_attributes options;
@@ -124,6 +125,78 @@ class ScaledDotProductFlashAttentionNode : public INode {
             add_attributes.inputs.IN_0 = last_output;
             add_attributes.inputs.IN_1 = options.inputs.Bias;
             last_output = add_attributes.outputs.OUT_0 = bias_output;
+            auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
+            sub_nodes.emplace_back(std::move(add_node));
+        }
+
+        if (options.alibi_mask) {
+            // Lower options to generate row index options
+            auto row_index_output = std::make_shared<Tensor_attributes>();
+            row_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes row_index_attributes;
+            row_index_attributes.set_name("gen_row_index")
+                .set_mode(PointwiseMode_t::GEN_INDEX)
+                .set_axis(2)
+                .set_compute_data_type(DataType_t::INT32);
+            row_index_attributes.inputs.IN_0   = last_output;
+            row_index_attributes.outputs.OUT_0 = row_index_output;
+            auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
+            sub_nodes.emplace_back(std::move(row_index_node));
+
+            // Lower options to generate col index options
+            auto col_index_output = std::make_shared<Tensor_attributes>();
+            col_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes col_index_attributes;
+            col_index_attributes.set_name("gen_col_index")
+                .set_mode(PointwiseMode_t::GEN_INDEX)
+                .set_axis(3)
+                .set_compute_data_type(DataType_t::INT32);
+            col_index_attributes.inputs.IN_0   = last_output;
+            col_index_attributes.outputs.OUT_0 = col_index_output;
+            auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
+            sub_nodes.emplace_back(std::move(col_index_node));
+
+            // Lower options to sub options
+            auto sub_output = std::make_shared<Tensor_attributes>();
+            sub_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes sub_attributes;
+            sub_attributes.set_name("sub").set_mode(PointwiseMode_t::SUB).set_compute_data_type(DataType_t::INT32);
+            sub_attributes.inputs.IN_0   = col_index_output;
+            sub_attributes.inputs.IN_1   = row_index_output;
+            sub_attributes.outputs.OUT_0 = sub_output;
+            auto sub_node                = std::make_unique<PointwiseNode>(std::move(sub_attributes), context);
+            sub_nodes.emplace_back(std::move(sub_node));
+
+            // Multiply by alibi slope
+            alibi_slopes = std::make_shared<Tensor_attributes>();
+            alibi_slopes->set_dim({1, h, 1, 1})
+                .set_stride({h, 1, 1, 1})
+                // Hard code data type float as FE itself will compute and place in variant pack later
+                .set_data_type(DataType_t::FLOAT);
+
+            auto alibi_mask = std::make_shared<Tensor_attributes>();
+            alibi_mask->set_is_virtual(true);
+
+            Pointwise_attributes mul_attributes;
+            mul_attributes.set_name("mul").set_mode(PointwiseMode_t::MUL);
+            mul_attributes.inputs.IN_0   = sub_output;
+            mul_attributes.inputs.IN_1   = alibi_slopes;
+            mul_attributes.outputs.OUT_0 = alibi_mask;
+            auto mul_node                = std::make_unique<PointwiseNode>(std::move(mul_attributes), context);
+            sub_nodes.emplace_back(std::move(mul_node));
+
+            // Add alibi_mask
+            auto add_output = std::make_shared<Tensor_attributes>();
+            add_output->set_is_virtual(true);
+
+            Pointwise_attributes add_attributes;
+            add_attributes.set_name("add").set_mode(PointwiseMode_t::ADD);
+            add_attributes.inputs.IN_0 = last_output;
+            add_attributes.inputs.IN_1 = alibi_mask;
+            last_output = add_attributes.outputs.OUT_0 = add_output;
             auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
             sub_nodes.emplace_back(std::move(add_node));
         }
@@ -298,6 +371,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
         if (options.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
+        }
+
+        if (options.alibi_mask) {
+            int64_t const h            = options.inputs.Q->get_dim()[1];
+            auto h_alibi_slopes_vector = detail::get_abili_slope(h);
+
+            float* d_alibi_slopes_vector;
+            cudaMalloc((void**)&d_alibi_slopes_vector, h * sizeof(float));
+            cudaMemcpy(d_alibi_slopes_vector, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice);
+            tensor_to_pass_by_value.emplace(alibi_slopes, d_alibi_slopes_vector);
         }
 
         return {error_code_t::OK, ""};

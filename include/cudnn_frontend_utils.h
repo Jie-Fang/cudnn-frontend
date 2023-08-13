@@ -760,6 +760,28 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
 
 namespace detail {
 
+inline std::vector<float>
+get_abili_slope(int64_t const n_heads) {
+    std::vector<float> slope;
+
+    int n = 1 << (int)(log2f(n_heads));
+    for (int i = 0; i < n; i++) {
+        slope.push_back((float)(i + 1.0));
+    }
+
+    for (int i = 0; i < 2 * (n_heads - n); i += 2) {
+        slope.push_back((float)(i + 1.0) * 0.5);
+    }
+
+    for (float& elem : slope) {
+        elem *= -8.0;
+        elem /= n;
+        elem = powf(2.0, elem);
+    }
+
+    return slope;
+}
+
 static inline cudnnStatus_t
 convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cudnn_mode) {
     switch (mode) {

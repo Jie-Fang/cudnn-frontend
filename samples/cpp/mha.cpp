@@ -88,7 +88,9 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
                                                           .set_dropout(dropout_probability, seed, offset);
 
 // Optional bias in flash attention is only supported 8.9.3 onwards
-#if (CUDNN_VERSION >= 8903)
+#if (CUDNN_VERSION >= 8904)
+    scaled_dot_product_flash_attention_options.set_bias(bias).set_alibi_mask(true);
+#elif (CUDNN_VERSION >= 8903)
     scaled_dot_product_flash_attention_options.set_bias(bias);
 #endif
 
@@ -213,6 +215,11 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
                                                           .set_causal_mask(true)
                                                           .set_attn_scale(attn_scale)
                                                           .set_bias(bias);
+
+// Alibi mask in flash attention is only supported 8.9.4 onwards
+#if (CUDNN_VERSION >= 8904)
+    scaled_dot_product_flash_attention_options.set_alibi_mask(true);
+#endif
 
     auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
     O->set_output(true).set_stride({h * d, d, b * h * d, 1});
