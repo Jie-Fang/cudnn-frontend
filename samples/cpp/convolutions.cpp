@@ -128,7 +128,9 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
 #if (CUDNN_VERSION < 8800)
     SKIP("ConvBNFprop requires cudnn 8.8 and up");
 #endif
-
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("ConvBNFprop requires Ampere and up");
+    }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
     REQUIRE(graph.validate().is_good());

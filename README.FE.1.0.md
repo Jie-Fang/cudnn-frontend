@@ -20,10 +20,11 @@ The steps involved in building and running a cudnn graph are as follows:
 4. Validate the operation graph. This step makes sure the graph is well built and does not have hanging tensors or node.
 5. Build the cudnn operation graph. This step lowers the graph into cudnn dialect.
 6. Get the execution plan, based on the heuristics type of your choice.
-7. [Optional] Filter out the plans by your custom criteria (Optional).
-8. [Optional] Run autotuning on the filter plan (Optional). 
-9. Set the execution plan of choice back into the graph.
-10. Execute the graph with the relevant data pointers.
+7. [Optional] Check support of the operation graph.
+8. [Optional] Filter out the plans by your custom criteria (Optional).
+9. [Optional] Run autotuning on the filter plan (Optional). 
+10. Set the execution plan of choice back into the graph.
+11. Execute the graph with the relevant data pointers.
     
 ## APIs
 FE v1.0 API follows a functional style of building a graph. Operations take in input tensors and return output tensors. This also allows composition of operations. 
@@ -52,7 +53,6 @@ Optional graph level attributes can be set on the object:
 - `cudnn_frontend::graph::Graph& set_compute_data_type(cudnn_frontend::DataType_t)`
 These attributes are meant to used as default in case they are not provided for constituent tensors and operations.
 
-Python 
 ### Define Tensors
 Users create input tensors to provide to operations within a graph. To add tensors in a graph, use:  
 `std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> cudnn_frontend::graph::tensor(cudnn_frontend::graph::Tensor_attributes)`.  
