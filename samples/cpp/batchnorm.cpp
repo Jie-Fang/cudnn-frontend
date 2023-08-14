@@ -163,7 +163,9 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 #if (CUDNN_VERSION < 8700)
     SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
 #endif
-
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("ConvBNFprop requires Ampere and up");
+    }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
@@ -256,7 +258,9 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 #if (CUDNN_VERSION < 8900)
     SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
 #endif
-
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("ConvBNFprop requires Ampere and up");
+    }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
