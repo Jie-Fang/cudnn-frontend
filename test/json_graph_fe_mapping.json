@@ -11,7 +11,7 @@
         },
     "conv":
         {
-            "operation": "conv",
+            "operation": "conv_fprop",
             "input": {"X": "image", "W": "weight"},
             "output": ["Y"],
             "properties": {
