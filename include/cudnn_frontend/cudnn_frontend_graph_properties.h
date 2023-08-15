@@ -802,6 +802,7 @@ class Batchnorm_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
         std::shared_ptr<Tensor_attributes> EPSILON;
         std::shared_ptr<Tensor_attributes> MOMENTUM;
+        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     } inputs;
 
     struct Outputs {
@@ -841,6 +842,12 @@ class Batchnorm_attributes : public Operation {
     Batchnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
+        return *this;
+    }
+
+    Batchnorm_attributes&
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
+        inputs.peer_stats = peer_stats;
         return *this;
     }
 

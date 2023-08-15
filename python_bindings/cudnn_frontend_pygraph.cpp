@@ -125,6 +125,7 @@ class PyGraph {
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_var,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& momentum,
+              std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>& peer_stats,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
         auto attributes = cudnn_frontend::graph::Batchnorm_attributes()
@@ -132,6 +133,7 @@ class PyGraph {
                               .set_compute_data_type(compute_data_type)
                               .set_epsilon(epsilon)
                               .set_previous_running_stats(in_running_mean, in_running_var, momentum)
+                              .set_peer_stats(peer_stats)
                               .set_name(name);
 
         auto [Y, mean, inv_var, next_running_mean, next_running_var] = graph.batchnorm(x, scale, bias, attributes);
@@ -568,6 +570,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("in_running_var"),
              py::arg("epsilon"),
              py::arg("momentum"),
+             py::arg_v("peer_stats", std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>()),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
         .def("batchnorm_backward",
