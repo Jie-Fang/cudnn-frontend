@@ -92,3 +92,6 @@ cuDNN v8.4 and above provides exeuction plan serialization and deserialization t
 ### API:
     - std::string cudnn_frontend::ExecutionPlan_v8::getJsonRepresentation() : Serialize the execution plan into a string in JSON format.
     - cudnn_frontend::ExecutionPlan_v8&& cudnn_frontend::ExecutionPlanBuilder_v8::loadFromJson(const std::string &json_plan) : Deserialize from a string containing the JSON representation of the execution plan.
+
+## Deprecation
+v0.x API may be deprecated in version 2.0 of the API. Please, consider adopting 1.0 API. If there are any issues, or missing functionalities in v1.0 API, please create a gitlab issue for this.
