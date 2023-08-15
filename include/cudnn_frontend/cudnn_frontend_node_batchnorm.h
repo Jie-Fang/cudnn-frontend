@@ -79,6 +79,12 @@ class BatchNormNode : public INode {
         infer_scalar_tensors(options.inputs.EPSILON);
         infer_scalar_tensors(options.inputs.MOMENTUM);
 
+        for (auto const& peer_stat : options.inputs.peer_stats) {
+            if (peer_stat->get_stride().empty()) {
+                peer_stat->set_stride(detail::generate_stride(peer_stat->get_dim()));
+            }
+        }
+
         return {error_code_t::OK, ""};
     }
 
@@ -111,6 +117,9 @@ class BatchNormNode : public INode {
         options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
         options.outputs.NEXT_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
         options.outputs.NEXT_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
+        for (auto const& peer_stat : options.inputs.peer_stats) {
+            peer_stat->set_uid(ICudnn::create_new_uid());
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -131,7 +140,9 @@ class BatchNormNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.INV_VARIANCE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_MEAN));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_VAR));
-
+        for (auto const& peer_stat : options.inputs.peer_stats) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(peer_stat));
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -144,7 +155,11 @@ class BatchNormNode : public INode {
         try {
 #endif
 
-            // Create the batchnorm operation.
+            std::vector<cudnn_frontend::Tensor> peer_stats;
+            for (auto const& peer_stat : options.inputs.peer_stats) {
+                peer_stats.emplace_back(std::move(*(tensors.at(peer_stat->get_uid()))));
+            }
+
             auto batchnorm_operation =
                 cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
                     .setNormalizationMode(NormMode_t::BATCH_NORM)
@@ -161,21 +176,26 @@ class BatchNormNode : public INode {
                     .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
                     .setExpDecayFactorTensor(*(tensors.at(options.inputs.MOMENTUM->get_uid())))
                     .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
+                    .setPeerStatTensor(peer_stats)
                     .build();
 
             // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {options.inputs.X,
-                                                         options.inputs.PREV_RUNNING_MEAN,
-                                                         options.inputs.PREV_RUNNING_VAR,
-                                                         options.inputs.EPSILON,
-                                                         options.inputs.MOMENTUM,
-                                                         options.inputs.SCALE,
-                                                         options.inputs.BIAS,
-                                                         options.outputs.Y,
-                                                         options.outputs.MEAN,
-                                                         options.outputs.INV_VARIANCE,
-                                                         options.outputs.NEXT_RUNNING_MEAN,
-                                                         options.outputs.NEXT_RUNNING_VAR};
+            std::vector<std::shared_ptr<Tensor_attributes>> tensors_involved_in_operation = {
+                options.inputs.X,
+                options.inputs.PREV_RUNNING_MEAN,
+                options.inputs.PREV_RUNNING_VAR,
+                options.inputs.EPSILON,
+                options.inputs.MOMENTUM,
+                options.inputs.SCALE,
+                options.inputs.BIAS,
+                options.outputs.Y,
+                options.outputs.MEAN,
+                options.outputs.INV_VARIANCE,
+                options.outputs.NEXT_RUNNING_MEAN,
+                options.outputs.NEXT_RUNNING_VAR};
+            for (auto const& peer_stat : options.inputs.peer_stats) {
+                tensors_involved_in_operation.push_back(peer_stat);
+            }
 
             std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {

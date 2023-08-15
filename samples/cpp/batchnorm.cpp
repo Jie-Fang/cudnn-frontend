@@ -132,6 +132,11 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
     auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
 
+    auto peer_stats_0 =
+        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_1 =
+        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+
     auto epsilon =
         graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
     auto momentum =
@@ -140,7 +145,8 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     auto batchnorm_options = fe::graph::Batchnorm_attributes()
                                  .set_forward_phase(fe::NormFwdPhase_t::TRAINING)
                                  .set_epsilon(epsilon)
-                                 .set_previous_running_stats(prev_running_mean, prev_running_var, momentum);
+                                 .set_previous_running_stats(prev_running_mean, prev_running_var, momentum)
+                                 .set_peer_stats({peer_stats_0, peer_stats_1});
     auto [bn_output, mean, inv_variance, next_running_mean, next_running_var] =
         graph.batchnorm(X, scale, bias, batchnorm_options);
     mean->set_output(true).set_data_type(fe::DataType_t::FLOAT);
@@ -190,6 +196,8 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
     float momentum_cpu = 1e-01f;
     Surface<half> A_tensor(4 * 32 * 16 * 16, false);
     Surface<half> Y_tensor(4 * 32 * 16 * 16, false);
+    Surface<float> Peer_stats_0_tensor(2 * 4 * 32, false, true);
+    Surface<float> Peer_stats_1_tensor(2 * 4 * 32, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
@@ -205,7 +213,9 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         {epsilon, &epsilon_cpu},
         {momentum, &momentum_cpu},
         {A, A_tensor.devPtr},
-        {Y, Y_tensor.devPtr}};
+        {Y, Y_tensor.devPtr},
+        {peer_stats_0, Peer_stats_0_tensor.devPtr},
+        {peer_stats_1, Peer_stats_1_tensor.devPtr}};
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     cudnnDestroy(handle);
