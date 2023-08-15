@@ -13,7 +13,7 @@ class PytorchReference:
     #   The only difference is that the input tensors are replaced by pytorch tensors
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
-    def conv(kwargs):
+    def conv_fprop(kwargs):
         return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
 
     # @brief: run relu
@@ -390,10 +390,6 @@ class test_graph:
             name = kwargs["name"]
         else:
             cudnn_opName = cudnn_op.__name__
-            if cudnn_op.__name__ == "conv_fprop":
-                cudnn_opName = "conv"
-            else:
-                cudnn_opName = cudnn_op.__name__
             name = self.create_unique_name(cudnn_opName)
 
         node = test_graph.create_operation(cudnn_op, name)
@@ -415,10 +411,6 @@ class test_graph:
     @staticmethod
     def create_operation(cudnn_op, name):
         cudnn_opName = cudnn_op.__name__
-        if cudnn_op.__name__ == "conv_fprop":
-            cudnn_opName = "conv"
-        else:
-            cudnn_opName = cudnn_op.__name__
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
         # TODO(@mbreughe): Add error handling code in case the function is not found

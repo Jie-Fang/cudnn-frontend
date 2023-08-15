@@ -36,7 +36,10 @@ class CMakeBuild(build_ext):
         ]
 
         if "CUDA_PATH" in os.environ:
-            cmake_args.append(f"-DCUDA_PATH={os.environ['CUDA_PATH']}")
+            cmake_args.append(f"-DCUDAToolkit_ROOT={os.environ['CUDA_PATH']}")
+
+        if "CUDAToolkit_ROOT" in os.environ:
+            cmake_args.append(f"-DCUDAToolkit_ROOT={os.environ['CUDAToolkit_ROOT']}")
 
         if "CUDNN_PATH" in os.environ:
             cmake_args.append(f"-DCUDNN_PATH={os.environ['CUDNN_PATH']}")
