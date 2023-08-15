@@ -99,7 +99,8 @@ class Legacy_operation:
             else:
                 self.operation_mapping = Legacy_operation.mapping[operation]
         except KeyError as orig_e:
-            e = ImplementationError("Operation:[{}]".format(operation))
+            print(orig_e.__str__())
+            e = ImplementationError("Operation:[{}]".format(str(orig_e)))
             raise e
 
         # keep track of the json node

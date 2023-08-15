@@ -9,11 +9,33 @@
                     "properties": {}
                 }
         },
+    "pointwise": 
+        {
+            "CUDNN_POINTWISE_ADD":
+                {
+                    "operation": "add",
+                    "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {}
+                }
+        },
     "conv":
         {
-            "operation": "conv",
+            "operation": "conv_fprop",
             "input": {"X": "image", "W": "weight"},
             "output": ["Y"],
+            "properties": {
+                "dilation": "dilation",
+                "pad": "padding",
+                "stride": "stride",
+                "name": "name"
+            }
+        },
+        "dgrad":
+        {
+            "operation": "conv_dgrad",
+            "input": {"W": "filter", "dY": "loss"},
+            "output": ["dX"],
             "properties": {
                 "dilation": "dilation",
                 "pad": "padding",

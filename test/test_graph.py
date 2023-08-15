@@ -46,6 +46,10 @@ class PytorchReference:
         output = torch.add(kwargs["input"], kwargs["bias"])
         return [output]
 
+    @staticmethod
+    def conv_dgrad(kwargs):
+        return [None, None]
+
 # Base class for Tensor and operation nodes
 class test_node:
     __test__ = False
@@ -327,6 +331,9 @@ class test_graph:
     # @brief: Add a convolution node to the graph
     def conv(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_fprop)
+
+    def conv_dgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_dgrad)
 
     # @brief: Add a relu to the graph
     def relu(self, **kwargs):
