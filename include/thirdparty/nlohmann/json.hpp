@@ -18115,7 +18115,10 @@ class serializer
                     return;
                 }
 
-                if (pretty_print)
+                // Custom from FE: Added to reduce line bloat when dumping dims and strides             
+                auto elementType = val.m_data.m_value.array->begin()->type();
+                if (pretty_print && (elementType != value_t::number_integer) && (elementType != value_t::number_unsigned))
+                // if (pretty_print)
                 {
                     o->write_characters("[\n", 2);
 
