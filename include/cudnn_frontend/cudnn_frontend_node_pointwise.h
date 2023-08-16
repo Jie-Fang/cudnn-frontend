@@ -137,6 +137,7 @@ class PointwiseNode : public INode {
 
             auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
                                             .setAxis(options.get_axis().value_or(-1))
+                                            .setReluLowerClipSlope(options.relu_lower_clip_slope.value_or(0.0))
                                             .setComputeType(options.get_compute_data_type())
                                             .setMode(options.mode)
                                             .build();
