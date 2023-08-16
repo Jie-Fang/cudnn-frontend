@@ -14,6 +14,7 @@
 #include "cudnn_frontend_node_pointwise.h"
 #include "cudnn_frontend_node_reduction.h"
 #include "cudnn_frontend_node_rng.h"
+#include "cudnn_frontend_node_reshape.h"
 #include "cudnn_frontend_node_scaled_dot_product_attention.h"
 #include "cudnn_frontend_node_scaled_dot_product_flash_attention.h"
 
@@ -284,6 +285,8 @@ class Graph : public INode {
                                                  std::shared_ptr<Tensor_attributes>,
                                                  std::shared_ptr<Tensor_attributes>,
                                                  Pointwise_attributes);
+
+    std::shared_ptr<Tensor_attributes> reduction(std::shared_ptr<Tensor_attributes>, Reduction_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_flash_attention(
         std::shared_ptr<Tensor_attributes>,
@@ -595,6 +598,18 @@ Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
     sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
 
     return OUT_0;
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes options) {
+    auto Y = options.outputs.Y = output_tensor(options.get_name() + "_output");
+
+    // Set inputs
+    options.inputs.X = input;
+
+    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(options), context));
+
+    return Y;
 }
 
 inline std::shared_ptr<Tensor_attributes>

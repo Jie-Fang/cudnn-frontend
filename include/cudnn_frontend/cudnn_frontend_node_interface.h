@@ -26,7 +26,7 @@ namespace graph {
 class INode : public ICudnn {
    public:
     // A closed set of types that are allowed to be passed by value today
-    using pass_by_values_t = std::variant<half, float>;
+    using pass_by_values_t = std::variant<half, float, float*>;
 
     detail::Context context;
 
@@ -94,6 +94,7 @@ class INode : public ICudnn {
         POINTWISE,
         REDUCTION,
         RESAMPLE,
+        RESHAPE,
         RNG,
         SCALED_DOT_PRODUCT_ATTENTION,
         WGRAD
@@ -239,6 +240,8 @@ class INode : public ICudnn {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), half_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), float_value_ptr);
+            } else if (float** float_value_ptr = std::get_if<float*>(&value)) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), *float_value_ptr);
             } else {
                 status.code    = error_code_t::INVALID_VARIANT_PACK;
                 status.err_msg = "[cudnn_frontend] ERROR: Unexpected type for pass by value tensor.";

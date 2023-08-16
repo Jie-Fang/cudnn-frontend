@@ -86,5 +86,9 @@ SpacesInSquareBrackets: false
 Standard:        Auto
 TabWidth:        4
 UseTab:          Never
+---
+Language: Json
+# Don't format .json files.
+DisableFormat: true
 ...
 

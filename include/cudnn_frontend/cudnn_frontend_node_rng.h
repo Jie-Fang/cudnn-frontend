@@ -54,6 +54,38 @@ class RngNode : public INode {
     }
 
     error_t
+    infer_properties_node() override final {
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for rng node " << options.name << "..."
+                    << std::endl;
+
+        auto y_tensor = options.outputs.Y;
+
+        options.fill_from_context(context);
+
+        // If user does not set shape and layout of the generated tensor,
+        // Get it from node attributes
+        // If layout is not set, generate the strides from layout
+
+        if (y_tensor->get_dim().empty() && options.get_dim().size()) {
+            y_tensor->set_dim(options.dim);
+        }
+
+        if (y_tensor->get_stride().empty()) {
+            if (options.get_stride().size()) {
+                y_tensor->set_stride(options.get_stride());
+            } else {
+                y_tensor->set_stride(detail::generate_stride(y_tensor->get_dim()));
+            }
+        }
+
+        if (y_tensor->get_dim().empty() || y_tensor->get_stride().empty()) {
+            return {error_code_t::SHAPE_DEDUCTION_FAILED, "RNG node output shape deduction failed"};
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     createOperations() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode operations " << options.name << "..." << std::endl;
