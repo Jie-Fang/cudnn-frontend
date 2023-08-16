@@ -159,6 +159,7 @@ class Operation {
         Pointwise,
         Reduction,
         Rng,
+        Reshape,
         Scaled_dot_product_attention,
         Scaled_dot_product_flash_attention,
         Softmax,
@@ -197,6 +198,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(Operation::Tag,
                                  {Operation::Tag::Pointwise, "Pointwise"},
                                  {Operation::Tag::Reduction, "Reduction"},
                                  {Operation::Tag::Rng, "Rng"},
+                                 {Operation::Tag::Reshape, "Reshape"},
                                  {Operation::Tag::Scaled_dot_product_attention, "Scaled_dot_product_attention"},
                                  {Operation::Tag::Scaled_dot_product_flash_attention,
                                   "Scaled_dot_product_flash_attention"},
@@ -800,6 +802,7 @@ class Batchnorm_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
         std::shared_ptr<Tensor_attributes> EPSILON;
         std::shared_ptr<Tensor_attributes> MOMENTUM;
+        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     } inputs;
 
     struct Outputs {
@@ -839,6 +842,12 @@ class Batchnorm_attributes : public Operation {
     Batchnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
+        return *this;
+    }
+
+    Batchnorm_attributes&
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
+        inputs.peer_stats = peer_stats;
         return *this;
     }
 
@@ -956,6 +965,8 @@ class Rng_attributes : public Operation {
     } outputs;
 
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
+    std::vector<int64_t> dim       = {};
+    std::vector<int64_t> stride    = {};
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
 
@@ -969,10 +980,34 @@ class Rng_attributes : public Operation {
                                    inputs,
                                    outputs,
                                    distribution,
+                                   dim,
+                                   stride,
                                    seed,
                                    bernoulli_probability)
 
     Rng_attributes() : Operation(Tag::Rng) {}
+
+    std::vector<int64_t>
+    get_dim() const {
+        return dim;
+    }
+
+    auto
+    set_dim(std::vector<int64_t> const& value) -> Rng_attributes& {
+        dim = value;
+        return *this;
+    }
+
+    std::vector<int64_t>
+    get_stride() const {
+        return stride;
+    }
+
+    auto
+    set_stride(std::vector<int64_t> const& value) -> Rng_attributes& {
+        stride = value;
+        return *this;
+    }
 
     RngDistribution_t
     get_distribution() const {
@@ -1024,6 +1059,74 @@ class Rng_attributes : public Operation {
         // Fill node's tensors
         if (inputs.Seed) inputs.Seed->fill_from_context(context);
         if (inputs.Offset) inputs.Offset->fill_from_context(context);
+        outputs.Y->fill_from_context(context);
+
+        // Fill this node
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Reshape_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+    } outputs;
+
+    std::vector<int64_t> dim    = {};
+    std::vector<int64_t> stride = {};
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, tag, inputs, outputs, dim, stride)
+
+    Reshape_attributes() : Operation(Tag::Reshape) {}
+
+    std::vector<int64_t>
+    get_dim() const {
+        return dim;
+    }
+
+    auto
+    set_dim(std::vector<int64_t> const& value) -> Reshape_attributes& {
+        dim = value;
+        return *this;
+    }
+
+    std::vector<int64_t>
+    get_stride() const {
+        return stride;
+    }
+
+    auto
+    set_stride(std::vector<int64_t> const& value) -> Reshape_attributes& {
+        stride = value;
+        return *this;
+    }
+
+    Reshape_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Reshape_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Reshape_attributes& {
+        inputs.X->fill_from_context(context);
         outputs.Y->fill_from_context(context);
 
         // Fill this node

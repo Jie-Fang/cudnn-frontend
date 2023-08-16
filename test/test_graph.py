@@ -13,7 +13,7 @@ class PytorchReference:
     #   The only difference is that the input tensors are replaced by pytorch tensors
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
-    def conv(kwargs):
+    def conv_fprop(kwargs):
         return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
 
     # @brief: run relu
@@ -35,6 +35,16 @@ class PytorchReference:
         # Filling out the others with an amount of None's and have the reference check deal with it
         output.extend([None]*4)
         return output
+
+    @staticmethod
+    def matmul(kwargs):
+        output = torch.bmm(kwargs['A'], kwargs['B'])
+        return [output]
+    
+    @staticmethod
+    def bias(kwargs):
+        output = torch.add(kwargs["input"], kwargs["bias"])
+        return [output]
 
 # Base class for Tensor and operation nodes
 class test_node:
@@ -244,10 +254,20 @@ class test_tensor:
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_data_type(data_type)
 
+    def set_stride(self, stride):
+        self.stride = stride
+
+        if self.cudnn_tensor is not None:
+            self.cudnn_tensor.set_stride(stride)
+
+    # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
         if "data_type" in dir(self):
             self.cudnn_tensor.set_data_type(self.data_type)
+
+        if "stride" in dir(self):
+            self.cudnn_tensor.set_stride(self.stride)
     
 
 def convert_to_cudnn_type(torch_type):
@@ -269,6 +289,22 @@ def convert_to_torch_type(cudnn_type):
         raise ValueError("Unsupported tensor data type.")
 
     return
+
+def is_column_major(cudnn_tensor):
+    strides = cudnn_tensor.get_stride()
+    assert len(strides) == 3
+    return strides[2] > strides[1]
+
+# @brief convert the strides of a torch_tensor to the ones of cudnn_tensor
+# @param torch_tensor: tensor created by torch
+# @param cudnn_tensor: tensor created by cudnn
+def convert_strides(torch_tensor, cudnn_tensor):
+    cudnn_stride = tuple(cudnn_tensor.get_stride())
+
+    # Ensure we setup the correct strides
+    torch_tensor = torch.as_strided(torch_tensor, torch_tensor.size(), tuple(cudnn_stride))
+
+    return torch_tensor
 
 # @brief: test_graph that mirrors cudnn.pygraph
 # @details: this contains functionality to run both cudnn code as well as a reference
@@ -298,6 +334,12 @@ class test_graph:
     
     def batchnorm(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.batchnorm)
+    
+    def matmul(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.matmul)
+    
+    def bias(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
 
     # @brief: Add an input tensor to the graph
     def tensor(self, **kwargs):
@@ -341,10 +383,6 @@ class test_graph:
             name = kwargs["name"]
         else:
             cudnn_opName = cudnn_op.__name__
-            if cudnn_op.__name__ == "conv_fprop":
-                cudnn_opName = "conv"
-            else:
-                cudnn_opName = cudnn_op.__name__
             name = self.create_unique_name(cudnn_opName)
 
         node = test_graph.create_operation(cudnn_op, name)
@@ -366,15 +404,12 @@ class test_graph:
     @staticmethod
     def create_operation(cudnn_op, name):
         cudnn_opName = cudnn_op.__name__
-        if cudnn_op.__name__ == "conv_fprop":
-            cudnn_opName = "conv"
-        else:
-            cudnn_opName = cudnn_op.__name__
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
         # TODO(@mbreughe): Add error handling code in case the function is not found
         ref_func = getattr(PytorchReference, cudnn_opName)
 
+        # TODO(@mbreughe): automate this
         num_outputs = 1
         if cudnn_opName == "batchnorm":
             num_outputs = 5
@@ -459,6 +494,8 @@ class test_graph:
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the is_visited status of the nodes
     # TODO(@mbreughe): to preserve resources, we could consider clearing intermediate results when they are no longer needed
+    # @pre: build_cudnn_graph may need to be invoked first because of its call to apply_modifiers_to_node_output_tensors, which may modify tensor layouts,
+    # but also because it sets output nodes
     def calc_reference(self):
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()
@@ -487,8 +524,10 @@ class test_graph:
         for node in self.nodes:
             if node.is_output_node():
                 for output in node.output:
-                    # TODO(@mbreughe): infer layout
-                    output_tensor = torch.zeros(*output.cudnn_tensor.get_dim(), dtype=convert_to_torch_type(output.cudnn_tensor.get_data_type()), device='cuda', layout=torch.strided).to(memory_format=torch.channels_last)
+                    output_tensor = torch.zeros(*output.cudnn_tensor.get_dim(), dtype=convert_to_torch_type(output.cudnn_tensor.get_data_type()), device='cuda')
+
+                    output_tensor = convert_strides(output_tensor, output.cudnn_tensor)
+
                     self.output_tensors.append(output_tensor)
                     variant_pack[output.cudnn_tensor] = self.output_tensors[-1]
 
@@ -496,7 +535,7 @@ class test_graph:
     
     # @brief: Run the cudnn implementation and the reference, and compare
     # @note: This assumes build_cudnn_graph has already been run
-    # @pre: build_cudnn_graph needs to be invoked first
+    # @pre: build_cudnn_graph needs to be called first
     def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
         workspace, variant_pack = self.create_workspace_and_variantpack()
 

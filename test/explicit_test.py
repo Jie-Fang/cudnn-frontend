@@ -117,7 +117,7 @@ def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
 
     torch.testing.assert_close(output, pyt_out, atol=0.001, rtol=0.001)
 
-@pytest.mark.skip(reason="https://nvbugs/4190558")
+#@pytest.mark.skip(reason="https://nvbugs/4190558")
 @pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [
     ([1, 16, 16, 16], [1,16,16,]),
 #,([16, 32, 64, 128], [16,32,64,]) # fails
@@ -143,6 +143,7 @@ def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
     gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight)
 
     gemm_output.set_is_virtual(True)
+    gemm_output.set_stride([M*N, N, 1])
 
     activation_output = cudnn_graph.relu(name = "relu", input = gemm_output)
     activation_output.set_output(True)
@@ -162,8 +163,7 @@ def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
     cudnn_graph.execute(variant_pack, workspace)
 
 
-    pyt_out = torch.transpose(torch.bmm(x, w), 1, 2)
-    pyt_out = torch.add(pyt_out, b)
+    pyt_out = torch.bmm(x, w)
     pyt_out = torch.nn.functional.relu(pyt_out)
 
     torch.testing.assert_close(output, pyt_out)
