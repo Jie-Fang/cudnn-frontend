@@ -738,6 +738,7 @@ class Pointwise_attributes : public Operation {
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
+    std::optional<float> relu_lower_clip_slope;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, IN_0, IN_1, IN_2)
 
@@ -761,6 +762,12 @@ class Pointwise_attributes : public Operation {
     Pointwise_attributes&
     set_axis(int64_t const axis) {
         this->axis = axis;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_relu_lower_clip_slope(float const negative_slope) {
+        this->relu_lower_clip_slope = negative_slope;
         return *this;
     }
 
