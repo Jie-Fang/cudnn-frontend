@@ -51,8 +51,6 @@ class Plans {
     }
 
     int64_t
-    get_workspace_size();
-    int64_t
     get_max_workspace_size();
 
     static error_t
@@ -190,11 +188,6 @@ Plans::build_all_plans(cudnnHandle_t h) {
 inline int64_t
 Plans::get_max_workspace_size() {
     return list_of_engine_configs.get_max_workspace_size();
-}
-
-inline int64_t
-Plans::get_workspace_size() {
-    return list_of_engine_configs.get_workspace_size();
 }
 
 class Graph : public INode {
