@@ -18,7 +18,41 @@ def read_json_test_dict(fname):
         json_tests = json.load(ifh)
     return json_tests
 
+# @raises ImplementationError
+# TODO: formatX -> formatAll
+# TODO: dimOut -> ???
+# TODO: dimX --> list(eval(s))
+def replace_single_param(json_test_def, abstract_params):
+    if "<" in json_test_def and ">" in json_test_def:
+        abstract_param = json_test_def.strip("<>")
+        print("Replacing", abstract_param)
+
+        if abstract_param in abstract_params:
+            return abstract_params[abstract_param]
+        elif abstract_param == "formatIn" or abstract_param == "filtFormat":
+            return replace_single_param(abstract_params, "formatAll")
+        elif "dimOut":
+            return 3
+        else:
+            raise ImplementationError("CLI parameter {} not provided".format(abstract_param))
+    else:
+        return json_test_def
+
+# @raises ImplementationError
 def replace_abstract_test_params(json_test_def, abstract_params):
+    if isinstance(json_test_def, dict):
+        for key in json_test_def.keys():
+            if not isinstance(json_test_def[key], dict) and not isinstance(json_test_def[key], list):
+                json_test_def[key] = replace_single_param(json_test_def[key], abstract_params)
+            else:
+                replace_abstract_test_params(json_test_def[key], abstract_params)
+    elif isinstance(json_test_def, list):
+        for item in json_test_def:
+            if not isinstance(item, dict) and not isinstance(item, list):
+                item = replace_single_param(item, abstract_params)
+            else:
+                replace_abstract_test_params(item, abstract_params)
+            
     return json_test_def
 
 def run_test_from_legacy_args(json_fname, args):
@@ -42,7 +76,9 @@ def run_test_from_legacy_args(json_fname, args):
     assert json_test_name in json_tests
     abstract_test_dict = json_tests[json_test_name]
     try:
+        print (abstract_test_dict)
         concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
+        print (abstract_test_dict)
         run_test_from_json_definition(concrete_test_dict)
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)

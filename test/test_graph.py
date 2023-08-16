@@ -45,6 +45,11 @@ class PytorchReference:
     def bias(kwargs):
         output = torch.add(kwargs["input"], kwargs["bias"])
         return [output]
+    
+    @staticmethod
+    def add(kwargs):
+        output = torch.add(kwargs["a"], kwargs["b"])
+        return [output]
 
     @staticmethod
     def conv_dgrad(kwargs):
