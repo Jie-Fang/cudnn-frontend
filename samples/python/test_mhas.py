@@ -128,13 +128,14 @@ def get_slopes(n_heads: int):
     return m
 
 alibi_mask_options = [True, False]
+padding_mask_options = [True, False]
 causal_mask_options = [True, False]
 layout_options      = ["bs3hd", "sbh3d"]
 dropout             = [True, False]
 is_infer            = [True, False]
 bias                = [True, False]
 
-all_options = [elem for elem in itertools.product(*[alibi_mask_options, causal_mask_options, layout_options, dropout, is_infer, bias])]
+all_options = [elem for elem in itertools.product(*[alibi_mask_options, padding_mask_options, causal_mask_options, layout_options, dropout, is_infer, bias])]
 
 @pytest.fixture(params=all_options)
 def param_extract(request):
@@ -143,10 +144,13 @@ def param_extract(request):
 @pytest.mark.skipif(cudnn.get_cudnn_version() < 8903, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_flash_attention(param_extract):
 
-    alibi_mask, causal_mask, layout, dropout_enable, infer_mode, bias_enable = param_extract
+    alibi_mask, padding_mask, causal_mask, layout, dropout_enable, infer_mode, bias_enable = param_extract
     
     if alibi_mask and cudnn.get_cudnn_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
+        
+    if padding_mask and cudnn.get_cudnn_version() < 8904:
+        pytest.skip("Padding mask is only supported 8.9.4 onwards.")
 
     s_q_choices = [256, 512, 1024, 2048] 
     d_choices   = [64,128]
@@ -218,6 +222,9 @@ def test_scale_dot_product_flash_attention(param_extract):
     Q_gpu = torch.as_strided(qkv_gpu, shape_Q, stride_Q, storage_offset=offset_Q)
     K_gpu = torch.as_strided(qkv_gpu, shape_K, stride_K, storage_offset=offset_K)
     V_gpu = torch.as_strided(qkv_gpu, shape_V, stride_V, storage_offset=offset_V)
+    
+    seq_len_Q_gpu = torch.full((b,1,1,1), s_q, dtype=torch.int32, device="cuda")
+    seq_len_K_gpu = torch.full((b,1,1,1), s_kv, dtype=torch.int32, device="cuda")
 
     Attn_scale_cpu = torch.full((1,1,1,1), attn_scale, dtype=torch.float32, device="cpu")
 
@@ -249,6 +256,8 @@ def test_scale_dot_product_flash_attention(param_extract):
     Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
     K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
+    seq_len_Q = graph.tensor(name = "seq_len_Q", dim = seq_len_Q_gpu.size(), stride = seq_len_Q_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_Q_gpu.dtype))
+    seq_len_K = graph.tensor(name = "seq_len_K", dim = seq_len_K_gpu.size(), stride = seq_len_K_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_K_gpu.dtype))
     Bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(),data_type = convert_to_cudnn_type(Q_gpu.dtype))
     Attn_scale = graph.tensor(name = "Attn_scale", dim = Attn_scale_cpu.size(), stride = Attn_scale_cpu.stride(), data_type = convert_to_cudnn_type(Attn_scale_cpu.dtype), is_pass_by_value = True)
     Seed = graph.tensor(name = "Seed", dim = Seed_gpu.size(), stride = Seed_gpu.stride(), data_type = convert_to_cudnn_type(Seed_gpu.dtype))
@@ -261,20 +270,24 @@ def test_scale_dot_product_flash_attention(param_extract):
     if bias_enable:
         O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                                 , q = Q, k = K, v = V
+                                                , seq_len_q = seq_len_Q, seq_len_k = seq_len_K
                                                 , is_inference = infer_mode
                                                 , bias = Bias
                                                 , dropout = dropout_tuple       
                                                 , attn_scale = Attn_scale
                                                 , use_alibi_mask = alibi_mask
+                                                , use_padding_mask = padding_mask
                                                 , use_causal_mask = causal_mask
                                                 )
     else:        
         O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                     , q = Q, k = K, v = V
+                                    , seq_len_q = seq_len_Q, seq_len_k = seq_len_K
                                     , is_inference = infer_mode
                                     , dropout = dropout_tuple
                                     , attn_scale = Attn_scale
                                     , use_alibi_mask = alibi_mask
+                                    , use_padding_mask = padding_mask
                                     , use_causal_mask = causal_mask
                                     )
 
@@ -292,7 +305,9 @@ def test_scale_dot_product_flash_attention(param_extract):
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     print("Executing the cudnn graph execute")
-    graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, Seed: Seed_gpu, Offset: Offset_gpu
+    graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu
+                   , seq_len_Q: seq_len_Q_gpu, seq_len_K: seq_len_K_gpu
+                   , Seed: Seed_gpu, Offset: Offset_gpu
                    , Attn_scale: Attn_scale_cpu, Bias: bias_gpu
                    , O: O_actual, Stats: Stats_actual}
                    , workspace)
@@ -319,6 +334,9 @@ def test_scale_dot_product_flash_attention(param_extract):
     if alibi_mask is True:
         apply_alibi_mask = ((torch.arange(s_kv, dtype=torch.float32)) - torch.arange(s_q, dtype=torch.float32).view(-1, 1)) * get_slopes(h)
         after_scale_S_cpu = after_scale_S_cpu + apply_alibi_mask
+
+    if padding_mask is True:
+        pass
 
     if causal_mask is True:
         causal_mask_cpu = torch.triu(torch.ones(s_q, s_q, dtype=torch.bool, device='cpu'), 1)
