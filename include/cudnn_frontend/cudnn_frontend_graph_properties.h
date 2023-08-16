@@ -448,6 +448,7 @@ class batchnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> MEAN;
         std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> EPSILON;
+        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     } inputs;
 
     struct Outputs {
@@ -475,6 +476,12 @@ class batchnorm_backward_attributes : public Operation {
     batchnorm_backward_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
+        return *this;
+    }
+
+    batchnorm_backward_attributes&
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
+        inputs.peer_stats = peer_stats;
         return *this;
     }
 
