@@ -329,7 +329,8 @@ class ScaledDotProductAttentionNode : public INode {
 
     virtual error_t
     pass_by_value_tensors_(
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
+        [[maybe_unused]] void* node_workspace) override {
         half dropout_scale_value = options.dropout_scale;
         tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
 

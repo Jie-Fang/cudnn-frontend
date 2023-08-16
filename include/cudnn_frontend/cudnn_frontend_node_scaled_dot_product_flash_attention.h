@@ -356,9 +356,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
         return {error_code_t::OK, ""};
     }
 
+    virtual int64_t
+    get_fe_workspace_size_node() const override final {
+        int64_t const h = options.inputs.Q->get_dim()[1];
+        return h * sizeof(float);
+    }
+
     virtual error_t
     pass_by_value_tensors_(
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
+        void* node_workspace) override {
         if (options.dropout_probability.has_value()) {
 #if CUDNN_VERSION < 8903
             half dropout_scale_value = (1.f / (options.dropout_probability.value()));
@@ -377,10 +384,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             int64_t const h            = options.inputs.Q->get_dim()[1];
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
 
-            float* d_alibi_slopes_vector;
-            cudaMalloc((void**)&d_alibi_slopes_vector, h * sizeof(float));
-            cudaMemcpy(d_alibi_slopes_vector, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice);
-            tensor_to_pass_by_value.emplace(alibi_slopes, d_alibi_slopes_vector);
+            cudaMemcpy(node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice);
+            tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
         }
 
         return {error_code_t::OK, ""};
