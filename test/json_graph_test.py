@@ -19,24 +19,47 @@ def read_json_test_dict(fname):
     return json_tests
 
 # @raises ImplementationError
-# TODO: formatX -> formatAll
-# TODO: dimOut -> ???
-# TODO: dimX --> list(eval(s))
+# TODO: keep track of which parameters were actually used (i.e., was as cli parameter specified that was never used? E.g., filtC)
 def replace_single_param(json_test_def, abstract_params):
-    if "<" in json_test_def and ">" in json_test_def:
+    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w"]
+    FORMAT_ALL = "formatALL"
+    INT_LISTS = ["dimOut", "dimA", "filtA", "convStrideA", "dilationA", "padA"]
+    catch_all = {"formatIn": FORMAT_ALL, "filtFormat": FORMAT_ALL, "formatOut": FORMAT_ALL}
+    defaults = {"groupCount": 1}
+    if isinstance(json_test_def, str) and "<" in json_test_def and ">" in json_test_def:
         abstract_param = json_test_def.strip("<>")
+        concrete_param = None
         print("Replacing", abstract_param)
 
-        if abstract_param in abstract_params:
-            return abstract_params[abstract_param]
-        elif abstract_param == "formatIn" or abstract_param == "filtFormat":
-            return replace_single_param(abstract_params, "formatAll")
-        elif "dimOut":
-            return 3
+        # Some parameters can be skipped in the first pass of parameter replacement (e.g., dimOut as it will be derived later)
+        if abstract_param in SKIPABLE:
+            return json_test_def
+        # Most common case: replace a parameter with what we found on the command line
+        elif abstract_param in abstract_params:
+            concrete_param = abstract_params[abstract_param]
+        # Some parameters have a catch-all instead (e.g., formatIn is specified by formatAll)
+        elif abstract_param in catch_all:
+            concrete_param = replace_single_param(abstract_params, catch_all[abstract_param])
+        # Some parameters have default values if unspecified
+        elif abstract_param in defaults:
+            concrete_param = defaults[abstract_param]
+        # Some parameters are booleans that are set on the command line, or have default value otherwise
+        elif abstract_param == "convMode":
+            if 'x' in abstract_params:
+                concrete_param = "CUDNN_CROSS_CORRELATION"
+            else:
+                concrete_param = "CUDNN_CONVOLUTION"
         else:
             raise ImplementationError("CLI parameter {} not provided".format(abstract_param))
-    else:
-        return json_test_def
+        
+        # Now that we have found the concrete parameter, we may need to do some post processing
+        if abstract_param in INT_LISTS:
+            return list(eval(concrete_param))
+        else:
+            return concrete_param
+
+    # If this wasn't an abstract parameter, just return it
+    return json_test_def
 
 # @raises ImplementationError
 def replace_abstract_test_params(json_test_def, abstract_params):
