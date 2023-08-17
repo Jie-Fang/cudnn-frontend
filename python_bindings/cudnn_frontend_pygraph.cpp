@@ -316,11 +316,13 @@ class PyGraph {
     // does not own them and will not increse ref count.
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     relu(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+         float const negative_slope,
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name) {
         auto attributes = cudnn_frontend::graph::Pointwise_attributes()
                               .set_compute_data_type(compute_data_type)
                               .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
+                              .set_relu_lower_clip_slope(negative_slope)
                               .set_name(name);
 
         auto OUT_0 = graph.pointwise(input, attributes);
@@ -332,14 +334,7 @@ class PyGraph {
                float const negative_slope,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name) {
-        auto attributes = cudnn_frontend::graph::Pointwise_attributes()
-                              .set_compute_data_type(compute_data_type)
-                              .set_mode(cudnn_frontend::PointwiseMode_t::RELU_FWD)
-                              .set_relu_lower_clip_slope(negative_slope)
-                              .set_name(name);
-
-        auto OUT_0 = graph.pointwise(input, attributes);
-        return OUT_0;
+        return relu(input, negative_slope, compute_data_type, name);
     }
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2UL>
@@ -801,6 +796,7 @@ init_pygraph_submodule(py::module_& m) {
         .def("relu",
              &PyGraph::relu,
              py::arg("input"),
+             py::arg_v("negative_slope", 0.0),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""),
              R"pbdoc(
@@ -808,6 +804,7 @@ init_pygraph_submodule(py::module_& m) {
 
                 Args:
                     input (cudnn_tensor): The input tensor.
+                    negative_slope (Optional[float]): The slope of the activation for negative inputs.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
 
