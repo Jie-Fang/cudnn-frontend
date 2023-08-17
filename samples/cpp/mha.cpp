@@ -89,7 +89,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
 // Optional bias in flash attention is only supported 8.9.3 onwards
 #if (CUDNN_VERSION >= 8904)
-    scaled_dot_product_flash_attention_options.set_bias(bias).set_alibi_mask(true);
+    scaled_dot_product_flash_attention_options.set_alibi_mask(true);
 #endif
 
 #if (CUDNN_VERSION >= 8903)

@@ -60,6 +60,21 @@ class ScaledDotProductFlashAttentionNode : public INode {
             return {status, message};
         }
 
+        if (options.padding_mask && (!(options.inputs.SEQ_LEN_Q) || !(options.inputs.SEQ_LEN_KV))) {
+            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: Padding mask requires seq_len_q and seq_len_kv to be set.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
+        if ((!options.padding_mask) && (options.inputs.SEQ_LEN_Q || options.inputs.SEQ_LEN_KV)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message =
+                "[cudnn_frontend] ERROR: seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
         return {error_code_t::OK, ""};
     }
 
