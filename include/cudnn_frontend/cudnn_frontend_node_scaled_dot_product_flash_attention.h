@@ -98,7 +98,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         bmm1_attributes.inputs.A          = options.inputs.Q;
         bmm1_attributes.inputs.B          = options.inputs.K;
         bmm1_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        bmm1_attributes.inputs.N_override = options.inputs.SEQ_LEN_K;
+        bmm1_attributes.inputs.N_override = options.inputs.SEQ_LEN_KV;
         last_output = bmm1_attributes.outputs.C = bmm1_output;
         auto bmm1_node                          = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
         sub_nodes.emplace_back(std::move(bmm1_node));
@@ -259,7 +259,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_mode(PointwiseMode_t::CMP_LT)
                 .set_compute_data_type(DataType_t::INT32);
             col_less_seq_kv_attributes.inputs.IN_0   = col_index_output;
-            col_less_seq_kv_attributes.inputs.IN_1   = options.inputs.SEQ_LEN_K;
+            col_less_seq_kv_attributes.inputs.IN_1   = options.inputs.SEQ_LEN_KV;
             col_less_seq_kv_attributes.outputs.OUT_0 = col_less_seq_kv_output;
             auto col_less_seq_kv_node = std::make_unique<PointwiseNode>(std::move(col_less_seq_kv_attributes), context);
             sub_nodes.emplace_back(std::move(col_less_seq_kv_node));
@@ -445,7 +445,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         bmm2_attributes.inputs.B          = options.inputs.V;
         bmm2_attributes.outputs.C         = options.outputs.O;
         bmm2_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        bmm2_attributes.inputs.K_override = options.inputs.SEQ_LEN_K;
+        bmm2_attributes.inputs.K_override = options.inputs.SEQ_LEN_KV;
         auto bmm2_node                    = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
         sub_nodes.emplace_back(std::move(bmm2_node));
 

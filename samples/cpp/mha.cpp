@@ -104,7 +104,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         .set_alibi_mask(true)
         .set_padding_mask(true)
         .set_seq_len_q(seq_q)
-        .set_seq_len_k(seq_kv);
+        .set_seq_len_kv(seq_kv);
 #elif (CUDNN_VERSION >= 8903)
     scaled_dot_product_flash_attention_options.set_bias(bias);
 #endif

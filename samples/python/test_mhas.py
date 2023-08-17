@@ -224,7 +224,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     V_gpu = torch.as_strided(qkv_gpu, shape_V, stride_V, storage_offset=offset_V)
     
     seq_len_Q_gpu = torch.full((b,1,1,1), s_q, dtype=torch.int32, device="cuda")
-    seq_len_K_gpu = torch.full((b,1,1,1), s_kv, dtype=torch.int32, device="cuda")
+    seq_len_KV_gpu = torch.full((b,1,1,1), s_kv, dtype=torch.int32, device="cuda")
 
     Attn_scale_cpu = torch.full((1,1,1,1), attn_scale, dtype=torch.float32, device="cpu")
 
@@ -257,7 +257,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
     seq_len_Q = graph.tensor(name = "seq_len_Q", dim = seq_len_Q_gpu.size(), stride = seq_len_Q_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_Q_gpu.dtype))
-    seq_len_K = graph.tensor(name = "seq_len_K", dim = seq_len_K_gpu.size(), stride = seq_len_K_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_K_gpu.dtype))
+    seq_len_KV = graph.tensor(name = "seq_len_KV", dim = seq_len_KV_gpu.size(), stride = seq_len_KV_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_KV_gpu.dtype))
     Bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(),data_type = convert_to_cudnn_type(Q_gpu.dtype))
     Attn_scale = graph.tensor(name = "Attn_scale", dim = Attn_scale_cpu.size(), stride = Attn_scale_cpu.stride(), data_type = convert_to_cudnn_type(Attn_scale_cpu.dtype), is_pass_by_value = True)
     Seed = graph.tensor(name = "Seed", dim = Seed_gpu.size(), stride = Seed_gpu.stride(), data_type = convert_to_cudnn_type(Seed_gpu.dtype))
@@ -270,7 +270,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     if bias_enable:
         O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                                 , q = Q, k = K, v = V
-                                                , seq_len_q = seq_len_Q, seq_len_k = seq_len_K
+                                                , seq_len_q = seq_len_Q, seq_len_kv = seq_len_KV
                                                 , is_inference = infer_mode
                                                 , bias = Bias
                                                 , dropout = dropout_tuple       
@@ -282,7 +282,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     else:        
         O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                     , q = Q, k = K, v = V
-                                    , seq_len_q = seq_len_Q, seq_len_k = seq_len_K
+                                    , seq_len_q = seq_len_Q, seq_len_kv = seq_len_KV
                                     , is_inference = infer_mode
                                     , dropout = dropout_tuple
                                     , attn_scale = Attn_scale
@@ -306,7 +306,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     print("Executing the cudnn graph execute")
     graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu
-                   , seq_len_Q: seq_len_Q_gpu, seq_len_K: seq_len_K_gpu
+                   , seq_len_Q: seq_len_Q_gpu, seq_len_KV: seq_len_KV_gpu
                    , Seed: Seed_gpu, Offset: Offset_gpu
                    , Attn_scale: Attn_scale_cpu, Bias: bias_gpu
                    , O: O_actual, Stats: Stats_actual}
