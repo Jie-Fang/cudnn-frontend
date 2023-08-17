@@ -124,7 +124,41 @@ def test_conv3d_bias_leaky_relu():
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
 
+def test_leaky_relu_backward():
+    N, C, H, W = 4, 16, 56, 56
+    negative_slope = 0.01
+    
+    # Reference code
+    loss_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    input_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+
+    @torch.jit.script
+    def dleaky_relu(grad: torch.Tensor, mask: torch.Tensor, negative_slope: float):
+        return torch.ones_like(grad).masked_fill_(mask < 0.0, negative_slope) * grad
+        
+    Y_expected = dleaky_relu(loss_gpu, input_gpu, negative_slope)
+    
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
+
+    loss = graph.tensor(name = "loss", dim = loss_gpu.size(), stride = loss_gpu.stride(), data_type = convert_to_cudnn_type(loss_gpu.dtype))
+    input = graph.tensor(name = "input", dim = input_gpu.size(), stride = input_gpu.stride(), data_type = convert_to_cudnn_type(input_gpu.dtype))
+
+    Y = graph.leaky_relu_backward(loss = loss, input = input, negative_slope = negative_slope)
+    Y.set_output(True)
+    
+    graph.check_support()
+
+    graph.build()
+
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+
+    Y_actual = torch.zeros_like(Y_expected)
+    graph.execute({loss: loss_gpu, input: input_gpu, Y: Y_actual}, workspace)
+
+    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-4, rtol=1e-4)
+
 if __name__ == "__main__":
     test_conv_relu()
     test_conv_bias_relu()
     test_conv3d_bias_leaky_relu()
+    test_leaky_relu_backward()
