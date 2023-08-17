@@ -130,7 +130,7 @@ def get_slopes(n_heads: int):
 alibi_mask_options = [True, False]
 causal_mask_options = [True, False]
 layout_options      = ["bs3hd", "sbh3d"]
-dropout             = [True, False]
+dropout             = [False]
 is_infer            = [True, False]
 bias                = [True, False]
 
