@@ -10,6 +10,9 @@ namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace cudnn_frontend;
 
+namespace cudnn_frontend {
+namespace python_bindings {
+
 // pybinds for pygraph class
 void
 init_pygraph_submodule(py::module_ &);
@@ -57,4 +60,7 @@ PYBIND11_MODULE(cudnn, m) {
 
     init_pygraph_submodule(m);
     init_properties(m);
+}
+
+}
 }

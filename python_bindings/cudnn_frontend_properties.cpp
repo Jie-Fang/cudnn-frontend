@@ -9,6 +9,10 @@
 namespace py = pybind11;
 using namespace pybind11::literals;
 
+namespace cudnn_frontend {
+
+namespace python_bindings {
+
 void
 init_properties(py::module_& m) {
     py::class_<cudnn_frontend::graph::Tensor_attributes, std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(
@@ -41,4 +45,8 @@ init_properties(py::module_& m) {
             out << json{props};
             return out.str();
         });
+
+}
+
+}
 }

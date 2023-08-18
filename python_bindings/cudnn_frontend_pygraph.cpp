@@ -16,6 +16,10 @@
 namespace py = pybind11;
 using namespace pybind11::literals;
 
+namespace cudnn_frontend {
+
+namespace python_bindings {
+
 // Raise C++ exceptions corresponding to C++ FE error codes.
 // Pybinds will automatically convert C++ exceptions to pythpn exceptions.
 void
@@ -1689,4 +1693,8 @@ init_pygraph_submodule(py::module_& m) {
             Returns:
                 cudnn_tensor: The result of the comparison.
         )pbdoc");
+}
+
+}
+
 }
