@@ -26,8 +26,10 @@ def test_conv_bias_relu():
     dilation = [1,1]
     model = CSBR().eval().to("cuda").to(torch.float16)
     Y_expected = model(X_gpu, W_gpu, b = B_gpu, padding = padding, stride = stride, dilation = dilation)
+    
+    handle = cudnn.create_handle()
 
-    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT, handle = handle)
 
     X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
@@ -50,6 +52,8 @@ def test_conv_bias_relu():
     graph.execute({X: X_gpu, W: W_gpu, B: B_gpu, Y: Y_actual}, workspace)
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
+    
+    cudnn.destroy_handle(handle)
     
 def test_conv_relu():
     # Reference code
