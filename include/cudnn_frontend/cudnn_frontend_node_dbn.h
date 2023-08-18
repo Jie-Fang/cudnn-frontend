@@ -88,6 +88,12 @@ class DBNNode : public INode {
         infer_per_channel_tensors(options.outputs.DSCALE);
         infer_per_channel_tensors(options.outputs.DBIAS);
 
+        for (auto const& peer_stat : options.inputs.peer_stats) {
+            if (peer_stat->get_stride().empty()) {
+                peer_stat->set_stride(detail::generate_stride(peer_stat->get_dim()));
+            }
+        }
+
         return {error_code_t::OK, ""};
     }
 
@@ -102,6 +108,9 @@ class DBNNode : public INode {
         options.outputs.DX->set_uid(ICudnn::create_new_uid());
         options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
         options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
+        for (auto const& peer_stat : options.inputs.peer_stats) {
+            peer_stat->set_uid(ICudnn::create_new_uid());
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -119,6 +128,9 @@ class DBNNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
+        for (auto const& peer_stat : options.inputs.peer_stats) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(peer_stat));
+        }
 
         return {error_code_t::OK, ""};
     }
@@ -132,6 +144,11 @@ class DBNNode : public INode {
         try {
 #endif
 
+            std::vector<cudnn_frontend::Tensor> peer_stats;
+            for (auto const& peer_stat : options.inputs.peer_stats) {
+                peer_stats.emplace_back(std::move(*(tensors.at(peer_stat->get_uid()))));
+            }
+
             // Create the DBN operation.
             auto DBN_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
                                      .setNormalizationMode(NormMode_t::BATCH_NORM)
@@ -144,19 +161,24 @@ class DBNNode : public INode {
                                                         *(tensors.at(options.outputs.DBIAS->get_uid())))
                                      // .setEpsilonTensor(*(tensors.at(epsilon->get_uid())))
                                      .setdxDesc(*(tensors.at(options.outputs.DX->get_uid())))
+                                     .setPeerStatTensor(peer_stats)
                                      .build();
 
             // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {options.inputs.X,
-                                                         options.inputs.DY,
-                                                         options.inputs.SCALE,
-                                                         options.inputs.MEAN,
-                                                         options.inputs.INV_VARIANCE
-                                                         // , epsilon
-                                                         ,
-                                                         options.outputs.DX,
-                                                         options.outputs.DSCALE,
-                                                         options.outputs.DBIAS};
+            std::vector<std::shared_ptr<Tensor_attributes>> tensors_involved_in_operation = {options.inputs.X,
+                                                                                             options.inputs.DY,
+                                                                                             options.inputs.SCALE,
+                                                                                             options.inputs.MEAN,
+                                                                                             options.inputs.INV_VARIANCE
+                                                                                             // , epsilon
+                                                                                             ,
+                                                                                             options.outputs.DX,
+                                                                                             options.outputs.DSCALE,
+                                                                                             options.outputs.DBIAS};
+
+            for (auto const& peer_stat : options.inputs.peer_stats) {
+                tensors_involved_in_operation.push_back(peer_stat);
+            }
 
             std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {

@@ -259,7 +259,14 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto inv_variance =
         graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
-    auto DBN_options = fe::graph::batchnorm_backward_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto peer_stats_0 =
+        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_1 =
+        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+
+    auto DBN_options = fe::graph::batchnorm_backward_attributes()
+                           .set_saved_mean_and_inv_variance(mean, inv_variance)
+                           .set_peer_stats({peer_stats_0, peer_stats_1});
     auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, X, scale, DBN_options);
     DX->set_output(true);
     dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
@@ -293,6 +300,8 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     Surface<float> Dscale_tensor(32, false);
     Surface<float> Dbias_tensor(32, false);
     Surface<half> DX_tensor(4 * 32 * 16 * 16, false);
+    Surface<float> Peer_stats_0_tensor(2 * 4 * 32, false, true);
+    Surface<float> Peer_stats_1_tensor(2 * 4 * 32, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
@@ -305,7 +314,9 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
         {scale, Scale_tensor.devPtr},
         {dscale, Dscale_tensor.devPtr},
         {dbias, Dbias_tensor.devPtr},
-        {DX, DX_tensor.devPtr}};
+        {DX, DX_tensor.devPtr},
+        {peer_stats_0, Peer_stats_0_tensor.devPtr},
+        {peer_stats_1, Peer_stats_1_tensor.devPtr}};
 
     // If is_dx_drelu_virtual, DADD output required
     Surface<half> DADD_tensor(4 * 32 * 16 * 16, false);

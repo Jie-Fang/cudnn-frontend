@@ -189,10 +189,12 @@ class PyGraph {
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
+                       std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>& peer_stats,
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name) {
         auto attributes = cudnn_frontend::graph::batchnorm_backward_attributes()
                               .set_saved_mean_and_inv_variance(mean, inv_variance)
+                              .set_peer_stats(peer_stats)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
 
@@ -555,6 +557,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("scale"),
              py::arg("mean"),
              py::arg("inv_variance"),
+             py::arg_v("peer_stats", std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>()),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
         .def("genstats",
