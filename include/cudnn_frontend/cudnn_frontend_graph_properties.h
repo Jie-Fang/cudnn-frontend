@@ -148,6 +148,7 @@ class Operation {
    public:
     enum class Tag {
         BN,
+        BN_inference,
         BN_finalize,
         Conv_fprop,
         Conv_dgrad,
@@ -187,6 +188,7 @@ class Operation {
 NLOHMANN_JSON_SERIALIZE_ENUM(Operation::Tag,
                              {
                                  {Operation::Tag::BN, "BN"},
+                                 {Operation::Tag::BN_inference, "BN_inference"},
                                  {Operation::Tag::BN_finalize, "BN_finalize"},
                                  {Operation::Tag::Conv_fprop, "Conv_fprop"},
                                  {Operation::Tag::Conv_dgrad, "Conv_dgrad"},
@@ -902,6 +904,58 @@ class Batchnorm_attributes : public Operation {
         outputs.INV_VARIANCE->fill_from_context(context);
         outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
         outputs.NEXT_RUNNING_VAR->fill_from_context(context);
+
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Batchnorm_inference_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+    } outputs;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, BIAS)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, tag, inputs, outputs)
+
+    Batchnorm_inference_attributes() : Operation(Tag::BN_inference) {}
+
+    Batchnorm_inference_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Batchnorm_inference_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Batchnorm_inference_attributes& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.MEAN->fill_from_context(context);
+        inputs.INV_VARIANCE->fill_from_context(context);
+
+        outputs.Y->fill_from_context(context);
 
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());

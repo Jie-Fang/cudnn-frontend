@@ -117,6 +117,7 @@ class INode : public ICudnn {
     enum class Type {
         COMPOSITE,
         BATCHNORM,
+        BATCHNORM_INFERENCE,
         BN_FINALIZE,
         CONVOLUTION,
         DBN,
