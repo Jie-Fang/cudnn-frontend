@@ -366,12 +366,10 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
     dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     dbias->set_output(true).set_data_type(fe::DataType_t::FLOAT);
 
-#if (CUDNN_VERSION < 8900)
-    SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+#if (CUDNN_VERSION < 8904)
+    SKIP("BN_infer->Drelu->DBN is not supported in cudnn versions prior to 8.9.4");
 #endif
-    if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
-    }
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
