@@ -237,7 +237,7 @@ def test_drelu_dadd_dbn():
         device_buffers[DX_drelu] = DX_drelu_actual
     graph.execute(device_buffers, workspace)
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8904, reason="BN_infer-Drelu-DBN not supported below cudnn 8.9.4")
 def test_bn_infer_drelu_dbn():
     # Tensors
     N, C, H, W = 4, 16, 56, 56
