@@ -350,6 +350,9 @@ class test_graph:
     def matmul(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.matmul)
     
+    def add(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.add)
+
     def bias(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
 
@@ -498,10 +501,10 @@ class test_graph:
         self.io_data_type = data_type
 
     def set_intermediate_data_type(self, data_type):
-        self.set_intermediate_data_type = data_type
+        self.intermediate_data_type = data_type
 
     def set_compute_data_type(self, data_type):
-        self.set_compute_data_type(data_type)
+        self.compute_data_type = data_type
 
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the is_visited status of the nodes
