@@ -120,20 +120,31 @@ class PyGraph {
     // descriptors.
     cudnn_frontend::graph::Graph graph;
     cudnnHandle_t handle;
+    bool is_handle_owner;
     bool is_built;
 
     PyGraph(std::string const& name,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
-            cudnn_frontend::DataType_t compute_data_type)
-        : graph(), handle(nullptr), is_built(false) {
+            cudnn_frontend::DataType_t compute_data_type,
+            void * handle_ = nullptr)
+        : graph(), handle((cudnnHandle_t)handle_), 
+        is_handle_owner(false), is_built(false) {
         graph.set_compute_data_type(compute_data_type)
             .set_intermediate_data_type(intermediate_data_type)
             .set_io_data_type(io_data_type);
-        cudnnCreate(&handle);
+        
+        if (handle_ == nullptr) {
+            cudnnCreate(&handle);
+            is_handle_owner = true; 
+        }
     }
 
-    ~PyGraph() { cudnnDestroy(handle); }
+    ~PyGraph() { 
+        if (is_handle_owner) {
+            cudnnDestroy(handle); 
+        }
+    }
 
     // Returns a shared pointer as both this PyGraph class and the caller will own
     // the underlying object.
@@ -525,11 +536,13 @@ init_pygraph_submodule(py::module_& m) {
         .def(py::init<std::string const&,
                       cudnn_frontend::DataType_t,
                       cudnn_frontend::DataType_t,
-                      cudnn_frontend::DataType_t>(),
+                      cudnn_frontend::DataType_t,
+                      void *>(),
              py::arg_v("name", "test_graph"),
              py::arg_v("io_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET))
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("handle", nullptr))
         .def("tensor",
              &PyGraph::tensor,
              py::arg{"dim"},

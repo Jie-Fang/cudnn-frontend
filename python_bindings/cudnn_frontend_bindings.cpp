@@ -21,8 +21,16 @@ init_pygraph_submodule(py::module_ &);
 void
 init_properties(py::module_ &);
 
+void *
+create_handle();
+
+void
+destroy_handle(void *);
+
 PYBIND11_MODULE(cudnn, m) {
     m.def("get_cudnn_version", &cudnnGetVersion);
+    m.def("create_handle", &create_handle);
+    m.def("destroy_handle", &destroy_handle);
 
     py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
         .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)

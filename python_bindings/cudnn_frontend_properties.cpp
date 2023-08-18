@@ -14,6 +14,22 @@ namespace cudnn_frontend {
 namespace python_bindings {
 
 void
+throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::string const& error_msg);
+
+void * 
+create_handle() {
+    cudnnHandle_t handle;
+    cudnnCreate(&handle);
+    return (void *)handle;
+}
+
+void
+destroy_handle(void *handle) {
+    auto status = cudnnDestroy((cudnnHandle_t)handle);
+    throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnHandle Destroy failed");
+}
+
+void
 init_properties(py::module_& m) {
     py::class_<cudnn_frontend::graph::Tensor_attributes, std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>(
         m, "tensor")
