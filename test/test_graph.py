@@ -3,6 +3,10 @@ import torch
 from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
+import utils
+
+# Globally ensure cudnn is disabled for everything torch related
+torch.backends.cudnn.enabled = False 
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
@@ -53,7 +57,9 @@ class PytorchReference:
 
     @staticmethod
     def conv_dgrad(kwargs):
-        return [None, None]
+        input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
+        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [dX]
 
 # Base class for Tensor and operation nodes
 class test_node:
@@ -574,7 +580,11 @@ class test_graph:
             if Y_expected is None:
                 continue
             
+            if Y_expected.dtype != Y_actual.dtype:
+                print ("WARNING: reference and actual output types differ ({} resp., {})".format(Y_expected.dtype, Y_actual.dtype) )
+
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+            print("cudnn and reference match")
             number_outputs_tested += 1
         
         assert number_outputs_tested >= 1

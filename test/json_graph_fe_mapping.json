@@ -16,7 +16,7 @@
                     "operation": "add",
                     "input": {"X": "a", "B": "b"},
                     "output": ["Y"],
-                    "properties": {}
+                    "properties": {"mathPrec": "compute_data_type"}
                 }
         },
     "conv":
@@ -28,7 +28,8 @@
                 "dilation": "dilation",
                 "pad": "padding",
                 "stride": "stride",
-                "name": "name"
+                "name": "name",
+                "mathPrec": "compute_data_type"
             }
         },
         "dgrad":
@@ -40,7 +41,8 @@
                 "dilation": "dilation",
                 "pad": "padding",
                 "stride": "stride",
-                "name": "name"
+                "name": "name",
+                "mathPrec": "compute_data_type"
             }
         }
 }

@@ -2,7 +2,7 @@
 
 import pytest
 import argparse
-import os
+import os, sys
 from json_graph_test import run_test_from_legacy_args
 
 from python_graph_defs.basic_tests import test_conv_relu

@@ -215,6 +215,9 @@ class Legacy_tensor:
 
     def __init__(self, jtensor):
         self.jtensor = jtensor
+
+    def get_data_type(self):
+        return Legacy_value.translate_to_pycudnn_value("dataType", self.jtensor["dataType"])
     
     def get_tensor_properties(self):
         pycudnn_props = {}
@@ -228,7 +231,8 @@ class Legacy_tensor:
 
 # This is to be used as static class only
 class Legacy_value:
-    mapping = {"dataType": {"s": cudnn.data_type.FLOAT, "h": cudnn.data_type.HALF}}
+    mapping = {"dataType": {"s": cudnn.data_type.FLOAT, "h": cudnn.data_type.HALF,
+               "float": cudnn.data_type.FLOAT, "half": cudnn.data_type.HALF}}
     indirection = {"mathPrec": "dataType"}
 
     @staticmethod
@@ -347,8 +351,16 @@ def run_test_from_json_definition(json_dict):
         Operations[name] = (test_graph_op, legacy_op)
 
     # Replace any remaining abstract parameters from the tensor dictionary (e.g., dimOut)
+    # TODO(@mbreughe): we actually only need the legacy operation part for every op in Operations
+    # (i.e. op[1] for op in Operation.values()). Clean this up so that we first do all the parameter concretization
+    # before we create test_graph nodes. We can even split this in 2 functions, to make this more readable/maintainable.
     jtensor_dict = replace_implicit_params(Operations, jtensor_dict)
 
+    for jtensor in jtensor_dict:
+        if jtensor["name"] in TGTensors:
+            TGTensors[jtensor["name"]].set_data_type(Legacy_tensor(jtensor).get_data_type())
+
+    
     # At this point TGTensors only contains output tensors. 
     # Identify all tensors in jtensor_dict that are not output tensors
     input_tensors = [tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors]
@@ -372,7 +384,12 @@ def run_test_from_json_definition(json_dict):
     print(graph)
 
     # TODO(@mbreughe): read in rtol/atol from json
-    testGraph.cudnn_execute_and_compare_to_reference(atol=1e-2,rtol=1e-2)
+    atol = 1e-2
+    rtol = 1e-2
+    if "tolerances" in json_dict:
+        atol = float(json_dict["tolerances"]["abs"])
+        rtol = float(json_dict["tolerances"]["rel"])
+    testGraph.cudnn_execute_and_compare_to_reference(atol=atol, rtol=rtol)
 
 # @brief: Create a pycudnn node from the legacy_op
 def create_test_graph_node(legacy_op):
