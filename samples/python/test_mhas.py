@@ -128,13 +128,14 @@ def get_slopes(n_heads: int):
     return m
 
 alibi_mask_options = [True, False]
+padding_mask_options = [True, False]
 causal_mask_options = [True, False]
 layout_options      = ["bs3hd", "sbh3d"]
 dropout             = [False]
 is_infer            = [True, False]
 bias                = [True, False]
 
-all_options = [elem for elem in itertools.product(*[alibi_mask_options, causal_mask_options, layout_options, dropout, is_infer, bias])]
+all_options = [elem for elem in itertools.product(*[alibi_mask_options, padding_mask_options, causal_mask_options, layout_options, dropout, is_infer, bias])]
 
 @pytest.fixture(params=all_options)
 def param_extract(request):
@@ -143,10 +144,13 @@ def param_extract(request):
 @pytest.mark.skipif(cudnn.get_cudnn_version() < 8903, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_flash_attention(param_extract):
 
-    alibi_mask, causal_mask, layout, dropout_enable, infer_mode, bias_enable = param_extract
+    alibi_mask, padding_mask, causal_mask, layout, dropout_enable, infer_mode, bias_enable = param_extract
     
     if alibi_mask and cudnn.get_cudnn_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
+        
+    if padding_mask and cudnn.get_cudnn_version() < 8903:
+        pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
     s_q_choices = [256, 512, 1024, 2048] 
     d_choices   = [64,128]
@@ -218,6 +222,10 @@ def test_scale_dot_product_flash_attention(param_extract):
     Q_gpu = torch.as_strided(qkv_gpu, shape_Q, stride_Q, storage_offset=offset_Q)
     K_gpu = torch.as_strided(qkv_gpu, shape_K, stride_K, storage_offset=offset_K)
     V_gpu = torch.as_strided(qkv_gpu, shape_V, stride_V, storage_offset=offset_V)
+    
+    if padding_mask:
+        seq_len_Q_gpu = torch.full((b,1,1,1), s_q, dtype=torch.int32, device="cuda")
+        seq_len_KV_gpu = torch.full((b,1,1,1), s_kv, dtype=torch.int32, device="cuda")
 
     Attn_scale_cpu = torch.full((1,1,1,1), attn_scale, dtype=torch.float32, device="cpu")
 
@@ -258,23 +266,34 @@ def test_scale_dot_product_flash_attention(param_extract):
     if dropout_enable == True:
         dropout_tuple = (dropout_prob, Seed, Offset)
 
+    seq_len_Q = None
+    seq_len_KV = None
+    if padding_mask:
+        seq_len_Q = graph.tensor(name = "seq_len_Q", dim = seq_len_Q_gpu.size(), stride = seq_len_Q_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_Q_gpu.dtype))
+        seq_len_KV = graph.tensor(name = "seq_len_KV", dim = seq_len_KV_gpu.size(), stride = seq_len_KV_gpu.stride(), data_type = convert_to_cudnn_type(seq_len_KV_gpu.dtype))
+    
+
     if bias_enable:
         O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                                 , q = Q, k = K, v = V
+                                                , seq_len_q = seq_len_Q, seq_len_kv = seq_len_KV
                                                 , is_inference = infer_mode
                                                 , bias = Bias
                                                 , dropout = dropout_tuple       
                                                 , attn_scale = Attn_scale
                                                 , use_alibi_mask = alibi_mask
+                                                , use_padding_mask = padding_mask
                                                 , use_causal_mask = causal_mask
                                                 )
     else:        
         O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
                                     , q = Q, k = K, v = V
+                                    , seq_len_q = seq_len_Q, seq_len_kv = seq_len_KV
                                     , is_inference = infer_mode
                                     , dropout = dropout_tuple
                                     , attn_scale = Attn_scale
                                     , use_alibi_mask = alibi_mask
+                                    , use_padding_mask = padding_mask
                                     , use_causal_mask = causal_mask
                                     )
 
@@ -291,11 +310,16 @@ def test_scale_dot_product_flash_attention(param_extract):
     Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float32, device="cuda")
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
-    print("Executing the cudnn graph execute")
-    graph.execute({Q: Q_gpu, K: K_gpu, V: V_gpu, Seed: Seed_gpu, Offset: Offset_gpu
+
+    cudnn_to_torch_tensor = {Q: Q_gpu, K: K_gpu, V: V_gpu
+                   , Seed: Seed_gpu, Offset: Offset_gpu
                    , Attn_scale: Attn_scale_cpu, Bias: bias_gpu
                    , O: O_actual, Stats: Stats_actual}
-                   , workspace)
+    if padding_mask:
+        cudnn_to_torch_tensor[seq_len_Q] = seq_len_Q_gpu
+        cudnn_to_torch_tensor[seq_len_KV] = seq_len_KV_gpu
+
+    graph.execute(cudnn_to_torch_tensor, workspace)
 
     torch.set_printoptions(precision = 2, linewidth = 2560, threshold = 1000000, sci_mode = False)
 
@@ -319,6 +343,9 @@ def test_scale_dot_product_flash_attention(param_extract):
     if alibi_mask is True:
         apply_alibi_mask = ((torch.arange(s_kv, dtype=torch.float32)) - torch.arange(s_q, dtype=torch.float32).view(-1, 1)) * get_slopes(h)
         after_scale_S_cpu = after_scale_S_cpu + apply_alibi_mask
+
+    if padding_mask is True:
+        pass
 
     if causal_mask is True:
         causal_mask_cpu = torch.triu(torch.ones(s_q, s_q, dtype=torch.bool, device='cpu'), 1)

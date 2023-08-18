@@ -16,7 +16,8 @@ namespace cudnn_frontend::graph {
 class ScaledDotProductFlashAttentionNode : public INode {
     std::shared_ptr<Tensor_attributes> rng_output;
     std::shared_ptr<Tensor_attributes> dropout_scale;
-    std::shared_ptr<Tensor_attributes> negative_inf;
+    std::shared_ptr<Tensor_attributes> negative_inf_causal;
+    std::shared_ptr<Tensor_attributes> negative_inf_padding;
     std::shared_ptr<Tensor_attributes> alibi_slopes;
 
    public:
@@ -39,6 +40,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         if (options.is_inference.has_value() == false) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message = "[cudnn_frontend] ERROR: is_infernece attribute not set.";
+            getLogger() << message << std::endl;
             return {status, message};
         }
 
@@ -46,6 +48,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
                 "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
+            getLogger() << message << std::endl;
             return {status, message};
         }
 
@@ -53,6 +56,22 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
                 "[cudnn_frontend] ERROR: Intermediate tensor data type needs to be set as internal tensors require it.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
+        if (options.padding_mask && (!(options.inputs.SEQ_LEN_Q) || !(options.inputs.SEQ_LEN_KV))) {
+            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: Padding mask requires seq_len_q and seq_len_kv to be set.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
+        if ((!options.padding_mask) && (options.inputs.SEQ_LEN_Q || options.inputs.SEQ_LEN_KV)) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message =
+                "[cudnn_frontend] ERROR: seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.";
+            getLogger() << message << std::endl;
             return {status, message};
         }
 
@@ -91,8 +110,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         Matmul_attributes bmm1_attributes;
         bmm1_attributes.set_name("bmm1");
-        bmm1_attributes.inputs.A = options.inputs.Q;
-        bmm1_attributes.inputs.B = options.inputs.K;
+        bmm1_attributes.inputs.A          = options.inputs.Q;
+        bmm1_attributes.inputs.B          = options.inputs.K;
+        bmm1_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
+        bmm1_attributes.inputs.N_override = options.inputs.SEQ_LEN_KV;
         last_output = bmm1_attributes.outputs.C = bmm1_output;
         auto bmm1_node                          = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
         sub_nodes.emplace_back(std::move(bmm1_node));
@@ -201,6 +222,99 @@ class ScaledDotProductFlashAttentionNode : public INode {
             sub_nodes.emplace_back(std::move(add_node));
         }
 
+        if (options.padding_mask) {
+            // Lower options to generate row index options
+            auto row_index_output = std::make_shared<Tensor_attributes>();
+            row_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes row_index_attributes;
+            row_index_attributes.set_name("gen_row_index")
+                .set_mode(PointwiseMode_t::GEN_INDEX)
+                .set_axis(2)
+                .set_compute_data_type(DataType_t::INT32);
+            row_index_attributes.inputs.IN_0   = last_output;
+            row_index_attributes.outputs.OUT_0 = row_index_output;
+            auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
+            sub_nodes.emplace_back(std::move(row_index_node));
+
+            // Lower options to generate col index options
+            auto col_index_output = std::make_shared<Tensor_attributes>();
+            col_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes col_index_attributes;
+            col_index_attributes.set_name("gen_col_index")
+                .set_mode(PointwiseMode_t::GEN_INDEX)
+                .set_axis(3)
+                .set_compute_data_type(DataType_t::INT32);
+            col_index_attributes.inputs.IN_0   = last_output;
+            col_index_attributes.outputs.OUT_0 = col_index_output;
+            auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
+            sub_nodes.emplace_back(std::move(col_index_node));
+
+            // Create operation for row index less than seq_q
+            auto row_less_seq_q_output = std::make_shared<Tensor_attributes>();
+            row_less_seq_q_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes row_less_seq_q_attributes;
+            row_less_seq_q_attributes.set_name("row_less_seq_q")
+                .set_mode(PointwiseMode_t::CMP_LT)
+                .set_compute_data_type(DataType_t::INT32);
+            row_less_seq_q_attributes.inputs.IN_0   = row_index_output;
+            row_less_seq_q_attributes.inputs.IN_1   = options.inputs.SEQ_LEN_Q;
+            row_less_seq_q_attributes.outputs.OUT_0 = row_less_seq_q_output;
+            auto row_less_seq_q_node = std::make_unique<PointwiseNode>(std::move(row_less_seq_q_attributes), context);
+            sub_nodes.emplace_back(std::move(row_less_seq_q_node));
+
+            // Create operation for col index less than seq_q
+            auto col_less_seq_kv_output = std::make_shared<Tensor_attributes>();
+            col_less_seq_kv_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+
+            Pointwise_attributes col_less_seq_kv_attributes;
+            col_less_seq_kv_attributes.set_name("col_less_seq_kv")
+                .set_mode(PointwiseMode_t::CMP_LT)
+                .set_compute_data_type(DataType_t::INT32);
+            col_less_seq_kv_attributes.inputs.IN_0   = col_index_output;
+            col_less_seq_kv_attributes.inputs.IN_1   = options.inputs.SEQ_LEN_KV;
+            col_less_seq_kv_attributes.outputs.OUT_0 = col_less_seq_kv_output;
+            auto col_less_seq_kv_node = std::make_unique<PointwiseNode>(std::move(col_less_seq_kv_attributes), context);
+            sub_nodes.emplace_back(std::move(col_less_seq_kv_node));
+
+            // Create operation logical AND that creates padding mask
+            auto logical_and_output = std::make_shared<Tensor_attributes>();
+            logical_and_output->set_is_virtual(true).set_data_type(DataType_t::BOOLEAN);
+
+            Pointwise_attributes logical_and_attributes;
+            logical_and_attributes.set_name("logical_and")
+                .set_mode(PointwiseMode_t::LOGICAL_AND)
+                .set_compute_data_type(DataType_t::BOOLEAN);
+            logical_and_attributes.inputs.IN_0   = row_less_seq_q_output;
+            logical_and_attributes.inputs.IN_1   = col_less_seq_kv_output;
+            logical_and_attributes.outputs.OUT_0 = logical_and_output;
+            auto logical_and_node = std::make_unique<PointwiseNode>(std::move(logical_and_attributes), context);
+            sub_nodes.emplace_back(std::move(logical_and_node));
+
+            // Lower options to binary select options
+            negative_inf_padding = std::make_shared<Tensor_attributes>();
+            negative_inf_padding->set_dim({1, 1, 1, 1})
+                .set_stride({1, 1, 1, 1})
+                .set_is_pass_by_value(true)
+                // Hard code data type float as FE itself will place FLOAT_MIN in variant pack later
+                .set_data_type(DataType_t::FLOAT);
+
+            auto padding_mask_output = std::make_shared<Tensor_attributes>();
+            padding_mask_output->set_is_virtual(true);
+
+            Pointwise_attributes binary_select_attributes;
+            binary_select_attributes.set_name("binary_select");
+            binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
+            binary_select_attributes.inputs.IN_0 = last_output;
+            binary_select_attributes.inputs.IN_1 = negative_inf_padding;
+            binary_select_attributes.inputs.IN_2 = logical_and_output;
+            last_output = binary_select_attributes.outputs.OUT_0 = padding_mask_output;
+            auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
+            sub_nodes.emplace_back(std::move(binary_select_node));
+        }
+
         if (options.causal_mask) {
             // Lower options to generate row index options
             auto row_index_output = std::make_shared<Tensor_attributes>();
@@ -243,8 +357,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             sub_nodes.emplace_back(std::move(greater_than_node));
 
             // Lower options to binary select options
-            negative_inf = std::make_shared<Tensor_attributes>();
-            negative_inf->set_dim({1, 1, 1, 1})
+            negative_inf_causal = std::make_shared<Tensor_attributes>();
+            negative_inf_causal->set_dim({1, 1, 1, 1})
                 .set_stride({1, 1, 1, 1})
                 .set_is_pass_by_value(true)
                 // Hard code data type float as FE itself will place FLOAT_MIN in variant pack later
@@ -257,7 +371,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             binary_select_attributes.set_name("binary_select");
             binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
             binary_select_attributes.inputs.IN_0 = last_output;
-            binary_select_attributes.inputs.IN_1 = negative_inf;
+            binary_select_attributes.inputs.IN_1 = negative_inf_causal;
             binary_select_attributes.inputs.IN_2 = row_greater_than_col_output;
             last_output = binary_select_attributes.outputs.OUT_0 = causal_mask_output;
             auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
@@ -342,10 +456,12 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         Matmul_attributes bmm2_attributes;
         bmm2_attributes.set_name("bmm2");
-        bmm2_attributes.inputs.A  = last_output;
-        bmm2_attributes.inputs.B  = options.inputs.V;
-        bmm2_attributes.outputs.C = options.outputs.O;
-        auto bmm2_node            = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
+        bmm2_attributes.inputs.A          = last_output;
+        bmm2_attributes.inputs.B          = options.inputs.V;
+        bmm2_attributes.outputs.C         = options.outputs.O;
+        bmm2_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
+        bmm2_attributes.inputs.K_override = options.inputs.SEQ_LEN_KV;
+        auto bmm2_node                    = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
         sub_nodes.emplace_back(std::move(bmm2_node));
 
         // Set dims if user did not
@@ -375,9 +491,14 @@ class ScaledDotProductFlashAttentionNode : public INode {
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
 
+        if (options.padding_mask) {
+            float negative_inf_value = std::numeric_limits<float>::min();
+            tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
+        }
+
         if (options.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::min();
-            tensor_to_pass_by_value.emplace(negative_inf, negative_inf_value);
+            tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
 
         if (options.alibi_mask) {

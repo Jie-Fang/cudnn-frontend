@@ -89,8 +89,25 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
 // Optional bias in flash attention is only supported 8.9.3 onwards
 #if (CUDNN_VERSION >= 8904)
-    scaled_dot_product_flash_attention_options.set_bias(bias).set_alibi_mask(true);
-#elif (CUDNN_VERSION >= 8903)
+    scaled_dot_product_flash_attention_options.set_alibi_mask(true);
+#endif
+
+#if (CUDNN_VERSION >= 8903)
+    auto seq_q  = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                      .set_name("seq_q")
+                                      .set_dim({b, 1, 1, 1})
+                                      .set_stride({1, 1, 1, 1})
+                                      .set_data_type(fe::DataType_t::INT32));
+    auto seq_kv = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                       .set_name("seq_kv")
+                                       .set_dim({b, 1, 1, 1})
+                                       .set_stride({1, 1, 1, 1})
+                                       .set_data_type(fe::DataType_t::INT32));
+
+    scaled_dot_product_flash_attention_options.set_bias(bias)
+        .set_padding_mask(true)
+        .set_seq_len_q(seq_q)
+        .set_seq_len_kv(seq_kv);
     scaled_dot_product_flash_attention_options.set_bias(bias);
 #endif
 
@@ -151,6 +168,24 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         {seed, dropoutSeed.devPtr},
         {offset, dropoutOffset.devPtr},
         {O, devPtrO}};
+
+#if (CUDNN_VERSION >= 8903)
+    Surface<int32_t> devActualSeqlenQ(b, false);
+    Surface<int32_t> devActualSeqlenKV(b, false);
+    std::vector<int32_t> hostActualSeqlenQ(b, 20);
+    std::vector<int32_t> hostActualSeqlenKV(b, 20);
+
+    checkCudaErr(cudaMemcpy(
+        devActualSeqlenQ.devPtr, hostActualSeqlenQ.data(), sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(devActualSeqlenKV.devPtr,
+                            hostActualSeqlenKV.data(),
+                            sizeof(hostActualSeqlenKV[0]) * b,
+                            cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    variant_pack[seq_q]  = devActualSeqlenQ.devPtr;
+    variant_pack[seq_kv] = devActualSeqlenKV.devPtr;
+#endif
 
     Surface<float> statsTensor(b * h * s_q * 1, false);
     if (is_inference == false) {

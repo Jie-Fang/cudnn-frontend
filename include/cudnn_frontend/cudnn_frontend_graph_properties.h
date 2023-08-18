@@ -1214,7 +1214,7 @@ class Scaled_dot_product_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Mask;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
         std::shared_ptr<Tensor_attributes> Dropout_scale;
@@ -1249,8 +1249,8 @@ class Scaled_dot_product_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_attention_attributes&
-    set_seq_len_k(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_K = value;
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 
@@ -1311,7 +1311,7 @@ class Scaled_dot_product_attention_attributes : public Operation {
         inputs.K->fill_from_context(context);
         inputs.V->fill_from_context(context);
         inputs.SEQ_LEN_Q->fill_from_context(context);
-        inputs.SEQ_LEN_K->fill_from_context(context);
+        inputs.SEQ_LEN_KV->fill_from_context(context);
         outputs.O->fill_from_context(context);
 
         // Fill this node
@@ -1329,7 +1329,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> K;
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
@@ -1395,8 +1395,8 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_flash_attention_attributes&
-    set_seq_len_k(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_K = value;
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 
