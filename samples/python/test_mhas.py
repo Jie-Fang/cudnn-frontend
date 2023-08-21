@@ -153,7 +153,7 @@ class scaled_dot_product_attention(torch.nn.Module):
             row_sum = torch.sum(row_exp, -1, True)
             Stats = row_max + torch.log(row_sum)
 
-        attn_weight = torch.softmax(S, dim=-1).to(dtype=torch.bfloat16)
+        attn_weight = torch.softmax(S, dim=-1).to(dtype=value.dtype)
         return attn_weight @ value, Stats
     
 alibi_mask_options = [True, False]
@@ -163,8 +163,9 @@ layout_options      = ["non_interleaved", "bs3hd", "sbh3d"]
 dropout             = [False]
 is_infer_options    = [True, False]
 bias                = [True, False]
+input_type_options  = [torch.float16, torch.bfloat16]
 
-all_options = [elem for elem in itertools.product(*[alibi_mask_options, padding_mask_options, causal_mask_options, layout_options, dropout, is_infer_options, bias])]
+all_options = [elem for elem in itertools.product(*[alibi_mask_options, padding_mask_options, causal_mask_options, layout_options, dropout, is_infer_options, bias, input_type_options])]
 
 @pytest.fixture(params=all_options)
 def param_extract(request):
@@ -173,7 +174,7 @@ def param_extract(request):
 @pytest.mark.skipif(cudnn.get_cudnn_version() < 8903, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_flash_attention(param_extract):
 
-    alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable = param_extract
+    alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type = param_extract
     
     if alibi_mask and cudnn.get_cudnn_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
@@ -217,7 +218,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     offset_multiple_sbh3d = d
     offset_multiple_bs3hd = h * d
     
-    bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype = torch.bfloat16) if bias_enable else None
+    bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype = input_type) if bias_enable else None
 
     if layout == 'sbh3d':
         stride_Q = stride_sbh3d
@@ -253,7 +254,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     else:
         assert False, "Layout should be either sbh3d or bs3hd or non_interleaved"
 
-    qkv_gpu = 1 *  (torch.randn(b * s_q * 3 * h * d, dtype=torch.bfloat16, device="cuda") - 0.5)
+    qkv_gpu = 1 *  (torch.randn(b * s_q * 3 * h * d, dtype=input_type, device="cuda") - 0.5)
 
     Q_gpu = torch.as_strided(qkv_gpu, shape_Q, stride_Q, storage_offset=offset_Q)
     K_gpu = torch.as_strided(qkv_gpu, shape_K, stride_K, storage_offset=offset_K)
@@ -269,7 +270,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     Offset_gpu = torch.full((1,1,1,1), 1, dtype=torch.int64, device="cuda")
     
     # Cudnn graph
-    graph = cudnn.pygraph(io_data_type = cudnn.data_type.BFLOAT16, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(io_data_type = convert_to_cudnn_type(input_type), intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
     Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
     K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
     V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
@@ -311,7 +312,7 @@ def test_scale_dot_product_flash_attention(param_extract):
     
     graph.build()
 
-    O_actual = torch.zeros(b * s_q * h * d, dtype=torch.bfloat16, device="cuda")
+    O_actual = torch.zeros(b * s_q * h * d, dtype=input_type, device="cuda")
     Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float32, device="cuda")
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
