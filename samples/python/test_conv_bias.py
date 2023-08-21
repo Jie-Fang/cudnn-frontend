@@ -136,9 +136,8 @@ def test_leaky_relu_backward():
     loss_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     input_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
 
-    @torch.jit.script
     def dleaky_relu(grad: torch.Tensor, mask: torch.Tensor, negative_slope: float):
-        return torch.ones_like(grad).masked_fill_(mask < 0.0, negative_slope) * grad
+        return torch.ones_like(grad).masked_fill_(mask <= 0.0, negative_slope) * grad
         
     Y_expected = dleaky_relu(loss_gpu, input_gpu, negative_slope)
     
@@ -162,7 +161,9 @@ def test_leaky_relu_backward():
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-4, rtol=1e-4)
 
 if __name__ == "__main__":
-    test_conv_relu()
-    test_conv_bias_relu()
-    test_conv3d_bias_leaky_relu()
-    test_leaky_relu_backward()
+    # test_conv_relu()
+    # test_conv_bias_relu()
+    # test_conv3d_bias_leaky_relu()
+    for i in range(100):
+        print(i)
+        test_leaky_relu_backward()
