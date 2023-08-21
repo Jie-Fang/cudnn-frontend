@@ -159,7 +159,7 @@ class scaled_dot_product_attention(torch.nn.Module):
 alibi_mask_options = [True, False]
 padding_mask_options = [True, False]
 causal_mask_options = [True, False]
-layout_options      = ["bs3hd", "sbh3d"]
+layout_options      = ["non_interleaved", "bs3hd", "sbh3d"]
 dropout             = [False]
 is_infer_options    = [True, False]
 bias                = [True, False]
@@ -239,8 +239,19 @@ def test_scale_dot_product_flash_attention(param_extract):
         offset_Q = offset_multiple_bs3hd * 0
         offset_K = offset_multiple_bs3hd * 1
         offset_V = offset_multiple_bs3hd * 2
+    elif layout == 'non_interleaved':
+        stride_Q = (1 * d * s_q *  h, 1 * d *  s_q, 1 * d, 1)
+        stride_K = (1 * d * s_kv * h, 1 * d * s_kv, 1, 1 * d)
+        stride_V = (1 * d * s_kv * h, 1 * d * s_kv, 1 * d, 1)
+        
+        stride_O = (d * s_q * h, d * s_q, d, 1)
+
+        offset_Q = 0
+        offset_K = offset_Q + b * d * s_q *  h
+        offset_V = offset_K + b * d * s_kv * h
+
     else:
-        assert False, "Layout should be either sbh3d or bs3hd"
+        assert False, "Layout should be either sbh3d or bs3hd or non_interleaved"
 
     qkv_gpu = 1 *  (torch.randn(b * s_q * 3 * h * d, dtype=torch.bfloat16, device="cuda") - 0.5)
 
@@ -327,8 +338,10 @@ def test_scale_dot_product_flash_attention(param_extract):
         O_reorg = O_actual.view([s_q, b, h, d]).permute(1, 2, 0, 3)
     elif layout == 'bs3hd':
         O_reorg = O_actual.view([b, s_q, h, d]).permute(0, 2, 1, 3)
+    elif layout == 'non_interleaved':
+        O_reorg = O_actual.view([b, h, s_q, d])
     else:
-        assert False, "Layout should be either sbh3d or bs3hd"
+        assert False, "Layout should be either sbh3d or bs3hd or non_interleaved"
 
     # Cpu reference
     sdpa = scaled_dot_product_attention()
@@ -338,126 +351,6 @@ def test_scale_dot_product_flash_attention(param_extract):
         assert compare_tensors(Stats_expected, Stats_reorg, "Stats") == 0
     
     assert compare_tensors(O_expected, O_reorg, "O") == 0
-
-
-causal_mask_options = [True, False]
-dropout             = [False]
-is_infer            = [True, False]
-bias                = [True, False]
-
-all_options_non_interleaved = [elem for elem in itertools.product(*[causal_mask_options, dropout, is_infer, bias])]
-
-@pytest.fixture(params=all_options_non_interleaved)
-def param_extract_non_interleaved(request):
-  return request.param
-
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8903, reason="requires cudnn 8.9 or higher")
-def test_scale_dot_product_flash_attention_non_interleaved(param_extract_non_interleaved):
-
-    causal_mask, dropout_enable, infer_mode, bias_enable = param_extract_non_interleaved
-        
-    s_q_choices = [256, 512, 1024, 2048] 
-    d_choices   = [64,128]
     
-    b = 32
-    h = 12
-    s_q  = random.choice(s_q_choices)
-    s_kv  = s_q
-    d = random.choice(d_choices)
-    
-    attn_scale = 0.125
-    
-    Attn_scale_cpu = torch.full((1,1,1,1), attn_scale, dtype=torch.float32, device="cpu")
-    
-    if dropout_enable == False:
-        dropout_prob = 1.0
-    else:
-        dropout_prob = 0.1
-    Seed_gpu = torch.full((1,1,1,1), 123456, dtype=torch.int64, device="cuda")
-    Offset_gpu = torch.full((1,1,1,1), 1, dtype=torch.int64, device="cuda")
-
-
-    shape_Q = (b, h, s_q, d)
-    shape_K = (b, h, d, s_kv)
-    shape_V = (b, h, s_kv, d)
-
-    stride_Q = (1 * d * s_q *  h, 1 * d *  s_q, 1 * d, 1)
-    stride_K = (1 * d * s_kv * h, 1 * d * s_kv, 1, 1 * d)
-    stride_V = (1 * d * s_kv * h, 1 * d * s_kv, 1 * d, 1)
-    
-    q_buffer = 1 *  (torch.randn(b * h * s_q * d,  dtype=torch.bfloat16, device="cuda") - 0.5)
-    k_buffer = 1 *  (torch.randn(b * h * d * s_kv, dtype=torch.bfloat16, device="cuda") - 0.5)
-    v_buffer = 1 *  (torch.randn(b * h * s_kv * d, dtype=torch.bfloat16, device="cuda") - 0.5)
-
-    Q_gpu = torch.as_strided(q_buffer, shape_Q, stride_Q)
-    K_gpu = torch.as_strided(k_buffer, shape_K, stride_K)
-    V_gpu = torch.as_strided(v_buffer, shape_V, stride_V)
-    
-    bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype = torch.bfloat16) if bias_enable else None
-
-    graph = cudnn.pygraph(io_data_type = cudnn.data_type.BFLOAT16, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
-    Q = graph.tensor(name = "Q", dim = Q_gpu.size(), stride = Q_gpu.stride(), data_type = convert_to_cudnn_type(Q_gpu.dtype))
-    K = graph.tensor(name = "K", dim = K_gpu.size(), stride = K_gpu.stride(), data_type = convert_to_cudnn_type(K_gpu.dtype))
-    V = graph.tensor(name = "V", dim = V_gpu.size(), stride = V_gpu.stride(), data_type = convert_to_cudnn_type(V_gpu.dtype))
-    Attn_scale = graph.tensor(name = "Attn_scale", dim = Attn_scale_cpu.size(), stride = Attn_scale_cpu.stride(), data_type = convert_to_cudnn_type(Attn_scale_cpu.dtype), is_pass_by_value = True)
-    Seed = graph.tensor(name = "Seed", dim = Seed_gpu.size(), stride = Seed_gpu.stride(), data_type = convert_to_cudnn_type(Seed_gpu.dtype))
-    Offset = graph.tensor(name = "Offset", dim = Offset_gpu.size(), stride = Offset_gpu.stride(), data_type = convert_to_cudnn_type(Offset_gpu.dtype))
-
-    dropout_tuple = None
-    if dropout_enable == True:
-        dropout_tuple = (dropout_prob, Seed, Offset)
-
-    Bias = None
-    if bias_enable:
-        Bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(),data_type = convert_to_cudnn_type(Q_gpu.dtype))
-
-    O, Stats = graph.scaled_dot_product_flash_attention(name = "scaled_dot_product_flash_attention"
-                                            , q = Q, k = K, v = V
-                                            , is_inference = infer_mode
-                                            , bias = Bias
-                                            , dropout = dropout_tuple
-                                            , attn_scale = Attn_scale
-                                            , use_causal_mask = causal_mask
-                                            )
-
-    stride_O = (d * s_q * h, d * s_q, d, 1)
-    O.set_output(True).set_stride(stride_O)
-
-    if infer_mode == False:
-        Stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-        
-    graph.check_support()
-    
-    graph.build()
-    
-    O_actual = torch.zeros(b * s_q * h * d, dtype=torch.bfloat16, device="cuda")
-    Stats_actual = torch.zeros(b * h * s_q * 1, dtype=torch.float32, device="cuda")
-
-    O_reorg = O_actual.view(b, h, s_q, d)
-    Stats_reorg = Stats_actual.view(b, h, s_q, 1)
-
-    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
-    print("Executing the cudnn graph execute")
-
-    cudnn_to_torch_tensor = {Q: Q_gpu, K: K_gpu, V: V_gpu
-                   , Seed: Seed_gpu, Offset: Offset_gpu
-                   , Attn_scale: Attn_scale_cpu
-                   , O: O_actual, Stats: Stats_actual}
-    
-    if bias_enable:
-        cudnn_to_torch_tensor[Bias] = bias_gpu
-
-    graph.execute(cudnn_to_torch_tensor, workspace)
-    
-    # Cpu reference
-    sdpa = scaled_dot_product_attention()
-    O_expected, Stats_expected = sdpa(Q_gpu, K_gpu.permute(0, 1, 3, 2), V_gpu, is_causal = causal_mask, is_infer = infer_mode, bias = bias_gpu, is_alibi = False, attn_scale = attn_scale)
-
-    if infer_mode == False:
-        assert compare_tensors(Stats_expected, Stats_reorg, "Stats") == 0
-        
-    assert compare_tensors(O_expected, O_reorg, "O") == 0
-
 if __name__ == "__main__":
     test_scale_dot_product_flash_attention((True, "bs3hd", False, False, True))
-    test_scale_dot_product_flash_attention_non_interleaved((True, False, False, True))
