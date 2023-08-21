@@ -133,18 +133,14 @@ class scaled_dot_product_attention(torch.nn.Module):
         _, _, s_kv, _ = key.shape
 
         S = query @ key.transpose(-2, -1) * attn_scale
-
-        attn_mask = torch.zeros(s_q, s_kv, dtype=torch.float32, device = 'cuda')
+        S = S.to(dtype=torch.float32)
         if bias is not None:
-            attn_mask = attn_mask + bias
+            S.add_(bias)
         if is_alibi:
-            libi = ((torch.arange(s_kv, dtype=torch.float32, device = 'cuda')) - torch.arange(s_q, dtype=torch.float32, device = 'cuda').view(-1, 1)) * get_slopes(h)
-            attn_mask = attn_mask + libi
+            S.add_(((torch.arange(s_kv, dtype=torch.float32, device = 'cuda')) - torch.arange(s_q, dtype=torch.float32, device = 'cuda').view(-1, 1)) * get_slopes(h))
         if is_causal:
-            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device = 'cuda').tril(diagonal=0)
-            attn_mask = attn_mask.masked_fill(causal_mask == 0, float('-inf')) 
-
-        S = S + attn_mask
+            causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device = 'cuda').triu_(diagonal=1)
+            S.masked_fill_(causal_mask, float('-inf')) 
 
         Stats = None
         if not is_infer:
@@ -153,8 +149,7 @@ class scaled_dot_product_attention(torch.nn.Module):
             row_sum = torch.sum(row_exp, -1, True)
             Stats = row_max + torch.log(row_sum)
 
-        attn_weight = torch.softmax(S, dim=-1).to(dtype=value.dtype)
-        return attn_weight @ value, Stats
+        return torch.softmax(S, dim=-1).to(dtype=value.dtype) @ value, Stats
     
 alibi_mask_options = [True, False]
 padding_mask_options = [True, False]
