@@ -5,6 +5,7 @@ import pytest
 import sys
 
 from test_graph import test_graph, operation
+from utils import getFwdConvDilatedFilterDim, getFwdConvPaddedImageDim, getFwdConvOutputDim
 
 class ImplementationError(Exception):
     def __init__(self, reason):
@@ -80,7 +81,7 @@ def replace_abstract_test_params(json_test_def, abstract_params):
     return json_test_def
 
 def run_test_from_legacy_args(json_fname, args):
-    print("Running from legac json graph definition")
+    print("Running from legacy json graph definition")
     kTEST_NAME = "jsonTestName"
 
     # Parse the cudnnTest arguments
@@ -247,17 +248,6 @@ class Legacy_value:
 
         return legacy_value
     
-def getFwdConvDilatedFilterDim(filterDim, dilation):
-    return ((filterDim - 1) * dilation) + 1
-
-
-def getFwdConvPaddedImageDim(tensorDim, pad):
-    return tensorDim + (2 * pad)
-
-def getFwdConvOutputDim(tensorDim, pad, filterDim, stride, dilation):
-    p = (getFwdConvPaddedImageDim(tensorDim, pad) - getFwdConvDilatedFilterDim(filterDim, dilation)) / stride + 1
-    return int(p)
-
 def get_conv_dim_out(legacy_op, jtensor_dict):
     filter_tensor_name = legacy_op.get_io_tensor_name("W")
     if filter_tensor_name is None:
@@ -285,8 +275,11 @@ def get_conv_dim_out(legacy_op, jtensor_dict):
                                     stdA[d], dilA[d])
     
     return dim
-    
-def replace_implicit_params(Operations, jtensor_dict):
+
+# @brief: Replace derived parameters
+# @details: Some parameters in the test definition are not explicitly specified and depend on several other specifications of the test
+# e.g., dimOut: when the operation is a convolution fprop, it depends on the dimensions of the input tensor and output tensor
+def replace_implicit_params(legacy_ops, jtensor_dict):
     # We could consider doing something smart where we skip this step if there are no
     # implicit parameters left to replace (e.g., from the first pass to replace_abstract_test_params we keep a hint)
     # This could save us time (but is this optimization really worth the complexity?)
@@ -296,11 +289,11 @@ def replace_implicit_params(Operations, jtensor_dict):
     # Replace dimOut
     conv_ops = ["dgrad", "wgrad", "conv"]
 
-    legacy_operations = [op[1].get_legacy_operation_type() for op in Operations.values()]
+    legacy_operations = [op.get_legacy_operation_type() for op in legacy_ops]
     
     # Is any of the operations a convolution operation?
     if set(legacy_operations).intersection(set(conv_ops)):
-        for (_, legacy_op) in Operations.values():
+        for legacy_op in legacy_ops:
             if legacy_op.get_legacy_operation_type() in conv_ops:
                 break
         implicit_params["dimOut"] = get_conv_dim_out(legacy_op, jtensor_dict)
@@ -320,12 +313,18 @@ def run_test_from_json_definition(json_dict):
     jtensor_dict = json_dict["tensors"]
     jnode_list = json_dict["nodes"]
 
+    legacy_ops = [Legacy_operation(jnode) for jnode in jnode_list]
+
+    # Replace any remaining abstract parameters from the tensor dictionary (e.g., dimOut)
+    # After this call we can use legacy_ops and jtensor_dict to construct the pycudnn graph and tensors
+    jtensor_dict = replace_implicit_params(legacy_ops, jtensor_dict)
+
     TGTensors = {}
     # Dictionary of operation names to (test_graph operation, LegacyOperation) tuples
     Operations = {}
+
     # Create all pycudnn operation nodes (without input) and their associated output tensors
-    for node in jnode_list:
-        legacy_op = Legacy_operation(node)
+    for legacy_op in legacy_ops:
         name = legacy_op.get_name()
 
         # Create node without input and add to the graph
@@ -339,25 +338,21 @@ def run_test_from_json_definition(json_dict):
         
         Operations[name] = (test_graph_op, legacy_op)
 
-    # Replace any remaining abstract parameters from the tensor dictionary (e.g., dimOut)
-    # TODO(@mbreughe): we actually only need the legacy operation part for every op in Operations
-    # (i.e. op[1] for op in Operation.values()). Clean this up so that we first do all the parameter concretization
-    # before we create test_graph nodes. We can even split this in 2 functions, to make this more readable/maintainable.
-    jtensor_dict = replace_implicit_params(Operations, jtensor_dict)
-
+    # Propagate any properties from the json test graph's output tensors
+    # At this point TGTensors only contains output tensors. 
+    # Since output tensors are created in cudnn as a result of adding an operation, 
+    # we did not propagate any specifications yet
+    # Currently we only need to propgate the data type
     for jtensor in jtensor_dict:
         if jtensor["name"] in TGTensors:
-            TGTensors[jtensor["name"]].set_data_type(Legacy_tensor(jtensor).get_data_type())
-
+            TGTensors[jtensor["name"]].set_data_type(Legacy_tensor(jtensor).get_data_type())    
     
-    # At this point TGTensors only contains output tensors. 
     # Identify all tensors in jtensor_dict that are not output tensors
     input_tensors = [tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors]
 
     # Create a TestTensor for every input tensor
     for jtensor in input_tensors:
         legacy_tensor = Legacy_tensor(jtensor)
-        # TODO(@mbreughe): are properties correctly transferred? 
         t = testGraph.tensor(**legacy_tensor.get_tensor_properties())
         TGTensors[jtensor["name"]] = t
 
@@ -370,7 +365,7 @@ def run_test_from_json_definition(json_dict):
 
     graph = testGraph.build_cudnn_graph()
 
-    # TODO(@mbreughe): read in rtol/atol from json
+    # Read in rtol/atol from json
     atol = 1e-2
     rtol = 1e-2
     if "tolerances" in json_dict:

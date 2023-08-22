@@ -18,3 +18,13 @@ def getSingleFwdConvImageDimFromPadded(paddedTensorDim, pad):
 
 def getSingleFwdConvDilatedFilterDim(filterDim, dilation):
     return ((filterDim - 1) * dilation) + 1
+
+def getFwdConvDilatedFilterDim(filterDim, dilation):
+    return ((filterDim - 1) * dilation) + 1
+
+def getFwdConvPaddedImageDim(tensorDim, pad):
+    return tensorDim + (2 * pad)
+
+def getFwdConvOutputDim(tensorDim, pad, filterDim, stride, dilation):
+    p = (getFwdConvPaddedImageDim(tensorDim, pad) - getFwdConvDilatedFilterDim(filterDim, dilation)) / stride + 1
+    return int(p)
