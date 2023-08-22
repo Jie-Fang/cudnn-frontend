@@ -343,7 +343,7 @@ class test_graph:
         return self.output_tensors
 
     # @brief: Add a convolution node to the graph
-    def conv(self, **kwargs):
+    def conv_fprop(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_fprop)
 
     def conv_dgrad(self, **kwargs):
