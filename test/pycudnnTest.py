@@ -2,7 +2,7 @@
 
 import pytest
 import argparse
-import os
+import os, sys
 from json_graph_test import run_test_from_legacy_args
 
 from python_graph_defs.basic_tests import test_conv_relu
@@ -30,6 +30,7 @@ if __name__ == "__main__":
     if args.skip_pytest:
         run_test_from_legacy_args(args.testPath, args.graphRunnerArgs)
         sys.exit(0)
+        
     # Graphs defined in json file
     elif args.testPath.endswith(".json"):
         pytest_cmd = [json_graph_test]
@@ -53,4 +54,4 @@ if __name__ == "__main__":
     if int(args.threads) > 1:
         pytest_cmd.extend(["-n", args.threads])
 
-    pytest.main(pytest_cmd)
+    sys.exit(pytest.main(pytest_cmd))

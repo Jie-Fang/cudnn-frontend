@@ -3,6 +3,13 @@ import torch
 from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
+import utils
+
+# Globally ensure cudnn is disabled for everything torch related
+# TODO(https://nvbugs/4251007): Because non-cudnn backend does not use TF32 we run into accuracy issues
+# Currently there are 3 solutions: 1) enable cudnn in the reference, or 2) set NVIDIA_TF32_OVERRIDE=1, 3) run reference twice -- this is most desirable and will be added later
+torch.backends.cudnn.enabled = True 
+
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
@@ -45,6 +52,17 @@ class PytorchReference:
     def bias(kwargs):
         output = torch.add(kwargs["input"], kwargs["bias"])
         return [output]
+    
+    @staticmethod
+    def add(kwargs):
+        output = torch.add(kwargs["a"], kwargs["b"])
+        return [output]
+
+    @staticmethod
+    def conv_dgrad(kwargs):
+        input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
+        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [dX]
 
 # Base class for Tensor and operation nodes
 class test_node:
@@ -325,8 +343,11 @@ class test_graph:
         return self.output_tensors
 
     # @brief: Add a convolution node to the graph
-    def conv(self, **kwargs):
+    def conv_fprop(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_fprop)
+
+    def conv_dgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_dgrad)
 
     # @brief: Add a relu to the graph
     def relu(self, **kwargs):
@@ -338,6 +359,9 @@ class test_graph:
     def matmul(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.matmul)
     
+    def add(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.add)
+
     def bias(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
 
@@ -486,10 +510,10 @@ class test_graph:
         self.io_data_type = data_type
 
     def set_intermediate_data_type(self, data_type):
-        self.set_intermediate_data_type = data_type
+        self.intermediate_data_type = data_type
 
     def set_compute_data_type(self, data_type):
-        self.set_compute_data_type(data_type)
+        self.compute_data_type = data_type
 
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the is_visited status of the nodes
@@ -559,7 +583,11 @@ class test_graph:
             if Y_expected is None:
                 continue
             
+            if Y_expected.dtype != Y_actual.dtype:
+                print ("WARNING: reference and actual output types differ ({} resp., {})".format(Y_expected.dtype, Y_actual.dtype) )
+
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+            print("cudnn and reference match")
             number_outputs_tested += 1
         
         assert number_outputs_tested >= 1
