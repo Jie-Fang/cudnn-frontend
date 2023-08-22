@@ -239,7 +239,9 @@ class Legacy_value:
             return Legacy_value.translate_to_pycudnn_value(Legacy_value.indirection[legacy_key_name], legacy_value)
         elif legacy_key_name == "layout":
             # TODO(@mbreughe): calculate strides instead. but if you do, also change test_graph code
-            if int(legacy_value) == 0:
+            if legacy_value in ["NHWC", "NCHW"]:
+                return legacy_value
+            elif int(legacy_value) == 0:
                 return "NCHW"
             elif int(legacy_value) == 1:
                 return "NHWC"
