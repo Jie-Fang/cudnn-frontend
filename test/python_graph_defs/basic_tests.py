@@ -7,6 +7,12 @@ def test_conv_relu(jparams, testgraph):
     conv_out = testgraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testgraph.relu(input = conv_out)
 
+def test_conv(jparams, testgraph):
+    X = testgraph.tensor(dim=jparams["in_dim"], data_type = cudnn.data_type.FLOAT, layout = "NHWC")
+    W = testgraph.tensor(dim=jparams["filter_dim"], data_type = cudnn.data_type.FLOAT, layout = "NHWC")
+    
+    conv_out = testgraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+
 def test_conv_relu_bias_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
     W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")

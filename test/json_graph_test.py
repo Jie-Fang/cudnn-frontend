@@ -30,9 +30,7 @@ def replace_single_param(json_test_def, abstract_params):
     if isinstance(json_test_def, str) and "<" in json_test_def and ">" in json_test_def:
         abstract_param = json_test_def.strip("<>")
         concrete_param = None
-        print("Replacing", abstract_param)
-
-        
+                
         # Most common case: replace a parameter with what we found on the command line
         if abstract_param in abstract_params:
             concrete_param = abstract_params[abstract_param]
@@ -82,7 +80,7 @@ def replace_abstract_test_params(json_test_def, abstract_params):
     return json_test_def
 
 def run_test_from_legacy_args(json_fname, args):
-    print("RUnning from legacy")
+    print("Running from legac json graph definition")
     kTEST_NAME = "jsonTestName"
 
     # Parse the cudnnTest arguments
@@ -93,7 +91,6 @@ def run_test_from_legacy_args(json_fname, args):
         k = kv_pair[0].strip("-").strip("=")
         v = kv_pair[1].strip("-").strip("=")
         abstract_params[k] = v
-    print (abstract_params)
 
     json_test_name = abstract_params[kTEST_NAME]
 
@@ -102,9 +99,7 @@ def run_test_from_legacy_args(json_fname, args):
     assert json_test_name in json_tests
     abstract_test_dict = json_tests[json_test_name]
     try:
-        print (abstract_test_dict)
         concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
-        print (abstract_test_dict)
         run_test_from_json_definition(concrete_test_dict)
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)
@@ -289,7 +284,6 @@ def get_conv_dim_out(legacy_op, jtensor_dict):
         dim[d+2] = getFwdConvOutputDim(X_tensor_dim[d+2], padA[d], filter_tensor_dim[d+2],
                                     stdA[d], dilA[d])
     
-    print ("Dimout will be ", dim)
     return dim
     
 def replace_implicit_params(Operations, jtensor_dict):
@@ -303,16 +297,11 @@ def replace_implicit_params(Operations, jtensor_dict):
     conv_ops = ["dgrad", "wgrad", "conv"]
 
     legacy_operations = [op[1].get_legacy_operation_type() for op in Operations.values()]
-
-    for (_, legacy_op) in Operations.values():
-        print(legacy_op.get_legacy_operation_type())
     
     # Is any of the operations a convolution operation?
     if set(legacy_operations).intersection(set(conv_ops)):
         for (_, legacy_op) in Operations.values():
-            print(legacy_op.get_legacy_operation_type())
             if legacy_op.get_legacy_operation_type() in conv_ops:
-                print("found one")
                 break
         implicit_params["dimOut"] = get_conv_dim_out(legacy_op, jtensor_dict)
         
@@ -380,8 +369,6 @@ def run_test_from_json_definition(json_dict):
     # we can do a front-end test by using the json dimensions of the virtual tensors
 
     graph = testGraph.build_cudnn_graph()
-
-    print(graph)
 
     # TODO(@mbreughe): read in rtol/atol from json
     atol = 1e-2

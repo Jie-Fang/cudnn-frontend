@@ -6,7 +6,10 @@ import copy
 import utils
 
 # Globally ensure cudnn is disabled for everything torch related
-torch.backends.cudnn.enabled = False 
+# TODO(https://nvbugs/4251007): Because non-cudnn backend does not use TF32 we run into accuracy issues
+# Currently there are 3 solutions: 1) enable cudnn in the reference, or 2) set NVIDIA_TF32_OVERRIDE=1, 3) run reference twice -- this is most desirable and will be added later
+torch.backends.cudnn.enabled = True 
+
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
