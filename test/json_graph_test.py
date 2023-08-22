@@ -104,7 +104,7 @@ def run_test_from_legacy_args(json_fname, args):
         run_test_from_json_definition(concrete_test_dict)
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)
-        sys.exit(0)
+        sys.exit(1)
 
 # A helper function to read json dictionaries
 # @note: scope tells us that the dictionary is being loaded only once
