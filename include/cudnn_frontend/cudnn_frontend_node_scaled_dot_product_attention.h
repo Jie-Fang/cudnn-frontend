@@ -104,7 +104,7 @@ class ScaledDotProductAttentionNode : public INode {
         bmm1_attributes.inputs.A          = options.inputs.Q;
         bmm1_attributes.inputs.B          = last_output;
         bmm1_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        bmm1_attributes.inputs.N_override = options.inputs.SEQ_LEN_K;
+        bmm1_attributes.inputs.N_override = options.inputs.SEQ_LEN_KV;
         last_output = bmm1_attributes.outputs.C = std::make_shared<Tensor_attributes>();
         // Set dims and strides for output of bmm1 as user never sets them
         last_output->set_is_virtual(true)
@@ -165,7 +165,7 @@ class ScaledDotProductAttentionNode : public INode {
             less_than_col_attributes.set_name("cmp_less_than_col");
             less_than_col_attributes.set_mode(PointwiseMode_t::CMP_LT);
             less_than_col_attributes.inputs.IN_0 = col_index;
-            less_than_col_attributes.inputs.IN_1 = options.inputs.SEQ_LEN_K;
+            less_than_col_attributes.inputs.IN_1 = options.inputs.SEQ_LEN_KV;
             auto less_than_col = less_than_col_attributes.outputs.OUT_0 = std::make_shared<Tensor_attributes>();
             less_than_col_attributes.outputs.OUT_0->set_is_virtual(true);
             auto less_than_col_node = std::make_unique<PointwiseNode>(std::move(less_than_col_attributes), context);
@@ -313,7 +313,7 @@ class ScaledDotProductAttentionNode : public INode {
         bmm2_attributes.inputs.A          = last_output;
         bmm2_attributes.inputs.B          = options.inputs.V;
         bmm2_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        bmm2_attributes.inputs.K_override = options.inputs.SEQ_LEN_K;
+        bmm2_attributes.inputs.K_override = options.inputs.SEQ_LEN_KV;
         bmm2_attributes.outputs.C         = options.outputs.O;
         auto bmm2_node                    = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
         sub_nodes.emplace_back(std::move(bmm2_node));
@@ -329,7 +329,8 @@ class ScaledDotProductAttentionNode : public INode {
 
     virtual error_t
     pass_by_value_tensors_(
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) override {
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
+        [[maybe_unused]] void* node_workspace) override {
         half dropout_scale_value = options.dropout_scale;
         tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
 

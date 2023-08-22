@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "cudnn_frontend_node_batchnorm.h"
+#include "cudnn_frontend_node_batchnorm_inference.h"
 #include "cudnn_frontend_node_bn_finalize.h"
 #include "cudnn_frontend_node_conv_fprop.h"
 #include "cudnn_frontend_node_conv_dgrad.h"
@@ -50,8 +51,6 @@ class Plans {
         return status;
     }
 
-    int64_t
-    get_workspace_size();
     int64_t
     get_max_workspace_size();
 
@@ -192,11 +191,6 @@ Plans::get_max_workspace_size() {
     return list_of_engine_configs.get_max_workspace_size();
 }
 
-inline int64_t
-Plans::get_workspace_size() {
-    return list_of_engine_configs.get_workspace_size();
-}
-
 class Graph : public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> tensors;
@@ -238,6 +232,13 @@ class Graph : public INode {
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 Batchnorm_attributes);
+
+    std::shared_ptr<Tensor_attributes> batchnorm_inference(std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           Batchnorm_inference_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 6> bn_finalize(std::shared_ptr<Tensor_attributes>,
                                                                   std::shared_ptr<Tensor_attributes>,
@@ -445,6 +446,28 @@ Graph::batchnorm(std::shared_ptr<Tensor_attributes> x,
     sub_nodes.emplace_back(std::make_unique<BatchNormNode>(std::move(options), context));
 
     return {Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::batchnorm_inference(std::shared_ptr<Tensor_attributes> x,
+                           std::shared_ptr<Tensor_attributes> mean,
+                           std::shared_ptr<Tensor_attributes> inv_variance,
+                           std::shared_ptr<Tensor_attributes> scale,
+                           std::shared_ptr<Tensor_attributes> bias,
+                           Batchnorm_inference_attributes options) {
+    // Set outputs
+    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+
+    // Set inputs
+    options.inputs.X            = x;
+    options.inputs.MEAN         = mean;
+    options.inputs.INV_VARIANCE = inv_variance;
+    options.inputs.SCALE        = scale;
+    options.inputs.BIAS         = bias;
+
+    sub_nodes.emplace_back(std::make_unique<BatchnormInferenceNode>(std::move(options), context));
+
+    return Y;
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>

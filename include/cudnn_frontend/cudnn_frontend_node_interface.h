@@ -26,7 +26,11 @@ namespace graph {
 class INode : public ICudnn {
    public:
     // A closed set of types that are allowed to be passed by value today
-    using pass_by_values_t = std::variant<half, float, float*>;
+    using pass_by_values_t = std::variant<half, float, void*>;
+
+    // Stores workspace size in bytes required by FE node
+    // It does NOT include cudnn backend workspace
+    size_t workspace_size;
 
     detail::Context context;
 
@@ -59,17 +63,46 @@ class INode : public ICudnn {
         return {error_code_t::OK, ""};
     }
 
+    virtual int64_t
+    get_fe_workspace_size_node() const {
+        // Mostly no FE nodes have require workspace
+        return 0;
+    }
+
+    int64_t
+    get_cudnn_workspace_size() const {
+        int64_t cudnn_workspace_size = get_cudnn_workspace_size_node();
+        for (auto const& sub_node : sub_nodes) {
+            cudnn_workspace_size += sub_node->get_cudnn_workspace_size();
+        }
+        return cudnn_workspace_size;
+    }
+
+    int64_t
+    get_fe_workspace_size() const {
+        int64_t fe_workspace_size = get_fe_workspace_size_node();
+        for (auto const& sub_node : sub_nodes) {
+            fe_workspace_size += sub_node->get_fe_workspace_size();
+        }
+        return fe_workspace_size;
+    }
+
     virtual error_t
-    pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&) {
+    pass_by_value_tensors_(std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&,
+                           [[maybe_unused]] void* node_workspace) {
         return {error_code_t::OK, ""};
     }
 
     error_t
     gather_pass_by_value_tensors(
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) {
-        CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(tensor_to_pass_by_value));
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
+        void* fe_workspace) {
+        void* node_workspace = fe_workspace;
+        CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(tensor_to_pass_by_value, node_workspace));
+        node_workspace = static_cast<char*>(node_workspace) + get_fe_workspace_size_node();
         for (auto const& sub_node : sub_nodes) {
-            auto status = sub_node->gather_pass_by_value_tensors(tensor_to_pass_by_value);
+            auto status    = sub_node->gather_pass_by_value_tensors(tensor_to_pass_by_value, node_workspace);
+            node_workspace = static_cast<char*>(node_workspace) + sub_node->get_fe_workspace_size_node();
             if (status.get_code() != error_code_t::OK) {
                 return status;
             }
@@ -84,6 +117,7 @@ class INode : public ICudnn {
     enum class Type {
         COMPOSITE,
         BATCHNORM,
+        BATCHNORM_INFERENCE,
         BN_FINALIZE,
         CONVOLUTION,
         DBN,
@@ -209,11 +243,10 @@ class INode : public ICudnn {
 
     int64_t
     get_workspace_size() const {
-        int64_t current_workspace_size = get_cudnn_workspace_size();
-        for (auto const& sub_node : sub_nodes) {
-            current_workspace_size += sub_node->get_cudnn_workspace_size();
-        }
-        return current_workspace_size;
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        return get_fe_workspace_size() + get_cudnn_workspace_size();
     }
 
     error_t
@@ -226,7 +259,10 @@ class INode : public ICudnn {
         }
 
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t> tensor_to_pass_by_value;
-        auto status = gather_pass_by_value_tensors(tensor_to_pass_by_value);
+        void* fe_workspace    = workspace;
+        void* cudnn_workspace = static_cast<char*>(fe_workspace) + get_fe_workspace_size();
+
+        auto status = gather_pass_by_value_tensors(tensor_to_pass_by_value, fe_workspace);
         if (status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Failed to gather_pass_by_value_tensors." << std::endl;
             return status;
@@ -240,8 +276,8 @@ class INode : public ICudnn {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), half_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), float_value_ptr);
-            } else if (float** float_value_ptr = std::get_if<float*>(&value)) {
-                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), *float_value_ptr);
+            } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), *void_value_ptr);
             } else {
                 status.code    = error_code_t::INVALID_VARIANT_PACK;
                 status.err_msg = "[cudnn_frontend] ERROR: Unexpected type for pass by value tensor.";
@@ -249,7 +285,7 @@ class INode : public ICudnn {
             }
         }
 
-        status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, workspace);
+        status = execute_cudnn_plans(handle, tensor_uid_to_pointer_map, cudnn_workspace);
         if (status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Execution failed." << std::endl;
             return status;
@@ -509,16 +545,6 @@ class Execution_plan_list {
             max_size = std::max(max_size, plan->getWorkspaceSize());
         }
         return max_size;
-    }
-
-    int64_t
-    get_workspace_size() {
-        if (execution_plans.size()) {
-            execution_plans.front()->getWorkspaceSize();
-        } else {
-            return 0;
-        }
-        return 0;
     }
 };
 

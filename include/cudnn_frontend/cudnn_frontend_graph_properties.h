@@ -148,6 +148,7 @@ class Operation {
    public:
     enum class Tag {
         BN,
+        BN_inference,
         BN_finalize,
         Conv_fprop,
         Conv_dgrad,
@@ -187,6 +188,7 @@ class Operation {
 NLOHMANN_JSON_SERIALIZE_ENUM(Operation::Tag,
                              {
                                  {Operation::Tag::BN, "BN"},
+                                 {Operation::Tag::BN_inference, "BN_inference"},
                                  {Operation::Tag::BN_finalize, "BN_finalize"},
                                  {Operation::Tag::Conv_fprop, "Conv_fprop"},
                                  {Operation::Tag::Conv_dgrad, "Conv_dgrad"},
@@ -448,6 +450,7 @@ class batchnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> MEAN;
         std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> EPSILON;
+        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     } inputs;
 
     struct Outputs {
@@ -475,6 +478,12 @@ class batchnorm_backward_attributes : public Operation {
     batchnorm_backward_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
+        return *this;
+    }
+
+    batchnorm_backward_attributes&
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
+        inputs.peer_stats = peer_stats;
         return *this;
     }
 
@@ -738,6 +747,7 @@ class Pointwise_attributes : public Operation {
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
+    std::optional<float> relu_lower_clip_slope;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, IN_0, IN_1, IN_2)
 
@@ -761,6 +771,12 @@ class Pointwise_attributes : public Operation {
     Pointwise_attributes&
     set_axis(int64_t const axis) {
         this->axis = axis;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_relu_lower_clip_slope(float const negative_slope) {
+        this->relu_lower_clip_slope = negative_slope;
         return *this;
     }
 
@@ -888,6 +904,58 @@ class Batchnorm_attributes : public Operation {
         outputs.INV_VARIANCE->fill_from_context(context);
         outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
         outputs.NEXT_RUNNING_VAR->fill_from_context(context);
+
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Batchnorm_inference_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+    } outputs;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, BIAS)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, tag, inputs, outputs)
+
+    Batchnorm_inference_attributes() : Operation(Tag::BN_inference) {}
+
+    Batchnorm_inference_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Batchnorm_inference_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Batchnorm_inference_attributes& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.MEAN->fill_from_context(context);
+        inputs.INV_VARIANCE->fill_from_context(context);
+
+        outputs.Y->fill_from_context(context);
 
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
@@ -1146,7 +1214,7 @@ class Scaled_dot_product_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Mask;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
         std::shared_ptr<Tensor_attributes> Dropout_scale;
@@ -1181,8 +1249,8 @@ class Scaled_dot_product_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_attention_attributes&
-    set_seq_len_k(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_K = value;
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 
@@ -1243,7 +1311,7 @@ class Scaled_dot_product_attention_attributes : public Operation {
         inputs.K->fill_from_context(context);
         inputs.V->fill_from_context(context);
         inputs.SEQ_LEN_Q->fill_from_context(context);
-        inputs.SEQ_LEN_K->fill_from_context(context);
+        inputs.SEQ_LEN_KV->fill_from_context(context);
         outputs.O->fill_from_context(context);
 
         // Fill this node
@@ -1261,7 +1329,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> K;
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
@@ -1327,8 +1395,8 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_flash_attention_attributes&
-    set_seq_len_k(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_K = value;
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 

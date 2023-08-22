@@ -29,12 +29,14 @@ class PointwiseNode : public INode {
         if (options.mode == PointwiseMode_t::NOT_SET) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message = "[cudnn_frontend] ERROR: pointwise mode not set.";
+            getLogger() << message << std::endl;
             return {status, message};
         }
 
         if (!(options.inputs.IN_0)) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message = "[cudnn_frontend] ERROR: pointwise input IN_0 not set.";
+            getLogger() << message << std::endl;
             return {status, message};
         }
 
@@ -43,6 +45,7 @@ class PointwiseNode : public INode {
             if (!(options.inputs.IN_1)) {
                 auto status         = error_code_t::ATTRIBUTE_NOT_SET;
                 std::string message = "[cudnn_frontend] ERROR: pointwise input IN_1 not set.";
+                getLogger() << message << std::endl;
                 return {status, message};
             }
         }
@@ -51,6 +54,7 @@ class PointwiseNode : public INode {
             if (!(options.inputs.IN_2)) {
                 auto status         = error_code_t::ATTRIBUTE_NOT_SET;
                 std::string message = "[cudnn_frontend] ERROR: pointwise input IN_2 not set.";
+                getLogger() << message << std::endl;
                 return {status, message};
             }
         }
@@ -58,6 +62,7 @@ class PointwiseNode : public INode {
         if (!(options.outputs.OUT_0)) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message = "[cudnn_frontend] ERROR: pointwise output OUT_0 not set in " + options.get_name();
+            getLogger() << message << std::endl;
             return {status, message};
         }
 
@@ -137,6 +142,7 @@ class PointwiseNode : public INode {
 
             auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
                                             .setAxis(options.get_axis().value_or(-1))
+                                            .setReluLowerClipSlope(options.relu_lower_clip_slope.value_or(0.0))
                                             .setComputeType(options.get_compute_data_type())
                                             .setMode(options.mode)
                                             .build();
