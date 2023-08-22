@@ -63,6 +63,15 @@ class PytorchReference:
         input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
         dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
         return [dX]
+    
+    @staticmethod
+    def conv_wgrad(kwargs):
+        return [None]
+
+    @staticmethod
+    def reduction(kwargs):
+        return [None]
+
 
 # Base class for Tensor and operation nodes
 class test_node:
@@ -278,6 +287,12 @@ class test_tensor:
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_stride(stride)
 
+    def set_dim(self, dim):
+        self.dim = dim
+
+        if self.cudnn_tensor is not None:
+            self.cudnn_tensor.set_dim(dim)
+
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
@@ -286,6 +301,9 @@ class test_tensor:
 
         if "stride" in dir(self):
             self.cudnn_tensor.set_stride(self.stride)
+
+        if "dim" in dir(self):
+            self.cudnn_tensor.set_dim(self.dim)
     
 
 def convert_to_cudnn_type(torch_type):
@@ -349,6 +367,9 @@ class test_graph:
     def conv_dgrad(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_dgrad)
 
+    def conv_wgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_wgrad)
+
     # @brief: Add a relu to the graph
     def relu(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.relu)
@@ -364,6 +385,9 @@ class test_graph:
 
     def bias(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
+
+    def reduction(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.reduction)
 
     # @brief: Add an input tensor to the graph
     def tensor(self, **kwargs):

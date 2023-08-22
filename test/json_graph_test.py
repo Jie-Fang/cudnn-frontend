@@ -135,6 +135,7 @@ class Legacy_operation:
     OUTPUT = "output"
     INPUT = "input"
     PROPS = "properties"
+    VAL_MAP = "value_mapping"
     MAPPING_FILE = os.path.join(os.path.dirname(__file__), "json_graph_fe_mapping.json")
     
     def setup_operation_mapping():
@@ -183,11 +184,19 @@ class Legacy_operation:
 
         return outputs
     
+    def translate_to_pycudnn_value(self, leg_prop, leg_value):
+        if Legacy_operation.VAL_MAP in self.operation_mapping and leg_prop in self.operation_mapping[Legacy_operation.VAL_MAP]:
+            print("DEBUGGING")
+            # TODO(@mbreughe): can we get rid of the eval?
+            return eval(self.operation_mapping[Legacy_operation.VAL_MAP][leg_prop][leg_value])
+        else:
+            return Legacy_value.translate_to_pycudnn_value(leg_prop, leg_value)
+    
     def get_operation_properties(self):
         property_map = {}
         for leg_prop, pycudnn_prop in self.operation_mapping[Legacy_operation.PROPS].items():
             leg_value = self.jnode[leg_prop]
-            property_map[pycudnn_prop] = Legacy_value.translate_to_pycudnn_value(leg_prop, leg_value)
+            property_map[pycudnn_prop] = self.translate_to_pycudnn_value(leg_prop, leg_value)
 
         return property_map
     

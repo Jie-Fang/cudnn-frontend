@@ -43,8 +43,12 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
         filename = os.path.join(params_path, "{}.json".format(test_name))
         if os.path.exists(filename):
             params = []
-            with open(filename) as ifh:
-                params = json.load(ifh)
+            try:
+                with open(filename) as ifh:
+                    params = json.load(ifh)
+            except Exception as e:
+                print("Issue with input parameter file {}".format(filename))
+                raise e
 
             cur_ids = ["{}[json({})]".format(test_name, i) for i in range(len(params))]
 
