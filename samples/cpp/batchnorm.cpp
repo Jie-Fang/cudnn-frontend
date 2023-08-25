@@ -248,7 +248,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     bool has_dadd = true;
     DX_drelu->set_output(has_dadd).set_data_type(fe::DataType_t::HALF);
 
-    fe::graph::batchnorm_backward_attributes::Inputs inputs;
+    fe::graph::Batchnorm_backward_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({4, 32, 16, 16})
@@ -264,7 +264,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     auto peer_stats_1 =
         graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
 
-    auto DBN_options = fe::graph::batchnorm_backward_attributes()
+    auto DBN_options = fe::graph::Batchnorm_backward_attributes()
                            .set_saved_mean_and_inv_variance(mean, inv_variance)
                            .set_peer_stats({peer_stats_0, peer_stats_1});
     auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, X, scale, DBN_options);
@@ -360,7 +360,7 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
     auto DX_drelu                = graph.pointwise(DY, BN_Y, relu_backward_attribues);
     DX_drelu->set_data_type(fe::DataType_t::HALF);
 
-    auto DBN_options = fe::graph::batchnorm_backward_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto DBN_options = fe::graph::Batchnorm_backward_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
     auto [DX, dscale, dbias] = graph.batchnorm_backward(DX_drelu, BN_X, scale, DBN_options);
     DX->set_output(true);
     dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);

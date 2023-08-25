@@ -270,7 +270,7 @@ class Graph : public INode {
     std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
-                                                                         batchnorm_backward_attributes);
+                                                                         Batchnorm_backward_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
@@ -474,7 +474,7 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          batchnorm_backward_attributes options) {
+                          Batchnorm_backward_attributes options) {
     // Set outputs
     options.make_outputs([this](std::string const &name) { return output_tensor(name); });
     auto return_outputs = options.outputs;

@@ -218,7 +218,7 @@ class PyGraph {
                        std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>& peer_stats,
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name) {
-        auto attributes = cudnn_frontend::graph::batchnorm_backward_attributes()
+        auto attributes = cudnn_frontend::graph::Batchnorm_backward_attributes()
                               .set_saved_mean_and_inv_variance(mean, inv_variance)
                               .set_peer_stats(peer_stats)
                               .set_compute_data_type(compute_data_type)

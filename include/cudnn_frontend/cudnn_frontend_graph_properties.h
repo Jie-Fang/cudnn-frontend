@@ -441,7 +441,7 @@ class Conv_fprop_attributes : public Operation {
     }
 };
 
-class batchnorm_backward_attributes : public Operation {
+class Batchnorm_backward_attributes : public Operation {
    public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> DY;
@@ -463,11 +463,11 @@ class batchnorm_backward_attributes : public Operation {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(batchnorm_backward_attributes, name, tag, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, tag, inputs, outputs)
 
-    batchnorm_backward_attributes() : Operation(Tag::DBN) {}
+    Batchnorm_backward_attributes() : Operation(Tag::DBN) {}
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
         inputs.MEAN         = mean;
@@ -475,13 +475,13 @@ class batchnorm_backward_attributes : public Operation {
         return *this;
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
         return *this;
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
         inputs.peer_stats = peer_stats;
         return *this;
@@ -494,20 +494,20 @@ class batchnorm_backward_attributes : public Operation {
         outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_name(std::string const& value) {
         name = value;
         return *this;
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
     auto
-    fill_from_context(detail::Context const& context) -> batchnorm_backward_attributes& {
+    fill_from_context(detail::Context const& context) -> Batchnorm_backward_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
