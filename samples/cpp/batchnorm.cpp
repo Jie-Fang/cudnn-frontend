@@ -32,7 +32,6 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::BN_finalize_attributes::Inputs inputs;
     auto sum =
         graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
     auto sq_sum            = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));
@@ -120,7 +119,6 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Batchnorm_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({4, 32, 16, 16})
@@ -248,7 +246,6 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     bool has_dadd = true;
     DX_drelu->set_output(has_dadd).set_data_type(fe::DataType_t::HALF);
 
-    fe::graph::Batchnorm_backward_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({4, 32, 16, 16})
