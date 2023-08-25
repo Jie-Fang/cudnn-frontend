@@ -29,12 +29,6 @@ function(find_cudnn_library NAME)
 endfunction()
 
 find_cudnn_library(cudnn)
-find_cudnn_library(cudnn_adv_infer)
-find_cudnn_library(cudnn_adv_train)
-find_cudnn_library(cudnn_cnn_infer)
-find_cudnn_library(cudnn_cnn_train)
-find_cudnn_library(cudnn_ops_infer)
-find_cudnn_library(cudnn_ops_train)
 
 include (FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
@@ -65,11 +59,5 @@ target_include_directories(
 target_link_libraries(
     CUDNN::cudnn_all
     INTERFACE
-    CUDNN::cudnn_adv_train
-    CUDNN::cudnn_ops_train
-    CUDNN::cudnn_cnn_train
-    CUDNN::cudnn_adv_infer
-    CUDNN::cudnn_cnn_infer
-    CUDNN::cudnn_ops_infer
     CUDNN::cudnn 
 )
