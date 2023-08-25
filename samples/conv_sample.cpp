@@ -1249,7 +1249,7 @@ run_dp4a(int64_t* x_dim,
 
         void* data_ptrs[] = {devPtrX, devPtrY, devPtrW};
         int64_t uids[]    = {'x', 'y', 'w'};
-        auto variantPack  = cudnn_frontend::VariantPackBuilder().setDataPointers(3, data_ptrs).setUids(3, uids).build();
+        auto variantPack  = cudnn_frontend::VariantPackBuilder().setDataPointers(3, data_ptrs).setUids(3, uids).setWorkspacePointer(workspace_ptr).build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
         auto sample_predicate_function = [max_workspace_size](cudnn_frontend::ExecutionPlan const& plan) -> bool {

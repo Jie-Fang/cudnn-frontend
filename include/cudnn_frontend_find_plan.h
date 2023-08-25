@@ -75,6 +75,7 @@ time_sorted_plan(cudnnHandle_t handle,
         successful_plan_count++;
         cudaDeviceSynchronize();
 
+        float time_run_ms[3] = {0.0f, 0.0f, 0.0f};
         for (int i = 0; i < maxIterCount; i++) {
             cudaEventRecord(start, stream);
 
@@ -97,8 +98,15 @@ time_sorted_plan(cudnnHandle_t handle,
                 } else {
                     break;
                 }
+            } else if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE) {
+                time_run_ms[i] = time_ms;
+                if (i == maxIterCount - 1) {
+                    auto min_of_first_two = std::min(time_run_ms[0], time_run_ms[1]);
+                    auto max_of_first_two = std::max(time_run_ms[0], time_run_ms[1]);
+                    final_time_ms         = std::max(min_of_first_two, std::min(max_of_first_two, time_run_ms[2]));
+                }
             } else {
-                final_time_ms = i == (maxIterCount / 2) ? time_ms : final_time_ms;
+                final_time_ms = time_ms;
             }
         }
         getLogger() << "[cudnn_frontend] Plan " << plan.getTag() << " took " << std::setw(10) << final_time_ms
