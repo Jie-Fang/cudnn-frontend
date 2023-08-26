@@ -46,7 +46,7 @@ class LayerNormNode : public INode {
         // scale_bias   dim is 1,c,h,w
         // mean inv_var dim is n,1,1,1
         auto scale_bias_dim = X->get_dim();
-        scale_bias_dim[0] = 1;
+        scale_bias_dim[0]   = 1;
 
         auto stats_dim = X->get_dim();
         for (size_t i = 1; i < stats_dim.size(); i++) {
@@ -77,7 +77,7 @@ class LayerNormNode : public INode {
             if (mean->get_stride().empty()) {
                 mean->set_stride(detail::generate_stride(mean->get_dim()));
             }
-            
+
             auto inv_var = options.outputs.INV_VARIANCE;
             if (inv_var->get_dim().empty()) {
                 inv_var->set_dim(stats_dim);
@@ -159,12 +159,8 @@ class LayerNormNode : public INode {
 #endif
             // Push all real tensors as required for operation execution.
             std::vector<std::shared_ptr<Tensor_attributes>> tensors_involved_in_operation = {
-                options.inputs.X,
-                options.inputs.EPSILON,
-                options.inputs.SCALE,
-                options.inputs.BIAS,
-                options.outputs.Y};
-            
+                options.inputs.X, options.inputs.EPSILON, options.inputs.SCALE, options.inputs.BIAS, options.outputs.Y};
+
             if (options.forward_phase == NormFwdPhase_t::TRAINING) {
                 tensors_involved_in_operation.push_back(options.outputs.MEAN);
                 tensors_involved_in_operation.push_back(options.outputs.INV_VARIANCE);
@@ -198,7 +194,7 @@ class LayerNormNode : public INode {
                         .setNormFwdPhase(options.forward_phase)
                         .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
                         .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
-                                        *(tensors.at(options.inputs.BIAS->get_uid())))
+                                         *(tensors.at(options.inputs.BIAS->get_uid())))
                         .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
                         .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                         .build();

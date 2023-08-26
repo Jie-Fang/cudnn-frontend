@@ -27,7 +27,8 @@ class DLNNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DLNNode " << options.name << "..." << std::endl;
 
-        if (!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON) && !(options.inputs.SCALE)) {
+        if (!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON) &&
+            !(options.inputs.SCALE)) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message = "[cudnn_frontend] ERROR: Either saved mean/inv_variance/scale or epsilon required.";
             return {status, message};
@@ -71,7 +72,7 @@ class DLNNode : public INode {
         }
 
         auto scale_bias_dim = X->get_dim();
-        scale_bias_dim[0] = 1;
+        scale_bias_dim[0]   = 1;
 
         auto stats_dim = X->get_dim();
         for (size_t i = 1; i < stats_dim.size(); i++) {
@@ -179,7 +180,6 @@ class DLNNode : public INode {
                                                                                              options.outputs.DX,
                                                                                              options.outputs.DSCALE,
                                                                                              options.outputs.DBIAS};
-
 
             std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {

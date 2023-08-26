@@ -231,9 +231,9 @@ class Graph : public INode {
     tensor(Tensor_attributes const &tensor);
 
     std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm(std::shared_ptr<Tensor_attributes>,
-                 std::shared_ptr<Tensor_attributes>,
-                 std::shared_ptr<Tensor_attributes>,
-                 Layernorm_attributes);
+                                                                std::shared_ptr<Tensor_attributes>,
+                                                                std::shared_ptr<Tensor_attributes>,
+                                                                Layernorm_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
@@ -278,7 +278,7 @@ class Graph : public INode {
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          Batchnorm_backward_attributes);
-    
+
     std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
@@ -438,12 +438,12 @@ Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
                  std::shared_ptr<Tensor_attributes> bias,
                  Layernorm_attributes options) {
     // Set outputs
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
-    std::shared_ptr<Tensor_attributes> MEAN = nullptr;
+    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
+    std::shared_ptr<Tensor_attributes> MEAN         = nullptr;
     std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
     if (options.forward_phase == NormFwdPhase_t::TRAINING) {
         MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-        INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
+        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
     }
     // Set inputs
     options.inputs.X     = x;

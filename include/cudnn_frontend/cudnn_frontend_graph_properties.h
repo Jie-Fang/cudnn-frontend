@@ -941,10 +941,10 @@ class Layernorm_attributes : public Operation {
 
     void
     make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y                 = output_tensor(name + "_Y_output");
+        outputs.Y = output_tensor(name + "_Y_output");
         if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN              = output_tensor(name + "_MEAN_output");
-            outputs.INV_VARIANCE      = output_tensor(name + "_INV_VARIANCE_output");
+            outputs.MEAN         = output_tensor(name + "_MEAN_output");
+            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
         }
     }
 
