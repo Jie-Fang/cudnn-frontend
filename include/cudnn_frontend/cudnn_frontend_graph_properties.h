@@ -861,8 +861,10 @@ class Layernorm_attributes : public Operation {
     void
     make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
         outputs.Y                 = output_tensor(name + "_Y_output");
-        outputs.MEAN              = output_tensor(name + "_MEAN_output");
-        outputs.INV_VARIANCE      = output_tensor(name + "_INV_VARIANCE_output");
+        if (forward_phase == NormFwdPhase_t::TRAINING) {
+            outputs.MEAN              = output_tensor(name + "_MEAN_output");
+            outputs.INV_VARIANCE      = output_tensor(name + "_INV_VARIANCE_output");
+        }
     }
 
     auto
@@ -874,8 +876,10 @@ class Layernorm_attributes : public Operation {
         inputs.EPSILON->fill_from_context(context);
 
         outputs.Y->fill_from_context(context);
-        outputs.MEAN->fill_from_context(context);
-        outputs.INV_VARIANCE->fill_from_context(context);
+        if (forward_phase == NormFwdPhase_t::TRAINING) {
+            outputs.MEAN->fill_from_context(context);
+            outputs.INV_VARIANCE->fill_from_context(context);
+        }
 
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());

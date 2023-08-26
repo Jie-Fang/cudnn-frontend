@@ -433,9 +433,12 @@ Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
                  Layernorm_attributes options) {
     // Set outputs
     auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
-    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-    auto INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
-
+    std::shared_ptr<Tensor_attributes> MEAN = nullptr;
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
+    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
+        MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+        INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
+    }
     // Set inputs
     options.inputs.X     = x;
     options.inputs.SCALE = scale;
