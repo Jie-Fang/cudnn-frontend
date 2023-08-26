@@ -158,3 +158,75 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
 
     cudnnDestroy(handle);
 }
+
+TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph;
+    graph.set_io_data_type(fe::DataType_t::HALF)
+        .set_intermediate_data_type(fe::DataType_t::FLOAT)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto X = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("X")
+                              .set_dim({4, 32, 16, 16})
+                              .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
+    auto DY = graph.tensor(fe::graph::Tensor_attributes()
+                               .set_name("DY")
+                               .set_dim({4, 32, 16, 16})
+                               .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
+
+    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
+    auto mean  = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance =
+        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+
+    auto DLN_options = fe::graph::Layernorm_backward_attributes()
+                           .set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto [DX, dscale, dbias] = graph.layernorm_backward(DY, X, scale, DLN_options);
+    DX->set_output(true);
+    dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    dbias->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+
+#if (CUDNN_VERSION < 8905)
+    SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
+#endif
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("LayerNorm Backward requires Ampere and up");
+    }
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.validate().is_good());
+
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+
+    REQUIRE(plans.check_support(handle).is_good());
+
+    REQUIRE(graph.set_execution_plans(plans).is_good());
+
+    Surface<half> X_tensor(4 * 32 * 16 * 16, false);
+    Surface<half> DY_tensor(4 * 32 * 16 * 16, false);
+    Surface<float> Mean_tensor(4, false);
+    Surface<float> Inv_variance_tensor(4, false);
+    Surface<float> Scale_tensor(32 * 16 * 16, false);
+    Surface<float> Dscale_tensor(32 * 16 * 16, false);
+    Surface<float> Dbias_tensor(32 * 16 * 16, false);
+    Surface<half> DX_tensor(4 * 32 * 16 * 16, false);
+
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {X, X_tensor.devPtr},
+        {DY, DY_tensor.devPtr},
+        {mean, Mean_tensor.devPtr},
+        {inv_variance, Inv_variance_tensor.devPtr},
+        {scale, Scale_tensor.devPtr},
+        {dscale, Dscale_tensor.devPtr},
+        {dbias, Dbias_tensor.devPtr},
+        {DX, DX_tensor.devPtr}};
+    
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    cudnnDestroy(handle);
+}

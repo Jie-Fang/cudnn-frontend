@@ -38,7 +38,7 @@ FE v1.0 API follows a functional style of building a graph. Operations take in i
 | Matrix Multiplication   | matmul <br> Matmul_attributes                             | matmul       |
 | Pointwise Operations    | pointwise <br> Pointwise_attributes                       | - add<br>- bias<br>- rqsrt<br>- sub<br>- mul<br>- scale<br>- relu<br>- elu<br>- gelu<br>- cmp_gt       |
 | Batch Normalization     | batchnorm <br>Batchnorm_attributes                        | batchnorm    |
-| Batch Norm bprop        | batchnorm_backward <br>batchnorm_backward_attributes      | batchnorm_backward    |
+| Batch Norm bprop        | batchnorm_backward <br>Batchnorm_backward_attributes      | batchnorm_backward    |
 | Generate stats of output| genstats <br>Genstats_attributes                          | genstats     |
 | BN Finalize of stats    | bn_finalize <br>BN_finalize_attributes                    | bn_finalize  |
 | Dbn weight              | dbn_weight <br>DBN_weight_attributes                      | dbn_weight   |
@@ -343,23 +343,23 @@ The API to achieve above is:
 std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes> loss,
                                                                          std::shared_ptr<Tensor_attributes> input,
                                                                          std::shared_ptr<Tensor_attributes> scale,
-                                                                         batchnorm_backward_attributes);
+                                                                         Batchnorm_backward_attributes);
 ```
 where the output array has tensors in order of: `[input gradient, scale gradient, bias gradient]`.
 
 DBN attributes is a lighweight structure with setters:  
 ```
-batchnorm_backward_attributes&
+Batchnorm_backward_attributes&
 set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> saved_mean,
                                 std::shared_ptr<Tensor_attributes> saved_inverse_variance)
                                 
-batchnorm_backward_attributes&
+Batchnorm_backward_attributes&
 set_epsilon(std::shared_ptr<Tensor_attributes> epsilon)
 
-batchnorm_backward_attributes&
+Batchnorm_backward_attributes&
 set_name(std::string const&)
 
-batchnorm_backward_attributes&
+Batchnorm_backward_attributes&
 set_compute_data_type(DataType_t value)
 ```
 Only setting either (saved mean and inverse_variance) or (epsilon) is necessary.

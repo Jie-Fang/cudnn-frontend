@@ -122,6 +122,7 @@ class INode : public ICudnn {
         CONVOLUTION,
         DBN,
         DBN_WEIGHT,
+        DLN,
         DGRAD,
         GENSTATS,
         LAYERNORM,

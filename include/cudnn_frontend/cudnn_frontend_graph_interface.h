@@ -9,6 +9,7 @@
 #include "cudnn_frontend_node_conv_dgrad.h"
 #include "cudnn_frontend_node_conv_wgrad.h"
 #include "cudnn_frontend_node_dbn.h"
+#include "cudnn_frontend_node_dln.h"
 #include "cudnn_frontend_node_dbn_weight.h"
 #include "cudnn_frontend_node_genstats.h"
 #include "cudnn_frontend_node_layernorm.h"
@@ -276,7 +277,12 @@ class Graph : public INode {
     std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
-                                                                         batchnorm_backward_attributes);
+                                                                         Batchnorm_backward_attributes);
+    
+    std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm_backward(std::shared_ptr<Tensor_attributes>,
+                                                                         std::shared_ptr<Tensor_attributes>,
+                                                                         std::shared_ptr<Tensor_attributes>,
+                                                                         Layernorm_backward_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
@@ -503,7 +509,7 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          batchnorm_backward_attributes options) {
+                          Batchnorm_backward_attributes options) {
     // Set outputs
     options.make_outputs([this](std::string const &name) { return output_tensor(name); });
     auto return_outputs = options.outputs;
@@ -514,6 +520,25 @@ Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
     options.inputs.SCALE = scale;
 
     sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
+
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::layernorm_backward(std::shared_ptr<Tensor_attributes> dy,
+                          std::shared_ptr<Tensor_attributes> x,
+                          std::shared_ptr<Tensor_attributes> scale,
+                          Layernorm_backward_attributes options) {
+    // Set outputs
+    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
+    auto return_outputs = options.outputs;
+
+    // Set inputs
+    options.inputs.DY    = dy;
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+
+    sub_nodes.emplace_back(std::make_unique<DLNNode>(std::move(options), context));
 
     return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }
