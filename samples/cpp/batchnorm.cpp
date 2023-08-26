@@ -32,7 +32,6 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::BN_finalize_attributes::Inputs inputs;
     auto sum =
         graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
     auto sq_sum            = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));

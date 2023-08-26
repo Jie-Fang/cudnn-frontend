@@ -11,6 +11,7 @@
 #include "cudnn_frontend_node_dbn.h"
 #include "cudnn_frontend_node_dbn_weight.h"
 #include "cudnn_frontend_node_genstats.h"
+#include "cudnn_frontend_node_layernorm.h"
 #include "cudnn_frontend_node_matmul.h"
 #include "cudnn_frontend_node_pointwise.h"
 #include "cudnn_frontend_node_reduction.h"
@@ -228,6 +229,11 @@ class Graph : public INode {
     std::shared_ptr<Tensor_attributes>
     tensor(Tensor_attributes const &tensor);
 
+    std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm(std::shared_ptr<Tensor_attributes>,
+                 std::shared_ptr<Tensor_attributes>,
+                 std::shared_ptr<Tensor_attributes>,
+                 Layernorm_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
@@ -418,6 +424,26 @@ Graph::bn_finalize(std::shared_ptr<Tensor_attributes> sum,
     sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(options), context));
 
     return {EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
+                 std::shared_ptr<Tensor_attributes> scale,
+                 std::shared_ptr<Tensor_attributes> bias,
+                 Layernorm_attributes options) {
+    // Set outputs
+    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+    auto INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
+
+    // Set inputs
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS  = bias;
+
+    sub_nodes.emplace_back(std::make_unique<LayerNormNode>(std::move(options), context));
+
+    return {Y, MEAN, INV_VARIANCE};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 5>

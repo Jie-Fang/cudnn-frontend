@@ -124,6 +124,7 @@ class INode : public ICudnn {
         DBN_WEIGHT,
         DGRAD,
         GENSTATS,
+        LAYERNORM,
         MATMUL,
         POINTWISE,
         REDUCTION,

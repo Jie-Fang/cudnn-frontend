@@ -156,6 +156,7 @@ class Operation {
         DBN,
         DBN_weight,
         Genstats,
+        LN,
         Matmul,
         Pointwise,
         Reduction,
@@ -801,6 +802,81 @@ class Pointwise_attributes : public Operation {
         outputs.OUT_0->fill_from_context(context);
 
         // Fill this node
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Layernorm_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+    } outputs;
+
+    NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, tag, inputs, outputs, forward_phase)
+
+    Layernorm_attributes() : Operation(Tag::LN) {}
+
+    Layernorm_attributes&
+    set_forward_phase(NormFwdPhase_t const value) {
+        forward_phase = value;
+        return *this;
+    }
+
+    Layernorm_attributes&
+    set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
+        inputs.EPSILON = value;
+        return *this;
+    }
+
+    Layernorm_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Layernorm_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    void
+    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
+        outputs.Y                 = output_tensor(name + "_Y_output");
+        outputs.MEAN              = output_tensor(name + "_MEAN_output");
+        outputs.INV_VARIANCE      = output_tensor(name + "_INV_VARIANCE_output");
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Layernorm_attributes& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.EPSILON->fill_from_context(context);
+
+        outputs.Y->fill_from_context(context);
+        outputs.MEAN->fill_from_context(context);
+        outputs.INV_VARIANCE->fill_from_context(context);
+
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
