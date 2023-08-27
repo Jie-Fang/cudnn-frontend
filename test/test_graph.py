@@ -18,19 +18,20 @@ class PytorchReference:
     # @brief: run convolution without bias
     # @param kwargs: these are the named parameters used in the associated cudnn.pygraph.conv function
     #   The only difference is that the input tensors are replaced by pytorch tensors
+    # @param test_tensor_out_list: a list of test_tensor instances. Some reference functions may need this (e.g., reduction)
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
-    def conv_fprop(kwargs):
+    def conv_fprop(kwargs, test_tensor_out_list):
         return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
-    def relu(kwargs):
+    def relu(kwargs, test_tensor_out_list):
         return [torch.nn.functional.relu(kwargs["input"])]
     
     @staticmethod
-    def batchnorm(kwargs):
+    def batchnorm(kwargs, test_tensor_out_list):
         is_training = kwargs["norm_forward_phase"] == cudnn.norm_forward_phase.TRAINING
         momentum = kwargs["momentum"].item()
         epsilon=kwargs["epsilon"].item()
@@ -44,33 +45,56 @@ class PytorchReference:
         return output
 
     @staticmethod
-    def matmul(kwargs):
+    def matmul(kwargs, test_tensor_out_list):
         output = torch.bmm(kwargs['A'], kwargs['B'])
         return [output]
     
     @staticmethod
-    def bias(kwargs):
+    def bias(kwargs, test_tensor_out_list):
         output = torch.add(kwargs["input"], kwargs["bias"])
         return [output]
     
     @staticmethod
-    def add(kwargs):
+    def add(kwargs, test_tensor_out_list):
         output = torch.add(kwargs["a"], kwargs["b"])
         return [output]
 
     @staticmethod
-    def conv_dgrad(kwargs):
+    def conv_dgrad(kwargs, test_tensor_out_list):
         input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
         dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
         return [dX]
     
     @staticmethod
-    def conv_wgrad(kwargs):
+    def conv_wgrad(kwargs, test_tensor_out_list):
         return [None]
 
     @staticmethod
-    def reduction(kwargs):
-        return [None]
+    def reduction(kwargs, test_tensor_out_list):
+        pycudnn_out_tensor = test_tensor_out_list[0].cudnn_tensor
+        # todo(@mbreughe): set default data types for output tensors based on pygraph settings
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        
+        # We reduce over the output dimension that is 1. For NCHW tensors, if multiple are 1, we priortize C.
+        out_dims = pycudnn_out_tensor.get_dim()
+        num_dims_one = out_dims.count(1)
+        assert num_dims_one > 0
+        if num_dims_one == 1:
+            axis = out_dims.index(1)
+        else:
+            print("WARNING: Seeing multiple dimensions to reduce over in reference. Making estimated guess.")
+            order = [1, 2, 3, 0]
+            for dim in order:
+                if out_dims[dim] == 1:
+                    axis = out_dims[dim]
+
+        print("TBD: other reductions")
+        output = kwargs["input"].sum(dim=axis, dtype=dtype)
+        #output = kwargs["input"].sum(dim=axis)
+        #output = output.type(dtype)
+        
+        output = output.reshape(out_dims)
+        return [output]
 
 
 # Base class for Tensor and operation nodes
@@ -187,7 +211,8 @@ class operation(test_node):
         for x in self.kwargs:
             if isinstance(self.kwargs[x], test_tensor):
                 new_kwargs[x] = self.kwargs[x].ref_data
-        ref_output = self.ref_func(new_kwargs)
+        # Note: we could choose to have the ref func set the output
+        ref_output = self.ref_func(new_kwargs, self.output)
 
         for output, ref_out in zip(self.output, ref_output):
             output.ref_data = ref_out
@@ -312,7 +337,7 @@ def convert_to_cudnn_type(torch_type):
     elif torch_type == torch.float32:
         return cudnn.data_type.FLOAT
     else:
-        raise ValueError("Unsupported tensor data type.")
+        raise ValueError("Unsupported tensor data type.", torch_type)
 
     return
 
@@ -322,7 +347,7 @@ def convert_to_torch_type(cudnn_type):
     elif cudnn_type == cudnn.data_type.FLOAT:
         return torch.float32
     else:
-        raise ValueError("Unsupported tensor data type.")
+        raise ValueError("Unsupported tensor data type.", cudnn_type)
 
     return
 

@@ -93,13 +93,21 @@ def test_gemm_bias_relu(jparams, testgraph):
     bias_out = testgraph.bias(name = "bias", input = gemm_output, bias = bias)
     relu_output = testgraph.relu(input=bias_out)
 
+def test_reduction(jparams, testgraph):
+    N,C,H,W = jparams["in_dim"]
+
+    X = testgraph.tensor(dim=[N,C,H,W], layout = "NHWC")
+    
+    Y = testgraph.reduction(input = X, mode = cudnn.reduction_mode.ADD)
+    Y.set_dim([N,1,H,W])
+    Y.set_data_type(cudnn.data_type.FLOAT)
+
 def test_conv_reduction(jparams, testgraph):
-    N, K, C, H, W = 4, 32, 16, 64, 64
-    R, S = 3, 3
+    N,C,H,W = jparams["in_dim"]
+    K,C2,R,S = jparams["filter_dim"]
+    assert C == C2
+
     padding = stride = dilation = [1, 1]
-    # N = jparams["in_dim"][0]
-    # H = jparams["in_dim"][2]
-    # W = jparams["in_dim"][3]
     X = testgraph.tensor(dim=[N,C,H,W], layout = "NHWC")
     Weight = testgraph.tensor(dim=[K,C,R,S], layout = "NHWC")
     Y0 = testgraph.conv_fprop(image = X, weight = Weight, padding = padding, stride = stride, dilation = dilation)
@@ -107,28 +115,3 @@ def test_conv_reduction(jparams, testgraph):
     Y = testgraph.reduction(input = Y0, mode = cudnn.reduction_mode.ADD)
     Y.set_dim([N,1,H,W])
     Y.set_data_type(cudnn.data_type.FLOAT)
-
-    # N, K, C, H, W = 4, 32, 16, 64, 64
-    # R, S = 3, 3
-    # padding = stride = dilation = [1, 1]
-
-    # # Reference
-    # X_gpu = torch.randn(N, C, H, W, dtype=torch.float16, device='cuda').to(memory_format=torch.channels_last)
-    # W_gpu = torch.randn(K, C, R, S, dtype=torch.float16, device='cuda').to(memory_format=torch.channels_last)
-    # # Perform convolution using FP32 computation while input and filter remain in FP16
-    # with torch.cuda.amp.autocast(dtype=torch.float32):
-    #     conv_output = torch.nn.functional.conv2d(X_gpu, W_gpu, padding=padding, stride=stride, dilation=dilation)
-    #     Y_expected = conv_output.sum(dim=1)
-
-    # # Cudnn code
-    # graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
-    # X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
-    # Weight = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
-
-    # Y0 = graph.conv_fprop(image = X, weight = Weight, padding = padding, stride = stride, dilation = dilation)
-    
-    # Y = graph.reduction(input = Y0, mode = cudnn.reduction_mode.ADD)
-    # Y.set_output(True).set_dim([N,1,H,W]).set_data_type(cudnn.data_type.FLOAT)
-    
-
- 
