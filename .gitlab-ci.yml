@@ -63,8 +63,6 @@ build:cudnn_8.6.0.163:
     tags:
         - ${ARCH}
     extends: .build:template
-    only:
-        - schedules 
 
 test:cudnn_8.6.0.163:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
@@ -162,8 +160,6 @@ test:cudnn_8.6.0.163:Hopper:
         - Hopper
     needs:
         - ["build:cudnn_8.6.0.163: [Hopper]"]
-    only:
-        - schedules 
 
 pytest:cudnn_8.6.0.163:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
@@ -173,8 +169,6 @@ pytest:cudnn_8.6.0.163:Hopper:
         - Hopper
     needs:
         - ["build:cudnn_8.6.0.163: [Hopper]"]
-    only:
-        - schedules 
 
 pycudnntest:cudnn_8.6.0.163:Hopper:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
@@ -184,8 +178,6 @@ pycudnntest:cudnn_8.6.0.163:Hopper:
         - Hopper
     needs:
         - ["build:cudnn_8.6.0.163: [Hopper]"]
-    only:
-        - schedules 
 
 
 build:cudnn_8.7.0.84:
