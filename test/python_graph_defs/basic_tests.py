@@ -1,4 +1,5 @@
 import cudnn
+import pytest
 
 def test_conv_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
@@ -36,6 +37,10 @@ def test_dgrad_add(jparams, testgraph):
     afterAdd = testgraph.add(name="add", a=dxTensor, b=bTensor)
 
 def test_batchnorm(jparams, testgraph):
+
+    if cudnn.get_cudnn_version() < 8700:
+        pytest.skip("BN not supported below cudnn 8.7")
+
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)
     
     N, C, H, W = jparams["in_dim"]
