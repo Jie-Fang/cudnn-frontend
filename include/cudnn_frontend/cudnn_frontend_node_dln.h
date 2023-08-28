@@ -10,26 +10,27 @@ namespace cudnn_frontend {
 
 namespace graph {
 
-class DBNNode : public INode {
+class DLNNode : public INode {
    public:
-    Batchnorm_backward_attributes options;
+    Layernorm_backward_attributes options;
 
-    DBNNode(Batchnorm_backward_attributes&& options_, detail::Context const& context)
+    DLNNode(Layernorm_backward_attributes&& options_, detail::Context const& context)
         : INode(context), options(std::move(options_)) {}
 
     Type
     getType() override final {
-        return Type::DBN;
+        return Type::DLN;
     }
 
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating DBNNode " << options.name << "..." << std::endl;
+                    << "Validating DLNNode " << options.name << "..." << std::endl;
 
-        if (!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON)) {
+        if (!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON) &&
+            !(options.inputs.SCALE)) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: Either saved mean/inv_variance or epsilon required.";
+            std::string message = "[cudnn_frontend] ERROR: Either saved mean/inv_variance/scale or epsilon required.";
             return {status, message};
         }
 
@@ -38,7 +39,7 @@ class DBNNode : public INode {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DBN node " << options.name << "..."
+        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DLN node " << options.name << "..."
                     << std::endl;
 
         options.fill_from_context(context);
@@ -49,6 +50,7 @@ class DBNNode : public INode {
 
         auto DY            = options.inputs.DY;
         auto dy_tensor_dim = DY->get_dim();
+
         // Only infer dims and strides if user did not set them
         if (dy_tensor_dim.empty()) {
             dy_tensor_dim.resize(x_tensor_dim.size());
@@ -69,30 +71,45 @@ class DBNNode : public INode {
             DX->set_stride(detail::generate_stride(DX->get_dim()));
         }
 
+        auto scale_bias_dim = X->get_dim();
+        scale_bias_dim[0]   = 1;
+
+        auto stats_dim = X->get_dim();
+        for (size_t i = 1; i < stats_dim.size(); i++) {
+            stats_dim[i] = 1;
+        }
+
+        auto mean = options.inputs.MEAN;
+        if (mean->get_dim().empty()) {
+            mean->set_dim(stats_dim);
+        }
+        if (mean->get_stride().empty()) {
+            mean->set_stride(detail::generate_stride(mean->get_dim()));
+        }
+
+        auto inv_var = options.inputs.INV_VARIANCE;
+        if (inv_var->get_dim().empty()) {
+            inv_var->set_dim(stats_dim);
+        }
+        if (inv_var->get_stride().empty()) {
+            inv_var->set_stride(detail::generate_stride(inv_var->get_dim()));
+        }
+
         // Set channel length tensors
-        auto infer_per_channel_tensors = [&x_tensor_dim](std::shared_ptr<Tensor_attributes>& T) {
+        auto infer_scale_bias_tensors = [&scale_bias_dim](std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
             // Only infer dims and strides if user did not set them
             if (tensor_dim.empty()) {
-                tensor_dim.resize(x_tensor_dim.size(), 1);
-                tensor_dim[1] = x_tensor_dim[1];
-                T->set_dim(tensor_dim);
+                T->set_dim(scale_bias_dim);
             }
             if (T->get_stride().empty()) {
                 T->set_stride(detail::generate_stride(T->get_dim()));
             }
         };
-        infer_per_channel_tensors(options.inputs.MEAN);
-        infer_per_channel_tensors(options.inputs.INV_VARIANCE);
-        infer_per_channel_tensors(options.inputs.SCALE);
-        infer_per_channel_tensors(options.outputs.DSCALE);
-        infer_per_channel_tensors(options.outputs.DBIAS);
 
-        for (auto const& peer_stat : options.inputs.peer_stats) {
-            if (peer_stat->get_stride().empty()) {
-                peer_stat->set_stride(detail::generate_stride(peer_stat->get_dim()));
-            }
-        }
+        infer_scale_bias_tensors(options.inputs.SCALE);
+        infer_scale_bias_tensors(options.outputs.DSCALE);
+        infer_scale_bias_tensors(options.outputs.DBIAS);
 
         return {error_code_t::OK, ""};
     }
@@ -108,16 +125,13 @@ class DBNNode : public INode {
         options.outputs.DX->set_uid(ICudnn::create_new_uid());
         options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
         options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        for (auto const& peer_stat : options.inputs.peer_stats) {
-            peer_stat->set_uid(ICudnn::create_new_uid());
-        }
         return {error_code_t::OK, ""};
     }
 
     error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DBNNode tensors " << options.name << "..." << std::endl;
+                    << "Building DLNNode tensors " << options.name << "..." << std::endl;
 
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
@@ -128,9 +142,6 @@ class DBNNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
-        for (auto const& peer_stat : options.inputs.peer_stats) {
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(peer_stat));
-        }
 
         return {error_code_t::OK, ""};
     }
@@ -138,20 +149,15 @@ class DBNNode : public INode {
     error_t
     createOperations() override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DBNNode operations " << options.name << "..." << std::endl;
+                    << "Building DLNNode operations " << options.name << "..." << std::endl;
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
 
-            std::vector<cudnn_frontend::Tensor> peer_stats;
-            for (auto const& peer_stat : options.inputs.peer_stats) {
-                peer_stats.emplace_back(std::move(*(tensors.at(peer_stat->get_uid()))));
-            }
-
-            // Create the DBN operation.
-            auto DBN_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
-                                     .setNormalizationMode(NormMode_t::BATCH_NORM)
+            // Create the DLN operation.
+            auto DLN_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
+                                     .setNormalizationMode(NormMode_t::LAYER_NORM)
                                      .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
                                      .setdyDesc(*(tensors.at(options.inputs.DY->get_uid())))
                                      .setScale(*(tensors.at(options.inputs.SCALE->get_uid())))
@@ -161,7 +167,6 @@ class DBNNode : public INode {
                                                         *(tensors.at(options.outputs.DBIAS->get_uid())))
                                      // .setEpsilonTensor(*(tensors.at(epsilon->get_uid())))
                                      .setdxDesc(*(tensors.at(options.outputs.DX->get_uid())))
-                                     .setPeerStatTensor(peer_stats)
                                      .build();
 
             // Push all real tensors as required for operation execution.
@@ -176,10 +181,6 @@ class DBNNode : public INode {
                                                                                              options.outputs.DSCALE,
                                                                                              options.outputs.DBIAS};
 
-            for (auto const& peer_stat : options.inputs.peer_stats) {
-                tensors_involved_in_operation.push_back(peer_stat);
-            }
-
             std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
@@ -187,7 +188,7 @@ class DBNNode : public INode {
                 }
             }
 
-            operations.push_back({std::move(DBN_operation), std::move(uids_in_operation)});
+            operations.push_back({std::move(DLN_operation), std::move(uids_in_operation)});
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
