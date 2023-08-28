@@ -273,7 +273,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     SKIP("single GPU BN is not supported in cudnn versions prior to 8.7");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("BatchNorm Backward requires Ampere and up");
     }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
@@ -305,7 +305,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
         {X, X_tensor.devPtr},
         {input_mask, Mask_tensor.devPtr},
         {DY, DY_tensor.devPtr},
-        {scale, DX_tensor.devPtr},
+        {scale, Scale_tensor.devPtr},
         {mean, Mean_tensor.devPtr},
         {inv_variance, Inv_variance_tensor.devPtr},
         {scale, Scale_tensor.devPtr},

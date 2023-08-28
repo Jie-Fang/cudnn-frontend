@@ -194,6 +194,24 @@ class PyGraph {
         return {Y, mean, inv_var, next_running_mean, next_running_var};
     }
 
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+    layernorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
+              cudnn_frontend::DataType_t const& compute_data_type,
+              std::string const& name) {
+        auto attributes = cudnn_frontend::graph::Layernorm_attributes()
+                              .set_forward_phase(forward_phase)
+                              .set_compute_data_type(compute_data_type)
+                              .set_epsilon(epsilon)
+                              .set_name(name);
+
+        auto [Y, mean, inv_var] = graph.layernorm(x, scale, bias, attributes);
+        return {Y, mean, inv_var};
+    }
+
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     batchnorm_inference(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
                         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& mean,
@@ -207,6 +225,23 @@ class PyGraph {
                               .set_name(name);
 
         return graph.batchnorm_inference(x, mean, inv_variance, scale, bias, attributes);
+    }
+
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+    layernorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
+                       cudnn_frontend::DataType_t const& compute_data_type,
+                       std::string const& name) {
+        auto attributes = cudnn_frontend::graph::Layernorm_backward_attributes()
+                              .set_saved_mean_and_inv_variance(mean, inv_variance)
+                              .set_compute_data_type(compute_data_type)
+                              .set_name(name);
+
+        auto [DX, DScale, DBias] = graph.layernorm_backward(dy, x, scale, attributes);
+        return {DX, DScale, DBias};
     }
 
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
@@ -578,6 +613,15 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("peer_stats", std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>()),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
+        .def("layernorm",
+             &PyGraph::layernorm,
+             py::arg("norm_forward_phase"),
+             py::arg("input"),
+             py::arg("scale"),
+             py::arg("bias"),
+             py::arg("epsilon"),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("name", ""))
         .def("batchnorm_inference",
              &PyGraph::batchnorm_inference,
              py::arg("input"),
@@ -595,6 +639,15 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("mean"),
              py::arg("inv_variance"),
              py::arg_v("peer_stats", std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>()),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("name", ""))
+        .def("layernorm_backward",
+             &PyGraph::layernorm_backward,
+             py::arg("grad"),
+             py::arg("input"),
+             py::arg("scale"),
+             py::arg("mean"),
+             py::arg("inv_variance"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
         .def("genstats",

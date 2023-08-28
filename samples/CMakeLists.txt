@@ -24,6 +24,7 @@ add_executable(
     cpp/dgrads.cpp
     cpp/matmuls.cpp
     cpp/batchnorm.cpp
+    cpp/layernorm.cpp
     cpp/wgrads.cpp
 
     conv_sample.cpp 
