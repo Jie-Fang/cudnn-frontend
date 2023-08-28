@@ -39,8 +39,7 @@ def test_batchnorm(jparams, testgraph):
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)
     
     N, C, H, W = jparams["in_dim"]
-    X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF) 
-    X.layout="NHWC"
+    X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF, layout = "NHWC") 
     scale = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
     bias = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
     in_running_mean = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
