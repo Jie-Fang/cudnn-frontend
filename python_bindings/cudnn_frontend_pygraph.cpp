@@ -209,11 +209,7 @@ class PyGraph {
                               .set_name(name);
 
         auto [Y, mean, inv_var] = graph.layernorm(x, scale, bias, attributes);
-        if (forward_phase == NormFwdPhase_t::INFERENCE) {
-            return {Y};
-        } else {
-            return {Y, mean, inv_var};
-        }
+        return {Y, mean, inv_var};
     }
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>

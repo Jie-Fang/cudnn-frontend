@@ -874,10 +874,10 @@ class Layernorm_backward_attributes : public Operation {
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
         inputs.DY->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
 
-        if (inputs.EPSILON) inputs.EPSILON->fill_from_context(context);
+        if (inputs.MEAN) { inputs.MEAN->fill_from_context(context);}
+        if (inputs.INV_VARIANCE) {inputs.INV_VARIANCE->fill_from_context(context);}
+        if (inputs.EPSILON) {inputs.EPSILON->fill_from_context(context);}
 
         outputs.DX->fill_from_context(context);
         outputs.DSCALE->fill_from_context(context);

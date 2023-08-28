@@ -1,6 +1,7 @@
 import cudnn
 import pytest
 import torch
+import itertools
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
@@ -13,15 +14,37 @@ def convert_to_cudnn_type(torch_type):
         return cudnn.data_type.UINT8
     else:
         raise ValueError("Unsupported tensor data type.")
-   
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8905, reason="LN not supported below cudnn 8.9.5")
-def test_ln():
-    batch_size, seq_size, dim = 16, 128, 256
 
-    x_gpu = torch.randn(batch_size * seq_size, dim, 1, 1, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
-    scale_gpu = torch.randn(1, dim, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
-    bias_gpu = torch.randn(1, dim, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
-    epsilon_cpu = torch.full((1, 1, 1, 1), 1e-03, requires_grad=False, device="cpu", dtype=torch.float32)
+
+embedding_dim_options = [768, 1024, 1280, 1600]
+
+all_options = embedding_dim_options
+
+@pytest.fixture(params=all_options)
+def param_extract(request):
+  return request.param
+
+@pytest.mark.skipif(cudnn.get_cudnn_version() < 8905, reason="LN not supported below cudnn 8.9.5")
+def test_ln(param_extract):
+    embedding_dim = param_extract
+    
+    batch_size, seq_size = 16, 128
+    N,C,H,W = batch_size * seq_size, embedding_dim, 1, 1
+    
+    epsilon_value = 1e-3
+
+    x_gpu = torch.randn(N, C, H, W, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    scale_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=torch.float32)
+    bias_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=torch.float32)
+    epsilon_cpu = torch.full((1, 1, 1, 1), epsilon_value, requires_grad=False, device="cpu", dtype=torch.float32)
+
+    print("Running reference")
+    
+    with torch.autocast("cuda", dtype=torch.float32):
+        Y_expected = torch.nn.functional.layer_norm(x_gpu, [C, H, W], weight=scale_gpu.squeeze(0), bias=bias_gpu.squeeze(0), eps=epsilon_value)
+    Y_expected = Y_expected.to(dtype=torch.float16)
+
+    print("Building cudnn graph")
 
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.FLOAT, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
@@ -49,6 +72,7 @@ def test_ln():
     saved_inv_var_actual = torch.zeros(batch_size * seq_size, requires_grad=False, device="cuda", dtype=torch.float32)   
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    print("Executing cudnn graph")
     
     graph.execute({
                     X : x_gpu
@@ -59,6 +83,11 @@ def test_ln():
                     , inv_var : saved_inv_var_actual
                     , Y : Y_actual
                 }, workspace)
-        
+    
+    print("Comparing with reference")
+    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
+    print("Success!!")
+    
+    
 if __name__ == "__main__":
-    test_ln()
+    test_ln(768)
