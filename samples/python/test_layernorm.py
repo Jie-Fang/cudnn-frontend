@@ -6,6 +6,8 @@ import itertools
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
         return cudnn.data_type.HALF
+    elif torch_type == torch.bfloat16:
+        return cudnn.data_type.BFLOAT16
     elif torch_type == torch.float32:
         return cudnn.data_type.FLOAT
     elif torch_type == torch.bool:
@@ -17,8 +19,9 @@ def convert_to_cudnn_type(torch_type):
 
 
 embedding_dim_options = [768, 1024, 1280, 1600]
+input_type_options = [torch.bfloat16, torch.float16]
 
-all_options = embedding_dim_options
+all_options = [elem for elem in itertools.product(*[embedding_dim_options, input_type_options])]
 
 @pytest.fixture(params=all_options)
 def param_extract(request):
@@ -26,14 +29,14 @@ def param_extract(request):
 
 @pytest.mark.skipif(cudnn.get_cudnn_version() < 8905, reason="LN not supported below cudnn 8.9.5")
 def test_ln(param_extract):
-    embedding_dim = param_extract
+    embedding_dim, input_type = param_extract
     
     batch_size, seq_size = 16, 128
     N,C,H,W = batch_size * seq_size, embedding_dim, 1, 1
     
     epsilon_value = 1e-3
 
-    x_gpu = torch.randn(N, C, H, W, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    x_gpu = torch.randn(N, C, H, W, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
     scale_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=torch.float32)
     bias_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=torch.float32)
     epsilon_cpu = torch.full((1, 1, 1, 1), epsilon_value, requires_grad=False, device="cpu", dtype=torch.float32)
@@ -42,7 +45,7 @@ def test_ln(param_extract):
     
     with torch.autocast("cuda", dtype=torch.float32):
         Y_expected = torch.nn.functional.layer_norm(x_gpu, [C, H, W], weight=scale_gpu.squeeze(0), bias=bias_gpu.squeeze(0), eps=epsilon_value)
-    Y_expected = Y_expected.to(dtype=torch.float16)
+    Y_expected = Y_expected.to(dtype=input_type)
 
     print("Building cudnn graph")
 
@@ -60,7 +63,7 @@ def test_ln(param_extract):
                             bias = bias,
                             epsilon = epsilon)
     
-    Y.set_output(True).set_data_type(cudnn.data_type.HALF)
+    Y.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     mean.set_output(True).set_data_type(cudnn.data_type.FLOAT)
     inv_var.set_output(True).set_data_type(cudnn.data_type.FLOAT)
     
@@ -85,7 +88,7 @@ def test_ln(param_extract):
                 }, workspace)
     
     print("Comparing with reference")
-    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
+    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
     print("Success!!")
     
     
