@@ -119,7 +119,6 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Batchnorm_attributes::Inputs inputs;
     auto X = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({4, 32, 16, 16})

@@ -218,7 +218,6 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    fe::graph::Scaled_dot_product_flash_attention_attributes::Inputs inputs;
     auto Q = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("Q")
                                   .set_dim({b, h, s_q, d})
