@@ -37,30 +37,25 @@ class WgradNode : public INode {
         auto const dy_tensor_dim = DY->get_dim();
         auto dw_tensor_dim       = DW->get_dim();
 
-        // Only infer dims and strides if user did not set them
-        if (dw_tensor_dim.empty()) {
-            dw_tensor_dim.resize(x_tensor_dim.size());
-            auto const& padding  = options.get_padding();
-            auto const& stride   = options.get_stride();
-            auto const& dilation = options.get_dilation();
-            // x NCHW
-            // w KCRS
-            // y NKPQ
-            // K
-            dw_tensor_dim[0] = dy_tensor_dim[1];
-            // C
-            dw_tensor_dim[1] = x_tensor_dim[1];
-            // RS
-            for (size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {
-                dw_tensor_dim[dim] =
-                    (x_tensor_dim[dim] + 2 * padding[dim - 2] - (dy_tensor_dim[dim] - 1) * stride[dim - 2] - 1) /
-                        dilation[dim - 2] +
-                    1;
-            }
-            DW->set_dim(dw_tensor_dim);
-        }
+        // No dim inferencing as inverse mapping from DY, X to DX is not unique.
+        // Only infer strides if user did not set them
         if (DW->get_stride().empty()) {
             DW->set_stride(detail::generate_stride(DW->get_dim()));
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << "Validating WgradNode " << options.name << "..." << std::endl;
+
+        if (options.outputs.DW->get_dim().empty()) {
+            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: wgrad requires output tensor to have its dims set.";
+            getLogger() << message << std::endl;
+            return {status, message};
         }
 
         return {error_code_t::OK, ""};

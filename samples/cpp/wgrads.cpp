@@ -56,7 +56,7 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
                                .set_stride({64 * 16 * 16, 1, 64 * 16, 64}));
     auto wgrad_options = fe::graph::Conv_wgrad_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
     auto DW            = graph.conv_wgrad(DY, relu_output, wgrad_options);
-    DW->set_output(true);
+    DW->set_output(true).set_dim({64, 64, 3, 3});
 
 #if (CUDNN_VERSION < 8800)
     SKIP("ConvBNwgrad requires cudnn 8.8 and up");

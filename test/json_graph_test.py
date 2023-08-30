@@ -215,6 +215,9 @@ class Legacy_tensor:
     def get_data_type(self):
         return Legacy_value.translate_to_pycudnn_value("dataType", self.jtensor["dataType"])
     
+    def get_dim(self):
+        return Legacy_value.translate_to_pycudnn_value("dim", self.jtensor["dim"])
+    
     def get_tensor_properties(self):
         pycudnn_props = {}
         for key, value in self.jtensor.items():
@@ -344,10 +347,15 @@ def run_test_from_json_definition(json_dict):
     # At this point TGTensors only contains output tensors. 
     # Since output tensors are created in cudnn as a result of adding an operation, 
     # we did not propagate any specifications yet
-    # Currently we only need to propgate the data type
+    # Currently we only need to propgate the data type and dims for dgrad/wgrad
     for jtensor in jtensor_dict:
-        if jtensor["name"] in TGTensors:
-            TGTensors[jtensor["name"]].set_data_type(Legacy_tensor(jtensor).get_data_type())    
+        tg_tensor = TGTensors.get(jtensor["name"], None)
+        legacy_tensor = Legacy_tensor(jtensor)
+        if tg_tensor is None:
+            continue
+
+        tg_tensor.set_data_type(legacy_tensor.get_data_type())
+        tg_tensor.set_dim(legacy_tensor.get_dim())
     
     # Identify all tensors in jtensor_dict that are not output tensors
     input_tensors = [tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors]

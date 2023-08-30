@@ -272,6 +272,12 @@ class test_tensor:
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_data_type(data_type)
 
+    def set_dim(self, dim):
+        self.dim = dim
+
+        if self.cudnn_tensor is not None:
+            self.cudnn_tensor.set_dim(dim)
+
     def set_stride(self, stride):
         self.stride = stride
 
@@ -283,6 +289,9 @@ class test_tensor:
         # If we ever specified a data type, apply it
         if "data_type" in dir(self):
             self.cudnn_tensor.set_data_type(self.data_type)
+
+        if "dim" in dir(self):
+            self.cudnn_tensor.set_dim(self.dim)
 
         if "stride" in dir(self):
             self.cudnn_tensor.set_stride(self.stride)
