@@ -8,7 +8,7 @@ import utils
 # Globally ensure cudnn is disabled for everything torch related
 # TODO(https://nvbugs/4251007): Because non-cudnn backend does not use TF32 we run into accuracy issues
 # Currently there are 3 solutions: 1) enable cudnn in the reference, or 2) set NVIDIA_TF32_OVERRIDE=1, 3) run reference twice -- this is most desirable and will be added later
-torch.backends.cudnn.enabled = True 
+torch.backends.cudnn.enabled = False 
 
 
 # @brief: Reference code
@@ -67,7 +67,10 @@ class PytorchReference:
     
     @staticmethod
     def conv_wgrad(kwargs, test_tensor_out_list):
-        return [None]
+        # TODO(@mbreughe): derive dimensions algebraic instead!!
+        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
+        return [dW]
 
     @staticmethod
     def reduction(kwargs, test_tensor_out_list):
@@ -217,6 +220,7 @@ class operation(test_node):
         for output, ref_out in zip(self.output, ref_output):
             output.ref_data = ref_out
 
+# TODO(@mbreughe): Support multiple distributions (see json graph's fill type)
 class random_tensor_generator(test_node):
     __test__ = False
 
@@ -231,7 +235,9 @@ class random_tensor_generator(test_node):
 
     def initialize_random_tensor(self):
         if self.output[0].ref_data is None:
-            self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
+            # The default random generator results in numerical issues
+            #self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
+            self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
             if self.get_layout() == "NHWC":
                 self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
