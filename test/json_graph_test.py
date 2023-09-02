@@ -72,9 +72,9 @@ def replace_abstract_test_params(json_test_def, abstract_params):
             else:
                 replace_abstract_test_params(json_test_def[key], abstract_params)
     elif isinstance(json_test_def, list):
-        for item in json_test_def:
+        for index, item in enumerate(json_test_def):
             if not isinstance(item, dict) and not isinstance(item, list):
-                item = replace_single_param(item, abstract_params)
+                json_test_def[index] = replace_single_param(item, abstract_params)
             else:
                 replace_abstract_test_params(item, abstract_params)
             
@@ -186,7 +186,6 @@ class Legacy_operation:
     
     def translate_to_pycudnn_value(self, leg_prop, leg_value):
         if Legacy_operation.VAL_MAP in self.operation_mapping and leg_prop in self.operation_mapping[Legacy_operation.VAL_MAP]:
-            print("DEBUGGING")
             # TODO(@mbreughe): can we get rid of the eval?
             return eval(self.operation_mapping[Legacy_operation.VAL_MAP][leg_prop][leg_value])
         else:
@@ -216,13 +215,16 @@ class Legacy_operation:
 # @note: we could opt to store the mapping in a file like we do for operation
 # however, the mapping is much fewer, so we decide to avoid the overhead for now
 class Legacy_tensor:
-    mapping = {"dataType": "data_type"}
+    mapping = {"dataType": "data_type", "dim": "dim"}
 
     def __init__(self, jtensor):
         self.jtensor = jtensor
 
     def get_data_type(self):
         return Legacy_value.translate_to_pycudnn_value("dataType", self.jtensor["dataType"])
+    
+    def get_dim(self):
+        return self.jtensor["dim"]
     
     def get_tensor_properties(self):
         pycudnn_props = {}
@@ -259,7 +261,7 @@ class Legacy_value:
 
         return legacy_value
     
-def get_conv_dim_out(legacy_op, jtensor_dict):
+def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     filter_tensor_name = legacy_op.get_io_tensor_name("W")
     if filter_tensor_name is None:
         filter_tensor_name = legacy_op.get_io_tensor_name("dW")
@@ -268,24 +270,36 @@ def get_conv_dim_out(legacy_op, jtensor_dict):
     if X_tensor_name is None:
         X_tensor_name = legacy_op.get_io_tensor_name("dX")
 
-    dim = [None] * 4
+    # Note that this is limited to 4 dimensions. It is here to mimic what we had for legacy reasons
+    dimOut = [None] * 4
     for jtensor in jtensor_dict:
         if jtensor["name"] == X_tensor_name:
             X_tensor_dim = jtensor["dim"]
         elif jtensor["name"] == filter_tensor_name:
             filter_tensor_dim = jtensor["dim"]
     
-    dim[0] = X_tensor_dim[0]
-    dim[1] = filter_tensor_dim[0]
+    dimOut[0] = X_tensor_dim[0]
+    dimOut[1] = filter_tensor_dim[0]
     
     padA = legacy_op.jnode["pad"]
     stdA = legacy_op.jnode["stride"]
     dilA = legacy_op.jnode["dilation"]
     for d in range(0,2):
-        dim[d+2] = getFwdConvOutputDim(X_tensor_dim[d+2], padA[d], filter_tensor_dim[d+2],
+        dimOut[d+2] = getFwdConvOutputDim(X_tensor_dim[d+2], padA[d], filter_tensor_dim[d+2],
                                     stdA[d], dilA[d])
     
-    return dim
+    input_nbDims = len(X_tensor_dim)
+    filter_nbDims = len(filter_tensor_dim)
+
+    N = X_tensor_dim[0]
+    C = X_tensor_dim[1]
+    H = X_tensor_dim[input_nbDims - 2]
+    W = X_tensor_dim[input_nbDims - 1]
+    K = filter_tensor_dim[0]
+    R = filter_tensor_dim[filter_nbDims - 2]
+    S = filter_tensor_dim[filter_nbDims - 1]
+
+    return [dimOut, N, C, H, W, K, R, S]
 
 # @brief: Replace derived parameters
 # @details: Some parameters in the test definition are not explicitly specified and depend on several other specifications of the test
@@ -307,14 +321,18 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
         for legacy_op in legacy_ops:
             if legacy_op.get_legacy_operation_type() in conv_ops:
                 break
-        implicit_params["dimOut"] = get_conv_dim_out(legacy_op, jtensor_dict)
-        
-        # We also need to make sure we can translate keys and values of tensors.
-        # e.g., formatIn --> if it's a conv formatIn=1 means NCHW. If it's a GEMM it means something else
-        # OR maybe we just set ethe srides
+        dimOut, N, C, H, W, K, R, S = get_conv_dim_placeholders(legacy_op, jtensor_dict)
 
+        implicit_params["dimOut"] = dimOut
+        implicit_params["n"] = N
+        implicit_params["c"] = C
+        implicit_params["h"] = H
+        implicit_params["w"] = W
+        implicit_params["k"] = K
+        implicit_params["r"] = R
+        implicit_params["s"] = S
+        
     jtensor_dict = replace_abstract_test_params(jtensor_dict, implicit_params)
-    
     return jtensor_dict
 
 # @brief: main function to run json graphs
@@ -353,10 +371,10 @@ def run_test_from_json_definition(json_dict):
     # At this point TGTensors only contains output tensors. 
     # Since output tensors are created in cudnn as a result of adding an operation, 
     # we did not propagate any specifications yet
-    # Currently we only need to propgate the data type
     for jtensor in jtensor_dict:
         if jtensor["name"] in TGTensors:
-            TGTensors[jtensor["name"]].set_data_type(Legacy_tensor(jtensor).get_data_type())    
+            TGTensors[jtensor["name"]].set_data_type(Legacy_tensor(jtensor).get_data_type())
+            TGTensors[jtensor["name"]].set_dim(Legacy_tensor(jtensor).get_dim())    
     
     # Identify all tensors in jtensor_dict that are not output tensors
     input_tensors = [tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors]
