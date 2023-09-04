@@ -22,6 +22,21 @@ class DgradNode : public INode {
     }
 
     error_t
+    validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << "Validating DgradNode " << options.name << "..." << std::endl;
+
+        if (options.outputs.DX->get_dim().empty()) {
+            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "[cudnn_frontend] ERROR: dgrad requires output tensor to have its dims set.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node " << options.name << "..."
                     << std::endl;
@@ -37,26 +52,8 @@ class DgradNode : public INode {
         auto const dy_tensor_dim = DY->get_dim();
         auto dx_tensor_dim       = DX->get_dim();
 
-        // Only infer dims and strides if user did not set them
-        if (dx_tensor_dim.empty()) {
-            dx_tensor_dim.resize(w_tensor_dim.size());
-            auto const& padding  = options.get_padding();
-            auto const& stride   = options.get_stride();
-            auto const& dilation = options.get_dilation();
-            // x NCHW
-            // w KCRS
-            // y NKPQ
-            // N
-            dx_tensor_dim[0] = dy_tensor_dim[0];
-            // C
-            dx_tensor_dim[1] = w_tensor_dim[1];
-            // HW
-            for (size_t dim = 2; dim < w_tensor_dim.size(); ++dim) {
-                dx_tensor_dim[dim] = (dy_tensor_dim[dim] - 1) * stride[dim - 2] - 2 * padding[dim - 2] + 1 +
-                                     dilation[dim - 2] * (w_tensor_dim[dim] - 1);
-            }
-            DX->set_dim(dx_tensor_dim);
-        }
+        // No dim inferencing as inverse mapping from DY, W to DX is not unique.
+        // Only infer strides if user did not set them
         if (DX->get_stride().empty()) {
             DX->set_stride(detail::generate_stride(DX->get_dim()));
         }

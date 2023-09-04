@@ -34,6 +34,8 @@ def test_dgrad_add(jparams, testgraph):
     bTensor =  testgraph.tensor(dim=jparams["dx_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
 
     dxTensor = testgraph.conv_dgrad(name="dgrad", loss=dyTensor, filter=wTensor, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    dxTensor.set_dim(jparams["dx_dim"])
+
     afterAdd = testgraph.add(name="add", a=dxTensor, b=bTensor)
 
 def test_batchnorm(jparams, testgraph):
