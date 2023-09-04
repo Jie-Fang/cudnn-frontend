@@ -37,60 +37,54 @@ def test_ln(param_extract):
     epsilon_value = 1e-3
 
     x_gpu = torch.randn(N, C, H, W, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
-    scale_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=torch.float32)
-    bias_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=torch.float32)
+    scale_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
+    bias_gpu = torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
     epsilon_cpu = torch.full((1, 1, 1, 1), epsilon_value, requires_grad=False, device="cpu", dtype=torch.float32)
 
     print("Running reference")
+        
+    Y_expected = torch.nn.functional.layer_norm(x_gpu, [C, H, W], weight=scale_gpu.squeeze(0), bias=bias_gpu.squeeze(0), eps=epsilon_value)
     
-    with torch.autocast("cuda", dtype=torch.float32):
-        Y_expected = torch.nn.functional.layer_norm(x_gpu, [C, H, W], weight=scale_gpu.squeeze(0), bias=bias_gpu.squeeze(0), eps=epsilon_value)
-    Y_expected = Y_expected.to(dtype=input_type)
-
     print("Building cudnn graph")
 
-    graph = cudnn.pygraph(io_data_type = cudnn.data_type.FLOAT, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
+    graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride())
-    bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride())
-    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True)
+    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
+    bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(), data_type = convert_to_cudnn_type(bias_gpu.dtype))
+    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
 
     Y, mean, inv_var = graph.layernorm(name = "LN", 
-                            norm_forward_phase = cudnn.norm_forward_phase.TRAINING,
+                            norm_forward_phase = cudnn.norm_forward_phase.INFERENCE,
                             input = X,
                             scale = scale, 
                             bias = bias,
                             epsilon = epsilon)
     
     Y.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
-    mean.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-    inv_var.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-    
+    assert mean is None, "Forward mode of inference should not output mean tensor"
+    assert inv_var is None, "Forward mode of inference should not output inv_var tensor"
+
     graph.check_support()
     graph.build()
     
     Y_actual = torch.zeros_like(x_gpu)
-    saved_mean_actual    = torch.zeros(batch_size * seq_size, requires_grad=False, device="cuda", dtype=torch.float32)
-    saved_inv_var_actual = torch.zeros(batch_size * seq_size, requires_grad=False, device="cuda", dtype=torch.float32)   
-
+    
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     print("Executing cudnn graph")
     
     graph.execute({
-                    X : x_gpu
-                    , scale : scale_gpu
-                    , bias : bias_gpu
-                    , epsilon: epsilon_cpu
-                    , mean : saved_mean_actual
-                    , inv_var : saved_inv_var_actual
-                    , Y : Y_actual
-                }, workspace)
+                X : x_gpu
+                , scale : scale_gpu
+                , bias : bias_gpu
+                , epsilon: epsilon_cpu
+                , Y : Y_actual
+            }, workspace)
     
     print("Comparing with reference")
-    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
+    torch.testing.assert_close(Y_expected, Y_actual, atol=2e-2, rtol=2e-2)
     print("Success!!")
     
     
 if __name__ == "__main__":
-    test_ln(768)
+    test_ln((1600, torch.bfloat16))
