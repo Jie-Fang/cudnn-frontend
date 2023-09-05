@@ -6,10 +6,7 @@ import copy
 import utils
 
 # Globally ensure cudnn is disabled for everything torch related
-# TODO(https://nvbugs/4251007): Because non-cudnn backend does not use TF32 we run into accuracy issues
-# Currently there are 3 solutions: 1) enable cudnn in the reference, or 2) set NVIDIA_TF32_OVERRIDE=1, 3) run reference twice -- this is most desirable and will be added later
 torch.backends.cudnn.enabled = False 
-
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
@@ -78,21 +75,14 @@ class PytorchReference:
         # todo(@mbreughe): set default data types for output tensors based on pygraph settings
         dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
         
-        # We reduce over the output dimension that is 1. For NCHW tensors, if multiple are 1, we priortize C.
         out_dims = pycudnn_out_tensor.get_dim()
-        num_dims_one = out_dims.count(1)
-        assert num_dims_one > 0
-        if num_dims_one == 1:
-            axis = out_dims.index(1)
-        else:
-            print("WARNING: Seeing multiple dimensions to reduce over in reference. Making estimated guess.")
-            order = [1, 2, 3, 0]
-            for dim in order:
-                if out_dims[dim] == 1:
-                    axis = out_dims[dim]
 
-        print("TBD: other reductions")
-        output = kwargs["input"].sum(dim=axis, dtype=dtype)
+        axis = []
+        for dim_idx, dim_val in enumerate(out_dims):
+            if dim_val == 1:
+                axis.append(dim_idx)
+
+        output = kwargs["input"].sum(dim=tuple(axis), dtype=dtype)
         #output = kwargs["input"].sum(dim=axis)
         #output = output.type(dtype)
         
