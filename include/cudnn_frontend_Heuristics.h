@@ -137,6 +137,7 @@ class EngineHeuristics_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor opGraph = nullptr;
     std::vector<ManagedOpaqueDescriptor> m_heuristic_results;  //! storage of heuristic results
     std::string opGraphTag;
+    int32_t target_sm_count = -1;
 
     static std::mutex &
     get_heur_b_mutex() {
@@ -171,6 +172,12 @@ class EngineHeuristicsBuilder_v8 {
     auto
     setHeurMode(cudnnBackendHeurMode_t mode_) -> EngineHeuristicsBuilder_v8 & {
         m_heuristics.mode = mode_;
+        return *this;
+    }
+
+    auto
+    setSMCount(int32_t sm_count_) -> EngineHeuristicsBuilder_v8 & {
+        m_heuristics.target_sm_count = sm_count_;
         return *this;
     }
     /** @} */
@@ -219,6 +226,22 @@ class EngineHeuristicsBuilder_v8 {
                 "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: SetAttribute CUDNN_ATTR_ENGINEHEUR_MODE Failed");
             return std::move(m_heuristics);
         };
+#if (CUDNN_VERSION >= 8905)
+        if (m_heuristics.target_sm_count >= 0) {
+            status = cudnnBackendSetAttribute(m_heuristics.pointer->get_backend_descriptor(),
+                                              CUDNN_ATTR_ENGINE_SM_COUNT_TARGET,
+                                              CUDNN_TYPE_INT32,
+                                              1,
+                                              &m_heuristics.target_sm_count);
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_heuristics,
+                    status,
+                    "CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR: SetAttribute CUDNN_ATTR_ENGINE_SM_COUNT_TARGET Failed");
+                return std::move(m_heuristics);
+            };
+        }
+#endif
 
 #if (CUDNN_VERSION >= 8401)
         if (m_heuristics.mode == CUDNN_HEUR_MODE_B) {

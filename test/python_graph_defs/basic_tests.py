@@ -1,4 +1,5 @@
 import cudnn
+import pytest
 
 def test_conv_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
@@ -33,14 +34,19 @@ def test_dgrad_add(jparams, testgraph):
     bTensor =  testgraph.tensor(dim=jparams["dx_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
 
     dxTensor = testgraph.conv_dgrad(name="dgrad", loss=dyTensor, filter=wTensor, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    dxTensor.set_dim(jparams["dx_dim"])
+
     afterAdd = testgraph.add(name="add", a=dxTensor, b=bTensor)
 
 def test_batchnorm(jparams, testgraph):
+
+    if cudnn.get_cudnn_version() < 8700:
+        pytest.skip("BN not supported below cudnn 8.7")
+
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)
     
     N, C, H, W = jparams["in_dim"]
-    X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF) 
-    X.layout="NHWC"
+    X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF, layout = "NHWC") 
     scale = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
     bias = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
     in_running_mean = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)

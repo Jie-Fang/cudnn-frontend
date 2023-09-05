@@ -55,7 +55,7 @@ Skip building python bindings by providing `CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS
 In case, you have a stale cmake cache and want to update the cudnn/cuda paths, please delete the cmake cache (or build directory and redo the above steps).
 
 ### Python API
-Install FE python API by running: `CUDAToolkit_ROOT=/path/to/cuda CUDNN_PATH=/path/to/cudnn python setup.py build`.  
+Install FE python API by running: `CUDAToolkit_ROOT=/path/to/cuda CUDNN_PATH=/path/to/cudnn pip install /path/to/cudnn_frontend`.  
 To provide a custom CUDA, export environment variable: `CUDAToolkit_ROOT`.  
 To provide a custom CUDNN, export environment variable: `CUDNN_PATH`.
 

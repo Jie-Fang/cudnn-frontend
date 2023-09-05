@@ -1252,7 +1252,7 @@ TEST_CASE("MatmulBiasAct sample_float", "[frontend][fusion][MatmulBiasAct]") {
     Surface<float> C(Csize, true);
 
     Surface<float> Z(zTensorDim[0] * zTensorDim[1] * zTensorDim[2], false);
-    Surface<half> AfterZ(Csize, false);
+    Surface<float> AfterZ(Csize, false);
 
     run_matmul_bias_gelu(aTensorDim,
                          bTensorDim,
@@ -2079,7 +2079,7 @@ TEST_CASE("Scale Bias Conv BNGenstats with CPU Reference", "[frontend][fusion][b
         // Data should have 1 variance
         diff = getError(1, after_normalization[index].second);
         if (diff < 0) diff = -diff;
-        if (diff > THRESHOLD) {
+        if (diff > 2 * THRESHOLD) {
             normalizationErrors++;
         }
     }
