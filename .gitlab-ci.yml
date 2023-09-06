@@ -606,3 +606,12 @@ pycudnntest:cudnn_8.9.5_latest:Hopper:
     dependencies: ["build:cudnn_8.9.5_latest"]
     tags:
         - Hopper
+
+L4_graph_runner:cudnn_8.9.5_latest:Hopper:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
+    extends:
+        - .fetch_cudnn:template
+        - .L4_graph_runner:template
+    dependencies: ["build:cudnn_8.9.5_latest"]
+    tags:
+        - Hopper

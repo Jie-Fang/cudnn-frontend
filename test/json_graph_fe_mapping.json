@@ -16,6 +16,19 @@
                     "properties": {"mathPrec": "compute_data_type"}
                 }
         },
+    "reduction":
+        {
+            "operation": "reduction",
+            "input": {"X": "input"},
+            "output": ["Y"],
+            "properties": {"reductionOp": "mode", "mathPrec": "compute_data_type"},
+            "value_mapping": {
+                "reductionOp": 
+                    {
+                        "CUDNN_REDUCE_TENSOR_ADD": "cudnn.reduction_mode.ADD"
+                    }
+            }
+        },
     "conv":
         {
             "operation": "conv_fprop",
@@ -34,6 +47,19 @@
             "operation": "conv_dgrad",
             "input": {"W": "filter", "dY": "loss"},
             "output": ["dX"],
+            "properties": {
+                "dilation": "dilation",
+                "pad": "padding",
+                "stride": "stride",
+                "name": "name",
+                "mathPrec": "compute_data_type"
+            }
+        },
+        "wgrad":
+        {
+            "operation": "conv_wgrad",
+            "input": {"dY": "loss", "X": "image"},
+            "output": ["dW"],
             "properties": {
                 "dilation": "dilation",
                 "pad": "padding",

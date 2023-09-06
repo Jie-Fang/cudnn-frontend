@@ -98,6 +98,26 @@ def test_gemm_bias_relu(jparams, testgraph):
 
     bias_out = testgraph.bias(name = "bias", input = gemm_output, bias = bias)
     relu_output = testgraph.relu(input=bias_out)
-    
 
- 
+def test_reduction(jparams, testgraph):
+    N,C,H,W = jparams["in_dim"]
+
+    X = testgraph.tensor(dim=[N,C,H,W], layout = "NHWC")
+    
+    Y = testgraph.reduction(input = X, mode = cudnn.reduction_mode.ADD)
+    Y.set_dim([N,1,H,W])
+    Y.set_data_type(cudnn.data_type.FLOAT)
+
+def test_conv_reduction(jparams, testgraph):
+    N,C,H,W = jparams["in_dim"]
+    K,C2,R,S = jparams["filter_dim"]
+    assert C == C2
+
+    padding = stride = dilation = [1, 1]
+    X = testgraph.tensor(dim=[N,C,H,W], layout = "NHWC")
+    Weight = testgraph.tensor(dim=[K,C,R,S], layout = "NHWC")
+    Y0 = testgraph.conv_fprop(image = X, weight = Weight, padding = padding, stride = stride, dilation = dilation)
+    
+    Y = testgraph.reduction(input = Y0, mode = cudnn.reduction_mode.ADD)
+    Y.set_dim([N,1,H,W])
+    Y.set_data_type(cudnn.data_type.FLOAT)
