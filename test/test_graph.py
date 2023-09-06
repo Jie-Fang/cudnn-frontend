@@ -32,8 +32,18 @@ class PytorchReference:
         is_training = kwargs["norm_forward_phase"] == cudnn.norm_forward_phase.TRAINING
         momentum = kwargs["momentum"].item()
         epsilon=kwargs["epsilon"].item()
-        output = torch.nn.functional.batch_norm(kwargs["input"], kwargs["in_running_mean"], kwargs["in_running_var"], weight= kwargs["scale"], bias=kwargs["bias"], training=is_training, momentum=momentum, eps=epsilon)
-        
+        # TODO(https://nvbugs/4272638): A bug with the cudnn backend disabled prevents correct behavior of batchnorm
+        # As a WAR temporarily enable the cudnn backend.
+        cudnn_enabled_before = torch.backends.cudnn.enabled
+        torch.backends.cudnn.enabled = True
+        try:
+            output = torch.nn.functional.batch_norm(kwargs["input"], kwargs["in_running_mean"], kwargs["in_running_var"], weight= kwargs["scale"], bias=kwargs["bias"], training=is_training, momentum=momentum, eps=epsilon)
+        except Exception as e:
+            raise e
+        finally:
+            # Set back the backend to what it was before
+            torch.backends.cudnn.enabled = cudnn_enabled_before
+
         output = [output]
 
         # torch's implementation only returns 1 output. 
