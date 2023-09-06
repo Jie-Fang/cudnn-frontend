@@ -311,7 +311,7 @@ class INode : public ICudnn {
     virtual ~INode(){};
 };
 
-static void
+[[maybe_unused]] static void
 to_json(json& j, const INode& p) {
     p.serialize(j);
 }

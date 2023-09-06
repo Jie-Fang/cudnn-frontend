@@ -35,7 +35,7 @@
 
 namespace cudnn_frontend {
 
-static cudnnStatus_t
+[[maybe_unused]] static cudnnStatus_t
 cudnnReorderFilterAndBiasInt8x32(cudnnHandle_t handle,
                                  const Tensor_v8 &tensor,
                                  const ConvDesc_v8 &conv_desc,
