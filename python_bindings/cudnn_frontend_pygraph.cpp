@@ -47,6 +47,10 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_code_t::UNSUPPORTED_GRAPH_FORMAT:
             throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_code_t::GRAPH_NOT_SUPPORTED:
+            throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_code_t::HANDLE_ERROR:
+            throw std::runtime_error(error_msg);
     }
 }
 
@@ -123,7 +127,7 @@ class PyGraph {
     bool is_handle_owner;
     bool is_built;
 
-    PyGraph(std::string const& name,
+    PyGraph(std::string const&,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
             cudnn_frontend::DataType_t compute_data_type,
@@ -339,7 +343,7 @@ class PyGraph {
            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B,
            cudnn_frontend::DataType_t const& compute_data_type,
            std::string const& name) {
-        auto attributes = cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type);
+        auto attributes = cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type).set_name(name);
 
         auto C = graph.matmul(A, B, attributes);
         return C;

@@ -103,7 +103,7 @@ tensor_create(cudnnDataType_t type,
                               .build();
     std::cout << tensor_created.describe() << std::endl;
     return tensor_created;
-};
+}
 
 static cudnn_frontend::Tensor
 tensor_create_with_offset(cudnnDataType_t type,
@@ -126,7 +126,7 @@ tensor_create_with_offset(cudnnDataType_t type,
                               .build();
     std::cout << tensor_created.describe() << std::endl;
     return tensor_created;
-};
+}
 
 static cudnn_frontend::PointWiseDesc
 pw_desc_create(cudnnDataType_t type, cudnnPointwiseMode_t mode) {
