@@ -402,9 +402,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
         sub_nodes.emplace_back(std::move(softmax_node));
 
         // Two cases for training: dropout present or not
-        bool dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
         // Special case: Skip dropout when 0.0 probability
-        dropout_present &= (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
+        bool dropout_present = (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
+        dropout_present = dropout_present || options.inputs.Dropout_mask;
+
         if (dropout_present) {
             // Lower options to rng options
             auto rng_output = std::make_shared<Tensor_attributes>();
