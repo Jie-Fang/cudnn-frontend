@@ -44,6 +44,15 @@ class ScaledDotProductFlashAttentionNode : public INode {
             return {status, message};
         }
 
+        if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message =
+                "[cudnn_frontend] ERROR: Using both, custom dropout mask and internal-mask generation using dropout "
+                "probability, is ill-formed.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
         if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
@@ -392,7 +401,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
         sub_nodes.emplace_back(std::move(softmax_node));
 
         // Two cases for training: dropout present or not
-        bool const dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
+        bool dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
+        // Special case: Skip dropout when 0.0 probability
+        dropout_present &= (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
         if (dropout_present) {
             // Lower options to rng options
             auto rng_output = std::make_shared<Tensor_attributes>();
