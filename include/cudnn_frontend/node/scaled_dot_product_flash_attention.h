@@ -44,7 +44,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             return {status, message};
         }
 
-        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 0) {
+        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
                 "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
@@ -405,7 +405,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Rng_attributes rng_attributes;
             rng_attributes.set_name("rng");
             rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
-                .set_bernoulli_probability(options.dropout_probability.value());
+                .set_bernoulli_probability(1.0 -
+                                           options.dropout_probability.value());  // As user sets dropout probability
             rng_attributes.inputs.Seed   = options.inputs.Seed;
             rng_attributes.inputs.Offset = options.inputs.Offset;
             rng_attributes.outputs.Y     = rng_output;
@@ -484,9 +485,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
         void* node_workspace) override {
         if (options.dropout_probability.has_value()) {
 #if CUDNN_VERSION < 8903
-            half dropout_scale_value = (1.f / (options.dropout_probability.value()));
+            half dropout_scale_value = (1.f / (1.0 - options.dropout_probability.value()));
 #else
-            float dropout_scale_value = (1.f / (options.dropout_probability.value()));
+            float dropout_scale_value = (1.f / (1.0 - options.dropout_probability.value()));
 #endif
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
