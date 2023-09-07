@@ -27,7 +27,7 @@ padding  = [1,1]
 stride   = [1,1]
 dilation = [1,1]
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="requires cudnn 8.8 or higher")
+@pytest.mark.skipif(cudnn.backend_version() < 8800, reason="requires cudnn 8.8 or higher")
 def test_conv_genstats():
     print("Running conv genstats")
 

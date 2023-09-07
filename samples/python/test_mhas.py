@@ -166,15 +166,15 @@ all_options = [elem for elem in itertools.product(*[alibi_mask_options, padding_
 def param_extract(request):
   return request.param
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8903, reason="requires cudnn 8.9 or higher")
+@pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9 or higher")
 def test_scale_dot_product_flash_attention(param_extract):
 
     alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type = param_extract
     
-    if alibi_mask and cudnn.get_cudnn_version() < 8904:
+    if alibi_mask and cudnn.backend_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
         
-    if padding_mask and cudnn.get_cudnn_version() < 8903:
+    if padding_mask and cudnn.backend_version() < 8903:
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
     s_q_choices = [256, 512, 1024, 2048] 

@@ -4,7 +4,7 @@ import cupy as cp
 import sys
 print("Example 2. Executing the Matmul + bias + relu graph")
 
-if cudnn.get_cudnn_version() < 8500:
+if cudnn.backend_version() < 8500:
     print("cudnn version does not support matmul+bias fusion for specified layout")
     exit(0)
 

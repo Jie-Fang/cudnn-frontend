@@ -18,7 +18,7 @@ class SGBN(torch.nn.Module):
     def forward(self, input, running_mean, running_var, weight, bias, eps, momentum):
         return torch.nn.functional.batch_norm(input, running_mean, running_var, weight=weight, bias=bias, training=True, momentum=momentum, eps=eps)
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
+@pytest.mark.skipif(cudnn.backend_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
 def test_bn_relu_with_mask():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -99,7 +99,7 @@ def test_bn_relu_with_mask():
     print("Comparing outputs")
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8700, reason="BN not supported below cudnn 8.7")
+@pytest.mark.skipif(cudnn.backend_version() < 8700, reason="BN not supported below cudnn 8.7")
 def test_bn():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -167,7 +167,7 @@ def test_bn():
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
+@pytest.mark.skipif(cudnn.backend_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
 def test_drelu_dadd_dbn():
     # Tensors
     N, C, H, W = 4, 16, 56, 56
@@ -237,7 +237,7 @@ def test_drelu_dadd_dbn():
         device_buffers[DX_drelu] = DX_drelu_actual
     graph.execute(device_buffers, workspace)
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8904, reason="BN_infer-Drelu-DBN not supported below cudnn 8.9.4")
+@pytest.mark.skipif(cudnn.backend_version() < 8904, reason="BN_infer-Drelu-DBN not supported below cudnn 8.9.4")
 def test_bn_infer_drelu_dbn():
     # Tensors
     N, C, H, W = 4, 16, 56, 56
