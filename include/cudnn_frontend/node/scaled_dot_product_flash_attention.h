@@ -103,9 +103,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto b            = q_dim[0];
         auto h            = q_dim[1];
         auto s_q          = q_dim[2];
-        auto d            = q_dim[3];
         auto const& k_dim = options.inputs.K->get_dim();
         auto s_kv         = k_dim[3];
+        auto const& v_dim = options.inputs.V->get_dim();
+        auto d_v          = v_dim[3];
 
         std::shared_ptr<Tensor_attributes> last_output;
 
@@ -478,7 +479,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         // Set dims if user did not
         if (options.outputs.O->get_dim().empty()) {
-            options.outputs.O->set_dim({b, h, s_q, d});
+            options.outputs.O->set_dim({b, h, s_q, d_v});
+        }
+        if (options.outputs.O->get_stride().empty()) {
+            auto const O_dim = options.outputs.O->get_dim();
+            options.outputs.O->set_stride({O_dim[3] * O_dim[2] * O_dim[1], O_dim[3] * O_dim[2], O_dim[3], 1});
         }
 
         return {error_code_t::OK, ""};
