@@ -44,7 +44,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
             return {status, message};
         }
 
-        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 0) {
+        if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
+            auto status = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message =
+                "[cudnn_frontend] ERROR: Using both, custom dropout mask and internal-mask generation using dropout "
+                "probability, is ill-formed.";
+            getLogger() << message << std::endl;
+            return {status, message};
+        }
+
+        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
                 "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
@@ -94,9 +103,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto b            = q_dim[0];
         auto h            = q_dim[1];
         auto s_q          = q_dim[2];
-        auto d            = q_dim[3];
         auto const& k_dim = options.inputs.K->get_dim();
         auto s_kv         = k_dim[3];
+        auto const& v_dim = options.inputs.V->get_dim();
+        auto d_v          = v_dim[3];
 
         std::shared_ptr<Tensor_attributes> last_output;
 
@@ -392,7 +402,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
         sub_nodes.emplace_back(std::move(softmax_node));
 
         // Two cases for training: dropout present or not
-        bool const dropout_present = options.dropout_probability.has_value() || options.inputs.Dropout_mask;
+        // Special case: Skip dropout when 0.0 probability
+        bool dropout_present = (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
+        dropout_present = dropout_present || options.inputs.Dropout_mask;
+
         if (dropout_present) {
             // Lower options to rng options
             auto rng_output = std::make_shared<Tensor_attributes>();
@@ -405,7 +418,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Rng_attributes rng_attributes;
             rng_attributes.set_name("rng");
             rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
-                .set_bernoulli_probability(options.dropout_probability.value());
+                .set_bernoulli_probability(1.0 -
+                                           options.dropout_probability.value());  // As user sets dropout probability
             rng_attributes.inputs.Seed   = options.inputs.Seed;
             rng_attributes.inputs.Offset = options.inputs.Offset;
             rng_attributes.outputs.Y     = rng_output;
@@ -466,7 +480,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         // Set dims if user did not
         if (options.outputs.O->get_dim().empty()) {
-            options.outputs.O->set_dim({b, h, s_q, d});
+            options.outputs.O->set_dim({b, h, s_q, d_v});
+        }
+        if (options.outputs.O->get_stride().empty()) {
+            auto const O_dim = options.outputs.O->get_dim();
+            options.outputs.O->set_stride({O_dim[3] * O_dim[2] * O_dim[1], O_dim[3] * O_dim[2], O_dim[3], 1});
         }
 
         return {error_code_t::OK, ""};
@@ -484,9 +502,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
         void* node_workspace) override {
         if (options.dropout_probability.has_value()) {
 #if CUDNN_VERSION < 8903
-            half dropout_scale_value = (1.f / (options.dropout_probability.value()));
+            half dropout_scale_value = (1.f / (1.0 - options.dropout_probability.value()));
 #else
-            float dropout_scale_value = (1.f / (options.dropout_probability.value()));
+            float dropout_scale_value = (1.f / (1.0 - options.dropout_probability.value()));
 #endif
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
