@@ -3,6 +3,7 @@ import os
 import cudnn
 import pytest
 import sys
+import argparse
 
 from test_graph import test_graph, operation
 from utils import getFwdConvDilatedFilterDim, getFwdConvPaddedImageDim, getFwdConvOutputDim
@@ -24,10 +25,11 @@ def read_json_test_dict(fname):
 def replace_single_param(json_test_def, abstract_params):
     SKIPABLE = ["dimOut", "k", "n", "c", "h", "w"]
     FORMAT_ALL = "formatAll"
+    IO_DATA_TYPE = "P"
     INT_LISTS = ["dimOut", "dimA", "filtA", "convStrideA", "dilationA", "padA"]
-    catch_all = {"formatIn": FORMAT_ALL, "filtFormat": FORMAT_ALL, "formatOut": FORMAT_ALL}
+    catch_all = {"formatIn": FORMAT_ALL, "filtFormat": FORMAT_ALL, "formatOut": FORMAT_ALL, "Pin": IO_DATA_TYPE, "Pout": IO_DATA_TYPE}
     layout_params = ["formatIn", "filtFormat", "formatOut", FORMAT_ALL]
-    defaults = {"groupCount": 1}
+
     if isinstance(json_test_def, str) and "<" in json_test_def and ">" in json_test_def:
         abstract_param = json_test_def.strip("<>")
         concrete_param = None
@@ -38,15 +40,6 @@ def replace_single_param(json_test_def, abstract_params):
         # Some parameters have a catch-all instead (e.g., formatIn is specified by formatAll)
         elif abstract_param in catch_all:
             concrete_param = abstract_params[catch_all[abstract_param]]
-        # Some parameters have default values if unspecified
-        elif abstract_param in defaults:
-            concrete_param = defaults[abstract_param]
-        # Some parameters are booleans that are set on the command line, or have default value otherwise
-        elif abstract_param == "convMode":
-            if 'x' in abstract_params:
-                concrete_param = "CUDNN_CROSS_CORRELATION"
-            else:
-                concrete_param = "CUDNN_CONVOLUTION"
         # Some parameters can be skipped in the first pass of parameter replacement (e.g., dimOut as it will be derived later)
         elif abstract_param in SKIPABLE:
             return json_test_def
@@ -80,22 +73,99 @@ def replace_abstract_test_params(json_test_def, abstract_params):
             
     return json_test_def
 
-def run_test_from_legacy_args(json_fname, args):
+def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     print("Running from legacy json graph definition")
     kTEST_NAME = "jsonTestName"
+    kDATA_TYPES = ['s', 'h', 'float', 'half']
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    
+    # General args
+    l_parser = argparse.ArgumentParser("legacy_graph_runner")
+    l_parser.add_argument("-" + kTEST_NAME, required=True)
+    l_parser.add_argument("-jsonPath", dest="json_fname", action='store', default=os.path.join(SCRIPT_DIR, "json_graph_defs",  "fusionGraphTests.json"))
+    l_parser.add_argument("-kv", action='append', dest='key_values', default=[], help="kv values to be specified as [-kv=<key>:<value>]+ e.g., -kv=layout:NCHW.")
+    l_parser.add_argument("-minDevVer", default=0, type=int)
+    l_parser.add_argument("-groupCount", default=1, type=int)
+    l_parser.add_argument("-atol", default=0.1, type=float)
+    l_parser.add_argument("-rtol", default=0.1, type=float)
+    # Convolution related params (TODO(@mbreughe): add grouping)
+    l_parser.add_argument("-x", "-convMode", dest='convMode', action='store_const', const='CUDNN_CROSS_CORRELATION', default='CUDNN_CONVOLUTION')
+    l_parser.add_argument("-dim", default=2)
+    l_parser.add_argument("-pad_d", action='store', default=0)
+    l_parser.add_argument("-pad_h", action='store', default=0)
+    l_parser.add_argument("-pad_w", action='store', default=0)
+    l_parser.add_argument("-dimA", default=None) # Alterantively we can use nargs='+' and specify as -dimA 1 2 3 4 (without comma's)
+    l_parser.add_argument("-filtA", default=None)
+    l_parser.add_argument("-convStrideA")   # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    l_parser.add_argument("-dilationA")     # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    l_parser.add_argument("-padA")          # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    # Type related
+    l_parser.add_argument("-Pin", choices=kDATA_TYPES)
+    l_parser.add_argument("-Pout", choices=kDATA_TYPES)
+    l_parser.add_argument("-Pcomp", choices=kDATA_TYPES)
+    # Format related
+    l_parser.add_argument("-formatAll", type=int, choices=[0,1])
+    # Ignored arguments
+    ignored_keys = ['d', 'gpuRef']
+    ignored_args = l_parser.add_argument_group('ignored_args')
+    ignored_args.add_argument("-d", action='store_true', default=None)
+    ignored_args.add_argument("-gpuRef", action='store_true', default=None)
 
-    # Parse the cudnnTest arguments
-    abstract_params = dict()
-    for kv in args.split(" -"): # note the space: this is to ensure we split something like -atol5e-3 correctly
+    # First parsing pass
+    legacy_args = l_parser.parse_args(unparsed_graphRunner_args)
+    print(legacy_args)
+    
+    abstract_params = vars(legacy_args)
+
+    # Special treatment for kv parameters:
+    for kv in legacy_args.key_values:
         kv_pair = kv.split(":")
         assert len(kv_pair) == 2
         k = kv_pair[0].strip("-").strip("=")
         v = kv_pair[1].strip("-").strip("=")
         abstract_params[k] = v
 
-    json_test_name = abstract_params[kTEST_NAME]
+    # Remove the unparsed key_values
+    del abstract_params['key_values']
 
-    json_tests = read_json_test_dict(json_fname)
+    # Second parsing pass: Some params' default value is default on other specifications
+    spatial_dims = abstract_params["dim"]
+    if abstract_params['padA'] is None:
+        padA = [0] * spatial_dims
+        if spatial_dims == 3:
+            padA[0] = int(abstract_params["pad_d"])
+            padA[1] = int(abstract_params["pad_h"])
+            padA[2] = int(abstract_params["pad_w"])
+        elif spatial_dims == 2:
+            padA[0] = int(abstract_params["pad_h"])
+            padA[1] = int(abstract_params["pad_w"])
+        else:
+            raise ValueError()
+        abstract_params['padA'] = padA
+    
+    # dilation default is array of ones
+    # stride default is 1, which is derived from cpp harness: first it's 0, but then getConvNdDesc and json_util override it with 1
+    ones = [1] * spatial_dims
+    for param_name in ["convStrideA", "dilationA"]:
+        if abstract_params[param_name] is None:
+            abstract_params[param_name] = ones
+
+    # Ignored arguments:
+    for key in ignored_keys:
+        if abstract_params[key] is not None:
+            print ("Note: Argument -{} ignored.".format(key))
+            del abstract_params[key]
+
+    # Remove any parameters that were not specified or didn't have a default:
+    for key in list(abstract_params.keys()):
+        if abstract_params[key] is None:
+            del abstract_params[key]
+
+    print(abstract_params)
+
+    json_test_name = legacy_args.jsonTestName
+
+    json_tests = read_json_test_dict(legacy_args.json_fname)
     
     assert json_test_name in json_tests
     abstract_test_dict = json_tests[json_test_name]
@@ -417,6 +487,7 @@ def create_test_graph_node(legacy_op):
 def create_kwargs(legacy_op, TGTensors):
     kwargs = {}
     kwargs.update(legacy_op.get_operation_properties())
+    print(kwargs)
     input_name_mapping = legacy_op.get_input_name_mapping()
 
     for pycudnn_input_name, tensor_name in input_name_mapping.items():
