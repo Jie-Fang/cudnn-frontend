@@ -313,3 +313,159 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     cudnnDestroy(handle);
 }
+
+TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
+    if (CUDART_VERSION < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+        return;
+    }
+
+    if (CUDNN_VERSION < 8905) {
+        SKIP("Test requires cuDNN version 8.9.5 or above");
+        return;
+    }
+
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("MHA Graph requires Hopper or above arch.");
+        return;
+    }
+
+    int64_t b                 = 1;     // batch size
+    int64_t h                 = 2;     // head dim
+    int64_t s_q               = 2048;  // q tensor is padded to this seq length
+    int64_t s_kv              = 2048;  // k and v tensor is padded to this seq length
+    int64_t d                 = 128;   // hidden dim
+
+    float dropout_probability = 0.2f;
+
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph mha_graph;
+    mha_graph.set_io_data_type(fe::DataType_t::HALF)
+                      .set_intermediate_data_type(fe::DataType_t::FLOAT)
+                      .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    // used for dropout != 0.0f
+    std::shared_ptr<fe::graph::Tensor_attributes> dropout_seed, dropout_offset;
+
+    auto q = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Q")
+                                  .set_dim({b, h, s_q, d})
+                                  .set_stride({h * s_q * d, s_q * d, d, 1}));
+    auto k = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("K")
+                                  .set_dim({b, h, d, s_kv})
+                                  .set_stride({h * s_kv * d, s_kv * d, 1, d}));
+    auto v = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("V")
+                                  .set_dim({b, h, d, s_kv})
+                                  .set_stride({h * s_kv * d, s_kv * d, 1, d}));
+    auto o = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("O")
+                                  .set_dim({b, h, s_q, d})
+                                  .set_stride({h * s_q * d, s_q * d, d, 1}));
+    auto dO = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("dO")
+                                  .set_dim({b, h, s_q, d})
+                                  .set_stride({h * s_q * d, s_q * d, d, 1}));
+    auto stats = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("stats")
+                                  .set_dim({b, h, s_q, 1})
+                                  .set_stride({h * s_q, s_q, 1, 1})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+
+    auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("attn_scale")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_is_pass_by_value(true)
+                                  .set_data_type(fe::DataType_t::FLOAT));
+
+    if (dropout_probability != 0.0f) {
+        dropout_seed = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Seed")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT32));
+        dropout_offset = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Offset")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT32));
+    }
+
+    auto scaled_dot_product_flash_attention_backward_options = fe::graph::Scaled_dot_product_flash_attention_backward_attributes()
+                                  .set_name("flash_attention_backward")
+                                  .set_causal_mask(true)
+                                  .set_attn_scale(attn_scale);
+
+    if (dropout_probability != 0.0f) {
+        scaled_dot_product_flash_attention_backward_options.set_dropout(dropout_probability, dropout_seed, dropout_offset);
+    }
+
+    auto [dQ, dK, dV] = mha_graph.scaled_dot_product_flash_attention_backward(q, k, v, o, dO, stats, scaled_dot_product_flash_attention_backward_options);
+
+    dQ->set_output(true).set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1});
+    dK->set_output(true).set_dim({b, h, s_kv, d}).set_stride({h * s_kv * d, s_kv * d, d, 1});
+    dV->set_output(true).set_dim({b, h, s_kv, d}).set_stride({h * s_kv * d, s_kv * d, d, 1});
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(mha_graph.validate().is_good());
+
+    REQUIRE(mha_graph.build_operation_graph(handle).is_good());
+
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+
+    REQUIRE(plans.check_support(handle).is_good());
+
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
+
+    // build variant pack
+    // inputs
+    Surface<half> q_tensor(b * h * s_q * d, false);
+    Surface<half> k_tensor(b * h * d * s_kv, false);
+    Surface<half> v_tensor(b * h * d * s_kv, false);
+    Surface<half> o_tensor(b * h * s_q * d, false);
+    Surface<half> dO_tensor(b * h * s_q * d, false);
+    Surface<half> stats_tensor(b * h * s_q * 1, false);
+    // outputs
+    Surface<half> dQ_tensor(b * h * s_q * d, false);
+    Surface<half> dK_tensor(b * h * s_kv * d, false);
+    Surface<half> dV_tensor(b * h * s_kv * d, false);
+
+    float attn_scale_cpu = 0.5f;
+
+    int32_t seed_value = 123456;
+    int32_t offset_value = 789;
+    Surface<int32_t> dropout_seed_tensor(1, false, seed_value);
+    Surface<int32_t> dropout_offset_tensor(1, false, offset_value);
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        // inputs
+        {q, q_tensor.devPtr},
+        {k, k_tensor.devPtr},
+        {v, v_tensor.devPtr},
+        {o, o_tensor.devPtr},
+        {dO, dO_tensor.devPtr},
+        {stats, stats_tensor.devPtr},
+        // outputs
+        {dQ, dQ_tensor.devPtr},
+        {dK, dK_tensor.devPtr},
+        {dV, dV_tensor.devPtr},
+        // pass by value
+        {attn_scale, &attn_scale_cpu}
+    };
+
+    if (dropout_probability != 0.0f) {
+        variant_pack[dropout_seed] = dropout_seed_tensor.devPtr;
+        variant_pack[dropout_offset] = dropout_offset_tensor.devPtr;
+    }
+
+    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    checkCudaErr(cudaDeviceSynchronize());
+
+    cudnnDestroy(handle);
+}

@@ -20,6 +20,7 @@
 #include "cudnn_frontend/node/reshape.h"
 #include "cudnn_frontend/node/scaled_dot_product_attention.h"
 #include "cudnn_frontend/node/scaled_dot_product_flash_attention.h"
+#include "cudnn_frontend/node/scaled_dot_product_flash_attention_backward.h"
 
 #include "cudnn_frontend_graph_helpers.h"
 
@@ -306,6 +307,14 @@ class Graph : public INode {
         std::shared_ptr<Tensor_attributes>,
         std::shared_ptr<Tensor_attributes>,
         Scaled_dot_product_flash_attention_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 3> scaled_dot_product_flash_attention_backward(
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        std::shared_ptr<Tensor_attributes>,
+        Scaled_dot_product_flash_attention_backward_attributes);
 
     Plans
     get_execution_plan_list(HeurMode_t mode);
@@ -740,6 +749,32 @@ Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
     sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(std::move(options), context));
 
     return {O, Stats};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::scaled_dot_product_flash_attention_backward(std::shared_ptr<Tensor_attributes> q,
+                                                   std::shared_ptr<Tensor_attributes> k,
+                                                   std::shared_ptr<Tensor_attributes> v,
+                                                   std::shared_ptr<Tensor_attributes> o,
+                                                   std::shared_ptr<Tensor_attributes> dO,
+                                                   std::shared_ptr<Tensor_attributes> Stats,
+                                                   Scaled_dot_product_flash_attention_backward_attributes options) {
+    // Set inputs
+    options.inputs.Q     = q;
+    options.inputs.K     = k;
+    options.inputs.V     = v;
+    options.inputs.O     = o;
+    options.inputs.dO    = dO;
+    options.inputs.Stats = Stats;
+
+    // Make required output tensors
+    auto dQ = options.outputs.dQ = output_tensor(options.get_name() + "::dQ");
+    auto dK = options.outputs.dK = output_tensor(options.get_name() + "::dK");
+    auto dV = options.outputs.dV = output_tensor(options.get_name() + "::dV");
+
+    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionBackwardNode>(std::move(options), context));
+
+    return {dQ, dK, dV};
 }
 
 }  // namespace cudnn_frontend::graph
