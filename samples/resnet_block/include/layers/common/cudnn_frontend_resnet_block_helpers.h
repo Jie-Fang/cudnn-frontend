@@ -482,7 +482,7 @@ calculateSize(const int64_t *dims, int numDims) {
         size *= dims[i];
     }
     return size;
-};
+}
 
 static inline bool
 isDimensionMatch(const int64_t *A, const int64_t *B, int numDims) {
@@ -504,7 +504,7 @@ isDimensionMatch(const int64_t *A, const int64_t *B, int numDims) {
 template <typename Base, typename T>
 static inline bool instanceof (const T *object) {
     return dynamic_cast<const Base *>(object) != nullptr;
-};
+}
 
 /**
  * @brief Helper error logging function Uses a generic type T for the block calling the error, that way the user knows
@@ -555,7 +555,7 @@ logErrorMessage(cudnnStatus_t status,
             "! Double check your parameters/device pointers. CUDNN error string: " + cudnnGetErrorString(status) + " " +
             extraMessage;
     }
-};
+}
 
 /**
  * @brief Helper error logging function to check for errors based on a cudnnStatus_t. Used internally when
@@ -586,6 +586,6 @@ checkErrorStatusAndLog(cudnnStatus_t status,
         return true;
     }
     return false;
-};
+}
 
 }  // namespace cudnn_frontend

@@ -20,7 +20,8 @@ enum class [[nodiscard]] error_code_t{OK,
                                       GRAPH_EXECUTION_FAILED,
                                       HEURISTIC_QUERY_FAILED,
                                       UNSUPPORTED_GRAPH_FORMAT,
-                                      INVALID_CUDA_DEVICE};
+                                      INVALID_CUDA_DEVICE,
+                                      HANDLE_ERROR};
 
 typedef struct error_object {
     error_code_t code;
@@ -118,6 +119,9 @@ operator<<(std::ostream& os, const error_code_t& mode) {
             break;
         case error_code_t::UNSUPPORTED_GRAPH_FORMAT:
             os << "UNSUPPORTED_GRAPH_FORMAT";
+            break;
+        case error_code_t::HANDLE_ERROR:
+            os << "HANDLE_ERROR";
             break;
     }
     return os;

@@ -2,21 +2,24 @@
 
 #include <unordered_map>
 
-#include "cudnn_frontend_node_batchnorm.h"
-#include "cudnn_frontend_node_bn_finalize.h"
-#include "cudnn_frontend_node_conv_fprop.h"
-#include "cudnn_frontend_node_conv_dgrad.h"
-#include "cudnn_frontend_node_conv_wgrad.h"
-#include "cudnn_frontend_node_dbn.h"
-#include "cudnn_frontend_node_dbn_weight.h"
-#include "cudnn_frontend_node_genstats.h"
-#include "cudnn_frontend_node_matmul.h"
-#include "cudnn_frontend_node_pointwise.h"
-#include "cudnn_frontend_node_reduction.h"
-#include "cudnn_frontend_node_rng.h"
-#include "cudnn_frontend_node_reshape.h"
-#include "cudnn_frontend_node_scaled_dot_product_attention.h"
-#include "cudnn_frontend_node_scaled_dot_product_flash_attention.h"
+#include "cudnn_frontend/node/batchnorm.h"
+#include "cudnn_frontend/node/batchnorm_inference.h"
+#include "cudnn_frontend/node/bn_finalize.h"
+#include "cudnn_frontend/node/conv_fprop.h"
+#include "cudnn_frontend/node/conv_dgrad.h"
+#include "cudnn_frontend/node/conv_wgrad.h"
+#include "cudnn_frontend/node/dbn.h"
+#include "cudnn_frontend/node/dln.h"
+#include "cudnn_frontend/node/dbn_weight.h"
+#include "cudnn_frontend/node/genstats.h"
+#include "cudnn_frontend/node/layernorm.h"
+#include "cudnn_frontend/node/matmul.h"
+#include "cudnn_frontend/node/pointwise.h"
+#include "cudnn_frontend/node/reduction.h"
+#include "cudnn_frontend/node/rng.h"
+#include "cudnn_frontend/node/reshape.h"
+#include "cudnn_frontend/node/scaled_dot_product_attention.h"
+#include "cudnn_frontend/node/scaled_dot_product_flash_attention.h"
 
 #include "cudnn_frontend_graph_helpers.h"
 
@@ -50,8 +53,6 @@ class Plans {
         return status;
     }
 
-    int64_t
-    get_workspace_size();
     int64_t
     get_max_workspace_size();
 
@@ -192,11 +193,6 @@ Plans::get_max_workspace_size() {
     return list_of_engine_configs.get_max_workspace_size();
 }
 
-inline int64_t
-Plans::get_workspace_size() {
-    return list_of_engine_configs.get_workspace_size();
-}
-
 class Graph : public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> tensors;
@@ -234,10 +230,22 @@ class Graph : public INode {
     std::shared_ptr<Tensor_attributes>
     tensor(Tensor_attributes const &tensor);
 
+    std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm(std::shared_ptr<Tensor_attributes>,
+                                                                std::shared_ptr<Tensor_attributes>,
+                                                                std::shared_ptr<Tensor_attributes>,
+                                                                Layernorm_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 Batchnorm_attributes);
+
+    std::shared_ptr<Tensor_attributes> batchnorm_inference(std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           std::shared_ptr<Tensor_attributes>,
+                                                           Batchnorm_inference_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 6> bn_finalize(std::shared_ptr<Tensor_attributes>,
                                                                   std::shared_ptr<Tensor_attributes>,
@@ -269,7 +277,12 @@ class Graph : public INode {
     std::array<std::shared_ptr<Tensor_attributes>, 3> batchnorm_backward(std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          std::shared_ptr<Tensor_attributes>,
-                                                                         batchnorm_backward_attributes);
+                                                                         Batchnorm_backward_attributes);
+
+    std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm_backward(std::shared_ptr<Tensor_attributes>,
+                                                                         std::shared_ptr<Tensor_attributes>,
+                                                                         std::shared_ptr<Tensor_attributes>,
+                                                                         Layernorm_backward_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
@@ -419,6 +432,29 @@ Graph::bn_finalize(std::shared_ptr<Tensor_attributes> sum,
     return {EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
 
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
+                 std::shared_ptr<Tensor_attributes> scale,
+                 std::shared_ptr<Tensor_attributes> bias,
+                 Layernorm_attributes options) {
+    // Set outputs
+    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
+    std::shared_ptr<Tensor_attributes> MEAN         = nullptr;
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
+    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
+        MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    }
+    // Set inputs
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS  = bias;
+
+    sub_nodes.emplace_back(std::make_unique<LayerNormNode>(std::move(options), context));
+
+    return {Y, MEAN, INV_VARIANCE};
+}
+
 inline std::array<std::shared_ptr<Tensor_attributes>, 5>
 Graph::batchnorm(std::shared_ptr<Tensor_attributes> x,
                  std::shared_ptr<Tensor_attributes> scale,
@@ -447,11 +483,33 @@ Graph::batchnorm(std::shared_ptr<Tensor_attributes> x,
     return {Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
 
+inline std::shared_ptr<Tensor_attributes>
+Graph::batchnorm_inference(std::shared_ptr<Tensor_attributes> x,
+                           std::shared_ptr<Tensor_attributes> mean,
+                           std::shared_ptr<Tensor_attributes> inv_variance,
+                           std::shared_ptr<Tensor_attributes> scale,
+                           std::shared_ptr<Tensor_attributes> bias,
+                           Batchnorm_inference_attributes options) {
+    // Set outputs
+    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+
+    // Set inputs
+    options.inputs.X            = x;
+    options.inputs.MEAN         = mean;
+    options.inputs.INV_VARIANCE = inv_variance;
+    options.inputs.SCALE        = scale;
+    options.inputs.BIAS         = bias;
+
+    sub_nodes.emplace_back(std::make_unique<BatchnormInferenceNode>(std::move(options), context));
+
+    return Y;
+}
+
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          batchnorm_backward_attributes options) {
+                          Batchnorm_backward_attributes options) {
     // Set outputs
     options.make_outputs([this](std::string const &name) { return output_tensor(name); });
     auto return_outputs = options.outputs;
@@ -462,6 +520,25 @@ Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
     options.inputs.SCALE = scale;
 
     sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
+
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::layernorm_backward(std::shared_ptr<Tensor_attributes> dy,
+                          std::shared_ptr<Tensor_attributes> x,
+                          std::shared_ptr<Tensor_attributes> scale,
+                          Layernorm_backward_attributes options) {
+    // Set outputs
+    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
+    auto return_outputs = options.outputs;
+
+    // Set inputs
+    options.inputs.DY    = dy;
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+
+    sub_nodes.emplace_back(std::make_unique<DLNNode>(std::move(options), context));
 
     return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }

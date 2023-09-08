@@ -749,8 +749,14 @@ run_from_cudnn_find(int64_t* x_dim,
         auto sample_predicate_function = [](cudnn_frontend::ExecutionPlan const& plan) -> bool {
             const int32_t max_plan_count = 5;
             static int32_t plan_count    = 0;
+
+            // Filter out plans that require non-zero workspace
+            if (plan.getWorkspaceSize() != 0) return true;
+
             plan_count++;
-            return plan.getWorkspaceSize() != 0 || plan_count > max_plan_count;
+
+            // Only keep first 5 plans
+            return plan_count > max_plan_count;
         };
 
         std::array<cudnn_frontend::GeneratorSource const, 2> sources = {heurgen_method, fallback_method};
@@ -1243,7 +1249,11 @@ run_dp4a(int64_t* x_dim,
 
         void* data_ptrs[] = {devPtrX, devPtrY, devPtrW};
         int64_t uids[]    = {'x', 'y', 'w'};
-        auto variantPack  = cudnn_frontend::VariantPackBuilder().setDataPointers(3, data_ptrs).setUids(3, uids).build();
+        auto variantPack  = cudnn_frontend::VariantPackBuilder()
+                               .setDataPointers(3, data_ptrs)
+                               .setUids(3, uids)
+                               .setWorkspacePointer(workspace_ptr)
+                               .build();
         std::cout << "variantPack " << variantPack.describe() << std::endl;
 
         auto sample_predicate_function = [max_workspace_size](cudnn_frontend::ExecutionPlan const& plan) -> bool {

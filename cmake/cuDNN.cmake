@@ -6,6 +6,10 @@ find_path(
     PATH_SUFFIXES include
 )
 
+file(READ "${CUDNN_INCLUDE_DIR}/cudnn_version.h" cudnn_version_header)
+string(REGEX MATCH "#define CUDNN_MAJOR [1-9]+" macrodef "${cudnn_version_header}")
+string(REGEX MATCH "[1-9]+" CUDNN_MAJOR_VERSION "${macrodef}")
+
 function(find_cudnn_library NAME)
     find_library(
         ${NAME}_LIBRARY ${NAME}
@@ -29,12 +33,6 @@ function(find_cudnn_library NAME)
 endfunction()
 
 find_cudnn_library(cudnn)
-find_cudnn_library(cudnn_adv_infer)
-find_cudnn_library(cudnn_adv_train)
-find_cudnn_library(cudnn_cnn_infer)
-find_cudnn_library(cudnn_cnn_train)
-find_cudnn_library(cudnn_ops_infer)
-find_cudnn_library(cudnn_ops_train)
 
 include (FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
@@ -65,11 +63,25 @@ target_include_directories(
 target_link_libraries(
     CUDNN::cudnn_all
     INTERFACE
-    CUDNN::cudnn_adv_train
-    CUDNN::cudnn_ops_train
-    CUDNN::cudnn_cnn_train
-    CUDNN::cudnn_adv_infer
-    CUDNN::cudnn_cnn_infer
-    CUDNN::cudnn_ops_infer
     CUDNN::cudnn 
 )
+
+if(CUDNN_MAJOR_VERSION EQUAL 8)
+    find_cudnn_library(cudnn_adv_infer)
+    find_cudnn_library(cudnn_adv_train)
+    find_cudnn_library(cudnn_cnn_infer)
+    find_cudnn_library(cudnn_cnn_train)
+    find_cudnn_library(cudnn_ops_infer)
+    find_cudnn_library(cudnn_ops_train)
+
+    target_link_libraries(
+        CUDNN::cudnn_all
+        INTERFACE
+        CUDNN::cudnn_adv_train
+        CUDNN::cudnn_ops_train
+        CUDNN::cudnn_cnn_train
+        CUDNN::cudnn_adv_infer
+        CUDNN::cudnn_cnn_infer
+        CUDNN::cudnn_ops_infer
+    )
+endif()

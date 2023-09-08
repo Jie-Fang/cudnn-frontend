@@ -1,28 +1,52 @@
 import cudnn
+import pytest
 
 def test_conv_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
     W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
     
-    conv_out = testgraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    conv_out = testgraph.conv_fprop(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     Y = testgraph.relu(input = conv_out)
+
+
+#This test broke in merge commit 72b88c88f125382694a784bb4ce2535f62d09903
+# def test_conv(jparams, testgraph):
+#     X = testgraph.tensor(dim=jparams["in_dim"], data_type = cudnn.data_type.FLOAT, layout = "NHWC")
+#     W = testgraph.tensor(dim=jparams["filter_dim"], data_type = cudnn.data_type.FLOAT, layout = "NHWC")
+    
+#     conv_out = testgraph.conv_fprop(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
 
 def test_conv_relu_bias_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
     W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
     bias = testgraph.tensor(dim=jparams["bias_dim"], layout = "NHWC")
 
-    conv_out = testgraph.conv(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    conv_out = testgraph.conv_fprop(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
     relu_1 = testgraph.relu(input = conv_out)
     bias_out = testgraph.bias(name = "bias", input = relu_1, bias = bias)
     relu_output = testgraph.relu(input=bias_out)
-    
+
+def test_dgrad_add(jparams, testgraph):
+    testgraph.set_compute_data_type(cudnn.data_type.FLOAT)
+    testgraph.set_io_data_type(cudnn.data_type.FLOAT)
+    wTensor = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
+    dyTensor = testgraph.tensor(dim=jparams["conv_out_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
+    bTensor =  testgraph.tensor(dim=jparams["dx_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
+
+    dxTensor = testgraph.conv_dgrad(name="dgrad", loss=dyTensor, filter=wTensor, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    dxTensor.set_dim(jparams["dx_dim"])
+
+    afterAdd = testgraph.add(name="add", a=dxTensor, b=bTensor)
+
 def test_batchnorm(jparams, testgraph):
+
+    if cudnn.backend_version() < 8700:
+        pytest.skip("BN not supported below cudnn 8.7")
+
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)
     
     N, C, H, W = jparams["in_dim"]
-    X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF) 
-    X.layout="NHWC"
+    X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF, layout = "NHWC") 
     scale = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
     bias = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
     in_running_mean = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
@@ -74,6 +98,26 @@ def test_gemm_bias_relu(jparams, testgraph):
 
     bias_out = testgraph.bias(name = "bias", input = gemm_output, bias = bias)
     relu_output = testgraph.relu(input=bias_out)
-    
 
- 
+def test_reduction(jparams, testgraph):
+    N,C,H,W = jparams["in_dim"]
+
+    X = testgraph.tensor(dim=[N,C,H,W], layout = "NHWC")
+    
+    Y = testgraph.reduction(input = X, mode = cudnn.reduction_mode.ADD)
+    Y.set_dim([N,1,H,W])
+    Y.set_data_type(cudnn.data_type.FLOAT)
+
+def test_conv_reduction(jparams, testgraph):
+    N,C,H,W = jparams["in_dim"]
+    K,C2,R,S = jparams["filter_dim"]
+    assert C == C2
+
+    padding = stride = dilation = [1, 1]
+    X = testgraph.tensor(dim=[N,C,H,W], layout = "NHWC")
+    Weight = testgraph.tensor(dim=[K,C,R,S], layout = "NHWC")
+    Y0 = testgraph.conv_fprop(image = X, weight = Weight, padding = padding, stride = stride, dilation = dilation)
+    
+    Y = testgraph.reduction(input = Y0, mode = cudnn.reduction_mode.ADD)
+    Y.set_dim([N,1,H,W])
+    Y.set_data_type(cudnn.data_type.FLOAT)
