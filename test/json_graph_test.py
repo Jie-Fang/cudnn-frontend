@@ -339,10 +339,10 @@ class Legacy_tensor:
             axes_order[-1] = axes_order[-2]
             axes_order[-2] = swap_val
             strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
-        elif layout == "NCHW" or int(layout) == 0:
+        elif layout == "NCHW" or str(layout) == '0':
             axes_order = list(range(nbDims))
             strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
-        elif layout == "NHWC" or int(layout) == 1:
+        elif layout == "NHWC" or str(layout) == '1':
             #TODO (@mbreughe): get this to work with the formula above
             strides = [1,1,1,1]
             strides[1] = 1
@@ -361,9 +361,9 @@ class Legacy_tensor:
                 layout = self.jtensor["layout"]
                 # TODO(@mbreughe): fix this in test_graph.py
                 # It shouldn't be necessary to specify thsi through both strides and layout
-                if layout == "NCHW" or int(layout) == 0:
+                if layout == "NCHW" or str(layout) == '0':
                     pycudnn_props[key] = "NCHW"
-                elif layout == "NHWC" or int(layout) == 1:
+                elif layout == "NHWC" or str(layout) == '1':
                     pycudnn_props[key] = "NHWC"
             else:
                 new_key = key
