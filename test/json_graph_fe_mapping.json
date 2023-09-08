@@ -17,7 +17,7 @@
                 },
             "CUDNN_POINTWISE_MUL":
                 {
-                    "operation": "add",
+                    "operation": "mul",
                     "input": {"X": "a", "B": "b"},
                     "output": ["Y"],
                     "properties": {"mathPrec": "compute_data_type"}

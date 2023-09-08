@@ -8,6 +8,9 @@ import utils
 # Globally ensure cudnn is disabled for everything torch related
 torch.backends.cudnn.enabled = False 
 
+# TODO(@mbreughe): allow dialing in any seed
+torch.manual_seed(0)
+
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
 # @note: we can easily replace PytorchReference by CustomReference to use a different reference framework (one LoC change in test_graph below)
@@ -64,6 +67,11 @@ class PytorchReference:
     @staticmethod
     def add(kwargs, test_tensor_out_list):
         output = torch.add(kwargs["a"], kwargs["b"])
+        return [output]
+
+    @staticmethod
+    def mul(kwargs, test_tensor_out_list):
+        output = torch.mul(kwargs["a"], kwargs["b"])
         return [output]
 
     @staticmethod
@@ -349,6 +357,8 @@ class test_tensor:
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
         return cudnn.data_type.HALF
+    elif torch_type == torch.bfloat16:
+        return cudnn.data_type.BFLOAT16
     elif torch_type == torch.float32:
         return cudnn.data_type.FLOAT
     else:
@@ -359,6 +369,8 @@ def convert_to_cudnn_type(torch_type):
 def convert_to_torch_type(cudnn_type):
     if cudnn_type == cudnn.data_type.HALF:
         return torch.float16
+    elif cudnn_type == cudnn.data_type.BFLOAT16:
+        return torch.bfloat16
     elif cudnn_type == cudnn.data_type.FLOAT:
         return torch.float32
     else:

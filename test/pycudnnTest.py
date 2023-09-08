@@ -21,15 +21,25 @@ if __name__ == "__main__":
 
     args, unknown_args = pct_parser.parse_known_args()
 
-    print (args, unknown_args)
-
     base_path = os.path.dirname(os.path.abspath(__file__))
     json_graph_test = os.path.join(base_path, "json_graph_test.py")
     python_graph_test = os.path.join(base_path, "python_graph_test.py")
 
     # Legacy style of calling cudnnTest (from e.g., cudnn_run.py)
     if args.R == 'graphRunner':
-        run_test_from_legacy_args(args, unknown_args)
+        # A quick sanitizing of the remaining arguments to be further parsed by run_test_from_legacy_args
+        sanitized_unk_args = []
+        for item in unknown_args:
+            if not "=" in item:
+                sanitized_unk_args.append(item)
+            else:
+                stripped = item.strip('=')
+                if "=" in stripped:
+                    sanitized_unk_args.extend(item.split("="))
+                else:
+                    sanitized_unk_args.append(stripped)
+        print (args, sanitized_unk_args)
+        run_test_from_legacy_args(args, sanitized_unk_args)
         sys.exit(0)
         
     # Graphs defined in json file

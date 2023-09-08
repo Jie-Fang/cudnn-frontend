@@ -6,7 +6,7 @@ import sys
 import argparse
 
 from test_graph import test_graph, operation
-from utils import getFwdConvDilatedFilterDim, getFwdConvPaddedImageDim, getFwdConvOutputDim
+from utils import getFwdConvDilatedFilterDim, getFwdConvPaddedImageDim, getFwdConvOutputDim, computeStrideNdTransposedPacked
 
 class ImplementationError(Exception):
     def __init__(self, reason):
@@ -76,14 +76,17 @@ def replace_abstract_test_params(json_test_def, abstract_params):
 def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     print("Running from legacy json graph definition")
     kTEST_NAME = "jsonTestName"
-    kDATA_TYPES = ['s', 'h', 'float', 'half']
+    kDATA_TYPES = ['s', 'h', 'float', 'half', "g", "b"]
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     
     # General args
-    l_parser = argparse.ArgumentParser("legacy_graph_runner")
+    l_parser = argparse.ArgumentParser("legacy_graph_runner", allow_abbrev=False)
     l_parser.add_argument("-" + kTEST_NAME, required=True)
     l_parser.add_argument("-jsonPath", dest="json_fname", action='store', default=os.path.join(SCRIPT_DIR, "json_graph_defs",  "fusionGraphTests.json"))
-    l_parser.add_argument("-kv", action='append', dest='key_values', default=[], help="kv values to be specified as [-kv=<key>:<value>]+ e.g., -kv=layout:NCHW.")
+    # These are somewhat complicated. We expect something like -kv=layout NCHH. In addition, multiple -kv invocations can happen. This means 2 things:
+    # 1) we need to set nargs to 2, so argparse knows it expects 2 values (in case above this is layout and NCHW). 
+    # 2), we need to specify action as append and build a list of kv values
+    l_parser.add_argument("-kv", action='append', nargs=2, dest='key_values', default=[], help="kv values to be specified as [-kv=<key> <value>]+ e.g., -kv=layout NCHW.")
     l_parser.add_argument("-minDevVer", default=0, type=int)
     l_parser.add_argument("-groupCount", default=1, type=int)
     l_parser.add_argument("-atol", default=0.1, type=float)
@@ -96,20 +99,40 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-pad_w", action='store', default=0)
     l_parser.add_argument("-dimA", default=None) # Alterantively we can use nargs='+' and specify as -dimA 1 2 3 4 (without comma's)
     l_parser.add_argument("-filtA", default=None)
+    l_parser.add_argument("-dimOut", default=None) # Don't specify a default as there is special logic for it in replace_implicit_params
     l_parser.add_argument("-convStrideA")   # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
     l_parser.add_argument("-dilationA")     # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
     l_parser.add_argument("-padA")          # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    # GEMM related params
+    l_parser.add_argument("-gemm_B", type=int, action="store")
+    l_parser.add_argument("-gemm_M", type=int, action="store")
+    l_parser.add_argument("-gemm_N", type=int, action="store")
+    l_parser.add_argument("-gemm_K", type=int, action="store")
+    l_parser.add_argument("-gemm_layout_A", action="store")
+    l_parser.add_argument("-gemm_layout_B", action="store")
+    l_parser.add_argument("-gemm_layout_C", action="store")
     # Type related
     l_parser.add_argument("-Pin", choices=kDATA_TYPES)
     l_parser.add_argument("-Pout", choices=kDATA_TYPES)
     l_parser.add_argument("-Pcomp", choices=kDATA_TYPES)
+    l_parser.add_argument("-Tin", choices=kDATA_TYPES)
+    l_parser.add_argument("-Tout", choices=kDATA_TYPES)
+    l_parser.add_argument("-Tcomp", choices=kDATA_TYPES)
     # Format related
     l_parser.add_argument("-formatAll", type=int, choices=[0,1])
     # Ignored arguments
-    ignored_keys = ['d', 'gpuRef']
+    ignored_keys = ['d', "b", "S", 'gpuRef', "Dforce_jit_dbg", "backendEngine", "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
     ignored_args = l_parser.add_argument_group('ignored_args')
-    ignored_args.add_argument("-d", action='store_true', default=None)
+    ignored_args.add_argument("-d", action='store', default=None)
+    ignored_args.add_argument("-b", action='store_true', default=None)
+    ignored_args.add_argument("-S", action='store_true', default=None)
     ignored_args.add_argument("-gpuRef", action='store_true', default=None)
+    ignored_args.add_argument("-Dforce_jit_dbg", action='store', default=None)
+    ignored_args.add_argument("-backendEngine", action='store', default=None, required=False)
+    ignored_args.add_argument("-engineCfgSweep", action='store', default=None, required=False)
+    ignored_args.add_argument("-knobSplitKSlices", action='store', default=None, required=False)
+    ignored_args.add_argument("-knobKernelCfg", action='store', default=None, required=False)
+    ignored_args.add_argument("-serialization", action='store', default=None, required=False)
 
     # First parsing pass
     legacy_args = l_parser.parse_args(unparsed_graphRunner_args)
@@ -119,10 +142,9 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     # Special treatment for kv parameters:
     for kv in legacy_args.key_values:
-        kv_pair = kv.split(":")
-        assert len(kv_pair) == 2
-        k = kv_pair[0].strip("-").strip("=")
-        v = kv_pair[1].strip("-").strip("=")
+        assert len(kv) == 2
+        k = kv[0].strip(":")
+        v = kv[1].strip(":")
         abstract_params[k] = v
 
     # Remove the unparsed key_values
@@ -160,6 +182,16 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     for key in list(abstract_params.keys()):
         if abstract_params[key] is None:
             del abstract_params[key]
+
+    # Third parsing: attempt to convert anything that is numeric for future convenience
+    for key in abstract_params:
+        val = abstract_params[key]
+        if isinstance(val, str) and val.isnumeric():
+            try:
+                val = int(val)
+            except:
+                val = float(val)
+            abstract_params[key] = val
 
     print(abstract_params)
 
@@ -296,20 +328,61 @@ class Legacy_tensor:
     def get_dim(self):
         return Legacy_value.translate_to_pycudnn_value("dim", self.jtensor["dim"])
     
+    def get_stride(self):
+        dim = self.jtensor["dim"]
+        layout = self.jtensor["layout"]
+        nbDims = len(dim)
+
+        if layout == "ROW_MAJOR":
+            axes_order = list(range(nbDims))
+            strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
+        elif layout == "COL_MAJOR":
+            axes_order = list(range(nbDims))
+            swap_val = axes_order[-1]
+            axes_order[-1] = axes_order[-2]
+            axes_order[-2] = swap_val
+            strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
+        elif layout == "NCHW" or int(layout) == 0:
+            axes_order = list(range(nbDims))
+            strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
+        elif layout == "NHWC" or int(layout) == 1:
+            #TODO (@mbreughe): get this to work with the formula above
+            strides = [1,1,1,1]
+            strides[1] = 1
+            strides[3] = dim[1]
+            strides[2] = strides[3] * dim[3]
+            strides[0] = strides[2] * dim[2]
+
+        print("{} in {} order is {} strides".format(dim, layout, strides))
+        return strides
+
     def get_tensor_properties(self):
         pycudnn_props = {}
         for key, value in self.jtensor.items():
-            new_key = key
-            if key in Legacy_tensor.mapping:
-                new_key = Legacy_tensor.mapping[key]
-            pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
+            # special treatment for layout
+            if key == "layout":
+                pycudnn_props["stride"] = self.get_stride()
+                layout = self.jtensor["layout"]
+                # TODO(@mbreughe): fix this in test_graph.py
+                # It shouldn't be necessary to specify thsi through both strides and layout
+                if layout == "NCHW" or int(layout) == 0:
+                    pycudnn_props[key] = "NCHW"
+                elif layout == "NHWC" or int(layout) == 1:
+                    pycudnn_props[key] = "NHWC"
+            else:
+                new_key = key
+                if key in Legacy_tensor.mapping:
+                    new_key = Legacy_tensor.mapping[key]
+                
+                pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
 
         return pycudnn_props
 
 # This is to be used as static class only
 class Legacy_value:
-    mapping = {"dataType": {"s": cudnn.data_type.FLOAT, "h": cudnn.data_type.HALF,
-               "float": cudnn.data_type.FLOAT, "half": cudnn.data_type.HALF}}
+    mapping = {"dataType": {"s": cudnn.data_type.FLOAT, "h": cudnn.data_type.HALF, 
+                        "g": cudnn.data_type.BFLOAT16, "b": cudnn.data_type.BOOLEAN,
+                        "float": cudnn.data_type.FLOAT, "half": cudnn.data_type.HALF}}
     indirection = {"mathPrec": "dataType"}
 
     @staticmethod
@@ -318,17 +391,7 @@ class Legacy_value:
             return Legacy_value.mapping[legacy_key_name][legacy_value]
         elif legacy_key_name in Legacy_value.indirection:
             return Legacy_value.translate_to_pycudnn_value(Legacy_value.indirection[legacy_key_name], legacy_value)
-        elif legacy_key_name == "layout":
-            # TODO(@mbreughe): calculate strides instead. but if you do, also change test_graph code
-            if legacy_value in ["NHWC", "NCHW"]:
-                return legacy_value
-            elif int(legacy_value) == 0:
-                return "NCHW"
-            elif int(legacy_value) == 1:
-                return "NHWC"
-            else:
-                raise ValueError("Unknown value {} for {}".format(legacy_value, legacy_key_name))
-
+        
         return legacy_value
     
 def get_conv_dim_placeholders(legacy_op, jtensor_dict):
@@ -449,6 +512,7 @@ def run_test_from_json_definition(json_dict):
 
         tg_tensor.set_data_type(legacy_tensor.get_data_type())
         tg_tensor.set_dim(legacy_tensor.get_dim())
+        tg_tensor.set_stride(legacy_tensor.get_stride())
     
     # Identify all tensors in jtensor_dict that are not output tensors
     input_tensors = [tensor for tensor in jtensor_dict if not tensor["name"] in TGTensors]
