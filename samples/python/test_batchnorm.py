@@ -18,7 +18,7 @@ class SGBN(torch.nn.Module):
     def forward(self, input, running_mean, running_var, weight, bias, eps, momentum):
         return torch.nn.functional.batch_norm(input, running_mean, running_var, weight=weight, bias=bias, training=True, momentum=momentum, eps=eps)
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
+@pytest.mark.skipif(cudnn.backend_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
 def test_bn_relu_with_mask():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -99,7 +99,7 @@ def test_bn_relu_with_mask():
     print("Comparing outputs")
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8700, reason="BN not supported below cudnn 8.7")
+@pytest.mark.skipif(cudnn.backend_version() < 8700, reason="BN not supported below cudnn 8.7")
 def test_bn():
     # Reference code
     N, C, H, W = 4, 16, 56, 56
@@ -167,7 +167,7 @@ def test_bn():
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
+@pytest.mark.skipif(cudnn.backend_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
 def test_drelu_dadd_dbn():
     # Tensors
     N, C, H, W = 4, 16, 56, 56
@@ -236,8 +236,73 @@ def test_drelu_dadd_dbn():
         DX_drelu_actual = torch.zeros_like(dy_gpu)
         device_buffers[DX_drelu] = DX_drelu_actual
     graph.execute(device_buffers, workspace)
+
+@pytest.mark.skipif(cudnn.backend_version() < 8904, reason="BN_infer-Drelu-DBN not supported below cudnn 8.9.4")
+def test_bn_infer_drelu_dbn():
+    # Tensors
+    N, C, H, W = 4, 16, 56, 56
+
+    bn_x_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    scale_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    bias_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    mean_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    inv_variance_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
+    dy_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+
+    # Cudnn code
+    graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
+
+    # Bool type is not supported by dlpack
+    BN_X = graph.tensor(name = "BN_X", dim = bn_x_gpu.size(), stride = bn_x_gpu.stride(), data_type = convert_to_cudnn_type(bn_x_gpu.dtype))
+    DY = graph.tensor(name = "DY", dim = dy_gpu.size(), stride = dy_gpu.stride(), data_type = convert_to_cudnn_type(dy_gpu.dtype))
+    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
+    bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(), data_type = convert_to_cudnn_type(bias_gpu.dtype))
+    mean = graph.tensor(name = "mean", dim = mean_gpu.size(), stride = mean_gpu.stride(), data_type = convert_to_cudnn_type(mean_gpu.dtype))
+    inv_variance = graph.tensor(name = "inv_variance", dim = inv_variance_gpu.size(), stride = inv_variance_gpu.stride(), data_type = convert_to_cudnn_type(inv_variance_gpu.dtype))
+
+    BN_Y = graph.batchnorm_inference(input = BN_X, mean = mean, inv_variance = inv_variance, scale = scale, bias = bias)    
+
+    DX_drelu = graph.relu_backward(loss = DY, input = BN_Y)
+    
+    DX_drelu.set_data_type(cudnn.data_type.HALF)
+
+    (DX, DScale, DBias) = graph.batchnorm_backward(name = "DBN"
+                                                    , grad = DX_drelu
+                                                    , input = BN_X
+                                                    , scale = scale
+                                                    , mean = mean
+                                                    , inv_variance = inv_variance
+                                                )
+
+    DX.set_output(True)
+    DScale.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    DBias.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+
+    graph.check_support()
+
+    graph.build()
+
+    DScale_actual = torch.zeros_like(scale_gpu)
+    DBias_actual = torch.zeros_like(scale_gpu)
+    DX_actual = torch.zeros_like(dy_gpu)
+
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+
+    device_buffers = {
+                    BN_X : bn_x_gpu
+                    , DY : dy_gpu
+                    , scale : scale_gpu
+                    , bias : bias_gpu
+                    , mean : mean_gpu
+                    , inv_variance : inv_variance_gpu
+                    , DX : DX_actual
+                    , DScale : DScale_actual
+                    , DBias : DBias_actual
+                }
+    graph.execute(device_buffers, workspace)
         
 if __name__ == "__main__":
     test_bn()
     test_bn_relu_with_mask()
     test_drelu_dadd_dbn()
+    test_bn_infer_drelu_dbn()

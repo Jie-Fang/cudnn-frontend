@@ -43,6 +43,7 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
 
     auto dgrad_options = fe::graph::Conv_dgrad_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
     auto dgrad_output  = graph.conv_dgrad(DY, W, dgrad_options);
+    dgrad_output->set_dim({4, 32, 16, 16});
 
     auto X             = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("input")
@@ -95,6 +96,7 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
 
     auto dgrad_options = fe::graph::Conv_dgrad_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
     auto dgrad_output  = graph.conv_dgrad(DY, W, dgrad_options);
+    dgrad_output->set_dim({4, 32, 16, 16});
 
     auto X            = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("image")

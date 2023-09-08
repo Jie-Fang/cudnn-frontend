@@ -18,17 +18,17 @@ padding  = [1,1]
 stride   = [1,1]
 dilation = [1,1]
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8800, reason="requires cudnn 8.8 or higher")
+@pytest.mark.skipif(cudnn.backend_version() < 8800, reason="requires cudnn 8.8 or higher")
 def test_scale_bias_relu_wgrad():
     print("Running test_scale_bias_relu_wgrad")
 
     # Reference
     X_gpu  = torch.randn(n, c, 32, 32, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     DY_gpu = torch.randn(n, k, 32, 32, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
-    DW_gpu = torch.randn(k, c, 3, 3, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     scale  = torch.randn(1, c, 1, 1, device = "cuda", dtype = torch.float16).to(memory_format=torch.channels_last) * 0.01
     bias   = torch.randn(1, c, 1, 1, device = "cuda", dtype = torch.float16).to(memory_format=torch.channels_last) * 0.01
-
+    DW_actual = torch.randn(k, c, 3, 3, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     X  = graph.tensor(name = "X",  dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
@@ -42,7 +42,7 @@ def test_scale_bias_relu_wgrad():
     relu_output  = graph.relu(name = "relu", input = bias_output)
 
     wgrad_output = graph.conv_wgrad(name = "wgrad", image = relu_output, loss = DY, padding = padding, stride = stride, dilation = dilation)
-    wgrad_output.set_output(True)
+    wgrad_output.set_output(True).set_dim([k, c, 3, 3])
 
     graph.check_support()
     

@@ -3,6 +3,10 @@ import torch
 from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
+import utils
+
+# Globally ensure cudnn is disabled for everything torch related
+torch.backends.cudnn.enabled = False 
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
@@ -11,24 +15,35 @@ class PytorchReference:
     # @brief: run convolution without bias
     # @param kwargs: these are the named parameters used in the associated cudnn.pygraph.conv function
     #   The only difference is that the input tensors are replaced by pytorch tensors
+    # @param test_tensor_out_list: a list of test_tensor instances. Some reference functions may need this (e.g., reduction)
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
-    def conv_fprop(kwargs):
+    def conv_fprop(kwargs, test_tensor_out_list):
         return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
-    def relu(kwargs):
+    def relu(kwargs, test_tensor_out_list):
         return [torch.nn.functional.relu(kwargs["input"])]
     
     @staticmethod
-    def batchnorm(kwargs):
+    def batchnorm(kwargs, test_tensor_out_list):
         is_training = kwargs["norm_forward_phase"] == cudnn.norm_forward_phase.TRAINING
         momentum = kwargs["momentum"].item()
         epsilon=kwargs["epsilon"].item()
-        output = torch.nn.functional.batch_norm(kwargs["input"], kwargs["in_running_mean"], kwargs["in_running_var"], weight= kwargs["scale"], bias=kwargs["bias"], training=is_training, momentum=momentum, eps=epsilon)
-        
+        # TODO(https://nvbugs/4272638): A bug with the cudnn backend disabled prevents correct behavior of batchnorm
+        # As a WAR temporarily enable the cudnn backend.
+        cudnn_enabled_before = torch.backends.cudnn.enabled
+        torch.backends.cudnn.enabled = True
+        try:
+            output = torch.nn.functional.batch_norm(kwargs["input"], kwargs["in_running_mean"], kwargs["in_running_var"], weight= kwargs["scale"], bias=kwargs["bias"], training=is_training, momentum=momentum, eps=epsilon)
+        except Exception as e:
+            raise e
+        finally:
+            # Set back the backend to what it was before
+            torch.backends.cudnn.enabled = cudnn_enabled_before
+
         output = [output]
 
         # torch's implementation only returns 1 output. 
@@ -37,14 +52,53 @@ class PytorchReference:
         return output
 
     @staticmethod
-    def matmul(kwargs):
+    def matmul(kwargs, test_tensor_out_list):
         output = torch.bmm(kwargs['A'], kwargs['B'])
         return [output]
     
     @staticmethod
-    def bias(kwargs):
+    def bias(kwargs, test_tensor_out_list):
         output = torch.add(kwargs["input"], kwargs["bias"])
         return [output]
+    
+    @staticmethod
+    def add(kwargs, test_tensor_out_list):
+        output = torch.add(kwargs["a"], kwargs["b"])
+        return [output]
+
+    @staticmethod
+    def conv_dgrad(kwargs, test_tensor_out_list):
+        input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
+        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [dX]
+    
+    @staticmethod
+    def conv_wgrad(kwargs, test_tensor_out_list):
+        # TODO(@mbreughe): derive dimensions algebraic instead!!
+        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
+        return [dW]
+
+    @staticmethod
+    def reduction(kwargs, test_tensor_out_list):
+        pycudnn_out_tensor = test_tensor_out_list[0].cudnn_tensor
+        # todo(@mbreughe): set default data types for output tensors based on pygraph settings
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        
+        out_dims = pycudnn_out_tensor.get_dim()
+
+        axis = []
+        for dim_idx, dim_val in enumerate(out_dims):
+            if dim_val == 1:
+                axis.append(dim_idx)
+
+        output = kwargs["input"].sum(dim=tuple(axis), dtype=dtype)
+        #output = kwargs["input"].sum(dim=axis)
+        #output = output.type(dtype)
+        
+        output = output.reshape(out_dims)
+        return [output]
+
 
 # Base class for Tensor and operation nodes
 class test_node:
@@ -160,11 +214,13 @@ class operation(test_node):
         for x in self.kwargs:
             if isinstance(self.kwargs[x], test_tensor):
                 new_kwargs[x] = self.kwargs[x].ref_data
-        ref_output = self.ref_func(new_kwargs)
+        # Note: we could choose to have the ref func set the output
+        ref_output = self.ref_func(new_kwargs, self.output)
 
         for output, ref_out in zip(self.output, ref_output):
             output.ref_data = ref_out
 
+# TODO(@mbreughe): Support multiple distributions (see json graph's fill type)
 class random_tensor_generator(test_node):
     __test__ = False
 
@@ -179,7 +235,9 @@ class random_tensor_generator(test_node):
 
     def initialize_random_tensor(self):
         if self.output[0].ref_data is None:
-            self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
+            # The default random generator results in numerical issues
+            #self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
+            self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
             if self.get_layout() == "NHWC":
                 self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
@@ -254,11 +312,23 @@ class test_tensor:
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_data_type(data_type)
 
+    def set_dim(self, dim):
+        self.dim = dim
+
+        if self.cudnn_tensor is not None:
+            self.cudnn_tensor.set_dim(dim)
+
     def set_stride(self, stride):
         self.stride = stride
 
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_stride(stride)
+
+    def set_dim(self, dim):
+        self.dim = dim
+
+        if self.cudnn_tensor is not None:
+            self.cudnn_tensor.set_dim(dim)
 
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
@@ -266,8 +336,14 @@ class test_tensor:
         if "data_type" in dir(self):
             self.cudnn_tensor.set_data_type(self.data_type)
 
+        if "dim" in dir(self):
+            self.cudnn_tensor.set_dim(self.dim)
+
         if "stride" in dir(self):
             self.cudnn_tensor.set_stride(self.stride)
+
+        if "dim" in dir(self):
+            self.cudnn_tensor.set_dim(self.dim)
     
 
 def convert_to_cudnn_type(torch_type):
@@ -276,7 +352,7 @@ def convert_to_cudnn_type(torch_type):
     elif torch_type == torch.float32:
         return cudnn.data_type.FLOAT
     else:
-        raise ValueError("Unsupported tensor data type.")
+        raise ValueError("Unsupported tensor data type.", torch_type)
 
     return
 
@@ -286,7 +362,7 @@ def convert_to_torch_type(cudnn_type):
     elif cudnn_type == cudnn.data_type.FLOAT:
         return torch.float32
     else:
-        raise ValueError("Unsupported tensor data type.")
+        raise ValueError("Unsupported tensor data type.", cudnn_type)
 
     return
 
@@ -325,8 +401,14 @@ class test_graph:
         return self.output_tensors
 
     # @brief: Add a convolution node to the graph
-    def conv(self, **kwargs):
+    def conv_fprop(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_fprop)
+
+    def conv_dgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_dgrad)
+
+    def conv_wgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_wgrad)
 
     # @brief: Add a relu to the graph
     def relu(self, **kwargs):
@@ -338,8 +420,14 @@ class test_graph:
     def matmul(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.matmul)
     
+    def add(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.add)
+
     def bias(self, **kwargs):
         return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
+
+    def reduction(self, **kwargs):
+        return self.create_and_add_operation(kwargs, cudnn.pygraph.reduction)
 
     # @brief: Add an input tensor to the graph
     def tensor(self, **kwargs):
@@ -486,10 +574,10 @@ class test_graph:
         self.io_data_type = data_type
 
     def set_intermediate_data_type(self, data_type):
-        self.set_intermediate_data_type = data_type
+        self.intermediate_data_type = data_type
 
     def set_compute_data_type(self, data_type):
-        self.set_compute_data_type(data_type)
+        self.compute_data_type = data_type
 
     # @brief: Run the reference for the associated graph
     # @note: this temporarily modifies the is_visited status of the nodes
@@ -559,7 +647,11 @@ class test_graph:
             if Y_expected is None:
                 continue
             
+            if Y_expected.dtype != Y_actual.dtype:
+                print ("WARNING: reference and actual output types differ ({} resp., {})".format(Y_expected.dtype, Y_actual.dtype) )
+
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+            print("cudnn and reference match")
             number_outputs_tested += 1
         
         assert number_outputs_tested >= 1

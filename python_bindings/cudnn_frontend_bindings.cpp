@@ -10,6 +10,9 @@ namespace py = pybind11;
 using namespace pybind11::literals;
 using namespace cudnn_frontend;
 
+namespace cudnn_frontend {
+namespace python_bindings {
+
 // pybinds for pygraph class
 void
 init_pygraph_submodule(py::module_ &);
@@ -18,8 +21,16 @@ init_pygraph_submodule(py::module_ &);
 void
 init_properties(py::module_ &);
 
+void *
+create_handle();
+
+void
+destroy_handle(void *);
+
 PYBIND11_MODULE(cudnn, m) {
-    m.def("get_cudnn_version", &cudnnGetVersion);
+    m.def("backend_version", &cudnnGetVersion);
+    m.def("create_handle", &create_handle);
+    m.def("destroy_handle", &destroy_handle);
 
     py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
         .value("FLOAT", cudnn_frontend::DataType_t::FLOAT)
@@ -58,3 +69,6 @@ PYBIND11_MODULE(cudnn, m) {
     init_pygraph_submodule(m);
     init_properties(m);
 }
+
+}  // namespace python_bindings
+}  // namespace cudnn_frontend

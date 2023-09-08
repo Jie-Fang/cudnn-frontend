@@ -148,13 +148,16 @@ class Operation {
    public:
     enum class Tag {
         BN,
+        BN_inference,
         BN_finalize,
         Conv_fprop,
         Conv_dgrad,
         Conv_wgrad,
         DBN,
+        DLN,
         DBN_weight,
         Genstats,
+        LN,
         Matmul,
         Pointwise,
         Reduction,
@@ -187,6 +190,7 @@ class Operation {
 NLOHMANN_JSON_SERIALIZE_ENUM(Operation::Tag,
                              {
                                  {Operation::Tag::BN, "BN"},
+                                 {Operation::Tag::BN_inference, "BN_inference"},
                                  {Operation::Tag::BN_finalize, "BN_finalize"},
                                  {Operation::Tag::Conv_fprop, "Conv_fprop"},
                                  {Operation::Tag::Conv_dgrad, "Conv_dgrad"},
@@ -439,7 +443,7 @@ class Conv_fprop_attributes : public Operation {
     }
 };
 
-class batchnorm_backward_attributes : public Operation {
+class Batchnorm_backward_attributes : public Operation {
    public:
     struct Inputs {
         std::shared_ptr<Tensor_attributes> DY;
@@ -448,6 +452,7 @@ class batchnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> MEAN;
         std::shared_ptr<Tensor_attributes> INV_VARIANCE;
         std::shared_ptr<Tensor_attributes> EPSILON;
+        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     } inputs;
 
     struct Outputs {
@@ -460,11 +465,11 @@ class batchnorm_backward_attributes : public Operation {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(batchnorm_backward_attributes, name, tag, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, tag, inputs, outputs)
 
-    batchnorm_backward_attributes() : Operation(Tag::DBN) {}
+    Batchnorm_backward_attributes() : Operation(Tag::DBN) {}
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
         inputs.MEAN         = mean;
@@ -472,9 +477,15 @@ class batchnorm_backward_attributes : public Operation {
         return *this;
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
         inputs.EPSILON = epsilon;
+        return *this;
+    }
+
+    Batchnorm_backward_attributes&
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
+        inputs.peer_stats = peer_stats;
         return *this;
     }
 
@@ -485,20 +496,20 @@ class batchnorm_backward_attributes : public Operation {
         outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_name(std::string const& value) {
         name = value;
         return *this;
     }
 
-    batchnorm_backward_attributes&
+    Batchnorm_backward_attributes&
     set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return *this;
     }
 
     auto
-    fill_from_context(detail::Context const& context) -> batchnorm_backward_attributes& {
+    fill_from_context(detail::Context const& context) -> Batchnorm_backward_attributes& {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
@@ -738,6 +749,7 @@ class Pointwise_attributes : public Operation {
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
+    std::optional<float> relu_lower_clip_slope;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, IN_0, IN_1, IN_2)
 
@@ -765,6 +777,12 @@ class Pointwise_attributes : public Operation {
     }
 
     Pointwise_attributes&
+    set_relu_lower_clip_slope(float const negative_slope) {
+        this->relu_lower_clip_slope = negative_slope;
+        return *this;
+    }
+
+    Pointwise_attributes&
     set_name(std::string const& value) {
         name = value;
         return *this;
@@ -785,6 +803,165 @@ class Pointwise_attributes : public Operation {
         outputs.OUT_0->fill_from_context(context);
 
         // Fill this node
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Layernorm_backward_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> DY;
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> DX;
+        std::shared_ptr<Tensor_attributes> DSCALE;
+        std::shared_ptr<Tensor_attributes> DBIAS;
+    } outputs;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, tag, inputs, outputs)
+
+    Layernorm_backward_attributes() : Operation(Tag::DLN) {}
+
+    Layernorm_backward_attributes&
+    set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
+                                    std::shared_ptr<Tensor_attributes> inv_variance) {
+        inputs.MEAN         = mean;
+        inputs.INV_VARIANCE = inv_variance;
+        return *this;
+    }
+
+    Layernorm_backward_attributes&
+    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
+        inputs.EPSILON = epsilon;
+        return *this;
+    }
+
+    void
+    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
+        outputs.DX     = output_tensor(name + "_DX_output");
+        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
+        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
+    }
+
+    Layernorm_backward_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Layernorm_backward_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    Layernorm_backward_attributes&
+    fill_from_context(detail::Context const& context) {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.DY->fill_from_context(context);
+
+        if (inputs.MEAN) { inputs.MEAN->fill_from_context(context);}
+        if (inputs.INV_VARIANCE) {inputs.INV_VARIANCE->fill_from_context(context);}
+        if (inputs.EPSILON) {inputs.EPSILON->fill_from_context(context);}
+
+        outputs.DX->fill_from_context(context);
+        outputs.DSCALE->fill_from_context(context);
+        outputs.DBIAS->fill_from_context(context);
+
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Layernorm_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+    } outputs;
+
+    NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, tag, inputs, outputs, forward_phase)
+
+    Layernorm_attributes() : Operation(Tag::LN) {}
+
+    Layernorm_attributes&
+    set_forward_phase(NormFwdPhase_t const value) {
+        forward_phase = value;
+        return *this;
+    }
+
+    Layernorm_attributes&
+    set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
+        inputs.EPSILON = value;
+        return *this;
+    }
+
+    Layernorm_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Layernorm_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    void
+    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
+        outputs.Y = output_tensor(name + "_Y_output");
+        if (forward_phase == NormFwdPhase_t::TRAINING) {
+            outputs.MEAN         = output_tensor(name + "_MEAN_output");
+            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
+        }
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Layernorm_attributes& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.EPSILON->fill_from_context(context);
+
+        outputs.Y->fill_from_context(context);
+        if (forward_phase == NormFwdPhase_t::TRAINING) {
+            outputs.MEAN->fill_from_context(context);
+            outputs.INV_VARIANCE->fill_from_context(context);
+        }
+
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }
@@ -888,6 +1065,58 @@ class Batchnorm_attributes : public Operation {
         outputs.INV_VARIANCE->fill_from_context(context);
         outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
         outputs.NEXT_RUNNING_VAR->fill_from_context(context);
+
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Batchnorm_inference_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> MEAN;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+    } outputs;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, BIAS)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, tag, inputs, outputs)
+
+    Batchnorm_inference_attributes() : Operation(Tag::BN_inference) {}
+
+    Batchnorm_inference_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Batchnorm_inference_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Batchnorm_inference_attributes& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.MEAN->fill_from_context(context);
+        inputs.INV_VARIANCE->fill_from_context(context);
+
+        outputs.Y->fill_from_context(context);
 
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
@@ -1146,7 +1375,7 @@ class Scaled_dot_product_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Mask;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
         std::shared_ptr<Tensor_attributes> Dropout_scale;
@@ -1181,8 +1410,8 @@ class Scaled_dot_product_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_attention_attributes&
-    set_seq_len_k(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_K = value;
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 
@@ -1243,7 +1472,7 @@ class Scaled_dot_product_attention_attributes : public Operation {
         inputs.K->fill_from_context(context);
         inputs.V->fill_from_context(context);
         inputs.SEQ_LEN_Q->fill_from_context(context);
-        inputs.SEQ_LEN_K->fill_from_context(context);
+        inputs.SEQ_LEN_KV->fill_from_context(context);
         outputs.O->fill_from_context(context);
 
         // Fill this node
@@ -1261,7 +1490,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> K;
         std::shared_ptr<Tensor_attributes> V;
         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_K;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
@@ -1327,8 +1556,8 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_flash_attention_attributes&
-    set_seq_len_k(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_K = value;
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 

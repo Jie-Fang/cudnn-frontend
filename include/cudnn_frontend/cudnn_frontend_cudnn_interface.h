@@ -208,7 +208,7 @@ class ICudnn {
 
    public:
     int64_t
-    get_cudnn_workspace_size() const {
+    get_cudnn_workspace_size_node() const {
         int64_t current_workspace_size = 0;
         for (auto const& execution_plan : execution_plans) {
             current_workspace_size += execution_plan->getWorkspaceSize();
