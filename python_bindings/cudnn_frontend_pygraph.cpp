@@ -559,7 +559,7 @@ class PyGraph {
             }
         }
 
-        auto [dQ, dK, dV] = graph.scaled_dot_product_flash_attention_backward(q, k, v, o, dO, Stats, attributes);
+        auto [dQ, dK, dV] = graph.scaled_dot_product_flash_attention_backward(q, k, v, o, dO, stats, attributes);
         return {dQ, dK, dV};
     }
 
