@@ -84,21 +84,16 @@ time_sorted_plan(cudnnHandle_t handle,
             cudaEventRecord(stop, stream);
             cudaEventSynchronize(stop);
             cudaEventElapsedTime(&time_ms, start, stop);
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4127)  // this could be ommited with c++17 and contexpr
-#endif
-            if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+
+            if constexpr (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
+
                 final_time_ms = std::min(min_time_ms, time_ms);
                 if (time_ms / min_time_ms < threshhold) {
                     min_time_ms = final_time_ms;
                 } else {
                     break;
                 }
-            } else if (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE) {
+            } else if constexpr (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_MEDIAN_OF_THREE) {
                 time_run_ms[i] = time_ms;
                 if (i == maxIterCount - 1) {
                     auto min_of_first_two = std::min(time_run_ms[0], time_run_ms[1]);
