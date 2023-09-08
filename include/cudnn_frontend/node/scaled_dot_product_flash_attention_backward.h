@@ -11,21 +11,12 @@
 #include "rng.h"
 #include "softmax.h"
 
-/* TODOs:
-    - Add C++ tests (done)
-    - Add Python tests (done)
-    - Double check if all the nodes are correct (Python ref) (done)
-    - Add dropout
-    - Add validation
-    - Add optional and flags
-*/
-
 namespace cudnn_frontend::graph {
 
 class ScaledDotProductFlashAttentionBackwardNode : public INode {
    private:
     std::shared_ptr<Tensor_attributes> negative_inf_causal;
-    // WAR one_tensor is needed for non-dropout graphs
+    // one_tensor is needed for non-dropout graphs
     std::shared_ptr<Tensor_attributes> one_tensor;
 
    public:
@@ -44,8 +35,6 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << options.name << "..." << std::endl;
-
-        // padding mask validation here
 
         if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
@@ -97,7 +86,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             options.inputs.Dropout_scale_inv->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
         }
 
-        // WAR one_tensor is needed for non-dropout graphs
+        // one_tensor is needed for non-dropout graphs
         one_tensor = std::make_shared<Tensor_attributes>();
         one_tensor->set_dim({1, 1, 1, 1})
                  .set_stride({1, 1, 1, 1})
@@ -401,7 +390,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale_inv, dropout_scale_inv_value);
         }
 
-        // WAR one_tensor is needed for non-dropout graphs
+        // one_tensor is needed for non-dropout graphs
         if (one_tensor != nullptr) {
             tensor_to_pass_by_value.emplace(one_tensor, 1.0f);
         }

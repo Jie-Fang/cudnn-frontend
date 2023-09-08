@@ -478,11 +478,9 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
     assert compare_tensors(dv_ref, dV, "dV", print_compare=print_compare) == 0
 
 if __name__ == "__main__":
-    # print("============= running forward tests ===========")
-    # # alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type
-    # test_scale_dot_product_flash_attention((False, False, False, "bs3hd", False, False, True, torch.float16), print_compare=True)
-    # for option in all_options_forward:
-    #     test_scale_dot_product_flash_attention(option)
-
-    print("============= running backwards tests ===========")
+    # alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type
+    test_scale_dot_product_flash_attention((False, False, False, "bs3hd", False, False, True, torch.float16), print_compare=True)
     test_scale_dot_product_flash_attention_backward(print_compare=True)
+
+    for option in all_options_forward:
+        test_scale_dot_product_flash_attention(option)
