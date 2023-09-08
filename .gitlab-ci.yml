@@ -54,6 +54,11 @@ stages:
     script:
         - ci/run_L4_graph_runner.sh
 
+.L4_graph_runner_large:template:
+    stage: L4_graph_runner
+    script:
+        - ci/run_L4_graph_runner_large.sh
+
 build:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
     stage: build
@@ -88,7 +93,7 @@ pycudnntest:cudnn_8.6.0.163:GA10x:
 
 L4_graph_runner:cudnn_8.6.0.163:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
-    extends: .L4_graph_runner:template
+    extends: .L4_graph_runner_large:template
     dependencies: ["build:cudnn_8.6.0.163"]
     tags:
         - GA10x
@@ -124,7 +129,7 @@ pycudnntest:cudnn_8.6.0.163:Ampere:
 
 L4_graph_runner:cudnn_8.6.0.163:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
-    extends: .L4_graph_runner:template
+    extends: .L4_graph_runner_large:template
     dependencies: ["build:cudnn_8.6.0.163"]
     tags:
         - Ampere
@@ -188,7 +193,7 @@ pycudnntest:cudnn_8.7.0.84:GA10x:
 
 L4_graph_runner:cudnn_8.7.0.84:GA10x:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.7.0.84_torch
-    extends: .L4_graph_runner:template
+    extends: .L4_graph_runner_large:template
     dependencies: ["build:cudnn_8.7.0.84"]
     tags:
         - GA10x
@@ -224,7 +229,7 @@ pycudnntest:cudnn_8.7.0.84:Ampere:
 
 L4_graph_runner:cudnn_8.7.0.84:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.7.0.84_torch
-    extends: .L4_graph_runner:template
+    extends: .L4_graph_runner_large:template
     dependencies: ["build:cudnn_8.7.0.84"]
     tags:
         - Ampere
@@ -294,7 +299,7 @@ pycudnntest:cudnn_8.8.0.121:Ampere:
 
 L4_graph_runner:cudnn_8.8.0.121:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0_cudnn_8.8.0.121_torch
-    extends: .L4_graph_runner:template
+    extends: .L4_graph_runner_large:template
     dependencies: ["build:cudnn_8.8.0.121"]
     tags:
         - Ampere
@@ -364,7 +369,7 @@ pycudnntest:cudnn_8.9.2.31:Ampere:
 
 L4_graph_runner:cudnn_8.9.2.31:Ampere:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.2.31_torch
-    extends: .L4_graph_runner:template
+    extends: .L4_graph_runner_large:template
     dependencies: ["build:cudnn_8.9.2.31"]
     tags:
         - Ampere
