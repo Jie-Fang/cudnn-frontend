@@ -38,7 +38,6 @@ if __name__ == "__main__":
                     sanitized_unk_args.extend(item.split("="))
                 else:
                     sanitized_unk_args.append(stripped)
-        print (args, sanitized_unk_args)
         run_test_from_legacy_args(args, sanitized_unk_args)
         sys.exit(0)
         

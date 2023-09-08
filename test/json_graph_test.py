@@ -136,7 +136,6 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     # First parsing pass
     legacy_args = l_parser.parse_args(unparsed_graphRunner_args)
-    print(legacy_args)
     
     abstract_params = vars(legacy_args)
 
@@ -192,8 +191,6 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
             except:
                 val = float(val)
             abstract_params[key] = val
-
-    print(abstract_params)
 
     json_test_name = legacy_args.jsonTestName
 
@@ -353,7 +350,6 @@ class Legacy_tensor:
             strides[2] = strides[3] * dim[3]
             strides[0] = strides[2] * dim[2]
 
-        print("{} in {} order is {} strides".format(dim, layout, strides))
         return strides
 
     def get_tensor_properties(self):
@@ -551,7 +547,6 @@ def create_test_graph_node(legacy_op):
 def create_kwargs(legacy_op, TGTensors):
     kwargs = {}
     kwargs.update(legacy_op.get_operation_properties())
-    print(kwargs)
     input_name_mapping = legacy_op.get_input_name_mapping()
 
     for pycudnn_input_name, tensor_name in input_name_mapping.items():
