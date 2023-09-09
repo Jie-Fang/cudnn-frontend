@@ -19,6 +19,8 @@ if __name__ == "__main__":
     pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
     pct_parser.add_argument('--R', '-R', choices=['graphRunner'])
 
+    print("Running: {}".format(" ".join(sys.argv)))
+
     args, unknown_args = pct_parser.parse_known_args()
 
     base_path = os.path.dirname(os.path.abspath(__file__))
