@@ -8,9 +8,6 @@ import utils
 # Globally ensure cudnn is disabled for everything torch related
 torch.backends.cudnn.enabled = False 
 
-# TODO(@mbreughe): allow dialing in any seed
-torch.manual_seed(0)
-
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
 # @note: we can easily replace PytorchReference by CustomReference to use a different reference framework (one LoC change in test_graph below)
@@ -637,6 +634,12 @@ class test_graph:
     # @note: This assumes build_cudnn_graph has already been run
     # @pre: build_cudnn_graph needs to be called first
     def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+        # Set the random seed here: all random tensors that are entry nodes
+        # are created by create_workspace_and_variantpack().
+        # TODO(@mbreughe): verify the above statement and move seed initialization
+        # to variantpack creation routine
+        # TODO(@mbreughe): allow dialing in any seed
+        torch.manual_seed(0)
         workspace, variant_pack = self.create_workspace_and_variantpack()
 
         # Run the cudnn graph
