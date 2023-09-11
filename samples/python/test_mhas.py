@@ -377,6 +377,8 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
     if is_infer == False:
         assert compare_tensors(stats_ref, stats_gpu, "stats", print_compare=print_compare) == 0
 
+@pytest.mark.skipif(cudnn.backend_version() < 8905, reason="requires cudnn 8.9.5 or higher")
+@pytest.mark.skipif(torch.cuda.get_device_capability()[0] < 9, reason="requires hopper or higher")
 def test_scale_dot_product_flash_attention_backward(print_compare=False):
     is_causal = True
     layout = "naive"
