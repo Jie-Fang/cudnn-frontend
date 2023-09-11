@@ -41,10 +41,9 @@ if __name__ == "__main__":
                     sanitized_unk_args.extend(item.split("="))
                 else:
                     sanitized_unk_args.append(stripped)
-        try:
-            run_test_from_legacy_args(args, sanitized_unk_args)
-        except Exception as e:
-            print("ERROR Caught: {}".format(cmd))
+
+        run_test_from_legacy_args(args, sanitized_unk_args)
+   
         sys.exit(0)
         
     # Graphs defined in json file
