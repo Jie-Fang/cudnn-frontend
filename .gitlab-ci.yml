@@ -319,7 +319,8 @@ pytest:cudnn_8.9.3.34:
     extends: .pytest:template
     needs: ["build:cudnn_8.9.3.34"]
     only:
-        - schedules 
+        - schedules
+    resource_group: memory_heavy_${ARCH}
 
 pycudnntest:cudnn_8.9.3.34:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
@@ -369,6 +370,7 @@ pytest:cudnn_8.9.4.27:
         - ${ARCH}
     extends: .pytest:template
     needs: ["build:cudnn_8.9.4.27"]
+    resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.4.27_torch
@@ -420,6 +422,7 @@ pytest:cudnn_8.9.5_latest:
         - .fetch_cudnn:template
         - .pytest:template
     needs: ["build:cudnn_8.9.5_latest"]
+    resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_8.9.5_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
