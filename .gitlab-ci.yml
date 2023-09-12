@@ -1,14 +1,16 @@
 variables:
   JFROG_API_KEY: $JFROG_API_KEY
+  THUNDER_BRANCH_NAME: "main"
 
 stages:
     - analysis
     - build
+    - thunder
     - cpp_tests
     - python_tests
     - pycudnnTest
     - L4_graph_runner
-
+    
 .fetch_cudnn:template:
     before_script:
         - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v8.9_cuda_12.2/
@@ -53,6 +55,13 @@ stages:
     stage: L4_graph_runner
     script:
         - ci/run_L4_graph_runner.sh
+        
+.thunder:template:
+    stage: thunder
+    script:
+        - git clone -b ${THUNDER_BRANCH_NAME} https://vedaanta-nvidia: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@github.com/Lightning-AI/lightning-thunder.git
+        - python lightning-thunder/setup.py develop
+        - pytest lightning-thunder/thunder/tests/test_cudnn_executor.py -v
 
 .L4_graph_runner_large:template:
     stage: L4_graph_runner
@@ -620,3 +629,25 @@ L4_graph_runner:cudnn_8.9.5_latest:Hopper:
     dependencies: ["build:cudnn_8.9.5_latest"]
     tags:
         - Hopper
+
+thunder:cudnn_8.9.2.31:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
+    script:
+        - pip install nvidia-cudnn-cu12==8.9.2.26
+        - cp -r /usr/local/lib/python3.10/dist-packages/nvidia/cudnn nvidia-cudnn
+        - export CUDNN_PATH=$(realpath nvidia-cudnn)
+        - for lib in /usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib/*.so.[0-9]; do filename=$(basename "$lib"); ln -sf "$lib" "${CUDNN_PATH}/lib/${filename%.so.[0-9]}.so"; done
+        - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
+    extends:
+        - .thunder:template
+
+thunder:cudnn_8.9.4.27:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
+    before_script:
+        - pip install nvidia-cudnn-cu12==8.9.4.25
+        - cp -r /usr/local/lib/python3.10/dist-packages/nvidia/cudnn nvidia-cudnn
+        - export CUDNN_PATH=$(realpath nvidia-cudnn)
+        - for lib in /usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib/*.so.[0-9]; do filename=$(basename "$lib"); ln -sf "$lib" "${CUDNN_PATH}/lib/${filename%.so.[0-9]}.so"; done
+        - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
+    extends:
+        - .thunder:template
