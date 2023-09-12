@@ -80,6 +80,7 @@ analysis:clang-format:
 
 build:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
+    needs: []
     stage: build
     extends: .build:template
 
@@ -127,6 +128,7 @@ L4_graph_runner:cudnn_8.6.0.163:
 
 build:cudnn_8.7.0.84:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.7.0.84_torch
+    needs: []
     stage: build
     extends: .build:template
     only:
@@ -182,6 +184,7 @@ L4_graph_runner:cudnn_8.7.0.84:
 
 build:cudnn_8.8.0.121:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.0_cudnn_8.8.0.121_torch
+    needs: []
     stage: build
     extends: .build:template
     only:
@@ -237,6 +240,7 @@ L4_graph_runner:cudnn_8.8.0.121:
 
 build:cudnn_8.9.2.31:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.2.31_torch
+    needs: []
     stage: build
     extends: .build:template
     only:
@@ -292,6 +296,7 @@ L4_graph_runner:cudnn_8.9.2.31:
 
 build:cudnn_8.9.3.34:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1_cudnn_8.9.3.34_torch
+    needs: []
     stage: build
     extends: .build:template
     only:
@@ -348,6 +353,7 @@ L4_graph_runner:cudnn_8.9.3.34:
 
 build:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.4.27_torch
+    needs: []
     stage: build
     extends: .build:template
 
@@ -450,6 +456,7 @@ L4_graph_runner:cudnn_8.9.5_latest:
     
 thunder:cudnn_8.9.2.31:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
+    needs: []
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -464,6 +471,7 @@ thunder:cudnn_8.9.2.31:
 
 thunder:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
+    needs: []
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -478,5 +486,6 @@ thunder:cudnn_8.9.4.27:
 
 build:cudnn_8.9_clang:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
+    needs: []
     stage: build
     extends: .build:template
