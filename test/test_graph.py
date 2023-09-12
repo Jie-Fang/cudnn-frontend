@@ -67,6 +67,11 @@ class PytorchReference:
         return [output]
 
     @staticmethod
+    def mul(kwargs, test_tensor_out_list):
+        output = torch.mul(kwargs["a"], kwargs["b"])
+        return [output]
+
+    @staticmethod
     def conv_dgrad(kwargs, test_tensor_out_list):
         input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
         dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
@@ -349,6 +354,8 @@ class test_tensor:
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
         return cudnn.data_type.HALF
+    elif torch_type == torch.bfloat16:
+        return cudnn.data_type.BFLOAT16
     elif torch_type == torch.float32:
         return cudnn.data_type.FLOAT
     else:
@@ -359,6 +366,8 @@ def convert_to_cudnn_type(torch_type):
 def convert_to_torch_type(cudnn_type):
     if cudnn_type == cudnn.data_type.HALF:
         return torch.float16
+    elif cudnn_type == cudnn.data_type.BFLOAT16:
+        return torch.bfloat16
     elif cudnn_type == cudnn.data_type.FLOAT:
         return torch.float32
     else:
@@ -625,6 +634,12 @@ class test_graph:
     # @note: This assumes build_cudnn_graph has already been run
     # @pre: build_cudnn_graph needs to be called first
     def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+        # Set the random seed here: all random tensors that are entry nodes
+        # are created by create_workspace_and_variantpack().
+        # TODO(@mbreughe): verify the above statement and move seed initialization
+        # to variantpack creation routine
+        # TODO(@mbreughe): allow dialing in any seed
+        torch.manual_seed(0)
         workspace, variant_pack = self.create_workspace_and_variantpack()
 
         # Run the cudnn graph
