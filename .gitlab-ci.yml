@@ -632,22 +632,28 @@ L4_graph_runner:cudnn_8.9.5_latest:Hopper:
 
 thunder:cudnn_8.9.2.31:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
-    script:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere", "GA10x"]
+    tags:
+        - ${ARCH}
+    before_script:
         - pip install nvidia-cudnn-cu12==8.9.2.26
-        - cp -r /usr/local/lib/python3.10/dist-packages/nvidia/cudnn nvidia-cudnn
-        - export CUDNN_PATH=$(realpath nvidia-cudnn)
-        - for lib in /usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib/*.so.[0-9]; do filename=$(basename "$lib"); ln -sf "$lib" "${CUDNN_PATH}/lib/${filename%.so.[0-9]}.so"; done
+        - export CUDNN_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn
         - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
     extends:
         - .thunder:template
 
 thunder:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere", "GA10x"]
+    tags:
+        - ${ARCH}
     before_script:
         - pip install nvidia-cudnn-cu12==8.9.4.25
-        - cp -r /usr/local/lib/python3.10/dist-packages/nvidia/cudnn nvidia-cudnn
-        - export CUDNN_PATH=$(realpath nvidia-cudnn)
-        - for lib in /usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib/*.so.[0-9]; do filename=$(basename "$lib"); ln -sf "$lib" "${CUDNN_PATH}/lib/${filename%.so.[0-9]}.so"; done
+        - export CUDNN_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn
         - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
     extends:
         - .thunder:template
