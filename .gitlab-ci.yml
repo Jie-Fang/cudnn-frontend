@@ -92,8 +92,6 @@ test:cudnn_8.6.0.163:
         - ${ARCH}
     extends: .test:template
     needs: ["build:cudnn_8.6.0.163"]
-    only:
-        - schedules 
 
 pytest:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
@@ -104,9 +102,7 @@ pytest:cudnn_8.6.0.163:
         - ${ARCH}
     extends: .pytest:template
     needs: ["build:cudnn_8.6.0.163"]
-    only:
-        - schedules 
-
+    
 pycudnntest:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
     parallel:
@@ -116,8 +112,6 @@ pycudnntest:cudnn_8.6.0.163:
         - ${ARCH}
     extends: .pycudnntest:template
     needs: ["build:cudnn_8.6.0.163"]
-    only:
-        - schedules
 
 L4_graph_runner:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
