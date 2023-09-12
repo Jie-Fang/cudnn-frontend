@@ -28,3 +28,17 @@ def getFwdConvPaddedImageDim(tensorDim, pad):
 def getFwdConvOutputDim(tensorDim, pad, filterDim, stride, dilation):
     p = (getFwdConvPaddedImageDim(tensorDim, pad) - getFwdConvDilatedFilterDim(filterDim, dilation)) / stride + 1
     return int(p)
+
+def computeStrideNdTransposedPacked(nbDims, dims, axesOrder):
+    inverseTranspose = dict()
+    for i in range(nbDims):
+        inverseTranspose[axesOrder[i]] = i
+
+    print (dims)
+    
+    strides = [1] * nbDims
+    strides[inverseTranspose[nbDims - 1]] = 1
+    for dim in range(nbDims - 2, -1, -1):
+        strides[inverseTranspose[dim]] = dims[inverseTranspose[dim + 1]] * strides[inverseTranspose[dim + 1]]
+    
+    return strides

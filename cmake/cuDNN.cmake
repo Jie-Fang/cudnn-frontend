@@ -4,6 +4,7 @@ find_path(
     CUDNN_INCLUDE_DIR cudnn.h
     HINTS $ENV{CUDNN_PATH} ${CUDNN_PATH} ${CUDAToolkit_INCLUDE_DIRS}
     PATH_SUFFIXES include
+    REQUIRED
 )
 
 file(READ "${CUDNN_INCLUDE_DIR}/cudnn_version.h" cudnn_version_header)
@@ -12,9 +13,10 @@ string(REGEX MATCH "[1-9]+" CUDNN_MAJOR_VERSION "${macrodef}")
 
 function(find_cudnn_library NAME)
     find_library(
-        ${NAME}_LIBRARY ${NAME}
+        ${NAME}_LIBRARY ${NAME} "lib${NAME}.so.${CUDNN_MAJOR_VERSION}"
         HINTS $ENV{CUDNN_PATH} ${CUDNN_PATH} ${CUDAToolkit_LIBRARY_DIR}
         PATH_SUFFIXES lib64 lib/x64 lib
+        REQUIRED
     )
     
     if(${NAME}_LIBRARY)
@@ -83,5 +85,20 @@ if(CUDNN_MAJOR_VERSION EQUAL 8)
         CUDNN::cudnn_adv_infer
         CUDNN::cudnn_cnn_infer
         CUDNN::cudnn_ops_infer
+    )
+elseif(CUDNN_MAJOR_VERSION EQUAL 9)
+    find_cudnn_library(cudnn_cnn)
+    find_cudnn_library(cudnn_adv)
+    find_cudnn_library(cudnn_graph)
+    find_cudnn_library(cudnn_ops)
+
+
+    target_link_libraries(
+        CUDNN::cudnn_all
+        INTERFACE
+        CUDNN::cudnn_adv
+        CUDNN::cudnn_ops
+        CUDNN::cudnn_cnn
+        CUDNN::cudnn_graph
     )
 endif()
