@@ -3,7 +3,6 @@ add_library(CUDNN::cudnn_all INTERFACE IMPORTED)
 find_path(
     CUDNN_INCLUDE_DIR cudnn.h
     HINTS $ENV{CUDNN_PATH} ${CUDNN_PATH} ${CUDAToolkit_INCLUDE_DIRS}
-    NO_DEFAULT_PATH  # Prevent searching in default paths
     PATH_SUFFIXES include
     REQUIRED
 )
@@ -16,7 +15,6 @@ function(find_cudnn_library NAME)
     find_library(
         ${NAME}_LIBRARY ${NAME} "lib${NAME}.so.${CUDNN_MAJOR_VERSION}"
         HINTS $ENV{CUDNN_PATH} ${CUDNN_PATH} ${CUDAToolkit_LIBRARY_DIR}
-        NO_DEFAULT_PATH  # Prevent searching in default paths
         PATH_SUFFIXES lib64 lib/x64 lib
         REQUIRED
     )
