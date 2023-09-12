@@ -88,4 +88,19 @@ if(CUDNN_MAJOR_VERSION EQUAL 8)
         CUDNN::cudnn_cnn_infer
         CUDNN::cudnn_ops_infer
     )
+elseif(CUDNN_MAJOR_VERSION EQUAL 9)
+    find_cudnn_library(cudnn_cnn)
+    find_cudnn_library(cudnn_adv)
+    find_cudnn_library(cudnn_graph)
+    find_cudnn_library(cudnn_ops)
+
+
+    target_link_libraries(
+        CUDNN::cudnn_all
+        INTERFACE
+        CUDNN::cudnn_adv
+        CUDNN::cudnn_ops
+        CUDNN::cudnn_cnn
+        CUDNN::cudnn_graph
+    )
 endif()
