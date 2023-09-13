@@ -26,12 +26,9 @@ class DgradNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DgradNode " << options.name << "..." << std::endl;
 
-        if (options.outputs.DX->get_dim().empty()) {
-            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: dgrad requires output tensor to have its dims set.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.outputs.DX->get_dim().empty(),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "dgrad requires output tensor to have its dims set.");
 
         return {error_code_t::OK, ""};
     }
