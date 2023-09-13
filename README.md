@@ -83,7 +83,8 @@ Calling `cudnn_frontend::getStream() = stream_name` can be used to assign the ou
 For further debugging, please turn on the cudnn backend logs described here https://docs.nvidia.com/deeplearning/cudnn/developer-guide/index.html#api-logging
 
 ## Documentation
-Documentation can be found at https://nvidia.github.io/cudnn-frontend/
+- See README.FE.1.0.md for v1.0 API documentation.
+- See README.FE.0.x.md for v0.x API documentation.
 
 ## Contributing:
 No external contribution to this repository is accepted. Please create an issue in github for bugs or feature requests.
