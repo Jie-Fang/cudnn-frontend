@@ -49,8 +49,8 @@ class Plans {
 
     inline error_t
     check_support(cudnnHandle_t h) {
-        auto status = list_of_engine_configs.check_support(h);
-        return status;
+        CHECK_CUDNN_FRONTEND_ERROR(list_of_engine_configs.check_support(h));
+        return {error_code_t::OK, ""};
     }
 
     int64_t
@@ -184,8 +184,8 @@ Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &
 
 inline error_t
 Plans::build_all_plans(cudnnHandle_t h) {
-    auto status = list_of_engine_configs.build_all_plans(h);
-    return status;
+    CHECK_CUDNN_FRONTEND_ERROR(list_of_engine_configs.build_all_plans(h));
+    return {error_code_t::OK, ""};
 }
 
 inline int64_t
@@ -342,12 +342,7 @@ class Graph : public INode {
     createOperationGraphs(cudnnHandle_t handle) override final {
         getLogger() << "Operation Graph has " << operations.size() << " operations." << std::endl;
 
-        auto status = create_cudnn_operation_graphs(handle);
-        if (status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: " << status.get_code()
-                        << " Failed to create execution plans for graph partitioning in FlatNode." << std::endl;
-            return status;
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graphs(handle));
 
         return {error_code_t::OK, ""};
     }

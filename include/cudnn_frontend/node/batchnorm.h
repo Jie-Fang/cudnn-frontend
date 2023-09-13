@@ -94,11 +94,9 @@ class BatchNormNode : public INode {
                     << "Validating BatchNormNode " << options.name << "..." << std::endl;
 
         // Norm forward phase should be set
-        if (options.forward_phase == NormFwdPhase_t::NOT_SET) {
-            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: Forward phase not set of batchnorm node.";
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.forward_phase == NormFwdPhase_t::NOT_SET,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Forward phase not set of batchnorm node.");
 
         return {error_code_t::OK, ""};
     }
