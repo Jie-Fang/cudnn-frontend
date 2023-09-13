@@ -375,8 +375,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     error_t
     pass_by_value_tensors_(
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* node_workspace) override {
-        CUDNN_FRONTEND_UNUSED(node_workspace);
+        [[maybe_unused]] void* node_workspace) override {
 
         if (options.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::min();
@@ -385,7 +384,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         if (options.dropout_probability.has_value()) {
             float dropout_scale_value = 1.f / (1 - options.dropout_probability.value());
-            float dropout_scale_inv_value = 1.f / dropout_scale_value;
+            float dropout_scale_inv_value = (1 - options.dropout_probability.value());
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale_inv, dropout_scale_inv_value);
         }
