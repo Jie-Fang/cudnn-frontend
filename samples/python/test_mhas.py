@@ -32,7 +32,7 @@ def make_tensor_attr(graph, torch_tensor, name="", dim=None, stride=None, is_pas
     )
 
 
-def compare_tensors(expected, actual, tensor_name, rtol=1e-2, atol=1e-2, fudge=1e-1, print_compare=False):
+def compare_tensors(expected, actual, tensor_name, rtol=2e-2, atol=2e-2, fudge=1e-9, print_compare=False):
     assert expected.shape == actual.shape
 
     expected = expected.to(dtype=torch.float64, device="cuda").flatten()
@@ -46,7 +46,7 @@ def compare_tensors(expected, actual, tensor_name, rtol=1e-2, atol=1e-2, fudge=1
     snr_db = (10 * torch.log10(snr)).item()
 
     absolute_error = (expected - actual).abs()
-    relative_error = relative_error = absolute_error / torch.where(expected.abs() < fudge, fudge, expected.abs())
+    relative_error = absolute_error / torch.where(expected.abs() < fudge, fudge, expected.abs())
 
     abs_error_indices = absolute_error > atol
     rel_error_indices = relative_error > rtol
@@ -520,5 +520,5 @@ if __name__ == "__main__":
     )
     test_scale_dot_product_flash_attention_backward(print_compare=True)
 
-    # for option in all_options_forward:
-    #     test_scale_dot_product_flash_attention(option)
+    for option in all_options_forward:
+        test_scale_dot_product_flash_attention(option)

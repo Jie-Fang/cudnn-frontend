@@ -19,6 +19,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     // one_tensor is needed for non-dropout graphs
     std::shared_ptr<Tensor_attributes> one_tensor;
 
+    // non-virtual node workspace tensors
     std::shared_ptr<Tensor_attributes> dQ_accum;
     int64_t dQ_accum_size = 0;
     std::shared_ptr<Tensor_attributes> softmax_sum;
