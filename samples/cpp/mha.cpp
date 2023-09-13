@@ -42,10 +42,10 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         return;
     }
 
-    int64_t b                 = 1;     // batch size
-    int64_t h                 = 2;     // head dim
-    int64_t s_q               = 2048;  // q tensor is padded to this seq length
-    int64_t s_kv              = 2048;  // k and v tensor is padded to this seq length
+    int64_t b                 = 3;     // batch size
+    int64_t h                 = 4;     // head dim
+    int64_t s_q               = 1024;  // q tensor is padded to this seq length
+    int64_t s_kv              = 1024;  // k and v tensor is padded to this seq length
     int64_t d                 = 128;   // hidden dim
     bool is_inference         = false;
     float dropout_probability = 0.2f;
@@ -218,10 +218,10 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
         return;
     }
 
-    int64_t b         = 1;     // batch size
-    int64_t h         = 2;     // head dim
-    int64_t s_q       = 2048;  // q tensor is padded to this seq length
-    int64_t s_kv      = 2048;  // k and v tensor is padded to this seq length
+    int64_t b         = 3;     // batch size
+    int64_t h         = 4;     // head dim
+    int64_t s_q       = 1024;  // q tensor is padded to this seq length
+    int64_t s_kv      = 1024;  // k and v tensor is padded to this seq length
     int64_t d         = 128;   // hidden dim
     bool is_inference = false;
 
@@ -333,10 +333,10 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
         return;
     }
 
-    int64_t b                 = 1;     // batch size
-    int64_t h                 = 2;     // head dim
-    int64_t s_q               = 2048;  // q tensor is padded to this seq length
-    int64_t s_kv              = 2048;  // k and v tensor is padded to this seq length
+    int64_t b                 = 3;     // batch size
+    int64_t h                 = 4;     // head dim
+    int64_t s_q               = 1024;  // q tensor is padded to this seq length
+    int64_t s_kv              = 1024;  // k and v tensor is padded to this seq length
     int64_t d                 = 128;   // hidden dim
 
     float dropout_probability = 0.2f;
