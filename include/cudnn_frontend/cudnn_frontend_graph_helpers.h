@@ -61,27 +61,26 @@ typedef struct error_object {
 
 } error_t;
 
-#define CHECK_CUDNN_FRONTEND_ERROR(x)                                                                                \
-    do {                                                                                                             \
-        if (x.is_bad()) {                                                                                            \
-            getLogger() << "[cudnn_frontend] ERROR: " << #x << " code " << x.get_code() << " at " << __FILE__ << ":" \
-                        << __LINE__ << std::endl;                                                                    \
-            return x;                                                                                                \
-        }                                                                                                            \
+#define CHECK_CUDNN_FRONTEND_ERROR(x)                                                                              \
+    do {                                                                                                           \
+        if (auto retval = x; retval.is_bad()) {                                                                    \
+            getLogger() << "[cudnn_frontend] ERROR: " << #x << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
+            return retval;                                                                                         \
+        }                                                                                                          \
     } while (0)
 
-#define RETURN_CUDNN_FRONTEND_ERROR_IF(cond, retval)                                                              \
-    do {                                                                                                          \
-        if (cond) {                                                                                               \
-            if (retval.get_code() == error_code_t::OK) {                                                          \
-                getLogger() << "[cudnn_frontend] INFO: " << #cond << " returned " << retval.get_code() << " at "  \
-                            << __FILE__ << ":" << __LINE__ << std::endl;                                          \
-            } else {                                                                                              \
-                getLogger() << "[cudnn_frontend] ERROR: " << #cond << " returned " << retval.get_code() << " at " \
-                            << __FILE__ << ":" << __LINE__ << std::endl;                                          \
-            }                                                                                                     \
-            return {retval};                                                                                      \
-        }                                                                                                         \
+#define RETURN_CUDNN_FRONTEND_ERROR_IF(cond, retval, message)                                                        \
+    do {                                                                                                             \
+        if (cond) {                                                                                                  \
+            if (retval == error_code_t::OK) {                                                                        \
+                getLogger() << "[cudnn_frontend] INFO: ";                                                            \
+            } else {                                                                                                 \
+                getLogger() << "[cudnn_frontend] ERROR: ";                                                           \
+            }                                                                                                        \
+            getLogger() << message << ". " << retval << " because (" << #cond ") at " << __FILE__ << ":" << __LINE__ \
+                        << "\n";                                                                                     \
+            return {retval, message};                                                                                \
+        }                                                                                                            \
     } while (0)
 
 static inline std::ostream&

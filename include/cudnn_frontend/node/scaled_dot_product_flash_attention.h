@@ -37,52 +37,33 @@ class ScaledDotProductFlashAttentionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionNode " << options.name << "..." << std::endl;
 
-        if (options.is_inference.has_value() == false) {
-            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: is_infernece attribute not set.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.is_inference.has_value() == false,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "is_infernece attribute not set");
 
-        if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: Using both, custom dropout mask and internal-mask generation using dropout "
-                "probability, is ill-formed.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.dropout_probability.has_value() && options.inputs.Dropout_mask,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Using both, custom dropout mask and internal-mask generation using dropout "
+                                       "probability, is ill-formed.");
 
-        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
-        if (context.get_intermediate_data_type() == DataType_t::NOT_SET) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: Intermediate tensor data type needs to be set as internal tensors require it.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Intermediate tensor data type needs to be set as internal tensors require it.");
 
-        if (options.padding_mask && (!(options.inputs.SEQ_LEN_Q) || !(options.inputs.SEQ_LEN_KV))) {
-            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: Padding mask requires seq_len_q and seq_len_kv to be set.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            options.padding_mask && (!(options.inputs.SEQ_LEN_Q) || !(options.inputs.SEQ_LEN_KV)),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Padding mask requires seq_len_q and seq_len_kv to be set.");
 
-        if ((!options.padding_mask) && (options.inputs.SEQ_LEN_Q || options.inputs.SEQ_LEN_KV)) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (!options.padding_mask) && (options.inputs.SEQ_LEN_Q || options.inputs.SEQ_LEN_KV),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
         return {error_code_t::OK, ""};
     }
@@ -404,7 +385,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         // Two cases for training: dropout present or not
         // Special case: Skip dropout when 0.0 probability
         bool dropout_present = (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
-        dropout_present = dropout_present || options.inputs.Dropout_mask;
+        dropout_present      = dropout_present || options.inputs.Dropout_mask;
 
         if (dropout_present) {
             // Lower options to rng options

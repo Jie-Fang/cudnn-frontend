@@ -27,11 +27,10 @@ class DBNNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DBNNode " << options.name << "..." << std::endl;
 
-        if (!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON)) {
-            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: Either saved mean/inv_variance or epsilon required.";
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Either saved mean/inv_variance or epsilon required.");
 
         return {error_code_t::OK, ""};
     }
