@@ -32,7 +32,7 @@ namespace cudnn_frontend {
 // json file is defined by environment variable
 // CUDNN_ERRATA_JSON_FILE. If the environment variable
 // is not set the value set in the API is considered.
-static bool
+[[maybe_unused]] static bool
 load_from_config(json &json_handle, const std::string &errata_json) {
     const char *err_json = get_environment("CUDNN_ERRATA_JSON_FILE");
     if (err_json == NULL && errata_json == "") {

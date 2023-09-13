@@ -27,7 +27,7 @@ all_options = [elem for elem in itertools.product(*[embedding_dim_options, input
 def param_extract(request):
   return request.param
 
-@pytest.mark.skipif(cudnn.get_cudnn_version() < 8905, reason="LN not supported below cudnn 8.9.5")
+@pytest.mark.skipif(cudnn.backend_version() < 8905, reason="LN not supported below cudnn 8.9.5")
 def test_ln(param_extract):
     embedding_dim, input_type = param_extract
     

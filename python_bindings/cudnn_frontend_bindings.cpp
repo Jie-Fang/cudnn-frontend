@@ -28,7 +28,7 @@ void
 destroy_handle(void *);
 
 PYBIND11_MODULE(cudnn, m) {
-    m.def("get_cudnn_version", &cudnnGetVersion);
+    m.def("backend_version", &cudnnGetVersion);
     m.def("create_handle", &create_handle);
     m.def("destroy_handle", &destroy_handle);
 
@@ -70,5 +70,5 @@ PYBIND11_MODULE(cudnn, m) {
     init_properties(m);
 }
 
-}
-}
+}  // namespace python_bindings
+}  // namespace cudnn_frontend
