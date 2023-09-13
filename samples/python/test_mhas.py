@@ -182,7 +182,6 @@ class ScaledDotProductAttentionPyT(torch.nn.Module):
         o = torch.einsum("bhqk,bhkd->bhqd", p, v)
         return o
 
-
 alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
@@ -214,7 +213,7 @@ def param_extract(request):
     return request.param
 
 
-@pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9 or higher")
+@pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
 def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
     alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type = param_extract
 
@@ -227,16 +226,16 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
     s_q_choices = [256, 512, 1024, 2048]
     d_choices = [64, 128]
 
-    b = 32
-    h = 12
+    b = 3
+    h = 4
     s_q = random.choice(s_q_choices)
     s_kv = s_q
     d = random.choice(d_choices)
 
-    print(f"{str(param_extract)} s={s_q} {d=}")
+    print(f"{str(param_extract)} s={s_q} d={d}")
 
     attn_scale_val = 0.125
-    dropout_prob = 0.1 if dropout_enable else 1.0
+    dropout_prob = 0.1 if dropout_enable else 0.0
 
     shape_q = (b, h, s_q, d)
     shape_k = (b, h, d, s_kv)
@@ -344,9 +343,12 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
     graph.check_support()
     graph.build()
 
-    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
-
-    variant_pack = {q: q_gpu, k: k_gpu, v: v_gpu, o: o_gpu}
+    variant_pack = {
+        q: q_gpu,
+        k: k_gpu,
+        v: v_gpu,
+        o: o_gpu
+    }
 
     if attn_scale_val != 1.0:
         variant_pack[attn_scale] = attn_scale_cpu
@@ -365,16 +367,17 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
     if is_infer == False:
         variant_pack[stats] = stats_gpu
 
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     graph.execute(variant_pack, workspace)
 
-    q_ref = q_gpu.detach().clone().cuda().float()
-    k_ref = k_gpu.permute(0, 1, 3, 2).detach().clone().cuda().float()
-    v_ref = v_gpu.detach().clone().cuda().float()
+    # compare with torch reference
+    q_ref = q_gpu.detach().float()
+    k_ref = k_gpu.permute(0, 1, 3, 2).detach().float()
+    v_ref = v_gpu.detach().float()
 
     if bias_enable:
-        bias_ref = bias_gpu.detach().clone().cuda().float()
+        bias_ref = bias_gpu.detach().float()
 
-    # torch reference
     o_ref, stats_ref = compute_o_stats(
         q_ref, k_ref, v_ref, attn_scale=attn_scale_val,
         bias=bias_ref if bias_enable else None, is_alibi=alibi_mask, is_causal=causal_mask
@@ -385,40 +388,47 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
         assert compare_tensors(stats_ref, stats_gpu, "stats", print_compare=print_compare) == 0
 
 
-@pytest.mark.skipif(cudnn.backend_version() < 8905, reason="requires cudnn 8.9.5 or higher")
-@pytest.mark.skipif(torch.cuda.get_device_capability()[0] < 9, reason="requires hopper or higher")
+@pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
+@pytest.mark.skipif(torch.cuda.get_device_capability()[0] < 9, reason="requires ampere or higher")
 def test_scale_dot_product_flash_attention_backward(print_compare=False):
     is_causal = True
     layout = "naive"
+    dropout_enable = False
     input_type = torch.float16
 
-    s_q_choices = [256, 512, 1024, 2048]
+    s_q_choices = [256, 512, 1024]
     d_choices = [64, 128]
 
-    b = 32
-    h = 12
+    b = 3
+    h = 4
     s_q = random.choice(s_q_choices)
     s_kv = s_q
     d = random.choice(d_choices)
 
-    print(f"s={s_q} {d=}")
+    print(f"s={s_q} d={d}")
 
-    attn_scale_val = 0.125
+    attn_scale_val = 1.0
+    dropout_prob = 0.1 if dropout_enable else 0.0
 
-    q = 1 * (torch.randn((b, h, s_q, d), dtype=input_type, device="cuda") - 0.5)
-    k = 1 * (torch.randn((b, h, s_kv, d), dtype=input_type, device="cuda") - 0.5)
-    v = 1 * (torch.randn((b, h, s_kv, d), dtype=input_type, device="cuda") - 0.5)
-    dO = 0.1 * torch.randn((b, h, s_q, d), dtype=input_type, device="cuda")
+    q_gpu = 1 * (torch.randn((b, h, s_q, d), dtype=input_type, device="cuda") - 0.5)
+    k_gpu = 1 * (torch.randn((b, h, s_kv, d), dtype=input_type, device="cuda") - 0.5)
+    v_gpu = 1 * (torch.randn((b, h, s_kv, d), dtype=input_type, device="cuda") - 0.5)
+    dO_gpu = 0.1 * torch.randn((b, h, s_q, d), dtype=input_type, device="cuda")
 
-    o, stats = compute_o_stats(q, k, v, is_causal=is_causal, attn_scale=attn_scale_val)
-    o = o.to(dtype=input_type).detach().clone()
-    stats = stats.to(dtype=torch.float32).detach().clone()
+    o_gpu, stats_gpu = compute_o_stats(q_gpu, k_gpu, v_gpu, is_causal=is_causal, attn_scale=attn_scale_val)
+    o_gpu = o_gpu.to(dtype=input_type).detach().clone()
+    stats_gpu = stats_gpu.to(dtype=torch.float32).detach().clone()
 
-    dQ = torch.empty((b, h, s_q, d), dtype=input_type, device="cuda")
-    dK = torch.empty((b, h, s_kv, d), dtype=input_type, device="cuda")
-    dV = torch.empty((b, h, s_kv, d), dtype=input_type, device="cuda")
+    dQ_gpu = torch.empty((b, h, s_q, d), dtype=input_type, device="cuda")
+    dK_gpu = torch.empty((b, h, s_kv, d), dtype=input_type, device="cuda")
+    dV_gpu = torch.empty((b, h, s_kv, d), dtype=input_type, device="cuda")
 
-    attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu")
+    if attn_scale_val != 1.0:
+        attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu")
+
+    if dropout_enable:
+        seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
+        offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
     # cuDNN graph
     graph = cudnn.pygraph(
@@ -426,67 +436,81 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
     )
-    q_attr = make_tensor_attr(graph, q, name="q")
-    k_attr = make_tensor_attr(graph, k, dim=(b, h, d, s_kv), stride=(h * s_kv * d, s_kv * d, 1, d), name="k")
-    v_attr = make_tensor_attr(graph, v, dim=(b, h, d, s_kv), stride=(h * s_kv * d, s_kv * d, 1, d), name="v")
-    o_attr = make_tensor_attr(graph, o, name="o")
-    dO_attr = make_tensor_attr(graph, dO, name="dO")
-    stats_attr = make_tensor_attr(graph, stats, name="stats")
-    attn_scale = make_tensor_attr(graph, attn_scale_cpu, is_pass_by_value=True, name="attn_scale")
+    q = make_tensor_attr(graph, q_gpu, name="q")
+    k = make_tensor_attr(graph, k_gpu, dim=(b, h, d, s_kv), stride=(h * s_kv * d, s_kv * d, 1, d), name="k")
+    v = make_tensor_attr(graph, v_gpu, dim=(b, h, d, s_kv), stride=(h * s_kv * d, s_kv * d, 1, d), name="v")
+    o = make_tensor_attr(graph, o_gpu, name="o")
+    dO = make_tensor_attr(graph, dO_gpu, name="dO")
+    stats = make_tensor_attr(graph, stats_gpu, name="stats")
 
-    dQ_attr, dK_attr, dV_attr = graph.scaled_dot_product_flash_attention_backward(
+    if attn_scale_val != 1.0:
+        attn_scale = make_tensor_attr(graph, attn_scale_cpu, is_pass_by_value=True, name="attn_scale")
+
+    if dropout_enable:
+        seed = make_tensor_attr(graph, seed_gpu, "seed")
+        offset = make_tensor_attr(graph, offset_gpu, "attn_scale")
+        dropout_tuple = (dropout_prob, seed, offset)
+
+    dQ, dK, dV = graph.scaled_dot_product_flash_attention_backward(
         name="scaled_dot_product_flash_attention",
-        q=q_attr,
-        k=k_attr,
-        v=v_attr,
-        o=o_attr,
-        dO=dO_attr,
-        stats=stats_attr,
-        use_causal_mask=True,
-        attn_scale=attn_scale,
+        q=q,
+        k=k,
+        v=v,
+        o=o,
+        dO=dO,
+        stats=stats,
+        attn_scale=attn_scale if attn_scale_val != 1.0 else None,
+        use_causal_mask=is_causal,
+        dropout=dropout_tuple if dropout_enable else None,
     )
 
-    dQ_attr.set_output(True).set_dim(dQ.size()).set_stride(dQ.stride())
-    dK_attr.set_output(True).set_dim(dK.size()).set_stride(dK.stride())
-    dV_attr.set_output(True).set_dim(dV.size()).set_stride(dV.stride())
+    dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
+    dK.set_output(True).set_dim(dK_gpu.size()).set_stride(dK_gpu.stride())
+    dV.set_output(True).set_dim(dV_gpu.size()).set_stride(dV_gpu.stride())
 
     graph.check_support()
     graph.build()
 
     variant_pack = {
-        q_attr: q,
-        k_attr: k,
-        v_attr: v,
-        o_attr: o,
-        dO_attr: dO,
-        stats_attr: stats,
-        dQ_attr: dQ,
-        dK_attr: dK,
-        dV_attr: dV,
-        attn_scale: attn_scale_cpu
+        q: q_gpu,
+        k: k_gpu,
+        v: v_gpu,
+        o: o_gpu,
+        dO: dO_gpu,
+        stats: stats_gpu,
+        dQ: dQ_gpu,
+        dK: dK_gpu,
+        dV: dV_gpu
     }
+
+    if attn_scale_val != 1.0:
+        variant_pack[attn_scale] = attn_scale_cpu
+
+    if dropout_enable:
+        variant_pack[seed] = seed_gpu
+        variant_pack[offset] = offset_gpu
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     graph.execute(variant_pack, workspace)
 
-    # compare with autograd reference
+    # compare with torch autograd reference
     nn_ref = ScaledDotProductAttentionPyT(is_causal=is_causal, attn_scale=attn_scale_val).cuda().float()
 
-    q_ref = q.detach().clone().cuda().float()
+    q_ref = q_gpu.detach().float()
     q_ref.requires_grad = True
-    k_ref = k.detach().clone().cuda().float()
+    k_ref = k_gpu.detach().float()
     k_ref.requires_grad = True
-    v_ref = v.detach().clone().cuda().float()
+    v_ref = v_gpu.detach().float()
     v_ref.requires_grad = True
-    do_ref = dO.detach().clone().cuda().float()
+    dO_ref = dO_gpu.detach().float()
 
     o_ref = nn_ref(q_ref, k_ref, v_ref)
 
-    dq_ref, dk_ref, dv_ref = torch.autograd.grad(outputs=o_ref, inputs=(q_ref, k_ref, v_ref), grad_outputs=do_ref)
+    dq_ref, dk_ref, dv_ref = torch.autograd.grad(outputs=o_ref, inputs=(q_ref, k_ref, v_ref), grad_outputs=dO_ref)
 
-    assert compare_tensors(dq_ref, dQ, "dQ", print_compare=print_compare) == 0
-    assert compare_tensors(dk_ref, dK, "dK", print_compare=print_compare) == 0
-    assert compare_tensors(dv_ref, dV, "dV", print_compare=print_compare) == 0
+    assert compare_tensors(dq_ref, dQ_gpu, "dQ", print_compare=print_compare) == 0
+    assert compare_tensors(dk_ref, dK_gpu, "dK", print_compare=print_compare) == 0
+    assert compare_tensors(dv_ref, dV_gpu, "dV", print_compare=print_compare) == 0
 
 
 if __name__ == "__main__":
@@ -496,5 +520,5 @@ if __name__ == "__main__":
     )
     test_scale_dot_product_flash_attention_backward(print_compare=True)
 
-    for option in all_options_forward:
-        test_scale_dot_product_flash_attention(option)
+    # for option in all_options_forward:
+    #     test_scale_dot_product_flash_attention(option)

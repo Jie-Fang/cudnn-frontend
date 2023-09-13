@@ -19,6 +19,11 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     // one_tensor is needed for non-dropout graphs
     std::shared_ptr<Tensor_attributes> one_tensor;
 
+    std::shared_ptr<Tensor_attributes> dQ_accum;
+    int64_t dQ_accum_size = 0;
+    std::shared_ptr<Tensor_attributes> softmax_sum;
+    int64_t softmax_sum_size = 0;
+
    public:
     Scaled_dot_product_flash_attention_backward_attributes options;
 
@@ -79,24 +84,16 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         auto const& k_dim = options.inputs.K->get_dim();
         auto s_kv         = k_dim[3];
 
-        if (options.dropout_probability.has_value()) {
-            options.inputs.Dropout_scale = make_tensor_(true, {1, 1, 1, 1});
-            options.inputs.Dropout_scale->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
-            options.inputs.Dropout_scale_inv = make_tensor_(true, {1, 1, 1, 1});
-            options.inputs.Dropout_scale_inv->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
-        }
+        std::shared_ptr<Tensor_attributes> last_output, exp_softmax_output, dp_scaled_output, rng_output;
+
+        // --------------Initialize and create tensors before creating nodes--------------------
 
         // one_tensor is needed for non-dropout graphs
         one_tensor = std::make_shared<Tensor_attributes>();
         one_tensor->set_dim({1, 1, 1, 1})
-                 .set_stride({1, 1, 1, 1})
-                 .set_is_pass_by_value(true)
-                 .set_data_type(DataType_t::FLOAT);
-
-        std::shared_ptr<Tensor_attributes> last_output, softmax_sum_output, exp_softmax_output, dp_scaled_output, rng_output;
-
-        bool is_dropout_prob = (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
-        bool is_dropout_mask = (options.inputs.Dropout_mask != nullptr);
+                .set_stride({1, 1, 1, 1})
+                .set_is_pass_by_value(true)
+                .set_data_type(DataType_t::FLOAT);
 
         // create tensors internal to the node
         if (options.causal_mask) {
@@ -105,6 +102,32 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                                 .set_stride({1, 1, 1, 1})
                                 .set_is_pass_by_value(true)
                                 .set_data_type(DataType_t::FLOAT);
+        }
+
+        bool is_dropout_prob = (options.dropout_probability.has_value());
+        bool is_dropout_mask = (options.inputs.Dropout_mask != nullptr);
+
+        // if dropout_prob is used, then the node creates scale and scale inverse
+        // if dropout_mask is used, then the user creates scale and scale_inverse
+        if (is_dropout_prob) {
+            options.inputs.Dropout_scale = make_tensor_(true, {1, 1, 1, 1});
+            options.inputs.Dropout_scale->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
+            options.inputs.Dropout_scale_inv = make_tensor_(true, {1, 1, 1, 1});
+            options.inputs.Dropout_scale_inv->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
+        }
+
+        // non-virtual dQAccum is required for below cuDNN 8.9.5
+        if (CUDNN_VERSION < 8905 || (CUDNN_VERSION == 8905 && (b * h * s_q * d * sizeof(float) <= (1 << 30)))) {
+            dQ_accum = make_tensor_(false, {b, h, s_q, d});
+            dQ_accum->set_data_type(DataType_t::FLOAT).set_reordering_type(TensorReordering_t::F16x16);
+            dQ_accum_size = b * h * s_q * d * sizeof(float);
+        }
+
+        // non-virtual softmax_sum is required for below cuDNN 8.9.5
+        if (CUDNN_VERSION < 8905) {
+            softmax_sum = make_tensor_(false, {b, h, s_q, 1});
+            softmax_sum->set_data_type(DataType_t::FLOAT);
+            softmax_sum_size = b * h * s_q * sizeof(float);
         }
 
         // --------------RNG node--------------------
@@ -151,10 +174,12 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             // WAR dropout scale inverse is needed for non-dropout graphs
             pw_mul_dropout_scale_inv_attr.inputs.IN_1 = one_tensor;
         }
-        pw_mul_dropout_scale_inv_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, 1});
+        if (softmax_sum != nullptr) {
+            pw_mul_dropout_scale_inv_attr.outputs.OUT_0 = softmax_sum;
+        } else {
+            pw_mul_dropout_scale_inv_attr.outputs.OUT_0 = softmax_sum = make_tensor_(true, {b, h, s_q, 1});
+        }
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dropout_scale_inv_attr), context));
-
-        softmax_sum_output = last_output;
 
         // --------------"Q @ KT => exp_softmax => dV" chain--------------------
 
@@ -300,7 +325,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         pw_subtract_ds_attr.set_name("pw_subtract_ds");
         pw_subtract_ds_attr.set_mode(PointwiseMode_t::SUB);
         pw_subtract_ds_attr.inputs.IN_0   = last_output;
-        pw_subtract_ds_attr.inputs.IN_1   = softmax_sum_output;
+        pw_subtract_ds_attr.inputs.IN_1   = softmax_sum;
         pw_subtract_ds_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_subtract_ds_attr), context));
 
@@ -366,16 +391,35 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         matmul_dP_K_attr.set_name("matmul_dP_K");
         matmul_dP_K_attr.inputs.A  = dp_scaled_output;
         matmul_dP_K_attr.inputs.B  = last_output;
-        matmul_dP_K_attr.outputs.C = options.outputs.dQ;
+        if (dQ_accum != nullptr) {
+            matmul_dP_K_attr.outputs.C = dQ_accum;
+        } else {
+            matmul_dP_K_attr.outputs.C = options.outputs.dQ;
+        }
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dP_K_attr), context));
 
+        if (dQ_accum != nullptr) {
+            Pointwise_attributes pw_identity_dQ_attr;
+            pw_identity_dQ_attr.set_name("pw_identity_dQ");
+            pw_identity_dQ_attr.set_mode(PointwiseMode_t::IDENTITY);
+            pw_identity_dQ_attr.inputs.IN_0   = dQ_accum;
+            pw_identity_dQ_attr.outputs.OUT_0 = options.outputs.dQ;
+            sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_identity_dQ_attr), context));
+        }
+
         return {error_code_t::OK, ""};
+    }
+
+    virtual int64_t
+    get_fe_workspace_size_node() const override final {
+        // set in infer_properties_node()
+        return dQ_accum_size + softmax_sum_size;
     }
 
     error_t
     pass_by_value_tensors_(
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        [[maybe_unused]] void* node_workspace) override {
+        void* node_workspace) override {
 
         if (options.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::min();
@@ -392,6 +436,17 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // one_tensor is needed for non-dropout graphs
         if (one_tensor != nullptr) {
             tensor_to_pass_by_value.emplace(one_tensor, 1.0f);
+        }
+
+        if (dQ_accum != nullptr) {
+            cudaMemset(node_workspace, 0, dQ_accum_size);
+            tensor_to_pass_by_value.emplace(dQ_accum, node_workspace);
+            node_workspace = static_cast<char*>(node_workspace) + dQ_accum_size;
+        }
+
+        if (softmax_sum != nullptr) {
+            // There is no requirement for softmax_sum to be memset to 0
+            tensor_to_pass_by_value.emplace(softmax_sum, node_workspace);
         }
 
         return {error_code_t::OK, ""};

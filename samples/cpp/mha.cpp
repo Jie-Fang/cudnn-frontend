@@ -27,10 +27,21 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
-#if CUDART_VERSION < 12000
-    SKIP("Test requires cuda toolkit 12.0 or above");
-    return;
-#endif
+    if (CUDART_VERSION < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+        return;
+    }
+
+    if (CUDNN_VERSION < 8900) {
+        SKIP("Test requires cuDNN version 8.9.0 or above");
+        return;
+    }
+
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("Test requires Hopper or above arch.");
+        return;
+    }
+
     int64_t b                 = 1;     // batch size
     int64_t h                 = 2;     // head dim
     int64_t s_q               = 2048;  // q tensor is padded to this seq length
@@ -120,15 +131,6 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         Stats->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     }
 
-#if (CUDNN_VERSION < 8900)
-    SKIP("MHA Graph requires cudnn 8.9 and up");
-    return;
-#endif
-    if (check_device_arch_newer_than("hopper") == false) {
-        SKIP("MHA Graph requires Hopper or above arch.");
-        return;
-    }
-
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
@@ -201,10 +203,21 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 }
 
 TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
-#if CUDART_VERSION < 12000
-    SKIP("Test requires cuda toolkit 12.0 or above");
-    return;
-#endif
+    if (CUDART_VERSION < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+        return;
+    }
+
+    if (CUDNN_VERSION < 8903) {
+        SKIP("Test requires cuDNN version 8.9.3 or above");
+        return;
+    }
+
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("Test requires Hopper or above arch.");
+        return;
+    }
+
     int64_t b         = 1;     // batch size
     int64_t h         = 2;     // head dim
     int64_t s_q       = 2048;  // q tensor is padded to this seq length
@@ -263,16 +276,6 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
         Stats->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     }
 
-// No dropout in flash attention only supported 8.9.3 onwards.
-#if (CUDNN_VERSION < 8903)
-    SKIP("MHA Graph requires cudnn 8.9 and up");
-    return;
-#endif
-    if (check_device_arch_newer_than("hopper") == false) {
-        SKIP("MHA Graph requires Hopper or above arch.");
-        return;
-    }
-
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
@@ -320,13 +323,13 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
         return;
     }
 
-    if (CUDNN_VERSION < 8905) {
-        SKIP("Test requires cuDNN version 8.9.5 or above");
+    if (CUDNN_VERSION < 8903) {
+        SKIP("Test requires cuDNN version 8.9.3 or above");
         return;
     }
 
-    if (check_device_arch_newer_than("hopper") == false) {
-        SKIP("MHA Graph requires Hopper or above arch.");
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("Test requires Hopper or above arch.");
         return;
     }
 
