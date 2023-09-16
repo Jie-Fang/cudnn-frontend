@@ -121,7 +121,7 @@ L4_graph_runner:cudnn_8.6.0.163:
             - ARCH: ["Ampere", "GA10x"]
     tags:
         - ${ARCH}
-    extends: .L4_graph_runner_large:template
+    extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.6.0.163"]
     only:
         - schedules 
@@ -177,7 +177,7 @@ L4_graph_runner:cudnn_8.7.0.84:
             - ARCH: ["Ampere", "GA10x"]
     tags:
         - ${ARCH}
-    extends: .L4_graph_runner_large:template
+    extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.7.0.84"]
     only:
         - schedules 
@@ -233,7 +233,7 @@ L4_graph_runner:cudnn_8.8.0.121:
             - ARCH: ["Ampere"]
     tags:
         - ${ARCH}
-    extends: .L4_graph_runner_large:template
+    extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.8.0.121"]
     only:
         - schedules 
@@ -289,7 +289,7 @@ L4_graph_runner:cudnn_8.9.2.31:
             - ARCH: ["Ampere"]
     tags:
         - ${ARCH}
-    extends: .L4_graph_runner_large:template
+    extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.9.2.31"]
     only:
         - schedules 
