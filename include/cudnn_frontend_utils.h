@@ -763,14 +763,20 @@ namespace detail {
 inline std::vector<float>
 get_abili_slope(int64_t const n_heads) {
     std::vector<float> slope;
-
-    int n = 1 << (int)(log2f(n_heads));
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4244)  // this could be ommited with c++17 and contexpr
+#endif
+    int n = 1 << static_cast<int>(log2f(n_heads));
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     for (int i = 0; i < n; i++) {
         slope.push_back((float)(i + 1.0));
     }
 
     for (int i = 0; i < 2 * (n_heads - n); i += 2) {
-        slope.push_back((float)(i + 1.0) * 0.5);
+        slope.push_back((float)(i + 1.0f) * 0.5f);
     }
 
     for (float& elem : slope) {
