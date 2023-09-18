@@ -702,6 +702,17 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_S_bmm_scale_attr), context));
         }
 
+        // pointwise add: bias
+        if (options.inputs.Bias) {
+            Pointwise_attributes pw_add_bias_attr;
+            pw_add_bias_attr.set_name("pw_add_bias");
+            pw_add_bias_attr.set_mode(PointwiseMode_t::ADD);
+            pw_add_bias_attr.inputs.IN_0 = last_output;
+            pw_add_bias_attr.inputs.IN_1 = options.inputs.Bias;
+            pw_add_bias_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_add_bias_attr), context));
+        }
+
         // Causal Mask DAG
         if (options.causal_mask) {
             std::shared_ptr<Tensor_attributes> row_index_output  = make_tensor_(true, {b, h, s_q, s_kv});

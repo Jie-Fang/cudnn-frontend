@@ -339,6 +339,7 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
     int64_t s_kv              = 1024;  // k and v tensor is padded to this seq length
     int64_t d                 = 128;   // hidden dim
 
+    bool is_bias = true;
     float dropout_probability = 0.2f;
 
     namespace fe = cudnn_frontend;
@@ -347,8 +348,8 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
                       .set_intermediate_data_type(fe::DataType_t::FLOAT)
                       .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    // used for dropout != 0.0f
-    std::shared_ptr<fe::graph::Tensor_attributes> dropout_seed, dropout_offset;
+    // used for bias, and dropout != 0.0f
+    std::shared_ptr<fe::graph::Tensor_attributes> bias, dropout_seed, dropout_offset;
 
     auto q = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("Q")
@@ -383,6 +384,13 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
                                   .set_is_pass_by_value(true)
                                   .set_data_type(fe::DataType_t::FLOAT));
 
+    if (is_bias) {
+        bias = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("bias")
+                                  .set_dim({b, 1, s_q, s_kv})
+                                  .set_stride({s_q * s_kv, s_q * s_kv, s_kv, 1}));
+    }
+
     if (dropout_probability != 0.0f) {
         dropout_seed = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("Seed")
@@ -400,6 +408,10 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
                                   .set_name("flash_attention_backward")
                                   .set_causal_mask(true)
                                   .set_attn_scale(attn_scale);
+
+    if (is_bias) {
+        scaled_dot_product_flash_attention_backward_options.set_bias(bias);
+    }
 
     if (dropout_probability != 0.0f) {
         scaled_dot_product_flash_attention_backward_options.set_dropout(dropout_probability, dropout_seed, dropout_offset);
@@ -439,6 +451,8 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
 
     float attn_scale_cpu = 0.5f;
 
+    Surface<half> bias_tensor(b * 1 * s_q * s_kv, false);
+
     int32_t seed_value = 123456;
     int32_t offset_value = 789;
     Surface<int32_t> dropout_seed_tensor(1, false, seed_value);
@@ -459,6 +473,10 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
         // pass by value
         {attn_scale, &attn_scale_cpu}
     };
+
+    if (is_bias) {
+        variant_pack[bias] = bias_tensor.devPtr;
+    }
 
     if (dropout_probability != 0.0f) {
         variant_pack[dropout_seed] = dropout_seed_tensor.devPtr;

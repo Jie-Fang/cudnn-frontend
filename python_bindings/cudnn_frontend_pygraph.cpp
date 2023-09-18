@@ -515,14 +515,16 @@ class PyGraph {
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& o,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
-                                                bool const use_causal_mask,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attn_scale,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+                                                bool const use_causal_mask,
                                                 py::object const& dropout,
                                                 cudnn_frontend::DataType_t const& compute_data_type,
                                                 std::string const& name) {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_backward_attributes()
-                              .set_causal_mask(use_causal_mask)
                               .set_attn_scale(attn_scale)
+                              .set_bias(bias)
+                              .set_causal_mask(use_causal_mask)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
 
@@ -870,8 +872,9 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("o"),
              py::arg("dO"),
              py::arg("stats"),
-             py::arg_v("use_causal_mask", false),
              py::arg_v("attn_scale", nullptr),
+             py::arg_v("bias", nullptr),
+             py::arg_v("use_causal_mask", false),
              py::arg_v("dropout", py::none()),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""),

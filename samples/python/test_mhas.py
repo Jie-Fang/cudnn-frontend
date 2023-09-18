@@ -186,9 +186,9 @@ alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
 layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
-dropout = [False]
+dropout_options = [False]
 is_infer_options = [False, True]
-bias = [False, True]
+bias_options = [False, True]
 input_type_options = [torch.float16, torch.bfloat16]
 
 all_options_forward = [
@@ -199,23 +199,43 @@ all_options_forward = [
             padding_mask_options,
             causal_mask_options,
             layout_options,
-            dropout,
+            dropout_options,
             is_infer_options,
-            bias,
-            input_type_options,
+            bias_options,
+            input_type_options
         ]
     )
 ]
 
+all_options_backward = [
+    elem
+    for elem in itertools.product(
+        *[
+            causal_mask_options,
+            dropout_options,
+            bias_options,
+            input_type_options
+        ]
+    )
+]
 
 @pytest.fixture(params=all_options_forward)
-def param_extract(request):
+def param_extract_forward(request):
     return request.param
 
 
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
-    alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type = param_extract
+def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=False):
+    (
+        alibi_mask,
+        padding_mask,
+        causal_mask,
+        layout,
+        dropout_enable,
+        is_infer,
+        bias_enable,
+        input_type
+    ) = param_extract_forward
 
     if alibi_mask and cudnn.backend_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
@@ -232,7 +252,7 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
     s_kv = s_q
     d = random.choice(d_choices)
 
-    print(f"{str(param_extract)} s={s_q} d={d}")
+    print(f"{str(param_extract_forward)} s={s_q} d={d}")
 
     attn_scale_val = 0.125
     dropout_prob = 0.1 if dropout_enable else 0.0
@@ -388,13 +408,22 @@ def test_scale_dot_product_flash_attention(param_extract, print_compare=False):
         assert compare_tensors(stats_ref, stats_gpu, "stats", print_compare=print_compare) == 0
 
 
+@pytest.fixture(params=all_options_backward)
+def param_extract_backward(request):
+    return request.param
+
+
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
 @pytest.mark.skipif(torch.cuda.get_device_capability()[0] < 9, reason="requires ampere or higher")
-def test_scale_dot_product_flash_attention_backward(print_compare=False):
-    is_causal = True
+def test_scale_dot_product_flash_attention_backward(param_extract_backward, print_compare=False):
+    (
+        is_causal,
+        is_dropout,
+        is_bias,
+        input_type
+    ) = param_extract_backward
+
     layout = "naive"
-    dropout_enable = False
-    input_type = torch.float16
 
     s_q_choices = [256, 512, 1024]
     d_choices = [64, 128]
@@ -405,30 +434,40 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
     s_kv = s_q
     d = random.choice(d_choices)
 
-    print(f"s={s_q} d={d}")
+    print(f"{str(param_extract_backward)} s={s_q} d={d}")
 
-    attn_scale_val = 1.0
-    dropout_prob = 0.1 if dropout_enable else 0.0
+    attn_scale_val = 0.125
+    dropout_prob = 0.1 if is_dropout else 0.0
 
     q_gpu = 1 * (torch.randn((b, h, s_q, d), dtype=input_type, device="cuda") - 0.5)
     k_gpu = 1 * (torch.randn((b, h, s_kv, d), dtype=input_type, device="cuda") - 0.5)
     v_gpu = 1 * (torch.randn((b, h, s_kv, d), dtype=input_type, device="cuda") - 0.5)
     dO_gpu = 0.1 * torch.randn((b, h, s_q, d), dtype=input_type, device="cuda")
 
-    o_gpu, stats_gpu = compute_o_stats(q_gpu, k_gpu, v_gpu, is_causal=is_causal, attn_scale=attn_scale_val)
+    if attn_scale_val != 1.0:
+        attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu")
+
+    if is_bias:
+        bias_gpu = torch.randn(b, 1, s_q, s_kv, device="cuda", dtype=input_type)
+
+    if is_dropout:
+        seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
+        offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
+
+    o_gpu, stats_gpu = compute_o_stats(
+        q_gpu,
+        k_gpu,
+        v_gpu,
+        is_causal=is_causal,
+        bias=bias_gpu if is_bias else None,
+        attn_scale=attn_scale_val
+    )
     o_gpu = o_gpu.to(dtype=input_type).detach().clone()
     stats_gpu = stats_gpu.to(dtype=torch.float32).detach().clone()
 
     dQ_gpu = torch.empty((b, h, s_q, d), dtype=input_type, device="cuda")
     dK_gpu = torch.empty((b, h, s_kv, d), dtype=input_type, device="cuda")
     dV_gpu = torch.empty((b, h, s_kv, d), dtype=input_type, device="cuda")
-
-    if attn_scale_val != 1.0:
-        attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu")
-
-    if dropout_enable:
-        seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
-        offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
     # cuDNN graph
     graph = cudnn.pygraph(
@@ -446,7 +485,10 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
     if attn_scale_val != 1.0:
         attn_scale = make_tensor_attr(graph, attn_scale_cpu, is_pass_by_value=True, name="attn_scale")
 
-    if dropout_enable:
+    if is_bias:
+        bias = make_tensor_attr(graph, bias_gpu, "bias")
+
+    if is_dropout:
         seed = make_tensor_attr(graph, seed_gpu, "seed")
         offset = make_tensor_attr(graph, offset_gpu, "attn_scale")
         dropout_tuple = (dropout_prob, seed, offset)
@@ -460,8 +502,9 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
         dO=dO,
         stats=stats,
         attn_scale=attn_scale if attn_scale_val != 1.0 else None,
+        bias=bias if is_bias else None,
         use_causal_mask=is_causal,
-        dropout=dropout_tuple if dropout_enable else None,
+        dropout=dropout_tuple if is_dropout else None,
     )
 
     dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
@@ -486,7 +529,10 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
     if attn_scale_val != 1.0:
         variant_pack[attn_scale] = attn_scale_cpu
 
-    if dropout_enable:
+    if is_bias:
+        variant_pack[bias] = bias_gpu
+
+    if is_dropout:
         variant_pack[seed] = seed_gpu
         variant_pack[offset] = offset_gpu
 
@@ -494,7 +540,11 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
     graph.execute(variant_pack, workspace)
 
     # compare with torch autograd reference
-    nn_ref = ScaledDotProductAttentionPyT(is_causal=is_causal, attn_scale=attn_scale_val).cuda().float()
+    nn_ref = ScaledDotProductAttentionPyT(
+        is_causal=is_causal,
+        is_bias=is_bias,
+        attn_scale=attn_scale_val
+    ).cuda().float()
 
     q_ref = q_gpu.detach().float()
     q_ref.requires_grad = True
@@ -504,21 +554,43 @@ def test_scale_dot_product_flash_attention_backward(print_compare=False):
     v_ref.requires_grad = True
     dO_ref = dO_gpu.detach().float()
 
-    o_ref = nn_ref(q_ref, k_ref, v_ref)
+    if is_bias:
+        bias_ref = bias_gpu.detach().float()
+        bias_ref.requires_grad = True
 
-    dq_ref, dk_ref, dv_ref = torch.autograd.grad(outputs=o_ref, inputs=(q_ref, k_ref, v_ref), grad_outputs=dO_ref)
+    o_ref = nn_ref(q_ref, k_ref, v_ref, bias=bias_ref if is_bias else None)
+
+    outputs_ref = [o_ref]
+    inputs_ref = [q_ref, k_ref, v_ref]
+
+    if is_bias:
+        inputs_ref.append(bias_ref)
+
+    [dq_ref, dk_ref, dv_ref, *opt_refs] = list(torch.autograd.grad(
+        outputs=outputs_ref,
+        inputs=inputs_ref,
+        grad_outputs=dO_ref
+    ))
 
     assert compare_tensors(dq_ref, dQ_gpu, "dQ", print_compare=print_compare) == 0
     assert compare_tensors(dk_ref, dK_gpu, "dK", print_compare=print_compare) == 0
     assert compare_tensors(dv_ref, dV_gpu, "dV", print_compare=print_compare) == 0
 
+    if is_bias:
+        db_ref = opt_refs.pop(0)
 
 if __name__ == "__main__":
-    # alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type
-    test_scale_dot_product_flash_attention(
-        (False, False, False, "bs3hd", False, False, True, torch.float16), print_compare=True
-    )
-    test_scale_dot_product_flash_attention_backward(print_compare=True)
+    """
+    option_forward = (alibi_mask, padding_mask, causal_mask, layout, dropout_enable, is_infer, bias_enable, input_type)
+    option_backward = (is_causal, is_dropout, is_bias, input_type)
+    test_scale_dot_product_flash_attention((False, False, False, "bs3hd", False, False, False, torch.float16), print_compare=True)
+    test_scale_dot_product_flash_attention_backward((False, False, False, torch.float16), print_compare=True)
+    """
 
+    print("==========running forward tests==========")
     for option in all_options_forward:
         test_scale_dot_product_flash_attention(option)
+
+    print("==========running backward tests==========")
+    for option in all_options_backward:
+        test_scale_dot_product_flash_attention_backward(option)

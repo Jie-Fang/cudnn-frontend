@@ -1618,6 +1618,7 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
         std::shared_ptr<Tensor_attributes> dO;
         std::shared_ptr<Tensor_attributes> Stats;
         std::shared_ptr<Tensor_attributes> Attn_scale;
+        std::shared_ptr<Tensor_attributes> Bias;
         std::shared_ptr<Tensor_attributes> Seed;
         std::shared_ptr<Tensor_attributes> Offset;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
@@ -1648,6 +1649,12 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
         inputs.Attn_scale = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_bias(std::shared_ptr<Tensor_attributes> value) {
+        inputs.Bias = value;
         return *this;
     }
 
