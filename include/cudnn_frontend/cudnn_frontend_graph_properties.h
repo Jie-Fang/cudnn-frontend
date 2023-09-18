@@ -1641,12 +1641,6 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     }
 
     Scaled_dot_product_flash_attention_backward_attributes&
-    set_causal_mask(bool const value) {
-        causal_mask = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
         inputs.Attn_scale = value;
         return *this;
@@ -1655,6 +1649,12 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
         inputs.Bias = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_causal_mask(bool const value) {
+        causal_mask = value;
         return *this;
     }
 

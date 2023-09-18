@@ -861,8 +861,8 @@ init_pygraph_submodule(py::module_& m) {
                     name (Optional[str]): The name of the operation.
 
                 Returns:
-                    cudnn_tensor: The result of scaled dot-product flash attention.
-                    Optional[cudnn_tensor]: The softmax statistics in case the operation is in a training step.
+                    o (cudnn_tensor): The result of scaled dot-product flash attention.
+                    stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
             )pbdoc")
         .def("scaled_dot_product_flash_attention_backward",
              &PyGraph::scaled_dot_product_flash_attention_backward,
@@ -879,7 +879,26 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""),
              R"pbdoc(
-                TODO add docs
+                Compute the key, query, value gradients of scaled dot-product flash attention.
+
+                Args:
+                    q (cudnn_tensor): The query data.
+                    k (cudnn_tensor): The key data.
+                    v (cudnn_tensor): The value data.
+                    o (cudnn_tensor): The output data.
+                    dO (cudnn_tensor): The output loss gradient.
+                    stats (cudnn_tensor): The softmax statistics from the forward pass.
+                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+                    bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
+                    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): The name of the operation.
+
+                Returns:
+                    dQ (cudnn_tensor): The query gradient tensor of scaled dot-product flash attention.
+                    dK (cudnn_tensor): The key gradient tensor of scaled dot-product flash attention.
+                    dV (cudnn_tensor): The value gradient tensor of scaled dot-product flash attention.
             )pbdoc")
         .def("build", &PyGraph::build)
         .def("check_support", &PyGraph::check_support)
