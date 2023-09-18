@@ -1,8 +1,8 @@
 ## Table of Contents
-1. [Scaled Dot Product Flash Attention](#Scaled Dot Product Flash Attention)
-2. [Scaled Dot Product Flash Attention Backward](#Scaled Dot Product Flash Attention Backward)
+1. [Scaled Dot Product Flash Attention](#scaled-dot-product-flash-attention)
+2. [Scaled Dot Product Flash Attention Backward](#scaled-dot-product-flash-attention-backward)
 
-### Scaled Dot Product Flash Attention
+### Scaled Dot Product Flash Attention {#scaled-dot-product-flash-attention}
 Computes the scaled dot product attention for given Query, Key and Value tensors. Optionally, can set dropout probability, causal mask. Can optionally dump stats to be used for the bprop computation.
 
 API:
@@ -67,7 +67,7 @@ Returns:
     stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
 ```
 
-### Scaled Dot Product Flash Attention Backward
+### Scaled Dot Product Flash Attention Backward {#scaled-dot-product-flash-attention-backward}
 Computes the query, key and value gradient tensors for scaled dot product flash attention. Optionally, can set dropout probability, causal mask.
 
 API:
