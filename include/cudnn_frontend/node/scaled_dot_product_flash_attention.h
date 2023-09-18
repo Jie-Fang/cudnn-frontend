@@ -541,29 +541,21 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << options.name << "..." << std::endl;
 
-        if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: Using both, custom dropout mask and internal-mask generation using dropout "
-                "probability, is ill-formed.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            options.dropout_probability.has_value() && options.inputs.Dropout_mask,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "[cudnn_frontend] ERROR: Using both, custom dropout mask and internal-mask generation using dropout "
+            "probability, is ill-formed.");
 
-        if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
-            getLogger() << message << std::endl;
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
-        if (context.get_intermediate_data_type() == DataType_t::NOT_SET) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "[cudnn_frontend] ERROR: Intermediate tensor data type needs to be set as internal tensors require it.";
-            return {status, message};
-        }
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            context.get_intermediate_data_type() == DataType_t::NOT_SET,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "[cudnn_frontend] ERROR: Intermediate tensor data type needs to be set as internal tensors require it.");
 
         return {error_code_t::OK, ""};
     }
