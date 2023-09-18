@@ -180,8 +180,8 @@ def test_scale_dot_product_flash_attention(param_extract):
     s_q_choices = [256, 512, 1024, 2048] 
     d_choices   = [64,128]
     
-    b = 32
-    h = 12
+    b = 3
+    h = 4
     s_q  = random.choice(s_q_choices)
     s_kv  = s_q
     d = random.choice(d_choices)
@@ -349,4 +349,4 @@ def test_scale_dot_product_flash_attention(param_extract):
     assert compare_tensors(O_expected, O_reorg, "O") == 0
     
 if __name__ == "__main__":
-    test_scale_dot_product_flash_attention((True, "bs3hd", False, False, True))
+    test_scale_dot_product_flash_attention((True, True, True, "bs3hd", False, True, True, torch.float16))
