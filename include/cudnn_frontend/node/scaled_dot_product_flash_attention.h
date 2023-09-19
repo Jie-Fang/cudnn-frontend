@@ -483,9 +483,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
         void* node_workspace) override {
         if (options.dropout_probability.has_value()) {
 #if CUDNN_VERSION < 8903
-            half dropout_scale_value = (1.f / (1.0 - options.dropout_probability.value()));
+            half dropout_scale_value = (1.f / (1.0f - options.dropout_probability.value()));
 #else
-            float dropout_scale_value = (1.f / (1.0 - options.dropout_probability.value()));
+            float dropout_scale_value = (1.f / (1.0f - options.dropout_probability.value()));
 #endif
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
@@ -609,14 +609,14 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         }
 
         // non-virtual dQAccum is required for below cuDNN 8.9.5
-        if (CUDNN_VERSION < 8905 || (CUDNN_VERSION == 8905 && (b * h * s_q * d * sizeof(float) <= (1 << 30)))) {
+        if (cudnnGetVersion() < 8905 || (cudnnGetVersion() == 8905 && (b * h * s_q * d * sizeof(float) <= (1 << 30)))) {
             dQ_accum = make_tensor_(false, {b, h, s_q, d});
             dQ_accum->set_data_type(DataType_t::FLOAT).set_reordering_type(TensorReordering_t::F16x16);
             dQ_accum_size = b * h * s_q * d * sizeof(float);
         }
 
         // non-virtual softmax_sum is required for below cuDNN 8.9.5
-        if (CUDNN_VERSION < 8905) {
+        if (cudnnGetVersion() < 8905) {
             softmax_sum = make_tensor_(false, {b, h, s_q, 1});
             softmax_sum->set_data_type(DataType_t::FLOAT);
             softmax_sum_size = b * h * s_q * sizeof(float);
@@ -967,7 +967,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     make_tensor_(bool is_virtual, std::vector<int64_t> const& dim) {
         std::vector<int64_t> stride(dim.size());
         int64_t prod = 1;
-        for (int i = dim.size() - 1; i >= 0; --i) {
+        for (int i = (int)dim.size() - 1; i >= 0; --i) {
             stride[i] = prod;
             prod *= dim[i];
         }

@@ -27,12 +27,12 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
-    if (CUDART_VERSION < 12000) {
+    if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
         return;
     }
 
-    if (CUDNN_VERSION < 8900) {
+    if (cudnnGetVersion() < 8900) {
         SKIP("Test requires cuDNN version 8.9.0 or above");
         return;
     }
@@ -98,29 +98,28 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
                                                           .set_attn_scale(attn_scale)
                                                           .set_dropout(dropout_probability, seed, offset);
 
-// Optional bias in flash attention is only supported 8.9.3 onwards
-#if (CUDNN_VERSION >= 8904)
-    scaled_dot_product_flash_attention_options.set_alibi_mask(true);
-#endif
+    // Optional bias in flash attention is only supported 8.9.3 onwards
+    if (cudnnGetVersion() >= 8904) {
+        scaled_dot_product_flash_attention_options.set_alibi_mask(true);
+    }
 
-#if (CUDNN_VERSION >= 8903)
     auto seq_q  = mha_graph.tensor(fe::graph::Tensor_attributes()
-                                      .set_name("seq_q")
-                                      .set_dim({b, 1, 1, 1})
-                                      .set_stride({1, 1, 1, 1})
-                                      .set_data_type(fe::DataType_t::INT32));
+                                    .set_name("seq_q")
+                                    .set_dim({b, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_data_type(fe::DataType_t::INT32));
     auto seq_kv = mha_graph.tensor(fe::graph::Tensor_attributes()
-                                       .set_name("seq_kv")
-                                       .set_dim({b, 1, 1, 1})
-                                       .set_stride({1, 1, 1, 1})
-                                       .set_data_type(fe::DataType_t::INT32));
+                                    .set_name("seq_kv")
+                                    .set_dim({b, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_data_type(fe::DataType_t::INT32));
 
-    scaled_dot_product_flash_attention_options.set_bias(bias)
-        .set_padding_mask(true)
-        .set_seq_len_q(seq_q)
-        .set_seq_len_kv(seq_kv);
-    scaled_dot_product_flash_attention_options.set_bias(bias);
-#endif
+    if (cudnnGetVersion() >= 8903) {
+        scaled_dot_product_flash_attention_options.set_bias(bias)
+            .set_padding_mask(true)
+            .set_seq_len_q(seq_q)
+            .set_seq_len_kv(seq_kv);
+    }
 
     auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
 
@@ -203,12 +202,12 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 }
 
 TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
-    if (CUDART_VERSION < 12000) {
+    if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
         return;
     }
 
-    if (CUDNN_VERSION < 8903) {
+    if (cudnnGetVersion() < 8903) {
         SKIP("Test requires cuDNN version 8.9.3 or above");
         return;
     }
@@ -263,10 +262,10 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
                                                           .set_attn_scale(attn_scale)
                                                           .set_bias(bias);
 
-// Alibi mask in flash attention is only supported 8.9.4 onwards
-#if (CUDNN_VERSION >= 8904)
-    scaled_dot_product_flash_attention_options.set_alibi_mask(true);
-#endif
+    // Alibi mask in flash attention is only supported 8.9.4 onwards
+    if (cudnnGetVersion() >= 8904) {
+        scaled_dot_product_flash_attention_options.set_alibi_mask(true);
+    }
 
     auto [O, Stats] = mha_graph.scaled_dot_product_flash_attention(Q, K, V, scaled_dot_product_flash_attention_options);
     O->set_output(true).set_stride({h * d, d, b * h * d, 1});
@@ -318,14 +317,13 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 }
 
 TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
-    if (CUDART_VERSION < 12000) {
-        SKIP("Test requires cuda toolkit 12.0 or above");
-        return;
+    if (cudnnGetCudartVersion() < 12000) {
+            SKIP("Test requires cuda toolkit 12.0 or above");
+            return;
     }
-
-    if (CUDNN_VERSION < 8903) {
-        SKIP("Test requires cuDNN version 8.9.3 or above");
-        return;
+    if (cudnnGetVersion() < 8903) {
+            SKIP("Test requires cuDNN version 8.9.3 or above");
+            return;
     }
 
     if (check_device_arch_newer_than("ampere") == false) {

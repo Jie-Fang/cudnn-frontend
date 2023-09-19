@@ -61,13 +61,21 @@ typedef struct error_object {
 
 } error_t;
 
+#ifdef WIN32
+#define CUDNN_FRONTEND_WHILE_FALSE \
+    __pragma(warning(push)) __pragma(warning(disable : 4127)) while (0) __pragma(warning(pop))
+#else
+#define CUDNN_FRONTEND_WHILE_FALSE while (0)
+#endif
+
 #define CHECK_CUDNN_FRONTEND_ERROR(x)                                                                              \
     do {                                                                                                           \
         if (auto retval = x; retval.is_bad()) {                                                                    \
             getLogger() << "[cudnn_frontend] ERROR: " << #x << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
             return retval;                                                                                         \
         }                                                                                                          \
-    } while (0)
+    }                                                                                                              \
+    CUDNN_FRONTEND_WHILE_FALSE
 
 #define RETURN_CUDNN_FRONTEND_ERROR_IF(cond, retval, message)                                                        \
     do {                                                                                                             \
@@ -81,7 +89,8 @@ typedef struct error_object {
                         << "\n";                                                                                     \
             return {retval, message};                                                                                \
         }                                                                                                            \
-    } while (0)
+    }                                                                                                                \
+    CUDNN_FRONTEND_WHILE_FALSE
 
 static inline std::ostream&
 operator<<(std::ostream& os, const error_code_t& mode) {
