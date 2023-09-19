@@ -489,3 +489,20 @@ build:cudnn_8.9_clang:
     needs: []
     stage: build
     extends: .build:template
+    
+build:cudnn_8.9_windows:
+    tags:
+        - Windows
+    needs: []
+    stage: build
+    script:
+        # Enable below lines to fetch latest cudnn if needed,
+        # Otherwise just use already downloaded cudnn_8.9.5.29
+        # - wget https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v8.9_cuda_12.2/8.9.5.29/cudnn-windows-x86_64-8.9.5.29.zip -O cudnn.zip
+        # - Expand-Archive .\cudnn.zip
+        - $Env:CUDNN_PATH = "C:\Users\Public\Downloads\cudnn"
+        - mkdir build
+        - cd build
+        - cmake ../
+        - cmake --build . -j16 --verbose
+    
