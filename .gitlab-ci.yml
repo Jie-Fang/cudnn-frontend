@@ -20,6 +20,16 @@ stages:
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
         - tar xvf cudnn.tar.gz --directory /
         - export CUDNN_PATH=/debug_cudnn
+        
+.fetch_cudnn_v9:template:
+    before_script:
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.0_cuda_12.2/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.0.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -2 | head -1`
+        - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
+        - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
+        - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
+        - tar xvf cudnn.tar.gz --directory /
+        - export CUDNN_PATH=/debug_cudnn
 
 .build:template:
     script:
@@ -510,6 +520,62 @@ L4_graph_runner:cudnn_8.9.6_latest:
         - .fetch_cudnn:template
         - .L4_graph_runner:template
     needs: ["build:cudnn_8.9.6_latest"]
+    
+build:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
+    stage: build
+    extends:
+        - .fetch_cudnn_v9:template
+        - .build:template
+
+test:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_v9:template
+        - .test:template
+    needs: ["build:cudnn_9.0.0_latest"]
+    
+pytest:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_v9:template
+        - .pytest:template
+    needs: ["build:cudnn_9.0.0_latest"]
+    resource_group: memory_heavy_${ARCH}
+    
+pycudnntest:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_v9:template
+        - .pycudnntest:template
+    needs: ["build:cudnn_9.0.0_latest"]
+    
+L4_graph_runner:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_v9:template
+        - .L4_graph_runner:template
+    needs: ["build:cudnn_9.0.0_latest"]
     
 thunder:cudnn_8.9.2.31:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
