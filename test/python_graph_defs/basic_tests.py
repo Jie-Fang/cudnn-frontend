@@ -40,7 +40,7 @@ def test_dgrad_add(jparams, testgraph):
 
 def test_batchnorm(jparams, testgraph):
 
-    if cudnn.backend_version() < 8700:
+    if (not "backend_version" in dir(cudnn)) or cudnn.backend_version() < 8700:
         pytest.skip("BN not supported below cudnn 8.7")
 
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)

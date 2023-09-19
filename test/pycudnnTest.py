@@ -19,7 +19,8 @@ if __name__ == "__main__":
     pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
     pct_parser.add_argument('--R', '-R', choices=['graphRunner'])
 
-    print("Running: {}".format(" ".join(sys.argv)))
+    cmd = " ".join(sys.argv)
+    print("Running: {}".format(cmd))
 
     args, unknown_args = pct_parser.parse_known_args()
 
@@ -40,7 +41,9 @@ if __name__ == "__main__":
                     sanitized_unk_args.extend(item.split("="))
                 else:
                     sanitized_unk_args.append(stripped)
+
         run_test_from_legacy_args(args, sanitized_unk_args)
+   
         sys.exit(0)
         
     # Graphs defined in json file
