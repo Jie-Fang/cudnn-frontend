@@ -507,8 +507,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
             cudaStream_t stream;
             cudnnGetStream(handle, &stream);
-            cudaMemcpyAsync(
-                node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream);
+            CHECK_CUDA_ERROR(cudaMemcpyAsync(
+                node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream));
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
         }
 
@@ -988,7 +988,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         if (dQ_accum != nullptr) {
             cudaStream_t stream;
             cudnnGetStream(handle, &stream);
-            cudaMemsetAsync(node_workspace, 0, dQ_accum_size, stream);
+            CHECK_CUDA_ERROR(cudaMemsetAsync(node_workspace, 0, dQ_accum_size, stream));
             tensor_to_pass_by_value.emplace(dQ_accum, node_workspace);
             node_workspace = static_cast<char*>(node_workspace) + dQ_accum_size;
         }
