@@ -484,20 +484,20 @@ class ScaledDotProductFlashAttentionNode : public INode {
         void* node_workspace) override {
         if (options.dropout_probability.has_value()) {
 #if CUDNN_VERSION < 8903
-            half dropout_scale_value = (1.f / (1.0f - options.dropout_probability.value()));
+            half dropout_scale_value = (1.0f / (1.0f - options.dropout_probability.value()));
 #else
-            float dropout_scale_value = (1.f / (1.0f - options.dropout_probability.value()));
+            float dropout_scale_value = (1.0f / (1.0f - options.dropout_probability.value()));
 #endif
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
 
         if (options.padding_mask) {
-            float negative_inf_value = std::numeric_limits<float>::min();
+            float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
         }
 
         if (options.causal_mask) {
-            float negative_inf_value = std::numeric_limits<float>::min();
+            float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
 
@@ -969,13 +969,13 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
         if (options.causal_mask) {
-            float negative_inf_value = std::numeric_limits<float>::min();
+            float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
 
         if (options.dropout_probability.has_value()) {
-            float dropout_scale_value     = 1.f / (1 - options.dropout_probability.value());
-            float dropout_scale_inv_value = (1 - options.dropout_probability.value());
+            float dropout_scale_value     = 1.0f / (1.0f - options.dropout_probability.value());
+            float dropout_scale_inv_value = (1.0f - options.dropout_probability.value());
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale_inv, dropout_scale_inv_value);
         }
