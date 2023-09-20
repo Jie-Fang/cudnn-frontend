@@ -479,6 +479,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
     virtual error_t
     pass_by_value_tensors_(
+        cudnnHandle_t handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
         if (options.dropout_probability.has_value()) {
@@ -504,7 +505,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             int64_t const h            = options.inputs.Q->get_dim()[1];
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
 
-            cudaMemcpy(node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice);
+            cudaStream_t stream;
+            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
+            CHECK_CUDA_ERROR(cudaMemcpyAsync(
+                node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream));
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
         }
 
@@ -583,17 +587,17 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // one_tensor is needed for non-dropout graphs
         one_tensor = std::make_shared<Tensor_attributes>();
         one_tensor->set_dim({1, 1, 1, 1})
-                .set_stride({1, 1, 1, 1})
-                .set_is_pass_by_value(true)
-                .set_data_type(DataType_t::FLOAT);
+            .set_stride({1, 1, 1, 1})
+            .set_is_pass_by_value(true)
+            .set_data_type(DataType_t::FLOAT);
 
         // create tensors internal to the node
         if (options.causal_mask) {
             negative_inf_causal = std::make_shared<Tensor_attributes>();
             negative_inf_causal->set_dim({1, 1, 1, 1})
-                                .set_stride({1, 1, 1, 1})
-                                .set_is_pass_by_value(true)
-                                .set_data_type(DataType_t::FLOAT);
+                .set_stride({1, 1, 1, 1})
+                .set_is_pass_by_value(true)
+                .set_data_type(DataType_t::FLOAT);
         }
 
         bool is_dropout_prob = (options.dropout_probability.has_value());
@@ -608,8 +612,46 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             options.inputs.Dropout_scale_inv->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
         }
 
-        // non-virtual dQAccum is required for below cuDNN 8.9.5
-        if (cudnnGetVersion() < 8905 || (cudnnGetVersion() == 8905 && (b * h * s_q * d * sizeof(float) <= (1 << 30)))) {
+        // WAR non-virtual dQAccum is required if it is not
+        // cudnn verision >= 8.9.5
+        // device version >= hopper
+        // sizeof(dp tensor) <= max_dp_workspace
+        bool war_use_non_virtual_dQAccum = true;
+
+        if (cudnnGetVersion() >= 8905) {
+            struct cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+            if (prop.major >= 9) {
+                // default upper limit for workspace 256MB
+                int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
+
+                // allow setting the upper limit with envvars
+                char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
+                if (env_dp_workspace_limit_char != nullptr) {
+                    try {
+                        std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
+                        int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stol(env_dp_workspace_limit_str));
+                        max_dp_workspace_bytes         = std::max(max_dp_workspace_bytes, env_dp_workspace_limit);
+                    } catch (...) {
+                        RETURN_CUDNN_FRONTEND_ERROR_IF(true,
+                                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                                       "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
+                                                       "(int64_t; in bytes)");
+                    }
+                }
+
+                int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
+                int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
+                int64_t required_dp_workspace_bytes = b * h * workspace_s_q * workspace_s_kv * 2;
+                required_dp_workspace_bytes         = (required_dp_workspace_bytes + 1024 * 1024 - 1) / (1024 * 1024);
+
+                if (required_dp_workspace_bytes <= max_dp_workspace_bytes) {
+                    war_use_non_virtual_dQAccum = false;
+                }
+            }
+        }
+
+        if (war_use_non_virtual_dQAccum) {
             dQ_accum = make_tensor_(false, {b, h, s_q, d});
             dQ_accum->set_data_type(DataType_t::FLOAT).set_reordering_type(TensorReordering_t::F16x16);
             dQ_accum_size = b * h * s_q * d * sizeof(float);
@@ -630,7 +672,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             rng_attr.set_bernoulli_probability(1.0f - options.dropout_probability.value());
             rng_attr.inputs.Seed   = options.inputs.Seed;
             rng_attr.inputs.Offset = options.inputs.Offset;
-            rng_attr.outputs.Y     = rng_output = make_tensor_(true,  {b, h, s_q, s_kv});
+            rng_attr.outputs.Y = rng_output = make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(rng_attr), context));
         } else if (is_dropout_mask) {
             rng_output = options.inputs.Dropout_mask;
@@ -659,7 +701,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_mul_dropout_scale_inv_attr;
         pw_mul_dropout_scale_inv_attr.set_name("pw_mul_dropout_scale_inv");
         pw_mul_dropout_scale_inv_attr.set_mode(PointwiseMode_t::MUL);
-        pw_mul_dropout_scale_inv_attr.inputs.IN_0   = last_output;
+        pw_mul_dropout_scale_inv_attr.inputs.IN_0 = last_output;
         if (options.inputs.Dropout_scale_inv != nullptr) {
             pw_mul_dropout_scale_inv_attr.inputs.IN_1 = options.inputs.Dropout_scale_inv;
         } else {
@@ -699,8 +741,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes pw_add_bias_attr;
             pw_add_bias_attr.set_name("pw_add_bias");
             pw_add_bias_attr.set_mode(PointwiseMode_t::ADD);
-            pw_add_bias_attr.inputs.IN_0 = last_output;
-            pw_add_bias_attr.inputs.IN_1 = options.inputs.Bias;
+            pw_add_bias_attr.inputs.IN_0   = last_output;
+            pw_add_bias_attr.inputs.IN_1   = options.inputs.Bias;
             pw_add_bias_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_add_bias_attr), context));
         }
@@ -770,7 +812,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             mask_attr.set_mode(PointwiseMode_t::MUL);
             mask_attr.inputs.IN_0   = last_output;
             mask_attr.inputs.IN_1   = rng_output;
-            mask_attr.outputs.OUT_0 = last_output = make_tensor_(true,  {b, h, s_q, s_kv});
+            mask_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(mask_attr), context));
         }
 
@@ -781,7 +823,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             pw_mul_dropout_scale.set_mode(PointwiseMode_t::MUL);
             pw_mul_dropout_scale.inputs.IN_0   = last_output;
             pw_mul_dropout_scale.inputs.IN_1   = options.inputs.Dropout_scale;
-            pw_mul_dropout_scale.outputs.OUT_0 = last_output = make_tensor_(true,  {b, h, s_q, s_kv});
+            pw_mul_dropout_scale.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dropout_scale), context));
         }
 
@@ -789,7 +831,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Reshape_attributes transpose_s_attr;
         transpose_s_attr.set_name("transpose_s");
         transpose_s_attr.inputs.X  = last_output;
-        transpose_s_attr.outputs.Y = last_output = make_tensor_(true, {b, h, s_kv, s_q}, {h * s_q * s_kv, s_q * s_kv, 1, s_kv});
+        transpose_s_attr.outputs.Y = last_output =
+            make_tensor_(true, {b, h, s_kv, s_q}, {h * s_q * s_kv, s_q * s_kv, 1, s_kv});
         sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(transpose_s_attr), context));
 
         // matmul: S^T * dO
@@ -869,7 +912,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Reshape_attributes transpose_dP_attr;
         transpose_dP_attr.set_name("transpose_dP");
         transpose_dP_attr.inputs.X  = last_output;
-        transpose_dP_attr.outputs.Y = last_output = make_tensor_(true, {b, h, s_kv, s_q}, {h * s_q * s_kv, s_q * s_kv, 1, s_kv});
+        transpose_dP_attr.outputs.Y = last_output =
+            make_tensor_(true, {b, h, s_kv, s_q}, {h * s_q * s_kv, s_q * s_kv, 1, s_kv});
         sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(transpose_dP_attr), context));
 
         // matmul: dP^T * Q
@@ -892,8 +936,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: dP * K
         Matmul_attributes matmul_dP_K_attr;
         matmul_dP_K_attr.set_name("matmul_dP_K");
-        matmul_dP_K_attr.inputs.A  = dp_scaled_output;
-        matmul_dP_K_attr.inputs.B  = last_output;
+        matmul_dP_K_attr.inputs.A = dp_scaled_output;
+        matmul_dP_K_attr.inputs.B = last_output;
         if (dQ_accum != nullptr) {
             matmul_dP_K_attr.outputs.C = dQ_accum;
         } else {
@@ -921,16 +965,16 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
     error_t
     pass_by_value_tensors_(
+        cudnnHandle_t handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
-
         if (options.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::min();
             tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
 
         if (options.dropout_probability.has_value()) {
-            float dropout_scale_value = 1.f / (1 - options.dropout_probability.value());
+            float dropout_scale_value     = 1.f / (1 - options.dropout_probability.value());
             float dropout_scale_inv_value = (1 - options.dropout_probability.value());
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
             tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale_inv, dropout_scale_inv_value);
@@ -942,7 +986,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         }
 
         if (dQ_accum != nullptr) {
-            cudaMemset(node_workspace, 0, dQ_accum_size);
+            cudaStream_t stream;
+            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
+            CHECK_CUDA_ERROR(cudaMemsetAsync(node_workspace, 0, dQ_accum_size, stream));
             tensor_to_pass_by_value.emplace(dQ_accum, node_workspace);
             node_workspace = static_cast<char*>(node_workspace) + dQ_accum_size;
         }
