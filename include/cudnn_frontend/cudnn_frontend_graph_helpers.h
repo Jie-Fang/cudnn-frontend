@@ -20,6 +20,8 @@ enum class [[nodiscard]] error_code_t{OK,
                                       GRAPH_EXECUTION_FAILED,
                                       HEURISTIC_QUERY_FAILED,
                                       UNSUPPORTED_GRAPH_FORMAT,
+                                      CUDA_API_FAILED,
+                                      CUDNN_BACKEND_API_FAILED,
                                       INVALID_CUDA_DEVICE,
                                       HANDLE_ERROR};
 
@@ -92,46 +94,52 @@ typedef struct error_object {
     }                                                                                                                \
     CUDNN_FRONTEND_WHILE_FALSE
 
+#define CHECK_CUDNN_ERROR(x)                                                                                      \
+    do {                                                                                                          \
+        if (auto cudnn_retval = x; cudnn_retval != CUDNN_STATUS_SUCCESS) {                                        \
+            std::stringstream error_msg;                                                                          \
+            error_msg << #x << " failed with " << cudnnGetErrorString(cudnn_retval);                              \
+            getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
+                        << std::endl;                                                                             \
+            return {error_code_t::CUDNN_BACKEND_API_FAILED, error_msg.str()};                                     \
+        }                                                                                                         \
+    }                                                                                                             \
+    CUDNN_FRONTEND_WHILE_FALSE
+
+#define CHECK_CUDA_ERROR(x)                                                                                       \
+    do {                                                                                                          \
+        if (auto cuda_retval = x; cuda_retval != cudaSuccess) {                                                   \
+            std::stringstream error_msg;                                                                          \
+            error_msg << #x << " failed with " << cudaGetErrorString(cuda_retval);                                \
+            getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
+                        << std::endl;                                                                             \
+            return {error_code_t::CUDA_API_FAILED, error_msg.str()};                                              \
+        }                                                                                                         \
+    }                                                                                                             \
+    CUDNN_FRONTEND_WHILE_FALSE
+
+NLOHMANN_JSON_SERIALIZE_ENUM(error_code_t,
+                             {
+                                 {error_code_t::OK, "OK"},
+                                 {error_code_t::ATTRIBUTE_NOT_SET, "ATTRIBUTE_NOT_SET"},
+                                 {error_code_t::SHAPE_DEDUCTION_FAILED, "SHAPE_DEDUCTION_FAILED"},
+                                 {error_code_t::INVALID_TENSOR_NAME, "INVALID_TENSOR_NAME"},
+                                 {error_code_t::INVALID_VARIANT_PACK, "INVALID_VARIANT_PACK"},
+                                 {error_code_t::GRAPH_NOT_SUPPORTED, "GRAPH_NOT_SUPPORTED"},
+                                 {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                  "GRAPH_EXECUTION_PLAN_CREATION_FAILED"},
+                                 {error_code_t::GRAPH_EXECUTION_FAILED, "GRAPH_EXECUTION_FAILED"},
+                                 {error_code_t::HEURISTIC_QUERY_FAILED, "HEURISTIC_QUERY_FAILED"},
+                                 {error_code_t::CUDNN_BACKEND_API_FAILED, "CUDNN_BACKEND_API_FAILED"},
+                                 {error_code_t::CUDA_API_FAILED, "CUDA_API_FAILED"},
+                                 {error_code_t::INVALID_CUDA_DEVICE, "INVALID_CUDA_DEVICE"},
+                                 {error_code_t::UNSUPPORTED_GRAPH_FORMAT, "UNSUPPORTED_GRAPH_FORMAT"},
+                                 {error_code_t::HANDLE_ERROR, "HANDLE_ERROR"},
+                             })
+
 static inline std::ostream&
 operator<<(std::ostream& os, const error_code_t& mode) {
-    switch (mode) {
-        case error_code_t::OK:
-            os << "OK";
-            break;
-        case error_code_t::ATTRIBUTE_NOT_SET:
-            os << "ATTRIBUTE_NOT_SET";
-            break;
-        case error_code_t::SHAPE_DEDUCTION_FAILED:
-            os << "SHAPE_DEDUCTION_FAILED";
-            break;
-        case error_code_t::INVALID_TENSOR_NAME:
-            os << "INVALID_TENSOR_NAME";
-            break;
-        case error_code_t::INVALID_VARIANT_PACK:
-            os << "INVALID_VARIANT_PACK";
-            break;
-        case error_code_t::GRAPH_NOT_SUPPORTED:
-            os << "GRAPH_NOT_SUPPORTED";
-            break;
-        case error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
-            os << "GRAPH_EXECUTION_PLAN_CREATION_FAILED";
-            break;
-        case error_code_t::GRAPH_EXECUTION_FAILED:
-            os << "GRAPH_EXECUTION_FAILED";
-            break;
-        case error_code_t::HEURISTIC_QUERY_FAILED:
-            os << "HEURISTIC_QUERY_FAILED";
-            break;
-        case error_code_t::INVALID_CUDA_DEVICE:
-            os << "INVALID_CUDA_DEVICE";
-            break;
-        case error_code_t::UNSUPPORTED_GRAPH_FORMAT:
-            os << "UNSUPPORTED_GRAPH_FORMAT";
-            break;
-        case error_code_t::HANDLE_ERROR:
-            os << "HANDLE_ERROR";
-            break;
-    }
+    os << json{mode};
     return os;
 }
 

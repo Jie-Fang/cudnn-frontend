@@ -43,6 +43,10 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_code_t::HEURISTIC_QUERY_FAILED:
             throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_code_t::CUDNN_BACKEND_API_FAILED:
+            throw std::runtime_error(error_msg);
+        case cudnn_frontend::error_code_t::CUDA_API_FAILED:
+            throw std::runtime_error(error_msg);
         case cudnn_frontend::error_code_t::INVALID_CUDA_DEVICE:
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_code_t::UNSUPPORTED_GRAPH_FORMAT:
@@ -131,22 +135,21 @@ class PyGraph {
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
             cudnn_frontend::DataType_t compute_data_type,
-            void * handle_ = nullptr)
-        : graph(), handle((cudnnHandle_t)handle_), 
-        is_handle_owner(false), is_built(false) {
+            void* handle_ = nullptr)
+        : graph(), handle((cudnnHandle_t)handle_), is_handle_owner(false), is_built(false) {
         graph.set_compute_data_type(compute_data_type)
             .set_intermediate_data_type(intermediate_data_type)
             .set_io_data_type(io_data_type);
-        
+
         if (handle_ == nullptr) {
             cudnnCreate(&handle);
-            is_handle_owner = true; 
+            is_handle_owner = true;
         }
     }
 
-    ~PyGraph() { 
+    ~PyGraph() {
         if (is_handle_owner) {
-            cudnnDestroy(handle); 
+            cudnnDestroy(handle);
         }
     }
 
@@ -343,7 +346,8 @@ class PyGraph {
            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B,
            cudnn_frontend::DataType_t const& compute_data_type,
            std::string const& name) {
-        auto attributes = cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type).set_name(name);
+        auto attributes =
+            cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type).set_name(name);
 
         auto C = graph.matmul(A, B, attributes);
         return C;
@@ -507,7 +511,6 @@ class PyGraph {
         return {O, Stats};
     }
 
-
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
     scaled_dot_product_flash_attention_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
@@ -532,32 +535,35 @@ class PyGraph {
 
         if (!dropout.is_none()) {
             if (!py::isinstance<py::tuple>(dropout)) {
-                throw std::runtime_error("dropout must be a tuple of (float probability, a seed tensor"
-                                         ", and an offset tensor) or (mask tensor, scale tensor)");
+                throw std::runtime_error(
+                    "dropout must be a tuple of (float probability, a seed tensor"
+                    ", and an offset tensor) or (mask tensor, scale tensor)");
             }
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
             if (dropout_tuple.size() != 3) {
-                throw std::runtime_error("dropout must be a tuple of (float probability, a seed tensor"
-                                         ", and an offset tensor) or (mask tensor, scale tensor)");
+                throw std::runtime_error(
+                    "dropout must be a tuple of (float probability, a seed tensor"
+                    ", and an offset tensor) or (mask tensor, scale tensor)");
             }
-            
-            if (py::isinstance<py::float_>(dropout_tuple[0]) &&
-                py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
+
+            if (py::isinstance<py::float_>(dropout_tuple[0]) && py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
                 py::isinstance(dropout_tuple[2], cudnn_tensor_type)) {
                 auto const probability = dropout_tuple[0].cast<float>();
-                auto const seed = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                auto const seed   = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
                 auto const offset = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
                 attributes.set_dropout(probability, seed, offset);
             } else if (py::isinstance(dropout_tuple[0], cudnn_tensor_type) &&
                        py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
                        py::isinstance(dropout_tuple[2], cudnn_tensor_type)) {
-                auto const mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                auto const mask  = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
                 auto const scale = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
-                auto const scale_inv = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                auto const scale_inv =
+                    dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
                 attributes.set_dropout(mask, scale, scale_inv);
             } else {
-                throw std::runtime_error("dropout must be a tuple of (float probability, a seed tensor"
-                                         ", and an offset tensor) or (mask tensor, scale tensor)");
+                throw std::runtime_error(
+                    "dropout must be a tuple of (float probability, a seed tensor"
+                    ", and an offset tensor) or (mask tensor, scale tensor)");
             }
         }
 
@@ -634,7 +640,7 @@ init_pygraph_submodule(py::module_& m) {
                       cudnn_frontend::DataType_t,
                       cudnn_frontend::DataType_t,
                       cudnn_frontend::DataType_t,
-                      void *>(),
+                      void*>(),
              py::arg_v("name", "test_graph"),
              py::arg_v("io_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -1859,6 +1865,6 @@ init_pygraph_submodule(py::module_& m) {
         )pbdoc");
 }
 
-}
+}  // namespace python_bindings
 
-}
+}  // namespace cudnn_frontend

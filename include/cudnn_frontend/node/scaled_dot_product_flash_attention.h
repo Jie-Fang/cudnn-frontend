@@ -506,9 +506,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
 
             cudaStream_t stream;
-            cudnnGetStream(handle, &stream);
-            cudaMemcpyAsync(
-                node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream);
+            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
+            CHECK_CUDA_ERROR(cudaMemcpyAsync(
+                node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream));
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
         }
 
@@ -631,7 +631,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                     try {
                         std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
                         int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stol(env_dp_workspace_limit_str));
-                        max_dp_workspace_bytes = std::max(max_dp_workspace_bytes, env_dp_workspace_limit);
+                        max_dp_workspace_bytes         = std::max(max_dp_workspace_bytes, env_dp_workspace_limit);
                     } catch (...) {
                         RETURN_CUDNN_FRONTEND_ERROR_IF(true,
                                                        error_code_t::ATTRIBUTE_NOT_SET,
@@ -640,10 +640,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                     }
                 }
 
-                int64_t workspace_s_q = ((s_q + 64 - 1) / 64) * 64;
-                int64_t workspace_s_kv = ((s_kv + 64 - 1) / 64) * 64;
+                int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
+                int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
                 int64_t required_dp_workspace_bytes = b * h * workspace_s_q * workspace_s_kv * 2;
-                required_dp_workspace_bytes = (required_dp_workspace_bytes + 1024 * 1024 - 1) / (1024 * 1024);
+                required_dp_workspace_bytes         = (required_dp_workspace_bytes + 1024 * 1024 - 1) / (1024 * 1024);
 
                 if (required_dp_workspace_bytes <= max_dp_workspace_bytes) {
                     war_use_non_virtual_dQAccum = false;
@@ -987,8 +987,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         if (dQ_accum != nullptr) {
             cudaStream_t stream;
-            cudnnGetStream(handle, &stream);
-            cudaMemsetAsync(node_workspace, 0, dQ_accum_size, stream);
+            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
+            CHECK_CUDA_ERROR(cudaMemsetAsync(node_workspace, 0, dQ_accum_size, stream));
             tensor_to_pass_by_value.emplace(dQ_accum, node_workspace);
             node_workspace = static_cast<char*>(node_workspace) + dQ_accum_size;
         }
