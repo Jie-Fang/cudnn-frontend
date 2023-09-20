@@ -21,6 +21,7 @@ enum class [[nodiscard]] error_code_t{OK,
                                       HEURISTIC_QUERY_FAILED,
                                       UNSUPPORTED_GRAPH_FORMAT,
                                       CUDA_API_FAILED,
+                                      CUDNN_BACKEND_API_FAILED,
                                       INVALID_CUDA_DEVICE,
                                       HANDLE_ERROR};
 
@@ -93,6 +94,18 @@ typedef struct error_object {
     }                                                                                                                \
     CUDNN_FRONTEND_WHILE_FALSE
 
+#define CHECK_CUDNN_ERROR(x)                                                                                      \
+    do {                                                                                                          \
+        if (auto cudnn_retval = x; cudnn_retval != CUDNN_STATUS_SUCCESS) {                                        \
+            std::stringstream error_msg;                                                                          \
+            error_msg << #x << " failed with " << cudnnGetErrorString(cudnn_retval);                              \
+            getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
+                        << std::endl;                                                                             \
+            return {error_code_t::CUDNN_BACKEND_API_FAILED, error_msg.str()};                                     \
+        }                                                                                                         \
+    }                                                                                                             \
+    CUDNN_FRONTEND_WHILE_FALSE
+
 #define CHECK_CUDA_ERROR(x)                                                                                       \
     do {                                                                                                          \
         if (auto cuda_retval = x; cuda_retval != cudaSuccess) {                                                   \
@@ -134,6 +147,9 @@ operator<<(std::ostream& os, const error_code_t& mode) {
             break;
         case error_code_t::HEURISTIC_QUERY_FAILED:
             os << "HEURISTIC_QUERY_FAILED";
+            break;
+        case error_code_t::CUDNN_BACKEND_API_FAILED:
+            os << "CUDNN_BACKEND_API_FAILED";
             break;
         case error_code_t::CUDA_API_FAILED:
             os << "CUDA_API_FAILED";
