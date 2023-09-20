@@ -286,6 +286,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         stride_k = (3 * h * d, 3 * d, 1, b * 3 * h * d)
         stride_v = (3 * h * d, 3 * d, b * 3 * h * d, 1)
         stride_o = (h * d, d, b * h * d, 1)
+        stride_order_o = (2, 1, 3, 0)
 
         offset_q = d * 0
         offset_k = d * 1
@@ -295,6 +296,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         stride_k = (s_q * 3 * h * d, d, 1, 3 * h * d)
         stride_v = (s_q * 3 * h * d, d, 3 * h * d, 1)
         stride_o = (s_q * h * d, d, h * d, 1)
+        stride_order_o = (3, 1, 2, 0)
 
         offset_q = h * d * 0
         offset_k = h * d * 1
@@ -304,6 +306,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         stride_k = (d * s_kv * h, d * s_kv, 1, d)
         stride_v = (d * s_kv * h, d * s_kv, d, 1)
         stride_o = (d * s_q * h, d * s_q, d, 1)
+        stride_order_o = (3, 2, 1, 0)
 
         offset_q = 0
         offset_k = offset_q + b * d * s_q * h

@@ -70,7 +70,10 @@ class RngNode : public INode {
             if (options.get_stride().size()) {
                 y_tensor->set_stride(options.get_stride());
             } else {
-                y_tensor->set_stride(detail::generate_stride(y_tensor->get_dim()));
+                auto const& y_dim = y_tensor->get_dim();
+                // Default to NHWC
+                auto const& stride_order = detail::generate_NHWC_stride_order(y_dim.size());
+                y_tensor->set_stride(detail::generate_stride(y_dim, stride_order));
             }
         }
 

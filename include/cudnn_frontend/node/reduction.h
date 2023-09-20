@@ -51,7 +51,10 @@ class ReductionNode : public INode {
             y_tensor->set_dim(x_tensor_dim);
         }
         if (y_tensor->get_stride().empty()) {
-            y_tensor->set_stride(detail::generate_stride(y_tensor->get_dim()));
+            auto const& y_dim = y_tensor->get_dim();
+            // Default to NHWC
+            auto const& stride_order = detail::generate_NHWC_stride_order(y_dim.size());
+            y_tensor->set_stride(detail::generate_stride(y_dim, stride_order));
         }
 
         return {error_code_t::OK, ""};
