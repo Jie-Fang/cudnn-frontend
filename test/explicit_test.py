@@ -62,7 +62,7 @@ def test_gemm_more_explicit(in_dim, expected_gemm_out_dim):
     torch.testing.assert_close(output, pyt_out)
 
 @pytest.mark.parametrize("in_dim, expected_gemm_out_dim", [
-    ([1, 16, 16, 16], [1,16,16,]),
+    ([1, 16, 16, 128], [1,16,16,])
 #,([16, 32, 64, 128], [16,32,64,]) # fails
 ])
 def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
@@ -79,7 +79,7 @@ def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
     # weight = cudnn_graph.tensor(name = "weight", dim = w.size(), stride = [K*N, 1, K])
     # bias = cudnn_graph.tensor(name = "bias", dim = b.size(), stride = [M*N, 1, M])
 
-    image = cudnn_graph.tensor(name = "image", dim = x.size(), stride = [M*K, M, 1])
+    image = cudnn_graph.tensor(name = "image", dim = x.size(), stride = [M*K, K, 1])
     weight = cudnn_graph.tensor(name = "weight", dim = w.size(), stride = [K*N, N, 1])
     bias = cudnn_graph.tensor(name = "bias", dim = b.size(), stride = [M*N, 1, M])
 
@@ -90,7 +90,7 @@ def test_gemm_bias_relu_more_explicit(in_dim, expected_gemm_out_dim):
 
     gemm_output = cudnn_graph.matmul(name = "mb_matmul", A = image, B = weight)
 
-    gemm_output.set_is_virtual(True)
+    gemm_output.set_is_virtual(True).set_stride([M*N, 1, M])
 
     bias_out = cudnn_graph.bias(name = "bias", input = gemm_output, bias = bias)
     activation_output = cudnn_graph.relu(name = "relu", input = bias_out)

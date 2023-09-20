@@ -211,18 +211,60 @@ class Context {
     }
 };
 
-// Always generates NCHW (4d/5d tensors) or Col major (matrices)
+// Creates dense, non-overlapping strides from given dim and stride_order.
+// For example, if a is a 4D tensor with dimensions labeled NCHW, then strided(a, (3, 0, 2, 1)) produces
+// strides where the C dimension has a corresponding stride of one.
 inline std::vector<int64_t>
-generate_stride(std::vector<int64_t> const& dim) {
-    std::vector<int64_t> stride(dim.size(), 1);
+generate_stride(std::vector<int64_t> const& dim, std::vector<int64_t> const& stride_order) {
+    size_t num_dims = dim.size();
+    std::vector<int64_t> stride(num_dims);
 
-    stride[dim.size() - 1] = stride[1] * dim[1];
-    for (int64_t d = dim.size() - 2; d >= 2; d--) {
-        stride[d] = stride[d + 1] * dim[d + 1];
+    // Sort the dimensions according to strides from least to greatest.
+    // Example, dim = (2, 3, 4, 5) stride_order = (3, 1, 2, 0)
+    // sorted_stride_order = ((0, (3, 5)), (1, (1, 3)), (2, (2, 4)), (3, (0, 2)))
+    std::vector<std::pair<int64_t, std::pair<size_t, size_t>>> sorted_stride_order;
+    for (size_t i = 0; i < num_dims; ++i) {
+        sorted_stride_order.push_back({stride_order[i], {i, dim[i]}});
     }
-    stride[0] = stride[2] * dim[2];
+    std::sort(sorted_stride_order.begin(), sorted_stride_order.end());
+
+    // As dims have now been ordered starting from fastest changing,
+    // just fill in strides by iterating linearly over them.
+    int64_t product = 1;
+    for (size_t i = 0; i < num_dims; ++i) {
+        stride[sorted_stride_order[i].second.first] = product;
+        product *= sorted_stride_order[i].second.second;
+    }
 
     return stride;
+}
+
+// Generate NHWC stride_order
+inline std::vector<int64_t>
+generate_NHWC_stride_order(int64_t const num_dims) {
+    std::vector<int64_t> stride_order(num_dims);
+
+    int64_t order   = 0;
+    stride_order[1] = order++;
+    for (size_t i = num_dims - 1; i > 1; --i) {
+        stride_order[i] = order++;
+    }
+    stride_order[0] = order;
+
+    return stride_order;
+}
+
+// Generate column major stride_order for matrices
+// dim = (*, M, N) where * is batch dimsensions
+// strides should be (..., N, 1)
+inline std::vector<int64_t>
+generate_column_major_stride_order(int64_t const num_dims) {
+    std::vector<int64_t> stride_order(num_dims);
+
+    int64_t order = num_dims - 1;
+    std::generate(stride_order.begin(), stride_order.end(), [&order] { return order--; });
+
+    return stride_order;
 }
 
 }  // namespace detail

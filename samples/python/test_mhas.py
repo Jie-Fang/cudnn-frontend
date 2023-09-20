@@ -121,29 +121,48 @@ def get_slopes(n_heads: int):
     return m
 
 
-def compute_o_stats(q, k, v, is_causal=False, bias=None, is_alibi=False, attn_scale=1.0, device="cuda"):
+def compute_o_stats(q, k, v, attn_scale=1.0, bias=None, is_alibi=False, padding=None, is_causal=False, device="cuda"):
     b, h, s_q, d = q.shape
     _, _, s_kv, _ = k.shape
 
     assert k.shape == (b, h, s_kv, d)
     assert v.shape == (b, h, s_kv, d)
 
+    if padding is not None:
+        seq_len_q, seq_len_kv = padding
+        q_mask = torch.zeros(b, 1, s_q, 1, dtype=torch.bool, device=device)
+        k_mask = torch.zeros(b, 1, s_kv, 1, dtype=torch.bool, device=device)
+        v_mask = torch.zeros(b, 1, s_kv, 1, dtype=torch.bool, device=device)
+        s_mask = torch.zeros(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
+        for i, (m, n) in enumerate(zip(seq_len_q, seq_len_kv)):
+            q_mask[i, :, m:, :] = True
+            k_mask[i, :, n:, :] = True
+            v_mask[i, :, n:, :] = True
+            s_mask[i, :, m:, :] = True
+            s_mask[i, :, :, n:] = True
+
     q = q.to(dtype=torch.float32, device=device)
     k = k.to(dtype=torch.float32, device=device)
     v = v.to(dtype=torch.float32, device=device)
-
+    if padding is not None:
+        q.masked_fill_(q_mask, 0)
+        k.masked_fill_(k_mask, 0)
+        v.masked_fill_(v_mask, 0)
     s = torch.einsum("bhqd,bhkd->bhqk", q, k) * attn_scale
     if bias is not None:
         s.add_(bias)
     if is_alibi:
-        s_diff = torch.arange(s_kv, dtype=torch.float32) - torch.arange(s_q, dtype=torch.float32).view(-1, 1)
-        s.add_(s_diff.to(device=device) * get_slopes(h))
+        lin_bias = ((torch.arange(s_kv, dtype=q.dtype)) - torch.arange(s_q, dtype=q.dtype).view(-1, 1))
+        s.add_(lin_bias.to(device=device) * get_slopes(h))
+    if padding is not None:
+        s.masked_fill_(s_mask, float("-inf"))
     if is_causal:
-        causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool).triu_(diagonal=1).cuda()
+        causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device).triu_(diagonal=1)
         s.masked_fill_(causal_mask, float("-inf"))
     p = torch.softmax(s, dim=-1)
+    if padding is not None:
+        p.masked_fill_(s_mask, 0)
     o = torch.einsum("bhqk,bhkd->bhqd", p, v)
-
     # amax (NOT absolute max) is used here to evenly distribute gradient
     row_max = torch.amax(s, -1, True)
     row_exp = torch.exp(s - row_max)
@@ -267,6 +286,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         stride_k = (3 * h * d, 3 * d, 1, b * 3 * h * d)
         stride_v = (3 * h * d, 3 * d, b * 3 * h * d, 1)
         stride_o = (h * d, d, b * h * d, 1)
+        stride_order_o = (2, 1, 3, 0)
 
         offset_q = d * 0
         offset_k = d * 1
@@ -276,6 +296,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         stride_k = (s_q * 3 * h * d, d, 1, 3 * h * d)
         stride_v = (s_q * 3 * h * d, d, 3 * h * d, 1)
         stride_o = (s_q * h * d, d, h * d, 1)
+        stride_order_o = (3, 1, 2, 0)
 
         offset_q = h * d * 0
         offset_k = h * d * 1
@@ -285,6 +306,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         stride_k = (d * s_kv * h, d * s_kv, 1, d)
         stride_v = (d * s_kv * h, d * s_kv, d, 1)
         stride_o = (d * s_q * h, d * s_q, d, 1)
+        stride_order_o = (3, 2, 1, 0)
 
         offset_q = 0
         offset_k = offset_q + b * d * s_q * h
@@ -304,16 +326,16 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type)
 
     if is_padding:
-        seq_len_q_gpu = torch.full((b, 1, 1, 1), s_q, dtype=torch.int32, device="cuda")
-        seq_len_kv_gpu = torch.full((b, 1, 1, 1), s_kv, dtype=torch.int32, device="cuda")
+        seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
+        seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
-    o_gpu = torch.zeros(*shape_o, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
+    o_gpu = torch.empty(*shape_o, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
     if is_infer == False:
-        stats_gpu = torch.zeros(b, h, s_q, 1, dtype=torch.float32, device="cuda")
+        stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda")
 
     # cuDNN graph
     graph = cudnn.pygraph(
@@ -398,10 +420,29 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     if is_bias:
         bias_ref = bias_gpu.detach().float()
 
+    if is_padding:
+        seq_len_q_ref = seq_len_q_gpu.detach().flatten()
+        seq_len_kv_ref = seq_len_kv_gpu.detach().flatten()
+
     o_ref, stats_ref = compute_o_stats(
-        q_ref, k_ref, v_ref, attn_scale=attn_scale_val,
-        bias=bias_ref if is_bias else None, is_alibi=is_alibi, is_causal=is_causal
+        q_ref,
+        k_ref,
+        v_ref,
+        attn_scale=attn_scale_val,
+        bias=bias_ref if is_bias else None,
+        is_alibi=is_alibi,
+        is_causal=is_causal,
+        padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None
     )
+
+    if is_padding:
+        # zero out padded region of the output for comparison
+        for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
+            o_ref[i, :, m:, :] = 0
+            o_gpu[i, :, m:, :] = 0
+            if is_infer == False:
+                stats_ref[i, :, m:, :] = 0
+                stats_gpu[i, :, m:, :] = 0
 
     assert compare_tensors(o_ref, o_gpu, "O", print_compare=print_compare) == 0
     if is_infer == False:
