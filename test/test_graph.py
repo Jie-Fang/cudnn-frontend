@@ -7,6 +7,8 @@ import utils
 
 # Globally ensure cudnn is disabled for everything torch related
 torch.backends.cudnn.enabled = False 
+# TODO(@barretw): ensure output is deterministic and reproducible for L4 tests
+torch.manual_seed(0)
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
