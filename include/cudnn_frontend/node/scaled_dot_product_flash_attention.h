@@ -608,8 +608,46 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             options.inputs.Dropout_scale_inv->set_data_type(DataType_t::FLOAT).set_is_pass_by_value(true);
         }
 
-        // non-virtual dQAccum is required for below cuDNN 8.9.5
-        if (cudnnGetVersion() < 8905 || (cudnnGetVersion() == 8905 && (b * h * s_q * d * sizeof(float) <= (1 << 30)))) {
+        // WAR non-virtual dQAccum is required if it is not
+        // cudnn verision >= 8.9.5
+        // device version >= hopper
+        // sizeof(dp tensor) <= max_dp_workspace
+        bool war_use_non_virtual_dQAccum = true;
+
+        if (cudnnGetVersion() >= 8905) {
+            struct cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+            if (prop.major >= 9) {
+                // default upper limit for workspace 256MB
+                int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
+
+                // allow setting the upper limit with envvars
+                char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
+                if (env_dp_workspace_limit_char != nullptr) {
+                    try {
+                        std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
+                        int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stol(env_dp_workspace_limit_str));
+                        max_dp_workspace_bytes = std::max(max_dp_workspace_bytes, env_dp_workspace_limit);
+                    } catch (...) {
+                        RETURN_CUDNN_FRONTEND_ERROR_IF(true,
+                                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                                       "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
+                                                       "(int64_t; in bytes)");
+                    }
+                }
+
+                int64_t workspace_s_q = ((s_q + 64 - 1) / 64) * 64;
+                int64_t workspace_s_kv = ((s_kv + 64 - 1) / 64) * 64;
+                int64_t required_dp_workspace_bytes = b * h * workspace_s_q * workspace_s_kv * 2;
+                required_dp_workspace_bytes = (required_dp_workspace_bytes + 1024 * 1024 - 1) / (1024 * 1024);
+
+                if (required_dp_workspace_bytes <= max_dp_workspace_bytes) {
+                    war_use_non_virtual_dQAccum = false;
+                }
+            }
+        }
+
+        if (war_use_non_virtual_dQAccum) {
             dQ_accum = make_tensor_(false, {b, h, s_q, d});
             dQ_accum->set_data_type(DataType_t::FLOAT).set_reordering_type(TensorReordering_t::F16x16);
             dQ_accum_size = b * h * s_q * d * sizeof(float);
