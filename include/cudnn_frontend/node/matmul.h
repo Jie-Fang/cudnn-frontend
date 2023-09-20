@@ -60,7 +60,10 @@ class MatmulNode : public INode {
             c_tensor->set_dim(c_tensor_dim);
         }
         if (c_tensor->get_stride().empty()) {
-            c_tensor->set_stride(detail::generate_stride(c_tensor->get_dim()));
+            auto const& c_dim = c_tensor->get_dim();
+            // Default to Col major
+            auto const& stride_order = detail::generate_column_major_stride_order(c_dim.size());
+            c_tensor->set_stride(detail::generate_stride(c_dim, stride_order));
         }
 
         return {error_code_t::OK, ""};

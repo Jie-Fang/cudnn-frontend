@@ -877,9 +877,15 @@ class Layernorm_backward_attributes : public Operation {
         inputs.SCALE->fill_from_context(context);
         inputs.DY->fill_from_context(context);
 
-        if (inputs.MEAN) { inputs.MEAN->fill_from_context(context);}
-        if (inputs.INV_VARIANCE) {inputs.INV_VARIANCE->fill_from_context(context);}
-        if (inputs.EPSILON) {inputs.EPSILON->fill_from_context(context);}
+        if (inputs.MEAN) {
+            inputs.MEAN->fill_from_context(context);
+        }
+        if (inputs.INV_VARIANCE) {
+            inputs.INV_VARIANCE->fill_from_context(context);
+        }
+        if (inputs.EPSILON) {
+            inputs.EPSILON->fill_from_context(context);
+        }
 
         outputs.DX->fill_from_context(context);
         outputs.DSCALE->fill_from_context(context);
@@ -1632,13 +1638,12 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
         std::shared_ptr<Tensor_attributes> dV;
     } outputs;
 
-    bool causal_mask  = false;
+    bool causal_mask = false;
     std::optional<float> dropout_probability;
 
    public:
     Scaled_dot_product_flash_attention_backward_attributes()
-        : Operation(Tag::Scaled_dot_product_flash_attention_backward) {
-    }
+        : Operation(Tag::Scaled_dot_product_flash_attention_backward) {}
 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
@@ -1663,13 +1668,15 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
                 std::shared_ptr<Tensor_attributes> seed,
                 std::shared_ptr<Tensor_attributes> offset) {
         dropout_probability = probability;
-        inputs.Seed   = seed;
-        inputs.Offset = offset;
+        inputs.Seed         = seed;
+        inputs.Offset       = offset;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_backward_attributes&
-    set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> scale_inv) {
+    set_dropout(std::shared_ptr<Tensor_attributes> mask,
+                std::shared_ptr<Tensor_attributes> scale,
+                std::shared_ptr<Tensor_attributes> scale_inv) {
         inputs.Dropout_mask      = mask;
         inputs.Dropout_scale     = scale;
         inputs.Dropout_scale_inv = scale_inv;
