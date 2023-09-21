@@ -630,7 +630,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                 if (env_dp_workspace_limit_char != nullptr) {
                     try {
                         std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
-                        int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stol(env_dp_workspace_limit_str));
+                        int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
                         max_dp_workspace_bytes         = std::max(max_dp_workspace_bytes, env_dp_workspace_limit);
                     } catch (...) {
                         RETURN_CUDNN_FRONTEND_ERROR_IF(true,
