@@ -32,8 +32,8 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
         return;
     }
 
-    if (cudnnGetVersion() < 8900) {
-        SKIP("Test requires cuDNN version 8.9.0 or above");
+    if (cudnnGetVersion() < 8901) {
+        SKIP("Test requires cuDNN version 8.9.1 or above");
         return;
     }
 
