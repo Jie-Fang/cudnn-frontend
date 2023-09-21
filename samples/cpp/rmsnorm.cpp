@@ -92,3 +92,69 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
 
     cudnnDestroy(handle);
 }
+
+TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph;
+    graph.set_intermediate_data_type(fe::DataType_t::FLOAT).set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto batch_size  = 4;
+    auto seq_length  = 1024;
+    auto hidden_size = 128;
+
+    auto X     = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("X")
+                              .set_data_type(fe::DataType_t::FLOAT)
+                              .set_dim({batch_size * seq_length, hidden_size, 1, 1})
+                              .set_stride({hidden_size, 1, hidden_size, hidden_size}));
+    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
+    auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
+
+    auto epsilon =
+        graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
+
+    auto rmsnorm_options =
+        fe::graph::Rmsnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::INFERENCE).set_epsilon(epsilon);
+    auto [Y, inv_variance] = graph.rmsnorm(X, scale, bias, rmsnorm_options);
+    Y->set_data_type(fe::DataType_t::FLOAT);
+    REQUIRE(inv_variance == nullptr);
+
+    Y->set_output(true);
+
+#if (CUDNN_VERSION < 8906)
+    SKIP("RmsNorm is not supported in cudnn versions prior to 8.9.6");
+#endif
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("ConvBNFprop requires Ampere and up");
+    }
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.validate().is_good());
+
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+
+    REQUIRE(plans.check_support(handle).is_good());
+
+    REQUIRE(graph.set_execution_plans(plans).is_good());
+
+    Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> Scale_tensor(hidden_size, false);
+    Surface<float> Bias_tensor(hidden_size, false);
+    float epsilon_cpu = 1e-05f;
+    Surface<half> Y_tensor(batch_size * seq_length * hidden_size, false);
+
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {X, X_tensor.devPtr},
+        {scale, Scale_tensor.devPtr},
+        {bias, Bias_tensor.devPtr},
+        {epsilon, &epsilon_cpu},
+        {Y, Y_tensor.devPtr}};
+
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    cudnnDestroy(handle);
+}
