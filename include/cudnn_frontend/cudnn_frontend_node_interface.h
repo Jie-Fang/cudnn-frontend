@@ -128,6 +128,7 @@ class INode : public ICudnn {
         REDUCTION,
         RESAMPLE,
         RESHAPE,
+        RMSNORM,
         RNG,
         SCALED_DOT_PRODUCT_ATTENTION,
         WGRAD

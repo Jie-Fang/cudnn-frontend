@@ -2501,6 +2501,12 @@ class OperationBuilder_v8 {
     }
 
     auto
+    setSavedInvVar(Tensor_v8 const &var) -> OperationBuilder_v8 & {
+        m_operation.savedInVardesc = var.get_desc();
+        return *this;
+    }
+
+    auto
     setScale(Tensor_v8 const &scale_tensor) -> OperationBuilder_v8 & {
         m_operation.scaledesc = scale_tensor.get_desc();
         return *this;

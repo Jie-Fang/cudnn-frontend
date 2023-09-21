@@ -162,6 +162,7 @@ class Operation {
         Pointwise,
         Reduction,
         Rng,
+        RMSNorm,
         Reshape,
         Scaled_dot_product_attention,
         Scaled_dot_product_flash_attention,
@@ -200,9 +201,11 @@ NLOHMANN_JSON_SERIALIZE_ENUM(
         {Operation::Tag::DBN, "DBN"},
         {Operation::Tag::DBN_weight, "DBN_weight"},
         {Operation::Tag::Genstats, "Genstats"},
+        {Operation::Tag::LN, "LN"},
         {Operation::Tag::Matmul, "Matmul"},
         {Operation::Tag::Pointwise, "Pointwise"},
         {Operation::Tag::Reduction, "Reduction"},
+        {Operation::Tag::RMSNorm, "RMSNorm"},
         {Operation::Tag::Rng, "Rng"},
         {Operation::Tag::Reshape, "Reshape"},
         {Operation::Tag::Scaled_dot_product_attention, "Scaled_dot_product_attention"},
@@ -1367,6 +1370,82 @@ class Reshape_attributes : public Operation {
         outputs.Y->fill_from_context(context);
 
         // Fill this node
+        if (get_compute_data_type() == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+        return *this;
+    }
+};
+
+class Rmsnorm_attributes : public Operation {
+   public:
+    struct Inputs {
+        std::shared_ptr<Tensor_attributes> X;
+        std::shared_ptr<Tensor_attributes> SCALE;
+        std::shared_ptr<Tensor_attributes> BIAS;
+        std::shared_ptr<Tensor_attributes> EPSILON;
+    } inputs;
+
+    struct Outputs {
+        std::shared_ptr<Tensor_attributes> Y;
+        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
+    } outputs;
+
+    NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, INV_VARIANCE)
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, tag, inputs, outputs, forward_phase)
+
+    Rmsnorm_attributes() : Operation(Tag::RMSNorm) {}
+
+    Rmsnorm_attributes&
+    set_forward_phase(NormFwdPhase_t const value) {
+        forward_phase = value;
+        return *this;
+    }
+
+    Rmsnorm_attributes&
+    set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
+        inputs.EPSILON = value;
+        return *this;
+    }
+
+    Rmsnorm_attributes&
+    set_name(std::string const& value) {
+        name = value;
+        return *this;
+    }
+
+    Rmsnorm_attributes&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return *this;
+    }
+
+    void
+    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
+        outputs.Y = output_tensor(name + "_Y_output");
+        if (forward_phase == NormFwdPhase_t::TRAINING) {
+            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
+        }
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Rmsnorm_attributes& {
+        // Fill node's tensors
+        inputs.X->fill_from_context(context);
+        inputs.SCALE->fill_from_context(context);
+        inputs.BIAS->fill_from_context(context);
+        inputs.EPSILON->fill_from_context(context);
+
+        outputs.Y->fill_from_context(context);
+        if (forward_phase == NormFwdPhase_t::TRAINING) {
+            outputs.INV_VARIANCE->fill_from_context(context);
+        }
+
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
         }

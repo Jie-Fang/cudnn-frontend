@@ -16,8 +16,9 @@
 #include "cudnn_frontend/node/matmul.h"
 #include "cudnn_frontend/node/pointwise.h"
 #include "cudnn_frontend/node/reduction.h"
-#include "cudnn_frontend/node/rng.h"
 #include "cudnn_frontend/node/reshape.h"
+#include "cudnn_frontend/node/rmsnorm.h"
+#include "cudnn_frontend/node/rng.h"
 #include "cudnn_frontend/node/scaled_dot_product_attention.h"
 #include "cudnn_frontend/node/scaled_dot_product_flash_attention.h"
 
@@ -300,6 +301,11 @@ class Graph : public INode {
                                                  Pointwise_attributes);
 
     std::shared_ptr<Tensor_attributes> reduction(std::shared_ptr<Tensor_attributes>, Reduction_attributes);
+
+    std::array<std::shared_ptr<Tensor_attributes>, 2> rmsnorm(std::shared_ptr<Tensor_attributes>,
+                                                              std::shared_ptr<Tensor_attributes>,
+                                                              std::shared_ptr<Tensor_attributes>,
+                                                              Rmsnorm_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_flash_attention(
         std::shared_ptr<Tensor_attributes>,
@@ -690,6 +696,27 @@ Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes 
     sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(options), context));
 
     return Y;
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 2>
+Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
+               std::shared_ptr<Tensor_attributes> scale,
+               std::shared_ptr<Tensor_attributes> bias,
+               Rmsnorm_attributes options) {
+    // Set outputs
+    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
+    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
+        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    }
+    // Set inputs
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS  = bias;
+
+    sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(options), context));
+
+    return {Y, INV_VARIANCE};
 }
 
 inline std::shared_ptr<Tensor_attributes>
