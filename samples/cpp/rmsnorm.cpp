@@ -158,3 +158,82 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
 
     cudnnDestroy(handle);
 }
+
+TEST_CASE("RmsNorm Backward", "[rmsnorm][graph]") {
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph;
+    graph.set_intermediate_data_type(fe::DataType_t::FLOAT).set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto batch_size  = 4;
+    auto seq_length  = 1024;
+    auto hidden_size = 128;
+
+    auto X  = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("X")
+                              .set_data_type(fe::DataType_t::FLOAT)
+                              .set_dim({batch_size * seq_length, hidden_size, 1, 1})
+                              .set_stride({hidden_size, 1, hidden_size, hidden_size}));
+    auto DY = graph.tensor(fe::graph::Tensor_attributes()
+                               .set_name("DY")
+                               .set_data_type(fe::DataType_t::FLOAT)
+                               .set_dim({batch_size * seq_length, hidden_size, 1, 1})
+                               .set_stride({hidden_size, 1, hidden_size, hidden_size}));
+
+    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance =
+        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+    auto epsilon =
+        graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_is_pass_by_value(true).set_data_type(
+            fe::DataType_t::FLOAT));
+
+    auto DRMS_options =
+        fe::graph::Rmsnorm_backward_attributes().set_saved_inv_variance(inv_variance).set_epsilon(epsilon);
+    auto [DX, dscale, dbias] = graph.rmsnorm_backward(DY, X, scale, DRMS_options);
+    DX->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    dbias->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+
+#if (CUDNN_VERSION < 8906)
+    SKIP("RmsNorm is not supported in cudnn versions prior to 8.9.6");
+#endif
+    if (check_device_arch_newer_than("ampere") == false) {
+        SKIP("RmsNorm Backward requires Ampere and up");
+    }
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.validate().is_good());
+
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+
+    REQUIRE(plans.check_support(handle).is_good());
+
+    REQUIRE(graph.set_execution_plans(plans).is_good());
+
+    Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> DY_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> Mean_tensor(batch_size * seq_length, false);
+    Surface<float> Inv_variance_tensor(batch_size * seq_length, false);
+    Surface<float> Scale_tensor(hidden_size, false);
+    Surface<float> Dscale_tensor(hidden_size, false);
+    Surface<float> Dbias_tensor(hidden_size, false);
+    Surface<float> DX_tensor(batch_size * seq_length * hidden_size, false);
+    float epsilon_val = 1e-5f;
+
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {X, X_tensor.devPtr},
+        {DY, DY_tensor.devPtr},
+        {inv_variance, Inv_variance_tensor.devPtr},
+        {scale, Scale_tensor.devPtr},
+        {dscale, Dscale_tensor.devPtr},
+        {dbias, Dbias_tensor.devPtr},
+        {DX, DX_tensor.devPtr},
+        {epsilon, &epsilon_val}};
+
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    cudnnDestroy(handle);
+}

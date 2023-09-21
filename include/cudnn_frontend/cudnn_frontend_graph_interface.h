@@ -307,6 +307,11 @@ class Graph : public INode {
                                                               std::shared_ptr<Tensor_attributes>,
                                                               Rmsnorm_attributes);
 
+    std::array<std::shared_ptr<Tensor_attributes>, 3> rmsnorm_backward(std::shared_ptr<Tensor_attributes>,
+                                                                       std::shared_ptr<Tensor_attributes>,
+                                                                       std::shared_ptr<Tensor_attributes>,
+                                                                       Rmsnorm_backward_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_flash_attention(
         std::shared_ptr<Tensor_attributes>,
         std::shared_ptr<Tensor_attributes>,
@@ -717,6 +722,25 @@ Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
     sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(options), context));
 
     return {Y, INV_VARIANCE};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
+                        std::shared_ptr<Tensor_attributes> x,
+                        std::shared_ptr<Tensor_attributes> scale,
+                        Rmsnorm_backward_attributes options) {
+    // Set outputs
+    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
+    auto return_outputs = options.outputs;
+
+    // Set inputs
+    options.inputs.DY    = dy;
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+
+    sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(options), context));
+
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }
 
 inline std::shared_ptr<Tensor_attributes>
