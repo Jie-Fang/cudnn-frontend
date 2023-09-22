@@ -620,7 +620,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         if (cudnnGetVersion() >= 8905) {
             struct cudaDeviceProp prop;
-            cudaGetDeviceProperties(&prop, 0);
+            CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
             if (prop.major >= 9) {
                 // default upper limit for workspace 256MB
                 int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
@@ -630,7 +630,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                 if (env_dp_workspace_limit_char != nullptr) {
                     try {
                         std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
-                        int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stol(env_dp_workspace_limit_str));
+                        int64_t env_dp_workspace_limit = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
                         max_dp_workspace_bytes         = std::max(max_dp_workspace_bytes, env_dp_workspace_limit);
                     } catch (...) {
                         RETURN_CUDNN_FRONTEND_ERROR_IF(true,
@@ -643,7 +643,6 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                 int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
                 int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
                 int64_t required_dp_workspace_bytes = b * h * workspace_s_q * workspace_s_kv * 2;
-                required_dp_workspace_bytes         = (required_dp_workspace_bytes + 1024 * 1024 - 1) / (1024 * 1024);
 
                 if (required_dp_workspace_bytes <= max_dp_workspace_bytes) {
                     war_use_non_virtual_dQAccum = false;
