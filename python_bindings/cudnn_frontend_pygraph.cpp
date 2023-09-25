@@ -447,6 +447,24 @@ class PyGraph {
         return OUT_0;
     }
 
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+    rmsnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
+            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
+            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
+            cudnn_frontend::DataType_t const& compute_data_type,
+            std::string const& name) {
+        auto attributes = cudnn_frontend::graph::Rmsnorm_attributes()
+                              .set_forward_phase(forward_phase)
+                              .set_compute_data_type(compute_data_type)
+                              .set_epsilon(epsilon)
+                              .set_name(name);
+
+        auto [Y, inv_var] = graph.rmsnorm(x, scale, bias, attributes);
+        return {Y, inv_var};
+    }
+
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
@@ -834,6 +852,15 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The result of reduction operation.
             )pbdoc")
+        .def("rmsnorm",
+             &PyGraph::rmsnorm,
+             py::arg("norm_forward_phase"),
+             py::arg("input"),
+             py::arg("scale"),
+             py::arg("bias"),
+             py::arg("epsilon"),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("name", ""))
         .def("scaled_dot_product_flash_attention",
              &PyGraph::scaled_dot_product_flash_attention,
              py::arg("q"),
