@@ -188,7 +188,12 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
     auto inv_variance =
         graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
-    auto DLN_options = fe::graph::Layernorm_backward_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
+    auto epsilon =
+        graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
+
+    auto DLN_options = fe::graph::Layernorm_backward_attributes()
+                           .set_saved_mean_and_inv_variance(mean, inv_variance)
+                           .set_epsilon(epsilon);
     auto [DX, dscale, dbias] = graph.layernorm_backward(DY, X, scale, DLN_options);
     DX->set_output(true);
     dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
@@ -221,6 +226,7 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
     Surface<float> Dscale_tensor(hidden_size, false);
     Surface<float> Dbias_tensor(hidden_size, false);
     Surface<half> DX_tensor(batch_size * seq_length * hidden_size, false);
+    float epsilon_value = 1e-5f;
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
@@ -228,6 +234,7 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
         {DY, DY_tensor.devPtr},
         {mean, Mean_tensor.devPtr},
         {inv_variance, Inv_variance_tensor.devPtr},
+        {epsilon, &epsilon_value},
         {scale, Scale_tensor.devPtr},
         {dscale, Dscale_tensor.devPtr},
         {dbias, Dbias_tensor.devPtr},
