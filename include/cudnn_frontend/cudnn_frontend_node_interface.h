@@ -121,6 +121,7 @@ class INode : public ICudnn {
         DBN_WEIGHT,
         DLN,
         DGRAD,
+        DRMSNorm,
         GENSTATS,
         LAYERNORM,
         MATMUL,
@@ -128,6 +129,7 @@ class INode : public ICudnn {
         REDUCTION,
         RESAMPLE,
         RESHAPE,
+        RMSNORM,
         RNG,
         SCALED_DOT_PRODUCT_ATTENTION,
         WGRAD
