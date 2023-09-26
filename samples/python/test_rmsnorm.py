@@ -60,9 +60,9 @@ def test_rmsnorm(param_extract):
     
     epsilon_value = 1e-3
 
-    x_gpu = 2*torch.randn(N, C, H, W, device="cuda", dtype=input_type).to(memory_format=torch.channels_last) - 1.25
-    scale_gpu = 3*torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=input_type).to(memory_format=torch.channels_last) - 2.75
-    bias_gpu = 4*torch.randn(1, C, H, W, requires_grad=False, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
+    x_gpu = 2*torch.randn(N, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last) - 1.25
+    scale_gpu = 3*torch.randn(1, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last) - 2.75
+    bias_gpu = 4*torch.randn(1, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
     epsilon_cpu = torch.full((1, 1, 1, 1), epsilon_value, requires_grad=False, device="cpu", dtype=torch.float32)
 
     print("Running reference")
@@ -100,9 +100,9 @@ def test_rmsnorm(param_extract):
     print("Executing cudnn graph")
     
     graph.execute({
-                X : x_gpu
-                , scale : scale_gpu
-                , bias : bias_gpu
+                X : x_gpu.detach()
+                , scale : scale_gpu.detach()
+                , bias : bias_gpu.detach()
                 , epsilon: epsilon_cpu
                 , Y : Y_actual
                 , inv_var: inv_var_actual
@@ -112,7 +112,63 @@ def test_rmsnorm(param_extract):
     torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
     torch.testing.assert_close(inv_var_expected, inv_var_actual, atol=atol, rtol=rtol)
     print("Success!!")
+
+    target = torch.randn_like(Y_expected)
+    criterion = nn.MSELoss()
+    loss = criterion(Y_expected, target)
     
+    Y_expected.retain_grad()
+    x_gpu.retain_grad()
+    scale_gpu.retain_grad()
+    bias_gpu.retain_grad()
+
+    loss.backward()
+
+    bwd_graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
+
+    DY = bwd_graph.tensor(name = "DY", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
+    X_bwd = bwd_graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
+    scale_bwd = bwd_graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
+    inv_var_bwd = bwd_graph.tensor(name = "inv_var", dim = inv_var_actual.size(), stride = inv_var_actual.stride(), data_type = convert_to_cudnn_type(inv_var_actual.dtype))
+    epsilon_bwd = bwd_graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
+
+    DX, Dscale, Dbias = bwd_graph.rmsnorm_backward(name = "DRMS", 
+                            grad = DY,
+                            input = X_bwd,
+                            scale = scale_bwd, 
+                            inv_variance = inv_var_bwd,
+                            epsilon = epsilon_bwd)
+    
+    DX.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
+    Dscale.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
+    Dbias.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
+    
+    bwd_graph.check_support()
+    bwd_graph.build()
+    
+    DX_actual = torch.empty_like(x_gpu)
+    DScale_actual = torch.empty_like(scale_gpu)
+    Dbias_actual = torch.empty_like(bias_gpu)
+
+    workspace = torch.empty(bwd_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    print("Executing cudnn bwd_graph")
+    
+    bwd_graph.execute({
+                X_bwd : x_gpu.detach()
+                , scale_bwd : scale_gpu.detach()
+                , DY : Y_expected.grad
+                , inv_var_bwd: inv_var_actual
+                , epsilon_bwd: epsilon_cpu
+                , DX: DX_actual
+                , Dscale: DScale_actual
+                , Dbias: Dbias_actual
+            }, workspace)
+
+    print("Comparing with reference")
+    torch.testing.assert_close(x_gpu.grad, DX_actual, atol=2e-4, rtol=2e-4)
+    torch.testing.assert_close(scale_gpu.grad, DScale_actual, atol=2e-4, rtol=2e-4)
+    torch.testing.assert_close(bias_gpu.grad, Dbias_actual, atol=2e-4, rtol=2e-4)
+    print("Success!!")
     
 if __name__ == "__main__":
     test_rmsnorm((1600, torch.bfloat16))
