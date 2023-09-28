@@ -257,8 +257,8 @@ class PyGraph {
 
         if (managed->dl_tensor.strides == nullptr) {
             // dlpack says "can be NULL, indicating tensor is compact and row-majored"
-            auto stride = cudnn_frontend::detail::generate_NHWC_stride_order(ndim);
-            props.set_stride(stride);
+            auto stride_order = cudnn_frontend::detail::generate_row_major_stride_order(ndim);
+            props.set_stride(cudnn_frontend::detail::generate_stride(dim, stride_order));
         } else {
             std::vector<int64_t> stride(managed->dl_tensor.strides, managed->dl_tensor.strides + ndim);
             props.set_stride(stride);
