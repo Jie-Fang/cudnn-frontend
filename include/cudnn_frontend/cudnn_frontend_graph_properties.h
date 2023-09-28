@@ -1678,6 +1678,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     bool alibi_mask   = false;
     bool causal_mask  = false;
     std::optional<float> dropout_probability;
+    std::optional<float> attn_scale_value;
 
     Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
 
@@ -1708,6 +1709,12 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     Scaled_dot_product_flash_attention_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
         inputs.Attn_scale = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes&
+    set_attn_scale(float const value) {
+        attn_scale_value = value;
         return *this;
     }
 

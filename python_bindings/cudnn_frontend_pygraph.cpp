@@ -584,7 +584,7 @@ class PyGraph {
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                        bool const is_inference,
-                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attn_scale,
+                                       py::object const& attn_scale,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
                                        bool const use_padding_mask,
                                        bool const use_alibi_mask,
@@ -596,13 +596,26 @@ class PyGraph {
                               .set_is_inference(is_inference)
                               .set_seq_len_q(seq_len_q)
                               .set_seq_len_kv(seq_len_kv)
-                              .set_attn_scale(attn_scale)
                               .set_bias(bias)
                               .set_padding_mask(use_padding_mask)
                               .set_alibi_mask(use_alibi_mask)
                               .set_causal_mask(use_causal_mask)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
+
+        if (!attn_scale.is_none()) {
+            if (py::isinstance<py::float_>(attn_scale)) {
+                auto const attn_scale_value = attn_scale.cast<float>();
+                attributes.set_attn_scale(attn_scale_value);
+            } else {
+                auto const attn_scale_tensor =
+                    attn_scale.cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if (!attn_scale_tensor) {
+                    throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
+                }
+                attributes.set_attn_scale(attn_scale_tensor);
+            }
+        }
 
         if (!dropout.is_none()) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
@@ -991,7 +1004,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("seq_len_q", nullptr),
              py::arg_v("seq_len_kv", nullptr),
              py::arg("is_inference"),
-             py::arg_v("attn_scale", nullptr),
+             py::arg_v("attn_scale", py::none()),
              py::arg_v("bias", nullptr),
              py::arg_v("use_padding_mask", false),
              py::arg_v("use_alibi_mask", false),
@@ -1046,7 +1059,7 @@ init_pygraph_submodule(py::module_& m) {
                     o (cudnn_tensor): The output data.
                     dO (cudnn_tensor): The output loss gradient.
                     stats (cudnn_tensor): The softmax statistics from the forward pass.
-                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+                    attn_scale (Optional[Union[cudnn_tensor|float]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.

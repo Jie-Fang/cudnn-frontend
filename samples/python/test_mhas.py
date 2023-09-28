@@ -273,7 +273,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
 
     print(f"{str(param_extract_forward)} s={s_q} d={d}")
 
-    attn_scale_val = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
 
     shape_q = (b, h, s_q, d)
@@ -319,9 +318,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     k_gpu = torch.as_strided(qkv_gpu, shape_k, stride_k, storage_offset=offset_k)
     v_gpu = torch.as_strided(qkv_gpu, shape_v, stride_v, storage_offset=offset_v)
 
-    if attn_scale_val != 1.0:
-        attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu")
-
     if is_bias:
         bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type)
 
@@ -347,9 +343,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     k = graph.tensor_like(k_gpu)
     v = graph.tensor_like(v_gpu)
 
-    if attn_scale_val != 1.0:
-        attn_scale = make_tensor_attr(graph, attn_scale_cpu, "attn_scale", is_pass_by_value=True)
-
     if is_bias:
         bias = make_tensor_attr(graph, bias_gpu, "bias")
 
@@ -368,7 +361,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         k=k,
         v=v,
         is_inference=is_infer,
-        attn_scale=attn_scale if attn_scale_val != 1.0 else None,
+        attn_scale=0.125,
         bias=bias if is_bias else None,
         use_alibi_mask=is_alibi,
         use_padding_mask=is_padding,
@@ -391,9 +384,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         v: v_gpu,
         o: o_gpu
     }
-
-    if attn_scale_val != 1.0:
-        variant_pack[attn_scale] = attn_scale_cpu
 
     if is_bias:
         variant_pack[bias] = bias_gpu
@@ -428,7 +418,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         q_ref,
         k_ref,
         v_ref,
-        attn_scale=attn_scale_val,
+        attn_scale=0.125,
         bias=bias_ref if is_bias else None,
         is_alibi=is_alibi,
         is_causal=is_causal,
