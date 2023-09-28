@@ -1,5 +1,6 @@
 #include <utility>
 #include <unordered_map>
+#include <vector>
 
 #include "dlpack/dlpack.h"
 
@@ -58,8 +59,77 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
     }
 }
 
+cudnn_frontend::DataType_t
+convert_to_cudnn_data_type(const DLDataType& dtype) {
+    switch (dtype.code) {
+        case DLDataTypeCode::kDLUInt:
+            switch (dtype.bits) {
+                case 8:
+                    return cudnn_frontend::DataType_t::UINT8;
+            }
+            break;
+        case DLDataTypeCode::kDLInt:
+            switch (dtype.bits) {
+                case 8:
+                    return cudnn_frontend::DataType_t::INT8;
+                case 32:
+                    return cudnn_frontend::DataType_t::INT32;
+                case 64:
+                    return cudnn_frontend::DataType_t::INT64;
+            }
+            break;
+        case DLDataTypeCode::kDLFloat:
+            switch (dtype.bits) {
+                case 16:
+                    return cudnn_frontend::DataType_t::HALF;
+                case 32:
+                    return cudnn_frontend::DataType_t::FLOAT;
+                case 64:
+                    return cudnn_frontend::DataType_t::DOUBLE;
+            }
+            break;
+        case DLDataTypeCode::kDLBfloat:
+            switch (dtype.bits) {
+                case 16:
+                    return cudnn_frontend::DataType_t::BFLOAT16;
+            }
+            break;
+        case DLDataTypeCode::kDLBool:
+            switch (dtype.bits) {
+                case 8:
+                    return cudnn_frontend::DataType_t::BOOLEAN;
+            }
+            break;
+    }
+    return cudnn_frontend::DataType_t::NOT_SET;
+}
+
+DLManagedTensor*
+extract_dlpack_tensor_ptr(py::object const& obj) {
+    throw_if(!py::hasattr(obj, "__dlpack__"),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Object does not have the __dlpack__() method");
+
+    py::capsule capsule = obj.attr("__dlpack__")();
+    throw_if(capsule.is_none(),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Failed to retrieve the DLPack capsule.");
+
+    DLManagedTensor* managed =
+        static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
+    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
+
+    DLDeviceType device_type = managed->dl_tensor.device.device_type;
+    throw_if(
+        device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged,
+        cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+        "Invalid device type.");
+
+    return managed;
+}
+
 char*
-extract_data_pointer(py::object obj) {
+extract_data_pointer(py::object const& obj) {
     throw_if(!py::hasattr(obj, "__dlpack__"),
              cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
              "Object does not have the __dlpack__() method");
@@ -169,6 +239,30 @@ class PyGraph {
                          .set_dim(dim)
                          .set_stride(stride)
                          .set_name(name);
+
+        return graph.tensor(props);
+    }
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    tensor_like(py::object pyobj) {
+        auto managed = extract_dlpack_tensor_ptr(pyobj);
+        auto ndim    = managed->dl_tensor.ndim;
+        std::vector<int64_t> dim(managed->dl_tensor.shape, managed->dl_tensor.shape + ndim);
+
+        auto props = cudnn_frontend::graph::Tensor_attributes()
+                         .set_data_type(convert_to_cudnn_data_type(managed->dl_tensor.dtype))
+                         .set_is_virtual(false)
+                         .set_is_pass_by_value(false)
+                         .set_dim(dim);
+
+        if (managed->dl_tensor.strides == nullptr) {
+            // dlpack says "can be NULL, indicating tensor is compact and row-majored"
+            auto stride = cudnn_frontend::detail::generate_NHWC_stride_order(ndim);
+            props.set_stride(stride);
+        } else {
+            std::vector<int64_t> stride(managed->dl_tensor.strides, managed->dl_tensor.strides + ndim);
+            props.set_stride(stride);
+        }
 
         return graph.tensor(props);
     }
@@ -684,6 +778,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("handle", nullptr))
+        .def("tensor_like", &PyGraph::tensor_like)
         .def("tensor",
              &PyGraph::tensor,
              py::arg{"dim"},

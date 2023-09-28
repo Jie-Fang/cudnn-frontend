@@ -343,9 +343,9 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
     )
-    q = make_tensor_attr(graph, q_gpu, "q")
-    k = make_tensor_attr(graph, k_gpu, "k")
-    v = make_tensor_attr(graph, v_gpu, "v")
+    q = graph.tensor_like(q_gpu)
+    k = graph.tensor_like(k_gpu)
+    v = graph.tensor_like(v_gpu)
 
     if attn_scale_val != 1.0:
         attn_scale = make_tensor_attr(graph, attn_scale_cpu, "attn_scale", is_pass_by_value=True)
