@@ -229,19 +229,6 @@ class DRMSNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating DRMSNormNode " << options.name << "..." << std::endl;
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            !(options.inputs.INV_VARIANCE) && !(options.inputs.EPSILON) && !(options.inputs.SCALE),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Either saved_inv_variance/scale or epsilon required.");
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DRMSNorm node " << options.name << "..."
                     << std::endl;
@@ -319,23 +306,6 @@ class DRMSNormNode : public INode {
         infer_scale_bias_tensors(options.outputs.DSCALE);
         infer_scale_bias_tensors(options.outputs.DBIAS);
 
-        // Set scalar tensors
-        auto infer_scalar_tensors = [&x_tensor_dim](std::shared_ptr<Tensor_attributes>& T) {
-            auto tensor_dim = T->get_dim();
-            // Only infer dims and strides if user did not set them
-            if (tensor_dim.empty()) {
-                tensor_dim.resize(x_tensor_dim.size(), 1);
-                T->set_dim(tensor_dim);
-            }
-            if (T->get_stride().empty()) {
-                auto const& T_dim = T->get_dim();
-                // Default to NHWC
-                auto const& stride_order = detail::generate_NHWC_stride_order(T_dim.size());
-                T->set_stride(detail::generate_stride(T_dim, stride_order));
-            }
-        };
-        infer_scalar_tensors(options.inputs.EPSILON);
-
         return {error_code_t::OK, ""};
     }
 
@@ -345,7 +315,6 @@ class DRMSNormNode : public INode {
         options.inputs.DY->set_uid(ICudnn::create_new_uid());
         options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
         options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
         options.outputs.DX->set_uid(ICudnn::create_new_uid());
         options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
         options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
@@ -361,7 +330,6 @@ class DRMSNormNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
@@ -388,7 +356,6 @@ class DRMSNormNode : public INode {
                     .setSavedInvVar(*(tensors.at(options.inputs.INV_VARIANCE->get_uid())))
                     .setDScaleAndDBias(*(tensors.at(options.outputs.DSCALE->get_uid())),
                                        *(tensors.at(options.outputs.DBIAS->get_uid())))
-                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
                     .setdxDesc(*(tensors.at(options.outputs.DX->get_uid())))
                     .build();
 
@@ -398,7 +365,6 @@ class DRMSNormNode : public INode {
                 options.inputs.DY,
                 options.inputs.SCALE,
                 options.inputs.INV_VARIANCE,
-                options.inputs.EPSILON,
                 options.outputs.DX,
                 options.outputs.DSCALE,
                 options.outputs.DBIAS};

@@ -133,14 +133,12 @@ def test_rmsnorm(param_extract):
     X_bwd = bwd_graph.tensor_like(x_gpu.detach())
     scale_bwd = bwd_graph.tensor_like(scale_gpu.detach())
     inv_var_bwd = bwd_graph.tensor_like(inv_var_actual)
-    epsilon_bwd = bwd_graph.tensor_like(epsilon_cpu)
 
     DX, Dscale, Dbias = bwd_graph.rmsnorm_backward(name = "DRMS", 
                             grad = DY,
                             input = X_bwd,
                             scale = scale_bwd, 
-                            inv_variance = inv_var_bwd,
-                            epsilon = epsilon_bwd)
+                            inv_variance = inv_var_bwd)
     
     DX.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     Dscale.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
@@ -161,7 +159,6 @@ def test_rmsnorm(param_extract):
                 , scale_bwd : scale_gpu.detach()
                 , DY : Y_expected.grad
                 , inv_var_bwd: inv_var_actual
-                , epsilon_bwd: epsilon_cpu
                 , DX: DX_actual
                 , Dscale: DScale_actual
                 , Dbias: Dbias_actual

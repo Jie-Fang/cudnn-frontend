@@ -1461,7 +1461,6 @@ class Rmsnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> X;
         std::shared_ptr<Tensor_attributes> SCALE;
         std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
     } inputs;
 
     struct Outputs {
@@ -1470,7 +1469,7 @@ class Rmsnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> DBIAS;
     } outputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, INV_VARIANCE, EPSILON)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, INV_VARIANCE)
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
 
@@ -1478,23 +1477,11 @@ class Rmsnorm_backward_attributes : public Operation {
 
     Rmsnorm_backward_attributes() : Operation(Tag::DRMSNorm) {}
 
-    Rmsnorm_backward_attributes&
-    set_saved_inv_variance(std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.INV_VARIANCE = inv_variance;
-        return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
-        return *this;
-    }
-
     void
     make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
+        outputs.DX     = output_tensor(name + "::DX_output");
+        outputs.DSCALE = output_tensor(name + "::DSCALE_output");
+        outputs.DBIAS  = output_tensor(name + "::DBIAS_output");
     }
 
     Rmsnorm_backward_attributes&
@@ -1515,13 +1502,7 @@ class Rmsnorm_backward_attributes : public Operation {
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
         inputs.DY->fill_from_context(context);
-
-        if (inputs.INV_VARIANCE) {
-            inputs.INV_VARIANCE->fill_from_context(context);
-        }
-        if (inputs.EPSILON) {
-            inputs.EPSILON->fill_from_context(context);
-        }
+        inputs.INV_VARIANCE->fill_from_context(context);
 
         outputs.DX->fill_from_context(context);
         outputs.DSCALE->fill_from_context(context);
