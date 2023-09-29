@@ -137,12 +137,16 @@ def test_rmsnorm(param_extract):
                             grad = DY,
                             input = X_bwd,
                             scale = scale_bwd, 
-                            inv_variance = inv_var_bwd)
+                            inv_variance = inv_var_bwd,
+                            has_dbias = has_bias)
     
     DX.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     Dscale.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
-    Dbias.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
-    
+    if has_bias:
+        Dbias.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
+    else:
+        assert Dbias is None
+
     bwd_graph.check_support()
     bwd_graph.build()
     

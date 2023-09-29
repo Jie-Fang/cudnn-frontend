@@ -729,8 +729,12 @@ Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                         std::shared_ptr<Tensor_attributes> inv_variance,
                         Rmsnorm_backward_attributes options) {
     // Set outputs
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DX = options.outputs.DX = output_tensor(options.get_name() + "::DX");
+    auto DScale = options.outputs.DSCALE     = output_tensor(options.get_name() + "::Dscale");
+    std::shared_ptr<Tensor_attributes> DBias = nullptr;
+    if (options.use_dbias.value_or(true)) {
+        DBias = options.outputs.DBIAS = output_tensor(options.get_name() + "::Dbias");
+    }
 
     // Set inputs
     options.inputs.DY           = dy;
@@ -740,7 +744,7 @@ Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
 
     sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(options), context));
 
-    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+    return {DX, DScale, DBias};
 }
 
 inline std::shared_ptr<Tensor_attributes>

@@ -178,11 +178,11 @@ TEST_CASE("RmsNorm Backward", "[rmsnorm][graph]") {
     auto inv_variance =
         graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
 
-    auto DRMS_options        = fe::graph::Rmsnorm_backward_attributes();
+    auto DRMS_options        = fe::graph::Rmsnorm_backward_attributes().has_dbias(false);
     auto [DX, dscale, dbias] = graph.rmsnorm_backward(DY, X, scale, inv_variance, DRMS_options);
     DX->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     dscale->set_output(true).set_data_type(fe::DataType_t::FLOAT);
-    dbias->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    REQUIRE(dbias == nullptr);
 
 #if (CUDNN_VERSION < 8906)
     SKIP("RmsNorm is not supported in cudnn versions prior to 8.9.6");
@@ -219,7 +219,6 @@ TEST_CASE("RmsNorm Backward", "[rmsnorm][graph]") {
         {inv_variance, Inv_variance_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
         {dscale, Dscale_tensor.devPtr},
-        {dbias, Dbias_tensor.devPtr},
         {DX, DX_tensor.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());

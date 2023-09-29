@@ -2520,6 +2520,12 @@ class OperationBuilder_v8 {
     }
 
     auto
+    setDScale(Tensor_v8 const &scale_tensor) -> OperationBuilder_v8 & {
+        m_operation.dscaledesc = scale_tensor.get_desc();
+        return *this;
+    }
+
+    auto
     setDScaleAndDBias(Tensor_v8 const &scale_tensor, Tensor_v8 const &bias_tensor) -> OperationBuilder_v8 & {
         m_operation.dscaledesc = scale_tensor.get_desc();
         m_operation.dbiasdesc  = bias_tensor.get_desc();

@@ -1480,13 +1480,14 @@ class Rmsnorm_backward_attributes : public Operation {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, tag, inputs, outputs)
 
+    std::optional<bool> use_dbias;
+
     Rmsnorm_backward_attributes() : Operation(Tag::DRMSNorm) {}
 
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "::DX_output");
-        outputs.DSCALE = output_tensor(name + "::DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "::DBIAS_output");
+    Rmsnorm_backward_attributes&
+    has_dbias(bool value) {
+        use_dbias = value;
+        return *this;
     }
 
     Rmsnorm_backward_attributes&
@@ -1511,7 +1512,7 @@ class Rmsnorm_backward_attributes : public Operation {
 
         outputs.DX->fill_from_context(context);
         outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
+        if (outputs.DBIAS) outputs.DBIAS->fill_from_context(context);
 
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
