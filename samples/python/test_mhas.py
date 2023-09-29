@@ -318,12 +318,10 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     k_gpu = torch.as_strided(qkv_gpu, shape_k, stride_k, storage_offset=offset_k)
     v_gpu = torch.as_strided(qkv_gpu, shape_v, stride_v, storage_offset=offset_v)
 
-    if is_bias:
-        bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type)
+    bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type) if is_bias else None
 
-    if is_padding:
-        seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-        seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
+    seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -343,12 +341,10 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     k = graph.tensor_like(k_gpu)
     v = graph.tensor_like(v_gpu)
 
-    if is_bias:
-        bias = graph.tensor_like(bias_gpu)
+    bias = graph.tensor_like(bias_gpu) if is_bias else None
 
-    if is_padding:
-        seq_len_q = graph.tensor_like(seq_len_q_gpu)
-        seq_len_kv = graph.tensor_like(seq_len_kv_gpu)
+    seq_len_q = graph.tensor_like(seq_len_q_gpu) if is_padding else None
+    seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if is_padding else None
 
     if is_dropout:
         seed = graph.tensor_like(seed_gpu)
@@ -362,11 +358,11 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         v=v,
         is_inference=is_infer,
         attn_scale=0.125,
-        bias=bias if is_bias else None,
+        bias=bias,
         use_alibi_mask=is_alibi,
         use_padding_mask=is_padding,
-        seq_len_q=seq_len_q if is_padding else None,
-        seq_len_kv=seq_len_kv if is_padding else None,
+        seq_len_q=seq_len_q,
+        seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
         dropout=dropout_tuple if is_dropout else None,
     )
@@ -382,15 +378,11 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         q: q_gpu,
         k: k_gpu,
         v: v_gpu,
-        o: o_gpu
+        bias: bias_gpu,
+        seq_len_q: seq_len_q_gpu,
+        seq_len_kv: seq_len_kv_gpu,
+        o: o_gpu,
     }
-
-    if is_bias:
-        variant_pack[bias] = bias_gpu
-
-    if is_padding:
-        variant_pack[seq_len_q] = seq_len_q_gpu
-        variant_pack[seq_len_kv] = seq_len_kv_gpu
 
     if is_dropout:
         variant_pack[seed] = seed_gpu

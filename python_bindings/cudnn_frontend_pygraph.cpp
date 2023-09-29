@@ -759,7 +759,11 @@ class PyGraph {
             py::object workspace) {
         std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void*> var_pack_;
         for (auto const& [tensor, pyobject] : var_pack) {
-            var_pack_.emplace(tensor, extract_data_pointer(pyobject));
+            // Its alright for the user to pass in None objects as key
+            // FE will just ignore them
+            if (tensor) {
+                var_pack_.emplace(tensor, extract_data_pointer(pyobject));
+            }
         }
 
         void* workspace_ptr = extract_data_pointer(workspace);
