@@ -552,10 +552,11 @@ class PyGraph {
         auto attributes = cudnn_frontend::graph::Rmsnorm_attributes()
                               .set_forward_phase(forward_phase)
                               .set_compute_data_type(compute_data_type)
+                              .set_bias(bias)
                               .set_epsilon(epsilon)
                               .set_name(name);
 
-        auto [Y, inv_var] = graph.rmsnorm(x, scale, bias, attributes);
+        auto [Y, inv_var] = graph.rmsnorm(x, scale, attributes);
         return {Y, inv_var};
     }
 
@@ -984,7 +985,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("norm_forward_phase"),
              py::arg("input"),
              py::arg("scale"),
-             py::arg("bias"),
+             py::arg_v("bias", nullptr),
              py::arg("epsilon"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))

@@ -40,24 +40,21 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
                               .set_dim({batch_size * seq_length, hidden_size, 1, 1})
                               .set_stride({hidden_size, 1, hidden_size, hidden_size}));
     auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
 
     auto epsilon =
         graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
 
     auto rmsnorm_options =
         fe::graph::Rmsnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon);
-    auto [Y, inv_variance] = graph.rmsnorm(X, scale, bias, rmsnorm_options);
-    Y->set_data_type(fe::DataType_t::FLOAT);
+    auto [Y, inv_variance] = graph.rmsnorm(X, scale, rmsnorm_options);
+    Y->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     inv_variance->set_output(true).set_data_type(fe::DataType_t::FLOAT);
-
-    Y->set_output(true);
 
 #if (CUDNN_VERSION < 8906)
     SKIP("RmsNorm is not supported in cudnn versions prior to 8.9.6");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("RMSNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
@@ -75,7 +72,6 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
     Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Var_tensor(batch_size * seq_length, false);
     Surface<float> Scale_tensor(hidden_size, false);
-    Surface<float> Bias_tensor(hidden_size, false);
     float epsilon_cpu = 1e-05f;
     Surface<half> Y_tensor(batch_size * seq_length * hidden_size, false);
 
@@ -84,7 +80,6 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
         {X, X_tensor.devPtr},
         {inv_variance, Var_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
-        {bias, Bias_tensor.devPtr},
         {epsilon, &epsilon_cpu},
         {Y, Y_tensor.devPtr}};
 
@@ -113,19 +108,19 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
     auto epsilon =
         graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
 
-    auto rmsnorm_options =
-        fe::graph::Rmsnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::INFERENCE).set_epsilon(epsilon);
-    auto [Y, inv_variance] = graph.rmsnorm(X, scale, bias, rmsnorm_options);
-    Y->set_data_type(fe::DataType_t::FLOAT);
+    auto rmsnorm_options = fe::graph::Rmsnorm_attributes()
+                               .set_forward_phase(fe::NormFwdPhase_t::INFERENCE)
+                               .set_epsilon(epsilon)
+                               .set_bias(bias);
+    auto [Y, inv_variance] = graph.rmsnorm(X, scale, rmsnorm_options);
+    Y->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     REQUIRE(inv_variance == nullptr);
-
-    Y->set_output(true);
 
 #if (CUDNN_VERSION < 8906)
     SKIP("RmsNorm is not supported in cudnn versions prior to 8.9.6");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("RmsNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));

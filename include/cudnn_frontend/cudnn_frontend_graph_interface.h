@@ -304,7 +304,6 @@ class Graph : public INode {
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> rmsnorm(std::shared_ptr<Tensor_attributes>,
                                                               std::shared_ptr<Tensor_attributes>,
-                                                              std::shared_ptr<Tensor_attributes>,
                                                               Rmsnorm_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 3> rmsnorm_backward(std::shared_ptr<Tensor_attributes>,
@@ -707,7 +706,6 @@ Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
                std::shared_ptr<Tensor_attributes> scale,
-               std::shared_ptr<Tensor_attributes> bias,
                Rmsnorm_attributes options) {
     // Set outputs
     auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
@@ -718,7 +716,6 @@ Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
     // Set inputs
     options.inputs.X     = x;
     options.inputs.SCALE = scale;
-    options.inputs.BIAS  = bias;
 
     sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(options), context));
 

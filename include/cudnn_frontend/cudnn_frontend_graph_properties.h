@@ -1409,6 +1409,12 @@ class Rmsnorm_attributes : public Operation {
     }
 
     Rmsnorm_attributes&
+    set_bias(std::shared_ptr<Tensor_attributes>& value) {
+        inputs.BIAS = value;
+        return *this;
+    }
+
+    Rmsnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
         return *this;
@@ -1439,7 +1445,6 @@ class Rmsnorm_attributes : public Operation {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
         inputs.EPSILON->fill_from_context(context);
 
         outputs.Y->fill_from_context(context);
