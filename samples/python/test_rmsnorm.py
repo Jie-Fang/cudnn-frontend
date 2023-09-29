@@ -34,11 +34,12 @@ class RMSNorm(torch.nn.Module):
     def forward(self, x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor = None) -> torch.Tensor:
         # NOTE: the original RMSNorm paper implementation is not equivalent
         norm_x = torch.mean(x * x, dim=self.dim, keepdim=True)
-        x_normed = x * torch.rsqrt(norm_x + self.eps)
+        inv_var = torch.rsqrt(norm_x + self.eps)
+        x_normed = x * inv_var
         x_scaled = weight * x_normed
         if bias is not None:
             x_scaled += bias
-        return x_scaled
+        return x_scaled, inv_var
 
 embedding_dim_options = [768, 1024, 1280, 1600]
 input_type_options = [torch.float16, torch.bfloat16]
@@ -70,9 +71,8 @@ def test_rmsnorm(param_extract):
     print("Running reference")
 
     model = RMSNorm(eps=epsilon_value, dim=(1,2,3)).float()
-    Y_expected = model(x_gpu, scale_gpu, bias_gpu if has_bias else None)
-    inv_var_expected = torch.rsqrt(torch.var(x_gpu.to(torch.float32), dim=(1, 2, 3), keepdim=True) + epsilon_value)
-
+    Y_expected, inv_var_expected = model(x_gpu, scale_gpu, bias_gpu if has_bias else None)
+    
     print("Building cudnn graph")
 
     graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
@@ -111,8 +111,8 @@ def test_rmsnorm(param_extract):
             }, workspace)
     
     print("Comparing with reference")
-    torch.testing.assert_close(Y_expected, Y_actual, atol=0.05, rtol=0.05)
-    torch.testing.assert_close(inv_var_expected, inv_var_actual, atol=0.1, rtol=0.1)
+    torch.testing.assert_close(Y_expected, Y_actual, atol=0.03125, rtol=0.03125)
+    torch.testing.assert_close(inv_var_expected, inv_var_actual, atol=0.005, rtol=0.005)
     print("Success!!")
 
     target = torch.randn_like(Y_expected)
