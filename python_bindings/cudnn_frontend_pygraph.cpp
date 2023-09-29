@@ -252,7 +252,7 @@ class PyGraph {
         auto props = cudnn_frontend::graph::Tensor_attributes()
                          .set_data_type(convert_to_cudnn_data_type(managed->dl_tensor.dtype))
                          .set_is_virtual(false)
-                         .set_is_pass_by_value(false)
+                         .set_is_pass_by_value(managed->dl_tensor.device.device_type == kDLCPU)
                          .set_dim(dim);
 
         if (managed->dl_tensor.strides == nullptr) {

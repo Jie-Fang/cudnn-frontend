@@ -344,15 +344,15 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     v = graph.tensor_like(v_gpu)
 
     if is_bias:
-        bias = make_tensor_attr(graph, bias_gpu, "bias")
+        bias = graph.tensor_like(bias_gpu)
 
     if is_padding:
-        seq_len_q = make_tensor_attr(graph, seq_len_q_gpu, "seq_len_q")
-        seq_len_kv = make_tensor_attr(graph, seq_len_kv_gpu, "seq_len_kv")
+        seq_len_q = graph.tensor_like(seq_len_q_gpu)
+        seq_len_kv = graph.tensor_like(seq_len_kv_gpu)
 
     if is_dropout:
-        seed = make_tensor_attr(graph, seed_gpu, "seed")
-        offset = make_tensor_attr(graph, offset_gpu, "attn_scale")
+        seed = graph.tensor_like(seed_gpu)
+        offset = graph.tensor_like(offset_gpu)
         dropout_tuple = (dropout_prob, seed, offset)
 
     o, stats = graph.scaled_dot_product_flash_attention(
@@ -514,7 +514,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     stats = make_tensor_attr(graph, stats_gpu, name="stats")
 
     if attn_scale_val != 1.0:
-        attn_scale = make_tensor_attr(graph, attn_scale_cpu, is_pass_by_value=True, name="attn_scale")
+        attn_scale = graph.tensor_like(attn_scale_cpu)
 
     if is_bias:
         bias = make_tensor_attr(graph, bias_gpu, "bias")

@@ -75,10 +75,10 @@ def test_rmsnorm(param_extract):
 
     graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
-    bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(), data_type = convert_to_cudnn_type(bias_gpu.dtype))
-    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
+    X = graph.tensor_like(x_gpu.detach())
+    scale = graph.tensor_like(scale_gpu.detach())
+    bias = graph.tensor_like(bias_gpu.detach())
+    epsilon = graph.tensor_like(epsilon_cpu)
 
     Y, inv_var = graph.rmsnorm(name = "RMS", 
                             norm_forward_phase = cudnn.norm_forward_phase.TRAINING,
@@ -126,11 +126,11 @@ def test_rmsnorm(param_extract):
 
     bwd_graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    DY = bwd_graph.tensor(name = "DY", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    X_bwd = bwd_graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale_bwd = bwd_graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
-    inv_var_bwd = bwd_graph.tensor(name = "inv_var", dim = inv_var_actual.size(), stride = inv_var_actual.stride(), data_type = convert_to_cudnn_type(inv_var_actual.dtype))
-    epsilon_bwd = bwd_graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
+    DY = bwd_graph.tensor_like(Y_expected.grad)
+    X_bwd = bwd_graph.tensor_like(x_gpu.detach())
+    scale_bwd = bwd_graph.tensor_like(scale_gpu.detach())
+    inv_var_bwd = bwd_graph.tensor_like(inv_var_actual)
+    epsilon_bwd = bwd_graph.tensor_like(epsilon_cpu)
 
     DX, Dscale, Dbias = bwd_graph.rmsnorm_backward(name = "DRMS", 
                             grad = DY,
