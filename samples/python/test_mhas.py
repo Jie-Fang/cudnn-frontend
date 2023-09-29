@@ -328,8 +328,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
     o_gpu = torch.empty(*shape_o, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
-    if is_infer == False:
-        stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda")
+    stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda") if not is_infer else None
 
     # cuDNN graph
     graph = cudnn.pygraph(
@@ -382,14 +381,12 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
         o: o_gpu,
+        stats: stats_gpu
     }
 
     if is_dropout:
         variant_pack[seed] = seed_gpu
         variant_pack[offset] = offset_gpu
-
-    if is_infer == False:
-        variant_pack[stats] = stats_gpu
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     graph.execute(variant_pack, workspace)

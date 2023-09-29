@@ -384,12 +384,19 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto softmax_output = std::make_shared<Tensor_attributes>();
         softmax_output->set_is_virtual(true);
 
+        // Create a virtual output for stats if inference step otherwise output.Stats is already set
+        auto softmax_stats = options.outputs.Stats;
+        if (options.is_inference.value() == true) {
+            softmax_stats = std::make_shared<Tensor_attributes>();
+            softmax_stats->set_is_virtual(true);
+        }
+
         Softmax_attributes softmax_attributes;
         softmax_attributes.set_name("softmax");
         softmax_attributes.use_stats = true;  // As this is flash attention
         softmax_attributes.inputs.P  = last_output;
         last_output = softmax_attributes.outputs.S = softmax_output;
-        softmax_attributes.outputs.Stats           = options.outputs.Stats;
+        softmax_attributes.outputs.Stats           = softmax_stats;
         auto softmax_node = std::make_unique<SoftmaxNode>(std::move(softmax_attributes), context);
         sub_nodes.emplace_back(std::move(softmax_node));
 
