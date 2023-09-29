@@ -31,16 +31,20 @@ class RMSNorm(torch.nn.Module):
         self.eps = eps
         self.dim = dim
 
-    def forward(self, x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor = None) -> torch.Tensor:
         # NOTE: the original RMSNorm paper implementation is not equivalent
         norm_x = torch.mean(x * x, dim=self.dim, keepdim=True)
         x_normed = x * torch.rsqrt(norm_x + self.eps)
-        return weight * x_normed + bias
+        x_scaled = weight * x_normed
+        if bias is not None:
+            x_scaled += bias
+        return x_scaled
 
 embedding_dim_options = [768, 1024, 1280, 1600]
 input_type_options = [torch.float16, torch.bfloat16]
+bias_options = [True, False]
 
-all_options = [elem for elem in itertools.product(*[embedding_dim_options, input_type_options])]
+all_options = [elem for elem in itertools.product(*[embedding_dim_options, input_type_options, bias_options])]
 
 @pytest.fixture(params=all_options)
 def param_extract(request):
@@ -51,27 +55,22 @@ def test_rmsnorm(param_extract):
     # TODO(@barretw): ensure output is deterministic and reproducible
     torch.manual_seed(0)
     
-    embedding_dim, input_type = param_extract
+    embedding_dim, input_type, has_bias = param_extract
     
-    if input_type == torch.bfloat16:
-        atol, rtol = 0.125, 0.125
-    else:
-        atol, rtol = 0.1, 0.1
-
     batch_size, seq_size = 16, 128
     N,C,H,W = batch_size * seq_size, embedding_dim, 1, 1
     
     epsilon_value = 1e-3
 
-    x_gpu = 2*torch.randn(N, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last) - 1.25
-    scale_gpu = 3*torch.randn(1, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last) - 2.75
-    bias_gpu = 4*torch.randn(1, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
+    x_gpu = 2*torch.randn(N, C, H, W, requires_grad=True, device="cuda", dtype=input_type) - 1.25
+    scale_gpu = 3*torch.randn(1, C, H, W, requires_grad=True, device="cuda", dtype=input_type) - 2.75
+    bias_gpu = torch.randn(1, C, H, W, requires_grad=True, device="cuda", dtype=input_type)
     epsilon_cpu = torch.full((1, 1, 1, 1), epsilon_value, requires_grad=False, device="cpu", dtype=torch.float32)
 
     print("Running reference")
 
-    model = RMSNorm(eps=epsilon_value, dim=(1,2,3))    
-    Y_expected = model(x_gpu, scale_gpu, bias_gpu)
+    model = RMSNorm(eps=epsilon_value, dim=(1,2,3)).float()
+    Y_expected = model(x_gpu, scale_gpu, bias_gpu if has_bias else None)
     inv_var_expected = torch.rsqrt(torch.var(x_gpu.to(torch.float32), dim=(1, 2, 3), keepdim=True) + epsilon_value)
 
     print("Building cudnn graph")
@@ -80,7 +79,7 @@ def test_rmsnorm(param_extract):
 
     X = graph.tensor_like(x_gpu.detach())
     scale = graph.tensor_like(scale_gpu.detach())
-    bias = graph.tensor_like(bias_gpu.detach())
+    bias = graph.tensor_like(bias_gpu.detach()) if has_bias else None
     epsilon = graph.tensor_like(epsilon_cpu)
 
     Y, inv_var = graph.rmsnorm(name = "RMS", 
@@ -112,8 +111,8 @@ def test_rmsnorm(param_extract):
             }, workspace)
     
     print("Comparing with reference")
-    torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
-    torch.testing.assert_close(inv_var_expected, inv_var_actual, atol=atol, rtol=rtol)
+    torch.testing.assert_close(Y_expected, Y_actual, atol=0.05, rtol=0.05)
+    torch.testing.assert_close(inv_var_expected, inv_var_actual, atol=0.1, rtol=0.1)
     print("Success!!")
 
     target = torch.randn_like(Y_expected)
@@ -167,7 +166,8 @@ def test_rmsnorm(param_extract):
     print("Comparing with reference")
     torch.testing.assert_close(x_gpu.grad, DX_actual, atol=2e-4, rtol=2e-4)
     torch.testing.assert_close(scale_gpu.grad, DScale_actual, atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(bias_gpu.grad, Dbias_actual, atol=5e-4, rtol=5e-4)
+    if has_bias:
+        torch.testing.assert_close(bias_gpu.grad, Dbias_actual, atol=5e-4, rtol=5e-4)
     print("Success!!")
     
 if __name__ == "__main__":
