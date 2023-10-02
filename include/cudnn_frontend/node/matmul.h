@@ -62,7 +62,7 @@ class MatmulNode : public INode {
         if (c_tensor->get_stride().empty()) {
             auto const& c_dim = c_tensor->get_dim();
             // Default to Col major
-            auto const& stride_order = detail::generate_column_major_stride_order(c_dim.size());
+            auto const& stride_order = detail::generate_row_major_stride_order(c_dim.size());
             c_tensor->set_stride(detail::generate_stride(c_dim, stride_order));
         }
 

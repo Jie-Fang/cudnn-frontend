@@ -1,5 +1,6 @@
 #include <utility>
 #include <unordered_map>
+#include <vector>
 
 #include "dlpack/dlpack.h"
 
@@ -58,8 +59,77 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
     }
 }
 
+cudnn_frontend::DataType_t
+convert_to_cudnn_data_type(const DLDataType& dtype) {
+    switch (dtype.code) {
+        case DLDataTypeCode::kDLUInt:
+            switch (dtype.bits) {
+                case 8:
+                    return cudnn_frontend::DataType_t::UINT8;
+            }
+            break;
+        case DLDataTypeCode::kDLInt:
+            switch (dtype.bits) {
+                case 8:
+                    return cudnn_frontend::DataType_t::INT8;
+                case 32:
+                    return cudnn_frontend::DataType_t::INT32;
+                case 64:
+                    return cudnn_frontend::DataType_t::INT64;
+            }
+            break;
+        case DLDataTypeCode::kDLFloat:
+            switch (dtype.bits) {
+                case 16:
+                    return cudnn_frontend::DataType_t::HALF;
+                case 32:
+                    return cudnn_frontend::DataType_t::FLOAT;
+                case 64:
+                    return cudnn_frontend::DataType_t::DOUBLE;
+            }
+            break;
+        case DLDataTypeCode::kDLBfloat:
+            switch (dtype.bits) {
+                case 16:
+                    return cudnn_frontend::DataType_t::BFLOAT16;
+            }
+            break;
+        case DLDataTypeCode::kDLBool:
+            switch (dtype.bits) {
+                case 8:
+                    return cudnn_frontend::DataType_t::BOOLEAN;
+            }
+            break;
+    }
+    return cudnn_frontend::DataType_t::NOT_SET;
+}
+
+DLManagedTensor*
+extract_dlpack_tensor_ptr(py::object const& obj) {
+    throw_if(!py::hasattr(obj, "__dlpack__"),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Object does not have the __dlpack__() method");
+
+    py::capsule capsule = obj.attr("__dlpack__")();
+    throw_if(capsule.is_none(),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Failed to retrieve the DLPack capsule.");
+
+    DLManagedTensor* managed =
+        static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
+    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
+
+    DLDeviceType device_type = managed->dl_tensor.device.device_type;
+    throw_if(
+        device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged,
+        cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+        "Invalid device type.");
+
+    return managed;
+}
+
 char*
-extract_data_pointer(py::object obj) {
+extract_data_pointer(py::object const& obj) {
     throw_if(!py::hasattr(obj, "__dlpack__"),
              cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
              "Object does not have the __dlpack__() method");
@@ -169,6 +239,30 @@ class PyGraph {
                          .set_dim(dim)
                          .set_stride(stride)
                          .set_name(name);
+
+        return graph.tensor(props);
+    }
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    tensor_like(py::object pyobj) {
+        auto managed = extract_dlpack_tensor_ptr(pyobj);
+        auto ndim    = managed->dl_tensor.ndim;
+        std::vector<int64_t> dim(managed->dl_tensor.shape, managed->dl_tensor.shape + ndim);
+
+        auto props = cudnn_frontend::graph::Tensor_attributes()
+                         .set_data_type(convert_to_cudnn_data_type(managed->dl_tensor.dtype))
+                         .set_is_virtual(false)
+                         .set_is_pass_by_value(managed->dl_tensor.device.device_type == kDLCPU)
+                         .set_dim(dim);
+
+        if (managed->dl_tensor.strides == nullptr) {
+            // dlpack says "can be NULL, indicating tensor is compact and row-majored"
+            auto stride_order = cudnn_frontend::detail::generate_row_major_stride_order(ndim);
+            props.set_stride(cudnn_frontend::detail::generate_stride(dim, stride_order));
+        } else {
+            std::vector<int64_t> stride(managed->dl_tensor.strides, managed->dl_tensor.strides + ndim);
+            props.set_stride(stride);
+        }
 
         return graph.tensor(props);
     }
@@ -458,10 +552,11 @@ class PyGraph {
         auto attributes = cudnn_frontend::graph::Rmsnorm_attributes()
                               .set_forward_phase(forward_phase)
                               .set_compute_data_type(compute_data_type)
+                              .set_bias(bias)
                               .set_epsilon(epsilon)
                               .set_name(name);
 
-        auto [Y, inv_var] = graph.rmsnorm(x, scale, bias, attributes);
+        auto [Y, inv_var] = graph.rmsnorm(x, scale, attributes);
         return {Y, inv_var};
     }
 
@@ -470,16 +565,15 @@ class PyGraph {
                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,
                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
-                     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& epsilon,
+                     bool const has_dbias,
                      cudnn_frontend::DataType_t const& compute_data_type,
                      std::string const& name) {
         auto attributes = cudnn_frontend::graph::Rmsnorm_backward_attributes()
-                              .set_saved_inv_variance(inv_variance)
-                              .set_epsilon(epsilon)
+                              .has_dbias(has_dbias)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
 
-        auto [DX, DScale, DBias] = graph.rmsnorm_backward(dy, x, scale, attributes);
+        auto [DX, DScale, DBias] = graph.rmsnorm_backward(dy, x, scale, inv_variance, attributes);
         return {DX, DScale, DBias};
     }
 
@@ -490,7 +584,7 @@ class PyGraph {
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                        bool const is_inference,
-                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attn_scale,
+                                       py::object const& attn_scale,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
                                        bool const use_padding_mask,
                                        bool const use_alibi_mask,
@@ -502,13 +596,26 @@ class PyGraph {
                               .set_is_inference(is_inference)
                               .set_seq_len_q(seq_len_q)
                               .set_seq_len_kv(seq_len_kv)
-                              .set_attn_scale(attn_scale)
                               .set_bias(bias)
                               .set_padding_mask(use_padding_mask)
                               .set_alibi_mask(use_alibi_mask)
                               .set_causal_mask(use_causal_mask)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
+
+        if (!attn_scale.is_none()) {
+            if (py::isinstance<py::float_>(attn_scale)) {
+                auto const attn_scale_value = attn_scale.cast<float>();
+                attributes.set_attn_scale(attn_scale_value);
+            } else {
+                auto const attn_scale_tensor =
+                    attn_scale.cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if (!attn_scale_tensor) {
+                    throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
+                }
+                attributes.set_attn_scale(attn_scale_tensor);
+            }
+        }
 
         if (!dropout.is_none()) {
             py::tuple dropout_tuple = dropout.cast<py::tuple>();
@@ -652,7 +759,11 @@ class PyGraph {
             py::object workspace) {
         std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void*> var_pack_;
         for (auto const& [tensor, pyobject] : var_pack) {
-            var_pack_.emplace(tensor, extract_data_pointer(pyobject));
+            // Its alright for the user to pass in None objects as key
+            // FE will just ignore them
+            if (tensor) {
+                var_pack_.emplace(tensor, extract_data_pointer(pyobject));
+            }
         }
 
         void* workspace_ptr = extract_data_pointer(workspace);
@@ -684,6 +795,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("handle", nullptr))
+        .def("tensor_like", &PyGraph::tensor_like)
         .def("tensor",
              &PyGraph::tensor,
              py::arg{"dim"},
@@ -875,7 +987,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("norm_forward_phase"),
              py::arg("input"),
              py::arg("scale"),
-             py::arg("bias"),
+             py::arg_v("bias", nullptr),
              py::arg("epsilon"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
@@ -885,7 +997,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("input"),
              py::arg("scale"),
              py::arg("inv_variance"),
-             py::arg("epsilon"),
+             py::arg("has_dbias"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
         .def("scaled_dot_product_flash_attention",
@@ -896,7 +1008,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("seq_len_q", nullptr),
              py::arg_v("seq_len_kv", nullptr),
              py::arg("is_inference"),
-             py::arg_v("attn_scale", nullptr),
+             py::arg_v("attn_scale", py::none()),
              py::arg_v("bias", nullptr),
              py::arg_v("use_padding_mask", false),
              py::arg_v("use_alibi_mask", false),
@@ -951,7 +1063,7 @@ init_pygraph_submodule(py::module_& m) {
                     o (cudnn_tensor): The output data.
                     dO (cudnn_tensor): The output loss gradient.
                     stats (cudnn_tensor): The softmax statistics from the forward pass.
-                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+                    attn_scale (Optional[Union[cudnn_tensor|float]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.

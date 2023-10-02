@@ -65,6 +65,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             error_code_t::ATTRIBUTE_NOT_SET,
             "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Attn_scale && options.attn_scale_value.has_value(),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "attn_scale with tensor and value cannot be set at the same time.");
+
         return {error_code_t::OK, ""};
     }
 
@@ -110,6 +114,13 @@ class ScaledDotProductFlashAttentionNode : public INode {
         sub_nodes.emplace_back(std::move(bmm1_node));
 
         // Optional scale
+        if (options.attn_scale_value.has_value()) {
+            options.inputs.Attn_scale = std::make_shared<Tensor_attributes>();
+            options.inputs.Attn_scale->set_dim({1, 1, 1, 1})
+                .set_stride({1, 1, 1, 1})
+                .set_data_type(DataType_t::FLOAT)
+                .set_is_pass_by_value(true);
+        }
         if (options.inputs.Attn_scale) {
             // Lower options to scale options
             auto attn_scale_output = std::make_shared<Tensor_attributes>();
@@ -373,12 +384,19 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto softmax_output = std::make_shared<Tensor_attributes>();
         softmax_output->set_is_virtual(true);
 
+        // Create a virtual output for stats if inference step otherwise output.Stats is already set
+        auto softmax_stats = options.outputs.Stats;
+        if (options.is_inference.value() == true) {
+            softmax_stats = std::make_shared<Tensor_attributes>();
+            softmax_stats->set_is_virtual(true);
+        }
+
         Softmax_attributes softmax_attributes;
         softmax_attributes.set_name("softmax");
         softmax_attributes.use_stats = true;  // As this is flash attention
         softmax_attributes.inputs.P  = last_output;
         last_output = softmax_attributes.outputs.S = softmax_output;
-        softmax_attributes.outputs.Stats           = options.outputs.Stats;
+        softmax_attributes.outputs.Stats           = softmax_stats;
         auto softmax_node = std::make_unique<SoftmaxNode>(std::move(softmax_attributes), context);
         sub_nodes.emplace_back(std::move(softmax_node));
 
@@ -510,6 +528,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             CHECK_CUDA_ERROR(cudaMemcpyAsync(
                 node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream));
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
+        }
+
+        if (options.attn_scale_value.has_value()) {
+            tensor_to_pass_by_value.emplace(options.inputs.Attn_scale, options.attn_scale_value.value());
         }
 
         return {error_code_t::OK, ""};

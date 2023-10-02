@@ -273,7 +273,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
 
     print(f"{str(param_extract_forward)} s={s_q} d={d}")
 
-    attn_scale_val = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
 
     shape_q = (b, h, s_q, d)
@@ -319,23 +318,17 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     k_gpu = torch.as_strided(qkv_gpu, shape_k, stride_k, storage_offset=offset_k)
     v_gpu = torch.as_strided(qkv_gpu, shape_v, stride_v, storage_offset=offset_v)
 
-    if attn_scale_val != 1.0:
-        attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu")
+    bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type) if is_bias else None
 
-    if is_bias:
-        bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type)
-
-    if is_padding:
-        seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-        seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
+    seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
     o_gpu = torch.empty(*shape_o, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
-    if is_infer == False:
-        stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda")
+    stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda") if not is_infer else None
 
     # cuDNN graph
     graph = cudnn.pygraph(
@@ -343,23 +336,18 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
     )
-    q = make_tensor_attr(graph, q_gpu, "q")
-    k = make_tensor_attr(graph, k_gpu, "k")
-    v = make_tensor_attr(graph, v_gpu, "v")
+    q = graph.tensor_like(q_gpu)
+    k = graph.tensor_like(k_gpu)
+    v = graph.tensor_like(v_gpu)
 
-    if attn_scale_val != 1.0:
-        attn_scale = make_tensor_attr(graph, attn_scale_cpu, "attn_scale", is_pass_by_value=True)
+    bias = graph.tensor_like(bias_gpu) if is_bias else None
 
-    if is_bias:
-        bias = make_tensor_attr(graph, bias_gpu, "bias")
-
-    if is_padding:
-        seq_len_q = make_tensor_attr(graph, seq_len_q_gpu, "seq_len_q")
-        seq_len_kv = make_tensor_attr(graph, seq_len_kv_gpu, "seq_len_kv")
+    seq_len_q = graph.tensor_like(seq_len_q_gpu) if is_padding else None
+    seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if is_padding else None
 
     if is_dropout:
-        seed = make_tensor_attr(graph, seed_gpu, "seed")
-        offset = make_tensor_attr(graph, offset_gpu, "attn_scale")
+        seed = graph.tensor_like(seed_gpu)
+        offset = graph.tensor_like(offset_gpu)
         dropout_tuple = (dropout_prob, seed, offset)
 
     o, stats = graph.scaled_dot_product_flash_attention(
@@ -368,12 +356,12 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         k=k,
         v=v,
         is_inference=is_infer,
-        attn_scale=attn_scale if attn_scale_val != 1.0 else None,
-        bias=bias if is_bias else None,
+        attn_scale=0.125,
+        bias=bias,
         use_alibi_mask=is_alibi,
         use_padding_mask=is_padding,
-        seq_len_q=seq_len_q if is_padding else None,
-        seq_len_kv=seq_len_kv if is_padding else None,
+        seq_len_q=seq_len_q,
+        seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
         dropout=dropout_tuple if is_dropout else None,
     )
@@ -389,25 +377,16 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         q: q_gpu,
         k: k_gpu,
         v: v_gpu,
-        o: o_gpu
+        bias: bias_gpu,
+        seq_len_q: seq_len_q_gpu,
+        seq_len_kv: seq_len_kv_gpu,
+        o: o_gpu,
+        stats: stats_gpu
     }
-
-    if attn_scale_val != 1.0:
-        variant_pack[attn_scale] = attn_scale_cpu
-
-    if is_bias:
-        variant_pack[bias] = bias_gpu
-
-    if is_padding:
-        variant_pack[seq_len_q] = seq_len_q_gpu
-        variant_pack[seq_len_kv] = seq_len_kv_gpu
 
     if is_dropout:
         variant_pack[seed] = seed_gpu
         variant_pack[offset] = offset_gpu
-
-    if is_infer == False:
-        variant_pack[stats] = stats_gpu
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
     graph.execute(variant_pack, workspace)
@@ -428,7 +407,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         q_ref,
         k_ref,
         v_ref,
-        attn_scale=attn_scale_val,
+        attn_scale=0.125,
         bias=bias_ref if is_bias else None,
         is_alibi=is_alibi,
         is_causal=is_causal,
@@ -524,7 +503,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     stats = make_tensor_attr(graph, stats_gpu, name="stats")
 
     if attn_scale_val != 1.0:
-        attn_scale = make_tensor_attr(graph, attn_scale_cpu, is_pass_by_value=True, name="attn_scale")
+        attn_scale = graph.tensor_like(attn_scale_cpu)
 
     if is_bias:
         bias = make_tensor_attr(graph, bias_gpu, "bias")

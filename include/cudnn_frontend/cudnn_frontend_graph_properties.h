@@ -1409,6 +1409,12 @@ class Rmsnorm_attributes : public Operation {
     }
 
     Rmsnorm_attributes&
+    set_bias(std::shared_ptr<Tensor_attributes>& value) {
+        inputs.BIAS = value;
+        return *this;
+    }
+
+    Rmsnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
         inputs.EPSILON = value;
         return *this;
@@ -1439,7 +1445,6 @@ class Rmsnorm_attributes : public Operation {
         // Fill node's tensors
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
         inputs.EPSILON->fill_from_context(context);
 
         outputs.Y->fill_from_context(context);
@@ -1461,7 +1466,6 @@ class Rmsnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> X;
         std::shared_ptr<Tensor_attributes> SCALE;
         std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
     } inputs;
 
     struct Outputs {
@@ -1470,31 +1474,20 @@ class Rmsnorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> DBIAS;
     } outputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, INV_VARIANCE, EPSILON)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, INV_VARIANCE)
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, tag, inputs, outputs)
 
+    std::optional<bool> use_dbias;
+
     Rmsnorm_backward_attributes() : Operation(Tag::DRMSNorm) {}
 
     Rmsnorm_backward_attributes&
-    set_saved_inv_variance(std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.INV_VARIANCE = inv_variance;
+    has_dbias(bool value) {
+        use_dbias = value;
         return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
     }
 
     Rmsnorm_backward_attributes&
@@ -1515,17 +1508,11 @@ class Rmsnorm_backward_attributes : public Operation {
         inputs.X->fill_from_context(context);
         inputs.SCALE->fill_from_context(context);
         inputs.DY->fill_from_context(context);
-
-        if (inputs.INV_VARIANCE) {
-            inputs.INV_VARIANCE->fill_from_context(context);
-        }
-        if (inputs.EPSILON) {
-            inputs.EPSILON->fill_from_context(context);
-        }
+        inputs.INV_VARIANCE->fill_from_context(context);
 
         outputs.DX->fill_from_context(context);
         outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
+        if (outputs.DBIAS) outputs.DBIAS->fill_from_context(context);
 
         if (get_compute_data_type() == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
@@ -1678,6 +1665,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     bool alibi_mask   = false;
     bool causal_mask  = false;
     std::optional<float> dropout_probability;
+    std::optional<float> attn_scale_value;
 
     Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
 
@@ -1708,6 +1696,12 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     Scaled_dot_product_flash_attention_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
         inputs.Attn_scale = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes&
+    set_attn_scale(float const value) {
+        attn_scale_value = value;
         return *this;
     }
 

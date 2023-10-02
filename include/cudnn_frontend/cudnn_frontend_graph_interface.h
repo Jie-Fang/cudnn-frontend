@@ -304,10 +304,10 @@ class Graph : public INode {
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> rmsnorm(std::shared_ptr<Tensor_attributes>,
                                                               std::shared_ptr<Tensor_attributes>,
-                                                              std::shared_ptr<Tensor_attributes>,
                                                               Rmsnorm_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 3> rmsnorm_backward(std::shared_ptr<Tensor_attributes>,
+                                                                       std::shared_ptr<Tensor_attributes>,
                                                                        std::shared_ptr<Tensor_attributes>,
                                                                        std::shared_ptr<Tensor_attributes>,
                                                                        Rmsnorm_backward_attributes);
@@ -706,7 +706,6 @@ Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
                std::shared_ptr<Tensor_attributes> scale,
-               std::shared_ptr<Tensor_attributes> bias,
                Rmsnorm_attributes options) {
     // Set outputs
     auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
@@ -717,7 +716,6 @@ Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
     // Set inputs
     options.inputs.X     = x;
     options.inputs.SCALE = scale;
-    options.inputs.BIAS  = bias;
 
     sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(options), context));
 
@@ -728,19 +726,25 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                         std::shared_ptr<Tensor_attributes> x,
                         std::shared_ptr<Tensor_attributes> scale,
+                        std::shared_ptr<Tensor_attributes> inv_variance,
                         Rmsnorm_backward_attributes options) {
     // Set outputs
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DX = options.outputs.DX = output_tensor(options.get_name() + "::DX");
+    auto DScale = options.outputs.DSCALE     = output_tensor(options.get_name() + "::Dscale");
+    std::shared_ptr<Tensor_attributes> DBias = nullptr;
+    if (options.use_dbias.value_or(true)) {
+        DBias = options.outputs.DBIAS = output_tensor(options.get_name() + "::Dbias");
+    }
 
     // Set inputs
-    options.inputs.DY    = dy;
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    options.inputs.DY           = dy;
+    options.inputs.X            = x;
+    options.inputs.SCALE        = scale;
+    options.inputs.INV_VARIANCE = inv_variance;
 
     sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(options), context));
 
-    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+    return {DX, DScale, DBias};
 }
 
 inline std::shared_ptr<Tensor_attributes>
@@ -784,7 +788,9 @@ Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
     auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
+    if (options.is_inference == false) {
+        Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
+    }
 
     // Set inputs
     options.inputs.Q = q;
