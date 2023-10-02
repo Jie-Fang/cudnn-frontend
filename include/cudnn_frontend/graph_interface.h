@@ -446,12 +446,12 @@ Graph::conv_fprop(std::shared_ptr<Tensor_attributes> x,
                   std::shared_ptr<Tensor_attributes> w,
                   Conv_fprop_attributes options) {
     // Make required output tensors
-    auto Y            = output_tensor(options.get_name() + "_output");
-    options.outputs.Y = Y;
+    auto Y                                                  = output_tensor(options.name + "::Y");
+    options.outputs[Conv_fprop_attributes::output_names::Y] = Y;
 
     // Set inputs
-    options.inputs.X = x;
-    options.inputs.W = w;
+    options.inputs[Conv_fprop_attributes::input_names::X] = x;
+    options.inputs[Conv_fprop_attributes::input_names::W] = w;
 
     sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(std::move(options), context));
 

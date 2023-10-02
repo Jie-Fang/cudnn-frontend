@@ -143,6 +143,58 @@ class Tensor_attributes {
     }
 };
 
+template <typename DerivedT>
+class Attributes {
+    using Derived_t = DerivedT;
+    DerivedT&
+    self() {
+        return *static_cast<DerivedT*>(this);
+    }
+    DerivedT const&
+    self() const {
+        return *static_cast<DerivedT const*>(this);
+    }
+
+   protected:
+    void
+    fill_from_context(detail::Context const& context) {
+        for (auto const& tensor : get_tensors()) {
+            if (tensor) {
+                tensor->fill_from_context(context);
+            }
+        }
+
+        if (compute_data_type == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+    }
+
+   public:
+    std::string name;
+    DataType_t compute_data_type = DataType_t::NOT_SET;
+
+    DerivedT&
+    set_name(std::string const& value) {
+        name = value;
+        return self();
+    }
+
+    DerivedT&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return self();
+    }
+
+    std::vector<std::shared_ptr<Tensor_attributes>>
+    get_tensors() {
+        auto derived                                                = static_cast<DerivedT*>(this);
+        std::vector<std::shared_ptr<Tensor_attributes>> all_tensors = derived->get_inputs();
+        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs = derived->get_outputs();
+        all_tensors.insert(all_tensors.end(), all_outputs.begin(), all_outputs.end());
+        return all_tensors;
+    }
+};
+
 class Operation {
    public:
     enum class Tag {
@@ -362,31 +414,51 @@ class Genstats_attributes : public Operation {
     }
 };
 
-class Conv_fprop_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> W;
-    } inputs;
+class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
+    friend class ConvolutionNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { X, W };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    std::vector<int64_t> padding  = {};
-    std::vector<int64_t> stride   = {};
-    std::vector<int64_t> dilation = {};
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
+    std::vector<int64_t> padding;
+    std::vector<int64_t> stride;
+    std::vector<int64_t> dilation;
 
     bool is_padding_set  = false;
     bool is_dilation_set = false;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, W)
+   public:
+    std::vector<std::shared_ptr<Tensor_attributes>>
+    get_inputs() {
+        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+        for (auto const& [name, input] : inputs) {
+            if (input) {
+                all_inputs.push_back(input);
+            }
+        }
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, tag, inputs, outputs, padding, stride, dilation)
+        return all_inputs;
+    }
 
-    Conv_fprop_attributes() : Operation(Tag::Conv_fprop) {}
+    std::vector<std::shared_ptr<Tensor_attributes>>
+    get_outputs() {
+        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
+
+        for (auto const& [name, output] : outputs) {
+            if (output) {
+                all_outputs.push_back(output);
+            }
+        }
+
+        return all_outputs;
+    }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
     get_padding() const {
@@ -420,32 +492,6 @@ class Conv_fprop_attributes : public Operation {
     set_dilation(std::vector<int64_t> value) {
         dilation        = value;
         is_dilation_set = true;
-        return *this;
-    }
-
-    Conv_fprop_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Conv_fprop_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Conv_fprop_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.W->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };

@@ -63,8 +63,6 @@ TEST_CASE("Conv fprop attributes", "[conv_fprop][serialize]") {
                                      .set_dilation({1, 1})
                                      .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    conv_fprop_attributes.inputs.X = x;
-
     json j                                  = conv_fprop_attributes;
     auto conv_fprop_attributes_deserialized = j;
 
