@@ -119,6 +119,7 @@
 #include "cudnn_frontend_Resample.h"
 
 #include "cudnn_frontend/cudnn_frontend_graph_interface.h"
+#include "cudnn_frontend/plans.h"
 
 #define CUDNN_FRONTEND_MAJOR_VERSION 1
 #define CUDNN_FRONTEND_MINOR_VERSION 0

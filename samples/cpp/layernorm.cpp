@@ -67,11 +67,12 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    fe::graph::Plans plans;
+    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    REQUIRE(set_execution_plans(plans, graph).is_good());
 
     Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Mean_tensor(batch_size * seq_length, false);
@@ -138,11 +139,12 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    fe::graph::Plans plans;
+    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    REQUIRE(set_execution_plans(plans, graph).is_good());
 
     Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Scale_tensor(hidden_size, false);
@@ -212,11 +214,12 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    fe::graph::Plans plans;
+    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    REQUIRE(set_execution_plans(plans, graph).is_good());
 
     Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<half> DY_tensor(batch_size * seq_length * hidden_size, false);
