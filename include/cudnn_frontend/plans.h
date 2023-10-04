@@ -15,12 +15,12 @@ class Execution_plan_list {
     std::vector<std::vector<cudnnBackendNumericalNote_t>> numeric_notes;
     std::vector<std::vector<cudnnBackendNumericalNote_t>> behavior_notes;
 
-    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
-
     std::vector<bool> filtered_indices;
     int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
    public:
+    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
+
     void
     set_tag(std::string const& tag) {
         operation_tag = tag;
@@ -28,11 +28,6 @@ class Execution_plan_list {
     void
     set_engine_configs(EngineConfigList list) {
         engine_configs = list;
-    }
-
-    std::shared_ptr<ExecutionPlan>
-    get_candidate() {
-        return (execution_plans.size() ? execution_plans.front() : nullptr);
     }
 
     std::vector<std::shared_ptr<ExecutionPlan>>&
@@ -379,11 +374,11 @@ get_execution_plan_list(Plans& plans, INode const& graph, HeurMode_t mode) {
 
 inline error_t
 set_execution_plans(Plans& plan, INode& graph) {
-    RETURN_CUDNN_FRONTEND_ERROR_IF(plan.list_of_engine_configs.get_candidate() == nullptr,
+    RETURN_CUDNN_FRONTEND_ERROR_IF(plan.list_of_engine_configs.execution_plans.empty(),
                                    error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                    "No validate candidate for plan execution");
 
-    graph.execution_plans.emplace_back(plan.list_of_engine_configs.get_candidate());
+    graph.execution_plans.emplace_back(plan.list_of_engine_configs.execution_plans.front());
 
     return {error_code_t::OK, ""};
 }

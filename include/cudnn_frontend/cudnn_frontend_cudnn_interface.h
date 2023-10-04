@@ -201,9 +201,8 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
     getLogger() << "[cudnn_frontend] INFO: "
                 << "Mode " << json{mode} << " config list has " << configs.size() << " configurations." << std::endl;
 
-    RETURN_CUDNN_FRONTEND_ERROR_IF(configs.size() == 0,
-                                   error_code_t::HEURISTIC_QUERY_FAILED,
-                                   "No valid engine configs for " + operation_graph_tag);
+    RETURN_CUDNN_FRONTEND_ERROR_IF(
+        configs.empty(), error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for " + operation_graph_tag);
 
     return {error_code_t::OK, ""};
 }

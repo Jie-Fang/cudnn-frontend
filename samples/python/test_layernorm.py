@@ -73,9 +73,10 @@ def test_ln(param_extract):
     Y.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     mean.set_output(True).set_data_type(convert_to_cudnn_type(mean_expected.dtype))
     inv_var.set_output(True).set_data_type(convert_to_cudnn_type(inv_var_expected.dtype))
-
+    
+    graph.validate()
+    graph.build_operation_graph()
     graph.check_support()
-    graph.build()
     
     Y_actual = torch.empty_like(x_gpu)
     mean_actual = torch.empty_like(mean_expected)
@@ -131,9 +132,10 @@ def test_ln(param_extract):
     DX.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     Dscale.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     Dbias.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
-    
+
+    bwd_graph.validate()
+    bwd_graph.build_operation_graph()    
     bwd_graph.check_support()
-    bwd_graph.build()
     
     DX_actual = torch.empty_like(x_gpu)
     DScale_actual = torch.empty_like(scale_gpu)

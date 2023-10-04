@@ -369,9 +369,10 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
     if is_infer == False:
         stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-
+    
+    graph.validate()
+    graph.build_operation_graph()
     graph.check_support()
-    graph.build()
 
     variant_pack = {
         q: q_gpu,
@@ -530,9 +531,10 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
     dK.set_output(True).set_dim(dK_gpu.size()).set_stride(dK_gpu.stride())
     dV.set_output(True).set_dim(dV_gpu.size()).set_stride(dV_gpu.stride())
-
+    
+    graph.validate()
+    graph.build_operation_graph()
     graph.check_support()
-    graph.build()
 
     variant_pack = {
         q: q_gpu,

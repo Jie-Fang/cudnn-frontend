@@ -199,14 +199,13 @@ class PyGraph {
     cudnn_frontend::graph::Graph graph;
     cudnnHandle_t handle;
     bool is_handle_owner;
-    bool is_built;
 
     PyGraph(std::string const&,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
             cudnn_frontend::DataType_t compute_data_type,
             void* handle_ = nullptr)
-        : graph(), handle((cudnnHandle_t)handle_), is_handle_owner(false), is_built(false) {
+        : graph(), handle((cudnnHandle_t)handle_), is_handle_owner(false) {
         graph.set_compute_data_type(compute_data_type)
             .set_intermediate_data_type(intermediate_data_type)
             .set_io_data_type(io_data_type);
@@ -717,28 +716,23 @@ class PyGraph {
     }
 
     void
-    check_support() {
-        build();
+    validate() {
+        auto status = graph.validate();
+        throw_if(status.is_bad(), status.get_code(), status.get_message());
     }
 
     void
-    build() {
-        if (is_built) {
-            return;
-        }
-
-        is_built = true;
-
-        auto status = graph.validate();
+    build_operation_graph() {
+        auto status = graph.build_operation_graph(handle);
         throw_if(status.is_bad(), status.get_code(), status.get_message());
+    }
 
-        status = graph.build_operation_graph(handle);
-        throw_if(status.is_bad(), status.get_code(), status.get_message());
-
+    void
+    check_support() {
         cudnn_frontend::graph::Plans plans;
         get_execution_plan_list(plans, graph, cudnn_frontend::HeurMode_t::HEUR_MODE_A);
 
-        status = plans.check_support(handle);
+        auto status = plans.check_support(handle);
         if (status.is_bad()) {
             cudnn_frontend::graph::Plans fallback_plans;
             get_execution_plan_list(fallback_plans, graph, cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK);
@@ -1077,7 +1071,8 @@ init_pygraph_submodule(py::module_& m) {
                     dK (cudnn_tensor): The key gradient tensor of scaled dot-product flash attention.
                     dV (cudnn_tensor): The value gradient tensor of scaled dot-product flash attention.
             )pbdoc")
-        .def("build", &PyGraph::build)
+        .def("validate", &PyGraph::validate)
+        .def("build_operation_graph", &PyGraph::build_operation_graph)
         .def("check_support", &PyGraph::check_support)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute)
