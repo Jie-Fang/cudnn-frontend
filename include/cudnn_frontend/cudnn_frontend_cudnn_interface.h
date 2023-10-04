@@ -7,14 +7,14 @@
 #include "../cudnn_frontend_Tensor.h"
 #include "../cudnn_frontend_Operation.h"
 #include "../cudnn_frontend_OperationGraph.h"
+#include "cudnn_frontend_EngineConfig.h"
 #include "../cudnn_frontend_ExecutionPlan.h"
 #include "../cudnn_frontend_VariantPack.h"
 
 #include "cudnn_frontend_graph_properties.h"
+#include "cudnn_frontend_graph_helpers.h"
 
 namespace cudnn_frontend {
-
-using op_graph_to_engine_configs = std::unordered_map<std::string, EngineConfigList>;
 
 class ICudnn {
    public:
@@ -38,8 +38,6 @@ class ICudnn {
         std::vector<uid_t> uids;
     };
     std::vector<operation_with_uids> operations;
-
-    op_graph_to_engine_configs engine_configs;
 
     // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
@@ -90,62 +88,6 @@ class ICudnn {
                                                     std::end(operation_with_uid.uids));
         }
         variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    create_cudnn_execution_plan(cudnnHandle_t handle) {
-        for (auto const& filtered_configs : engine_configs) {
-            for (size_t i = 0; i < filtered_configs.second.size(); i++) {
-                getLogger() << "[cudnn_frontend] INFO: "
-                            << "Trying config: " << i << std::endl;
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-                try {
-#endif
-
-                    auto configs = filtered_configs.second;
-                    auto plan    = cudnn_frontend::ExecutionPlanBuilder()
-                                    .setHandle(handle)
-                                    .setEngineConfig(configs[i], filtered_configs.first)
-                                    .build();
-                    if (plan.get_status() != CUDNN_STATUS_SUCCESS) {
-                        getLogger() << "[cudnn_frontend] ERROR: "
-                                    << "Config " << i << " failed with " << plan.get_error() << std::endl;
-                        // If last config, return error
-                        // or else continue to the next config
-                        if (i == filtered_configs.second.size() - 1) {
-                            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "No successful plan built."};
-                        }
-                        continue;
-                    }
-                    getLogger() << "[cudnn_frontend] INFO: "
-                                << "Config " << i << " succeeded! Plan has built!" << std::endl;
-                    getLogger() << "[cudnn_frontend] INFO: " << plan.describe() << std::endl;
-
-                    execution_plans.push_back(std::make_shared<ExecutionPlan>(std::move(plan)));
-                    getLogger() << "[cudnn_frontend] INFO: "
-                                << " Successfully built plan." << std::endl;
-
-                    // Getting here means plan successfully built
-                    // move onto next operation graph
-                    break;
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-                } catch (cudnn_frontend::cudnnException& e) {
-                    // The last config didn't work (E.g. all configs didn't work)
-                    getLogger() << "[cudnn_frontend] ERROR: "
-                                << "Config " << i << " failed with " << e.getCudnnStatus() << " " << e.what()
-                                << std::endl;
-                    if (i == filtered_configs.second.size() - 1) {
-                        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "All plan creation failed"};
-                    }
-                    continue;
-                }
-#endif
-            }
-        }
 
         return {error_code_t::OK, ""};
     }
@@ -275,6 +217,39 @@ query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operatio
         CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, mode));
         op_graph_to_configs.emplace(operation_graph->getTag(), configs);
     }
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
+                            ManagedOpaqueDescriptor& config,
+                            std::string const& operation_graph_tag,
+                            cudnnHandle_t handle) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    try {
+#endif
+        auto built_plan = cudnn_frontend::ExecutionPlanBuilder()
+                              .setHandle(handle)
+                              .setEngineConfig(config, operation_graph_tag)
+                              .build();
+        if (built_plan.get_status() != CUDNN_STATUS_SUCCESS) {
+            getLogger() << "[cudnn_frontend] ERROR: "
+                        << "Config failed with " << built_plan.get_error() << std::endl;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: Config succeeded! Plan has built!\n";
+        getLogger() << "[cudnn_frontend] INFO: " << built_plan.describe() << std::endl;
+        plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
+
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    } catch (cudnn_frontend::cudnnException& e) {
+        getLogger() << "[cudnn_frontend] ERROR: "
+                    << "Config failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
+        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
+    }
+#endif
+
     return {error_code_t::OK, ""};
 }
 
