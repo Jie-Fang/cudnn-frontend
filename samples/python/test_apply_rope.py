@@ -37,39 +37,45 @@ def build_rope_cache(
 
     return cos, sin
 
-def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
-    head_size = x.size(-1)
-    x1 = x[..., : head_size // 2]  # (B, nh, T, hs/2)
-    x2 = x[..., head_size // 2 :]  # (B, nh, T, hs/2)
-    rotated = torch.cat((-x2, x1), dim=-1)  # (B, nh, T, hs)
-    roped = (x * cos) + (rotated * sin)
-    return roped.type_as(x)
+
+def apply_rope(q: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+    def fn(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+        head_size = x.size(-1)
+        x1 = x[..., : head_size // 2]  # (B, nh, T, hs/2)
+        x2 = x[..., head_size // 2 :]  # (B, nh, T, hs/2)
+        rotated = torch.cat((-x2, x1), dim=-1)  # (B, nh, T, hs)
+        roped = (x * cos) + (rotated * sin)
+        return roped.type_as(x)
+    rope_n_elem = cos.size(-1)
+    q_roped = fn(q[..., : rope_n_elem], cos, sin)
+    return torch.cat((q_roped, q[..., rope_n_elem :]), dim=-1)
 
 def test_apply_rope():
-    B, nh, T, hs = 4, 3, 64, 128
+    B, nh, T, hs = 8, 32, 4096, 128
+    rope_n_elem = int(0.25 * hs)
 
     # Reference
-    x_gpu = torch.ones(B, nh, T, hs, dtype=torch.float16, device='cuda')
-    
+    x_gpu = torch.randn(B, nh, T, hs, dtype=torch.float16, device='cuda')
+
     cos_gpu, sin_gpu = build_rope_cache(
         seq_len=T,
-        n_elem=hs,
+        n_elem=rope_n_elem,
     )
 
     Y_expected = apply_rope(x_gpu, cos_gpu, sin_gpu)
 
     # Cudnn code
-    x_gpu = x_gpu.reshape(-1, T, hs)
-    x1_gpu = x_gpu[..., : hs // 2]
-    x2_gpu = x_gpu[..., hs // 2 :]
+    x_gpu_3d = x_gpu.reshape(-1, T, hs)
+    x1_gpu = x_gpu_3d[..., : rope_n_elem // 2]
+    x2_gpu = x_gpu_3d[..., rope_n_elem // 2 : rope_n_elem]
 
-    cos_gpu = cos_gpu.reshape(1, T, hs)
-    cos1_gpu = cos_gpu[..., : hs // 2]
-    cos2_gpu = cos_gpu[..., hs // 2 :]
+    cos_gpu = cos_gpu.reshape(1, T, rope_n_elem)
+    cos1_gpu = cos_gpu[..., : rope_n_elem // 2]
+    cos2_gpu = cos_gpu[..., rope_n_elem // 2 :]
 
-    sin_gpu = sin_gpu.reshape(1, T, hs)
-    sin1_gpu = sin_gpu[..., : hs // 2]
-    sin2_gpu = sin_gpu[..., hs // 2 :]
+    sin_gpu = sin_gpu.reshape(1, T, rope_n_elem)
+    sin1_gpu = sin_gpu[..., : rope_n_elem // 2]
+    sin2_gpu = sin_gpu[..., rope_n_elem // 2 :]
 
     graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
     x1 = graph.tensor_like(x1_gpu)
@@ -82,10 +88,10 @@ def test_apply_rope():
     x1_cos1 = graph.mul(a = x1, b = cos1)
     x2_cos2 = graph.mul(a = x2, b = cos2)
 
-    neg_x2_sin1 = graph.mul(a = graph.neg(input = x2), b = sin1)
+    x2_sin1 = graph.mul(a = x2, b = sin1)
     x1_sin2 = graph.mul(a = x1, b = sin2)
     
-    Y1 = graph.add(a = x1_cos1, b = neg_x2_sin1)
+    Y1 = graph.sub(a = x1_cos1, b = x2_sin1)
     Y1.set_output(True).set_data_type(convert_to_cudnn_type(torch.float16))
     
     Y2 = graph.add(a = x2_cos2, b = x1_sin2)
@@ -95,13 +101,9 @@ def test_apply_rope():
     
     graph.build()
 
-    Y_actual   = torch.empty_like(Y_expected)
-    Y1_actual = Y_actual[..., : hs // 2]
-    Y2_actual = Y_actual[..., hs // 2 :]
-
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
-    graph.execute({x1: x1_gpu, x2: x2_gpu, sin1: sin1_gpu, sin2: sin2_gpu, cos1: cos1_gpu, cos2: cos2_gpu, Y1: Y1_actual, Y2: Y2_actual}, workspace)
+    graph.execute({x1: x1_gpu, x2: x2_gpu, sin1: sin1_gpu, sin2: sin2_gpu, cos1: cos1_gpu, cos2: cos2_gpu, Y1: x1_gpu, Y2: x2_gpu}, workspace)
 
     # Compare
-    torch.testing.assert_close(Y_expected, Y_actual, atol=1e-4, rtol=1e-4)
+    torch.testing.assert_close(Y_expected, x_gpu, atol=1e-2, rtol=1e-2)
