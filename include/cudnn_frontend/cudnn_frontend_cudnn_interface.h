@@ -27,9 +27,6 @@ class ICudnn {
         return uid;
     }
 
-    std::vector<std::shared_ptr<OperationGraph_v8>> operation_graphs;
-    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
-
    protected:
     inline static std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
 
@@ -38,6 +35,9 @@ class ICudnn {
         std::vector<uid_t> uids;
     };
     std::vector<operation_with_uids> operations;
+
+    std::vector<std::shared_ptr<OperationGraph_v8>> operation_graphs;
+    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
 
     // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;

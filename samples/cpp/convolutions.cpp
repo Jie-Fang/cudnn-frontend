@@ -65,8 +65,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -81,7 +80,7 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
         {X, x_tensor.devPtr}, {W, w_tensor.devPtr}, {S, s_tensor.devPtr}, {B, b_tensor.devPtr}, {Y, y_tensor.devPtr}};
 
     REQUIRE(plans.autotune(handle, variant_pack, workspace.devPtr).is_good());
-    REQUIRE(set_execution_plans(plans, graph).is_good());
+    REQUIRE(graph.set_execution_plans(plans).is_good());
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
@@ -138,12 +137,11 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(set_execution_plans(plans, graph).is_good());
+    REQUIRE(graph.set_execution_plans(plans).is_good());
 
     Surface<half> x_tensor(4 * 64 * 16 * 16, false);
     Surface<half> s_tensor(64, false);
@@ -236,14 +234,12 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     auto status = plans.check_support(handle);
 
     if (status.is_bad()) {
-        fe::graph::Plans fallback_plans;
-        get_execution_plan_list(fallback_plans, graph, fe::HeurMode_t::HEUR_MODE_FALLBACK);
+        auto fallback_plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
         REQUIRE(fallback_plans.check_support(handle).is_good());
     }
 

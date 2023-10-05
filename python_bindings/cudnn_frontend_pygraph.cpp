@@ -729,18 +729,16 @@ class PyGraph {
 
     void
     check_support() {
-        cudnn_frontend::graph::Plans plans;
-        get_execution_plan_list(plans, graph, cudnn_frontend::HeurMode_t::HEUR_MODE_A);
+        auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A);
 
         auto status = plans.check_support(handle);
         if (status.is_bad()) {
-            cudnn_frontend::graph::Plans fallback_plans;
-            get_execution_plan_list(fallback_plans, graph, cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK);
-            status = fallback_plans.check_support(handle);
+            auto fallback_plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK);
+            status              = fallback_plans.check_support(handle);
             throw_if(status.is_bad(), status.get_code(), status.get_message());
-            status = set_execution_plans(fallback_plans, graph);
+            status = graph.set_execution_plans(fallback_plans);
         } else {
-            status = set_execution_plans(plans, graph);
+            status = graph.set_execution_plans(plans);
         }
         return;
     }

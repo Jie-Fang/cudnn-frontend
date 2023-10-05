@@ -30,6 +30,11 @@ class Execution_plan_list {
         engine_configs = list;
     }
 
+    std::shared_ptr<ExecutionPlan> const
+    get_candidate() const {
+        return (execution_plans.size() ? execution_plans.front() : nullptr);
+    }
+
     std::vector<std::shared_ptr<ExecutionPlan>>&
     get_execution_plans() {
         return execution_plans;
@@ -193,8 +198,6 @@ class Execution_plan_list {
 };
 
 class Plans {
-    friend class Graph;
-
    public:
     Execution_plan_list list_of_engine_configs;
 
@@ -354,33 +357,6 @@ Plans::build_all_plans(cudnnHandle_t h) {
 inline int64_t
 Plans::get_max_workspace_size() {
     return list_of_engine_configs.get_max_workspace_size();
-}
-
-inline error_t
-get_execution_plan_list(Plans& plans, INode const& graph, HeurMode_t mode) {
-    std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
-    CHECK_CUDNN_FRONTEND_ERROR(detail::query_heuristics(graph.operation_graphs, op_graph_to_configs, mode));
-
-    getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
-    auto& engine_configs = plans.list_of_engine_configs;
-    engine_configs.set_tag(op_graph_to_configs.begin()->first);
-    engine_configs.set_engine_configs(op_graph_to_configs.begin()->second);
-
-    getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
-    CHECK_CUDNN_FRONTEND_ERROR(engine_configs.query_properties());
-
-    return {error_code_t::OK, ""};
-}
-
-inline error_t
-set_execution_plans(Plans& plan, INode& graph) {
-    RETURN_CUDNN_FRONTEND_ERROR_IF(plan.list_of_engine_configs.execution_plans.empty(),
-                                   error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                                   "No validate candidate for plan execution");
-
-    graph.execution_plans.emplace_back(plan.list_of_engine_configs.execution_plans.front());
-
-    return {error_code_t::OK, ""};
 }
 
 }  // namespace cudnn_frontend::graph

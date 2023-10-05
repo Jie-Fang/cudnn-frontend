@@ -22,6 +22,7 @@
 #include "cudnn_frontend/node/scaled_dot_product_attention.h"
 #include "cudnn_frontend/node/scaled_dot_product_flash_attention.h"
 
+#include "cudnn_frontend/plans.h"
 #include "cudnn_frontend_graph_helpers.h"
 
 namespace cudnn_frontend::graph {
@@ -158,6 +159,20 @@ class Graph : public INode {
         std::shared_ptr<Tensor_attributes>,
         Scaled_dot_product_flash_attention_backward_attributes);
 
+    Plans
+    get_execution_plan_list(HeurMode_t mode);
+
+    error_t
+    set_execution_plans(Plans const &plan) {
+        if (plan.list_of_engine_configs.get_candidate() == nullptr) {
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                    "[cudnn_frontend] ERROR: No validate candidate for plan execution"};
+        }
+        execution_plans.emplace_back(plan.list_of_engine_configs.get_candidate());
+
+        return {error_code_t::OK, ""};
+    }
+
     error_t
     createOperationGraphs(cudnnHandle_t handle) override final {
         getLogger() << "Operation Graph has " << operations.size() << " operations." << std::endl;
@@ -167,6 +182,31 @@ class Graph : public INode {
         return {error_code_t::OK, ""};
     }
 };
+
+inline Plans
+Graph::get_execution_plan_list(HeurMode_t mode) {
+    Plans plan_list;
+    // TODO: The error returned is not propagate to user.
+    // Should the return value be changed to error_code_t too?
+    std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
+    auto status = detail::query_heuristics(operation_graphs, op_graph_to_configs, mode);
+    if (status.is_bad()) {
+        getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
+        return plan_list;
+    }
+
+    getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
+    auto &engine_configs = plan_list.list_of_engine_configs;
+    engine_configs.set_tag(op_graph_to_configs.begin()->first);
+    engine_configs.set_engine_configs(op_graph_to_configs.begin()->second);
+
+    getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
+    status = engine_configs.query_properties();
+    if (status.is_bad()) {
+        getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl;
+    }
+    return plan_list;
+}
 
 inline Graph &
 Graph::set_intermediate_data_type(DataType_t const type) {

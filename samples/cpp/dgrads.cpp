@@ -60,12 +60,11 @@ TEST_CASE("Dgrad Drelu Graph", "[dgrad][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(set_execution_plans(plans, graph).is_good());
+    REQUIRE(graph.set_execution_plans(plans).is_good());
 
     Surface<half> dy_tensor(4 * 64 * 16 * 16, false);
     Surface<half> w_tensor(64 * 32 * 3 * 3, false);
@@ -160,12 +159,11 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(set_execution_plans(plans, graph).is_good());
+    REQUIRE(graph.set_execution_plans(plans).is_good());
 
     Surface<half> dy_tensor(4 * 64 * 16 * 16, false);
     Surface<half> w_tensor(64 * 32 * 3 * 3, false);

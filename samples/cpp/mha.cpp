@@ -139,12 +139,11 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, mha_graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(set_execution_plans(plans, mha_graph).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -285,12 +284,11 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, mha_graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(set_execution_plans(plans, mha_graph).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -429,12 +427,11 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    fe::graph::Plans plans;
-    get_execution_plan_list(plans, mha_graph, fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
-    REQUIRE(set_execution_plans(plans, mha_graph).is_good());
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     // build variant pack
     // inputs
