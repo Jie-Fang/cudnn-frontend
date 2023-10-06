@@ -1,7 +1,5 @@
 import cudnn
-import pytest
 import torch
-from typing import Optional
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
@@ -14,10 +12,10 @@ def convert_to_cudnn_type(torch_type):
 def build_rope_cache(
     seq_len: int,
     n_elem: int,
-    device: Optional[torch.device] = 'cuda',
+    device = 'cuda',
     base: int = 10000,
     condense_ratio: int = 1,
-) -> tuple[torch.Tensor, torch.Tensor]:
+):
     """Enhanced Transformer with Rotary Position Embedding.
 
     Derived from: https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/labml_nn/
@@ -38,7 +36,7 @@ def build_rope_cache(
     return cos, sin
 
 
-def apply_rope(q: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+def apply_rope_ref(q: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
     def fn(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
         head_size = x.size(-1)
         x1 = x[..., : head_size // 2]  # (B, nh, T, hs/2)
@@ -50,7 +48,7 @@ def apply_rope(q: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.T
     q_roped = fn(q[..., : rope_n_elem], cos, sin)
     return torch.cat((q_roped, q[..., rope_n_elem :]), dim=-1)
 
-def test_apply_rope():
+def apply_rope():
     B, nh, T, hs = 8, 32, 4096, 128
     rope_n_elem = int(0.25 * hs)
 
@@ -62,7 +60,7 @@ def test_apply_rope():
         n_elem=rope_n_elem,
     )
 
-    Y_expected = apply_rope(x_gpu, cos_gpu, sin_gpu)
+    Y_expected = apply_rope_ref(x_gpu, cos_gpu, sin_gpu)
 
     # Cudnn code
     x_gpu_3d = x_gpu.reshape(-1, T, hs)
