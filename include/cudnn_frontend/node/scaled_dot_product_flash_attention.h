@@ -401,9 +401,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
         sub_nodes.emplace_back(std::move(softmax_node));
 
         // Two cases for training: dropout present or not
-        // Special case: Skip dropout when 0.0 probability
-        bool dropout_present = (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0);
-        dropout_present      = dropout_present || options.inputs.Dropout_mask;
+        bool dropout_present = false;
+        if (options.dropout_probability.has_value()) {
+            dropout_present = true;
+            // Special case: Skip dropout when 0.0 probability. Only do for 8.9.3 and up as rng isn't optional earlier.
+            if (cudnnGetVersion() > 8902 && options.dropout_probability.value() != 0.0) {
+                dropout_present = false;
+            }
+        } else if (options.inputs.Dropout_mask) {
+            dropout_present = true;
+        }
 
         if (dropout_present) {
             // Lower options to rng options
