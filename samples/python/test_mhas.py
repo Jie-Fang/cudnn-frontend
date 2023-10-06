@@ -121,7 +121,7 @@ def compute_ref(
     padding=None,
     is_causal=False,
     compute_stats=False,
-    device="cuda"
+    device="cuda",
 ):
     b, h, s_q, d = q.shape
     _, _, s_kv, _ = k.shape
@@ -182,6 +182,7 @@ def compute_ref(
 
     return o
 
+
 alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
@@ -202,7 +203,7 @@ all_options_forward = [
             padding_mask_options,
             causal_mask_options,
             dropout_options,
-            is_infer_options
+            is_infer_options,
         ]
     )
 ]
@@ -222,6 +223,7 @@ all_options_backward = [
     )
 ]
 
+
 @pytest.fixture(params=all_options_forward)
 def param_extract_forward(request):
     return request.param
@@ -237,7 +239,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         is_padding,
         is_causal,
         is_dropout,
-        is_infer
+        is_infer,
     ) = param_extract_forward
 
     if is_alibi and cudnn.backend_version() < 8904:
@@ -343,7 +345,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
-        dropout=dropout_tuple if is_dropout else None
+        dropout=dropout_tuple if is_dropout else None,
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
@@ -361,7 +363,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
         o: o_gpu,
-        stats: stats_gpu
+        stats: stats_gpu,
     }
 
     if is_dropout:
@@ -393,7 +395,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
-        compute_stats=(is_infer == False)
+        compute_stats=(is_infer == False),
     )
     if is_infer == False:
         o_ref, stats_ref = ret
@@ -428,7 +430,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         is_bias,
         is_padding,
         is_causal,
-        is_dropout
+        is_dropout,
     ) = param_extract_backward
 
     s_q_choices = [256, 512, 1024]
@@ -489,7 +491,9 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
 
     dO_gpu = 0.1 * torch.randn(b * h * s_q * d, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
 
-    attn_scale_cpu = torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu") if attn_scale_val != 1.0 else None
+    attn_scale_cpu = (
+        torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu") if attn_scale_val != 1.0 else None
+    )
 
     bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type) if is_bias else None
 
@@ -509,7 +513,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         is_alibi=is_alibi,
         padding=(seq_len_q_gpu, seq_len_kv_gpu) if is_padding else None,
         is_causal=is_causal,
-        compute_stats=True
+        compute_stats=True,
     )
 
     if layout == "sbh3d":
@@ -564,7 +568,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
-        dropout=dropout_tuple if is_dropout else None
+        dropout=dropout_tuple if is_dropout else None,
     )
 
     dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
@@ -624,7 +628,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
-        compute_stats=False
+        compute_stats=False,
     )
 
     outputs_ref = [o_ref]
@@ -633,11 +637,9 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     if is_bias:
         inputs_ref.append(bias_ref)
 
-    [dQ_ref, dK_ref, dV_ref, *opt_refs] = list(torch.autograd.grad(
-        outputs=outputs_ref,
-        inputs=inputs_ref,
-        grad_outputs=dO_ref
-    ))
+    [dQ_ref, dK_ref, dV_ref, *opt_refs] = list(
+        torch.autograd.grad(outputs=outputs_ref, inputs=inputs_ref, grad_outputs=dO_ref)
+    )
 
     if is_bias:
         dBias_ref = opt_refs.pop(0)
@@ -658,6 +660,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     assert compare_tensors(dQ_ref, dQ_gpu, "dQ", print_compare=print_compare) == 0
     assert compare_tensors(dK_ref, dK_gpu, "dK", print_compare=print_compare) == 0
     assert compare_tensors(dV_ref, dV_gpu, "dV", print_compare=print_compare) == 0
+
 
 if __name__ == "__main__":
     """
