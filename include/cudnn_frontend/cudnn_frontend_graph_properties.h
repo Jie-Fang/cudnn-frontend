@@ -1644,10 +1644,10 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> Q;
         std::shared_ptr<Tensor_attributes> K;
         std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Seed;
         std::shared_ptr<Tensor_attributes> Offset;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
@@ -1661,8 +1661,8 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     } outputs;
 
     std::optional<bool> is_inference;
-    bool padding_mask = false;
     bool alibi_mask   = false;
+    bool padding_mask = false;
     bool causal_mask  = false;
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
@@ -1672,24 +1672,6 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     Scaled_dot_product_flash_attention_attributes&
     set_is_inference(bool const value) {
         is_inference = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_padding_mask(bool const value) {
-        padding_mask = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_alibi_mask(bool const value) {
-        alibi_mask = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_causal_mask(bool const value) {
-        causal_mask = value;
         return *this;
     }
 
@@ -1712,6 +1694,18 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     }
 
     Scaled_dot_product_flash_attention_attributes&
+    set_alibi_mask(bool const value) {
+        alibi_mask = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes&
+    set_padding_mask(bool const value) {
+        padding_mask = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes&
     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
         inputs.SEQ_LEN_Q = value;
         return *this;
@@ -1720,6 +1714,12 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     Scaled_dot_product_flash_attention_attributes&
     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
         inputs.SEQ_LEN_KV = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_attributes&
+    set_causal_mask(bool const value) {
+        causal_mask = value;
         return *this;
     }
 
@@ -1779,6 +1779,8 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
         std::shared_ptr<Tensor_attributes> Stats;
         std::shared_ptr<Tensor_attributes> Attn_scale;
         std::shared_ptr<Tensor_attributes> Bias;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
+        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
         std::shared_ptr<Tensor_attributes> Seed;
         std::shared_ptr<Tensor_attributes> Offset;
         std::shared_ptr<Tensor_attributes> Dropout_mask;
@@ -1792,7 +1794,10 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
         std::shared_ptr<Tensor_attributes> dV;
     } outputs;
 
-    bool causal_mask = false;
+    bool alibi_mask   = false;
+    bool padding_mask = false;
+    bool causal_mask  = false;
+
     std::optional<float> dropout_probability;
 
    public:
@@ -1808,6 +1813,30 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
         inputs.Bias = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_alibi_mask(bool const value) {
+        alibi_mask = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_padding_mask(bool const value) {
+        padding_mask = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_Q = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs.SEQ_LEN_KV = value;
         return *this;
     }
 

@@ -581,24 +581,24 @@ class PyGraph {
     scaled_dot_product_flash_attention(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
-                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
-                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                        bool const is_inference,
                                        py::object const& attn_scale,
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
-                                       bool const use_padding_mask,
                                        bool const use_alibi_mask,
+                                       bool const use_padding_mask,
+                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                        bool const use_causal_mask,
                                        py::object const& dropout,
                                        cudnn_frontend::DataType_t const& compute_data_type,
                                        std::string const& name) {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_attributes()
                               .set_is_inference(is_inference)
+                              .set_bias(bias)
+                              .set_alibi_mask(use_alibi_mask)
+                              .set_padding_mask(use_padding_mask)
                               .set_seq_len_q(seq_len_q)
                               .set_seq_len_kv(seq_len_kv)
-                              .set_bias(bias)
-                              .set_padding_mask(use_padding_mask)
-                              .set_alibi_mask(use_alibi_mask)
                               .set_causal_mask(use_causal_mask)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
@@ -665,6 +665,10 @@ class PyGraph {
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attn_scale,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+                                                bool const use_alibi_mask,
+                                                bool const use_padding_mask,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                                 bool const use_causal_mask,
                                                 py::object const& dropout,
                                                 cudnn_frontend::DataType_t const& compute_data_type,
@@ -672,6 +676,10 @@ class PyGraph {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_backward_attributes()
                               .set_attn_scale(attn_scale)
                               .set_bias(bias)
+                              .set_alibi_mask(use_alibi_mask)
+                              .set_padding_mask(use_padding_mask)
+                              .set_seq_len_q(seq_len_q)
+                              .set_seq_len_kv(seq_len_kv)
                               .set_causal_mask(use_causal_mask)
                               .set_compute_data_type(compute_data_type)
                               .set_name(name);
@@ -1005,13 +1013,13 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("q"),
              py::arg("k"),
              py::arg("v"),
+             py::arg("is_inference"),
+             py::arg_v("attn_scale", nullptr),
+             py::arg_v("bias", nullptr),
+             py::arg_v("use_alibi_mask", false),
+             py::arg_v("use_padding_mask", false),
              py::arg_v("seq_len_q", nullptr),
              py::arg_v("seq_len_kv", nullptr),
-             py::arg("is_inference"),
-             py::arg_v("attn_scale", py::none()),
-             py::arg_v("bias", nullptr),
-             py::arg_v("use_padding_mask", false),
-             py::arg_v("use_alibi_mask", false),
              py::arg_v("use_causal_mask", false),
              py::arg_v("dropout", py::none()),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -1023,13 +1031,13 @@ init_pygraph_submodule(py::module_& m) {
                     q (cudnn_tensor): The query data.
                     k (cudnn_tensor): The key data.
                     v (cudnn_tensor): The value data.
-                    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
-                    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     is_inference (bool): Whether it is an inference step or training step.
                     attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
-                    use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
                     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
+                    use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
+                    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+                    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
@@ -1049,6 +1057,10 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("stats"),
              py::arg_v("attn_scale", nullptr),
              py::arg_v("bias", nullptr),
+             py::arg_v("use_alibi_mask", false),
+             py::arg_v("use_padding_mask", false),
+             py::arg_v("seq_len_q", nullptr),
+             py::arg_v("seq_len_kv", nullptr),
              py::arg_v("use_causal_mask", false),
              py::arg_v("dropout", py::none()),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -1063,8 +1075,12 @@ init_pygraph_submodule(py::module_& m) {
                     o (cudnn_tensor): The output data.
                     dO (cudnn_tensor): The output loss gradient.
                     stats (cudnn_tensor): The softmax statistics from the forward pass.
-                    attn_scale (Optional[Union[cudnn_tensor|float]]): The scale factor for attention. Default is None.
+                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
+                    use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
+                    use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
+                    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+                    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
