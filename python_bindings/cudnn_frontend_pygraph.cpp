@@ -663,7 +663,7 @@ class PyGraph {
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& o,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
-                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& attn_scale,
+                                                py::object const& attn_scale,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
                                                 bool const use_alibi_mask,
                                                 bool const use_padding_mask,
@@ -674,7 +674,6 @@ class PyGraph {
                                                 cudnn_frontend::DataType_t const& compute_data_type,
                                                 std::string const& name) {
         auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_backward_attributes()
-                              .set_attn_scale(attn_scale)
                               .set_bias(bias)
                               .set_alibi_mask(use_alibi_mask)
                               .set_padding_mask(use_padding_mask)
@@ -685,6 +684,20 @@ class PyGraph {
                               .set_name(name);
 
         py::object cudnn_tensor_type = py::module_::import("cudnn").attr("tensor");
+
+        if (!attn_scale.is_none()) {
+            if (py::isinstance<py::float_>(attn_scale)) {
+                auto const attn_scale_value = attn_scale.cast<float>();
+                attributes.set_attn_scale(attn_scale_value);
+            } else {
+                auto const attn_scale_tensor =
+                    attn_scale.cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+                if (!attn_scale_tensor) {
+                    throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
+                }
+                attributes.set_attn_scale(attn_scale_tensor);
+            }
+        }
 
         if (!dropout.is_none()) {
             if (!py::isinstance<py::tuple>(dropout)) {
@@ -1014,7 +1027,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("k"),
              py::arg("v"),
              py::arg("is_inference"),
-             py::arg_v("attn_scale", nullptr),
+             py::arg_v("attn_scale", py::none()),
              py::arg_v("bias", nullptr),
              py::arg_v("use_alibi_mask", false),
              py::arg_v("use_padding_mask", false),
@@ -1032,7 +1045,7 @@ init_pygraph_submodule(py::module_& m) {
                     k (cudnn_tensor): The key data.
                     v (cudnn_tensor): The value data.
                     is_inference (bool): Whether it is an inference step or training step.
-                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+                    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
                     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
                     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
@@ -1055,7 +1068,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("o"),
              py::arg("dO"),
              py::arg("stats"),
-             py::arg_v("attn_scale", nullptr),
+             py::arg_v("attn_scale", py::none()),
              py::arg_v("bias", nullptr),
              py::arg_v("use_alibi_mask", false),
              py::arg_v("use_padding_mask", false),
@@ -1075,7 +1088,7 @@ init_pygraph_submodule(py::module_& m) {
                     o (cudnn_tensor): The output data.
                     dO (cudnn_tensor): The output loss gradient.
                     stats (cudnn_tensor): The softmax statistics from the forward pass.
-                    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+                    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
                     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
                     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.

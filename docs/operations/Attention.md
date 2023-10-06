@@ -64,7 +64,7 @@ Args:
     k (cudnn_tensor): The key data.
     v (cudnn_tensor): The value data.
     is_inference (bool): Whether it is an inference step or training step.
-    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
@@ -146,7 +146,7 @@ Args:
     o (cudnn_tensor): The output data.
     dO (cudnn_tensor): The output loss gradient.
     stats (cudnn_tensor): The softmax statistics from the forward pass.
-    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.

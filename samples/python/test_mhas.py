@@ -259,6 +259,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
 
     print(f"{str(param_extract_forward)} s={s_q} d={d}")
 
+    attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
 
     shape_q = (b, h, s_q, d)
@@ -338,7 +339,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         k=k,
         v=v,
         is_inference=is_infer,
-        attn_scale=0.125,
+        attn_scale=attn_scale,
         bias=bias,
         use_alibi_mask=is_alibi,
         use_padding_mask=is_padding,
@@ -390,7 +391,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         q_ref,
         k_ref,
         v_ref,
-        attn_scale=0.125,
+        attn_scale=attn_scale,
         bias=bias_ref if is_bias else None,
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
@@ -444,7 +445,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
 
     print(f"{str(param_extract_backward)} s={s_q} d={d}")
 
-    attn_scale_val = 0.125
+    attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
 
     shape_q = (b, h, s_q, d)
@@ -491,10 +492,6 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
 
     dO_gpu = 0.1 * torch.randn(b * h * s_q * d, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
 
-    attn_scale_cpu = (
-        torch.full((1, 1, 1, 1), attn_scale_val, dtype=torch.float32, device="cpu") if attn_scale_val != 1.0 else None
-    )
-
     bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type) if is_bias else None
 
     seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
@@ -508,7 +505,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         q_gpu,
         k_gpu,
         v_gpu,
-        attn_scale=attn_scale_val,
+        attn_scale=attn_scale,
         bias=bias_gpu,
         is_alibi=is_alibi,
         padding=(seq_len_q_gpu, seq_len_kv_gpu) if is_padding else None,
@@ -540,8 +537,6 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     o = graph.tensor_like(o_gpu)
     dO = graph.tensor_like(dO_gpu)
     stats = graph.tensor_like(stats_gpu)
-
-    attn_scale = graph.tensor_like(attn_scale_cpu).set_is_pass_by_value(True) if attn_scale_val != 1.0 else None
 
     bias = graph.tensor_like(bias_gpu) if is_bias else None
 
@@ -588,7 +583,6 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         dQ: dQ_gpu,
         dK: dK_gpu,
         dV: dV_gpu,
-        attn_scale: attn_scale_cpu,
         bias: bias_gpu,
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
@@ -623,7 +617,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         q_ref,
         k_ref,
         v_ref,
-        attn_scale=attn_scale_val,
+        attn_scale=attn_scale,
         bias=bias_ref if is_bias else None,
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
