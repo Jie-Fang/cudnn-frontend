@@ -22,177 +22,10 @@
 #include "cudnn_frontend/node/scaled_dot_product_attention.h"
 #include "cudnn_frontend/node/scaled_dot_product_flash_attention.h"
 
+#include "cudnn_frontend/plans.h"
 #include "cudnn_frontend_graph_helpers.h"
 
 namespace cudnn_frontend::graph {
-
-class Plans {
-    friend class Graph;
-    Execution_plan_list list_of_engine_configs;
-
-   public:
-    Execution_plan_list &
-    get_engine_configs() {
-        return list_of_engine_configs;
-    }
-
-    Plans &
-    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &);
-    Plans &
-    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &);
-    Plans &
-    filter_out_workspace_greater_than(int64_t const workspace) {
-        list_of_engine_configs.set_max_workspace_allowed(workspace);
-        return *this;
-    }
-
-    error_t build_all_plans(cudnnHandle_t);
-
-    inline error_t
-    check_support(cudnnHandle_t h) {
-        CHECK_CUDNN_FRONTEND_ERROR(list_of_engine_configs.check_support(h));
-        return {error_code_t::OK, ""};
-    }
-
-    int64_t
-    get_max_workspace_size();
-
-    static error_t
-    autotune_default_impl(Plans *plans,
-                          cudnnHandle_t handle,
-                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> variants,
-                          void *workspace,
-                          void *) {
-        auto &execution_plans = plans->get_engine_configs().get_execution_plans();
-
-        // Create the variant pack for all the plans to use.
-        std::vector<int64_t> uids;
-        std::vector<void *> ptrs;
-        for (auto it : variants) {
-            uids.push_back(it.first->get_uid());
-            ptrs.push_back(it.second);
-        }
-
-        auto variantPack = VariantPackBuilder()
-                               .setDataPointers(ptrs.size(), ptrs.data())
-                               .setUids(uids.size(), uids.data())
-                               .setWorkspacePointer(workspace)
-                               .build();
-
-        std::vector<std::shared_ptr<ExecutionPlan>> time_sorted_plans;
-
-        auto plan_cmp = [](std::shared_ptr<ExecutionPlan> a, std::shared_ptr<ExecutionPlan> b) {
-            return a->getExecutionTime() < b->getExecutionTime();
-        };
-        std::set<std::shared_ptr<ExecutionPlan>, decltype(plan_cmp)> timed_execution_plans(plan_cmp);
-
-        const int maxIterCount         = 100;
-        const float threshhold         = 0.95f;
-        uint64_t successful_plan_count = 0;
-        cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-        cudaDeviceSynchronize();
-
-        cudaStream_t stream = nullptr;
-        cudnnGetStream(handle, &stream);
-
-        for (auto plan : plans->get_engine_configs().get_execution_plans()) {
-            float time_ms       = 0.0f;
-            float final_time_ms = 0.0f;
-            float min_time_ms   = std::numeric_limits<float>::max();
-
-            // Warm-up run
-            auto warmup_status = cudnnBackendExecute(handle, plan->get_raw_desc(), variantPack.get_raw_desc());
-            if (warmup_status != CUDNN_STATUS_SUCCESS) {
-                getLogger() << "[cudnn_frontend] Plan " << plan->getTag() << " failed with " << to_string(warmup_status)
-                            << std::endl;
-                continue;
-            }
-            successful_plan_count++;
-            cudaDeviceSynchronize();
-
-            for (int i = 0; i < maxIterCount; i++) {
-                cudaEventRecord(start, stream);
-
-                cudnnBackendExecute(handle, plan->get_raw_desc(), variantPack.get_raw_desc());
-
-                cudaEventRecord(stop, stream);
-                cudaEventSynchronize(stop);
-                cudaEventElapsedTime(&time_ms, start, stop);
-
-                final_time_ms = std::min(min_time_ms, time_ms);
-                if (time_ms / min_time_ms < threshhold) {
-                    min_time_ms = final_time_ms;
-                } else {
-                    break;
-                }
-            }
-
-            getLogger() << "[cudnn_frontend] Plan " << plan->getTag() << " took " << std::setw(10) << final_time_ms
-                        << std::endl;
-            plan->setExecutionTime(final_time_ms);
-            timed_execution_plans.insert(plan);
-        }
-
-        execution_plans.clear();
-        for (auto sorted_plan : timed_execution_plans) {
-            execution_plans.push_back(sorted_plan);
-        }
-
-        cudaEventDestroy(start);
-        cudaEventDestroy(stop);
-
-        getLogger() << "Autotuned " << successful_plan_count << " plans." << std::endl;
-        return {error_code_t::OK, ""};
-    }
-
-    std::function<
-        error_t(Plans *, cudnnHandle_t, std::unordered_map<std::shared_ptr<Tensor_attributes>, void *>, void *, void *)>
-        autotune_impl = &Plans::autotune_default_impl;
-
-    error_t
-    autotune(cudnnHandle_t handle,
-             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> variants,
-             void *workspace,
-             void *user_impl = nullptr) {
-        auto error = autotune_impl(this, handle, variants, workspace, user_impl);
-        return error;
-    }
-};
-
-inline Plans &
-Plans::filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
-    // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_code_t too?
-    auto status = list_of_engine_configs.filter_out_behavior_notes(notes);
-    if (status.is_bad()) {
-        getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
-    }
-    return *this;
-}
-
-inline Plans &
-Plans::filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
-    // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_code_t too?
-    auto status = list_of_engine_configs.filter_out_numeric_notes(notes);
-    if (status.is_bad()) {
-        getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
-    }
-    return *this;
-}
-
-inline error_t
-Plans::build_all_plans(cudnnHandle_t h) {
-    CHECK_CUDNN_FRONTEND_ERROR(list_of_engine_configs.build_all_plans(h));
-    return {error_code_t::OK, ""};
-}
-
-inline int64_t
-Plans::get_max_workspace_size() {
-    return list_of_engine_configs.get_max_workspace_size();
-}
 
 class Graph : public INode {
    private:
@@ -341,23 +174,6 @@ class Graph : public INode {
     }
 
     error_t
-    get_engine_configs(Execution_plan_list &plan_list) {
-        getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
-
-        if (engine_configs.size() == 0) {
-            return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for mode_a"};
-        }
-        plan_list.set_tag(engine_configs.begin()->first);
-        plan_list.set_engine_configs(engine_configs.begin()->second);
-
-        getLogger() << "[cudnn_frontend] INFO: Querying engine config properties for cfg_count "
-                    << engine_configs.begin()->second.size() << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(plan_list.query_properties());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createOperationGraphs(cudnnHandle_t handle) override final {
         getLogger() << "Operation Graph has " << operations.size() << " operations." << std::endl;
 
@@ -372,14 +188,20 @@ Graph::get_execution_plan_list(HeurMode_t mode) {
     Plans plan_list;
     // TODO: The error returned is not propagate to user.
     // Should the return value be changed to error_code_t too?
-
-    auto status = query_heuristics(mode);
+    std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
+    auto status = detail::query_heuristics(operation_graphs, op_graph_to_configs, mode);
     if (status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
         return plan_list;
     }
 
-    status = get_engine_configs(plan_list.list_of_engine_configs);
+    getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
+    auto &engine_configs = plan_list.list_of_engine_configs;
+    engine_configs.set_tag(op_graph_to_configs.begin()->first);
+    engine_configs.set_engine_configs(op_graph_to_configs.begin()->second);
+
+    getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
+    status = engine_configs.query_properties();
     if (status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl;
     }

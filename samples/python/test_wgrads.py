@@ -43,10 +43,10 @@ def test_scale_bias_relu_wgrad():
 
     wgrad_output = graph.conv_wgrad(name = "wgrad", image = relu_output, loss = DY, padding = padding, stride = stride, dilation = dilation)
     wgrad_output.set_output(True).set_dim([k, c, 3, 3])
-
-    graph.check_support()
     
-    graph.build()
+    graph.validate()
+    graph.build_operation_graph()
+    graph.check_support()
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 

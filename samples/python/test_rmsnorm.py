@@ -91,9 +91,10 @@ def test_rmsnorm(param_extract):
     
     Y.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     inv_var.set_output(True).set_data_type(convert_to_cudnn_type(inv_var_expected.dtype))
-
+    
+    graph.validate()
+    graph.build_operation_graph()
     graph.check_support()
-    graph.build()
     
     Y_actual = torch.empty_like(x_gpu)
     inv_var_actual = torch.empty_like(inv_var_expected)
@@ -147,8 +148,9 @@ def test_rmsnorm(param_extract):
     else:
         assert Dbias is None
 
+    bwd_graph.validate()
+    bwd_graph.build_operation_graph()
     bwd_graph.check_support()
-    bwd_graph.build()
     
     DX_actual = torch.empty_like(x_gpu)
     DScale_actual = torch.empty_like(scale_gpu)

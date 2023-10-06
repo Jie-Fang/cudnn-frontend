@@ -46,9 +46,10 @@ def test_matmul_bias_relu(param_extract):
     response = graph.matmul(name = "matmul", A = X, B = W)
     Y = graph.bias(name = "bias", input = response, bias = B)
     Y.set_output(True).set_data_type(convert_to_cudnn_type(input_type))
-
+    
+    graph.validate()
+    graph.build_operation_graph()
     graph.check_support()
-    graph.build()
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 

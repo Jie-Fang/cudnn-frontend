@@ -559,7 +559,9 @@ class test_graph:
         self.mark_implicit_output_nodes()
 
         # Building graph
-        graph.build()
+        graph.validate()
+        graph.build_operation_graph()
+        graph.check_support()
 
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()

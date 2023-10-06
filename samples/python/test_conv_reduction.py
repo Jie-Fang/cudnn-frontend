@@ -34,10 +34,10 @@ def test_reduction():
     
     Y = graph.reduction(input = Y0, mode = cudnn.reduction_mode.ADD)
     Y.set_output(True).set_dim([N,1,H,W]).set_data_type(cudnn.data_type.FLOAT)
-
-    graph.check_support()
     
-    graph.build()
+    graph.validate()
+    graph.build_operation_graph()
+    graph.check_support()
 
     Y_actual   = torch.zeros_like(Y_expected)
 
