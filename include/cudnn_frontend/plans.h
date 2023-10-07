@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "cudnn_frontend_node_interface.h"
-#include "cudnn_frontend_EngineConfig.h"
-#include "cudnn_frontend_Logging.h"
+#include "../cudnn_frontend_EngineConfig.h"
+#include "../cudnn_frontend_Logging.h"
 
 namespace cudnn_frontend::graph {
 
