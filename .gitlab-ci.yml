@@ -87,6 +87,13 @@ analysis:clang-format:
     allow_failure: true
     script:
         - ci/run_style_check_diff.sh
+        
+analysis:check-relative-includes:
+    image: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+    stage: analysis
+    script:
+        - echo "#include \"$CI_PROJECT_DIR/include/cudnn_frontend.h\"" > test_build.cpp
+        - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/
 
 build:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
@@ -628,4 +635,3 @@ build:cudnn_8.9_windows:
         - cd build
         - cmake ../
         - cmake --build . -j16 --verbose
-    
