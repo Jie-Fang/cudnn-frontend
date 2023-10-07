@@ -93,7 +93,8 @@ analysis:check-relative-includes:
     stage: analysis
     script:
         - echo "#include \"$CI_PROJECT_DIR/include/cudnn_frontend.h\"" > test_build.cpp
-        - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/
+        - echo 'int main() { return 0; }' >> test_build.cpp
+        - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/ -L/usr/lib/x86_64-linux-gnu/ -lcudnn
 
 build:cudnn_8.6.0.163:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_11.8_cudnn_8.6.0.163_torch
