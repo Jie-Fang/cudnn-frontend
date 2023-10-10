@@ -34,21 +34,21 @@ class ScaledDotProductAttentionNode : public INode {
 
         if (options.is_inference.has_value() == false) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message = "[cudnn_frontend] ERROR: is_infernece attribute not set.";
+            std::string message = "is_infernece attribute not set.";
             return {status, message};
         }
 
         if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
-                "[cudnn_frontend] ERROR: Dropout probability cannot be 1 as corresponding scale wont be well formed.";
+                "Dropout probability cannot be 1 as corresponding scale wont be well formed.";
             return {status, message};
         }
 
         if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
             auto status = error_code_t::ATTRIBUTE_NOT_SET;
             std::string message =
-                "[cudnn_frontend] ERROR: Both, dropout probability and custom dropout mask, cannot be set together.";
+                "Both, dropout probability and custom dropout mask, cannot be set together.";
             return {status, message};
         }
 
