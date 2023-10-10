@@ -14,6 +14,7 @@
 #include "node/genstats.h"
 #include "node/layernorm.h"
 #include "node/instancenorm.h"
+#include "node/din.h"
 #include "node/matmul.h"
 #include "node/pointwise.h"
 #include "node/reduction.h"
@@ -124,6 +125,10 @@ class Graph : public INode {
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          Layernorm_backward_attributes);
 
+    std::array<std::shared_ptr<Tensor_attributes>, 3> instancenorm_backward(std::shared_ptr<Tensor_attributes>,
+                                                                         std::shared_ptr<Tensor_attributes>,
+                                                                         std::shared_ptr<Tensor_attributes>,
+                                                                         Instancenorm_backward_attributes);
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
     std::shared_ptr<Tensor_attributes> matmul(std::shared_ptr<Tensor_attributes>,
@@ -404,6 +409,25 @@ Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
     options.inputs.SCALE = scale;
 
     sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
+
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::instancenorm_backward(std::shared_ptr<Tensor_attributes> dy,
+                          std::shared_ptr<Tensor_attributes> x,
+                          std::shared_ptr<Tensor_attributes> scale,
+                          Instancenorm_backward_attributes options) {
+    // Set outputs
+    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
+    auto return_outputs = options.outputs;
+
+    // Set inputs
+    options.inputs.DY    = dy;
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+
+    sub_nodes.emplace_back(std::make_unique<DINNode>(std::move(options), context));
 
     return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }
