@@ -28,8 +28,7 @@ def param_extract(request):
   return request.param
 
 @pytest.mark.skipif(cudnn.backend_version() < 8905, reason="LN not supported below cudnn 8.9.5")
-def test_ln(param_extract):
-    # TODO(@barretw): ensure output is deterministic and reproducible
+def test_in(param_extract):
     torch.manual_seed(0)
 
     embedding_dim, input_type = param_extract
@@ -167,4 +166,4 @@ def test_ln(param_extract):
     print("Success!!")
 
 if __name__ == "__main__":
-    test_ln((1600, torch.bfloat16))
+    test_in((1600, torch.bfloat16))
