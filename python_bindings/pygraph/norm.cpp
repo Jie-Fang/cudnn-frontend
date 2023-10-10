@@ -145,43 +145,42 @@ PyGraph::rmsnorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribut
     return {DX, DScale, DBias};
 }
 
+std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+PyGraph::instancenorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
+                      cudnn_frontend::DataType_t const& compute_data_type,
+                      std::string const& name) {
+    auto attributes = cudnn_frontend::graph::Instancenorm_attributes()
+                          .set_forward_phase(forward_phase)
+                          .set_compute_data_type(compute_data_type)
+                          .set_epsilon(epsilon)
+                          .set_name(name);
 
-    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
-    PyGraph::instancenorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
-              cudnn_frontend::DataType_t const& compute_data_type,
-              std::string const& name) {
-        auto attributes = cudnn_frontend::graph::Instancenorm_attributes()
-                              .set_forward_phase(forward_phase)
-                              .set_compute_data_type(compute_data_type)
-                              .set_epsilon(epsilon)
-                              .set_name(name);
+    auto [Y, mean, inv_var] = graph.instancenorm(x, scale, bias, attributes);
+    return {Y, mean, inv_var};
+}
 
-        auto [Y, mean, inv_var] = graph.instancenorm(x, scale, bias, attributes);
-        return {Y, mean, inv_var};
-    }
-    
-    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
-    PyGraph::instancenorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& epsilon,
-                       cudnn_frontend::DataType_t const& compute_data_type,
-                       std::string const& name) {
-        auto attributes = cudnn_frontend::graph::Instancenorm_backward_attributes()
-                              .set_saved_mean_and_inv_variance(mean, inv_variance)
-                              .set_epsilon(epsilon)
-                              .set_compute_data_type(compute_data_type)
-                              .set_name(name);
+std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+PyGraph::instancenorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy,
+                               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,
+                               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
+                               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
+                               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
+                               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& epsilon,
+                               cudnn_frontend::DataType_t const& compute_data_type,
+                               std::string const& name) {
+    auto attributes = cudnn_frontend::graph::Instancenorm_backward_attributes()
+                          .set_saved_mean_and_inv_variance(mean, inv_variance)
+                          .set_epsilon(epsilon)
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name);
 
-        auto [DX, DScale, DBias] = graph.instancenorm_backward(dy, x, scale, attributes);
-        return {DX, DScale, DBias};
-    }
+    auto [DX, DScale, DBias] = graph.instancenorm_backward(dy, x, scale, attributes);
+    return {DX, DScale, DBias};
+}
 
 void
 init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
@@ -254,7 +253,7 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
              py::arg("has_dbias"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
-          
+
         .def("instancenorm",
              &PyGraph::instancenorm,
              py::arg("norm_forward_phase"),
@@ -264,7 +263,7 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
              py::arg("epsilon"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
-          
+
         .def("instancenorm_backward",
              &PyGraph::instancenorm_backward,
              py::arg("grad"),

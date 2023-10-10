@@ -26,8 +26,8 @@ all_options = [elem for elem in itertools.product(*[input_type_options,])]
 def param_extract(request):
   return request.param
 
-@pytest.mark.skipif(cudnn.backend_version() < 8905, reason="LN not supported below cudnn 8.9.5")
-def test_ln(param_extract):
+@pytest.mark.skipif(cudnn.backend_version() < 8905, reason="IN not supported below cudnn 8.9.5")
+def test_in(param_extract):
     torch.manual_seed(0)
 
     input_type = param_extract
@@ -55,10 +55,10 @@ def test_ln(param_extract):
 
     graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
-    bias = graph.tensor(name = "bias", dim = bias_gpu.size(), stride = bias_gpu.stride(), data_type = convert_to_cudnn_type(bias_gpu.dtype))
-    epsilon = graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
+    X = graph.tensor_like(x_gpu.detach())
+    scale = graph.tensor_like(scale_gpu.detach())
+    bias = graph.tensor_like(bias_gpu.detach())
+    epsilon = graph.tensor_like(epsilon_cpu)
     
     Y, mean, inv_var = graph.instancenorm(name = "IN", 
                             norm_forward_phase = cudnn.norm_forward_phase.TRAINING,
@@ -73,7 +73,9 @@ def test_ln(param_extract):
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+    plans.check_support()
+    graph.set_execution_plans(plans)
     
     Y_actual = torch.empty_like(x_gpu)
     mean_actual = torch.empty_like(mean_expected)
@@ -111,12 +113,12 @@ def test_ln(param_extract):
     
     bwd_graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    DY = bwd_graph.tensor(name = "DY", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    X_bwd = bwd_graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale_bwd = bwd_graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
-    mean_bwd = bwd_graph.tensor(name = "mean", dim = mean_actual.size(), stride = mean_actual.stride(), data_type = convert_to_cudnn_type(mean_actual.dtype))
-    inv_var_bwd = bwd_graph.tensor(name = "inv_var", dim = inv_var_actual.size(), stride = inv_var_actual.stride(), data_type = convert_to_cudnn_type(inv_var_actual.dtype))
-    epsilon_bwd = bwd_graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
+    DY = bwd_graph.tensor_like(x_gpu.detach())
+    X_bwd = bwd_graph.tensor_like(x_gpu.detach())
+    scale_bwd = bwd_graph.tensor_like(scale_gpu.detach())
+    mean_bwd = bwd_graph.tensor_like(mean_actual.detach())
+    inv_var_bwd = bwd_graph.tensor_like(inv_var_actual.detach())
+    epsilon_bwd = bwd_graph.tensor_like(epsilon_cpu)
 
     DX, Dscale, Dbias = bwd_graph.instancenorm_backward(name = "DIN", 
                             grad = DY,
@@ -131,8 +133,10 @@ def test_ln(param_extract):
     Dbias.set_output(True).set_data_type(convert_to_cudnn_type(bias_gpu.dtype))
 
     bwd_graph.validate()
-    bwd_graph.build_operation_graph()    
-    bwd_graph.check_support()
+    bwd_graph.build_operation_graph()
+    bwd_plans = bwd_graph.get_execution_plan_list([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+    bwd_plans.check_support()
+    bwd_graph.set_execution_plans(bwd_plans)
     
     DX_actual = torch.empty_like(x_gpu)
     DScale_actual = torch.empty_like(scale_gpu)
@@ -161,4 +165,4 @@ def test_ln(param_extract):
     print("Success!!")
 
 if __name__ == "__main__":
-    test_ln((torch.float16))
+    test_in((torch.float16))

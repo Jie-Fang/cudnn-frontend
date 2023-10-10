@@ -14,7 +14,6 @@
 #include "node/genstats.h"
 #include "node/layernorm.h"
 #include "node/instancenorm.h"
-#include "node/din.h"
 #include "node/matmul.h"
 #include "node/pointwise.h"
 #include "node/reduction.h"
@@ -72,9 +71,9 @@ class Graph : public INode {
                                                                 Layernorm_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 3> instancenorm(std::shared_ptr<Tensor_attributes>,
-                                                                std::shared_ptr<Tensor_attributes>,
-                                                                std::shared_ptr<Tensor_attributes>,
-                                                                Instancenorm_attributes);
+                                                                   std::shared_ptr<Tensor_attributes>,
+                                                                   std::shared_ptr<Tensor_attributes>,
+                                                                   Instancenorm_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
@@ -126,9 +125,9 @@ class Graph : public INode {
                                                                          Layernorm_backward_attributes);
 
     std::array<std::shared_ptr<Tensor_attributes>, 3> instancenorm_backward(std::shared_ptr<Tensor_attributes>,
-                                                                         std::shared_ptr<Tensor_attributes>,
-                                                                         std::shared_ptr<Tensor_attributes>,
-                                                                         Instancenorm_backward_attributes);
+                                                                            std::shared_ptr<Tensor_attributes>,
+                                                                            std::shared_ptr<Tensor_attributes>,
+                                                                            Instancenorm_backward_attributes);
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
     std::shared_ptr<Tensor_attributes> matmul(std::shared_ptr<Tensor_attributes>,
@@ -323,9 +322,9 @@ Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::instancenorm(std::shared_ptr<Tensor_attributes> x,
-                 std::shared_ptr<Tensor_attributes> scale,
-                 std::shared_ptr<Tensor_attributes> bias,
-                 Instancenorm_attributes options) {
+                    std::shared_ptr<Tensor_attributes> scale,
+                    std::shared_ptr<Tensor_attributes> bias,
+                    Instancenorm_attributes options) {
     // Set outputs
     auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
     std::shared_ptr<Tensor_attributes> MEAN         = nullptr;
@@ -415,9 +414,9 @@ Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::instancenorm_backward(std::shared_ptr<Tensor_attributes> dy,
-                          std::shared_ptr<Tensor_attributes> x,
-                          std::shared_ptr<Tensor_attributes> scale,
-                          Instancenorm_backward_attributes options) {
+                             std::shared_ptr<Tensor_attributes> x,
+                             std::shared_ptr<Tensor_attributes> scale,
+                             Instancenorm_backward_attributes options) {
     // Set outputs
     options.make_outputs([this](std::string const &name) { return output_tensor(name); });
     auto return_outputs = options.outputs;
