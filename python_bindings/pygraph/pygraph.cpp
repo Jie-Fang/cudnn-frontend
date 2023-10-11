@@ -77,30 +77,6 @@ convert_to_cudnn_data_type(const DLDataType& dtype) {
     return cudnn_frontend::DataType_t::NOT_SET;
 }
 
-DLManagedTensor*
-extract_dlpack_tensor_ptr(py::object const& obj) {
-    throw_if(!py::hasattr(obj, "__dlpack__"),
-             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
-             "Object does not have the __dlpack__() method");
-
-    py::capsule capsule = obj.attr("__dlpack__")();
-    throw_if(capsule.is_none(),
-             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
-             "Failed to retrieve the DLPack capsule.");
-
-    DLManagedTensor* managed =
-        static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
-    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
-
-    DLDeviceType device_type = managed->dl_tensor.device.device_type;
-    throw_if(
-        device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged,
-        cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
-        "Invalid device type.");
-
-    return managed;
-}
-
 char*
 extract_data_pointer(py::object const& obj) {
     throw_if(!py::hasattr(obj, "__dlpack__"),
@@ -144,9 +120,27 @@ PyGraph::tensor(std::vector<int64_t> const& dim,
 }
 
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-PyGraph::tensor_like(py::object pyobj) {
-    auto managed = extract_dlpack_tensor_ptr(pyobj);
-    auto ndim    = managed->dl_tensor.ndim;
+PyGraph::tensor_like(py::object const& pyobj) {
+    throw_if(!py::hasattr(pyobj, "__dlpack__"),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Object does not have the __dlpack__() method");
+
+    py::capsule capsule = pyobj.attr("__dlpack__")();
+    throw_if(capsule.is_none(),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Failed to retrieve the DLPack capsule.");
+
+    DLManagedTensor* managed =
+        static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
+    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
+
+    DLDeviceType device_type = managed->dl_tensor.device.device_type;
+    throw_if(
+        device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged,
+        cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+        "Invalid device type.");
+
+    auto ndim = managed->dl_tensor.ndim;
     std::vector<int64_t> dim(managed->dl_tensor.shape, managed->dl_tensor.shape + ndim);
 
     auto props = cudnn_frontend::graph::Tensor_attributes()

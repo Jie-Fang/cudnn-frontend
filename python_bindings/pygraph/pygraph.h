@@ -75,7 +75,7 @@ class PyGraph {
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    tensor_like(py::object pyobj);
+    tensor_like(py::object const& pyobj);
 
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     batchnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
