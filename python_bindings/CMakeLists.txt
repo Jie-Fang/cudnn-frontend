@@ -26,9 +26,13 @@ include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 pybind11_add_module(
     cudnn
     
-    cudnn_frontend_bindings.cpp
-    cudnn_frontend_pygraph.cpp
-    cudnn_frontend_properties.cpp
+    main.cpp
+    properties.cpp
+    
+    pygraph/pygraph.cpp
+    pygraph/norm.cpp
+    pygraph/sdpa.cpp
+    pygraph/pointwise.cpp
 )
 
 target_link_libraries(
