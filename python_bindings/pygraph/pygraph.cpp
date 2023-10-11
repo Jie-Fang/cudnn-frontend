@@ -21,6 +21,9 @@ using namespace pybind11::literals;
 namespace cudnn_frontend::python_bindings {
 
 void
+throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::string const& error_msg);
+
+void
 init_pygraph_norm_submodule(py::class_<PyGraph>&);
 
 void
@@ -28,44 +31,6 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>&);
 
 void
 init_pygraph_pointwise_submodule(py::class_<PyGraph>&);
-
-// Raise C++ exceptions corresponding to C++ FE error codes.
-// Pybinds will automatically convert C++ exceptions to pythpn exceptions.
-void
-throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::string const& error_msg) {
-    if (cond == false) return;
-
-    switch (error_code) {
-        case cudnn_frontend::error_code_t::OK:
-            return;
-        case cudnn_frontend::error_code_t::ATTRIBUTE_NOT_SET:
-            throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_code_t::SHAPE_DEDUCTION_FAILED:
-            throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_code_t::INVALID_TENSOR_NAME:
-            throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_code_t::INVALID_VARIANT_PACK:
-            throw std::invalid_argument(error_msg);
-        case cudnn_frontend::error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::GRAPH_EXECUTION_FAILED:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::HEURISTIC_QUERY_FAILED:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::CUDNN_BACKEND_API_FAILED:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::CUDA_API_FAILED:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::INVALID_CUDA_DEVICE:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::UNSUPPORTED_GRAPH_FORMAT:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::GRAPH_NOT_SUPPORTED:
-            throw std::runtime_error(error_msg);
-        case cudnn_frontend::error_code_t::HANDLE_ERROR:
-            throw std::runtime_error(error_msg);
-    }
-}
 
 cudnn_frontend::DataType_t
 convert_to_cudnn_data_type(const DLDataType& dtype) {
@@ -305,20 +270,18 @@ PyGraph::build_operation_graph() {
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
-void
-PyGraph::check_support() {
-    auto plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_A);
+PyPlans
+PyGraph::get_execution_plan_list(cudnn_frontend::HeurMode_t const mode) {
+    PyPlans pyplans;
+    pyplans.plans  = graph.get_execution_plan_list(mode);
+    pyplans.handle = handle;
+    return pyplans;
+}
 
-    auto status = plans.check_support(handle);
-    if (status.is_bad()) {
-        auto fallback_plans = graph.get_execution_plan_list(cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK);
-        status              = fallback_plans.check_support(handle);
-        throw_if(status.is_bad(), status.get_code(), status.get_message());
-        status = graph.set_execution_plans(fallback_plans);
-    } else {
-        status = graph.set_execution_plans(plans);
-    }
-    return;
+void
+PyGraph::set_execution_plans(PyPlans const& pyplans) {
+    auto status = graph.set_execution_plans(pyplans.plans);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
 int64_t
@@ -501,7 +464,19 @@ init_pygraph_submodule(py::module_& m) {
 
                 Returns:
                     cudnn_tensor: The result of reduction operation.
-            )pbdoc");
+            )pbdoc")
+        .def("validate", &PyGraph::validate)
+        .def("build_operation_graph", &PyGraph::build_operation_graph)
+        .def("get_execution_plan_list", &PyGraph::get_execution_plan_list)
+        .def("set_execution_plans", &PyGraph::set_execution_plans)
+        .def("get_workspace_size", &PyGraph::get_workspace_size)
+        .def("execute", &PyGraph::execute)
+        .def("__repr__", [](PyGraph const& pygraph) {
+            std::stringstream ss;
+            json j = pygraph.graph;
+            ss << j.dump(4);
+            return ss.str();
+        });
 
     init_pygraph_norm_submodule(pygraph_);
     init_pygraph_sdpa_submodule(pygraph_);

@@ -94,7 +94,9 @@ def test_rmsnorm(param_extract):
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans.check_support()
+    graph.set_execution_plans(plans)
     
     Y_actual = torch.empty_like(x_gpu)
     inv_var_actual = torch.empty_like(inv_var_expected)
@@ -150,7 +152,9 @@ def test_rmsnorm(param_extract):
 
     bwd_graph.validate()
     bwd_graph.build_operation_graph()
-    bwd_graph.check_support()
+    bwd_plans = bwd_graph.get_execution_plan_list(cudnn.heur_mode.A)
+    bwd_plans.check_support()
+    bwd_graph.set_execution_plans(bwd_plans)
     
     DX_actual = torch.empty_like(x_gpu)
     DScale_actual = torch.empty_like(scale_gpu)

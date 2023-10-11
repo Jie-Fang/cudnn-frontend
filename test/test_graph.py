@@ -561,7 +561,9 @@ class test_graph:
         # Building graph
         graph.validate()
         graph.build_operation_graph()
-        graph.check_support()
+        plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+        plans.check_support()
+        graph.set_execution_plans(plans)
 
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()

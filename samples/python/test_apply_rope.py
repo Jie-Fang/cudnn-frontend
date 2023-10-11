@@ -95,10 +95,12 @@ def apply_rope():
     Y2 = graph.add(a = x2_cos2, b = x1_sin2)
     Y2.set_output(True).set_data_type(convert_to_cudnn_type(torch.float16))
 
-    graph.check_support()
+    graph.validate()
+    graph.build_operation_graph()
+    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans.check_support()
+    graph.set_execution_plans(plans)
     
-    graph.build()
-
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
     graph.execute({x1: x1_gpu, x2: x2_gpu, sin1: sin1_gpu, sin2: sin2_gpu, cos1: cos1_gpu, cos2: cos2_gpu, Y1: x1_gpu, Y2: x2_gpu}, workspace)

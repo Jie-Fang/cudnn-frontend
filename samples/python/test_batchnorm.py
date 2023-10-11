@@ -69,7 +69,9 @@ def test_bn_relu_with_mask():
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans.check_support()
+    graph.set_execution_plans(plans)
 
     saved_mean_actual = torch.zeros_like(scale_gpu)
     saved_inv_var_actual = torch.zeros_like(scale_gpu)
@@ -143,7 +145,9 @@ def test_bn():
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans.check_support()
+    graph.set_execution_plans(plans)
 
     saved_mean_actual = torch.zeros_like(scale_gpu)
     saved_inv_var_actual = torch.zeros_like(scale_gpu)
@@ -215,7 +219,9 @@ def test_drelu_dadd_dbn():
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans.check_support()
+    graph.set_execution_plans(plans)
 
     DScale_actual = torch.zeros_like(scale_gpu)
     DBias_actual = torch.zeros_like(scale_gpu)
@@ -282,7 +288,9 @@ def test_bn_infer_drelu_dbn():
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans.check_support()
+    graph.set_execution_plans(plans)
 
     DScale_actual = torch.zeros_like(scale_gpu)
     DBias_actual = torch.zeros_like(scale_gpu)
