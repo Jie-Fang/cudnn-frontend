@@ -28,6 +28,9 @@ pybind11_add_module(
     
     bindings.cpp
     pygraph.cpp
+    pygraph_norm.cpp
+    pygraph_sdpa.cpp
+    pygraph_pointwise.cpp
     properties.cpp
 )
 
