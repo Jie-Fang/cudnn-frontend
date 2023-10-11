@@ -487,16 +487,16 @@ NLOHMANN_JSON_SERIALIZE_ENUM(PointwiseMode_t,
                              })
 
 enum class HeurMode_t {
-    HEUR_MODE_A,
-    HEUR_MODE_B,
-    HEUR_MODE_FALLBACK,
+    A,
+    B,
+    FALLBACK,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(HeurMode_t,
                              {
-                                 {HeurMode_t::HEUR_MODE_A, "HEUR_MODE_A"},
-                                 {HeurMode_t::HEUR_MODE_B, "HEUR_MODE_B"},
-                                 {HeurMode_t::HEUR_MODE_FALLBACK, "HEUR_MODE_FALLBACK"},
+                                 {HeurMode_t::A, "A"},
+                                 {HeurMode_t::B, "B"},
+                                 {HeurMode_t::FALLBACK, "FALLBACK"},
                              })
 
 enum class DataType_t {

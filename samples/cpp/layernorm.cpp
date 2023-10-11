@@ -67,7 +67,7 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -138,7 +138,7 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -212,7 +212,7 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 

@@ -89,9 +89,9 @@ init_properties(py::module_& m) {
         .value("NOT_SET", cudnn_frontend::NormFwdPhase_t::NOT_SET);
 
     py::enum_<cudnn_frontend::HeurMode_t>(m, "heur_mode")
-        .value("A", cudnn_frontend::HeurMode_t::HEUR_MODE_A)
-        .value("B", cudnn_frontend::HeurMode_t::HEUR_MODE_B)
-        .value("FALLBACK", cudnn_frontend::HeurMode_t::HEUR_MODE_FALLBACK);
+        .value("A", cudnn_frontend::HeurMode_t::A)
+        .value("B", cudnn_frontend::HeurMode_t::B)
+        .value("FALLBACK", cudnn_frontend::HeurMode_t::FALLBACK);
 
     py::enum_<cudnn_frontend::ReductionMode_t>(m, "reduction_mode")
         .value("ADD", cudnn_frontend::ReductionMode_t::ADD)

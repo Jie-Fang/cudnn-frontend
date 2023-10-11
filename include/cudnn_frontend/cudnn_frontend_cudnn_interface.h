@@ -160,9 +160,9 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
                 << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
 
     std::unordered_map<HeurMode_t, std::string> mode_to_string = {
-        {HeurMode_t::HEUR_MODE_A, "heuristics_mode_a"},
-        {HeurMode_t::HEUR_MODE_B, "heuristics_mode_b"},
-        {HeurMode_t::HEUR_MODE_FALLBACK, "heuristics_fallback"},
+        {HeurMode_t::A, "heuristics_mode_a"},
+        {HeurMode_t::B, "heuristics_mode_b"},
+        {HeurMode_t::FALLBACK, "heuristics_fallback"},
     };
 
     auto statuses =
