@@ -27,11 +27,12 @@ pybind11_add_module(
     cudnn
     
     bindings.cpp
-    pygraph.cpp
-    pygraph_norm.cpp
-    pygraph_sdpa.cpp
-    pygraph_pointwise.cpp
     properties.cpp
+    
+    pygraph/pygraph.cpp
+    pygraph/norm.cpp
+    pygraph/sdpa.cpp
+    pygraph/pointwise.cpp
 )
 
 target_link_libraries(
