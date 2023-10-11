@@ -263,7 +263,7 @@ class PyGraph {
     build_operation_graph();
 
     PyPlans
-    get_execution_plan_list(cudnn_frontend::HeurMode_t const);
+    get_execution_plan_list(std::vector<cudnn_frontend::HeurMode_t> const&);
 
     void
     set_execution_plans(PyPlans const&);

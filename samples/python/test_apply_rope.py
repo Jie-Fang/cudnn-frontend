@@ -97,7 +97,7 @@ def apply_rope():
 
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
     

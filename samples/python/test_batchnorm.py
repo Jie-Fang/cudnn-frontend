@@ -69,7 +69,7 @@ def test_bn_relu_with_mask():
     
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 
@@ -145,7 +145,7 @@ def test_bn():
     
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 
@@ -219,7 +219,7 @@ def test_drelu_dadd_dbn():
     
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 
@@ -288,7 +288,7 @@ def test_bn_infer_drelu_dbn():
     
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 

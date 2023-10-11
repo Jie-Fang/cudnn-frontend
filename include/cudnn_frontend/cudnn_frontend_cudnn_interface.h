@@ -154,19 +154,12 @@ namespace detail {
 inline error_t
 query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_graph,
                             cudnn_frontend::EngineConfigList& configs,
-                            HeurMode_t mode) {
+                            std::vector<HeurMode_t> const& modes) {
     auto const& operation_graph_tag = operation_graph->getTag();
     getLogger() << "[cudnn_frontend] INFO: "
                 << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
 
-    std::unordered_map<HeurMode_t, std::string> mode_to_string = {
-        {HeurMode_t::A, "heuristics_mode_a"},
-        {HeurMode_t::B, "heuristics_mode_b"},
-        {HeurMode_t::FALLBACK, "heuristics_fallback"},
-    };
-
-    auto statuses =
-        cudnn_frontend::get_heuristics_list<1>({mode_to_string[mode]}, *operation_graph, allowAllConfig, configs, true);
+    auto statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
 
     getLogger() << "[cudnn_frontend] INFO: get_heuristics_list statuses: ";
     for (size_t i = 0; i < statuses.size(); i++) {
@@ -174,8 +167,7 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
     }
     getLogger() << std::endl;
 
-    getLogger() << "[cudnn_frontend] INFO: "
-                << "Mode " << json{mode} << " config list has " << configs.size() << " configurations." << std::endl;
+    getLogger() << "[cudnn_frontend] INFO: config list has " << configs.size() << " configurations." << std::endl;
 
     if (configs.empty()) {
         getLogger() << "[cudnn_frontend] ERROR: No valid engine configs returned from heuristics.";
@@ -187,10 +179,10 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
 inline error_t
 query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operation_graphs,
                  std::unordered_map<std::string, EngineConfigList>& op_graph_to_configs,
-                 HeurMode_t mode) {
+                 std::vector<HeurMode_t> const& modes) {
     for (auto const& operation_graph : operation_graphs) {
         cudnn_frontend::EngineConfigList configs;
-        CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, mode));
+        CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, modes));
         op_graph_to_configs.emplace(operation_graph->getTag(), configs);
     }
     return {error_code_t::OK, ""};

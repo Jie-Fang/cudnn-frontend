@@ -271,9 +271,9 @@ PyGraph::build_operation_graph() {
 }
 
 PyPlans
-PyGraph::get_execution_plan_list(cudnn_frontend::HeurMode_t const mode) {
+PyGraph::get_execution_plan_list(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
     PyPlans pyplans;
-    pyplans.plans  = graph.get_execution_plan_list(mode);
+    pyplans.plans  = graph.get_execution_plan_list(modes);
     pyplans.handle = handle;
     return pyplans;
 }

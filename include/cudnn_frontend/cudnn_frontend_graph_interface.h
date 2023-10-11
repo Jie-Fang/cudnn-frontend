@@ -162,6 +162,9 @@ class Graph : public INode {
     Plans
     get_execution_plan_list(HeurMode_t mode);
 
+    Plans
+    get_execution_plan_list(std::vector<HeurMode_t> const &mode);
+
     error_t
     set_execution_plans(Plans const &plan) {
         if (plan.list_of_engine_configs.get_candidate() == nullptr) {
@@ -184,12 +187,38 @@ class Graph : public INode {
 };
 
 inline Plans
+Graph::get_execution_plan_list(std::vector<HeurMode_t> const &mode) {
+    Plans plan_list;
+    // TODO: The error returned is not propagate to user.
+    // Should the return value be changed to error_code_t too?
+
+    std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
+    auto status = detail::query_heuristics(operation_graphs, op_graph_to_configs, mode);
+    if (status.is_bad()) {
+        getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
+        return plan_list;
+    }
+
+    getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
+    auto &engine_configs = plan_list.list_of_engine_configs;
+    engine_configs.set_tag(op_graph_to_configs.begin()->first);
+    engine_configs.set_engine_configs(op_graph_to_configs.begin()->second);
+
+    getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
+    status = engine_configs.query_properties();
+    if (status.is_bad()) {
+        getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl;
+    }
+    return plan_list;
+}
+
+inline Plans
 Graph::get_execution_plan_list(HeurMode_t mode) {
     Plans plan_list;
     // TODO: The error returned is not propagate to user.
     // Should the return value be changed to error_code_t too?
     std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
-    auto status = detail::query_heuristics(operation_graphs, op_graph_to_configs, mode);
+    auto status = detail::query_heuristics(operation_graphs, op_graph_to_configs, {mode});
     if (status.is_bad()) {
         getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
         return plan_list;

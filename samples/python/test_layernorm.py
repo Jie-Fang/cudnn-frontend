@@ -76,7 +76,7 @@ def test_ln(param_extract):
     
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
     
@@ -137,7 +137,7 @@ def test_ln(param_extract):
 
     bwd_graph.validate()
     bwd_graph.build_operation_graph()    
-    bwd_plans = bwd_graph.get_execution_plan_list(cudnn.heur_mode.A)
+    bwd_plans = bwd_graph.get_execution_plan_list([cudnn.heur_mode.A])
     bwd_plans.check_support()
     bwd_graph.set_execution_plans(bwd_plans)
     

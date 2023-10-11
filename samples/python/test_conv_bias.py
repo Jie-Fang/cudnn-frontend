@@ -44,7 +44,7 @@ def test_conv_bias_relu():
         
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 
@@ -80,7 +80,7 @@ def test_conv_relu():
         
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 
@@ -123,7 +123,7 @@ def test_conv3d_bias_leaky_relu():
         
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 
@@ -157,7 +157,7 @@ def test_leaky_relu_backward():
         
     graph.validate()
     graph.build_operation_graph()
-    plans = graph.get_execution_plan_list(cudnn.heur_mode.A)
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
     plans.check_support()
     graph.set_execution_plans(plans)
 

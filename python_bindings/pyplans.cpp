@@ -52,7 +52,7 @@ init_pyplans_submodule(py::module_& m) {
     pyplans_.def("filter_out_numeric_notes", &PyPlans::filter_out_numeric_notes)
         .def("filter_out_behavior_notes", &PyPlans::filter_out_behavior_notes)
         .def("filter_out_workspace_greater_than", &PyPlans::filter_out_workspace_greater_than)
-        // .def("build_all_plans", &PyPlans::build_all_plans)
+        .def("build_all_plans", &PyPlans::build_all_plans)
         .def("check_support", &PyPlans::check_support)
         .def("get_max_workspace_size", &PyPlans::get_max_workspace_size);
 }
