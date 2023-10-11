@@ -139,7 +139,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -284,7 +284,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::A);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -427,7 +427,7 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
-    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_A);
+    auto plans = mha_graph.get_execution_plan_list(fe::HeurMode_t::A);
 
     REQUIRE(plans.check_support(handle).is_good());
 

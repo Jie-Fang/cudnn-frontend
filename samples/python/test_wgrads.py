@@ -46,7 +46,9 @@ def test_scale_bias_relu_wgrad():
     
     graph.validate()
     graph.build_operation_graph()
-    graph.check_support()
+    plans = graph.get_execution_plan_list([cudnn.heur_mode.A])
+    plans.check_support()
+    graph.set_execution_plans(plans)
 
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 

@@ -68,7 +68,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -177,7 +177,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -282,7 +282,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -374,7 +374,7 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::HEUR_MODE_FALLBACK);
+    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
 
     REQUIRE(plans.check_support(handle).is_good());
 

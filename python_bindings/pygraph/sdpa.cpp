@@ -1,6 +1,4 @@
 #include <utility>
-#include <unordered_map>
-#include <vector>
 
 #include "pybind11/pybind11.h"
 #include "pybind11/cast.h"
@@ -256,18 +254,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     dQ (cudnn_tensor): The query gradient tensor of scaled dot-product flash attention.
                     dK (cudnn_tensor): The key gradient tensor of scaled dot-product flash attention.
                     dV (cudnn_tensor): The value gradient tensor of scaled dot-product flash attention.
-            )pbdoc")
-        .def("validate", &PyGraph::validate)
-        .def("build_operation_graph", &PyGraph::build_operation_graph)
-        .def("check_support", &PyGraph::check_support)
-        .def("get_workspace_size", &PyGraph::get_workspace_size)
-        .def("execute", &PyGraph::execute)
-        .def("__repr__", [](PyGraph const& pygraph) {
-            std::stringstream ss;
-            json j = pygraph.graph;
-            ss << j.dump(4);
-            return ss.str();
-        });
+            )pbdoc");
 }
 
 }  // namespace cudnn_frontend::python_bindings
