@@ -181,4 +181,4 @@ def test_rmsnorm(param_extract):
     print("Success!!")
     
 if __name__ == "__main__":
-    test_rmsnorm((1600, torch.bfloat16))
+    test_rmsnorm((1600, torch.bfloat16, True))
