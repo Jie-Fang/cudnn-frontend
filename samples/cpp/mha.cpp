@@ -47,7 +47,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     int64_t s_q               = 1024;  // q tensor is padded to this seq length
     int64_t s_kv              = 1024;  // k and v tensor is padded to this seq length
     int64_t d                 = 128;   // hidden dim
-    bool is_inference         = true;
+    bool is_inference         = false;
     float dropout_probability = 0.1f;
 
     namespace fe = cudnn_frontend;
