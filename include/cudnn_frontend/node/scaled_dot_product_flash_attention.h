@@ -405,7 +405,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         if (options.dropout_probability.has_value()) {
             dropout_present = true;
             // Special case: Skip dropout when 0.0 probability. Only do for 8.9.3 and up as rng isn't optional earlier.
-            if (cudnnGetVersion() > 8902 && options.dropout_probability.value() != 0.0) {
+            if (cudnnGetVersion() > 8902 && options.dropout_probability.value() == 0.0) {
                 dropout_present = false;
             }
         } else if (options.inputs.Dropout_mask) {
@@ -507,7 +507,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         cudnnHandle_t handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
-        if (options.dropout_probability.has_value()) {
+        if (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0) {
 #if CUDNN_VERSION < 8903
             half dropout_scale_value = (1.0f / (1.0f - options.dropout_probability.value()));
 #else

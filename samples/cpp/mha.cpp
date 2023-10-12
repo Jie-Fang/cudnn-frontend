@@ -48,7 +48,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
     int64_t s_kv              = 1024;  // k and v tensor is padded to this seq length
     int64_t d                 = 128;   // hidden dim
     bool is_inference         = true;
-    float dropout_probability = 0.0f;
+    float dropout_probability = 0.1f;
 
     namespace fe = cudnn_frontend;
     fe::graph::Graph mha_graph;
@@ -440,7 +440,7 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
     Surface<half> v_tensor(b * h * d * s_kv, false);
     Surface<half> o_tensor(b * h * s_q * d, false);
     Surface<half> dO_tensor(b * h * s_q * d, false);
-    Surface<half> stats_tensor(b * h * s_q * 1, false);
+    Surface<float> stats_tensor(b * h * s_q * 1, false);
     // outputs
     Surface<half> dQ_tensor(b * h * s_q * d, false);
     Surface<half> dK_tensor(b * h * s_kv * d, false);
