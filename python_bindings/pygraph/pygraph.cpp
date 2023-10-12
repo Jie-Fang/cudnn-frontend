@@ -278,6 +278,15 @@ PyGraph::set_execution_plans(PyPlans const& pyplans) {
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
+void
+PyGraph::build(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
+    validate();
+    build_operation_graph();
+    auto pyplans = get_execution_plan_list(modes);
+    pyplans.check_support();
+    set_execution_plans(pyplans);
+}
+
 int64_t
 PyGraph::get_workspace_size() {
     return graph.get_workspace_size();
@@ -463,6 +472,7 @@ init_pygraph_submodule(py::module_& m) {
         .def("build_operation_graph", &PyGraph::build_operation_graph)
         .def("get_execution_plan_list", &PyGraph::get_execution_plan_list)
         .def("set_execution_plans", &PyGraph::set_execution_plans)
+        .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute)
         .def("__repr__", [](PyGraph const& pygraph) {

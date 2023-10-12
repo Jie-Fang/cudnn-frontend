@@ -177,6 +177,9 @@ class Graph : public INode {
     }
 
     error_t
+    build(cudnnHandle_t const &handle, std::vector<HeurMode_t> const &mode);
+
+    error_t
     createOperationGraphs(cudnnHandle_t handle) override final {
         getLogger() << "Operation Graph has " << operations.size() << " operations." << std::endl;
 
@@ -235,6 +238,21 @@ Graph::get_execution_plan_list(HeurMode_t mode) {
         getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl;
     }
     return plan_list;
+}
+
+inline error_t
+Graph::build(cudnnHandle_t const &handle, std::vector<HeurMode_t> const &modes) {
+    CHECK_CUDNN_FRONTEND_ERROR(validate());
+
+    CHECK_CUDNN_FRONTEND_ERROR(build_operation_graph(handle));
+
+    auto plans = get_execution_plan_list(modes);
+
+    CHECK_CUDNN_FRONTEND_ERROR(plans.check_support(handle));
+
+    CHECK_CUDNN_FRONTEND_ERROR(set_execution_plans(plans));
+
+    return {error_code_t::OK, ""};
 }
 
 inline Graph &

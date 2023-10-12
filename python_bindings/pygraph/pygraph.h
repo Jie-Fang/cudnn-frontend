@@ -268,6 +268,9 @@ class PyGraph {
     void
     set_execution_plans(PyPlans const&);
 
+    void
+    build(std::vector<cudnn_frontend::HeurMode_t> const&);
+
     int64_t
     get_workspace_size();
 
