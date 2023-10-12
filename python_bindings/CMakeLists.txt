@@ -43,7 +43,6 @@ target_link_libraries(
 
     PRIVATE dlpack
     PRIVATE CUDA::cudart
-    PRIVATE CUDA::cublas
     PRIVATE CUDA::nvrtc
     PRIVATE CUDNN::cudnn_all
 )
