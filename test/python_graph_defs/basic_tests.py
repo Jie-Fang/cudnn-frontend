@@ -38,6 +38,15 @@ def test_dgrad_add(jparams, testgraph):
 
     afterAdd = testgraph.add(name="add", a=dxTensor, b=bTensor)
 
+def test_dgrad(jparams, testgraph):
+    testgraph.set_compute_data_type(cudnn.data_type.FLOAT)
+    testgraph.set_io_data_type(cudnn.data_type.FLOAT)
+    wTensor = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
+    dyTensor = testgraph.tensor(dim=jparams["conv_out_dim"], layout = "NHWC", data_type=cudnn.data_type.FLOAT)
+
+    dxTensor = testgraph.conv_dgrad(name="dgrad", loss=dyTensor, filter=wTensor, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    dxTensor.set_dim(jparams["dx_dim"])
+
 def test_batchnorm(jparams, testgraph):
 
     if (not "backend_version" in dir(cudnn)) or cudnn.backend_version() < 8700:

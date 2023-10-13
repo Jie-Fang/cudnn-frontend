@@ -75,7 +75,9 @@ class PytorchReference:
 
     @staticmethod
     def conv_dgrad(kwargs, test_tensor_out_list):
-        input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
+        # This turns out to be ambiguous (a single (loss, filter) tensor pair can map to multiple dX tensor sizes)
+        # input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
+        input_size = test_tensor_out_list[0].dim
         dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
         return [dX]
     
@@ -105,6 +107,12 @@ class PytorchReference:
         
         output = output.reshape(out_dims)
         return [output]
+    
+    @staticmethod
+    def relu_backward(kwargs, test_tensor_out_list):
+        dX = torch.where(kwargs["input"] > 0, kwargs["loss"], 0)
+        dX = dX.to(convert_to_torch_type(test_tensor_out_list[0].data_type))
+        return [dX]
 
 
 # Base class for Tensor and operation nodes
@@ -157,7 +165,6 @@ class test_node:
 
     def run_reftree_recursive(self):
         if not self.is_visited() and self.is_prereq_satisfied():
-            #print ("Checking {}".format(self.name))
             self.run_ref()
             self.set_visited()
             for node in self.consumer_nodes:
@@ -331,12 +338,6 @@ class test_tensor:
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_stride(stride)
 
-    def set_dim(self, dim):
-        self.dim = dim
-
-        if self.cudnn_tensor is not None:
-            self.cudnn_tensor.set_dim(dim)
-
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
@@ -348,9 +349,6 @@ class test_tensor:
 
         if "stride" in dir(self):
             self.cudnn_tensor.set_stride(self.stride)
-
-        if "dim" in dir(self):
-            self.cudnn_tensor.set_dim(self.dim)
     
 
 def convert_to_cudnn_type(torch_type):
@@ -666,6 +664,9 @@ class test_graph:
             
             if Y_expected.dtype != Y_actual.dtype:
                 print ("WARNING: reference and actual output types differ ({} resp., {})".format(Y_expected.dtype, Y_actual.dtype) )
+
+            if Y_expected.shape != Y_actual.shape:
+                print ("WARNING: reference and actual output shapes differ ({} resp., {})".format(Y_expected.shape, Y_actual.shape) )
 
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
             print("cudnn and reference match")
