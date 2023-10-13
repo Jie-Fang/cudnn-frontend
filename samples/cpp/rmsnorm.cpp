@@ -63,7 +63,7 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
+    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::FALLBACK});
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -129,7 +129,7 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
+    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::FALLBACK});
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -197,7 +197,7 @@ TEST_CASE("RmsNorm Backward", "[rmsnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::A);
+    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::A});
 
     REQUIRE(plans.check_support(handle).is_good());
 
