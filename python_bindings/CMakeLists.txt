@@ -26,7 +26,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 pybind11_add_module(
     cudnn
     
-    main.cpp
+    pycudnn.cpp
     properties.cpp
     pyplans.cpp
     

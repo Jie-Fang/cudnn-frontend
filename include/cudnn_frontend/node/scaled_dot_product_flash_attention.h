@@ -3,8 +3,8 @@
 #include "../../cudnn_frontend_Heuristics.h"
 #include "../../cudnn_frontend_Logging.h"
 
-#include "../cudnn_frontend_graph_helpers.h"
-#include "../cudnn_frontend_node_interface.h"
+#include "../graph_helpers.h"
+#include "../node_interface.h"
 
 #include "matmul.h"
 #include "pointwise.h"
@@ -577,11 +577,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << options.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.dropout_probability.has_value() && options.inputs.Dropout_mask,
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Using both, custom dropout mask and internal-mask generation using dropout "
-            "probability, is ill-formed.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.dropout_probability.has_value() && options.inputs.Dropout_mask,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Using both, custom dropout mask and internal-mask generation using dropout "
+                                       "probability, is ill-formed.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0,
@@ -598,15 +597,13 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             error_code_t::ATTRIBUTE_NOT_SET,
             "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.inputs.Attn_scale && options.attn_scale_value.has_value(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "attn_scale with tensor and value cannot be set at the same time.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Attn_scale && options.attn_scale_value.has_value(),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "attn_scale with tensor and value cannot be set at the same time.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            context.get_intermediate_data_type() == DataType_t::NOT_SET,
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Intermediate tensor data type needs to be set as internal tensors require it.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Intermediate tensor data type needs to be set as internal tensors require it.");
 
         return {error_code_t::OK, ""};
     }
