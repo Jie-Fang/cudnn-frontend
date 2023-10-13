@@ -23,7 +23,7 @@
 #include "node/scaled_dot_product_flash_attention.h"
 
 #include "plans.h"
-#include "cudnn_frontend_graph_helpers.h"
+#include "graph_helpers.h"
 
 namespace cudnn_frontend::graph {
 

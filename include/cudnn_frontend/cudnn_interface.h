@@ -11,8 +11,8 @@
 #include "../cudnn_frontend_ExecutionPlan.h"
 #include "../cudnn_frontend_VariantPack.h"
 
-#include "cudnn_frontend_graph_properties.h"
-#include "cudnn_frontend_graph_helpers.h"
+#include "graph_properties.h"
+#include "graph_helpers.h"
 
 namespace cudnn_frontend {
 
