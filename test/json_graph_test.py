@@ -23,7 +23,7 @@ def read_json_test_dict(fname):
 # @raises ImplementationError
 # TODO: keep track of which parameters were actually used (i.e., was as cli parameter specified that was never used? E.g., filtC)
 def replace_single_param(json_test_def, abstract_params):
-    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w"]
+    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w", "r", "s"]
     FORMAT_ALL = "formatAll"
     IO_DATA_TYPE = "P"
     INT_LISTS = ["dimOut", "dimA", "filtA", "convStrideA", "dilationA", "padA"]
