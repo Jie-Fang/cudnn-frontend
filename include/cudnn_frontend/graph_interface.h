@@ -13,6 +13,7 @@
 #include "node/dbn_weight.h"
 #include "node/genstats.h"
 #include "node/layernorm.h"
+#include "node/instancenorm.h"
 #include "node/matmul.h"
 #include "node/pointwise.h"
 #include "node/reduction.h"
@@ -69,6 +70,11 @@ class Graph : public INode {
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 Layernorm_attributes);
 
+    std::array<std::shared_ptr<Tensor_attributes>, 3> instancenorm(std::shared_ptr<Tensor_attributes>,
+                                                                   std::shared_ptr<Tensor_attributes>,
+                                                                   std::shared_ptr<Tensor_attributes>,
+                                                                   Instancenorm_attributes);
+
     std::array<std::shared_ptr<Tensor_attributes>, 5> batchnorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
@@ -118,6 +124,10 @@ class Graph : public INode {
                                                                          std::shared_ptr<Tensor_attributes>,
                                                                          Layernorm_backward_attributes);
 
+    std::array<std::shared_ptr<Tensor_attributes>, 3> instancenorm_backward(std::shared_ptr<Tensor_attributes>,
+                                                                            std::shared_ptr<Tensor_attributes>,
+                                                                            std::shared_ptr<Tensor_attributes>,
+                                                                            Instancenorm_backward_attributes);
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
     std::shared_ptr<Tensor_attributes> matmul(std::shared_ptr<Tensor_attributes>,
@@ -310,6 +320,29 @@ Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
     return {Y, MEAN, INV_VARIANCE};
 }
 
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::instancenorm(std::shared_ptr<Tensor_attributes> x,
+                    std::shared_ptr<Tensor_attributes> scale,
+                    std::shared_ptr<Tensor_attributes> bias,
+                    Instancenorm_attributes options) {
+    // Set outputs
+    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
+    std::shared_ptr<Tensor_attributes> MEAN         = nullptr;
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
+    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
+        MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
+        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    }
+    // Set inputs
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+    options.inputs.BIAS  = bias;
+
+    sub_nodes.emplace_back(std::make_unique<InstanceNormNode>(std::move(options), context));
+
+    return {Y, MEAN, INV_VARIANCE};
+}
+
 inline std::array<std::shared_ptr<Tensor_attributes>, 5>
 Graph::batchnorm(std::shared_ptr<Tensor_attributes> x,
                  std::shared_ptr<Tensor_attributes> scale,
@@ -375,6 +408,25 @@ Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
     options.inputs.SCALE = scale;
 
     sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
+
+    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 3>
+Graph::instancenorm_backward(std::shared_ptr<Tensor_attributes> dy,
+                             std::shared_ptr<Tensor_attributes> x,
+                             std::shared_ptr<Tensor_attributes> scale,
+                             Instancenorm_backward_attributes options) {
+    // Set outputs
+    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
+    auto return_outputs = options.outputs;
+
+    // Set inputs
+    options.inputs.DY    = dy;
+    options.inputs.X     = x;
+    options.inputs.SCALE = scale;
+
+    sub_nodes.emplace_back(std::make_unique<DINNode>(std::move(options), context));
 
     return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
 }
