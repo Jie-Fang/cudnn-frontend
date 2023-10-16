@@ -30,7 +30,8 @@ def param_extract(request):
 def test_in(param_extract):
     torch.manual_seed(0)
 
-    input_type = param_extract
+    input_type, = param_extract
+    print(input_type)
 
     if input_type == torch.bfloat16:
         atol, rtol = 0.125, 0.125
@@ -125,8 +126,7 @@ def test_in(param_extract):
                             input = X_bwd,
                             scale = scale_bwd, 
                             mean = mean_bwd,
-                            inv_variance = inv_var_bwd,
-                            epsilon = epsilon_bwd)
+                            inv_variance = inv_var_bwd)
     
     DX.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     Dscale.set_output(True).set_data_type(convert_to_cudnn_type(scale_gpu.dtype))
@@ -165,4 +165,4 @@ def test_in(param_extract):
     print("Success!!")
 
 if __name__ == "__main__":
-    test_in((torch.float16))
+    test_in((torch.float16, ))
