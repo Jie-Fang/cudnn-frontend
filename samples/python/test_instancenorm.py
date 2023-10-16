@@ -41,9 +41,9 @@ def test_in(param_extract):
     
     epsilon_value = 1e-5
 
-    x_gpu       = torch.randn(N, C, H, W, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
-    scale_gpu   = torch.randn(1, C, 1, 1, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
-    bias_gpu    = torch.randn(1, C, 1, 1, requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
+    x_gpu       = torch.randn((N, C, H, W), requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
+    scale_gpu   = torch.randn((1, C, 1, 1), requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
+    bias_gpu    = torch.randn((1, C, 1, 1), requires_grad=True, device="cuda", dtype=input_type).to(memory_format=torch.channels_last)
     epsilon_cpu = torch.full((1, 1, 1, 1), epsilon_value, requires_grad=False, device="cpu", dtype=torch.float32)
 
     print("Running reference")
