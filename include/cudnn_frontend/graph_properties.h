@@ -155,10 +155,12 @@ class Operation {
         Conv_wgrad,
         DBN,
         DLN,
+        DIN,
         DBN_weight,
         DRMSNorm,
         Genstats,
         LN,
+        IN,
         Matmul,
         Pointwise,
         Reduction,
@@ -824,7 +826,6 @@ class Instancenorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> SCALE;
         std::shared_ptr<Tensor_attributes> MEAN;
         std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
     } inputs;
 
     struct Outputs {
@@ -833,25 +834,19 @@ class Instancenorm_backward_attributes : public Operation {
         std::shared_ptr<Tensor_attributes> DBIAS;
     } outputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE)
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, tag, inputs, outputs)
 
-    Instancenorm_backward_attributes() : Operation(Tag::DLN) {}
+    Instancenorm_backward_attributes() : Operation(Tag::DIN) {}
 
     Instancenorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
         inputs.MEAN         = mean;
         inputs.INV_VARIANCE = inv_variance;
-        return *this;
-    }
-
-    Instancenorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
         return *this;
     }
 
@@ -886,9 +881,6 @@ class Instancenorm_backward_attributes : public Operation {
         }
         if (inputs.INV_VARIANCE) {
             inputs.INV_VARIANCE->fill_from_context(context);
-        }
-        if (inputs.EPSILON) {
-            inputs.EPSILON->fill_from_context(context);
         }
 
         outputs.DX->fill_from_context(context);
@@ -1090,7 +1082,7 @@ class Instancenorm_attributes : public Operation {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, tag, inputs, outputs, forward_phase)
 
-    Instancenorm_attributes() : Operation(Tag::LN) {}
+    Instancenorm_attributes() : Operation(Tag::IN) {}
 
     Instancenorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {

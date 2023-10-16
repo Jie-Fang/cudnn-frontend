@@ -169,12 +169,10 @@ PyGraph::instancenorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_att
                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
-                               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& epsilon,
                                cudnn_frontend::DataType_t const& compute_data_type,
                                std::string const& name) {
     auto attributes = cudnn_frontend::graph::Instancenorm_backward_attributes()
                           .set_saved_mean_and_inv_variance(mean, inv_variance)
-                          .set_epsilon(epsilon)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -271,7 +269,6 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
              py::arg("scale"),
              py::arg_v("mean", nullptr),
              py::arg_v("inv_variance", nullptr),
-             py::arg_v("epsilon", nullptr),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""));
 }
