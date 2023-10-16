@@ -559,8 +559,8 @@ class test_graph:
         self.mark_implicit_output_nodes()
 
         # Building graph
-        graph.build()
-
+        graph.build([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()
 

@@ -23,13 +23,25 @@ Scaled_dot_product_flash_attention_attributes &
 set_is_inference(bool const value);
 
 Scaled_dot_product_flash_attention_attributes &
-set_causal_mask(bool const value);
+set_attn_scale(std::shared_ptr<Tensor_attributes> value);
 
 Scaled_dot_product_flash_attention_attributes &
 set_bias(std::shared_ptr<Tensor_attributes> value);
 
+Scaled_dot_product_flash_attention_attributes&
+set_alibi_mask(bool const value)
+
+Scaled_dot_product_flash_attention_attributes&
+set_padding_mask(bool const value);
+
+Scaled_dot_product_flash_attention_attributes&
+set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
+
+Scaled_dot_product_flash_attention_attributes&
+set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
+
 Scaled_dot_product_flash_attention_attributes &
-set_attn_scale(std::shared_ptr<Tensor_attributes> value);
+set_causal_mask(bool const value);
 
 Scaled_dot_product_flash_attention_attributes &
 set_dropout(float const probability,
@@ -37,7 +49,8 @@ set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> offset);
 
 Scaled_dot_product_flash_attention_attributes &
-set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale);
+set_dropout(std::shared_ptr<Tensor_attributes> mask,
+            std::shared_ptr<Tensor_attributes> scale);
 
 Scaled_dot_product_flash_attention_attributes &
 set_compute_data_type(DataType_t value)
@@ -50,12 +63,12 @@ Args:
     q (cudnn_tensor): The query data.
     k (cudnn_tensor): The key data.
     v (cudnn_tensor): The value data.
-    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
-    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
     is_inference (bool): Whether it is an inference step or training step.
-    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
+    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
@@ -95,6 +108,18 @@ Scaled_dot_product_flash_attention_backward_attributes&
 set_bias(std::shared_ptr<Tensor_attributes> value)
 
 Scaled_dot_product_flash_attention_backward_attributes&
+set_alibi_mask(bool const value)
+
+Scaled_dot_product_flash_attention_backward_attributes&
+set_padding_mask(bool const value);
+
+Scaled_dot_product_flash_attention_backward_attributes&
+set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
+
+Scaled_dot_product_flash_attention_backward_attributes&
+set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
+
+Scaled_dot_product_flash_attention_backward_attributes&
 set_causal_mask(bool const value)
 
 Scaled_dot_product_flash_attention_backward_attributes&
@@ -103,7 +128,9 @@ set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> offset)
 
 Scaled_dot_product_flash_attention_backward_attributes&
-set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale, std::shared_ptr<Tensor_attributes> scale_inv)
+set_dropout(std::shared_ptr<Tensor_attributes> mask,
+            std::shared_ptr<Tensor_attributes> scale,
+            std::shared_ptr<Tensor_attributes> scale_inv)
 
 Scaled_dot_product_flash_attention_backward_attributes&
 set_compute_data_type(DataType_t const value)
@@ -119,10 +146,13 @@ Args:
     o (cudnn_tensor): The output data.
     dO (cudnn_tensor): The output loss gradient.
     stats (cudnn_tensor): The softmax statistics from the forward pass.
-    attn_scale (Optional[cudnn_tensor]): The scale factor for attention. Default is None.
+    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
+    use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)],
+                            Tuple[mask: cudnn_tensor, scale: cudnn_tensor, scale_inv: cudnn_tensor]]]):
+        Whether to do dropout. Default is None.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
 
