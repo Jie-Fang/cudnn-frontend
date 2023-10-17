@@ -89,9 +89,28 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto h            = q_dim[1];
         auto s_q          = q_dim[2];
         auto const& k_dim = options.inputs.K->get_dim();
-        auto s_kv         = k_dim[3];
+        auto s_kv         = k_dim[2];
         auto const& v_dim = options.inputs.V->get_dim();
         auto d_v          = v_dim[3];
+
+        // cuDNN frontend API attention requires Q, K, V where
+        // Q = {b, h, s_q, d_qk}
+        // K = {b, h, s_kv, d_qk}
+        // V = {b, h, s_kv, d_v}
+        // but cuDNN backend API attention requires Q, KT, V
+        // Q = {b, h, s_q, d_qk}
+        // KT = {b, h, d_qk, s_kv}
+        // V = {b, h, s_kv, d_v}
+        // So the code below maps the K->KT
+        std::vector<int64_t> temp_vec;
+
+        temp_vec = options.inputs.K->get_dim();
+        std::swap(temp_vec[2], temp_vec[3]);
+        options.inputs.K->set_dim(temp_vec);
+
+        temp_vec = options.inputs.K->get_stride();
+        std::swap(temp_vec[2], temp_vec[3]);
+        options.inputs.K->set_stride(temp_vec);
 
         std::shared_ptr<Tensor_attributes> last_output;
 
@@ -622,7 +641,34 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         auto s_q          = q_dim[2];
         auto d            = q_dim[3];
         auto const& k_dim = options.inputs.K->get_dim();
-        auto s_kv         = k_dim[3];
+        auto s_kv         = k_dim[2];
+
+        // cuDNN frontend API attention requires Q, K, V where
+        // Q = {b, h, s_q, d}
+        // K = {b, h, s_kv, d}
+        // V = {b, h, s_kv, d}
+        // but cuDNN backend API attention requires Q, KT, VT
+        // Q = {b, h, s_q, d}
+        // KT = {b, h, d, s_kv}
+        // VT = {b, h, d, s_kv}
+        // So the code below maps the K->KT and V->VT
+        std::vector<int64_t> temp_vec;
+
+        temp_vec = options.inputs.K->get_dim();
+        std::swap(temp_vec[2], temp_vec[3]);
+        options.inputs.K->set_dim(temp_vec);
+
+        temp_vec = options.inputs.K->get_stride();
+        std::swap(temp_vec[2], temp_vec[3]);
+        options.inputs.K->set_stride(temp_vec);
+
+        temp_vec = options.inputs.V->get_dim();
+        std::swap(temp_vec[2], temp_vec[3]);
+        options.inputs.V->set_dim(temp_vec);
+
+        temp_vec = options.inputs.V->get_stride();
+        std::swap(temp_vec[2], temp_vec[3]);
+        options.inputs.V->set_stride(temp_vec);
 
         std::shared_ptr<Tensor_attributes> last_output, exp_softmax_output, dp_scaled_output, rng_output;
 
@@ -1105,14 +1151,18 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         // --------------"dp_scaled @ K => dQ" chain--------------------
 
-        auto const& k_stride = options.inputs.K->get_stride();
+        auto const& kt_dim = options.inputs.K->get_dim();
+        auto const& kt_stride = options.inputs.K->get_stride();
 
         // transpose KT
         Reshape_attributes transpose_K_attr;
         transpose_K_attr.set_name("transpose_K");
         transpose_K_attr.inputs.X  = options.inputs.K;
         transpose_K_attr.outputs.Y = last_output = make_tensor_(
-            true, {k_dim[0], k_dim[1], k_dim[3], k_dim[2]}, {k_stride[0], k_stride[1], k_stride[3], k_stride[2]});
+            true,
+            {kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]},
+            {kt_stride[0], kt_stride[1], kt_stride[3], kt_stride[2]}
+        );
         sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(transpose_K_attr), context));
 
         // matmul: dP * K
