@@ -638,11 +638,11 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
     REQUIRE(mha_graph.set_execution_plans(plans).is_good());
 
     //// Build variant pack
-    Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
-    Surface<half> oTensor(b * s_q * h * d, false);
+    Surface<int8_t> qkvTensor(b * s_q * 3 * h * d, false);
+    Surface<int8_t> oTensor(b * s_q * h * d, false);
     void* devPtrQ = qkvTensor.devPtr;
-    void* devPtrK = (qkvTensor.devPtr + d);
-    void* devPtrV = (qkvTensor.devPtr + 2 * d);
+    void* devPtrK = (qkvTensor.devPtr + h * d);
+    void* devPtrV = (qkvTensor.devPtr + 2 * h * d);
     void* devPtrO = oTensor.devPtr;
 
     float attn_scale_cpu = 0.5f;
