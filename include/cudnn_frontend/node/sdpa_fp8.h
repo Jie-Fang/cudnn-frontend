@@ -251,7 +251,7 @@ class SDPA_FP8_Node : public INode {
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
         if (attributes.dropout_probability.has_value()) {
-            float dropout_scale_value = (1.f / (1.0 - attributes.dropout_probability.value()));
+            float dropout_scale_value = (1.f / (1.0f - attributes.dropout_probability.value()));
 
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
