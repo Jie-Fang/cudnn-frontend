@@ -15,6 +15,7 @@ namespace cudnn_frontend::graph {
 
 class SDPA_FP8_Node : public INode {
     std::shared_ptr<Tensor_attributes> dropout_scale;
+    std::shared_ptr<Tensor_attributes> KT;
 
    public:
     SDPA_FP8_attributes attributes;
@@ -97,7 +98,7 @@ class SDPA_FP8_Node : public INode {
 
         // Reshape K
         auto transpose_k_attr = Reshape_attributes().set_name("K^T");
-        last_output = reshape(attributes.inputs[SDPA_FP8_attributes::input_names::K], transpose_k_attr);
+        last_output = KT = reshape(attributes.inputs[SDPA_FP8_attributes::input_names::K], transpose_k_attr);
         auto const K_stride = attributes.inputs[SDPA_FP8_attributes::input_names::K]->get_dim();
         last_output->set_name("Kt").set_dim({b, h, d_q, s_kv}).set_stride({K_stride[0], K_stride[1], K_stride[3], K_stride[2]});
         
@@ -248,6 +249,7 @@ class SDPA_FP8_Node : public INode {
     virtual error_t
     pass_by_value_tensors_(
         cudnnHandle_t,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
         if (attributes.dropout_probability.has_value()) {
@@ -255,6 +257,12 @@ class SDPA_FP8_Node : public INode {
 
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
+
+        // sdpa_fp8 creates a non virtual KT.
+        // User does not know about it and should not provide device pointer for it.
+        // But the backend will ask for it.
+        void* k_ptr = tensor_to_pointer_map.at(attributes.inputs[SDPA_FP8_attributes::input_names::K]);
+        tensor_to_pass_by_value.emplace(KT, k_ptr);
 
         return {error_code_t::OK, ""};
 

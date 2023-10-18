@@ -629,8 +629,6 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
 
     REQUIRE(mha_graph.validate().is_good());
 
-    // std::cout << json(mha_graph).dump(4);
-
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
 
     auto plans = mha_graph.get_execution_plan_list({fe::HeurMode_t::A});
@@ -693,13 +691,8 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
         variant_pack[Zinv] = MTensor.devPtr;
     }
 
-    // The hack of making Kt a non-virtual tensor is going to bite you.
-    // Relax that requirement and get Uid from K, instead of Kt tensor
-
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
     REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    std::cout << json(mha_graph).dump(4);
 
     checkCudaErr(cudaDeviceSynchronize());
 

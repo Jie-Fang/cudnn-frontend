@@ -85,6 +85,7 @@ class INode : public ICudnn {
 
     virtual error_t
     pass_by_value_tensors_(cudnnHandle_t,
+                           std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
                            std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&,
                            void*) {
         return {error_code_t::OK, ""};
@@ -93,14 +94,16 @@ class INode : public ICudnn {
     error_t
     gather_pass_by_value_tensors(
         cudnnHandle_t const& handle,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* fe_workspace) {
         void* node_workspace = fe_workspace;
-        CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(handle, tensor_to_pass_by_value, node_workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            pass_by_value_tensors_(handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
         node_workspace = static_cast<char*>(node_workspace) + get_fe_workspace_size_node();
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(
-                sub_node->gather_pass_by_value_tensors(handle, tensor_to_pass_by_value, node_workspace));
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->gather_pass_by_value_tensors(
+                handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
             node_workspace = static_cast<char*>(node_workspace) + sub_node->get_fe_workspace_size_node();
         }
         return {error_code_t::OK, ""};
@@ -313,7 +316,8 @@ class INode : public ICudnn {
         void* fe_workspace    = workspace;
         void* cudnn_workspace = static_cast<char*>(fe_workspace) + get_fe_workspace_size();
 
-        CHECK_CUDNN_FRONTEND_ERROR(gather_pass_by_value_tensors(handle, tensor_to_pass_by_value, fe_workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            gather_pass_by_value_tensors(handle, tensor_to_pointer_map, tensor_to_pass_by_value, fe_workspace));
 
         // Add pass_by_value data pointers to tensor_uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
