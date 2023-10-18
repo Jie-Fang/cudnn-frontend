@@ -104,7 +104,7 @@ The dimensions for
 - Value tensor should be $(B, H, S_{kv}, D)$
 - Output tensor should be $(B, H, S_{q}, D)$
 - Stats tensor should be $(B, H, S_{q}, 1)$
-- Gradient tensors for the Query, Key, Value, and Output tensors follow the same conventions.
+- Gradient tensors for query, key, value, and output should follow the same convention
 
 Where $B$ is the batch size, $H$ is the number of heads, $S_{q}$ is the sequence length of the query, $S_{kv}$ is the sequence length
 of the key and value, and $D$ is the embedding size per head.
