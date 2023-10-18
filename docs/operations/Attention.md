@@ -5,9 +5,23 @@
 ### Scaled Dot Product Flash Attention
 Computes the scaled dot product attention for given Query, Key and Value tensors. Optionally, can set dropout probability, causal mask. Can optionally dump stats to be used for the bprop computation.
 
-API:
+The dimensions for
 
-```
+- Query tensor should be $(B, H, S_{q}, D)$
+- Key tensor should be $(B, H, S_{kv}, D)$
+- Value tensor should be $(B, H, S_{kv}, D)$
+- Output tensor should be $(B, H, S_{q}, D)$
+- Stats tensor should be $(B, H, S_{q}, 1)$
+
+Where $B$ is the batch size, $H$ is the number of heads, $S_{q}$ is the sequence length of the query, $S_{kv}$ is the sequence length
+of the key and value, and $D$ is the embedding dimension per head.
+
+Additionally, the stride for the last dimension corresponding to the embedding dim per head for each of these tensors
+must be 1.
+
+**API:**
+
+```cpp
 std::array<std::shared_ptr<Tensor_attributes>, 2> 
 scaled_dot_product_flash_attention
     (std::shared_ptr<Tensor_attributes> q,
@@ -18,7 +32,7 @@ scaled_dot_product_flash_attention
 
 where the output array has tensors in order of: `[output, softmax_stats]` and `Scaled_dot_product_flash_attention_attributes` controls the sub-graph in the operation
 
-```
+```cpp
 Scaled_dot_product_flash_attention_attributes &
 set_is_inference(bool const value);
 
@@ -56,7 +70,7 @@ Scaled_dot_product_flash_attention_attributes &
 set_compute_data_type(DataType_t value)
 ```
 
-Python API: 
+**Python API:**
 
 ```
 Args:
@@ -83,8 +97,23 @@ Returns:
 ### Scaled Dot Product Flash Attention Backward
 Computes the query, key and value gradient tensors for scaled dot product flash attention. Optionally, can set dropout probability, causal mask.
 
+The dimensions for
+
+- Query tensor should be $(B, H, S_{q}, D)$
+- Key tensor should be $(B, H, S_{kv}, D)$
+- Value tensor should be $(B, H, S_{kv}, D)$
+- Output tensor should be $(B, H, S_{q}, D)$
+- Stats tensor should be $(B, H, S_{q}, 1)$
+- Gradient tensors for the Query, Key, Value, and Output tensors follow the same conventions.
+
+Where $B$ is the batch size, $H$ is the number of heads, $S_{q}$ is the sequence length of the query, $S_{kv}$ is the sequence length
+of the key and value, and $D$ is the embedding size per head.
+
+Additionally, the stride for the last dimension corresponding to the embedding size per head for each of these tensors
+must be 1.
+
 API:
-```
+```cpp
 std::array<std::shared_ptr<Tensor_attributes>, 3>
 scaled_dot_product_flash_attention_backward
     (std::shared_ptr<Tensor_attributes> q,
@@ -100,7 +129,7 @@ where the output array has tensors in order of: `[dQ, dK, dV]`
 where, `Scaled_dot_product_flash_attention_backward_attributes` controls the sub-graph in the operation
 
 
-```
+```cpp
 Scaled_dot_product_flash_attention_backward_attributes&
 set_attn_scale(std::shared_ptr<Tensor_attributes> value)
 
@@ -167,3 +196,4 @@ Returns:
 - The cudnn backend enums are changed as follows:
     - `cudnnBackend<enum_name>` -> `cudnn_frontend::<enum_name>`
     - `cudnn<enum_name>` -> `cudnn_frontend::<enum_name>`
+- Scaled Dot Product Flash Attention Backward improves computation speed by employing an optional workspace tensor, which consumes quadratically increasing memory usage relative to sequence length. The default GPU memory limit for the workspace tensor is 256MB, but users with enough available GPU memory budget, can increase this limit by configuring the CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT environment variable to the desired new limit in bytes.

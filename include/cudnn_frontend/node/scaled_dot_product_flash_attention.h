@@ -37,6 +37,14 @@ class ScaledDotProductFlashAttentionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionNode " << options.name << "..." << std::endl;
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Q->get_stride().back() != 1 ||
+                                       options.inputs.K->get_stride().back() != 1 ||
+                                       options.inputs.V->get_stride().back() != 1 ||
+                                       options.outputs.O->get_stride().back() != 1,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "The stride for the last dimension corresponding to the embedding size per head"
+                                       " should be 1");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(options.is_inference.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "is_infernece attribute not set");
@@ -595,6 +603,18 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << options.name << "..." << std::endl;
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Q->get_stride().back() != 1 ||
+                                       options.inputs.K->get_stride().back() != 1 ||
+                                       options.inputs.V->get_stride().back() != 1 ||
+                                       options.inputs.O->get_stride().back() != 1 ||
+                                       options.outputs.dQ->get_stride().back() != 1 ||
+                                       options.outputs.dV->get_stride().back() != 1 ||
+                                       options.outputs.dK->get_stride().back() != 1 ||
+                                       options.inputs.dO->get_stride().back() != 1,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "The stride for the last dimension corresponding to the hidden size per head"
+                                       " should be 1");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(options.dropout_probability.has_value() && options.inputs.Dropout_mask,
                                        error_code_t::ATTRIBUTE_NOT_SET,
