@@ -619,7 +619,7 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
     SKIP("MHA Graph requires cudnn 8.9 and up");
     return;
 #endif
-    if (check_device_arch_newer_than("hopper") == false && check_device_arch_newer_than("ampere") == false) {
+    if (check_device_arch_newer_than("hopper") == false) {
         SKIP("MHA Graph requires Hopper or above arch.");
         return;
     }
