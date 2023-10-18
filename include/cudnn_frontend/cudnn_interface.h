@@ -52,17 +52,34 @@ class ICudnn {
             props->set_uid(uid);
             uid++;
 
-            auto tensor = cudnn_frontend::TensorBuilder()
-                              .setDim(props->get_dim().size(), props->get_dim().data())
-                              .setStrides(props->get_stride().size(), props->get_stride().data())
-                              .setId(props->get_uid())
-                              .setAlignment(16)
-                              .setDataType(props->get_data_type())
-                              .setVirtual(props->get_is_virtual())
-                              .setByValue(props->get_is_pass_by_value())
-                              .setReorderType(props->get_reordering_type())
-                              .build();
-            tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+                    if (auto ragged_offset_props = props->get_ragged_offset(); ragged_offset_props) {
+                        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors));
+
+                        auto tensor = cudnn_frontend::TensorBuilder()
+                                        .setDim(props->get_dim().size(), props->get_dim().data())
+                                        .setStrides(props->get_stride().size(), props->get_stride().data())
+                                        .setId(props->get_uid())
+                                        .setAlignment(16)
+                                        .setDataType(props->get_data_type())
+                                        .setVirtual(props->get_is_virtual())
+                                        .setByValue(props->get_is_pass_by_value())
+                                        .setReorderType(props->get_reordering_type())
+                                        .setRaggedOffset(tensors.at(uid))
+                                        .build();
+                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+                    }
+                else {
+                auto tensor = cudnn_frontend::TensorBuilder()
+                                .setDim(props->get_dim().size(), props->get_dim().data())
+                                .setStrides(props->get_stride().size(), props->get_stride().data())
+                                .setId(props->get_uid())
+                                .setAlignment(16)
+                                .setDataType(props->get_data_type())
+                                .setVirtual(props->get_is_virtual())
+                                .setByValue(props->get_is_pass_by_value())
+                                .setReorderType(props->get_reordering_type())
+                                .build();
+                }
         } else {
             // Make sure tensor's uid is present in backend tensor registry.
             RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -111,9 +128,36 @@ class ICudnn {
                         void* workspace_ptr) {
         getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plans.size() << " Plans." << std::endl;
 
+        // First check here and list out which uids are required but missing
+        // ideally printing the names correponding to those uids will be helpful too.
+
         for (size_t i = 0; i < execution_plans.size(); ++i) {
             auto const& execution_plan   = execution_plans[i];
             auto const& variant_pack_uid = variant_pack_uids[i];
+
+            std::cout << "\nRequired uids = \n";
+            for (auto ele : variant_pack_uid) {
+                std::cout << ele << "\n";
+            }
+
+            std::cout << "\nAvailable uids = \n";
+            for (auto ele : tensor_uid_to_pointer_map) {
+                std::cout << ele.first << "\n";
+            }
+
+            std::cout << "\nMissing uids = \n";
+            for (auto ele : variant_pack_uid) {
+                if (tensor_uid_to_pointer_map.find(ele) == tensor_uid_to_pointer_map.end()) {
+                    std::cout << ele << "\n";
+                }
+            }
+
+            std::cout << "\nExtra uids = \n";
+            for (auto ele : tensor_uid_to_pointer_map) {
+                if (variant_pack_uid.find(ele.first) == variant_pack_uid.end()) {
+                    std::cout << ele.first << "\n";
+                }
+            }
 
             getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
 

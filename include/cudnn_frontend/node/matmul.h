@@ -53,9 +53,16 @@ class MatmulNode : public INode {
         // Only infer dims and strides if user did not set them
         if (c_tensor_dim.empty()) {
             c_tensor_dim.resize(a_tensor_dim.size());
-            c_tensor_dim[0] = a_tensor_dim[0];  // B
-            c_tensor_dim[1] = a_tensor_dim[1];  // M
-            c_tensor_dim[2] = b_tensor_dim[2];  // N
+            if (a_tensor_dim.size() == 4) {
+                c_tensor_dim[0] = a_tensor_dim[0];  // B
+                c_tensor_dim[1] = a_tensor_dim[1];  // H
+                c_tensor_dim[2] = a_tensor_dim[2];  // M
+                c_tensor_dim[3] = b_tensor_dim[3];  // N
+            } else {
+                c_tensor_dim[0] = a_tensor_dim[0];  // B
+                c_tensor_dim[1] = a_tensor_dim[1];  // M
+                c_tensor_dim[2] = b_tensor_dim[2];  // N
+            }
             c_tensor->set_dim(c_tensor_dim);
         }
         if (c_tensor->get_stride().empty()) {
