@@ -696,8 +696,6 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
     // The hack of making Kt a non-virtual tensor is going to bite you.
     // Relax that requirement and get Uid from K, instead of Kt tensor
 
-    std::cout << json(mha_graph).dump(4);
-
     Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
     REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
