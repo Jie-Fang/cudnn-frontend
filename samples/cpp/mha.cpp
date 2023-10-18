@@ -535,13 +535,13 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
                                      .set_name("Seed")
                                      .set_dim({1, 1, 1, 1})
                                      .set_stride({1, 1, 1, 1})
-                                     .set_data_type(fe::DataType_t::INT32));
+                                     .set_data_type(fe::DataType_t::INT64));
 
     auto offset = mha_graph.tensor(fe::graph::Tensor_attributes()
                                        .set_name("Offset")
                                        .set_dim({1, 1, 1, 1})
                                        .set_stride({1, 1, 1, 1})
-                                       .set_data_type(fe::DataType_t::INT32));
+                                       .set_data_type(fe::DataType_t::INT64));
 
     auto descale_q = mha_graph.tensor(fe::graph::Tensor_attributes()
                                           .set_name("descale_Q")
@@ -657,13 +657,39 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
     Surface<float> AMax_S_Tensor(1, false);
     Surface<float> AMax_O_Tensor(1, false);
 
-    Surface<int32_t> seed_Tensor(1, false);
-    Surface<int32_t> offset_Tensor(1, false);
+    Surface<int64_t> seed_Tensor(1, false);
+    Surface<int64_t> offset_Tensor(1, false);
+    std::vector<int64_t> seed_cpu   = {123456};
+    std::vector<int64_t> offset_cpu = {1};
+    checkCudaErr(cudaMemcpy(seed_Tensor.devPtr, seed_cpu.data(), sizeof(seed_cpu[0]), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(offset_Tensor.devPtr, offset_cpu.data(), sizeof(offset_cpu[0]), cudaMemcpyHostToDevice));
 
-    Surface<int32_t> mnk_override_Tensor(b, false);
+    Surface<int32_t> devActualSeqlenQ(b, false);
+    Surface<int32_t> devActualSeqlenKV(b, false);
+    std::vector<int32_t> hostActualSeqlen(b, s);
+
+    checkCudaErr(cudaMemcpy(
+        devActualSeqlenQ.devPtr, hostActualSeqlen.data(), sizeof(hostActualSeqlen[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(
+        devActualSeqlenKV.devPtr, hostActualSeqlen.data(), sizeof(hostActualSeqlen[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
 
     Surface<int32_t> ragged_offset_QKV_Tensor(b + 1, false);
     Surface<int32_t> ragged_offset_O_Tensor(b + 1, false);
+    std::vector<int32_t> ragged_offset(b + 1);
+
+    for (size_t i = 0; i < ragged_offset.size(); ++i) {
+        ragged_offset[i] = i * s_q * 3 * h * d;
+    }
+    checkCudaErr(cudaMemcpy(ragged_offset_O_Tensor.devPtr,
+                            ragged_offset.data(),
+                            sizeof(ragged_offset[0]) * (b + 1),
+                            cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(ragged_offset_QKV_Tensor.devPtr,
+                            ragged_offset.data(),
+                            sizeof(ragged_offset[0]) * (b + 1),
+                            cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {Q, devPtrQ},
@@ -680,7 +706,7 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
         {scale_o, scale_O_Tensor.devPtr},
         {AMax_S, AMax_S_Tensor.devPtr},
         {AMax_O, AMax_O_Tensor.devPtr},
-        {mnk_override, mnk_override_Tensor.devPtr},
+        {mnk_override, devActualSeqlenQ.devPtr},
         {ragged_offset_QKV, ragged_offset_QKV_Tensor.devPtr},
         {ragged_offset_O, ragged_offset_O_Tensor.devPtr}};
 
