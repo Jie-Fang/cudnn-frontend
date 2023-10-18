@@ -332,7 +332,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         }
 
         auto softmax_attributes =
-            Softmax_attributes().set_name("softmax").has_stats(true);  // As this is flash attention
+            Softmax_attributes().set_name("softmax").has_stats(true).has_M_Zinv(false);  // As this is flash attention
         // Special non-functional-style call. Needed because output already created and provided to user.
         softmax(last_output, softmax_attributes, softmax_output, softmax_stats);
         last_output = softmax_output;
