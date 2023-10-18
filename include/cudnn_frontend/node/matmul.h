@@ -156,11 +156,27 @@ class MatmulNode : public INode {
             for (auto const& [name, tensor] : attributes.inputs) {
                 if (tensor && tensor->get_is_virtual() == false) {
                     uids_involved_in_operations.insert(tensor->get_uid());
+                    // HACK
+                    // FIXME
+                    // TODO
+                    // also check whether the tensor has a ragged offset tensor.
+                    // Placing in matmul as there is one usecase of sdpa_fp8 today
+                    if (auto ragged_offset = tensor->get_ragged_offset()) {
+                        uids_involved_in_operations.insert(ragged_offset->get_uid());
+                    }
                 }
             }
             for (auto const& [name, tensor] : attributes.outputs) {
                 if (tensor && tensor->get_is_virtual() == false) {
                     uids_involved_in_operations.insert(tensor->get_uid());
+                    // HACK
+                    // FIXME
+                    // TODO
+                    // also check whether the tensor has a ragged offset tensor.
+                    // Placing in matmul as there is one usecase of sdpa_fp8 today
+                    if (auto ragged_offset = tensor->get_ragged_offset()) {
+                        uids_involved_in_operations.insert(ragged_offset->get_uid());
+                    }
                 }
             }
 

@@ -251,7 +251,7 @@ class SDPA_FP8_Node : public INode {
         cudnnHandle_t,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* node_workspace) override {
+        void*) override {
         if (attributes.dropout_probability.has_value()) {
             float dropout_scale_value = (1.f / (1.0f - attributes.dropout_probability.value()));
 
@@ -265,8 +265,6 @@ class SDPA_FP8_Node : public INode {
         tensor_to_pass_by_value.emplace(KT, k_ptr);
 
         return {error_code_t::OK, ""};
-
-        (void)(node_workspace);
     }
 };
 
