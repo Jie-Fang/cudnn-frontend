@@ -196,4 +196,4 @@ Returns:
 - The cudnn backend enums are changed as follows:
     - `cudnnBackend<enum_name>` -> `cudnn_frontend::<enum_name>`
     - `cudnn<enum_name>` -> `cudnn_frontend::<enum_name>`
-- Scaled Dot Product Flash Attention Backward improves computation speed by employing an optional workspace tensor, which consumes quadratically increasing memory usage relative to sequence length. The default GPU memory limit for the workspace tensor is 256MB, but users with enough available GPU memory budget, can increase this limit by configuring the CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT environment variable to the desired new limit in bytes.
+- Scaled Dot Product Flash Attention Backward improves computation speed by employing an optional workspace tensor, which consumes quadratically increasing memory usage relative to sequence length. The default GPU memory limit for the workspace tensor is 256MB, but users with enough available GPU memory budget can increase this limit by configuring the CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT environment variable to the desired new limit in bytes.
