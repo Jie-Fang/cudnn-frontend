@@ -22,8 +22,7 @@ class Tensor_attributes {
     bool is_virtual                    = false;
     bool is_pass_by_value              = false;
     TensorReordering_t reordering_type = TensorReordering_t::NONE;
-    using uid_t                        = int64_t;
-    uid_t uid;
+    int64_t uid                        = 0;
 
    public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor_attributes,
@@ -120,13 +119,13 @@ class Tensor_attributes {
         return *this;
     }
 
-    uid_t
+    int64_t
     get_uid() const {
         return uid;
     }
 
     auto
-    set_uid(uid_t value) -> Tensor_attributes& {
+    set_uid(int64_t value) -> Tensor_attributes& {
         uid = value;
         return *this;
     }

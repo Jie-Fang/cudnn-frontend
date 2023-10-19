@@ -141,20 +141,6 @@ class InstanceNormNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
-        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-            options.outputs.MEAN->set_uid(ICudnn::create_new_uid());
-            options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        }
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building InstanceNormNode tensors " << options.name << "..." << std::endl;
@@ -194,14 +180,15 @@ class InstanceNormNode : public INode {
                 }
             }
 
-            cudnn_frontend::OperationBuilder &op_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                                    .setNormalizationMode(NormMode_t::INSTANCE_NORM)
-                                    .setNormFwdPhase(options.forward_phase)
-                                    .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
-                                    .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
-                                                     *(tensors.at(options.inputs.BIAS->get_uid())))
-                                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
-                                    .setyDesc(*(tensors.at(options.outputs.Y->get_uid())));
+            cudnn_frontend::OperationBuilder& op_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
+                    .setNormalizationMode(NormMode_t::INSTANCE_NORM)
+                    .setNormFwdPhase(options.forward_phase)
+                    .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
+                    .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
+                                     *(tensors.at(options.inputs.BIAS->get_uid())))
+                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
+                    .setyDesc(*(tensors.at(options.outputs.Y->get_uid())));
 
             if (options.forward_phase == NormFwdPhase_t::TRAINING) {
                 op_builder.setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())),
@@ -210,7 +197,7 @@ class InstanceNormNode : public INode {
 
             // cudnn_frontend::Operation instancenorm_operation = op_builder.build();
             operations.push_back({op_builder.build(), std::move(uids_in_operation)});
-            
+
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
@@ -243,10 +230,10 @@ class DINNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DINNode " << options.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) &&
-                                           !(options.inputs.SCALE),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Either saved mean/inv_variance/scale or epsilon required.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.SCALE),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Either saved mean/inv_variance/scale or epsilon required.");
 
         return {error_code_t::OK, ""};
     }
@@ -351,19 +338,6 @@ class DINNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.DY->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.MEAN) {options.inputs.MEAN->set_uid(ICudnn::create_new_uid());}
-        if (options.inputs.INV_VARIANCE) {options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());}
-        options.outputs.DX->set_uid(ICudnn::create_new_uid());
-        options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
-        options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DINode tensors " << options.name << "..." << std::endl;
@@ -371,8 +345,12 @@ class DINNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
-        if (options.inputs.MEAN) {CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN));}
-        if (options.inputs.INV_VARIANCE) {CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));}
+        if (options.inputs.MEAN) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN));
+        }
+        if (options.inputs.INV_VARIANCE) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));
+        }
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));

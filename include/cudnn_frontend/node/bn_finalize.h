@@ -82,26 +82,6 @@ class BatchNormFinalizeNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.SUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
-        options.inputs.PREV_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
-        options.inputs.PREV_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.inputs.MOMENTUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.ACCUM_COUNT->set_uid(ICudnn::create_new_uid());
-        options.outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
-        options.outputs.EQ_SCALE->set_uid(ICudnn::create_new_uid());
-        options.outputs.MEAN->set_uid(ICudnn::create_new_uid());
-        options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        options.outputs.NEXT_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
-        options.outputs.NEXT_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchNormFinalizeNode tensors " << options.name << "..." << std::endl;

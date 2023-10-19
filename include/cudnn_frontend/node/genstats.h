@@ -64,14 +64,6 @@ class GenstatsNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.outputs.SUM->set_uid(ICudnn::create_new_uid());
-        options.outputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building GenstatsNode tensors " << options.name << "..." << std::endl;

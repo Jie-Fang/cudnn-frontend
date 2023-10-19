@@ -45,7 +45,13 @@ class ICudnn {
     error_t
     create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props) {
         // Check whether tensor already created
-        auto const uid = props->get_uid();
+        auto uid = props->get_uid();
+
+        if (uid == 0) {
+            uid = ICudnn::create_new_uid();
+            props->set_uid(uid);
+        }
+
         if (tensors.find(uid) != tensors.end()) {
             getLogger() << "[cudnn_frontend] INFO: Backend tensor already created for Id: " << uid << ".\n";
             return {error_code_t::OK, ""};

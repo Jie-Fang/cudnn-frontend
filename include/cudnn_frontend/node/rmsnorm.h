@@ -116,19 +116,6 @@ class RMSNormNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.BIAS) options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
-        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-            options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        }
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RMSNormNode tensors " << options.name << "..." << std::endl;
@@ -338,20 +325,6 @@ class DRMSNormNode : public INode {
             infer_scale_bias_tensors(options.outputs.DBIAS);
         }
 
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.DY->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        options.outputs.DX->set_uid(ICudnn::create_new_uid());
-        options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
-        if (options.use_dbias.value()) {
-            options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        }
         return {error_code_t::OK, ""};
     }
 

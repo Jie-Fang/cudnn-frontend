@@ -30,14 +30,6 @@ class RngNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        if (options.inputs.Seed) options.inputs.Seed->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.Offset) options.inputs.Offset->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode tensors " << options.name << "..." << std::endl;

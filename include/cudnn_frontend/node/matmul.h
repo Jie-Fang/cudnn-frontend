@@ -70,17 +70,6 @@ class MatmulNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.A->set_uid(ICudnn::create_new_uid());
-        options.inputs.B->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.M_override) options.inputs.M_override->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.N_override) options.inputs.N_override->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.K_override) options.inputs.K_override->set_uid(ICudnn::create_new_uid());
-        options.outputs.C->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building MatmulNode tensors " << options.name << "..." << std::endl;

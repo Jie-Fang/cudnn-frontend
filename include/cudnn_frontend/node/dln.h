@@ -145,20 +145,6 @@ class DLNNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.DY->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.MEAN) options.inputs.MEAN->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.INV_VARIANCE) options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.EPSILON) options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.outputs.DX->set_uid(ICudnn::create_new_uid());
-        options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
-        options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DLNNode tensors " << options.name << "..." << std::endl;

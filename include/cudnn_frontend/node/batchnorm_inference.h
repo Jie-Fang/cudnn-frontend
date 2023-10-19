@@ -78,18 +78,6 @@ class BatchnormInferenceNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        attributes.inputs.X->set_uid(ICudnn::create_new_uid());
-        attributes.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        attributes.inputs.BIAS->set_uid(ICudnn::create_new_uid());
-        attributes.inputs.MEAN->set_uid(ICudnn::create_new_uid());
-        attributes.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        attributes.outputs.Y->set_uid(ICudnn::create_new_uid());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchnormInferenceNode tensors " << attributes.name << "..." << std::endl;

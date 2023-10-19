@@ -62,14 +62,6 @@ class DgradNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.DY->set_uid(ICudnn::create_new_uid());
-        options.inputs.W->set_uid(ICudnn::create_new_uid());
-        options.outputs.DX->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DgradNode tensors " << options.name << "..." << std::endl;

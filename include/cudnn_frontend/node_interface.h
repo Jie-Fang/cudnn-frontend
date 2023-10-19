@@ -36,11 +36,6 @@ class INode : public ICudnn {
 
    private:
     virtual error_t
-    assign_uids_node() {
-        return {error_code_t::OK, ""};
-    };
-
-    virtual error_t
     infer_properties_node() {
         return {error_code_t::OK, ""};
     };
@@ -50,15 +45,6 @@ class INode : public ICudnn {
     validate_node() const {
         return {error_code_t::OK, ""};
     };
-
-    error_t
-    assign_uids() {
-        CHECK_CUDNN_FRONTEND_ERROR(assign_uids_node());
-        for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->assign_uids());
-        }
-        return {error_code_t::OK, ""};
-    }
 
     virtual int64_t
     get_fe_workspace_size_node() const {
@@ -194,7 +180,6 @@ class INode : public ICudnn {
     error_t
     build_operation_graph(cudnnHandle_t handle) {
         CHECK_CUDNN_FRONTEND_ERROR(validate());
-        CHECK_CUDNN_FRONTEND_ERROR(assign_uids());
         CHECK_CUDNN_FRONTEND_ERROR(createTensors());
         CHECK_CUDNN_FRONTEND_ERROR(createOperations());
         CHECK_CUDNN_FRONTEND_ERROR(createOperationGraphs(handle));

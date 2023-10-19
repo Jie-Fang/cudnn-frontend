@@ -75,15 +75,6 @@ class PointwiseNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.IN_0->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.IN_1) options.inputs.IN_1->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.IN_2) options.inputs.IN_2->set_uid(ICudnn::create_new_uid());
-        options.outputs.OUT_0->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     createTensors() override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode " << options.name << " tensors X:" << std::endl;
