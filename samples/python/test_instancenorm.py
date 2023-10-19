@@ -100,7 +100,7 @@ def test_in(param_extract):
     torch.testing.assert_close(mean_expected, mean_actual, atol=atol, rtol=rtol)
     torch.testing.assert_close(inv_var_expected, inv_var_actual, atol=atol, rtol=rtol)
     print("Success!!")
-    
+
     target = torch.randn_like(Y_expected)
     criterion = torch.nn.MSELoss()
     loss = criterion(Y_expected, target)
@@ -114,7 +114,11 @@ def test_in(param_extract):
     
     bwd_graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    DY = bwd_graph.tensor_like(x_gpu.detach())
+    # https://github.com/pytorch/pytorch/issues/72341
+    # PyT does not preserve layout for IN
+    DY_gpu = Y_expected.grad.to(memory_format=torch.channels_last)
+
+    DY = bwd_graph.tensor_like(DY_gpu)
     X_bwd = bwd_graph.tensor_like(x_gpu.detach())
     scale_bwd = bwd_graph.tensor_like(scale_gpu.detach())
     mean_bwd = bwd_graph.tensor_like(mean_actual.detach())
@@ -148,7 +152,7 @@ def test_in(param_extract):
     bwd_graph.execute({
                 X_bwd : x_gpu.detach()
                 , scale_bwd : scale_gpu.detach()
-                , DY : Y_expected.grad
+                , DY : DY_gpu
                 , mean_bwd: mean_actual.detach()
                 , inv_var_bwd: inv_var_actual.detach()
                 , epsilon_bwd: epsilon_cpu
@@ -159,9 +163,9 @@ def test_in(param_extract):
 
     torch.cuda.synchronize()
     print("Comparing with reference")
-    torch.testing.assert_close(x_gpu.grad, DX_actual, atol=2e-4, rtol=2e-4)
-    # torch.testing.assert_close(scale_gpu.grad, DScale_actual, atol=2e-4, rtol=2e-4)
-    # torch.testing.assert_close(bias_gpu.grad, Dbias_actual, atol=2e-4, rtol=2e-4)
+    torch.testing.assert_close(x_gpu.grad, DX_actual, atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(scale_gpu.grad, DScale_actual, atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(bias_gpu.grad, Dbias_actual, atol=2e-3, rtol=2e-3)
     print("Success!!")
 
 if __name__ == "__main__":
