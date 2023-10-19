@@ -126,33 +126,30 @@ class INode : public ICudnn {
 
     // Creates cudnn tensors for each node (and its sub nodes)
     virtual error_t
-    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) {
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, tensors));
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors));
         }
         return {error_code_t::OK, ""};
-    }
-
-    virtual error_t
-    createOperationGraphs(cudnnHandle_t) {
-        return {error_code_t::GRAPH_NOT_SUPPORTED, ""};
     }
 
     // Creates cudnn operation for each node (and its sub nodes)
     // Only INode that map to a primitive cudnn operation need to specialize.
     virtual error_t
-    create_cudnn_operations(std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operation,
+        std::vector<cudnn_frontend::Operation>& backend_operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) {
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(tensors));
-
-            // Roll up operations to parent node, so that parent can too partition operation graphs.
-            for (auto&& operation_with_uids : sub_node->operations) {
-                operations.push_back(std::move(operation_with_uids));
-            }
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(
+                uids_involved_in_operation, backend_operations, uid_to_backend_tensors));
         }
         return {error_code_t::OK, ""};
     }
 
+    // An implicitly topological-sorted vector of sub nodes.
+    // The sorted order is a side effect of functional API.
     std::vector<std::unique_ptr<INode>> sub_nodes;
 
    public:
@@ -186,24 +183,24 @@ class INode : public ICudnn {
 
         // Starting uid for operation graph.
         // Each time a backend tensor is created, uid will be incremented by 1, ensuring uniqueness.
-        // TODO: Maybe just use uid_to_backend_tensors size as uid each time?
+        // TODO: Maybe just use uid_to_tensors size as uid each time?
         int64_t uid = 1;
 
-        // The tensor mapping from fe::Tensor to be::Tensor.
-        //
-        // sub nodes share fe::Tensor. Example, in a conv-bias graph, conv output Y and bias input IN_0 are the same
-        // fe::Tensor. But both sub ndoes need to work together to make sure only one be::Tensor is created. Hence this
-        // uid_to_backend_tensors acts as the global registry for each sub node to use.
-        //
-        // Key cannot be fe::Tensor, or shared_ptr<fe::Tensor>, or underlying object address of fe::Tensor.
-        // Hence using uid, as that uniquely identifies both types of tensors.
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> uid_to_backend_tensors{};
-
         // Lower each sub node to cudnn backend.
-        create_cudnn_tensors(uid, uid_to_backend_tensors);
-        create_cudnn_operations(uid_to_backend_tensors);
+        create_cudnn_tensors(uid, uid_to_tensors);
 
-        CHECK_CUDNN_FRONTEND_ERROR(createOperationGraphs(handle));
+        // INode needs to keep track of all uids that an operation graph uses.
+        // This is because cudnn backend will not accept extra tensors in variant pack.
+        // But FE users provide 1 large list of tensors.
+        // So internally FE assigns subset of the usre-provided tensor list to each operation graph.
+        // Also, as uid in a variant pack have to be unique, keep a set of them.
+        std::unordered_set<uid_t> uids_involved_in_operation;
+        create_cudnn_operations(uids_involved_in_operation, operations, uid_to_tensors);
+
+        // The method here fuses all operations. There will be 1 operation graph in total.
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graphs(handle));
+        variant_pack_uids.push_back(std::move(uids_involved_in_operation));
+
         return {error_code_t::OK, ""};
     }
 

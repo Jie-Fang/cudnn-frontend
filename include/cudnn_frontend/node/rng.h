@@ -79,6 +79,8 @@ class RngNode : public INode {
 
     error_t
     create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode operations " << options.name << "..." << std::endl;
@@ -104,14 +106,13 @@ class RngNode : public INode {
                                              .setOffsetDesc(*(tensors.at(options.inputs.Offset->get_uid())))
                                              .build();
 
-                    std::vector<uid_t> uids_in_operation;
                     for (auto const& tensor : tensors_involved_in_operation) {
                         if (tensor && tensor->get_is_virtual() == false) {
-                            uids_in_operation.push_back(tensor->get_uid());
+                            uids_involved_in_operations.insert(tensor->get_uid());
                         }
                     }
 
-                    operations.push_back({std::move(Rng_operation), std::move(uids_in_operation)});
+                    operations.push_back(std::move(Rng_operation));
 
                 } else {
                     auto Rng_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
@@ -120,14 +121,13 @@ class RngNode : public INode {
                                              .setSeed(options.get_seed().value())
                                              .build();
 
-                    std::vector<uid_t> uids_in_operation;
                     for (auto const& tensor : tensors_involved_in_operation) {
                         if (tensor && tensor->get_is_virtual() == false) {
-                            uids_in_operation.push_back(tensor->get_uid());
+                            uids_involved_in_operations.insert(tensor->get_uid());
                         }
                     }
 
-                    operations.push_back({std::move(Rng_operation), std::move(uids_in_operation)});
+                    operations.push_back(std::move(Rng_operation));
                 }
             }
 

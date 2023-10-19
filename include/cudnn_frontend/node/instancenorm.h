@@ -159,6 +159,8 @@ class InstanceNormNode : public INode {
     }
     error_t
     create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building InstanceNormNode operations " << options.name << "..." << std::endl;
@@ -175,10 +177,9 @@ class InstanceNormNode : public INode {
                 tensors_involved_in_operation.push_back(options.outputs.INV_VARIANCE);
             }
 
-            std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
 
@@ -198,7 +199,7 @@ class InstanceNormNode : public INode {
             }
 
             // cudnn_frontend::Operation instancenorm_operation = op_builder.build();
-            operations.push_back({op_builder.build(), std::move(uids_in_operation)});
+            operations.push_back(op_builder.build());
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
@@ -363,6 +364,8 @@ class DINNode : public INode {
 
     error_t
     create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DINode operations " << options.name << "..." << std::endl;
@@ -395,14 +398,13 @@ class DINNode : public INode {
                 options.outputs.DSCALE,
                 options.outputs.DBIAS};
 
-            std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
 
-            operations.push_back({std::move(DIN_operation), std::move(uids_in_operation)});
+            operations.push_back(std::move(DIN_operation));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

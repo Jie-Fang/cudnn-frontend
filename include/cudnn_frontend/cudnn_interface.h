@@ -19,16 +19,22 @@ namespace cudnn_frontend {
 class ICudnn {
    protected:
     using uid_t = int64_t;
-    struct operation_with_uids {
-        cudnn_frontend::Operation_v8 operation;
-        std::vector<uid_t> uids;
-    };
-    std::vector<operation_with_uids> operations;
+
+    //// Store tensors and operations as they (probably?) need to be kept alive.
+    //
+    // The tensor mapping from fe::Tensor to be::Tensor.
+    //
+    // sub nodes share fe::Tensor. Example, in a conv-bias graph, conv output Y and bias input IN_0 are the same
+    // fe::Tensor. But both sub ndoes need to work together to make sure only one be::Tensor is created. Hence this
+    // uid_to_backend_tensors acts as the global registry for each sub node to use.
+    //
+    // Key cannot be fe::Tensor, or shared_ptr<fe::Tensor>, or underlying object address of fe::Tensor.
+    // Hence using uid, as that uniquely identifies both types of tensors.
+    std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> uid_to_tensors;
+    std::vector<cudnn_frontend::Operation> operations;
 
     std::vector<std::shared_ptr<OperationGraph_v8>> operation_graphs;
     std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
-
-    // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
     // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
@@ -75,8 +81,8 @@ class ICudnn {
     error_t
     create_cudnn_operation_graphs(cudnnHandle_t handle) {
         std::vector<Operation const*> cudnn_operations;
-        for (auto const& operation_with_uid : operations) {
-            cudnn_operations.push_back(&(operation_with_uid.operation));
+        for (auto const& operation : operations) {
+            cudnn_operations.push_back(&operation);
         }
         auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder()
                                          .setHandle(handle)
@@ -85,14 +91,6 @@ class ICudnn {
 
         operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
         getLogger() << "[cudnn_frontend] INFO: Successfully built Operation Graphs." << std::endl;
-
-        // Push variant pack tensors required for this operation graph
-        std::unordered_set<uid_t> variant_pack_for_operation_graph;
-        for (auto const& operation_with_uid : operations) {
-            variant_pack_for_operation_graph.insert(std::begin(operation_with_uid.uids),
-                                                    std::end(operation_with_uid.uids));
-        }
-        variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
 
         return {error_code_t::OK, ""};
     }
