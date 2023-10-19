@@ -62,8 +62,8 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
                                   .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
     auto K = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("K")
-                                  .set_dim({b, h, d, s_kv})
-                                  .set_stride({3 * h * d, 3 * d, 1, 3 * b * h * d}));
+                                  .set_dim({b, h, s_kv, d})
+                                  .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
     auto V = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("V")
                                   .set_dim({b, h, s_kv, d})
@@ -238,8 +238,8 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
                                   .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
     auto K = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("K")
-                                  .set_dim({b, h, d, s_kv})
-                                  .set_stride({3 * h * d, 3 * d, 1, 3 * b * h * d}));
+                                  .set_dim({b, h, s_kv, d})
+                                  .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
     auto V = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("V")
                                   .set_dim({b, h, s_kv, d})
@@ -355,12 +355,12 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
         fe::graph::Tensor_attributes().set_name("Q").set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1}));
     auto k = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("K")
-                                  .set_dim({b, h, d, s_kv})
-                                  .set_stride({h * s_kv * d, s_kv * d, 1, d}));
+                                  .set_dim({b, h, s_kv, d})
+                                  .set_stride({h * s_kv * d, s_kv * d, d, 1}));
     auto v = mha_graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("V")
-                                  .set_dim({b, h, d, s_kv})
-                                  .set_stride({h * s_kv * d, s_kv * d, 1, d}));
+                                  .set_dim({b, h, s_kv, d})
+                                  .set_stride({h * s_kv * d, s_kv * d, d, 1}));
     auto o = mha_graph.tensor(
         fe::graph::Tensor_attributes().set_name("O").set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1}));
     auto dO = mha_graph.tensor(
