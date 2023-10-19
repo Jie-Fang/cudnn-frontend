@@ -17,19 +17,8 @@
 namespace cudnn_frontend {
 
 class ICudnn {
-   public:
-    using uid_t = int64_t;
-
-    static uid_t
-    create_new_uid() {
-        static uid_t uid = 0;
-        uid++;
-        return uid;
-    }
-
    protected:
-    inline static std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
-
+    using uid_t = int64_t;
     struct operation_with_uids {
         cudnn_frontend::Operation_v8 operation;
         std::vector<uid_t> uids;
@@ -42,33 +31,43 @@ class ICudnn {
     // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
+    // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
-    create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props) {
+    create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
+                        int64_t& uid,
+                        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
         // Check whether tensor already created
-        auto uid = props->get_uid();
-
-        if (uid == 0) {
-            uid = ICudnn::create_new_uid();
+        // TODO: Do not reply on uid being 0?
+        if (props->get_uid() == 0) {
+            // Make sure no other tensor somehow already has claimed uid.
+            RETURN_CUDNN_FRONTEND_ERROR_IF(tensors.find(uid) != tensors.end(),
+                                           error_code_t::ATTRIBUTE_NOT_SET,
+                                           "Trying to assign same uid to possibily two different tensors.");
             props->set_uid(uid);
-        }
+            uid++;
 
-        if (tensors.find(uid) != tensors.end()) {
-            getLogger() << "[cudnn_frontend] INFO: Backend tensor already created for Id: " << uid << ".\n";
-            return {error_code_t::OK, ""};
-        }
+            auto tensor = cudnn_frontend::TensorBuilder()
+                              .setDim(props->get_dim().size(), props->get_dim().data())
+                              .setStrides(props->get_stride().size(), props->get_stride().data())
+                              .setId(props->get_uid())
+                              .setAlignment(16)
+                              .setDataType(props->get_data_type())
+                              .setVirtual(props->get_is_virtual())
+                              .setByValue(props->get_is_pass_by_value())
+                              .setReorderType(props->get_reordering_type())
+                              .build();
+            tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+        } else {
+            // Make sure tensor's uid is present in backend tensor registry.
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                tensors.find(props->get_uid()) == tensors.end(),
+                error_code_t::ATTRIBUTE_NOT_SET,
+                "Backend tensor already not found for non-zero Id: " + std::to_string(props->get_uid()));
 
-        // Create new backend tensor
-        auto tensor = cudnn_frontend::TensorBuilder()
-                          .setDim(props->get_dim().size(), props->get_dim().data())
-                          .setStrides(props->get_stride().size(), props->get_stride().data())
-                          .setId(uid)
-                          .setAlignment(16)
-                          .setDataType(props->get_data_type())
-                          .setVirtual(props->get_is_virtual())
-                          .setByValue(props->get_is_pass_by_value())
-                          .setReorderType(props->get_reordering_type())
-                          .build();
-        tensors.emplace(uid, std::make_shared<Tensor>(std::move(tensor)));
+            getLogger() << "[cudnn_frontend] INFO: Backend tensor already created for Id: " +
+                               std::to_string(props->get_uid())
+                        << std::endl;
+        }
 
         return {error_code_t::OK, ""};
     }

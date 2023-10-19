@@ -124,10 +124,11 @@ class INode : public ICudnn {
     };
     Type tag;
 
+    // Creates cudnn tensors for each node (and its sub nodes)
     virtual error_t
-    createTensors() {
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->createTensors());
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, tensors));
         }
         return {error_code_t::OK, ""};
     }
@@ -137,10 +138,12 @@ class INode : public ICudnn {
         return {error_code_t::GRAPH_NOT_SUPPORTED, ""};
     }
 
+    // Creates cudnn operation for each node (and its sub nodes)
+    // Only INode that map to a primitive cudnn operation need to specialize.
     virtual error_t
-    createOperations() {
+    create_cudnn_operations(std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->createOperations());
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(tensors));
 
             // Roll up operations to parent node, so that parent can too partition operation graphs.
             for (auto&& operation_with_uids : sub_node->operations) {
@@ -180,8 +183,26 @@ class INode : public ICudnn {
     error_t
     build_operation_graph(cudnnHandle_t handle) {
         CHECK_CUDNN_FRONTEND_ERROR(validate());
-        CHECK_CUDNN_FRONTEND_ERROR(createTensors());
-        CHECK_CUDNN_FRONTEND_ERROR(createOperations());
+
+        // Starting uid for operation graph.
+        // Each time a backend tensor is created, uid will be incremented by 1, ensuring uniqueness.
+        // TODO: Maybe just use uid_to_backend_tensors size as uid each time?
+        int64_t uid = 1;
+
+        // The tensor mapping from fe::Tensor to be::Tensor.
+        //
+        // sub nodes share fe::Tensor. Example, in a conv-bias graph, conv output Y and bias input IN_0 are the same
+        // fe::Tensor. But both sub ndoes need to work together to make sure only one be::Tensor is created. Hence this
+        // uid_to_backend_tensors acts as the global registry for each sub node to use.
+        //
+        // Key cannot be fe::Tensor, or shared_ptr<fe::Tensor>, or underlying object address of fe::Tensor.
+        // Hence using uid, as that uniquely identifies both types of tensors.
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> uid_to_backend_tensors{};
+
+        // Lower each sub node to cudnn backend.
+        create_cudnn_tensors(uid, uid_to_backend_tensors);
+        create_cudnn_operations(uid_to_backend_tensors);
+
         CHECK_CUDNN_FRONTEND_ERROR(createOperationGraphs(handle));
         return {error_code_t::OK, ""};
     }

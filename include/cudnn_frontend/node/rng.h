@@ -30,13 +30,14 @@ class RngNode : public INode {
     }
 
     error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode tensors " << options.name << "..." << std::endl;
 
-        if (options.inputs.Seed) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Seed));
-        if (options.inputs.Offset) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Offset));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
+        if (options.inputs.Seed) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Seed, uid, tensors));
+        if (options.inputs.Offset) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Offset, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
@@ -77,7 +78,8 @@ class RngNode : public INode {
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode operations " << options.name << "..." << std::endl;
 

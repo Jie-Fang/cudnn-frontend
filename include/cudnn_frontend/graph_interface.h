@@ -190,6 +190,7 @@ class Graph : public INode {
     createOperationGraphs(cudnnHandle_t handle) override final {
         getLogger() << "Operation Graph has " << operations.size() << " operations." << std::endl;
 
+        // The method here fuses all operations. There is 1 operation graph.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graphs(handle));
 
         return {error_code_t::OK, ""};

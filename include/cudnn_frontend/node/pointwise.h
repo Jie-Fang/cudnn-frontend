@@ -75,32 +75,34 @@ class PointwiseNode : public INode {
     }
 
     error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode " << options.name << " tensors X:" << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0, uid, tensors));
 
         auto const port_count = get_pointwise_mode_port_count(options.mode);
         if (port_count >= 3) {
             getLogger() << "[cudnn_frontend] INFO: "
                         << "Building PointwiseNode " << options.name << " tensors B:" << std::endl;
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_1));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_1, uid, tensors));
         }
         if (port_count >= 4) {
             getLogger() << "[cudnn_frontend] INFO: "
                         << "Building PointwiseNode " << options.name << " tensors T:" << std::endl;
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_2));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_2, uid, tensors));
         }
 
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode " << options.name << " tensors Y:" << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode operations " << options.name << "..." << std::endl;
 
