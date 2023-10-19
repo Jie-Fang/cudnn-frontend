@@ -319,8 +319,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
     )
     q = graph.tensor_like(q_gpu)
     k = graph.tensor_like(k_gpu)
-    k.set_dim((shape_k[0], shape_k[1], shape_k[3], shape_k[2]))
-    k.set_stride((stride_k[0], stride_k[1], stride_k[3], stride_k[2]))
     v = graph.tensor_like(v_gpu)
 
     bias = graph.tensor_like(bias_gpu) if is_bias else None
@@ -537,12 +535,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     )
     q = graph.tensor_like(q_gpu)
     k = graph.tensor_like(k_gpu)
-    k.set_dim((shape_k[0], shape_k[1], shape_k[3], shape_k[2]))
-    k.set_stride((stride_k[0], stride_k[1], stride_k[3], stride_k[2]))
     v = graph.tensor_like(v_gpu)
-    v.set_dim((shape_v[0], shape_v[1], shape_v[3], shape_v[2]))
-    v.set_stride((stride_v[0], stride_v[1], stride_v[3], stride_v[2]))
-
     o = graph.tensor_like(o_gpu)
     dO = graph.tensor_like(dO_gpu)
     stats = graph.tensor_like(stats_gpu)
