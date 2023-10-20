@@ -25,7 +25,7 @@ enum class [[nodiscard]] error_code_t{OK,
                                       INVALID_CUDA_DEVICE,
                                       HANDLE_ERROR};
 
-typedef struct error_object {
+typedef struct [[nodiscard]] error_object {
     error_code_t code;
     std::string err_msg;
     error_object() : code(error_code_t::OK), err_msg(""){};

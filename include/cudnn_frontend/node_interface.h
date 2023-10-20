@@ -179,7 +179,7 @@ class INode : public ICudnn {
         int64_t uid = 1;
 
         // Lower each sub node to cudnn backend.
-        create_cudnn_tensors(uid, uid_to_tensors);
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid, uid_to_tensors));
 
         // INode needs to keep track of all uids that an operation graph uses.
         // This is because cudnn backend will not accept extra tensors in variant pack.
@@ -187,7 +187,7 @@ class INode : public ICudnn {
         // So internally FE assigns subset of the usre-provided tensor list to each operation graph.
         // Also, as uid in a variant pack have to be unique, keep a set of them.
         std::unordered_set<uid_t> uids_involved_in_operation;
-        create_cudnn_operations(uids_involved_in_operation, operations, uid_to_tensors);
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operations(uids_involved_in_operation, operations, uid_to_tensors));
 
         // The method here fuses all operations. There will be 1 operation graph in total.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graphs(handle));
