@@ -338,26 +338,30 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 5>
 Graph::batchnorm(std::shared_ptr<Tensor_attributes> x,
                  std::shared_ptr<Tensor_attributes> scale,
                  std::shared_ptr<Tensor_attributes> bias,
-                 Batchnorm_attributes options) {
+                 Batchnorm_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
-    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-    auto INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto Y = attributes.outputs[Batchnorm_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    auto MEAN = attributes.outputs[Batchnorm_attributes::output_names::MEAN] =
+        output_tensor(attributes.name + "::MEAN");
+    auto INV_VARIANCE = attributes.outputs[Batchnorm_attributes::output_names::INV_VARIANCE] =
+        output_tensor(attributes.name + "::INV_VARIANCE");
     std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
     std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR  = nullptr;
-    if (options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
-        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
-        NEXT_RUNNING_VAR  = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    if (attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_MEAN] &&
+        attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_VAR] &&
+        attributes.inputs[Batchnorm_attributes::input_names::MOMENTUM]) {
+        NEXT_RUNNING_MEAN = output_tensor(attributes.name + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR  = output_tensor(attributes.name + "::NEXT_RUNNING_VAR");
     }
-    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
-    options.outputs.NEXT_RUNNING_VAR  = NEXT_RUNNING_VAR;
+    attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN] = NEXT_RUNNING_MEAN;
+    attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_VAR]  = NEXT_RUNNING_VAR;
 
     // Set inputs
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
-    options.inputs.BIAS  = bias;
+    attributes.inputs[Batchnorm_attributes::input_names::X]     = x;
+    attributes.inputs[Batchnorm_attributes::input_names::SCALE] = scale;
+    attributes.inputs[Batchnorm_attributes::input_names::BIAS]  = bias;
 
-    sub_nodes.emplace_back(std::make_unique<BatchNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<BatchNormNode>(std::move(attributes), context));
 
     return {Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
