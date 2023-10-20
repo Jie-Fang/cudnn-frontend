@@ -666,7 +666,7 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
 
     Surface<int32_t> devActualSeqlenQ(b, false);
     Surface<int32_t> devActualSeqlenKV(b, false);
-    std::vector<int32_t> hostActualSeqlen(b, s);
+    std::vector<int32_t> hostActualSeqlen(b, static_cast<int32_t>(s));
 
     checkCudaErr(cudaMemcpy(
         devActualSeqlenQ.devPtr, hostActualSeqlen.data(), sizeof(hostActualSeqlen[0]) * b, cudaMemcpyHostToDevice));
@@ -679,7 +679,7 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
     std::vector<int32_t> ragged_offset(b + 1);
 
     for (size_t i = 0; i < ragged_offset.size(); ++i) {
-        ragged_offset[i] = i * s_q * 3 * h * d;
+        ragged_offset[i] = static_cast<int32_t>(static_cast<int32_t>(i) * s_q * 3 * h * d);
     }
     checkCudaErr(cudaMemcpy(ragged_offset_O_Tensor.devPtr,
                             ragged_offset.data(),
