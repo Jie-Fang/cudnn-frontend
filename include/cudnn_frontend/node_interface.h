@@ -40,7 +40,6 @@ class INode : public ICudnn {
         return {error_code_t::OK, ""};
     };
 
-    bool has_validation_checked = false;
     virtual error_t
     validate_node() const {
         return {error_code_t::OK, ""};
@@ -158,10 +157,6 @@ class INode : public ICudnn {
 
     error_t
     validate() {
-        if (has_validation_checked) {
-            return {error_code_t::OK, ""};
-        }
-
         // validate self
         CHECK_CUDNN_FRONTEND_ERROR(validate_node());
 
@@ -173,14 +168,11 @@ class INode : public ICudnn {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->validate());
         }
 
-        has_validation_checked = true;
         return {error_code_t::OK, ""};
     }
 
     error_t
     build_operation_graph(cudnnHandle_t handle) {
-        CHECK_CUDNN_FRONTEND_ERROR(validate());
-
         // Starting uid for operation graph.
         // Each time a backend tensor is created, uid will be incremented by 1, ensuring uniqueness.
         // TODO: Maybe just use uid_to_tensors size as uid each time?
