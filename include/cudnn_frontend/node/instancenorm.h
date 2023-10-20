@@ -183,23 +183,26 @@ class InstanceNormNode : public INode {
                 }
             }
 
-            cudnn_frontend::OperationBuilder& op_builder =
-                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                    .setNormalizationMode(NormMode_t::INSTANCE_NORM)
-                    .setNormFwdPhase(options.forward_phase)
-                    .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
-                    .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
-                                     *(tensors.at(options.inputs.BIAS->get_uid())))
-                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
-                    .setyDesc(*(tensors.at(options.outputs.Y->get_uid())));
+            cudnn_frontend::OperationBuilder&& op_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
+            
+
+            op_builder.setNormalizationMode(NormMode_t::INSTANCE_NORM)
+                        .setNormFwdPhase(options.forward_phase)
+                        .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
+                        .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
+                                        *(tensors.at(options.inputs.BIAS->get_uid())))
+                        .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
+                        .setyDesc(*(tensors.at(options.outputs.Y->get_uid())));
 
             if (options.forward_phase == NormFwdPhase_t::TRAINING) {
                 op_builder.setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())),
                                                  *(tensors.at(options.outputs.INV_VARIANCE->get_uid())));
             }
 
+            auto instance_norm_op = op_builder.build();
             // cudnn_frontend::Operation instancenorm_operation = op_builder.build();
-            operations.push_back(op_builder.build());
+            operations.push_back(std::move(instance_norm_op));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
