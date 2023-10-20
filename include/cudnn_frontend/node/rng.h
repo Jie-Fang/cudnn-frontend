@@ -30,21 +30,14 @@ class RngNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        if (options.inputs.Seed) options.inputs.Seed->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.Offset) options.inputs.Offset->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode tensors " << options.name << "..." << std::endl;
 
-        if (options.inputs.Seed) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Seed));
-        if (options.inputs.Offset) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Offset));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
+        if (options.inputs.Seed) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Seed, uid, tensors));
+        if (options.inputs.Offset) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Offset, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
@@ -85,7 +78,10 @@ class RngNode : public INode {
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode operations " << options.name << "..." << std::endl;
 
@@ -110,14 +106,13 @@ class RngNode : public INode {
                                              .setOffsetDesc(*(tensors.at(options.inputs.Offset->get_uid())))
                                              .build();
 
-                    std::vector<uid_t> uids_in_operation;
                     for (auto const& tensor : tensors_involved_in_operation) {
                         if (tensor && tensor->get_is_virtual() == false) {
-                            uids_in_operation.push_back(tensor->get_uid());
+                            uids_involved_in_operations.insert(tensor->get_uid());
                         }
                     }
 
-                    operations.push_back({std::move(Rng_operation), std::move(uids_in_operation)});
+                    operations.push_back(std::move(Rng_operation));
 
                 } else {
                     auto Rng_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
@@ -126,14 +121,13 @@ class RngNode : public INode {
                                              .setSeed(options.get_seed().value())
                                              .build();
 
-                    std::vector<uid_t> uids_in_operation;
                     for (auto const& tensor : tensors_involved_in_operation) {
                         if (tensor && tensor->get_is_virtual() == false) {
-                            uids_in_operation.push_back(tensor->get_uid());
+                            uids_involved_in_operations.insert(tensor->get_uid());
                         }
                     }
 
-                    operations.push_back({std::move(Rng_operation), std::move(uids_in_operation)});
+                    operations.push_back(std::move(Rng_operation));
                 }
             }
 

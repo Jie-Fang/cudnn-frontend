@@ -70,28 +70,18 @@ class MatmulNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.A->set_uid(ICudnn::create_new_uid());
-        options.inputs.B->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.M_override) options.inputs.M_override->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.N_override) options.inputs.N_override->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.K_override) options.inputs.K_override->set_uid(ICudnn::create_new_uid());
-        options.outputs.C->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building MatmulNode tensors " << options.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.A));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.B));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.C));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.A, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.B, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.C, uid, tensors));
 
         for (auto const& tensor : {options.inputs.M_override, options.inputs.N_override, options.inputs.K_override}) {
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor));
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
             }
         }
 
@@ -99,7 +89,10 @@ class MatmulNode : public INode {
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building MatmulNode operations " << options.name << "..." << std::endl;
 
@@ -129,14 +122,14 @@ class MatmulNode : public INode {
                                             .setmOverrideDesc(*tensors.at(options.inputs.M_override->get_uid()))
                                             .setnOverrideDesc(*tensors.at(options.inputs.N_override->get_uid()))
                                             .build();
-                std::vector<uid_t> uids_in_operation;
+
                 for (auto const& tensor : tensors_involved_in_operation) {
                     if (tensor && tensor->get_is_virtual() == false) {
-                        uids_in_operation.push_back(tensor->get_uid());
+                        uids_involved_in_operations.insert(tensor->get_uid());
                     }
                 }
 
-                operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
+                operations.push_back(std::move(matmul_operation));
             } else if (options.inputs.K_override) {
                 // Create the matmul operation.
                 auto matmul_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR)
@@ -147,14 +140,14 @@ class MatmulNode : public INode {
                                             .setmOverrideDesc(*tensors.at(options.inputs.M_override->get_uid()))
                                             .setkOverrideDesc(*tensors.at(options.inputs.K_override->get_uid()))
                                             .build();
-                std::vector<uid_t> uids_in_operation;
+
                 for (auto const& tensor : tensors_involved_in_operation) {
                     if (tensor && tensor->get_is_virtual() == false) {
-                        uids_in_operation.push_back(tensor->get_uid());
+                        uids_involved_in_operations.insert(tensor->get_uid());
                     }
                 }
 
-                operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
+                operations.push_back(std::move(matmul_operation));
             } else {
                 // Create the matmul operation.
                 auto matmul_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR)
@@ -163,14 +156,14 @@ class MatmulNode : public INode {
                                             .setcMatDesc(*tensors.at(options.outputs.C->get_uid()))
                                             .setmatmulDesc(matmul_descriptor)
                                             .build();
-                std::vector<uid_t> uids_in_operation;
+
                 for (auto const& tensor : tensors_involved_in_operation) {
                     if (tensor && tensor->get_is_virtual() == false) {
-                        uids_in_operation.push_back(tensor->get_uid());
+                        uids_involved_in_operations.insert(tensor->get_uid());
                     }
                 }
 
-                operations.push_back({std::move(matmul_operation), std::move(uids_in_operation)});
+                operations.push_back(std::move(matmul_operation));
             }
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION

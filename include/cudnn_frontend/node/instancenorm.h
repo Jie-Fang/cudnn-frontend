@@ -141,37 +141,27 @@ class InstanceNormNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
-        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-            options.outputs.MEAN->set_uid(ICudnn::create_new_uid());
-            options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        }
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building InstanceNormNode tensors " << options.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.BIAS, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y, uid, tensors));
         if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.MEAN));
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.INV_VARIANCE));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.MEAN, uid, tensors));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.INV_VARIANCE, uid, tensors));
         }
         return {error_code_t::OK, ""};
     }
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building InstanceNormNode operations " << options.name << "..." << std::endl;
 
@@ -187,21 +177,21 @@ class InstanceNormNode : public INode {
                 tensors_involved_in_operation.push_back(options.outputs.INV_VARIANCE);
             }
 
-            std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
 
-            cudnn_frontend::OperationBuilder &op_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                                    .setNormalizationMode(NormMode_t::INSTANCE_NORM)
-                                    .setNormFwdPhase(options.forward_phase)
-                                    .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
-                                    .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
-                                                     *(tensors.at(options.inputs.BIAS->get_uid())))
-                                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
-                                    .setyDesc(*(tensors.at(options.outputs.Y->get_uid())));
+            cudnn_frontend::OperationBuilder& op_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
+                    .setNormalizationMode(NormMode_t::INSTANCE_NORM)
+                    .setNormFwdPhase(options.forward_phase)
+                    .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
+                    .setScaleAndBias(*(tensors.at(options.inputs.SCALE->get_uid())),
+                                     *(tensors.at(options.inputs.BIAS->get_uid())))
+                    .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
+                    .setyDesc(*(tensors.at(options.outputs.Y->get_uid())));
 
             if (options.forward_phase == NormFwdPhase_t::TRAINING) {
                 op_builder.setSavedMeanAndInvVar(*(tensors.at(options.outputs.MEAN->get_uid())),
@@ -209,8 +199,8 @@ class InstanceNormNode : public INode {
             }
 
             // cudnn_frontend::Operation instancenorm_operation = op_builder.build();
-            operations.push_back({op_builder.build(), std::move(uids_in_operation)});
-            
+            operations.push_back(op_builder.build());
+
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
@@ -243,10 +233,10 @@ class DINNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DINNode " << options.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) &&
-                                           !(options.inputs.SCALE),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Either saved mean/inv_variance/scale or epsilon required.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            !(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) && !(options.inputs.SCALE),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Either saved mean/inv_variance/scale or epsilon required.");
 
         return {error_code_t::OK, ""};
     }
@@ -351,37 +341,32 @@ class DINNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.DY->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.MEAN) {options.inputs.MEAN->set_uid(ICudnn::create_new_uid());}
-        if (options.inputs.INV_VARIANCE) {options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());}
-        options.outputs.DX->set_uid(ICudnn::create_new_uid());
-        options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
-        options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DINode tensors " << options.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
-        if (options.inputs.MEAN) {CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN));}
-        if (options.inputs.INV_VARIANCE) {CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));}
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE, uid, tensors));
+        if (options.inputs.MEAN) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN, uid, tensors));
+        }
+        if (options.inputs.INV_VARIANCE) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE, uid, tensors));
+        }
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DINode operations " << options.name << "..." << std::endl;
 
@@ -413,14 +398,13 @@ class DINNode : public INode {
                 options.outputs.DSCALE,
                 options.outputs.DBIAS};
 
-            std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
 
-            operations.push_back({std::move(DIN_operation), std::move(uids_in_operation)});
+            operations.push_back(std::move(DIN_operation));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

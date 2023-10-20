@@ -75,41 +75,36 @@ class PointwiseNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.IN_0->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.IN_1) options.inputs.IN_1->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.IN_2) options.inputs.IN_2->set_uid(ICudnn::create_new_uid());
-        options.outputs.OUT_0->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode " << options.name << " tensors X:" << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_0, uid, tensors));
 
         auto const port_count = get_pointwise_mode_port_count(options.mode);
         if (port_count >= 3) {
             getLogger() << "[cudnn_frontend] INFO: "
                         << "Building PointwiseNode " << options.name << " tensors B:" << std::endl;
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_1));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_1, uid, tensors));
         }
         if (port_count >= 4) {
             getLogger() << "[cudnn_frontend] INFO: "
                         << "Building PointwiseNode " << options.name << " tensors T:" << std::endl;
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_2));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.IN_2, uid, tensors));
         }
 
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode " << options.name << " tensors Y:" << std::endl;
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.OUT_0, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building PointwiseNode operations " << options.name << "..." << std::endl;
 
@@ -138,14 +133,14 @@ class PointwiseNode : public INode {
                         .setyDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                         .setpwDesc(pointwise_descriptor)
                         .build();
-                std::vector<uid_t> uids_in_operation;
+
                 for (auto const& tensor : tensors_involved_in_operation) {
                     if (tensor && tensor->get_is_virtual() == false) {
-                        uids_in_operation.push_back(tensor->get_uid());
+                        uids_involved_in_operations.insert(tensor->get_uid());
                     }
                 }
 
-                operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
+                operations.push_back(std::move(pointwise_operation));
             } else if (port_count == 3) {
                 if (options.mode == PointwiseMode_t::RELU_BWD) {
                     auto pointwise_operation =
@@ -155,14 +150,14 @@ class PointwiseNode : public INode {
                             .setdxDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                             .setpwDesc(pointwise_descriptor)
                             .build();
-                    std::vector<uid_t> uids_in_operation;
+
                     for (auto const& tensor : tensors_involved_in_operation) {
                         if (tensor && tensor->get_is_virtual() == false) {
-                            uids_in_operation.push_back(tensor->get_uid());
+                            uids_involved_in_operations.insert(tensor->get_uid());
                         }
                     }
 
-                    operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
+                    operations.push_back(std::move(pointwise_operation));
                 } else {
                     auto pointwise_operation =
                         cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR)
@@ -171,14 +166,14 @@ class PointwiseNode : public INode {
                             .setyDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                             .setpwDesc(pointwise_descriptor)
                             .build();
-                    std::vector<uid_t> uids_in_operation;
+
                     for (auto const& tensor : tensors_involved_in_operation) {
                         if (tensor && tensor->get_is_virtual() == false) {
-                            uids_in_operation.push_back(tensor->get_uid());
+                            uids_involved_in_operations.insert(tensor->get_uid());
                         }
                     }
 
-                    operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
+                    operations.push_back(std::move(pointwise_operation));
                 }
             } else if (port_count == 2) {
                 auto pointwise_operation =
@@ -187,14 +182,14 @@ class PointwiseNode : public INode {
                         .setyDesc(*(tensors.at(options.outputs.OUT_0->get_uid())))
                         .setpwDesc(pointwise_descriptor)
                         .build();
-                std::vector<uid_t> uids_in_operation;
+
                 for (auto const& tensor : tensors_involved_in_operation) {
                     if (tensor && tensor->get_is_virtual() == false) {
-                        uids_in_operation.push_back(tensor->get_uid());
+                        uids_involved_in_operations.insert(tensor->get_uid());
                     }
                 }
 
-                operations.push_back({std::move(pointwise_operation), std::move(uids_in_operation)});
+                operations.push_back(std::move(pointwise_operation));
             }
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION

@@ -185,15 +185,6 @@ class Graph : public INode {
 
     error_t
     build(cudnnHandle_t const &handle, std::vector<HeurMode_t> const &mode);
-
-    error_t
-    createOperationGraphs(cudnnHandle_t handle) override final {
-        getLogger() << "Operation Graph has " << operations.size() << " operations." << std::endl;
-
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graphs(handle));
-
-        return {error_code_t::OK, ""};
-    }
 };
 
 inline Plans

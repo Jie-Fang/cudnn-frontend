@@ -82,52 +82,36 @@ class BatchNormFinalizeNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.SUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.SQ_SUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        options.inputs.BIAS->set_uid(ICudnn::create_new_uid());
-        options.inputs.PREV_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
-        options.inputs.PREV_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.inputs.MOMENTUM->set_uid(ICudnn::create_new_uid());
-        options.inputs.ACCUM_COUNT->set_uid(ICudnn::create_new_uid());
-        options.outputs.EQ_BIAS->set_uid(ICudnn::create_new_uid());
-        options.outputs.EQ_SCALE->set_uid(ICudnn::create_new_uid());
-        options.outputs.MEAN->set_uid(ICudnn::create_new_uid());
-        options.outputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        options.outputs.NEXT_RUNNING_MEAN->set_uid(ICudnn::create_new_uid());
-        options.outputs.NEXT_RUNNING_VAR->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchNormFinalizeNode tensors " << options.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SUM));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SQ_SUM));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_VAR));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MOMENTUM));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.ACCUM_COUNT));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SUM, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SQ_SUM, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.BIAS, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_MEAN, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.PREV_RUNNING_VAR, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MOMENTUM, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.ACCUM_COUNT, uid, tensors));
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_BIAS));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.INV_VARIANCE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_MEAN));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_VAR));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_BIAS, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.EQ_SCALE, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.MEAN, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.INV_VARIANCE, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_MEAN, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.NEXT_RUNNING_VAR, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchNormFinalizeNode operations " << options.name << "..." << std::endl;
 
@@ -174,14 +158,13 @@ class BatchNormFinalizeNode : public INode {
                                                          options.outputs.NEXT_RUNNING_MEAN,
                                                          options.outputs.NEXT_RUNNING_VAR};
 
-            std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
 
-            operations.push_back({std::move(batchnorm_operation), std::move(uids_in_operation)});
+            operations.push_back(std::move(batchnorm_operation));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

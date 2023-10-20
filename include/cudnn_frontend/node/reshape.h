@@ -32,13 +32,6 @@ class ReshapeNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reshape node " << options.name << "..."
                     << std::endl;
@@ -74,18 +67,22 @@ class ReshapeNode : public INode {
     }
 
     error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building Reshape tensors " << options.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X, uid, tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y, uid, tensors));
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ReshapeNode operations " << options.name << "..." << std::endl;
 
@@ -100,13 +97,12 @@ class ReshapeNode : public INode {
                                   .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
                                   .build();
 
-            std::vector<uid_t> uids_in_operation;
             for (auto const& tensor : tensors_involved_in_operation) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
-            operations.push_back({std::move(reshape_op), std::move(uids_in_operation)});
+            operations.push_back(std::move(reshape_op));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
