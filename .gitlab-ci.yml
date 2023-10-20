@@ -421,6 +421,8 @@ build:cudnn_8.9.5.29:
     needs: []
     stage: build
     extends: .build:template
+    only:
+        - schedules 
 
 test:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.5.29_torch
@@ -431,6 +433,8 @@ test:cudnn_8.9.5.29:
         - ${ARCH}
     extends: .test:template
     needs: ["build:cudnn_8.9.5.29"]
+    only:
+        - schedules 
     
 pytest:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.5.29_torch
@@ -442,6 +446,8 @@ pytest:cudnn_8.9.5.29:
     extends: .pytest:template
     needs: ["build:cudnn_8.9.5.29"]
     resource_group: memory_heavy_${ARCH}
+    only:
+        - schedules 
     
 pycudnntest:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.5.29_torch
@@ -452,6 +458,8 @@ pycudnntest:cudnn_8.9.5.29:
         - ${ARCH}
     extends: .pycudnntest:template
     needs: ["build:cudnn_8.9.5.29"]
+    only:
+        - schedules 
     
 L4_graph_runner:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.5.29_torch
@@ -462,6 +470,8 @@ L4_graph_runner:cudnn_8.9.5.29:
         - ${ARCH}
     extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.9.5.29"]
+    only:
+        - schedules 
 
 build:cudnn_8.9.6.38:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.38_torch
