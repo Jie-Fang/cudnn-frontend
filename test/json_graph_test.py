@@ -1,12 +1,13 @@
+from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime
+import cudnn
+reportCurrentTime("import_cudnn")
 import json
 import os
-import cudnn
-import pytest
 import sys
 import argparse
 
-from test_graph import test_graph, operation
-from utils import getFwdConvDilatedFilterDim, getFwdConvPaddedImageDim, getFwdConvOutputDim, computeStrideNdTransposedPacked
+from test_graph import test_graph
+
 
 class ImplementationError(Exception):
     def __init__(self, reason):
@@ -18,6 +19,7 @@ def read_json_test_dict(fname):
 
     with open(fname) as ifh:
         json_tests = json.load(ifh)
+    reportCurrentTime("read_json_test_dict")
     return json_tests
 
 # @raises ImplementationError
@@ -70,14 +72,27 @@ def replace_abstract_test_params(json_test_def, abstract_params):
                 json_test_def[index] = replace_single_param(item, abstract_params)
             else:
                 replace_abstract_test_params(item, abstract_params)
-            
+      
     return json_test_def
 
 def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     print("Running from legacy json graph definition")
+
     kTEST_NAME = "jsonTestName"
     kDATA_TYPES = ['s', 'h', 'float', 'half', "g", "b"]
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+    # A quick sanitizing of the remaining arguments to be further parsed by run_test_from_legacy_args
+    sanitized_graphRunner_args = []
+    for item in unparsed_graphRunner_args:
+        if not "=" in item:
+            sanitized_graphRunner_args.append(item)
+        else:
+            stripped = item.strip('=')
+            if "=" in stripped:
+                sanitized_graphRunner_args.extend(item.split("="))
+            else:
+                sanitized_graphRunner_args.append(stripped)
     
     # General args
     l_parser = argparse.ArgumentParser("legacy_graph_runner", allow_abbrev=False)
@@ -120,22 +135,24 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-Tcomp", choices=kDATA_TYPES)
     # Format related
     l_parser.add_argument("-formatAll", type=int, choices=[0,1])
+
+    #Other
+    l_parser.add_argument("-backendEngine", dest='backendEngine', action='store', type=int, default=-1, required=False)
     # Ignored arguments
-    ignored_keys = ['d', "b", "S", 'gpuRef', "Dforce_jit_dbg", "backendEngine", "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
+    ignored_keys = ['d', "b", "S", 'gpuRef', "Dforce_jit_dbg", "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
     ignored_args = l_parser.add_argument_group('ignored_args')
     ignored_args.add_argument("-d", action='store', default=None)
     ignored_args.add_argument("-b", action='store_true', default=None)
     ignored_args.add_argument("-S", action='store_true', default=None)
     ignored_args.add_argument("-gpuRef", action='store_true', default=None)
     ignored_args.add_argument("-Dforce_jit_dbg", action='store', default=None)
-    ignored_args.add_argument("-backendEngine", action='store', default=None, required=False)
     ignored_args.add_argument("-engineCfgSweep", action='store', default=None, required=False)
     ignored_args.add_argument("-knobSplitKSlices", action='store', default=None, required=False)
     ignored_args.add_argument("-knobKernelCfg", action='store', default=None, required=False)
     ignored_args.add_argument("-serialization", action='store', default=None, required=False)
 
     # First parsing pass
-    legacy_args = l_parser.parse_args(unparsed_graphRunner_args)
+    legacy_args = l_parser.parse_args(sanitized_graphRunner_args)
     
     abstract_params = vars(legacy_args)
 
@@ -194,30 +211,18 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     json_test_name = legacy_args.jsonTestName
 
+    reportCurrentTime("arg_parse_2")
     json_tests = read_json_test_dict(legacy_args.json_fname)
     
     assert json_test_name in json_tests
     abstract_test_dict = json_tests[json_test_name]
     try:
         concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
-        run_test_from_json_definition(concrete_test_dict)
+        reportCurrentTime("replace_abstract_test_params")
+        run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)
         sys.exit(1)
-
-# A helper function to read json dictionaries
-# @note: scope tells us that the dictionary is being loaded only once
-@pytest.fixture(scope="module")
-def json_dict(request):
-    fname = request.param
-    return read_json_test_dict(fname)
-
-# Main entry point for json defined graphs
-# @param json_dict: implicit call to a fixture using the json file name provided on the command line
-# @param test_name: the specific test to be ran
-def test_json_graph(json_dict, test_name):
-    assert test_name in json_dict
-    run_test_from_json_definition(json_dict[test_name])
 
 # @brief: A utility class to help parse graphRunner json graph definitions
 # @details: This is a utility class to extract infomration from a json graph definition (graphRunner json format)
@@ -465,8 +470,9 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
     return jtensor_dict
 
 # @brief: main function to run json graphs
-def run_test_from_json_definition(json_dict):
+def run_test_from_json_definition(json_dict, backendEngine=-1):
     testGraph = test_graph()
+    testGraph.set_backend_engine(backendEngine)
 
     jtensor_dict = json_dict["tensors"]
     jnode_list = json_dict["nodes"]
@@ -516,9 +522,10 @@ def run_test_from_json_definition(json_dict):
     # Create a TestTensor for every input tensor
     for jtensor in input_tensors:
         legacy_tensor = Legacy_tensor(jtensor)
+        
         t = testGraph.tensor(**legacy_tensor.get_tensor_properties())
         TGTensors[jtensor["name"]] = t
-
+    
     # Finalize the connections by adding inputs and properties to the operation nodes
     for name, (test_graph_op, legacy_op) in Operations.items():
         test_graph_op.set_kwargs(create_kwargs(legacy_op, TGTensors))
@@ -534,6 +541,8 @@ def run_test_from_json_definition(json_dict):
     if "tolerances" in json_dict:
         atol = float(json_dict["tolerances"]["abs"])
         rtol = float(json_dict["tolerances"]["rel"])
+
+    reportCurrentTime("test_setup")      
     testGraph.cudnn_execute_and_compare_to_reference(atol=atol, rtol=rtol)
 
 # @brief: Create a pycudnn node from the legacy_op
