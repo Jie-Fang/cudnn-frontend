@@ -105,9 +105,9 @@ class ConvolutionNode : public INode {
             // Create the convolution operation.
             auto convolution_operation =
                 cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                    .setxDesc(*(tensors.at(attributes.inputs[Conv_fprop_attributes::input_names::X]->get_uid())))
-                    .setwDesc(*(tensors.at(attributes.inputs[Conv_fprop_attributes::input_names::W]->get_uid())))
-                    .setyDesc(*(tensors.at(attributes.outputs[Conv_fprop_attributes::output_names::Y]->get_uid())))
+                    .setxDesc(*(tensors[attributes.inputs[Conv_fprop_attributes::input_names::X]->get_uid()]))
+                    .setwDesc(*(tensors[attributes.inputs[Conv_fprop_attributes::input_names::W]->get_uid()]))
+                    .setyDesc(*(tensors[attributes.outputs[Conv_fprop_attributes::output_names::Y]->get_uid()]))
                     .setcDesc(convolution_descriptor)
                     .setAlpha(1.f)
                     .setBeta(0.f)

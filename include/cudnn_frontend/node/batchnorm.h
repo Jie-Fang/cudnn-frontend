@@ -139,35 +139,31 @@ class BatchNormNode : public INode {
 
             std::vector<cudnn_frontend::Tensor> peer_stats;
             for (auto const& peer_stat : attributes.peer_stats) {
-                peer_stats.emplace_back(std::move(*(tensors.at(peer_stat->get_uid()))));
+                peer_stats.emplace_back(std::move(*(tensors[peer_stat->get_uid()])));
             }
 
             auto batchnorm_operation =
                 cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
                     .setNormalizationMode(NormMode_t::BATCH_NORM)
                     .setNormFwdPhase(attributes.forward_phase)
-                    .setxDesc(*(tensors.at(attributes.inputs[Batchnorm_attributes::input_names::X]->get_uid())))
+                    .setxDesc(*(tensors[attributes.inputs[Batchnorm_attributes::input_names::X]->get_uid()]))
                     .setSavedMeanAndInvVar(
-                        *(tensors.at(attributes.outputs[Batchnorm_attributes::output_names::MEAN]->get_uid())),
-                        *(tensors.at(attributes.outputs[Batchnorm_attributes::output_names::INV_VARIANCE]->get_uid())))
-                    .setScaleAndBias(
-                        *(tensors.at(attributes.inputs[Batchnorm_attributes::input_names::SCALE]->get_uid())),
-                        *(tensors.at(attributes.inputs[Batchnorm_attributes::input_names::BIAS]->get_uid())))
+                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::MEAN]->get_uid()]),
+                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::INV_VARIANCE]->get_uid()]))
+                    .setScaleAndBias(*(tensors[attributes.inputs[Batchnorm_attributes::input_names::SCALE]->get_uid()]),
+                                     *(tensors[attributes.inputs[Batchnorm_attributes::input_names::BIAS]->get_uid()]))
                     .setPrevRunningMeanAndVar(
-                        *(tensors.at(
-                            attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_MEAN]->get_uid())),
-                        *(tensors.at(
-                            attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_VAR]->get_uid())))
+                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_MEAN]->get_uid()]),
+                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_VAR]->get_uid()]))
                     .setNextRunningMeanAndVar(
-                        *(tensors.at(
-                            attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN]->get_uid())),
-                        *(tensors.at(
-                            attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_VAR]->get_uid())))
+                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN]
+                                      ->get_uid()]),
+                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_VAR]->get_uid()]))
                     .setEpsilonTensor(
-                        *(tensors.at(attributes.inputs[Batchnorm_attributes::input_names::EPSILON]->get_uid())))
+                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::EPSILON]->get_uid()]))
                     .setExpDecayFactorTensor(
-                        *(tensors.at(attributes.inputs[Batchnorm_attributes::input_names::MOMENTUM]->get_uid())))
-                    .setyDesc(*(tensors.at(attributes.outputs[Batchnorm_attributes::output_names::Y]->get_uid())))
+                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::MOMENTUM]->get_uid()]))
+                    .setyDesc(*(tensors[attributes.outputs[Batchnorm_attributes::output_names::Y]->get_uid()]))
                     .setPeerStatTensor(peer_stats)
                     .build();
 
