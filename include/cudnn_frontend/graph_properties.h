@@ -148,6 +148,8 @@ class Tensor_attributes {
     }
 };
 
+class Batchnorm_attributes;
+
 template <typename DerivedT>
 class Attributes {
     DerivedT&
@@ -212,6 +214,19 @@ class Attributes {
                                                "Tensor '" + tensor->name + "' strides not set.");
             }
         }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes>) {
+            for (auto const& tensor : derived->peer_stats) {
+                if (tensor) {
+                    RETURN_CUDNN_FRONTEND_ERROR_IF(
+                        tensor->dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats dims not set.");
+                    RETURN_CUDNN_FRONTEND_ERROR_IF(
+                        tensor->stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats strides not set.");
+                }
+            }
+        }
+
         return {error_code_t::OK, ""};
     }
 };
@@ -1206,6 +1221,7 @@ class Instancenorm_attributes : public Operation {
 };
 
 class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
+    friend class Attributes<Batchnorm_attributes>;
     friend class BatchNormNode;
     friend class Graph;
 

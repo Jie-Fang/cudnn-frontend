@@ -27,6 +27,7 @@ class BatchNormNode : public INode {
                     << std::endl;
 
         attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto X                  = attributes.inputs[Batchnorm_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
@@ -65,37 +66,6 @@ class BatchNormNode : public INode {
         infer_per_channel_tensors(attributes.outputs[Batchnorm_attributes::output_names::INV_VARIANCE]);
         infer_per_channel_tensors(attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN]);
         infer_per_channel_tensors(attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_VAR]);
-        infer_per_channel_tensors(attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_MEAN]);
-        infer_per_channel_tensors(attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_VAR]);
-        infer_per_channel_tensors(attributes.inputs[Batchnorm_attributes::input_names::SCALE]);
-        infer_per_channel_tensors(attributes.inputs[Batchnorm_attributes::input_names::BIAS]);
-
-        // Set scalar tensors
-        auto infer_scalar_tensors = [&x_tensor_dim](std::shared_ptr<Tensor_attributes>& T) {
-            auto tensor_dim = T->get_dim();
-            // Only infer dims and strides if user did not set them
-            if (tensor_dim.empty()) {
-                tensor_dim.resize(x_tensor_dim.size(), 1);
-                T->set_dim(tensor_dim);
-            }
-            if (T->get_stride().empty()) {
-                auto const& T_dim = T->get_dim();
-                // Default to NHWC
-                auto const& stride_order = detail::generate_NHWC_stride_order(T_dim.size());
-                T->set_stride(detail::generate_stride(T_dim, stride_order));
-            }
-        };
-        infer_scalar_tensors(attributes.inputs[Batchnorm_attributes::input_names::EPSILON]);
-        infer_scalar_tensors(attributes.inputs[Batchnorm_attributes::input_names::MOMENTUM]);
-
-        for (auto const& peer_stat : attributes.peer_stats) {
-            if (peer_stat->get_stride().empty()) {
-                auto const& peer_stat_dim = peer_stat->get_dim();
-                // Default to NHWC
-                auto const& stride_order = detail::generate_NHWC_stride_order(peer_stat_dim.size());
-                peer_stat->set_stride(detail::generate_stride(peer_stat_dim, stride_order));
-            }
-        }
 
         return {error_code_t::OK, ""};
     }
