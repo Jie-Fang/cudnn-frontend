@@ -1,12 +1,15 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <numeric>
 #include <optional>
 #include <unordered_map>
 #include <vector>
 
-#include "graph_helpers.h"
+#include "context.h"
+
+#include "../cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 
