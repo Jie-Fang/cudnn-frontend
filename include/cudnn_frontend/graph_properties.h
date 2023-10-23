@@ -17,7 +17,9 @@ namespace graph {
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
 class Tensor_attributes {
-   protected:
+    template <typename>
+    friend class Attributes;
+
     std::string name;
     DataType_t data_type               = DataType_t::NOT_SET;
     std::vector<int64_t> dim           = {};
@@ -194,6 +196,23 @@ class Attributes {
         auto all_outputs = derived->get_outputs();
         all_tensors.insert(all_tensors.end(), all_outputs.begin(), all_outputs.end());
         return all_tensors;
+    }
+
+    // Common input tensor validate functions
+    error_t
+    validate_inputs() const {
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto const& [enum_name, tensor] : derived->inputs) {
+            if (tensor) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->dim.empty(),
+                                               error_code_t::ATTRIBUTE_NOT_SET,
+                                               "Tensor '" + tensor->name + "' dims not set.");
+                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->stride.empty(),
+                                               error_code_t::ATTRIBUTE_NOT_SET,
+                                               "Tensor '" + tensor->name + "' strides not set.");
+            }
+        }
+        return {error_code_t::OK, ""};
     }
 };
 
@@ -417,6 +436,7 @@ class Genstats_attributes : public Operation {
 };
 
 class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
+    friend class Attributes<Conv_fprop_attributes>;
     friend class ConvolutionNode;
     friend class Graph;
 

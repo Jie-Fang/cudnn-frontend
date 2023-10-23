@@ -20,6 +20,7 @@ add_executable(
     unit_tests
 
     serialize.cpp
+    validate.cpp
 )
 
 if (MSVC)

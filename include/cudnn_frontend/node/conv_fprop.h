@@ -27,6 +27,7 @@ class ConvolutionNode : public INode {
                     << std::endl;
 
         attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
         auto X = attributes.inputs[Conv_fprop_attributes::input_names::X];
