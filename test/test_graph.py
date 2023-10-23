@@ -11,8 +11,6 @@ utils.reportCurrentTime("import_test_graph_deps")
 
 # Globally ensure cudnn is disabled for everything torch related
 torch.backends.cudnn.enabled = False 
-# TODO(@barretw): ensure output is deterministic and reproducible for L4 tests
-torch.manual_seed(0)
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
@@ -401,6 +399,9 @@ class test_graph:
     __test__ = False
     # Add data types, custom test name ,etc.
     def __init__(self, io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT):
+        # TODO(@barretw): ensure output is deterministic and reproducible for L4 tests
+        torch.manual_seed(0)
+        
         self.uid_counter = 0
         self.nodes = []
         self.entrance_nodes = []
