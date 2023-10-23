@@ -1,9 +1,13 @@
+import utils
 import cudnn
+utils.reportCurrentTime("import_cudnn")
 import torch
+utils.reportCurrentTime("import_torch")
 from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
-import utils
+utils.reportCurrentTime("import_test_graph_deps")
+
 
 # Globally ensure cudnn is disabled for everything torch related
 torch.backends.cudnn.enabled = False 
@@ -405,6 +409,10 @@ class test_graph:
         self.io_data_type = io_data_type
         self.intermediate_data_type = intermediate_data_type
         self.compute_data_type = compute_data_type
+        self.backend_engine = -1
+
+    def set_backend_engine(self, engine):
+        self.backend_engine = engine
 
     def getOutputs(self):
         return self.output_tensors
@@ -539,13 +547,15 @@ class test_graph:
     def build_cudnn_graph(self):
         # Setting up graph
         graph = cudnn.pygraph(self.graph_name, io_data_type = self.io_data_type, intermediate_data_type = self.intermediate_data_type, compute_data_type = self.compute_data_type)
-        
+        utils.reportCurrentTime("cudnn.pygraph")
+
         # TODO(@mbreughe): Change this. We don't want to invoke cudnn calls this way since we change the order
         # a developer may have intended. It is useful when building from json graphs, but not when 
         # manually setting up graphs. This is like building a house of cards.
         self.clear_node_meta_data()
         for node in self.entrance_nodes:
             node.build_cudnntree_recursive(graph)
+        
         
         # Once we constructed the cudnn graph, it's time to apply any explicit modifiers to each node's output tensors
         # test_graph creates dummy output tensors to allow constructing of a graph.
@@ -556,13 +566,28 @@ class test_graph:
         # Setting implicit output nodes"
         self.mark_implicit_output_nodes()
 
+        utils.reportCurrentTime("recursive_tree_build")
+
         # Building graph
-        graph.build([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        heurs = []
+        if self.backend_engine == -1:
+            heurs.append(cudnn.heur_mode.A)
+        elif self.backend_engine == -2:
+            heurs.append(cudnn.heur_mode.B)
+        elif self.backend_engine == -3:
+            heurs.append(cudnn.heur_mode.FALLBACK)
+        else:
+            print("MB Unkown heuristic, using A")
+            heurs.append(cudnn.heur_mode.A)
+        graph.build(heurs)
+        utils.reportCurrentTime("graph.build")
         
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()
 
         self.cudnn_graph = graph
+
+        utils.reportCurrentTime("post_build")
         return graph
     
     # @brief: check whether correct shape inferencing took place
@@ -607,6 +632,7 @@ class test_graph:
 
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()
+        utils.reportCurrentTime("calc_reference")
         return output
     
     def create_workspace_and_variantpack(self):
@@ -628,6 +654,8 @@ class test_graph:
                     self.output_tensors.append(output_tensor)
                     variant_pack[output.cudnn_tensor] = self.output_tensors[-1]
 
+        utils.reportCurrentTime("create_workspace_and_variantpack")
+
         return (workspace, variant_pack)
     
     # @brief: Run the cudnn implementation and the reference, and compare
@@ -645,6 +673,7 @@ class test_graph:
         # Run the cudnn graph
         print("Executing graph through cudnn")
         self.cudnn_graph.execute(variant_pack, workspace)
+        utils.reportCurrentTime("graph.execute")
 
         # Run the reference
         print("Computing reference")
@@ -673,3 +702,5 @@ class test_graph:
             number_outputs_tested += 1
         
         assert number_outputs_tested >= 1
+
+        utils.reportCurrentTime("assert_close")
