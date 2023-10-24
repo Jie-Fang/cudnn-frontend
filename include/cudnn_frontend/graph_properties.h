@@ -445,73 +445,19 @@ class Batchnorm_backward_attributes : public Attributes<Batchnorm_backward_attri
     }
 };
 
-class DBN_weight_attributes : public Operation {
+class DBN_weight_attributes : public Attributes<DBN_weight_attributes> {
+    friend class Attributes<DBN_weight_attributes>;
+    friend class DBNWeightNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DSCALE, DBIAS, EQ_BIAS, EQ_SCALE_DY, EQ_SCALE_X };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> DY;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-        std::shared_ptr<Tensor_attributes> EQ_SCALE_DY;
-        std::shared_ptr<Tensor_attributes> EQ_SCALE_X;
-        std::shared_ptr<Tensor_attributes> EQ_BIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, DY)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DSCALE, DBIAS, EQ_SCALE_DY, EQ_SCALE_X, EQ_BIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes, name, tag, inputs, outputs)
-
-    DBN_weight_attributes() : Operation(Tag::DBN_weight) {}
-
-    DBN_weight_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    DBN_weight_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DSCALE      = output_tensor(name + "_dscale_output");
-        outputs.DBIAS       = output_tensor(name + "_dbias_output");
-        outputs.EQ_SCALE_DY = output_tensor(name + "_eq_scale_dy_output");
-        outputs.EQ_SCALE_X  = output_tensor(name + "_eq_scale_x_output");
-        outputs.EQ_BIAS     = output_tensor(name + "_eq_bias_output");
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> DBN_weight_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-        outputs.EQ_SCALE_DY->fill_from_context(context);
-        outputs.EQ_SCALE_X->fill_from_context(context);
-        outputs.EQ_BIAS->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes, name, inputs, outputs)
 };
 
 class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {

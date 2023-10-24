@@ -490,25 +490,29 @@ Graph::dbn_weight(std::shared_ptr<Tensor_attributes> dy,
                   std::shared_ptr<Tensor_attributes> mean,
                   std::shared_ptr<Tensor_attributes> inv_variance,
                   std::shared_ptr<Tensor_attributes> scale,
-                  DBN_weight_attributes options) {
+                  DBN_weight_attributes attributes) {
     // Make required output tensors
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DBIAS = attributes.outputs[DBN_weight_attributes::output_names::DBIAS] =
+        output_tensor(attributes.name + "::DBIAS");
+    auto DSCALE = attributes.outputs[DBN_weight_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::DSCALE");
+    auto EQ_BIAS = attributes.outputs[DBN_weight_attributes::output_names::EQ_BIAS] =
+        output_tensor(attributes.name + "::EQ_BIAS");
+    auto EQ_SCALE_DY = attributes.outputs[DBN_weight_attributes::output_names::EQ_SCALE_DY] =
+        output_tensor(attributes.name + "::EQ_SCALE_DY");
+    auto EQ_SCALE_X = attributes.outputs[DBN_weight_attributes::output_names::EQ_SCALE_X] =
+        output_tensor(attributes.name + "::EQ_SCALE_X");
 
     // Set inputs
-    options.inputs.DY           = dy;
-    options.inputs.X            = x;
-    options.inputs.SCALE        = scale;
-    options.inputs.MEAN         = mean;
-    options.inputs.INV_VARIANCE = inv_variance;
+    attributes.inputs[DBN_weight_attributes::input_names::DY]           = dy;
+    attributes.inputs[DBN_weight_attributes::input_names::X]            = x;
+    attributes.inputs[DBN_weight_attributes::input_names::SCALE]        = scale;
+    attributes.inputs[DBN_weight_attributes::input_names::MEAN]         = mean;
+    attributes.inputs[DBN_weight_attributes::input_names::INV_VARIANCE] = inv_variance;
 
-    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(std::move(attributes), context));
 
-    return {return_outputs.DSCALE,
-            return_outputs.DBIAS,
-            return_outputs.EQ_SCALE_DY,
-            return_outputs.EQ_SCALE_X,
-            return_outputs.EQ_BIAS};
+    return {DSCALE, DBIAS, EQ_SCALE_DY, EQ_SCALE_X, EQ_BIAS};
 }
 
 inline std::shared_ptr<Tensor_attributes>
