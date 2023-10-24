@@ -398,19 +398,23 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          Batchnorm_backward_attributes options) {
+                          Batchnorm_backward_attributes attributes) {
     // Set outputs
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DX = attributes.outputs[Batchnorm_backward_attributes::output_names::DX] =
+        output_tensor(attributes.name + "::DX");
+    auto DSCALE = attributes.outputs[Batchnorm_backward_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::DSCALE");
+    auto DBIAS = attributes.outputs[Batchnorm_backward_attributes::output_names::DBIAS] =
+        output_tensor(attributes.name + "::DBIAS");
 
     // Set inputs
-    options.inputs.DY    = dy;
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    attributes.inputs[Batchnorm_backward_attributes::input_names::DY]    = dy;
+    attributes.inputs[Batchnorm_backward_attributes::input_names::X]     = x;
+    attributes.inputs[Batchnorm_backward_attributes::input_names::SCALE] = scale;
 
-    sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(attributes), context));
 
-    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+    return {DX, DSCALE, DBIAS};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>

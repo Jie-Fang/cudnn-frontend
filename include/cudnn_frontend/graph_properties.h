@@ -149,6 +149,7 @@ class Tensor_attributes {
 };
 
 class Batchnorm_attributes;
+class Batchnorm_backward_attributes;
 
 template <typename DerivedT>
 class Attributes {
@@ -176,7 +177,8 @@ class Attributes {
             }
         }
         // Handle special case of BN where peer_stats is also an input
-        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes>) {
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
             for (auto& tensor : derived->peer_stats) {
                 if (tensor) {
                     tensor->fill_from_context(context);
@@ -221,7 +223,8 @@ class Attributes {
         }
 
         // Handle special case of BN where peer_stats is also an input
-        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes>) {
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
             for (auto const& tensor : derived->peer_stats) {
                 if (tensor) {
                     RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -374,36 +377,7 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-    bool is_padding_set  = false;
-    bool is_dilation_set = false;
-
    public:
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_inputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
-
-        for (auto const& [name, input] : inputs) {
-            if (input) {
-                all_inputs.push_back(input);
-            }
-        }
-
-        return all_inputs;
-    }
-
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_outputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
-
-        for (auto const& [name, output] : outputs) {
-            if (output) {
-                all_outputs.push_back(output);
-            }
-        }
-
-        return all_outputs;
-    }
-
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
@@ -413,8 +387,7 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
 
     Conv_fprop_attributes&
     set_padding(std::vector<int64_t> value) {
-        padding        = value;
-        is_padding_set = true;
+        padding = value;
         return *this;
     }
 
@@ -436,95 +409,38 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
 
     Conv_fprop_attributes&
     set_dilation(std::vector<int64_t> value) {
-        dilation        = value;
-        is_dilation_set = true;
+        dilation = value;
         return *this;
     }
 };
 
-class Batchnorm_backward_attributes : public Operation {
+class Batchnorm_backward_attributes : public Attributes<Batchnorm_backward_attributes> {
+    friend class Attributes<Batchnorm_backward_attributes>;
+    friend class DBNNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    // Only special case where one of the inputs is a vector.
+    std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
+
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, tag, inputs, outputs)
-
-    Batchnorm_backward_attributes() : Operation(Tag::DBN) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, inputs, outputs)
 
     Batchnorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.MEAN         = mean;
-        inputs.INV_VARIANCE = inv_variance;
+        inputs[Batchnorm_backward_attributes::input_names::MEAN]         = mean;
+        inputs[Batchnorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
         return *this;
     }
 
     Batchnorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
-        return *this;
-    }
-
-    Batchnorm_backward_attributes&
-    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
-        inputs.peer_stats = peer_stats;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
-    }
-
-    Batchnorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Batchnorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Batchnorm_backward_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-
-        if (inputs.EPSILON) inputs.EPSILON->fill_from_context(context);
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& input_peer_stats) {
+        peer_stats = input_peer_stats;
         return *this;
     }
 };
@@ -1145,38 +1061,6 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
    public:
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_inputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
-
-        for (auto const& [name, input] : inputs) {
-            if (input) {
-                all_inputs.push_back(input);
-            }
-        }
-
-        for (auto const& peer_stat : peer_stats) {
-            if (peer_stat) {
-                all_inputs.push_back(peer_stat);
-            }
-        }
-
-        return all_inputs;
-    }
-
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_outputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
-
-        for (auto const& [name, output] : outputs) {
-            if (output) {
-                all_outputs.push_back(output);
-            }
-        }
-
-        return all_outputs;
-    }
-
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs, forward_phase)
 
     Batchnorm_attributes&

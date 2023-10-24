@@ -292,15 +292,30 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
                               .set_dim({4, 32, 16, 16})
                               .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
 
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto mean  = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
-    auto inv_variance =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+    auto scale        = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, 32, 1, 11})
+                                  .set_stride({32, 1, 32, 32})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto mean         = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("mean")
+                                 .set_dim({1, 32, 1, 11})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_name("inv_variance")
+                                         .set_dim({1, 32, 1, 11})
+                                         .set_stride({32, 1, 32, 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
-    auto peer_stats_0 =
-        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    auto peer_stats_1 =
-        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_0 = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_dim({2, 4 * 32, 1, 1})
+                                         .set_stride({4 * 32, 1, 4 * 32, 4 * 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_1 = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_dim({2, 4 * 32, 1, 1})
+                                         .set_stride({4 * 32, 1, 4 * 32, 4 * 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
     auto DBN_options = fe::graph::Batchnorm_backward_attributes()
                            .set_saved_mean_and_inv_variance(mean, inv_variance)
