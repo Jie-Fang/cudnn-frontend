@@ -169,9 +169,7 @@ def test_leaky_relu_backward():
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-4, rtol=1e-4)
 
 if __name__ == "__main__":
-    # test_conv_relu()
-    # test_conv_bias_relu()
-    # test_conv3d_bias_leaky_relu()
-    for i in range(100):
-        print(i)
-        test_leaky_relu_backward()
+    test_conv_relu()
+    test_conv_bias_relu()
+    test_conv3d_bias_leaky_relu()
+    test_leaky_relu_backward()

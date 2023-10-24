@@ -157,60 +157,6 @@ allowAllConfig(cudnnBackendDescriptor_t engine_config) {
 
 namespace detail {
 
-class Context {
-    DataType_t compute_data_type      = DataType_t::NOT_SET;
-    DataType_t intermediate_data_type = DataType_t::NOT_SET;
-    DataType_t io_data_type           = DataType_t::NOT_SET;
-
-   public:
-    Context&
-    set_intermediate_data_type(DataType_t const type) {
-        intermediate_data_type = type;
-        return *this;
-    }
-
-    Context&
-    set_io_data_type(DataType_t const type) {
-        io_data_type = type;
-        return *this;
-    }
-
-    Context&
-    set_compute_data_type(DataType_t const type) {
-        compute_data_type = type;
-        return *this;
-    }
-
-    DataType_t
-    get_io_data_type() const {
-        return io_data_type;
-    }
-
-    DataType_t
-    get_intermediate_data_type() const {
-        return intermediate_data_type;
-    }
-
-    DataType_t
-    get_compute_data_type() const {
-        return compute_data_type;
-    }
-
-    Context&
-    fill_missing_properties(Context const& global_context) {
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(global_context.get_compute_data_type());
-        }
-        if (get_intermediate_data_type() == DataType_t::NOT_SET) {
-            set_intermediate_data_type(global_context.get_intermediate_data_type());
-        }
-        if (get_io_data_type() == DataType_t::NOT_SET) {
-            set_io_data_type(global_context.get_io_data_type());
-        }
-        return *this;
-    }
-};
-
 // Creates dense, non-overlapping strides from given dim and stride_order.
 // For example, if a is a 4D tensor with dimensions labeled NCHW, then strided(a, (3, 0, 2, 1)) produces
 // strides where the C dimension has a corresponding stride of one.

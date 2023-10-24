@@ -1,12 +1,15 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <numeric>
 #include <optional>
 #include <unordered_map>
 #include <vector>
 
-#include "graph_helpers.h"
+#include "context.h"
+
+#include "../cudnn_frontend_utils.h"
 
 namespace cudnn_frontend {
 
@@ -14,7 +17,9 @@ namespace graph {
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
 class Tensor_attributes {
-   protected:
+    template <typename>
+    friend class Attributes;
+
     std::string name;
     DataType_t data_type               = DataType_t::NOT_SET;
     std::vector<int64_t> dim           = {};
@@ -140,6 +145,89 @@ class Tensor_attributes {
             }
         }
         return *this;
+    }
+};
+
+class Batchnorm_attributes;
+
+template <typename DerivedT>
+class Attributes {
+    DerivedT&
+    self() {
+        return *static_cast<DerivedT*>(this);
+    }
+    DerivedT const&
+    self() const {
+        return *static_cast<DerivedT const*>(this);
+    }
+
+   protected:
+    void
+    fill_from_context(detail::Context const& context) {
+        for (auto const& tensor : get_tensors()) {
+            if (tensor) {
+                tensor->fill_from_context(context);
+            }
+        }
+
+        if (compute_data_type == DataType_t::NOT_SET) {
+            set_compute_data_type(context.get_compute_data_type());
+        }
+    }
+
+   public:
+    std::string name;
+    DataType_t compute_data_type = DataType_t::NOT_SET;
+
+    DerivedT&
+    set_name(std::string const& value) {
+        name = value;
+        return self();
+    }
+
+    DerivedT&
+    set_compute_data_type(DataType_t value) {
+        compute_data_type = value;
+        return self();
+    }
+
+    std::vector<std::shared_ptr<Tensor_attributes>> const
+    get_tensors() const {
+        auto derived     = static_cast<DerivedT const*>(this);
+        auto all_tensors = derived->get_inputs();
+        auto all_outputs = derived->get_outputs();
+        all_tensors.insert(all_tensors.end(), all_outputs.begin(), all_outputs.end());
+        return all_tensors;
+    }
+
+    // Common input tensor validate functions
+    error_t
+    validate_inputs() const {
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto const& [enum_name, tensor] : derived->inputs) {
+            if (tensor) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->dim.empty(),
+                                               error_code_t::ATTRIBUTE_NOT_SET,
+                                               "Tensor '" + tensor->name + "' dims not set.");
+                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->stride.empty(),
+                                               error_code_t::ATTRIBUTE_NOT_SET,
+                                               "Tensor '" + tensor->name + "' strides not set.");
+            }
+        }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes>) {
+            for (auto const& tensor : derived->peer_stats) {
+                if (tensor) {
+                    RETURN_CUDNN_FRONTEND_ERROR_IF(
+                        tensor->dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats dims not set.");
+                    RETURN_CUDNN_FRONTEND_ERROR_IF(
+                        tensor->stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats strides not set.");
+                }
+            }
+        }
+
+        return {error_code_t::OK, ""};
     }
 };
 
@@ -362,31 +450,52 @@ class Genstats_attributes : public Operation {
     }
 };
 
-class Conv_fprop_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> W;
-    } inputs;
+class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
+    friend class Attributes<Conv_fprop_attributes>;
+    friend class ConvolutionNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { X, W };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    std::vector<int64_t> padding  = {};
-    std::vector<int64_t> stride   = {};
-    std::vector<int64_t> dilation = {};
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
+    std::vector<int64_t> padding;
+    std::vector<int64_t> stride;
+    std::vector<int64_t> dilation;
 
     bool is_padding_set  = false;
     bool is_dilation_set = false;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, W)
+   public:
+    std::vector<std::shared_ptr<Tensor_attributes>> const
+    get_inputs() const {
+        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
+        for (auto const& [name, input] : inputs) {
+            if (input) {
+                all_inputs.push_back(input);
+            }
+        }
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, tag, inputs, outputs, padding, stride, dilation)
+        return all_inputs;
+    }
 
-    Conv_fprop_attributes() : Operation(Tag::Conv_fprop) {}
+    std::vector<std::shared_ptr<Tensor_attributes>> const
+    get_outputs() const {
+        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
+
+        for (auto const& [name, output] : outputs) {
+            if (output) {
+                all_outputs.push_back(output);
+            }
+        }
+
+        return all_outputs;
+    }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
     get_padding() const {
@@ -420,32 +529,6 @@ class Conv_fprop_attributes : public Operation {
     set_dilation(std::vector<int64_t> value) {
         dilation        = value;
         is_dilation_set = true;
-        return *this;
-    }
-
-    Conv_fprop_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Conv_fprop_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Conv_fprop_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.W->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };
@@ -1137,36 +1220,55 @@ class Instancenorm_attributes : public Operation {
     }
 };
 
-class Batchnorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> PREV_RUNNING_MEAN;
-        std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-        std::shared_ptr<Tensor_attributes> MOMENTUM;
-        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
-    } inputs;
+class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
+    friend class Attributes<Batchnorm_attributes>;
+    friend class BatchNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN;
-        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, PREV_RUNNING_MEAN, PREV_RUNNING_VAR, EPSILON, MOMENTUM };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    // Only special case where one of the inputs is a vector.
+    std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
+
+    enum class output_names { Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, PREV_RUNNING_MEAN, PREV_RUNNING_VAR, EPSILON, MOMENTUM)
+   public:
+    std::vector<std::shared_ptr<Tensor_attributes>> const
+    get_inputs() const {
+        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR)
+        for (auto const& [name, input] : inputs) {
+            if (input) {
+                all_inputs.push_back(input);
+            }
+        }
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, tag, inputs, outputs, forward_phase)
+        for (auto const& peer_stat : peer_stats) {
+            if (peer_stat) {
+                all_inputs.push_back(peer_stat);
+            }
+        }
 
-    Batchnorm_attributes() : Operation(Tag::BN) {}
+        return all_inputs;
+    }
+
+    std::vector<std::shared_ptr<Tensor_attributes>> const
+    get_outputs() const {
+        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
+
+        for (auto const& [name, output] : outputs) {
+            if (output) {
+                all_outputs.push_back(output);
+            }
+        }
+
+        return all_outputs;
+    }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs, forward_phase)
 
     Batchnorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -1178,65 +1280,21 @@ class Batchnorm_attributes : public Operation {
     set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean,
                                std::shared_ptr<Tensor_attributes>& variance,
                                std::shared_ptr<Tensor_attributes>& momentum) {
-        inputs.PREV_RUNNING_MEAN = mean;
-        inputs.PREV_RUNNING_VAR  = variance;
-        inputs.MOMENTUM          = momentum;
+        inputs[input_names::PREV_RUNNING_MEAN] = mean;
+        inputs[input_names::PREV_RUNNING_VAR]  = variance;
+        inputs[input_names::MOMENTUM]          = momentum;
         return *this;
     }
 
     Batchnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
+        inputs[input_names::EPSILON] = value;
         return *this;
     }
 
     Batchnorm_attributes&
-    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
-        inputs.peer_stats = peer_stats;
-        return *this;
-    }
-
-    Batchnorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Batchnorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y                 = output_tensor(name + "_Y_output");
-        outputs.MEAN              = output_tensor(name + "_MEAN_output");
-        outputs.INV_VARIANCE      = output_tensor(name + "_INV_VARIANCE_output");
-        outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
-        outputs.NEXT_RUNNING_VAR  = output_tensor(name + "_NEXT_RUNNING_VAR_output");
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Batchnorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.PREV_RUNNING_MEAN->fill_from_context(context);
-        inputs.PREV_RUNNING_VAR->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-        inputs.MOMENTUM->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        outputs.MEAN->fill_from_context(context);
-        outputs.INV_VARIANCE->fill_from_context(context);
-        outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
-        outputs.NEXT_RUNNING_VAR->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& input_peer_stats) {
+        peer_stats = input_peer_stats;
         return *this;
     }
 };
