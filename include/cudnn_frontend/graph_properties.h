@@ -514,28 +514,23 @@ class DBN_weight_attributes : public Operation {
     }
 };
 
-class Conv_dgrad_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> W;
-    } inputs;
+class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
+    friend class Attributes<Conv_dgrad_attributes>;
+    friend class DgradNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-    } outputs;
+    enum class input_names { DY, W };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DX };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::vector<int64_t> padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, W)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes, name, tag, inputs, outputs, padding, stride, dilation)
-
-    Conv_dgrad_attributes() : Operation(Tag::Conv_dgrad) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
     get_padding() const {
@@ -567,32 +562,6 @@ class Conv_dgrad_attributes : public Operation {
     Conv_dgrad_attributes&
     set_dilation(std::vector<int64_t> value) {
         dilation = value;
-        return *this;
-    }
-
-    Conv_dgrad_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Conv_dgrad_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Conv_dgrad_attributes& {
-        // Fill node's tensors
-        inputs.DY->fill_from_context(context);
-        inputs.W->fill_from_context(context);
-        outputs.DX->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };
@@ -1956,28 +1925,23 @@ class Softmax_attributes : public Operation {
     }
 };
 
-class Conv_wgrad_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
+class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
+    friend class Attributes<Conv_wgrad_attributes>;
+    friend class WgradNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DW;
-    } outputs;
+    enum class input_names { DY, X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DW };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::vector<int64_t> padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DW)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes, name, tag, inputs, outputs, padding, stride, dilation)
-
-    Conv_wgrad_attributes() : Operation(Tag::Conv_wgrad) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
     get_padding() const {
@@ -2009,32 +1973,6 @@ class Conv_wgrad_attributes : public Operation {
     Conv_wgrad_attributes&
     set_dilation(std::vector<int64_t> value) {
         dilation = value;
-        return *this;
-    }
-
-    Conv_wgrad_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Conv_wgrad_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Conv_wgrad_attributes& {
-        // Fill node's tensors
-        inputs.DY->fill_from_context(context);
-        inputs.X->fill_from_context(context);
-        outputs.DW->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };

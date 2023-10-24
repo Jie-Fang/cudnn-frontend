@@ -10,11 +10,11 @@
 namespace cudnn_frontend::graph {
 
 class DgradNode : public INode {
-    Conv_dgrad_attributes options;
+    Conv_dgrad_attributes attributes;
 
    public:
-    DgradNode(Conv_dgrad_attributes&& options_, detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+    DgradNode(Conv_dgrad_attributes&& attributes_, detail::Context const& context)
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -24,26 +24,23 @@ class DgradNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating DgradNode " << options.name << "..." << std::endl;
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.outputs.DX->get_dim().empty(),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "dgrad requires output tensor to have its dims set.");
+                    << "Validating DgradNode " << attributes.name << "..." << std::endl;
 
         return {error_code_t::OK, ""};
     }
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node " << options.name << "..."
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node " << attributes.name << "..."
                     << std::endl;
 
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
-        auto DX = options.outputs.DX;
-        auto W  = options.inputs.W;
-        auto DY = options.inputs.DY;
+        auto DX = attributes.outputs[Conv_dgrad_attributes::output_names::DX];
+        auto W  = attributes.inputs[Conv_dgrad_attributes::input_names::W];
+        auto DY = attributes.inputs[Conv_dgrad_attributes::input_names::DY];
 
         auto const w_tensor_dim  = W->get_dim();
         auto const dy_tensor_dim = DY->get_dim();
@@ -65,12 +62,18 @@ class DgradNode : public INode {
     create_cudnn_tensors(int64_t& uid,
                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DgradNode tensors " << options.name << "..." << std::endl;
+                    << "Building DgradNode tensors " << attributes.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX, uid, tensors));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.W, uid, tensors));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY, uid, tensors));
-
+        for (auto const& [name, tensor] : attributes.inputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+        for (auto const& [name, tensor] : attributes.outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -80,46 +83,45 @@ class DgradNode : public INode {
         std::vector<cudnn_frontend::Operation_v8>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DgradNode operations " << options.name << "..." << std::endl;
+                    << "Building DgradNode operations " << attributes.name << "..." << std::endl;
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
 
             // dgrad descriptor
-            int64_t const spatial_dim_count = options.get_padding().size();
+            int64_t const spatial_dim_count = attributes.get_padding().size();
             auto dgrad_descriptor           = cudnn_frontend::ConvDescBuilder()
-                                        .setComputeType(options.get_compute_data_type())
+                                        .setComputeType(attributes.compute_data_type)
                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                         .setSpatialDimCount(spatial_dim_count)
-                                        .setSpatialStride(spatial_dim_count, options.get_stride().data())
-                                        .setPrePadding(spatial_dim_count, options.get_padding().data())
-                                        .setPostPadding(spatial_dim_count, options.get_padding().data())
-                                        .setDilation(spatial_dim_count, options.get_dilation().data())
+                                        .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
+                                        .setPrePadding(spatial_dim_count, attributes.get_padding().data())
+                                        .setPostPadding(spatial_dim_count, attributes.get_padding().data())
+                                        .setDilation(spatial_dim_count, attributes.get_dilation().data())
                                         .build();
 
             // Create the dgrad operation.
             auto dgrad_operation =
                 cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR)
-                    .setdxDesc(*(tensors.at(options.outputs.DX->get_uid())))
-                    .setwDesc(*(tensors.at(options.inputs.W->get_uid())))
-                    .setdyDesc(*(tensors.at(options.inputs.DY->get_uid())))
+                    .setdxDesc(*(tensors.at(attributes.outputs[Conv_dgrad_attributes::output_names::DX]->get_uid())))
+                    .setwDesc(*(tensors.at(attributes.inputs[Conv_dgrad_attributes::input_names::W]->get_uid())))
+                    .setdyDesc(*(tensors.at(attributes.inputs[Conv_dgrad_attributes::input_names::DY]->get_uid())))
                     .setcDesc(dgrad_descriptor)
                     .setAlpha(1.f)
                     .setBeta(0.f)
                     .build();
-
-            // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {options.outputs.DX, options.inputs.W, options.inputs.DY};
-
-            for (auto const& tensor : tensors_involved_in_operation) {
+            operations.push_back(std::move(dgrad_operation));
+            for (auto const& [name, tensor] : attributes.inputs) {
                 if (tensor && tensor->get_is_virtual() == false) {
                     uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
-
-            operations.push_back(std::move(dgrad_operation));
-
+            for (auto const& [name, tensor] : attributes.outputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
@@ -131,7 +133,7 @@ class DgradNode : public INode {
 
     virtual void
     serialize(json& j) const override final {
-        j = options;
+        j = attributes;
     }
 };
 
