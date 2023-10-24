@@ -830,7 +830,6 @@ class Rng_attributes : public Attributes<Rng_attributes> {
     friend class RngNode;
     friend class ScaledDotProductFlashAttentionNode;
     friend class ScaledDotProductFlashAttentionBackwardNode;
-    friend class Graph;
 
     enum class input_names { Seed, Offset };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -911,26 +910,22 @@ class Rng_attributes : public Attributes<Rng_attributes> {
     }
 };
 
-class Reshape_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
+class Reshape_attributes : public Attributes<Reshape_attributes> {
+    friend class Attributes<Reshape_attributes>;
+    friend class ReshapeNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::vector<int64_t> dim    = {};
     std::vector<int64_t> stride = {};
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, tag, inputs, outputs, dim, stride)
-
-    Reshape_attributes() : Operation(Tag::Reshape) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, inputs, outputs, dim, stride)
 
     std::vector<int64_t>
     get_dim() const {
@@ -951,30 +946,6 @@ class Reshape_attributes : public Operation {
     auto
     set_stride(std::vector<int64_t> const& value) -> Reshape_attributes& {
         stride = value;
-        return *this;
-    }
-
-    Reshape_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Reshape_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Reshape_attributes& {
-        inputs.X->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };

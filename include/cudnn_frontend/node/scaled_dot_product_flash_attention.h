@@ -1130,8 +1130,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // reshape: transpose S
         Reshape_attributes transpose_s_attr;
         transpose_s_attr.set_name("transpose_s");
-        transpose_s_attr.inputs.X  = last_output;
-        transpose_s_attr.outputs.Y = last_output =
+        transpose_s_attr.inputs[Reshape_attributes::input_names::X]   = last_output;
+        transpose_s_attr.outputs[Reshape_attributes::output_names::Y] = last_output =
             make_tensor_(true, {b, h, s_kv, s_q}, {h * s_q * s_kv, s_q * s_kv, 1, s_kv});
         last_output->set_data_type(context.get_io_data_type());
         sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(transpose_s_attr), context));
@@ -1222,8 +1222,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // tranpose dP
         Reshape_attributes transpose_dP_attr;
         transpose_dP_attr.set_name("transpose_dP");
-        transpose_dP_attr.inputs.X  = last_output;
-        transpose_dP_attr.outputs.Y = last_output =
+        transpose_dP_attr.inputs[Reshape_attributes::input_names::X]   = last_output;
+        transpose_dP_attr.outputs[Reshape_attributes::output_names::Y] = last_output =
             make_tensor_(true, {b, h, s_kv, s_q}, {h * s_q * s_kv, s_q * s_kv, 1, s_kv});
         sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(transpose_dP_attr), context));
 
@@ -1245,8 +1245,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // transpose KT
         Reshape_attributes transpose_K_attr;
         transpose_K_attr.set_name("transpose_K");
-        transpose_K_attr.inputs.X  = options.inputs.K;
-        transpose_K_attr.outputs.Y = last_output =
+        transpose_K_attr.inputs[Reshape_attributes::input_names::X]   = options.inputs.K;
+        transpose_K_attr.outputs[Reshape_attributes::output_names::Y] = last_output =
             make_tensor_(true,
                          {kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]},
                          {kt_stride[0], kt_stride[1], kt_stride[3], kt_stride[2]});
