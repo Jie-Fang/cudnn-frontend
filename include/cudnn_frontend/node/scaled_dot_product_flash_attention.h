@@ -421,10 +421,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         Softmax_attributes softmax_attributes;
         softmax_attributes.set_name("softmax");
-        softmax_attributes.use_stats = true;  // As this is flash attention
-        softmax_attributes.inputs.P  = last_output;
-        last_output = softmax_attributes.outputs.S = softmax_output;
-        softmax_attributes.outputs.Stats           = softmax_stats;
+        softmax_attributes.use_stats                                  = true;  // As this is flash attention
+        softmax_attributes.inputs[Softmax_attributes::input_names::P] = last_output;
+        last_output = softmax_attributes.outputs[Softmax_attributes::output_names::S] = softmax_output;
+        softmax_attributes.outputs[Softmax_attributes::output_names::Stats]           = softmax_stats;
         auto softmax_node = std::make_unique<SoftmaxNode>(std::move(softmax_attributes), context);
         sub_nodes.emplace_back(std::move(softmax_node));
 

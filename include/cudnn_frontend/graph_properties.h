@@ -1458,47 +1458,17 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     }
 };
 
-class Softmax_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> P;
-    } inputs;
+class Softmax_attributes : public Attributes<Softmax_attributes> {
+    friend class Attributes<Softmax_attributes>;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class SoftmaxNode;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes>
-            S;  // softmax output dumped when in forward training mode. Users first need to check whether its nullptr.
-        std::shared_ptr<Tensor_attributes> Stats;  // softmax stats dumped when in forward training mode. Users first
-                                                   // need to check whether its nullptr.
-    } outputs;
+    enum class input_names { P };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
+    enum class output_names { S, Stats };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     std::optional<bool> use_stats;
-
-    Softmax_attributes() : Operation(Tag::Softmax) {}
-
-    Softmax_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Softmax_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Softmax_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.P->fill_from_context(context);
-        outputs.S->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
 class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
