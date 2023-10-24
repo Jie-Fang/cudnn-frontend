@@ -131,12 +131,12 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         Matmul_attributes bmm1_attributes;
         bmm1_attributes.set_name("bmm1");
-        bmm1_attributes.inputs.A          = options.inputs.Q;
-        bmm1_attributes.inputs.B          = options.inputs.K;
-        bmm1_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        bmm1_attributes.inputs.N_override = options.inputs.SEQ_LEN_KV;
-        last_output = bmm1_attributes.outputs.C = bmm1_output;
-        auto bmm1_node                          = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
+        bmm1_attributes.inputs[Matmul_attributes::input_names::A]          = options.inputs.Q;
+        bmm1_attributes.inputs[Matmul_attributes::input_names::B]          = options.inputs.K;
+        bmm1_attributes.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
+        bmm1_attributes.inputs[Matmul_attributes::input_names::N_override] = options.inputs.SEQ_LEN_KV;
+        last_output = bmm1_attributes.outputs[Matmul_attributes::output_names::C] = bmm1_output;
+        auto bmm1_node = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
         sub_nodes.emplace_back(std::move(bmm1_node));
 
         // Optional scale
@@ -505,12 +505,12 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         Matmul_attributes bmm2_attributes;
         bmm2_attributes.set_name("bmm2");
-        bmm2_attributes.inputs.A          = last_output;
-        bmm2_attributes.inputs.B          = options.inputs.V;
-        bmm2_attributes.outputs.C         = options.outputs.O;
-        bmm2_attributes.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        bmm2_attributes.inputs.K_override = options.inputs.SEQ_LEN_KV;
-        auto bmm2_node                    = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
+        bmm2_attributes.inputs[Matmul_attributes::input_names::A]          = last_output;
+        bmm2_attributes.inputs[Matmul_attributes::input_names::B]          = options.inputs.V;
+        bmm2_attributes.outputs[Matmul_attributes::output_names::C]        = options.outputs.O;
+        bmm2_attributes.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
+        bmm2_attributes.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_KV;
+        auto bmm2_node = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
         sub_nodes.emplace_back(std::move(bmm2_node));
 
         // Set dims if user did not
@@ -842,11 +842,12 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: Q * K^T
         Matmul_attributes matmul_Q_KT_attr;
         matmul_Q_KT_attr.set_name("matmul_Q_KT");
-        matmul_Q_KT_attr.inputs.A          = options.inputs.Q;
-        matmul_Q_KT_attr.inputs.B          = options.inputs.K;
-        matmul_Q_KT_attr.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        matmul_Q_KT_attr.inputs.N_override = options.inputs.SEQ_LEN_KV;
-        matmul_Q_KT_attr.outputs.C = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::A]          = options.inputs.Q;
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.K;
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::N_override] = options.inputs.SEQ_LEN_KV;
+        matmul_Q_KT_attr.outputs[Matmul_attributes::output_names::C]        = last_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_Q_KT_attr), context));
 
         if (options.attn_scale_value.has_value()) {
@@ -1089,11 +1090,11 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: S^T * dO
         Matmul_attributes matmul_ST_dO_attr;
         matmul_ST_dO_attr.set_name("matmul_ST_dO");
-        matmul_ST_dO_attr.inputs.A          = last_output;
-        matmul_ST_dO_attr.inputs.B          = options.inputs.dO;
-        matmul_ST_dO_attr.inputs.M_override = options.inputs.SEQ_LEN_KV;
-        matmul_ST_dO_attr.inputs.K_override = options.inputs.SEQ_LEN_Q;
-        matmul_ST_dO_attr.outputs.C         = options.outputs.dV;
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::A]          = last_output;
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.dO;
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_KV;
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_Q;
+        matmul_ST_dO_attr.outputs[Matmul_attributes::output_names::C]        = options.outputs.dV;
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_ST_dO_attr), context));
 
         // --------------"dO @ VT => dp_scaled_output => dK" chain--------------------
@@ -1101,11 +1102,12 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: dO * V^T
         Matmul_attributes matmul_dO_VT_attr;
         matmul_dO_VT_attr.set_name("matmul_dO_VT");
-        matmul_dO_VT_attr.inputs.A          = options.inputs.dO;
-        matmul_dO_VT_attr.inputs.B          = options.inputs.V;
-        matmul_dO_VT_attr.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        matmul_dO_VT_attr.inputs.N_override = options.inputs.SEQ_LEN_KV;
-        matmul_dO_VT_attr.outputs.C = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::A]          = options.inputs.dO;
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.V;
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::N_override] = options.inputs.SEQ_LEN_KV;
+        matmul_dO_VT_attr.outputs[Matmul_attributes::output_names::C]        = last_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dO_VT_attr), context));
 
         // pointwise mul: dS * mask
@@ -1179,11 +1181,11 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: dP^T * Q
         Matmul_attributes matmul_dPT_Q_attr;
         matmul_dPT_Q_attr.set_name("matmul_dPT_Q");
-        matmul_dPT_Q_attr.inputs.A          = last_output;
-        matmul_dPT_Q_attr.inputs.B          = options.inputs.Q;
-        matmul_dPT_Q_attr.outputs.C         = options.outputs.dK;
-        matmul_dPT_Q_attr.inputs.M_override = options.inputs.SEQ_LEN_KV;
-        matmul_dPT_Q_attr.inputs.K_override = options.inputs.SEQ_LEN_Q;
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::A]          = last_output;
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.Q;
+        matmul_dPT_Q_attr.outputs[Matmul_attributes::output_names::C]        = options.outputs.dK;
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_KV;
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_Q;
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dPT_Q_attr), context));
 
         // --------------"dp_scaled @ K => dQ" chain--------------------
@@ -1204,15 +1206,15 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: dP * K
         Matmul_attributes matmul_dP_K_attr;
         matmul_dP_K_attr.set_name("matmul_dP_K");
-        matmul_dP_K_attr.inputs.A = dp_scaled_output;
-        matmul_dP_K_attr.inputs.B = last_output;
+        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::A] = dp_scaled_output;
+        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::B] = last_output;
         if (dQ_accum) {
-            matmul_dP_K_attr.outputs.C = dQ_accum;
+            matmul_dP_K_attr.outputs[Matmul_attributes::output_names::C] = dQ_accum;
         } else {
-            matmul_dP_K_attr.outputs.C = options.outputs.dQ;
+            matmul_dP_K_attr.outputs[Matmul_attributes::output_names::C] = options.outputs.dQ;
         }
-        matmul_dP_K_attr.inputs.M_override = options.inputs.SEQ_LEN_Q;
-        matmul_dP_K_attr.inputs.K_override = options.inputs.SEQ_LEN_KV;
+        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
+        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_KV;
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dP_K_attr), context));
 
         if (dQ_accum) {

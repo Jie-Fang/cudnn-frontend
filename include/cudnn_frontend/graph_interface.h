@@ -666,14 +666,16 @@ Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
 }
 
 inline std::shared_ptr<Tensor_attributes>
-Graph::matmul(std::shared_ptr<Tensor_attributes> a, std::shared_ptr<Tensor_attributes> b, Matmul_attributes options) {
-    auto C = options.outputs.C = output_tensor(options.get_name() + "_output");
+Graph::matmul(std::shared_ptr<Tensor_attributes> a,
+              std::shared_ptr<Tensor_attributes> b,
+              Matmul_attributes attributes) {
+    auto C = attributes.outputs[Matmul_attributes::output_names::C] = output_tensor(attributes.name + "::C");
 
     // Set inputs
-    options.inputs.A = a;
-    options.inputs.B = b;
+    attributes.inputs[Matmul_attributes::input_names::A] = a;
+    attributes.inputs[Matmul_attributes::input_names::B] = b;
 
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(attributes), context));
 
     return C;
 }

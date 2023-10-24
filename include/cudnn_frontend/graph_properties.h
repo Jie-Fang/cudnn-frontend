@@ -566,57 +566,21 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     }
 };
 
-class Matmul_attributes : public Operation {
+class Matmul_attributes : public Attributes<Matmul_attributes> {
+    friend class Attributes<Matmul_attributes>;
+    friend class MatmulNode;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
+
+    enum class input_names { A, B, M_override, N_override, K_override };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { C };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> A;
-        std::shared_ptr<Tensor_attributes> B;
-        std::shared_ptr<Tensor_attributes> M_override;
-        std::shared_ptr<Tensor_attributes> N_override;
-        std::shared_ptr<Tensor_attributes> K_override;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> C;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, A, B, M_override, N_override, K_override)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, C)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, tag, inputs, outputs)
-
-    Matmul_attributes() : Operation(Tag::Matmul) {}
-
-    Matmul_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Matmul_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Matmul_attributes& {
-        // Fill node's tensors
-        inputs.A->fill_from_context(context);
-        inputs.B->fill_from_context(context);
-        outputs.C->fill_from_context(context);
-
-        if (inputs.M_override) inputs.M_override->fill_from_context(context);
-        if (inputs.N_override) inputs.N_override->fill_from_context(context);
-        if (inputs.K_override) inputs.K_override->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, inputs, outputs)
 };
 
 class Pointwise_attributes : public Attributes<Pointwise_attributes> {
