@@ -49,6 +49,7 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
                                     .set_name("epsilon")
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
+                                    .set_is_pass_by_value(true)
                                     .set_data_type(fe::DataType_t::FLOAT));
 
     auto rmsnorm_options =
@@ -76,11 +77,11 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
 
     REQUIRE(graph.set_execution_plans(plans).is_good());
 
-    Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Var_tensor(batch_size * seq_length, false);
     Surface<float> Scale_tensor(hidden_size, false);
     float epsilon_cpu = 1e-05f;
-    Surface<half> Y_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> Y_tensor(batch_size * seq_length * hidden_size, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
@@ -124,6 +125,7 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
                                     .set_name("epsilon")
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
+                                    .set_is_pass_by_value(true)
                                     .set_data_type(fe::DataType_t::FLOAT));
 
     auto rmsnorm_options = fe::graph::Rmsnorm_attributes()
@@ -153,11 +155,11 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
 
     REQUIRE(graph.set_execution_plans(plans).is_good());
 
-    Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Scale_tensor(hidden_size, false);
     Surface<float> Bias_tensor(hidden_size, false);
     float epsilon_cpu = 1e-05f;
-    Surface<half> Y_tensor(batch_size * seq_length * hidden_size, false);
+    Surface<float> Y_tensor(batch_size * seq_length * hidden_size, false);
 
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {

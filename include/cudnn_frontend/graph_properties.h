@@ -665,192 +665,67 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     }
 };
 
-class Instancenorm_backward_attributes : public Operation {
+class Instancenorm_backward_attributes : public Attributes<Instancenorm_backward_attributes> {
+    friend class Attributes<Instancenorm_backward_attributes>;
+    friend class DINNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, tag, inputs, outputs)
-
-    Instancenorm_backward_attributes() : Operation(Tag::DIN) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, inputs, outputs)
 
     Instancenorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.MEAN         = mean;
-        inputs.INV_VARIANCE = inv_variance;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
-    }
-
-    Instancenorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Instancenorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Instancenorm_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-
-        if (inputs.MEAN) {
-            inputs.MEAN->fill_from_context(context);
-        }
-        if (inputs.INV_VARIANCE) {
-            inputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Instancenorm_backward_attributes::input_names::MEAN]         = mean;
+        inputs[Instancenorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
         return *this;
     }
 };
 
-class Layernorm_backward_attributes : public Operation {
+class Layernorm_backward_attributes : public Attributes<Layernorm_backward_attributes> {
+    friend class Attributes<Layernorm_backward_attributes>;
+    friend class DLNNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, tag, inputs, outputs)
-
-    Layernorm_backward_attributes() : Operation(Tag::DLN) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, inputs, outputs)
 
     Layernorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.MEAN         = mean;
-        inputs.INV_VARIANCE = inv_variance;
-        return *this;
-    }
-
-    Layernorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
-    }
-
-    Layernorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Layernorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Layernorm_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-
-        if (inputs.MEAN) {
-            inputs.MEAN->fill_from_context(context);
-        }
-        if (inputs.INV_VARIANCE) {
-            inputs.INV_VARIANCE->fill_from_context(context);
-        }
-        if (inputs.EPSILON) {
-            inputs.EPSILON->fill_from_context(context);
-        }
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Layernorm_backward_attributes::input_names::MEAN]         = mean;
+        inputs[Layernorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
         return *this;
     }
 };
 
-class Layernorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
+class Layernorm_attributes : public Attributes<Layernorm_attributes> {
+    friend class Attributes<Layernorm_attributes>;
+    friend class LayerNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, EPSILON };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, MEAN, INV_VARIANCE };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, tag, inputs, outputs, forward_phase)
-
-    Layernorm_attributes() : Operation(Tag::LN) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, inputs, outputs, forward_phase)
 
     Layernorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -860,76 +735,26 @@ class Layernorm_attributes : public Operation {
 
     Layernorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
-        return *this;
-    }
-
-    Layernorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Layernorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y = output_tensor(name + "_Y_output");
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN         = output_tensor(name + "_MEAN_output");
-            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
-        }
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Layernorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN->fill_from_context(context);
-            outputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Layernorm_attributes::input_names::EPSILON] = value;
         return *this;
     }
 };
 
-class Instancenorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
+class Instancenorm_attributes : public Attributes<Instancenorm_attributes> {
+    friend class Attributes<Instancenorm_attributes>;
+    friend class InstanceNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, EPSILON };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, MEAN, INV_VARIANCE };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, tag, inputs, outputs, forward_phase)
-
-    Instancenorm_attributes() : Operation(Tag::IN) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, inputs, outputs, forward_phase)
 
     Instancenorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -939,48 +764,7 @@ class Instancenorm_attributes : public Operation {
 
     Instancenorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
-        return *this;
-    }
-
-    Instancenorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Instancenorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y = output_tensor(name + "_Y_output");
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN         = output_tensor(name + "_MEAN_output");
-            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
-        }
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Instancenorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN->fill_from_context(context);
-            outputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Instancenorm_attributes::input_names::EPSILON] = value;
         return *this;
     }
 };
