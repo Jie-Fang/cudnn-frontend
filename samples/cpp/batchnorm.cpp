@@ -387,11 +387,26 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
                                  .set_dim({4, 32, 16, 16})
                                  .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
 
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
-    auto mean  = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
-    auto inv_variance =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+    auto scale        = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, 32, 1, 1})
+                                  .set_stride({32, 1, 32, 32})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto bias         = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("bias")
+                                 .set_dim({1, 32, 1, 1})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
+    auto mean         = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("mean")
+                                 .set_dim({1, 32, 1, 1})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_name("inv_variance")
+                                         .set_dim({1, 32, 1, 1})
+                                         .set_stride({32, 1, 32, 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
     auto batchnorm_inference_attributes = fe::graph::Batchnorm_inference_attributes();
     auto BN_Y = graph.batchnorm_inference(BN_X, mean, inv_variance, scale, bias, batchnorm_inference_attributes);

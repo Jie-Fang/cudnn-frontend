@@ -381,18 +381,19 @@ Graph::batchnorm_inference(std::shared_ptr<Tensor_attributes> x,
                            std::shared_ptr<Tensor_attributes> inv_variance,
                            std::shared_ptr<Tensor_attributes> scale,
                            std::shared_ptr<Tensor_attributes> bias,
-                           Batchnorm_inference_attributes options) {
+                           Batchnorm_inference_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+    auto Y = attributes.outputs[Batchnorm_inference_attributes::output_names::Y] =
+        output_tensor(attributes.name + "::Y");
 
     // Set inputs
-    options.inputs.X            = x;
-    options.inputs.MEAN         = mean;
-    options.inputs.INV_VARIANCE = inv_variance;
-    options.inputs.SCALE        = scale;
-    options.inputs.BIAS         = bias;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::X]            = x;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::MEAN]         = mean;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::INV_VARIANCE] = inv_variance;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::SCALE]        = scale;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::BIAS]         = bias;
 
-    sub_nodes.emplace_back(std::make_unique<BatchnormInferenceNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<BatchnormInferenceNode>(std::move(attributes), context));
 
     return Y;
 }

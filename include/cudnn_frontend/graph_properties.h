@@ -780,56 +780,19 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     }
 };
 
-class Batchnorm_inference_attributes : public Operation {
+class Batchnorm_inference_attributes : public Attributes<Batchnorm_inference_attributes> {
+    friend class Attributes<Batchnorm_inference_attributes>;
+    friend class BatchnormInferenceNode;
+    friend class Graph;
+
+    enum class input_names { X, MEAN, INV_VARIANCE, SCALE, BIAS };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, BIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, tag, inputs, outputs)
-
-    Batchnorm_inference_attributes() : Operation(Tag::BN_inference) {}
-
-    Batchnorm_inference_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Batchnorm_inference_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Batchnorm_inference_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, inputs, outputs)
 };
 
 class Reduction_attributes : public Attributes<Reduction_attributes> {
