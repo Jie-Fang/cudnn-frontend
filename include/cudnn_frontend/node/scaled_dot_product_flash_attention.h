@@ -37,24 +37,22 @@ class ScaledDotProductFlashAttentionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionNode " << attributes.name << "..." << std::endl;
 
-        auto const& q    = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::Q);
-        bool const has_q = (q != attributes.inputs.end()) && (q->second != nullptr);
-        auto const& k    = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::K);
-        bool const has_k = (k != attributes.inputs.end()) && (k->second != nullptr);
-        auto const& v    = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::V);
-        bool const has_v = (v != attributes.inputs.end()) && (v->second != nullptr);
-        auto const& o    = attributes.outputs.find(Scaled_dot_product_flash_attention_attributes::output_names::O);
-        bool const has_o = (o != attributes.outputs.end()) && (o->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_q, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input q not set");
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_k, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input k not set");
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_v, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input v not set");
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_o, error_code_t::ATTRIBUTE_NOT_SET, "Tensor output o not set");
+        CUDNN_FE_VALIDATE_INPUT_TENSORS(Scaled_dot_product_flash_attention_attributes::input_names::Q, 
+                                  Scaled_dot_product_flash_attention_attributes::input_names::K, 
+                                  Scaled_dot_product_flash_attention_attributes::input_names::V);
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(q->second->get_stride().back() != 1 || k->second->get_stride().back() != 1 ||
-                                           v->second->get_stride().back() != 1 || o->second->get_stride().back() != 1,
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "The stride for the last dimension corresponding to the embedding size per head"
-                                       " should be 1");
+        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Scaled_dot_product_flash_attention_attributes::output_names::O); 
+
+
+        #define CUDNN_FE_VALIDATE_STRIDE(port, port_map) \
+                { auto const& t    = port_map.find(port); \
+                RETURN_CUDNN_FRONTEND_ERROR_IF(t->second->get_stride().back() != 1, error_code_t::GRAPH_NOT_SUPPORTED,\
+                     "The stride for the last dimension corresponding to the embedding size per head should be 1 for " + std::string(#port)); }
+
+        CUDNN_FE_VALIDATE_STRIDE(Scaled_dot_product_flash_attention_attributes::input_names::Q, attributes.inputs); 
+        CUDNN_FE_VALIDATE_STRIDE(Scaled_dot_product_flash_attention_attributes::input_names::K, attributes.inputs); 
+        CUDNN_FE_VALIDATE_STRIDE(Scaled_dot_product_flash_attention_attributes::input_names::V, attributes.inputs); 
+        CUDNN_FE_VALIDATE_STRIDE(Scaled_dot_product_flash_attention_attributes::output_names::O, attributes.outputs); 
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.is_inference.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
