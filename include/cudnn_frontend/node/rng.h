@@ -9,10 +9,11 @@
 namespace cudnn_frontend::graph {
 
 class RngNode : public INode {
-    Rng_attributes options;
+    Rng_attributes attributes;
 
    public:
-    RngNode(Rng_attributes&& options_, detail::Context const& context) : INode(context), options(std::move(options_)) {}
+    RngNode(Rng_attributes&& attributes_, detail::Context const& context)
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -22,9 +23,12 @@ class RngNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating RngNode " << options.name << "..." << std::endl;
+                    << "Validating RngNode " << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!(options.outputs.Y), error_code_t::ATTRIBUTE_NOT_SET, "rng output not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.outputs.find(Rng_attributes::output_names::Y) == attributes.outputs.end(),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "rng output not set.");
 
         return {error_code_t::OK, ""};
     }
@@ -33,35 +37,42 @@ class RngNode : public INode {
     create_cudnn_tensors(int64_t& uid,
                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building RngNode tensors " << options.name << "..." << std::endl;
+                    << "Building RngNode tensors " << attributes.name << "..." << std::endl;
 
-        if (options.inputs.Seed) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Seed, uid, tensors));
-        if (options.inputs.Offset) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.Offset, uid, tensors));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y, uid, tensors));
-
+        for (auto const& [name, tensor] : attributes.inputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+        for (auto const& [name, tensor] : attributes.outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
         return {error_code_t::OK, ""};
     }
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for rng node " << options.name << "..."
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for rng node " << attributes.name << "..."
                     << std::endl;
 
-        auto y_tensor = options.outputs.Y;
+        auto y_tensor = attributes.outputs[Rng_attributes::output_names::Y];
 
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // If user does not set shape and layout of the generated tensor,
         // Get it from node attributes
         // If layout is not set, generate the strides from layout
 
-        if (y_tensor->get_dim().empty() && options.get_dim().size()) {
-            y_tensor->set_dim(options.dim);
+        if (y_tensor->get_dim().empty() && attributes.get_dim().size()) {
+            y_tensor->set_dim(attributes.dim);
         }
 
         if (y_tensor->get_stride().empty()) {
-            if (options.get_stride().size()) {
-                y_tensor->set_stride(options.get_stride());
+            if (attributes.get_stride().size()) {
+                y_tensor->set_stride(attributes.get_stride());
             } else {
                 auto const& y_dim = y_tensor->get_dim();
                 // Default to NHWC
@@ -83,50 +94,47 @@ class RngNode : public INode {
         std::vector<cudnn_frontend::Operation_v8>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building RngNode operations " << options.name << "..." << std::endl;
+                    << "Building RngNode operations " << attributes.name << "..." << std::endl;
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
 
-            // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {options.inputs.Seed, options.inputs.Offset, options.outputs.Y};
+            for (auto const& [name, tensor] : attributes.inputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
+            for (auto const& [name, tensor] : attributes.outputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
 
-            if (options.get_distribution() == RngDistribution_t::BERNOULLI) {
+            if (attributes.get_distribution() == RngDistribution_t::BERNOULLI) {
                 auto rng_descriptor = cudnn_frontend::RngDescBuilder()
-                                          .setRngDistribution(options.get_distribution())
-                                          .setBernoulliDistProbability(options.get_bernoulli_probability().value())
+                                          .setRngDistribution(attributes.get_distribution())
+                                          .setBernoulliDistProbability(attributes.get_bernoulli_probability().value())
                                           .build();
 
-                if (options.inputs.Seed) {
-                    auto Rng_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
-                                             .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
-                                             .setRngDesc(rng_descriptor)
-                                             .setSeedDesc(*(tensors.at(options.inputs.Seed->get_uid())))
-                                             .setOffsetDesc(*(tensors.at(options.inputs.Offset->get_uid())))
-                                             .build();
-
-                    for (auto const& tensor : tensors_involved_in_operation) {
-                        if (tensor && tensor->get_is_virtual() == false) {
-                            uids_involved_in_operations.insert(tensor->get_uid());
-                        }
-                    }
-
+                if (attributes.inputs[Rng_attributes::input_names::Seed]) {
+                    auto Rng_operation =
+                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
+                            .setyDesc(*(tensors.at(attributes.outputs[Rng_attributes::output_names::Y]->get_uid())))
+                            .setRngDesc(rng_descriptor)
+                            .setSeedDesc(*(tensors.at(attributes.inputs[Rng_attributes::input_names::Seed]->get_uid())))
+                            .setOffsetDesc(
+                                *(tensors.at(attributes.inputs[Rng_attributes::input_names::Offset]->get_uid())))
+                            .build();
                     operations.push_back(std::move(Rng_operation));
 
                 } else {
-                    auto Rng_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
-                                             .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
-                                             .setRngDesc(rng_descriptor)
-                                             .setSeed(options.get_seed().value())
-                                             .build();
-
-                    for (auto const& tensor : tensors_involved_in_operation) {
-                        if (tensor && tensor->get_is_virtual() == false) {
-                            uids_involved_in_operations.insert(tensor->get_uid());
-                        }
-                    }
-
+                    auto Rng_operation =
+                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
+                            .setyDesc(*(tensors.at(attributes.outputs[Rng_attributes::output_names::Y]->get_uid())))
+                            .setRngDesc(rng_descriptor)
+                            .setSeed(attributes.get_seed().value())
+                            .build();
                     operations.push_back(std::move(Rng_operation));
                 }
             }
@@ -142,7 +150,7 @@ class RngNode : public INode {
 
     virtual void
     serialize(json& j) const override final {
-        j = options;
+        j = attributes;
     }
 };
 

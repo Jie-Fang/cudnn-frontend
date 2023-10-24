@@ -20,7 +20,7 @@
 #include "node/reshape.h"
 #include "node/rmsnorm.h"
 #include "node/rng.h"
-#include "node/scaled_dot_product_attention.h"
+// #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
 
 #include "plans.h"
@@ -41,11 +41,11 @@ class Graph : public INode {
     }
 
     // This API is still work in progress and unverified.
-    std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
-        std::shared_ptr<Tensor_attributes>,
-        std::shared_ptr<Tensor_attributes>,
-        std::shared_ptr<Tensor_attributes>,
-        Scaled_dot_product_attention_attributes);
+    // std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
+    //     std::shared_ptr<Tensor_attributes>,
+    //     std::shared_ptr<Tensor_attributes>,
+    //     std::shared_ptr<Tensor_attributes>,
+    //     Scaled_dot_product_attention_attributes);
 
    public:
     Graph() : INode(detail::Context{}) {}
@@ -260,30 +260,36 @@ Graph::bn_finalize(std::shared_ptr<Tensor_attributes> sum,
                    std::shared_ptr<Tensor_attributes> bias,
                    std::shared_ptr<Tensor_attributes> epsilon,
                    std::shared_ptr<Tensor_attributes> accum_count,
-                   BN_finalize_attributes options) {
+                   BN_finalize_attributes attributes) {
     // Set outputs
-    auto EQ_SCALE = options.outputs.EQ_SCALE = output_tensor(options.get_name() + "::EQ_SCALE");
-    auto EQ_BIAS = options.outputs.EQ_BIAS = output_tensor(options.get_name() + "::EQ_BIAS");
-    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-    auto INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto EQ_SCALE = attributes.outputs[BN_finalize_attributes::output_names::EQ_SCALE] =
+        output_tensor(attributes.name + "::EQ_SCALE");
+    auto EQ_BIAS = attributes.outputs[BN_finalize_attributes::output_names::EQ_BIAS] =
+        output_tensor(attributes.name + "::EQ_BIAS");
+    auto MEAN = attributes.outputs[BN_finalize_attributes::output_names::MEAN] =
+        output_tensor(attributes.name + "::MEAN");
+    auto INV_VARIANCE = attributes.outputs[BN_finalize_attributes::output_names::INV_VARIANCE] =
+        output_tensor(attributes.name + "::INV_VARIANCE");
     std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
     std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR  = nullptr;
-    if (options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
-        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
-        NEXT_RUNNING_VAR  = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    if (attributes.inputs[BN_finalize_attributes::input_names::PREV_RUNNING_MEAN] &&
+        attributes.inputs[BN_finalize_attributes::input_names::PREV_RUNNING_VAR] &&
+        attributes.inputs[BN_finalize_attributes::input_names::MOMENTUM]) {
+        NEXT_RUNNING_MEAN = output_tensor(attributes.name + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR  = output_tensor(attributes.name + "::NEXT_RUNNING_VAR");
     }
-    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
-    options.outputs.NEXT_RUNNING_VAR  = NEXT_RUNNING_VAR;
+    attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_MEAN] = NEXT_RUNNING_MEAN;
+    attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_VAR]  = NEXT_RUNNING_VAR;
 
     // Set inputs
-    options.inputs.SUM         = sum;
-    options.inputs.SQ_SUM      = sq_sum;
-    options.inputs.SCALE       = scale;
-    options.inputs.BIAS        = bias;
-    options.inputs.EPSILON     = epsilon;
-    options.inputs.ACCUM_COUNT = accum_count;
+    attributes.inputs[BN_finalize_attributes::input_names::SUM]         = sum;
+    attributes.inputs[BN_finalize_attributes::input_names::SQ_SUM]      = sq_sum;
+    attributes.inputs[BN_finalize_attributes::input_names::SCALE]       = scale;
+    attributes.inputs[BN_finalize_attributes::input_names::BIAS]        = bias;
+    attributes.inputs[BN_finalize_attributes::input_names::EPSILON]     = epsilon;
+    attributes.inputs[BN_finalize_attributes::input_names::ACCUM_COUNT] = accum_count;
 
-    sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(attributes), context));
 
     return {EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }
@@ -292,21 +298,22 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::layernorm(std::shared_ptr<Tensor_attributes> x,
                  std::shared_ptr<Tensor_attributes> scale,
                  std::shared_ptr<Tensor_attributes> bias,
-                 Layernorm_attributes options) {
+                 Layernorm_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
-    std::shared_ptr<Tensor_attributes> MEAN         = nullptr;
-    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
-    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-        MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto Y = attributes.outputs[Layernorm_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    std::shared_ptr<Tensor_attributes> MEAN                            = nullptr;
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE                    = nullptr;
+    if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
+        MEAN = attributes.outputs[Layernorm_attributes::output_names::MEAN] = output_tensor(attributes.name + "::MEAN");
+        INV_VARIANCE = attributes.outputs[Layernorm_attributes::output_names::INV_VARIANCE] =
+            output_tensor(attributes.name + "::INV_VARIANCE");
     }
     // Set inputs
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
-    options.inputs.BIAS  = bias;
+    attributes.inputs[Layernorm_attributes::input_names::X]     = x;
+    attributes.inputs[Layernorm_attributes::input_names::SCALE] = scale;
+    attributes.inputs[Layernorm_attributes::input_names::BIAS]  = bias;
 
-    sub_nodes.emplace_back(std::make_unique<LayerNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<LayerNormNode>(std::move(attributes), context));
 
     return {Y, MEAN, INV_VARIANCE};
 }
@@ -315,21 +322,23 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::instancenorm(std::shared_ptr<Tensor_attributes> x,
                     std::shared_ptr<Tensor_attributes> scale,
                     std::shared_ptr<Tensor_attributes> bias,
-                    Instancenorm_attributes options) {
+                    Instancenorm_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
-    std::shared_ptr<Tensor_attributes> MEAN         = nullptr;
-    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
-    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-        MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto Y = attributes.outputs[Instancenorm_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    std::shared_ptr<Tensor_attributes> MEAN                               = nullptr;
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE                       = nullptr;
+    if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
+        MEAN = attributes.outputs[Instancenorm_attributes::output_names::MEAN] =
+            output_tensor(attributes.name + "::MEAN");
+        INV_VARIANCE = attributes.outputs[Instancenorm_attributes::output_names::INV_VARIANCE] =
+            output_tensor(attributes.name + "::INV_VARIANCE");
     }
     // Set inputs
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
-    options.inputs.BIAS  = bias;
+    attributes.inputs[Instancenorm_attributes::input_names::X]     = x;
+    attributes.inputs[Instancenorm_attributes::input_names::SCALE] = scale;
+    attributes.inputs[Instancenorm_attributes::input_names::BIAS]  = bias;
 
-    sub_nodes.emplace_back(std::make_unique<InstanceNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<InstanceNormNode>(std::move(attributes), context));
 
     return {Y, MEAN, INV_VARIANCE};
 }
@@ -372,18 +381,19 @@ Graph::batchnorm_inference(std::shared_ptr<Tensor_attributes> x,
                            std::shared_ptr<Tensor_attributes> inv_variance,
                            std::shared_ptr<Tensor_attributes> scale,
                            std::shared_ptr<Tensor_attributes> bias,
-                           Batchnorm_inference_attributes options) {
+                           Batchnorm_inference_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "::Y");
+    auto Y = attributes.outputs[Batchnorm_inference_attributes::output_names::Y] =
+        output_tensor(attributes.name + "::Y");
 
     // Set inputs
-    options.inputs.X            = x;
-    options.inputs.MEAN         = mean;
-    options.inputs.INV_VARIANCE = inv_variance;
-    options.inputs.SCALE        = scale;
-    options.inputs.BIAS         = bias;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::X]            = x;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::MEAN]         = mean;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::INV_VARIANCE] = inv_variance;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::SCALE]        = scale;
+    attributes.inputs[Batchnorm_inference_attributes::input_names::BIAS]         = bias;
 
-    sub_nodes.emplace_back(std::make_unique<BatchnormInferenceNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<BatchnormInferenceNode>(std::move(attributes), context));
 
     return Y;
 }
@@ -392,72 +402,84 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::batchnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          Batchnorm_backward_attributes options) {
+                          Batchnorm_backward_attributes attributes) {
     // Set outputs
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DX = attributes.outputs[Batchnorm_backward_attributes::output_names::DX] =
+        output_tensor(attributes.name + "::DX");
+    auto DSCALE = attributes.outputs[Batchnorm_backward_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::DSCALE");
+    auto DBIAS = attributes.outputs[Batchnorm_backward_attributes::output_names::DBIAS] =
+        output_tensor(attributes.name + "::DBIAS");
 
     // Set inputs
-    options.inputs.DY    = dy;
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    attributes.inputs[Batchnorm_backward_attributes::input_names::DY]    = dy;
+    attributes.inputs[Batchnorm_backward_attributes::input_names::X]     = x;
+    attributes.inputs[Batchnorm_backward_attributes::input_names::SCALE] = scale;
 
-    sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DBNNode>(std::move(attributes), context));
 
-    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+    return {DX, DSCALE, DBIAS};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::instancenorm_backward(std::shared_ptr<Tensor_attributes> dy,
                              std::shared_ptr<Tensor_attributes> x,
                              std::shared_ptr<Tensor_attributes> scale,
-                             Instancenorm_backward_attributes options) {
+                             Instancenorm_backward_attributes attributes) {
     // Set outputs
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DX = attributes.outputs[Instancenorm_backward_attributes::output_names::DX] =
+        output_tensor(attributes.name + "::DX");
+    auto DSCALE = attributes.outputs[Instancenorm_backward_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::DSCALE");
+    auto DBIAS = attributes.outputs[Instancenorm_backward_attributes::output_names::DBIAS] =
+        output_tensor(attributes.name + "::DBIAS");
 
     // Set inputs
-    options.inputs.DY    = dy;
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    attributes.inputs[Instancenorm_backward_attributes::input_names::DY]    = dy;
+    attributes.inputs[Instancenorm_backward_attributes::input_names::X]     = x;
+    attributes.inputs[Instancenorm_backward_attributes::input_names::SCALE] = scale;
 
-    sub_nodes.emplace_back(std::make_unique<DINNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DINNode>(std::move(attributes), context));
 
-    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+    return {DX, DSCALE, DBIAS};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 3>
 Graph::layernorm_backward(std::shared_ptr<Tensor_attributes> dy,
                           std::shared_ptr<Tensor_attributes> x,
                           std::shared_ptr<Tensor_attributes> scale,
-                          Layernorm_backward_attributes options) {
+                          Layernorm_backward_attributes attributes) {
     // Set outputs
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DX = attributes.outputs[Layernorm_backward_attributes::output_names::DX] =
+        output_tensor(attributes.name + "::DX");
+    auto DSCALE = attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::DSCALE");
+    auto DBIAS = attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS] =
+        output_tensor(attributes.name + "::DBIAS");
 
     // Set inputs
-    options.inputs.DY    = dy;
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    attributes.inputs[Layernorm_backward_attributes::input_names::DY]    = dy;
+    attributes.inputs[Layernorm_backward_attributes::input_names::X]     = x;
+    attributes.inputs[Layernorm_backward_attributes::input_names::SCALE] = scale;
 
-    sub_nodes.emplace_back(std::make_unique<DLNNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DLNNode>(std::move(attributes), context));
 
-    return {return_outputs.DX, return_outputs.DSCALE, return_outputs.DBIAS};
+    return {DX, DSCALE, DBIAS};
 }
 
 inline std::shared_ptr<Tensor_attributes>
 Graph::conv_fprop(std::shared_ptr<Tensor_attributes> x,
                   std::shared_ptr<Tensor_attributes> w,
-                  Conv_fprop_attributes options) {
+                  Conv_fprop_attributes attributes) {
     // Make required output tensors
-    auto Y                                                  = output_tensor(options.name + "::Y");
-    options.outputs[Conv_fprop_attributes::output_names::Y] = Y;
+    auto Y                                                     = output_tensor(attributes.name + "::Y");
+    attributes.outputs[Conv_fprop_attributes::output_names::Y] = Y;
 
     // Set inputs
-    options.inputs[Conv_fprop_attributes::input_names::X] = x;
-    options.inputs[Conv_fprop_attributes::input_names::W] = w;
+    attributes.inputs[Conv_fprop_attributes::input_names::X] = x;
+    attributes.inputs[Conv_fprop_attributes::input_names::W] = w;
 
-    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<ConvolutionNode>(std::move(attributes), context));
 
     return Y;
 }
@@ -468,53 +490,59 @@ Graph::dbn_weight(std::shared_ptr<Tensor_attributes> dy,
                   std::shared_ptr<Tensor_attributes> mean,
                   std::shared_ptr<Tensor_attributes> inv_variance,
                   std::shared_ptr<Tensor_attributes> scale,
-                  DBN_weight_attributes options) {
+                  DBN_weight_attributes attributes) {
     // Make required output tensors
-    options.make_outputs([this](std::string const &name) { return output_tensor(name); });
-    auto return_outputs = options.outputs;
+    auto DBIAS = attributes.outputs[DBN_weight_attributes::output_names::DBIAS] =
+        output_tensor(attributes.name + "::DBIAS");
+    auto DSCALE = attributes.outputs[DBN_weight_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::DSCALE");
+    auto EQ_BIAS = attributes.outputs[DBN_weight_attributes::output_names::EQ_BIAS] =
+        output_tensor(attributes.name + "::EQ_BIAS");
+    auto EQ_SCALE_DY = attributes.outputs[DBN_weight_attributes::output_names::EQ_SCALE_DY] =
+        output_tensor(attributes.name + "::EQ_SCALE_DY");
+    auto EQ_SCALE_X = attributes.outputs[DBN_weight_attributes::output_names::EQ_SCALE_X] =
+        output_tensor(attributes.name + "::EQ_SCALE_X");
 
     // Set inputs
-    options.inputs.DY           = dy;
-    options.inputs.X            = x;
-    options.inputs.SCALE        = scale;
-    options.inputs.MEAN         = mean;
-    options.inputs.INV_VARIANCE = inv_variance;
+    attributes.inputs[DBN_weight_attributes::input_names::DY]           = dy;
+    attributes.inputs[DBN_weight_attributes::input_names::X]            = x;
+    attributes.inputs[DBN_weight_attributes::input_names::SCALE]        = scale;
+    attributes.inputs[DBN_weight_attributes::input_names::MEAN]         = mean;
+    attributes.inputs[DBN_weight_attributes::input_names::INV_VARIANCE] = inv_variance;
 
-    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DBNWeightNode>(std::move(attributes), context));
 
-    return {return_outputs.DSCALE,
-            return_outputs.DBIAS,
-            return_outputs.EQ_SCALE_DY,
-            return_outputs.EQ_SCALE_X,
-            return_outputs.EQ_BIAS};
+    return {DSCALE, DBIAS, EQ_SCALE_DY, EQ_SCALE_X, EQ_BIAS};
 }
 
 inline std::shared_ptr<Tensor_attributes>
 Graph::conv_dgrad(std::shared_ptr<Tensor_attributes> dy,
                   std::shared_ptr<Tensor_attributes> w,
-                  Conv_dgrad_attributes options) {
+                  Conv_dgrad_attributes attributes) {
     // Make required output tensors
-    auto DX = options.outputs.DX = output_tensor(options.get_name() + "_output");
+    auto DX = attributes.outputs[Conv_dgrad_attributes::output_names::DX] = output_tensor(attributes.name + "::DX");
 
     // Set inputs
-    options.inputs.DY = dy;
-    options.inputs.W  = w;
+    attributes.inputs[Conv_dgrad_attributes::input_names::DY] = dy;
+    attributes.inputs[Conv_dgrad_attributes::input_names::W]  = w;
 
-    sub_nodes.emplace_back(std::make_unique<DgradNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DgradNode>(std::move(attributes), context));
 
     return DX;
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
-Graph::genstats(std::shared_ptr<Tensor_attributes> x, Genstats_attributes options) {
+Graph::genstats(std::shared_ptr<Tensor_attributes> x, Genstats_attributes attributes) {
     // Set outputs
-    auto SUM = options.outputs.SUM = output_tensor(options.get_name() + "_sum_output");
-    auto SQ_SUM = options.outputs.SQ_SUM = output_tensor(options.get_name() + "_sq_sum_output");
+    auto SUM = attributes.outputs[Genstats_attributes::output_names::SUM] =
+        output_tensor(attributes.name + "_sum_output");
+    auto SQ_SUM = attributes.outputs[Genstats_attributes::output_names::SQ_SUM] =
+        output_tensor(attributes.name + "_sq_sum_output");
 
     // Set inputs
-    options.inputs.X = x;
+    attributes.inputs[Genstats_attributes::input_names::X] = x;
 
-    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(std::move(attributes), context));
 
     return {SUM, SQ_SUM};
 }
@@ -522,27 +550,28 @@ Graph::genstats(std::shared_ptr<Tensor_attributes> x, Genstats_attributes option
 inline std::shared_ptr<Tensor_attributes>
 Graph::conv_wgrad(std::shared_ptr<Tensor_attributes> dy,
                   std::shared_ptr<Tensor_attributes> x,
-                  Conv_wgrad_attributes options) {
+                  Conv_wgrad_attributes attributes) {
     // Make required output tensors
-    auto DW = options.outputs.DW = output_tensor(options.get_name() + "_output");
+    auto DW = attributes.outputs[Conv_wgrad_attributes::output_names::DW] = output_tensor(attributes.name + "::DW");
 
     // Set inputs
-    options.inputs.X  = x;
-    options.inputs.DY = dy;
+    attributes.inputs[Conv_wgrad_attributes::input_names::X]  = x;
+    attributes.inputs[Conv_wgrad_attributes::input_names::DY] = dy;
 
-    sub_nodes.emplace_back(std::make_unique<WgradNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<WgradNode>(std::move(attributes), context));
 
     return DW;
 }
 
 inline std::shared_ptr<Tensor_attributes>
-Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
+Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes attributes) {
+    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+        output_tensor(attributes.name + "::OUT_0");
 
     // Set inputs
-    options.inputs.IN_0 = a;
+    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
 
     return OUT_0;
 }
@@ -550,14 +579,15 @@ Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes opti
 inline std::shared_ptr<Tensor_attributes>
 Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
                  std::shared_ptr<Tensor_attributes> b,
-                 Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
+                 Pointwise_attributes attributes) {
+    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+        output_tensor(attributes.name + "::OUT_0");
 
     // Set inputs
-    options.inputs.IN_0 = a;
-    options.inputs.IN_1 = b;
+    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
+    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
 
     return OUT_0;
 }
@@ -566,27 +596,28 @@ inline std::shared_ptr<Tensor_attributes>
 Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
                  std::shared_ptr<Tensor_attributes> b,
                  std::shared_ptr<Tensor_attributes> c,
-                 Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
+                 Pointwise_attributes attributes) {
+    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+        output_tensor(attributes.name + "::OUT_0");
 
     // Set inputs
-    options.inputs.IN_0 = a;
-    options.inputs.IN_1 = b;
-    options.inputs.IN_2 = c;
+    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
+    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
+    attributes.inputs[Pointwise_attributes::input_names::IN_2] = c;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
 
     return OUT_0;
 }
 
 inline std::shared_ptr<Tensor_attributes>
-Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes options) {
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "_output");
+Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes attributes) {
+    auto Y = attributes.outputs[Reduction_attributes::output_names::Y] = output_tensor(attributes.name + "_output");
 
     // Set inputs
-    options.inputs.X = input;
+    attributes.inputs[Reduction_attributes::input_names::X] = input;
 
-    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
 
     return Y;
 }
@@ -594,18 +625,19 @@ Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
                std::shared_ptr<Tensor_attributes> scale,
-               Rmsnorm_attributes options) {
+               Rmsnorm_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
-    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
-    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto Y = attributes.outputs[Rmsnorm_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE                  = nullptr;
+    if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
+        INV_VARIANCE = attributes.outputs[Rmsnorm_attributes::output_names::INV_VARIANCE] =
+            output_tensor(attributes.name + "::INV_VARIANCE");
     }
     // Set inputs
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    attributes.inputs[Rmsnorm_attributes::input_names::X]     = x;
+    attributes.inputs[Rmsnorm_attributes::input_names::SCALE] = scale;
 
-    sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(attributes), context));
 
     return {Y, INV_VARIANCE};
 }
@@ -615,77 +647,84 @@ Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                         std::shared_ptr<Tensor_attributes> x,
                         std::shared_ptr<Tensor_attributes> scale,
                         std::shared_ptr<Tensor_attributes> inv_variance,
-                        Rmsnorm_backward_attributes options) {
+                        Rmsnorm_backward_attributes attributes) {
     // Set outputs
-    auto DX = options.outputs.DX = output_tensor(options.get_name() + "::DX");
-    auto DScale = options.outputs.DSCALE     = output_tensor(options.get_name() + "::Dscale");
+    auto DX = attributes.outputs[Rmsnorm_backward_attributes::output_names::DX] =
+        output_tensor(attributes.name + "::DX");
+    auto DScale = attributes.outputs[Rmsnorm_backward_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::Dscale");
     std::shared_ptr<Tensor_attributes> DBias = nullptr;
-    if (options.use_dbias.value_or(true)) {
-        DBias = options.outputs.DBIAS = output_tensor(options.get_name() + "::Dbias");
+    if (attributes.use_dbias.value_or(true)) {
+        DBias = attributes.outputs[Rmsnorm_backward_attributes::output_names::DBIAS] =
+            output_tensor(attributes.name + "::Dbias");
     }
 
     // Set inputs
-    options.inputs.DY           = dy;
-    options.inputs.X            = x;
-    options.inputs.SCALE        = scale;
-    options.inputs.INV_VARIANCE = inv_variance;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::DY]           = dy;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::X]            = x;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::SCALE]        = scale;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
 
-    sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(attributes), context));
 
     return {DX, DScale, DBias};
 }
 
 inline std::shared_ptr<Tensor_attributes>
-Graph::matmul(std::shared_ptr<Tensor_attributes> a, std::shared_ptr<Tensor_attributes> b, Matmul_attributes options) {
-    auto C = options.outputs.C = output_tensor(options.get_name() + "_output");
+Graph::matmul(std::shared_ptr<Tensor_attributes> a,
+              std::shared_ptr<Tensor_attributes> b,
+              Matmul_attributes attributes) {
+    auto C = attributes.outputs[Matmul_attributes::output_names::C] = output_tensor(attributes.name + "::C");
 
     // Set inputs
-    options.inputs.A = a;
-    options.inputs.B = b;
+    attributes.inputs[Matmul_attributes::input_names::A] = a;
+    attributes.inputs[Matmul_attributes::input_names::B] = b;
 
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(attributes), context));
 
     return C;
 }
 
-inline std::array<std::shared_ptr<Tensor_attributes>, 2>
-Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q,
-                                    std::shared_ptr<Tensor_attributes> k,
-                                    std::shared_ptr<Tensor_attributes> v,
-                                    Scaled_dot_product_attention_attributes options) {
-    // Make required output tensors
-    auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
-    auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
+// inline std::array<std::shared_ptr<Tensor_attributes>, 2>
+// Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q,
+//                                     std::shared_ptr<Tensor_attributes> k,
+//                                     std::shared_ptr<Tensor_attributes> v,
+//                                     Scaled_dot_product_attention_attributes options) {
+//     // Make required output tensors
+//     auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
+//     auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
 
-    // Set inputs
-    options.inputs.Q = q;
-    options.inputs.K = k;
-    options.inputs.V = v;
+//     // Set inputs
+//     options.inputs.Q = q;
+//     options.inputs.K = k;
+//     options.inputs.V = v;
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(std::move(options), context));
+//     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(std::move(options), context));
 
-    return {O, S};
-}
+//     return {O, S};
+// }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
                                           std::shared_ptr<Tensor_attributes> k,
                                           std::shared_ptr<Tensor_attributes> v,
-                                          Scaled_dot_product_flash_attention_attributes options) {
+                                          Scaled_dot_product_flash_attention_attributes attributes) {
     // Make required output tensors
-    auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
+    auto O = attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O] =
+        output_tensor(attributes.name + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (options.is_inference == false) {
-        Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
+    if (attributes.is_inference == false) {
+        Stats = attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::Stats] =
+            output_tensor(attributes.name + "::Stats");
     }
 
     // Set inputs
-    options.inputs.Q = q;
-    options.inputs.K = k;
-    options.inputs.V = v;
+    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q] = q;
+    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K] = k;
+    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::V] = v;
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(std::move(attributes), context));
 
     return {O, Stats};
 }
@@ -697,21 +736,25 @@ Graph::scaled_dot_product_flash_attention_backward(std::shared_ptr<Tensor_attrib
                                                    std::shared_ptr<Tensor_attributes> o,
                                                    std::shared_ptr<Tensor_attributes> dO,
                                                    std::shared_ptr<Tensor_attributes> Stats,
-                                                   Scaled_dot_product_flash_attention_backward_attributes options) {
+                                                   Scaled_dot_product_flash_attention_backward_attributes attributes) {
     // Set inputs
-    options.inputs.Q     = q;
-    options.inputs.K     = k;
-    options.inputs.V     = v;
-    options.inputs.O     = o;
-    options.inputs.dO    = dO;
-    options.inputs.Stats = Stats;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q]     = q;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]     = k;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V]     = v;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::O]     = o;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::dO]    = dO;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Stats] = Stats;
 
     // Make required output tensors
-    auto dQ = options.outputs.dQ = output_tensor(options.get_name() + "::dQ");
-    auto dK = options.outputs.dK = output_tensor(options.get_name() + "::dK");
-    auto dV = options.outputs.dV = output_tensor(options.get_name() + "::dV");
+    auto dQ = attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dQ] =
+        output_tensor(attributes.name + "::dQ");
+    auto dK = attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dK] =
+        output_tensor(attributes.name + "::dK");
+    auto dV = attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dV] =
+        output_tensor(attributes.name + "::dV");
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionBackwardNode>(std::move(options), context));
+    sub_nodes.emplace_back(
+        std::make_unique<ScaledDotProductFlashAttentionBackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV};
 }

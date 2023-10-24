@@ -149,6 +149,7 @@ class Tensor_attributes {
 };
 
 class Batchnorm_attributes;
+class Batchnorm_backward_attributes;
 
 template <typename DerivedT>
 class Attributes {
@@ -164,9 +165,24 @@ class Attributes {
    protected:
     void
     fill_from_context(detail::Context const& context) {
-        for (auto const& tensor : get_tensors()) {
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto& [name, tensor] : derived->inputs) {
             if (tensor) {
                 tensor->fill_from_context(context);
+            }
+        }
+        for (auto& [name, tensor] : derived->outputs) {
+            if (tensor) {
+                tensor->fill_from_context(context);
+            }
+        }
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
+            for (auto& tensor : derived->peer_stats) {
+                if (tensor) {
+                    tensor->fill_from_context(context);
+                }
             }
         }
 
@@ -191,15 +207,6 @@ class Attributes {
         return self();
     }
 
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_tensors() const {
-        auto derived     = static_cast<DerivedT const*>(this);
-        auto all_tensors = derived->get_inputs();
-        auto all_outputs = derived->get_outputs();
-        all_tensors.insert(all_tensors.end(), all_outputs.begin(), all_outputs.end());
-        return all_tensors;
-    }
-
     // Common input tensor validate functions
     error_t
     validate_inputs() const {
@@ -216,7 +223,8 @@ class Attributes {
         }
 
         // Handle special case of BN where peer_stats is also an input
-        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes>) {
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
             for (auto const& tensor : derived->peer_stats) {
                 if (tensor) {
                     RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -231,223 +239,54 @@ class Attributes {
     }
 };
 
-class Operation {
-   public:
-    enum class Tag {
-        BN,
-        BN_inference,
-        BN_finalize,
-        Conv_fprop,
-        Conv_dgrad,
-        Conv_wgrad,
-        DBN,
-        DLN,
-        DIN,
-        DBN_weight,
-        DRMSNorm,
-        Genstats,
-        LN,
-        IN,
-        Matmul,
-        Pointwise,
-        Reduction,
-        Rng,
-        RMSNorm,
-        Reshape,
-        Scaled_dot_product_attention,
-        Scaled_dot_product_flash_attention,
-        Scaled_dot_product_flash_attention_backward,
-        Softmax,
+class BN_finalize_attributes : public Attributes<BN_finalize_attributes> {
+    friend class Attributes<BN_finalize_attributes>;
+    friend class BatchNormFinalizeNode;
+    friend class Graph;
+
+    enum class input_names {
+        SUM,
+        SQ_SUM,
+        SCALE,
+        BIAS,
+        EPSILON,
+        ACCUM_COUNT,
+        PREV_RUNNING_MEAN,
+        PREV_RUNNING_VAR,
+        MOMENTUM
     };
-    Tag tag;
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    std::string name;
-    DataType_t compute_data_type = DataType_t::NOT_SET;
+    enum class output_names { EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
-    Operation(Tag t) : tag(t) {}
-
-    std::string const
-    get_name() const {
-        return name;
-    }
-
-    DataType_t
-    get_compute_data_type() const {
-        return compute_data_type;
-    }
-
-    virtual ~Operation() = default;
-};
-
-NLOHMANN_JSON_SERIALIZE_ENUM(
-    Operation::Tag,
-    {
-        {Operation::Tag::BN, "BN"},
-        {Operation::Tag::BN_inference, "BN_inference"},
-        {Operation::Tag::BN_finalize, "BN_finalize"},
-        {Operation::Tag::Conv_fprop, "Conv_fprop"},
-        {Operation::Tag::Conv_dgrad, "Conv_dgrad"},
-        {Operation::Tag::Conv_wgrad, "Conv_wgrad"},
-        {Operation::Tag::DBN, "DBN"},
-        {Operation::Tag::DBN_weight, "DBN_weight"},
-        {Operation::Tag::Genstats, "Genstats"},
-        {Operation::Tag::LN, "LN"},
-        {Operation::Tag::Matmul, "Matmul"},
-        {Operation::Tag::Pointwise, "Pointwise"},
-        {Operation::Tag::Reduction, "Reduction"},
-        {Operation::Tag::RMSNorm, "RMSNorm"},
-        {Operation::Tag::Rng, "Rng"},
-        {Operation::Tag::Reshape, "Reshape"},
-        {Operation::Tag::Scaled_dot_product_attention, "Scaled_dot_product_attention"},
-        {Operation::Tag::Scaled_dot_product_flash_attention, "Scaled_dot_product_flash_attention"},
-        {Operation::Tag::Scaled_dot_product_flash_attention_backward, "Scaled_dot_product_flash_attention_backward"},
-        {Operation::Tag::Softmax, "Softmax"},
-    })
-
-class BN_finalize_attributes : public Operation {
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> SUM;
-        std::shared_ptr<Tensor_attributes> SQ_SUM;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-        std::shared_ptr<Tensor_attributes> ACCUM_COUNT;
-        std::shared_ptr<Tensor_attributes> PREV_RUNNING_MEAN;
-        std::shared_ptr<Tensor_attributes> PREV_RUNNING_VAR;
-        std::shared_ptr<Tensor_attributes> MOMENTUM;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> EQ_SCALE;
-        std::shared_ptr<Tensor_attributes> EQ_BIAS;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN;
-        std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs,
-                                   SUM,
-                                   SQ_SUM,
-                                   SCALE,
-                                   BIAS,
-                                   EPSILON,
-                                   ACCUM_COUNT,
-                                   PREV_RUNNING_MEAN,
-                                   PREV_RUNNING_VAR,
-                                   MOMENTUM)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize_attributes, name, tag, inputs, outputs)
-
-    BN_finalize_attributes() : Operation(Tag::BN_finalize) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize_attributes, name, inputs, outputs)
 
     BN_finalize_attributes&
     set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean,
                                std::shared_ptr<Tensor_attributes>& variance,
                                std::shared_ptr<Tensor_attributes>& momentum) {
-        inputs.PREV_RUNNING_MEAN = mean;
-        inputs.PREV_RUNNING_VAR  = variance;
-        inputs.MOMENTUM          = momentum;
-        return *this;
-    }
-
-    BN_finalize_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    BN_finalize_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.EQ_SCALE          = output_tensor(name + "_EQ_SCALE_output");
-        outputs.EQ_BIAS           = output_tensor(name + "_EQ_BIAS_output");
-        outputs.MEAN              = output_tensor(name + "_MEAN_output");
-        outputs.INV_VARIANCE      = output_tensor(name + "_INV_VARIANCE_output");
-        outputs.NEXT_RUNNING_MEAN = output_tensor(name + "_NEXT_RUNNING_MEAN_output");
-        outputs.NEXT_RUNNING_VAR  = output_tensor(name + "_NEXT_RUNNING_VAR_output");
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> BN_finalize_attributes& {
-        // Fill node's tensors
-        inputs.SUM->fill_from_context(context);
-        inputs.SQ_SUM->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.PREV_RUNNING_MEAN->fill_from_context(context);
-        inputs.PREV_RUNNING_VAR->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-        inputs.MOMENTUM->fill_from_context(context);
-        inputs.ACCUM_COUNT->fill_from_context(context);
-
-        outputs.EQ_SCALE->fill_from_context(context);
-        outputs.EQ_BIAS->fill_from_context(context);
-        outputs.MEAN->fill_from_context(context);
-        outputs.INV_VARIANCE->fill_from_context(context);
-        outputs.NEXT_RUNNING_MEAN->fill_from_context(context);
-        outputs.NEXT_RUNNING_VAR->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[BN_finalize_attributes::input_names::PREV_RUNNING_MEAN] = mean;
+        inputs[BN_finalize_attributes::input_names::PREV_RUNNING_VAR]  = variance;
+        inputs[BN_finalize_attributes::input_names::MOMENTUM]          = momentum;
         return *this;
     }
 };
 
-class Genstats_attributes : public Operation {
+class Genstats_attributes : public Attributes<Genstats_attributes> {
+    friend class Attributes<Genstats_attributes>;
+    friend class GenstatsNode;
+    friend class Graph;
+
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { SUM, SQ_SUM };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> SUM;
-        std::shared_ptr<Tensor_attributes> SQ_SUM;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, SUM, SQ_SUM)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes, name, tag, inputs, outputs)
-
-    Genstats_attributes() : Operation(Tag::Genstats) {}
-
-    Genstats_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Genstats_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Genstats_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        outputs.SUM->fill_from_context(context);
-        outputs.SQ_SUM->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes, name, inputs, outputs)
 };
 
 class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
@@ -465,36 +304,7 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-    bool is_padding_set  = false;
-    bool is_dilation_set = false;
-
    public:
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_inputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
-
-        for (auto const& [name, input] : inputs) {
-            if (input) {
-                all_inputs.push_back(input);
-            }
-        }
-
-        return all_inputs;
-    }
-
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_outputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
-
-        for (auto const& [name, output] : outputs) {
-            if (output) {
-                all_outputs.push_back(output);
-            }
-        }
-
-        return all_outputs;
-    }
-
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
@@ -504,8 +314,7 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
 
     Conv_fprop_attributes&
     set_padding(std::vector<int64_t> value) {
-        padding        = value;
-        is_padding_set = true;
+        padding = value;
         return *this;
     }
 
@@ -527,190 +336,74 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
 
     Conv_fprop_attributes&
     set_dilation(std::vector<int64_t> value) {
-        dilation        = value;
-        is_dilation_set = true;
+        dilation = value;
         return *this;
     }
 };
 
-class Batchnorm_backward_attributes : public Operation {
+class Batchnorm_backward_attributes : public Attributes<Batchnorm_backward_attributes> {
+    friend class Attributes<Batchnorm_backward_attributes>;
+    friend class DBNNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    // Only special case where one of the inputs is a vector.
+    std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
+
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-        std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, tag, inputs, outputs)
-
-    Batchnorm_backward_attributes() : Operation(Tag::DBN) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, inputs, outputs)
 
     Batchnorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.MEAN         = mean;
-        inputs.INV_VARIANCE = inv_variance;
+        inputs[Batchnorm_backward_attributes::input_names::MEAN]         = mean;
+        inputs[Batchnorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
         return *this;
     }
 
     Batchnorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
-        return *this;
-    }
-
-    Batchnorm_backward_attributes&
-    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& peer_stats) {
-        inputs.peer_stats = peer_stats;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
-    }
-
-    Batchnorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Batchnorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Batchnorm_backward_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-
-        if (inputs.EPSILON) inputs.EPSILON->fill_from_context(context);
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+    set_peer_stats(std::vector<std::shared_ptr<Tensor_attributes>> const& input_peer_stats) {
+        peer_stats = input_peer_stats;
         return *this;
     }
 };
 
-class DBN_weight_attributes : public Operation {
+class DBN_weight_attributes : public Attributes<DBN_weight_attributes> {
+    friend class Attributes<DBN_weight_attributes>;
+    friend class DBNWeightNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DSCALE, DBIAS, EQ_BIAS, EQ_SCALE_DY, EQ_SCALE_X };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> DY;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-        std::shared_ptr<Tensor_attributes> EQ_SCALE_DY;
-        std::shared_ptr<Tensor_attributes> EQ_SCALE_X;
-        std::shared_ptr<Tensor_attributes> EQ_BIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, DY)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DSCALE, DBIAS, EQ_SCALE_DY, EQ_SCALE_X, EQ_BIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes, name, tag, inputs, outputs)
-
-    DBN_weight_attributes() : Operation(Tag::DBN_weight) {}
-
-    DBN_weight_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    DBN_weight_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DSCALE      = output_tensor(name + "_dscale_output");
-        outputs.DBIAS       = output_tensor(name + "_dbias_output");
-        outputs.EQ_SCALE_DY = output_tensor(name + "_eq_scale_dy_output");
-        outputs.EQ_SCALE_X  = output_tensor(name + "_eq_scale_x_output");
-        outputs.EQ_BIAS     = output_tensor(name + "_eq_bias_output");
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> DBN_weight_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-        outputs.EQ_SCALE_DY->fill_from_context(context);
-        outputs.EQ_SCALE_X->fill_from_context(context);
-        outputs.EQ_BIAS->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes, name, inputs, outputs)
 };
 
-class Conv_dgrad_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> W;
-    } inputs;
+class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
+    friend class Attributes<Conv_dgrad_attributes>;
+    friend class DgradNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-    } outputs;
+    enum class input_names { DY, W };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DX };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::vector<int64_t> padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, W)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes, name, tag, inputs, outputs, padding, stride, dilation)
-
-    Conv_dgrad_attributes() : Operation(Tag::Conv_dgrad) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
     get_padding() const {
@@ -744,110 +437,46 @@ class Conv_dgrad_attributes : public Operation {
         dilation = value;
         return *this;
     }
-
-    Conv_dgrad_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Conv_dgrad_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Conv_dgrad_attributes& {
-        // Fill node's tensors
-        inputs.DY->fill_from_context(context);
-        inputs.W->fill_from_context(context);
-        outputs.DX->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Matmul_attributes : public Operation {
+class Matmul_attributes : public Attributes<Matmul_attributes> {
+    friend class Attributes<Matmul_attributes>;
+    friend class MatmulNode;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
+
+    enum class input_names { A, B, M_override, N_override, K_override };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { C };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> A;
-        std::shared_ptr<Tensor_attributes> B;
-        std::shared_ptr<Tensor_attributes> M_override;
-        std::shared_ptr<Tensor_attributes> N_override;
-        std::shared_ptr<Tensor_attributes> K_override;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> C;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, A, B, M_override, N_override, K_override)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, C)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, tag, inputs, outputs)
-
-    Matmul_attributes() : Operation(Tag::Matmul) {}
-
-    Matmul_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Matmul_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Matmul_attributes& {
-        // Fill node's tensors
-        inputs.A->fill_from_context(context);
-        inputs.B->fill_from_context(context);
-        outputs.C->fill_from_context(context);
-
-        if (inputs.M_override) inputs.M_override->fill_from_context(context);
-        if (inputs.N_override) inputs.N_override->fill_from_context(context);
-        if (inputs.K_override) inputs.K_override->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, inputs, outputs)
 };
 
-class Pointwise_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> IN_0;
-        std::shared_ptr<Tensor_attributes> IN_1;
-        std::shared_ptr<Tensor_attributes> IN_2;
-    } inputs;
+class Pointwise_attributes : public Attributes<Pointwise_attributes> {
+    friend class Attributes<Pointwise_attributes>;
+    friend class PointwiseNode;
+    friend class SoftmaxNode;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> OUT_0;
-    } outputs;
+    enum class input_names { IN_0, IN_1, IN_2 };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { OUT_0 };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
+
     std::optional<float> relu_lower_clip_slope;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, IN_0, IN_1, IN_2)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, OUT_0)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, tag, inputs, outputs, mode, axis)
-
-    Pointwise_attributes() : Operation(Tag::Pointwise) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, inputs, outputs, mode, axis)
 
     Pointwise_attributes&
     set_mode(PointwiseMode_t const value) {
@@ -871,221 +500,69 @@ class Pointwise_attributes : public Operation {
         this->relu_lower_clip_slope = negative_slope;
         return *this;
     }
-
-    Pointwise_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Pointwise_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Pointwise_attributes& {
-        // Fill node's tensors
-        inputs.IN_0->fill_from_context(context);
-        if (inputs.IN_1) inputs.IN_1->fill_from_context(context);
-        if (inputs.IN_2) inputs.IN_2->fill_from_context(context);
-        outputs.OUT_0->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Instancenorm_backward_attributes : public Operation {
+class Instancenorm_backward_attributes : public Attributes<Instancenorm_backward_attributes> {
+    friend class Attributes<Instancenorm_backward_attributes>;
+    friend class DINNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, tag, inputs, outputs)
-
-    Instancenorm_backward_attributes() : Operation(Tag::DIN) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, inputs, outputs)
 
     Instancenorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.MEAN         = mean;
-        inputs.INV_VARIANCE = inv_variance;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
-    }
-
-    Instancenorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Instancenorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Instancenorm_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-
-        if (inputs.MEAN) {
-            inputs.MEAN->fill_from_context(context);
-        }
-        if (inputs.INV_VARIANCE) {
-            inputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Instancenorm_backward_attributes::input_names::MEAN]         = mean;
+        inputs[Instancenorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
         return *this;
     }
 };
 
-class Layernorm_backward_attributes : public Operation {
+class Layernorm_backward_attributes : public Attributes<Layernorm_backward_attributes> {
+    friend class Attributes<Layernorm_backward_attributes>;
+    friend class DLNNode;
+    friend class Graph;
+
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, tag, inputs, outputs)
-
-    Layernorm_backward_attributes() : Operation(Tag::DLN) {}
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, inputs, outputs)
 
     Layernorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
                                     std::shared_ptr<Tensor_attributes> inv_variance) {
-        inputs.MEAN         = mean;
-        inputs.INV_VARIANCE = inv_variance;
-        return *this;
-    }
-
-    Layernorm_backward_attributes&
-    set_epsilon(std::shared_ptr<Tensor_attributes> epsilon) {
-        inputs.EPSILON = epsilon;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.DX     = output_tensor(name + "_DX_output");
-        outputs.DSCALE = output_tensor(name + "_DSCALE_output");
-        outputs.DBIAS  = output_tensor(name + "_DBIAS_output");
-    }
-
-    Layernorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Layernorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Layernorm_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-
-        if (inputs.MEAN) {
-            inputs.MEAN->fill_from_context(context);
-        }
-        if (inputs.INV_VARIANCE) {
-            inputs.INV_VARIANCE->fill_from_context(context);
-        }
-        if (inputs.EPSILON) {
-            inputs.EPSILON->fill_from_context(context);
-        }
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Layernorm_backward_attributes::input_names::MEAN]         = mean;
+        inputs[Layernorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
         return *this;
     }
 };
 
-class Layernorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
+class Layernorm_attributes : public Attributes<Layernorm_attributes> {
+    friend class Attributes<Layernorm_attributes>;
+    friend class LayerNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, EPSILON };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, MEAN, INV_VARIANCE };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, tag, inputs, outputs, forward_phase)
-
-    Layernorm_attributes() : Operation(Tag::LN) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, inputs, outputs, forward_phase)
 
     Layernorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -1095,76 +572,26 @@ class Layernorm_attributes : public Operation {
 
     Layernorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
-        return *this;
-    }
-
-    Layernorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Layernorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y = output_tensor(name + "_Y_output");
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN         = output_tensor(name + "_MEAN_output");
-            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
-        }
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Layernorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN->fill_from_context(context);
-            outputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Layernorm_attributes::input_names::EPSILON] = value;
         return *this;
     }
 };
 
-class Instancenorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
+class Instancenorm_attributes : public Attributes<Instancenorm_attributes> {
+    friend class Attributes<Instancenorm_attributes>;
+    friend class InstanceNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, EPSILON };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, MEAN, INV_VARIANCE };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, MEAN, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, tag, inputs, outputs, forward_phase)
-
-    Instancenorm_attributes() : Operation(Tag::IN) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, inputs, outputs, forward_phase)
 
     Instancenorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -1174,48 +601,7 @@ class Instancenorm_attributes : public Operation {
 
     Instancenorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
-        return *this;
-    }
-
-    Instancenorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Instancenorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y = output_tensor(name + "_Y_output");
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN         = output_tensor(name + "_MEAN_output");
-            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
-        }
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Instancenorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.MEAN->fill_from_context(context);
-            outputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Instancenorm_attributes::input_names::EPSILON] = value;
         return *this;
     }
 };
@@ -1236,38 +622,6 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
    public:
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_inputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_inputs;
-
-        for (auto const& [name, input] : inputs) {
-            if (input) {
-                all_inputs.push_back(input);
-            }
-        }
-
-        for (auto const& peer_stat : peer_stats) {
-            if (peer_stat) {
-                all_inputs.push_back(peer_stat);
-            }
-        }
-
-        return all_inputs;
-    }
-
-    std::vector<std::shared_ptr<Tensor_attributes>> const
-    get_outputs() const {
-        std::vector<std::shared_ptr<Tensor_attributes>> all_outputs;
-
-        for (auto const& [name, output] : outputs) {
-            if (output) {
-                all_outputs.push_back(output);
-            }
-        }
-
-        return all_outputs;
-    }
-
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs, forward_phase)
 
     Batchnorm_attributes&
@@ -1299,77 +653,38 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     }
 };
 
-class Batchnorm_inference_attributes : public Operation {
+class Batchnorm_inference_attributes : public Attributes<Batchnorm_inference_attributes> {
+    friend class Attributes<Batchnorm_inference_attributes>;
+    friend class BatchnormInferenceNode;
+    friend class Graph;
+
+    enum class input_names { X, MEAN, INV_VARIANCE, SCALE, BIAS };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> MEAN;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, MEAN, INV_VARIANCE, SCALE, BIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, tag, inputs, outputs)
-
-    Batchnorm_inference_attributes() : Operation(Tag::BN_inference) {}
-
-    Batchnorm_inference_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Batchnorm_inference_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Batchnorm_inference_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.BIAS->fill_from_context(context);
-        inputs.MEAN->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, inputs, outputs)
 };
 
-class Reduction_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
+class Reduction_attributes : public Attributes<Reduction_attributes> {
+    friend class Attributes<Reduction_attributes>;
+    friend class ReductionNode;
+    friend class SoftmaxNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::optional<ReductionMode_t> mode;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, tag, inputs, outputs, mode)
-
-    Reduction_attributes() : Operation(Tag::Reduction) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, inputs, outputs, mode)
 
     std::optional<ReductionMode_t>
     get_mode() const {
@@ -1381,43 +696,19 @@ class Reduction_attributes : public Operation {
         mode = value;
         return *this;
     }
-
-    Reduction_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Reduction_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Reduction_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Rng_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Seed;
-        std::shared_ptr<Tensor_attributes> Offset;
-    } inputs;
+class Rng_attributes : public Attributes<Rng_attributes> {
+    friend class Attributes<Rng_attributes>;
+    friend class RngNode;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { Seed, Offset };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
     std::vector<int64_t> dim       = {};
@@ -1425,13 +716,9 @@ class Rng_attributes : public Operation {
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, Seed, Offset)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
+   public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng_attributes,
                                    name,
-                                   tag,
                                    inputs,
                                    outputs,
                                    distribution,
@@ -1439,8 +726,6 @@ class Rng_attributes : public Operation {
                                    stride,
                                    seed,
                                    bernoulli_probability)
-
-    Rng_attributes() : Operation(Tag::Rng) {}
 
     std::vector<int64_t>
     get_dim() const {
@@ -1496,54 +781,24 @@ class Rng_attributes : public Operation {
         bernoulli_probability = value;
         return *this;
     }
-
-    Rng_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Rng_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Rng_attributes& {
-        // Fill node's tensors
-        if (inputs.Seed) inputs.Seed->fill_from_context(context);
-        if (inputs.Offset) inputs.Offset->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Reshape_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
+class Reshape_attributes : public Attributes<Reshape_attributes> {
+    friend class Attributes<Reshape_attributes>;
+    friend class ReshapeNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::vector<int64_t> dim    = {};
     std::vector<int64_t> stride = {};
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, tag, inputs, outputs, dim, stride)
-
-    Reshape_attributes() : Operation(Tag::Reshape) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, inputs, outputs, dim, stride)
 
     std::vector<int64_t>
     get_dim() const {
@@ -1566,55 +821,23 @@ class Reshape_attributes : public Operation {
         stride = value;
         return *this;
     }
-
-    Reshape_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Reshape_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Reshape_attributes& {
-        inputs.X->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Rmsnorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
+class Rmsnorm_attributes : public Attributes<Rmsnorm_attributes> {
+    friend class Attributes<Rmsnorm_attributes>;
+    friend class RMSNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, EPSILON };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, INV_VARIANCE };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, tag, inputs, outputs, forward_phase)
-
-    Rmsnorm_attributes() : Operation(Tag::RMSNorm) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, inputs, outputs, forward_phase)
 
     Rmsnorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -1624,255 +847,178 @@ class Rmsnorm_attributes : public Operation {
 
     Rmsnorm_attributes&
     set_bias(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.BIAS = value;
+        inputs[Rmsnorm_attributes::input_names::BIAS] = value;
         return *this;
     }
 
     Rmsnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
-        return *this;
-    }
-
-    Rmsnorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Rmsnorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y = output_tensor(name + "_Y_output");
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
-        }
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Rmsnorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Rmsnorm_attributes::input_names::EPSILON] = value;
         return *this;
     }
 };
 
-class Rmsnorm_backward_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } inputs;
+class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attributes> {
+    friend class Attributes<Rmsnorm_backward_attributes>;
+    friend class DRMSNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
+    enum class input_names { DY, X, SCALE, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, tag, inputs, outputs)
-
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     std::optional<bool> use_dbias;
 
-    Rmsnorm_backward_attributes() : Operation(Tag::DRMSNorm) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, inputs, outputs)
 
     Rmsnorm_backward_attributes&
     has_dbias(bool value) {
         use_dbias = value;
         return *this;
     }
-
-    Rmsnorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        if (outputs.DBIAS) outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Scaled_dot_product_attention_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Q;
-        std::shared_ptr<Tensor_attributes> K;
-        std::shared_ptr<Tensor_attributes> Attn_scale;
-        std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
-        std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
-        std::shared_ptr<Tensor_attributes> Mask;
-        std::shared_ptr<Tensor_attributes> Dropout_mask;
-        std::shared_ptr<Tensor_attributes> Dropout_scale;
-    } inputs;
+// class Scaled_dot_product_attention_attributes : public Operation {
+//    public:
+//     struct Inputs {
+//         std::shared_ptr<Tensor_attributes> Q;
+//         std::shared_ptr<Tensor_attributes> K;
+//         std::shared_ptr<Tensor_attributes> Attn_scale;
+//         std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
+//         std::shared_ptr<Tensor_attributes> V;
+//         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
+//         std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
+//         std::shared_ptr<Tensor_attributes> Mask;
+//         std::shared_ptr<Tensor_attributes> Dropout_mask;
+//         std::shared_ptr<Tensor_attributes> Dropout_scale;
+//     } inputs;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> O;
-        std::shared_ptr<Tensor_attributes>
-            S;  // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
-    } outputs;
+//     struct Outputs {
+//         std::shared_ptr<Tensor_attributes> O;
+//         std::shared_ptr<Tensor_attributes>
+//             S;  // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
+//     } outputs;
 
-    std::optional<bool> is_inference;
-    bool padding_mask = false;
-    bool causal_mask  = false;
-    std::optional<float> dropout_probability;
-    int64_t seed;
-    float dropout_scale = 1.f;
+//     std::optional<bool> is_inference;
+//     bool padding_mask = false;
+//     bool causal_mask  = false;
+//     std::optional<float> dropout_probability;
+//     int64_t seed;
+//     float dropout_scale = 1.f;
 
-   public:
-    Scaled_dot_product_attention_attributes() : Operation(Tag::Scaled_dot_product_attention), is_inference(false) {}
+//    public:
+//     Scaled_dot_product_attention_attributes() : Operation(Tag::Scaled_dot_product_attention), is_inference(false) {}
 
-    Scaled_dot_product_attention_attributes&
-    set_is_inference(bool const value) {
-        is_inference = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_is_inference(bool const value) {
+//         is_inference = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_Q = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
+//         inputs.SEQ_LEN_Q = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_KV = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+//         inputs.SEQ_LEN_KV = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_padding_mask(bool const value) {
-        padding_mask = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_padding_mask(bool const value) {
+//         padding_mask = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_causal_mask(bool const value) {
-        causal_mask = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_causal_mask(bool const value) {
+//         causal_mask = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Attn_scale = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
+//         inputs.Attn_scale = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_bias(std::shared_ptr<Tensor_attributes> bias) {
-        inputs.Bias = bias;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_bias(std::shared_ptr<Tensor_attributes> bias) {
+//         inputs.Bias = bias;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_dropout(float const probability, int64_t const seed_) {
-        dropout_probability = probability;
-        seed                = seed_;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_dropout(float const probability, int64_t const seed_) {
+//         dropout_probability = probability;
+//         seed                = seed_;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
-        inputs.Dropout_mask  = mask;
-        inputs.Dropout_scale = scale;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
+//         inputs.Dropout_mask  = mask;
+//         inputs.Dropout_scale = scale;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_compute_data_type(DataType_t const value) {
+//         compute_data_type = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_name(std::string const& value) {
+//         name = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.Q->fill_from_context(context);
-        inputs.K->fill_from_context(context);
-        inputs.V->fill_from_context(context);
-        inputs.SEQ_LEN_Q->fill_from_context(context);
-        inputs.SEQ_LEN_KV->fill_from_context(context);
-        outputs.O->fill_from_context(context);
+//     Scaled_dot_product_attention_attributes&
+//     fill_from_context(detail::Context const& context) {
+//         // Fill node's tensors
+//         inputs.Q->fill_from_context(context);
+//         inputs.K->fill_from_context(context);
+//         inputs.V->fill_from_context(context);
+//         inputs.SEQ_LEN_Q->fill_from_context(context);
+//         inputs.SEQ_LEN_KV->fill_from_context(context);
+//         outputs.O->fill_from_context(context);
 
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
-};
+//         // Fill this node
+//         if (get_compute_data_type() == DataType_t::NOT_SET) {
+//             set_compute_data_type(context.get_compute_data_type());
+//         }
+//         return *this;
+//     }
+// };
 
-class Scaled_dot_product_flash_attention_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Q;
-        std::shared_ptr<Tensor_attributes> K;
-        std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> Attn_scale;
-        std::shared_ptr<Tensor_attributes> Bias;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
-        std::shared_ptr<Tensor_attributes> Seed;
-        std::shared_ptr<Tensor_attributes> Offset;
-        std::shared_ptr<Tensor_attributes> Dropout_mask;
-        std::shared_ptr<Tensor_attributes> Dropout_scale;
-    } inputs;
+class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_dot_product_flash_attention_attributes> {
+    friend class Attributes<Scaled_dot_product_flash_attention_attributes>;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> O;
-        std::shared_ptr<Tensor_attributes> Stats;  // softmax stats dumped when in forward training mode. Users first
-                                                   // need to check whether its nullptr.
-    } outputs;
+    enum class input_names {
+        Q,
+        K,
+        V,
+        Attn_scale,
+        Bias,
+        SEQ_LEN_Q,
+        SEQ_LEN_KV,
+        Seed,
+        Offset,
+        Dropout_mask,
+        Dropout_scale
+    };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { O, Stats };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::optional<bool> is_inference;
     bool alibi_mask   = false;
@@ -1881,8 +1027,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
-    Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
-
+   public:
     Scaled_dot_product_flash_attention_attributes&
     set_is_inference(bool const value) {
         is_inference = value;
@@ -1891,7 +1036,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
 
     Scaled_dot_product_flash_attention_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Attn_scale = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale] = value;
         return *this;
     }
 
@@ -1903,7 +1048,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
 
     Scaled_dot_product_flash_attention_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Bias = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias] = value;
         return *this;
     }
 
@@ -1921,13 +1066,13 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
 
     Scaled_dot_product_flash_attention_attributes&
     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_Q = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q] = value;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_attributes&
     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_KV = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV] = value;
         return *this;
     }
 
@@ -1941,72 +1086,47 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     set_dropout(float const probability,
                 std::shared_ptr<Tensor_attributes> seed,
                 std::shared_ptr<Tensor_attributes> offset) {
-        dropout_probability = probability;
-        inputs.Seed         = seed;
-        inputs.Offset       = offset;
+        dropout_probability                                                        = probability;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Seed]   = seed;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Offset] = offset;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_attributes&
     set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
-        inputs.Dropout_mask  = mask;
-        inputs.Dropout_scale = scale;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.Q->fill_from_context(context);
-        inputs.K->fill_from_context(context);
-        inputs.V->fill_from_context(context);
-        outputs.O->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_mask]  = mask;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_scale] = scale;
         return *this;
     }
 };
 
-class Scaled_dot_product_flash_attention_backward_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Q;
-        std::shared_ptr<Tensor_attributes> K;
-        std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> O;
-        std::shared_ptr<Tensor_attributes> dO;
-        std::shared_ptr<Tensor_attributes> Stats;
-        std::shared_ptr<Tensor_attributes> Attn_scale;
-        std::shared_ptr<Tensor_attributes> Bias;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
-        std::shared_ptr<Tensor_attributes> Seed;
-        std::shared_ptr<Tensor_attributes> Offset;
-        std::shared_ptr<Tensor_attributes> Dropout_mask;
-        std::shared_ptr<Tensor_attributes> Dropout_scale;
-        std::shared_ptr<Tensor_attributes> Dropout_scale_inv;
-    } inputs;
+class Scaled_dot_product_flash_attention_backward_attributes
+    : public Attributes<Scaled_dot_product_flash_attention_backward_attributes> {
+    friend class Attributes<Scaled_dot_product_flash_attention_backward_attributes>;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> dQ;
-        std::shared_ptr<Tensor_attributes> dK;
-        std::shared_ptr<Tensor_attributes> dV;
-    } outputs;
+    enum class input_names {
+        Q,
+        K,
+        V,
+        O,
+        dO,
+        Stats,
+        Attn_scale,
+        Bias,
+        SEQ_LEN_Q,
+        SEQ_LEN_KV,
+        Seed,
+        Offset,
+        Dropout_mask,
+        Dropout_scale,
+        Dropout_scale_inv
+    };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { dQ, dK, dV };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     bool alibi_mask   = false;
     bool padding_mask = false;
@@ -2016,12 +1136,9 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     std::optional<float> attn_scale_value;
 
    public:
-    Scaled_dot_product_flash_attention_backward_attributes()
-        : Operation(Tag::Scaled_dot_product_flash_attention_backward) {}
-
     Scaled_dot_product_flash_attention_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Attn_scale = value;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale] = value;
         return *this;
     }
 
@@ -2033,7 +1150,7 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Bias = value;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Bias] = value;
         return *this;
     }
 
@@ -2051,13 +1168,13 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_Q = value;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q] = value;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_KV = value;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV] = value;
         return *this;
     }
 
@@ -2071,9 +1188,9 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     set_dropout(float const probability,
                 std::shared_ptr<Tensor_attributes> seed,
                 std::shared_ptr<Tensor_attributes> offset) {
-        dropout_probability = probability;
-        inputs.Seed         = seed;
-        inputs.Offset       = offset;
+        dropout_probability                                                                 = probability;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Seed]   = seed;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Offset] = offset;
         return *this;
     }
 
@@ -2081,110 +1198,43 @@ class Scaled_dot_product_flash_attention_backward_attributes : public Operation 
     set_dropout(std::shared_ptr<Tensor_attributes> mask,
                 std::shared_ptr<Tensor_attributes> scale,
                 std::shared_ptr<Tensor_attributes> scale_inv) {
-        inputs.Dropout_mask      = mask;
-        inputs.Dropout_scale     = scale;
-        inputs.Dropout_scale_inv = scale_inv;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_backward_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.Q->fill_from_context(context);
-        inputs.K->fill_from_context(context);
-        inputs.V->fill_from_context(context);
-        inputs.O->fill_from_context(context);
-        inputs.dO->fill_from_context(context);
-        inputs.Stats->fill_from_context(context);
-        outputs.dQ->fill_from_context(context);
-        outputs.dK->fill_from_context(context);
-        outputs.dV->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_mask]      = mask;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale]     = scale;
+        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv] = scale_inv;
         return *this;
     }
 };
 
-class Softmax_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> P;
-    } inputs;
+class Softmax_attributes : public Attributes<Softmax_attributes> {
+    friend class Attributes<Softmax_attributes>;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class SoftmaxNode;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes>
-            S;  // softmax output dumped when in forward training mode. Users first need to check whether its nullptr.
-        std::shared_ptr<Tensor_attributes> Stats;  // softmax stats dumped when in forward training mode. Users first
-                                                   // need to check whether its nullptr.
-    } outputs;
+    enum class input_names { P };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
+    enum class output_names { S, Stats };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     std::optional<bool> use_stats;
-
-    Softmax_attributes() : Operation(Tag::Softmax) {}
-
-    Softmax_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Softmax_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Softmax_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.P->fill_from_context(context);
-        outputs.S->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
 };
 
-class Conv_wgrad_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
+class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
+    friend class Attributes<Conv_wgrad_attributes>;
+    friend class WgradNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DW;
-    } outputs;
+    enum class input_names { DY, X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { DW };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::vector<int64_t> padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DW)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes, name, tag, inputs, outputs, padding, stride, dilation)
-
-    Conv_wgrad_attributes() : Operation(Tag::Conv_wgrad) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes, name, inputs, outputs, padding, stride, dilation)
 
     std::vector<int64_t>
     get_padding() const {
@@ -2216,32 +1266,6 @@ class Conv_wgrad_attributes : public Operation {
     Conv_wgrad_attributes&
     set_dilation(std::vector<int64_t> value) {
         dilation = value;
-        return *this;
-    }
-
-    Conv_wgrad_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Conv_wgrad_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Conv_wgrad_attributes& {
-        // Fill node's tensors
-        inputs.DY->fill_from_context(context);
-        inputs.X->fill_from_context(context);
-        outputs.DW->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };

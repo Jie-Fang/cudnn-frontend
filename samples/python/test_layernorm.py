@@ -120,15 +120,13 @@ def test_in(param_extract):
     scale_bwd = bwd_graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
     mean_bwd = bwd_graph.tensor(name = "mean", dim = mean_actual.size(), stride = mean_actual.stride(), data_type = convert_to_cudnn_type(mean_actual.dtype))
     inv_var_bwd = bwd_graph.tensor(name = "inv_var", dim = inv_var_actual.size(), stride = inv_var_actual.stride(), data_type = convert_to_cudnn_type(inv_var_actual.dtype))
-    epsilon_bwd = bwd_graph.tensor(name = "epsilon", dim = epsilon_cpu.size(), stride = epsilon_cpu.stride(), is_pass_by_value = True, data_type = convert_to_cudnn_type(epsilon_cpu.dtype))
 
     DX, Dscale, Dbias = bwd_graph.layernorm_backward(name = "DLN", 
                             grad = DY,
                             input = X_bwd,
                             scale = scale_bwd, 
                             mean = mean_bwd,
-                            inv_variance = inv_var_bwd,
-                            epsilon = epsilon_bwd)
+                            inv_variance = inv_var_bwd)
     
     DX.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
     Dscale.set_output(True).set_data_type(convert_to_cudnn_type(x_gpu.dtype))
@@ -153,7 +151,6 @@ def test_in(param_extract):
                 , DY : Y_expected.grad
                 , mean_bwd: mean_actual.detach()
                 , inv_var_bwd: inv_var_actual.detach()
-                , epsilon_bwd: epsilon_cpu
                 , DX: DX_actual
                 , Dscale: DScale_actual
                 , Dbias: Dbias_actual

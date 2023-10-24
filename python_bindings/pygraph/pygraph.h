@@ -114,7 +114,6 @@ class PyGraph {
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& epsilon,
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name);
 
