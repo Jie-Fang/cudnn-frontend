@@ -41,11 +41,11 @@ class Graph : public INode {
     }
 
     // This API is still work in progress and unverified.
-    std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
-        std::shared_ptr<Tensor_attributes>,
-        std::shared_ptr<Tensor_attributes>,
-        std::shared_ptr<Tensor_attributes>,
-        Scaled_dot_product_attention_attributes);
+    // std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
+    //     std::shared_ptr<Tensor_attributes>,
+    //     std::shared_ptr<Tensor_attributes>,
+    //     std::shared_ptr<Tensor_attributes>,
+    //     Scaled_dot_product_attention_attributes);
 
    public:
     Graph() : INode(detail::Context{}) {}

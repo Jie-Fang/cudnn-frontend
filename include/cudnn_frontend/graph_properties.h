@@ -239,79 +239,6 @@ class Attributes {
     }
 };
 
-class Operation {
-   public:
-    enum class Tag {
-        BN,
-        BN_inference,
-        BN_finalize,
-        Conv_fprop,
-        Conv_dgrad,
-        Conv_wgrad,
-        DBN,
-        DLN,
-        DIN,
-        DBN_weight,
-        DRMSNorm,
-        Genstats,
-        LN,
-        IN,
-        Matmul,
-        Pointwise,
-        Reduction,
-        Rng,
-        RMSNorm,
-        Reshape,
-        Scaled_dot_product_attention,
-        Scaled_dot_product_flash_attention,
-        Scaled_dot_product_flash_attention_backward,
-        Softmax,
-    };
-    Tag tag;
-
-    std::string name;
-    DataType_t compute_data_type = DataType_t::NOT_SET;
-
-    Operation(Tag t) : tag(t) {}
-
-    std::string const
-    get_name() const {
-        return name;
-    }
-
-    DataType_t
-    get_compute_data_type() const {
-        return compute_data_type;
-    }
-
-    virtual ~Operation() = default;
-};
-
-NLOHMANN_JSON_SERIALIZE_ENUM(
-    Operation::Tag,
-    {
-        {Operation::Tag::BN, "BN"},
-        {Operation::Tag::BN_inference, "BN_inference"},
-        {Operation::Tag::BN_finalize, "BN_finalize"},
-        {Operation::Tag::Conv_fprop, "Conv_fprop"},
-        {Operation::Tag::Conv_dgrad, "Conv_dgrad"},
-        {Operation::Tag::Conv_wgrad, "Conv_wgrad"},
-        {Operation::Tag::DBN, "DBN"},
-        {Operation::Tag::DBN_weight, "DBN_weight"},
-        {Operation::Tag::Genstats, "Genstats"},
-        {Operation::Tag::LN, "LN"},
-        {Operation::Tag::Matmul, "Matmul"},
-        {Operation::Tag::Pointwise, "Pointwise"},
-        {Operation::Tag::Reduction, "Reduction"},
-        {Operation::Tag::RMSNorm, "RMSNorm"},
-        {Operation::Tag::Rng, "Rng"},
-        {Operation::Tag::Reshape, "Reshape"},
-        {Operation::Tag::Scaled_dot_product_attention, "Scaled_dot_product_attention"},
-        {Operation::Tag::Scaled_dot_product_flash_attention, "Scaled_dot_product_flash_attention"},
-        {Operation::Tag::Scaled_dot_product_flash_attention_backward, "Scaled_dot_product_flash_attention_backward"},
-        {Operation::Tag::Softmax, "Softmax"},
-    })
-
 class BN_finalize_attributes : public Attributes<BN_finalize_attributes> {
     friend class Attributes<BN_finalize_attributes>;
     friend class BatchNormFinalizeNode;
@@ -953,122 +880,122 @@ class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attribute
     }
 };
 
-class Scaled_dot_product_attention_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Q;
-        std::shared_ptr<Tensor_attributes> K;
-        std::shared_ptr<Tensor_attributes> Attn_scale;
-        std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
-        std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
-        std::shared_ptr<Tensor_attributes> Mask;
-        std::shared_ptr<Tensor_attributes> Dropout_mask;
-        std::shared_ptr<Tensor_attributes> Dropout_scale;
-    } inputs;
+// class Scaled_dot_product_attention_attributes : public Operation {
+//    public:
+//     struct Inputs {
+//         std::shared_ptr<Tensor_attributes> Q;
+//         std::shared_ptr<Tensor_attributes> K;
+//         std::shared_ptr<Tensor_attributes> Attn_scale;
+//         std::shared_ptr<Tensor_attributes> Bias;  // Optional bias after bmm1
+//         std::shared_ptr<Tensor_attributes> V;
+//         std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
+//         std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
+//         std::shared_ptr<Tensor_attributes> Mask;
+//         std::shared_ptr<Tensor_attributes> Dropout_mask;
+//         std::shared_ptr<Tensor_attributes> Dropout_scale;
+//     } inputs;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> O;
-        std::shared_ptr<Tensor_attributes>
-            S;  // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
-    } outputs;
+//     struct Outputs {
+//         std::shared_ptr<Tensor_attributes> O;
+//         std::shared_ptr<Tensor_attributes>
+//             S;  // softmax output dumped when is_inference false. Users first need to check whether its nullptr.
+//     } outputs;
 
-    std::optional<bool> is_inference;
-    bool padding_mask = false;
-    bool causal_mask  = false;
-    std::optional<float> dropout_probability;
-    int64_t seed;
-    float dropout_scale = 1.f;
+//     std::optional<bool> is_inference;
+//     bool padding_mask = false;
+//     bool causal_mask  = false;
+//     std::optional<float> dropout_probability;
+//     int64_t seed;
+//     float dropout_scale = 1.f;
 
-   public:
-    Scaled_dot_product_attention_attributes() : Operation(Tag::Scaled_dot_product_attention), is_inference(false) {}
+//    public:
+//     Scaled_dot_product_attention_attributes() : Operation(Tag::Scaled_dot_product_attention), is_inference(false) {}
 
-    Scaled_dot_product_attention_attributes&
-    set_is_inference(bool const value) {
-        is_inference = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_is_inference(bool const value) {
+//         is_inference = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_Q = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
+//         inputs.SEQ_LEN_Q = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_KV = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+//         inputs.SEQ_LEN_KV = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_padding_mask(bool const value) {
-        padding_mask = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_padding_mask(bool const value) {
+//         padding_mask = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_causal_mask(bool const value) {
-        causal_mask = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_causal_mask(bool const value) {
+//         causal_mask = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Attn_scale = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
+//         inputs.Attn_scale = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_bias(std::shared_ptr<Tensor_attributes> bias) {
-        inputs.Bias = bias;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_bias(std::shared_ptr<Tensor_attributes> bias) {
+//         inputs.Bias = bias;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_dropout(float const probability, int64_t const seed_) {
-        dropout_probability = probability;
-        seed                = seed_;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_dropout(float const probability, int64_t const seed_) {
+//         dropout_probability = probability;
+//         seed                = seed_;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
-        inputs.Dropout_mask  = mask;
-        inputs.Dropout_scale = scale;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
+//         inputs.Dropout_mask  = mask;
+//         inputs.Dropout_scale = scale;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_compute_data_type(DataType_t const value) {
+//         compute_data_type = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
+//     Scaled_dot_product_attention_attributes&
+//     set_name(std::string const& value) {
+//         name = value;
+//         return *this;
+//     }
 
-    Scaled_dot_product_attention_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.Q->fill_from_context(context);
-        inputs.K->fill_from_context(context);
-        inputs.V->fill_from_context(context);
-        inputs.SEQ_LEN_Q->fill_from_context(context);
-        inputs.SEQ_LEN_KV->fill_from_context(context);
-        outputs.O->fill_from_context(context);
+//     Scaled_dot_product_attention_attributes&
+//     fill_from_context(detail::Context const& context) {
+//         // Fill node's tensors
+//         inputs.Q->fill_from_context(context);
+//         inputs.K->fill_from_context(context);
+//         inputs.V->fill_from_context(context);
+//         inputs.SEQ_LEN_Q->fill_from_context(context);
+//         inputs.SEQ_LEN_KV->fill_from_context(context);
+//         outputs.O->fill_from_context(context);
 
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
-};
+//         // Fill this node
+//         if (get_compute_data_type() == DataType_t::NOT_SET) {
+//             set_compute_data_type(context.get_compute_data_type());
+//         }
+//         return *this;
+//     }
+// };
 
 class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_dot_product_flash_attention_attributes> {
     friend class Attributes<Scaled_dot_product_flash_attention_attributes>;
