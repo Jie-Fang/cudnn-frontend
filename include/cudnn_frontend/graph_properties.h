@@ -619,29 +619,27 @@ class Matmul_attributes : public Operation {
     }
 };
 
-class Pointwise_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> IN_0;
-        std::shared_ptr<Tensor_attributes> IN_1;
-        std::shared_ptr<Tensor_attributes> IN_2;
-    } inputs;
+class Pointwise_attributes : public Attributes<Pointwise_attributes> {
+    friend class Attributes<Pointwise_attributes>;
+    friend class PointwiseNode;
+    friend class SoftmaxNode;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> OUT_0;
-    } outputs;
+    enum class input_names { IN_0, IN_1, IN_2 };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { OUT_0 };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
     std::optional<int64_t> axis;
+
     std::optional<float> relu_lower_clip_slope;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, IN_0, IN_1, IN_2)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, OUT_0)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, tag, inputs, outputs, mode, axis)
-
-    Pointwise_attributes() : Operation(Tag::Pointwise) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, inputs, outputs, mode, axis)
 
     Pointwise_attributes&
     set_mode(PointwiseMode_t const value) {
@@ -663,33 +661,6 @@ class Pointwise_attributes : public Operation {
     Pointwise_attributes&
     set_relu_lower_clip_slope(float const negative_slope) {
         this->relu_lower_clip_slope = negative_slope;
-        return *this;
-    }
-
-    Pointwise_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Pointwise_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Pointwise_attributes& {
-        // Fill node's tensors
-        inputs.IN_0->fill_from_context(context);
-        if (inputs.IN_1) inputs.IN_1->fill_from_context(context);
-        if (inputs.IN_2) inputs.IN_2->fill_from_context(context);
-        outputs.OUT_0->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };

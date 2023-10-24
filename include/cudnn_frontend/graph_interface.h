@@ -20,7 +20,7 @@
 #include "node/reshape.h"
 #include "node/rmsnorm.h"
 #include "node/rng.h"
-#include "node/scaled_dot_product_attention.h"
+// #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
 
 #include "plans.h"
@@ -548,13 +548,14 @@ Graph::conv_wgrad(std::shared_ptr<Tensor_attributes> dy,
 }
 
 inline std::shared_ptr<Tensor_attributes>
-Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
+Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes attributes) {
+    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+        output_tensor(attributes.name + "::OUT_0");
 
     // Set inputs
-    options.inputs.IN_0 = a;
+    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
 
     return OUT_0;
 }
@@ -562,14 +563,15 @@ Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes opti
 inline std::shared_ptr<Tensor_attributes>
 Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
                  std::shared_ptr<Tensor_attributes> b,
-                 Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
+                 Pointwise_attributes attributes) {
+    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+        output_tensor(attributes.name + "::OUT_0");
 
     // Set inputs
-    options.inputs.IN_0 = a;
-    options.inputs.IN_1 = b;
+    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
+    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
 
     return OUT_0;
 }
@@ -578,15 +580,16 @@ inline std::shared_ptr<Tensor_attributes>
 Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
                  std::shared_ptr<Tensor_attributes> b,
                  std::shared_ptr<Tensor_attributes> c,
-                 Pointwise_attributes options) {
-    auto OUT_0 = options.outputs.OUT_0 = output_tensor(options.get_name() + "_output");
+                 Pointwise_attributes attributes) {
+    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+        output_tensor(attributes.name + "::OUT_0");
 
     // Set inputs
-    options.inputs.IN_0 = a;
-    options.inputs.IN_1 = b;
-    options.inputs.IN_2 = c;
+    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
+    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
+    attributes.inputs[Pointwise_attributes::input_names::IN_2] = c;
 
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
 
     return OUT_0;
 }
@@ -660,24 +663,24 @@ Graph::matmul(std::shared_ptr<Tensor_attributes> a, std::shared_ptr<Tensor_attri
     return C;
 }
 
-inline std::array<std::shared_ptr<Tensor_attributes>, 2>
-Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q,
-                                    std::shared_ptr<Tensor_attributes> k,
-                                    std::shared_ptr<Tensor_attributes> v,
-                                    Scaled_dot_product_attention_attributes options) {
-    // Make required output tensors
-    auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
-    auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
+// inline std::array<std::shared_ptr<Tensor_attributes>, 2>
+// Graph::scaled_dot_product_attention(std::shared_ptr<Tensor_attributes> q,
+//                                     std::shared_ptr<Tensor_attributes> k,
+//                                     std::shared_ptr<Tensor_attributes> v,
+//                                     Scaled_dot_product_attention_attributes options) {
+//     // Make required output tensors
+//     auto O = options.outputs.O = output_tensor(options.get_name() + "_output");
+//     auto S = options.outputs.S = output_tensor(options.get_name() + "_softmax_output");
 
-    // Set inputs
-    options.inputs.Q = q;
-    options.inputs.K = k;
-    options.inputs.V = v;
+//     // Set inputs
+//     options.inputs.Q = q;
+//     options.inputs.K = k;
+//     options.inputs.V = v;
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(std::move(options), context));
+//     sub_nodes.emplace_back(std::make_unique<ScaledDotProductAttentionNode>(std::move(options), context));
 
-    return {O, S};
-}
+//     return {O, S};
+// }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,

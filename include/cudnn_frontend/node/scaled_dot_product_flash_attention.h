@@ -37,13 +37,12 @@ class ScaledDotProductFlashAttentionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionNode " << options.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Q->get_stride().back() != 1 ||
-                                       options.inputs.K->get_stride().back() != 1 ||
-                                       options.inputs.V->get_stride().back() != 1 ||
-                                       options.outputs.O->get_stride().back() != 1,
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "The stride for the last dimension corresponding to the embedding size per head"
-                                       " should be 1");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            options.inputs.Q->get_stride().back() != 1 || options.inputs.K->get_stride().back() != 1 ||
+                options.inputs.V->get_stride().back() != 1 || options.outputs.O->get_stride().back() != 1,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "The stride for the last dimension corresponding to the embedding size per head"
+            " should be 1");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(options.is_inference.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
@@ -156,9 +155,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes scale_attributes;
             scale_attributes.set_name("attn_scale");
             scale_attributes.set_mode(PointwiseMode_t::MUL);
-            scale_attributes.inputs.IN_0 = last_output;
-            scale_attributes.inputs.IN_1 = options.inputs.Attn_scale;
-            last_output = scale_attributes.outputs.OUT_0 = attn_scale_output;
+            scale_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            scale_attributes.inputs[Pointwise_attributes::input_names::IN_1] = options.inputs.Attn_scale;
+            last_output = scale_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = attn_scale_output;
             auto scale_node = std::make_unique<PointwiseNode>(std::move(scale_attributes), context);
             sub_nodes.emplace_back(std::move(scale_node));
         }
@@ -172,9 +171,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes add_attributes;
             add_attributes.set_name("bias");
             add_attributes.set_mode(PointwiseMode_t::ADD);
-            add_attributes.inputs.IN_0 = last_output;
-            add_attributes.inputs.IN_1 = options.inputs.Bias;
-            last_output = add_attributes.outputs.OUT_0 = bias_output;
+            add_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] = options.inputs.Bias;
+            last_output = add_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = bias_output;
             auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
             sub_nodes.emplace_back(std::move(add_node));
         }
@@ -189,8 +188,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_mode(PointwiseMode_t::GEN_INDEX)
                 .set_axis(2)
                 .set_compute_data_type(DataType_t::INT32);
-            row_index_attributes.inputs.IN_0   = last_output;
-            row_index_attributes.outputs.OUT_0 = row_index_output;
+            row_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            row_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_index_output;
             auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
             sub_nodes.emplace_back(std::move(row_index_node));
 
@@ -203,8 +202,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_mode(PointwiseMode_t::GEN_INDEX)
                 .set_axis(3)
                 .set_compute_data_type(DataType_t::INT32);
-            col_index_attributes.inputs.IN_0   = last_output;
-            col_index_attributes.outputs.OUT_0 = col_index_output;
+            col_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            col_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_index_output;
             auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
             sub_nodes.emplace_back(std::move(col_index_node));
 
@@ -214,10 +213,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
             Pointwise_attributes sub_attributes;
             sub_attributes.set_name("sub").set_mode(PointwiseMode_t::SUB).set_compute_data_type(DataType_t::INT32);
-            sub_attributes.inputs.IN_0   = col_index_output;
-            sub_attributes.inputs.IN_1   = row_index_output;
-            sub_attributes.outputs.OUT_0 = sub_output;
-            auto sub_node                = std::make_unique<PointwiseNode>(std::move(sub_attributes), context);
+            sub_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = col_index_output;
+            sub_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = row_index_output;
+            sub_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = sub_output;
+            auto sub_node = std::make_unique<PointwiseNode>(std::move(sub_attributes), context);
             sub_nodes.emplace_back(std::move(sub_node));
 
             // Multiply by alibi slope
@@ -232,10 +231,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
             Pointwise_attributes mul_attributes;
             mul_attributes.set_name("mul").set_mode(PointwiseMode_t::MUL);
-            mul_attributes.inputs.IN_0   = sub_output;
-            mul_attributes.inputs.IN_1   = alibi_slopes;
-            mul_attributes.outputs.OUT_0 = alibi_mask;
-            auto mul_node                = std::make_unique<PointwiseNode>(std::move(mul_attributes), context);
+            mul_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = sub_output;
+            mul_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = alibi_slopes;
+            mul_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = alibi_mask;
+            auto mul_node = std::make_unique<PointwiseNode>(std::move(mul_attributes), context);
             sub_nodes.emplace_back(std::move(mul_node));
 
             // Add alibi_mask
@@ -244,9 +243,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
             Pointwise_attributes add_attributes;
             add_attributes.set_name("add").set_mode(PointwiseMode_t::ADD);
-            add_attributes.inputs.IN_0 = last_output;
-            add_attributes.inputs.IN_1 = alibi_mask;
-            last_output = add_attributes.outputs.OUT_0 = add_output;
+            add_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] = alibi_mask;
+            last_output = add_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = add_output;
             auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
             sub_nodes.emplace_back(std::move(add_node));
         }
@@ -261,8 +260,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_mode(PointwiseMode_t::GEN_INDEX)
                 .set_axis(2)
                 .set_compute_data_type(DataType_t::INT32);
-            row_index_attributes.inputs.IN_0   = last_output;
-            row_index_attributes.outputs.OUT_0 = row_index_output;
+            row_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            row_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_index_output;
             auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
             sub_nodes.emplace_back(std::move(row_index_node));
 
@@ -275,8 +274,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_mode(PointwiseMode_t::GEN_INDEX)
                 .set_axis(3)
                 .set_compute_data_type(DataType_t::INT32);
-            col_index_attributes.inputs.IN_0   = last_output;
-            col_index_attributes.outputs.OUT_0 = col_index_output;
+            col_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            col_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_index_output;
             auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
             sub_nodes.emplace_back(std::move(col_index_node));
 
@@ -288,9 +287,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             row_less_seq_q_attributes.set_name("row_less_seq_q")
                 .set_mode(PointwiseMode_t::CMP_LT)
                 .set_compute_data_type(DataType_t::INT32);
-            row_less_seq_q_attributes.inputs.IN_0   = row_index_output;
-            row_less_seq_q_attributes.inputs.IN_1   = options.inputs.SEQ_LEN_Q;
-            row_less_seq_q_attributes.outputs.OUT_0 = row_less_seq_q_output;
+            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = row_index_output;
+            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_Q;
+            row_less_seq_q_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_less_seq_q_output;
             auto row_less_seq_q_node = std::make_unique<PointwiseNode>(std::move(row_less_seq_q_attributes), context);
             sub_nodes.emplace_back(std::move(row_less_seq_q_node));
 
@@ -302,9 +301,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             col_less_seq_kv_attributes.set_name("col_less_seq_kv")
                 .set_mode(PointwiseMode_t::CMP_LT)
                 .set_compute_data_type(DataType_t::INT32);
-            col_less_seq_kv_attributes.inputs.IN_0   = col_index_output;
-            col_less_seq_kv_attributes.inputs.IN_1   = options.inputs.SEQ_LEN_KV;
-            col_less_seq_kv_attributes.outputs.OUT_0 = col_less_seq_kv_output;
+            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = col_index_output;
+            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_KV;
+            col_less_seq_kv_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_less_seq_kv_output;
             auto col_less_seq_kv_node = std::make_unique<PointwiseNode>(std::move(col_less_seq_kv_attributes), context);
             sub_nodes.emplace_back(std::move(col_less_seq_kv_node));
 
@@ -316,9 +315,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             logical_and_attributes.set_name("logical_and")
                 .set_mode(PointwiseMode_t::LOGICAL_AND)
                 .set_compute_data_type(DataType_t::BOOLEAN);
-            logical_and_attributes.inputs.IN_0   = row_less_seq_q_output;
-            logical_and_attributes.inputs.IN_1   = col_less_seq_kv_output;
-            logical_and_attributes.outputs.OUT_0 = logical_and_output;
+            logical_and_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = row_less_seq_q_output;
+            logical_and_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = col_less_seq_kv_output;
+            logical_and_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = logical_and_output;
             auto logical_and_node = std::make_unique<PointwiseNode>(std::move(logical_and_attributes), context);
             sub_nodes.emplace_back(std::move(logical_and_node));
 
@@ -336,10 +335,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes binary_select_attributes;
             binary_select_attributes.set_name("binary_select");
             binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
-            binary_select_attributes.inputs.IN_0 = last_output;
-            binary_select_attributes.inputs.IN_1 = negative_inf_padding;
-            binary_select_attributes.inputs.IN_2 = logical_and_output;
-            last_output = binary_select_attributes.outputs.OUT_0 = padding_mask_output;
+            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_1] = negative_inf_padding;
+            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_2] = logical_and_output;
+            last_output = binary_select_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+                padding_mask_output;
             auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
             sub_nodes.emplace_back(std::move(binary_select_node));
         }
@@ -352,8 +352,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes row_index_attributes;
             row_index_attributes.set_name("gen_row_index");
             row_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-            row_index_attributes.inputs.IN_0   = last_output;
-            row_index_attributes.outputs.OUT_0 = row_index_output;
+            row_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            row_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_index_output;
             auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
             sub_nodes.emplace_back(std::move(row_index_node));
 
@@ -364,8 +364,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes col_index_attributes;
             col_index_attributes.set_name("gen_col_index");
             col_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-            col_index_attributes.inputs.IN_0   = last_output;
-            col_index_attributes.outputs.OUT_0 = col_index_output;
+            col_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            col_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_index_output;
             auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
             sub_nodes.emplace_back(std::move(col_index_node));
 
@@ -379,9 +379,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes greater_than_attributes;
             greater_than_attributes.set_name("row_greater_than_col");
             greater_than_attributes.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
-            greater_than_attributes.inputs.IN_0   = row_index_output;
-            greater_than_attributes.inputs.IN_1   = col_index_output;
-            greater_than_attributes.outputs.OUT_0 = row_greater_than_col_output;
+            greater_than_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = row_index_output;
+            greater_than_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = col_index_output;
+            greater_than_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_greater_than_col_output;
             auto greater_than_node = std::make_unique<PointwiseNode>(std::move(greater_than_attributes), context);
             sub_nodes.emplace_back(std::move(greater_than_node));
 
@@ -399,10 +399,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes binary_select_attributes;
             binary_select_attributes.set_name("binary_select");
             binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
-            binary_select_attributes.inputs.IN_0 = last_output;
-            binary_select_attributes.inputs.IN_1 = negative_inf_causal;
-            binary_select_attributes.inputs.IN_2 = row_greater_than_col_output;
-            last_output = binary_select_attributes.outputs.OUT_0 = causal_mask_output;
+            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_1] = negative_inf_causal;
+            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_2] = row_greater_than_col_output;
+            last_output = binary_select_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+                causal_mask_output;
             auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
             sub_nodes.emplace_back(std::move(binary_select_node));
         }
@@ -466,9 +467,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes mask_attributes;
             mask_attributes.set_name("dropout_mask_mul");
             mask_attributes.set_mode(PointwiseMode_t::MUL);
-            mask_attributes.inputs.IN_0 = last_output;
-            mask_attributes.inputs.IN_1 = rng_output;
-            last_output = mask_attributes.outputs.OUT_0 = dropout_mask_output;
+            mask_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            mask_attributes.inputs[Pointwise_attributes::input_names::IN_1] = rng_output;
+            last_output = mask_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = dropout_mask_output;
             auto mask_node = std::make_unique<PointwiseNode>(std::move(mask_attributes), context);
             sub_nodes.emplace_back(std::move(mask_node));
 
@@ -490,9 +491,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             Pointwise_attributes dropout_scale_attributes;
             dropout_scale_attributes.set_name("dropout_scale");
             dropout_scale_attributes.set_mode(PointwiseMode_t::MUL);
-            dropout_scale_attributes.inputs.IN_0 = last_output;
-            dropout_scale_attributes.inputs.IN_1 = dropout_scale;
-            last_output = dropout_scale_attributes.outputs.OUT_0 = dropout_scale_output;
+            dropout_scale_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            dropout_scale_attributes.inputs[Pointwise_attributes::input_names::IN_1] = dropout_scale;
+            last_output = dropout_scale_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
+                dropout_scale_output;
             auto dropout_scale_node = std::make_unique<PointwiseNode>(std::move(dropout_scale_attributes), context);
             sub_nodes.emplace_back(std::move(dropout_scale_node));
         }
@@ -604,17 +606,14 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << options.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Q->get_stride().back() != 1 ||
-                                       options.inputs.K->get_stride().back() != 1 ||
-                                       options.inputs.V->get_stride().back() != 1 ||
-                                       options.inputs.O->get_stride().back() != 1 ||
-                                       options.outputs.dQ->get_stride().back() != 1 ||
-                                       options.outputs.dV->get_stride().back() != 1 ||
-                                       options.outputs.dK->get_stride().back() != 1 ||
-                                       options.inputs.dO->get_stride().back() != 1,
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "The stride for the last dimension corresponding to the hidden size per head"
-                                       " should be 1");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            options.inputs.Q->get_stride().back() != 1 || options.inputs.K->get_stride().back() != 1 ||
+                options.inputs.V->get_stride().back() != 1 || options.inputs.O->get_stride().back() != 1 ||
+                options.outputs.dQ->get_stride().back() != 1 || options.outputs.dV->get_stride().back() != 1 ||
+                options.outputs.dK->get_stride().back() != 1 || options.inputs.dO->get_stride().back() != 1,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "The stride for the last dimension corresponding to the hidden size per head"
+            " should be 1");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(options.dropout_probability.has_value() && options.inputs.Dropout_mask,
                                        error_code_t::ATTRIBUTE_NOT_SET,
@@ -803,9 +802,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_mul_dO_O_attr;
         pw_mul_dO_O_attr.set_name("pw_mul_dO_O");
         pw_mul_dO_O_attr.set_mode(PointwiseMode_t::MUL);
-        pw_mul_dO_O_attr.inputs.IN_0   = options.inputs.dO;
-        pw_mul_dO_O_attr.inputs.IN_1   = options.inputs.O;
-        pw_mul_dO_O_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, d});
+        pw_mul_dO_O_attr.inputs[Pointwise_attributes::input_names::IN_0]    = options.inputs.dO;
+        pw_mul_dO_O_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.O;
+        pw_mul_dO_O_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+            make_tensor_(true, {b, h, s_q, d});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dO_O_attr), context));
 
         // reduction add: dO * O
@@ -820,17 +820,19 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_mul_dropout_scale_inv_attr;
         pw_mul_dropout_scale_inv_attr.set_name("pw_mul_dropout_scale_inv");
         pw_mul_dropout_scale_inv_attr.set_mode(PointwiseMode_t::MUL);
-        pw_mul_dropout_scale_inv_attr.inputs.IN_0 = last_output;
+        pw_mul_dropout_scale_inv_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
         if (options.inputs.Dropout_scale_inv) {
-            pw_mul_dropout_scale_inv_attr.inputs.IN_1 = options.inputs.Dropout_scale_inv;
+            pw_mul_dropout_scale_inv_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                options.inputs.Dropout_scale_inv;
         } else {
             // WAR dropout scale inverse is needed for non-dropout graphs
-            pw_mul_dropout_scale_inv_attr.inputs.IN_1 = one_tensor;
+            pw_mul_dropout_scale_inv_attr.inputs[Pointwise_attributes::input_names::IN_1] = one_tensor;
         }
         if (softmax_sum) {
-            pw_mul_dropout_scale_inv_attr.outputs.OUT_0 = softmax_sum;
+            pw_mul_dropout_scale_inv_attr.outputs[Pointwise_attributes::output_names::OUT_0] = softmax_sum;
         } else {
-            pw_mul_dropout_scale_inv_attr.outputs.OUT_0 = softmax_sum = make_tensor_(true, {b, h, s_q, 1});
+            pw_mul_dropout_scale_inv_attr.outputs[Pointwise_attributes::output_names::OUT_0] = softmax_sum =
+                make_tensor_(true, {b, h, s_q, 1});
         }
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dropout_scale_inv_attr), context));
 
@@ -858,9 +860,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes pw_mul_S_bmm_scale_attr;
             pw_mul_S_bmm_scale_attr.set_name("pw_mul_S_bmm_scale");
             pw_mul_S_bmm_scale_attr.set_mode(PointwiseMode_t::MUL);
-            pw_mul_S_bmm_scale_attr.inputs.IN_0   = last_output;
-            pw_mul_S_bmm_scale_attr.inputs.IN_1   = options.inputs.Attn_scale;
-            pw_mul_S_bmm_scale_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            pw_mul_S_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            pw_mul_S_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Attn_scale;
+            pw_mul_S_bmm_scale_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_S_bmm_scale_attr), context));
         }
 
@@ -869,9 +872,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes add_bias_attr;
             add_bias_attr.set_name("add_bias");
             add_bias_attr.set_mode(PointwiseMode_t::ADD);
-            add_bias_attr.inputs.IN_0   = last_output;
-            add_bias_attr.inputs.IN_1   = options.inputs.Bias;
-            add_bias_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            add_bias_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            add_bias_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Bias;
+            add_bias_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(add_bias_attr), context));
         }
 
@@ -888,39 +892,40 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes gen_row_idx_attr;
             gen_row_idx_attr.set_name("gen_row_idx_alibi");
             gen_row_idx_attr.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2).set_compute_data_type(DataType_t::INT32);
-            gen_row_idx_attr.inputs.IN_0   = last_output;
-            gen_row_idx_attr.outputs.OUT_0 = row_idx_output;
+            gen_row_idx_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            gen_row_idx_attr.outputs[Pointwise_attributes::output_names::OUT_0] = row_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gen_row_idx_attr), context));
 
             Pointwise_attributes gen_col_idx_attr;
             gen_col_idx_attr.set_name("gen_col_idx_alibi");
             gen_col_idx_attr.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3).set_compute_data_type(DataType_t::INT32);
-            gen_col_idx_attr.inputs.IN_0   = last_output;
-            gen_col_idx_attr.outputs.OUT_0 = col_idx_output;
+            gen_col_idx_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            gen_col_idx_attr.outputs[Pointwise_attributes::output_names::OUT_0] = col_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gen_col_idx_attr), context));
 
             Pointwise_attributes sub_col_row_attr;
             sub_col_row_attr.set_name("sub_col_row_alibi");
             sub_col_row_attr.set_mode(PointwiseMode_t::SUB).set_compute_data_type(DataType_t::INT32);
-            sub_col_row_attr.inputs.IN_0   = col_idx_output;
-            sub_col_row_attr.inputs.IN_1   = row_idx_output;
-            sub_col_row_attr.outputs.OUT_0 = sub_idx_output;
+            sub_col_row_attr.inputs[Pointwise_attributes::input_names::IN_0]    = col_idx_output;
+            sub_col_row_attr.inputs[Pointwise_attributes::input_names::IN_1]    = row_idx_output;
+            sub_col_row_attr.outputs[Pointwise_attributes::output_names::OUT_0] = sub_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(sub_col_row_attr), context));
 
             Pointwise_attributes mul_dist_slope_attr;
             mul_dist_slope_attr.set_name("mul_dist_slope_alibi");
             mul_dist_slope_attr.set_mode(PointwiseMode_t::MUL);
-            mul_dist_slope_attr.inputs.IN_0   = sub_idx_output;
-            mul_dist_slope_attr.inputs.IN_1   = alibi_slopes;
-            mul_dist_slope_attr.outputs.OUT_0 = alibi_mask_output;
+            mul_dist_slope_attr.inputs[Pointwise_attributes::input_names::IN_0]    = sub_idx_output;
+            mul_dist_slope_attr.inputs[Pointwise_attributes::input_names::IN_1]    = alibi_slopes;
+            mul_dist_slope_attr.outputs[Pointwise_attributes::output_names::OUT_0] = alibi_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(mul_dist_slope_attr), context));
 
             Pointwise_attributes add_alibi_attr;
             add_alibi_attr.set_name("add_alibi");
             add_alibi_attr.set_mode(PointwiseMode_t::ADD);
-            add_alibi_attr.inputs.IN_0   = last_output;
-            add_alibi_attr.inputs.IN_1   = alibi_mask_output;
-            add_alibi_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            add_alibi_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            add_alibi_attr.inputs[Pointwise_attributes::input_names::IN_1]    = alibi_mask_output;
+            add_alibi_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(add_alibi_attr), context));
         }
 
@@ -939,48 +944,49 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes gen_row_idx_attr;
             gen_row_idx_attr.set_name("gen_row_idx_alibi");
             gen_row_idx_attr.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2).set_compute_data_type(DataType_t::INT32);
-            gen_row_idx_attr.inputs.IN_0   = last_output;
-            gen_row_idx_attr.outputs.OUT_0 = row_idx_output;
+            gen_row_idx_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            gen_row_idx_attr.outputs[Pointwise_attributes::output_names::OUT_0] = row_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gen_row_idx_attr), context));
 
             Pointwise_attributes gen_col_idx_attr;
             gen_col_idx_attr.set_name("gen_col_idx_alibi");
             gen_col_idx_attr.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3).set_compute_data_type(DataType_t::INT32);
-            gen_col_idx_attr.inputs.IN_0   = last_output;
-            gen_col_idx_attr.outputs.OUT_0 = col_idx_output;
+            gen_col_idx_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            gen_col_idx_attr.outputs[Pointwise_attributes::output_names::OUT_0] = col_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gen_col_idx_attr), context));
 
             Pointwise_attributes lt_row_sq_attr;
             lt_row_sq_attr.set_name("lt_row_sq_causal");
             lt_row_sq_attr.set_mode(PointwiseMode_t::CMP_LT).set_compute_data_type(DataType_t::BOOLEAN);
-            lt_row_sq_attr.inputs.IN_0   = row_idx_output;
-            lt_row_sq_attr.inputs.IN_1   = options.inputs.SEQ_LEN_Q;
-            lt_row_sq_attr.outputs.OUT_0 = row_mask_output;
+            lt_row_sq_attr.inputs[Pointwise_attributes::input_names::IN_0]    = row_idx_output;
+            lt_row_sq_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_Q;
+            lt_row_sq_attr.outputs[Pointwise_attributes::output_names::OUT_0] = row_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(lt_row_sq_attr), context));
 
             Pointwise_attributes lt_col_skv_attr;
             lt_col_skv_attr.set_name("lt_col_skv_causal");
             lt_col_skv_attr.set_mode(PointwiseMode_t::CMP_LT).set_compute_data_type(DataType_t::BOOLEAN);
-            lt_col_skv_attr.inputs.IN_0   = col_idx_output;
-            lt_col_skv_attr.inputs.IN_1   = options.inputs.SEQ_LEN_KV;
-            lt_col_skv_attr.outputs.OUT_0 = col_mask_output;
+            lt_col_skv_attr.inputs[Pointwise_attributes::input_names::IN_0]    = col_idx_output;
+            lt_col_skv_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_KV;
+            lt_col_skv_attr.outputs[Pointwise_attributes::output_names::OUT_0] = col_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(lt_col_skv_attr), context));
 
             Pointwise_attributes and_row_col_mask_attr;
             and_row_col_mask_attr.set_name("and_row_col_mask");
             and_row_col_mask_attr.set_mode(PointwiseMode_t::LOGICAL_AND).set_compute_data_type(DataType_t::BOOLEAN);
-            and_row_col_mask_attr.inputs.IN_0   = row_mask_output;
-            and_row_col_mask_attr.inputs.IN_1   = col_mask_output;
-            and_row_col_mask_attr.outputs.OUT_0 = padding_mask_output;
+            and_row_col_mask_attr.inputs[Pointwise_attributes::input_names::IN_0]    = row_mask_output;
+            and_row_col_mask_attr.inputs[Pointwise_attributes::input_names::IN_1]    = col_mask_output;
+            and_row_col_mask_attr.outputs[Pointwise_attributes::output_names::OUT_0] = padding_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(and_row_col_mask_attr), context));
 
             Pointwise_attributes select_padding_attr;
             select_padding_attr.set_name("select_causal");
             select_padding_attr.set_mode(PointwiseMode_t::BINARY_SELECT);
-            select_padding_attr.inputs.IN_0   = last_output;
-            select_padding_attr.inputs.IN_1   = negative_inf_padding;
-            select_padding_attr.inputs.IN_2   = padding_mask_output;
-            select_padding_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            select_padding_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            select_padding_attr.inputs[Pointwise_attributes::input_names::IN_1]    = negative_inf_padding;
+            select_padding_attr.inputs[Pointwise_attributes::input_names::IN_2]    = padding_mask_output;
+            select_padding_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(select_padding_attr), context));
         }
 
@@ -996,32 +1002,33 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes gen_row_idx_attr;
             gen_row_idx_attr.set_name("gen_row_idx_causal");
             gen_row_idx_attr.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2).set_compute_data_type(DataType_t::INT32);
-            gen_row_idx_attr.inputs.IN_0   = last_output;
-            gen_row_idx_attr.outputs.OUT_0 = row_idx_output;
+            gen_row_idx_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            gen_row_idx_attr.outputs[Pointwise_attributes::output_names::OUT_0] = row_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gen_row_idx_attr), context));
 
             Pointwise_attributes gen_col_idx_attr;
             gen_col_idx_attr.set_name("gen_col_idx_causal");
             gen_col_idx_attr.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3).set_compute_data_type(DataType_t::INT32);
-            gen_col_idx_attr.inputs.IN_0   = last_output;
-            gen_col_idx_attr.outputs.OUT_0 = col_idx_output;
+            gen_col_idx_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            gen_col_idx_attr.outputs[Pointwise_attributes::output_names::OUT_0] = col_idx_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gen_col_idx_attr), context));
 
             Pointwise_attributes gt_row_col_attr;
             gt_row_col_attr.set_name("gt_row_col_causal");
             gt_row_col_attr.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
-            gt_row_col_attr.inputs.IN_0   = row_idx_output;
-            gt_row_col_attr.inputs.IN_1   = col_idx_output;
-            gt_row_col_attr.outputs.OUT_0 = causal_mask_output;
+            gt_row_col_attr.inputs[Pointwise_attributes::input_names::IN_0]    = row_idx_output;
+            gt_row_col_attr.inputs[Pointwise_attributes::input_names::IN_1]    = col_idx_output;
+            gt_row_col_attr.outputs[Pointwise_attributes::output_names::OUT_0] = causal_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(gt_row_col_attr), context));
 
             Pointwise_attributes select_causal_attr;
             select_causal_attr.set_name("select_causal");
             select_causal_attr.set_mode(PointwiseMode_t::BINARY_SELECT);
-            select_causal_attr.inputs.IN_0   = last_output;
-            select_causal_attr.inputs.IN_1   = negative_inf_causal;
-            select_causal_attr.inputs.IN_2   = causal_mask_output;
-            select_causal_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            select_causal_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            select_causal_attr.inputs[Pointwise_attributes::input_names::IN_1]    = negative_inf_causal;
+            select_causal_attr.inputs[Pointwise_attributes::input_names::IN_2]    = causal_mask_output;
+            select_causal_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(select_causal_attr), context));
         }
 
@@ -1029,17 +1036,19 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_subtract_s_attr;
         pw_subtract_s_attr.set_name("pw_subtract_s");
         pw_subtract_s_attr.set_mode(PointwiseMode_t::SUB);
-        pw_subtract_s_attr.inputs.IN_0   = last_output;
-        pw_subtract_s_attr.inputs.IN_1   = options.inputs.Stats;
-        pw_subtract_s_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+        pw_subtract_s_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+        pw_subtract_s_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Stats;
+        pw_subtract_s_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_subtract_s_attr), context));
 
         // pointwise exp softmax
         Pointwise_attributes exp_attr;
         exp_attr.set_name("exp_softmax");
         exp_attr.set_mode(PointwiseMode_t::EXP);
-        exp_attr.inputs.IN_0   = last_output;
-        exp_attr.outputs.OUT_0 = last_output = exp_softmax_output = make_tensor_(true, {b, h, s_q, s_kv});
+        exp_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+        exp_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output = exp_softmax_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         last_output->set_data_type(context.get_io_data_type());
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(exp_attr), context));
 
@@ -1048,9 +1057,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes mask_attr;
             mask_attr.set_name("dropout_mask_mul");
             mask_attr.set_mode(PointwiseMode_t::MUL);
-            mask_attr.inputs.IN_0   = last_output;
-            mask_attr.inputs.IN_1   = rng_output;
-            mask_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            mask_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            mask_attr.inputs[Pointwise_attributes::input_names::IN_1]    = rng_output;
+            mask_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(mask_attr), context));
         }
 
@@ -1059,9 +1069,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes pw_mul_dropout_scale;
             pw_mul_dropout_scale.set_name("pw_mul_dropout_scale");
             pw_mul_dropout_scale.set_mode(PointwiseMode_t::MUL);
-            pw_mul_dropout_scale.inputs.IN_0   = last_output;
-            pw_mul_dropout_scale.inputs.IN_1   = options.inputs.Dropout_scale;
-            pw_mul_dropout_scale.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            pw_mul_dropout_scale.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            pw_mul_dropout_scale.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Dropout_scale;
+            pw_mul_dropout_scale.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dropout_scale), context));
         }
 
@@ -1100,31 +1111,34 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_mul_dS_mask_attr;
         pw_mul_dS_mask_attr.set_name("pw_mul_dS_mask");
         pw_mul_dS_mask_attr.set_mode(PointwiseMode_t::MUL);
-        pw_mul_dS_mask_attr.inputs.IN_0 = last_output;
+        pw_mul_dS_mask_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
         if (is_dropout_prob || is_dropout_mask) {
-            pw_mul_dS_mask_attr.inputs.IN_1 = rng_output;
+            pw_mul_dS_mask_attr.inputs[Pointwise_attributes::input_names::IN_1] = rng_output;
         } else {
-            pw_mul_dS_mask_attr.inputs.IN_1 = one_tensor;
+            pw_mul_dS_mask_attr.inputs[Pointwise_attributes::input_names::IN_1] = one_tensor;
         }
-        pw_mul_dS_mask_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+        pw_mul_dS_mask_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dS_mask_attr), context));
 
         // pointwise: subtract ds
         Pointwise_attributes pw_subtract_ds_attr;
         pw_subtract_ds_attr.set_name("pw_subtract_ds");
         pw_subtract_ds_attr.set_mode(PointwiseMode_t::SUB);
-        pw_subtract_ds_attr.inputs.IN_0   = last_output;
-        pw_subtract_ds_attr.inputs.IN_1   = softmax_sum;
-        pw_subtract_ds_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+        pw_subtract_ds_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+        pw_subtract_ds_attr.inputs[Pointwise_attributes::input_names::IN_1]    = softmax_sum;
+        pw_subtract_ds_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_subtract_ds_attr), context));
 
         // pointwise: mul dP
         Pointwise_attributes pw_mul_dP_attr;
         pw_mul_dP_attr.set_name("pw_mul_dP");
         pw_mul_dP_attr.set_mode(PointwiseMode_t::MUL);
-        pw_mul_dP_attr.inputs.IN_0   = last_output;
-        pw_mul_dP_attr.inputs.IN_1   = exp_softmax_output;
-        pw_mul_dP_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+        pw_mul_dP_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+        pw_mul_dP_attr.inputs[Pointwise_attributes::input_names::IN_1]    = exp_softmax_output;
+        pw_mul_dP_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+            make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dP_attr), context));
 
         // pointwise: mul dP_dropout_scale
@@ -1132,9 +1146,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes pw_mul_dP_dropout_scale_attr;
             pw_mul_dP_dropout_scale_attr.set_name("pw_mul_dP_dropout_scale");
             pw_mul_dP_dropout_scale_attr.set_mode(PointwiseMode_t::MUL);
-            pw_mul_dP_dropout_scale_attr.inputs.IN_0   = last_output;
-            pw_mul_dP_dropout_scale_attr.inputs.IN_1   = options.inputs.Dropout_scale;
-            pw_mul_dP_dropout_scale_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            pw_mul_dP_dropout_scale_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            pw_mul_dP_dropout_scale_attr.inputs[Pointwise_attributes::input_names::IN_1] = options.inputs.Dropout_scale;
+            pw_mul_dP_dropout_scale_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dP_dropout_scale_attr), context));
         }
 
@@ -1143,9 +1158,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes pw_mul_dP_bmm_scale_attr;
             pw_mul_dP_bmm_scale_attr.set_name("pw_mul_dP_bmm_scale");
             pw_mul_dP_bmm_scale_attr.set_mode(PointwiseMode_t::MUL);
-            pw_mul_dP_bmm_scale_attr.inputs.IN_0   = last_output;
-            pw_mul_dP_bmm_scale_attr.inputs.IN_1   = options.inputs.Attn_scale;
-            pw_mul_dP_bmm_scale_attr.outputs.OUT_0 = last_output = make_tensor_(true, {b, h, s_q, s_kv});
+            pw_mul_dP_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
+            pw_mul_dP_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Attn_scale;
+            pw_mul_dP_bmm_scale_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
+                make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dP_bmm_scale_attr), context));
         }
 
@@ -1171,18 +1187,17 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         // --------------"dp_scaled @ K => dQ" chain--------------------
 
-        auto const& kt_dim = options.inputs.K->get_dim();
+        auto const& kt_dim    = options.inputs.K->get_dim();
         auto const& kt_stride = options.inputs.K->get_stride();
 
         // transpose KT
         Reshape_attributes transpose_K_attr;
         transpose_K_attr.set_name("transpose_K");
         transpose_K_attr.inputs.X  = options.inputs.K;
-        transpose_K_attr.outputs.Y = last_output = make_tensor_(
-            true,
-            {kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]},
-            {kt_stride[0], kt_stride[1], kt_stride[3], kt_stride[2]}
-        );
+        transpose_K_attr.outputs.Y = last_output =
+            make_tensor_(true,
+                         {kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]},
+                         {kt_stride[0], kt_stride[1], kt_stride[3], kt_stride[2]});
         sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(transpose_K_attr), context));
 
         // matmul: dP * K
@@ -1203,8 +1218,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes pw_identity_dQ_attr;
             pw_identity_dQ_attr.set_name("pw_identity_dQ");
             pw_identity_dQ_attr.set_mode(PointwiseMode_t::IDENTITY);
-            pw_identity_dQ_attr.inputs.IN_0   = dQ_accum;
-            pw_identity_dQ_attr.outputs.OUT_0 = options.outputs.dQ;
+            pw_identity_dQ_attr.inputs[Pointwise_attributes::input_names::IN_0]    = dQ_accum;
+            pw_identity_dQ_attr.outputs[Pointwise_attributes::output_names::OUT_0] = options.outputs.dQ;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_identity_dQ_attr), context));
         }
 

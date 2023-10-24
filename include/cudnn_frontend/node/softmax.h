@@ -69,10 +69,10 @@ class SoftmaxNode : public INode {
         Pointwise_attributes sub_options;
         sub_options.set_name("sub");
         sub_options.set_mode(PointwiseMode_t::SUB);
-        sub_options.inputs.IN_0   = options.inputs.P;
-        sub_options.inputs.IN_1   = max_output;
-        sub_options.outputs.OUT_0 = sub_output;
-        auto sub_node             = std::make_unique<PointwiseNode>(std::move(sub_options), context);
+        sub_options.inputs[Pointwise_attributes::input_names::IN_0]    = options.inputs.P;
+        sub_options.inputs[Pointwise_attributes::input_names::IN_1]    = max_output;
+        sub_options.outputs[Pointwise_attributes::output_names::OUT_0] = sub_output;
+        auto sub_node = std::make_unique<PointwiseNode>(std::move(sub_options), context);
         sub_nodes.emplace_back(std::move(sub_node));
 
         // Lower options to exp options
@@ -82,9 +82,9 @@ class SoftmaxNode : public INode {
         Pointwise_attributes exp_options;
         exp_options.set_name("exp");
         exp_options.set_mode(PointwiseMode_t::EXP);
-        exp_options.inputs.IN_0   = sub_output;
-        exp_options.outputs.OUT_0 = exp_output;
-        auto exp_node             = std::make_unique<PointwiseNode>(std::move(exp_options), context);
+        exp_options.inputs[Pointwise_attributes::input_names::IN_0]    = sub_output;
+        exp_options.outputs[Pointwise_attributes::output_names::OUT_0] = exp_output;
+        auto exp_node = std::make_unique<PointwiseNode>(std::move(exp_options), context);
         sub_nodes.emplace_back(std::move(exp_node));
 
         // Lower options to reduce sum options
@@ -112,19 +112,19 @@ class SoftmaxNode : public INode {
             auto log_options = Pointwise_attributes();
             log_options.set_name("log");
             log_options.set_mode(PointwiseMode_t::LOG);
-            log_options.inputs.IN_0   = sum_output;
-            log_options.outputs.OUT_0 = log_output;
-            auto log_node             = std::make_unique<PointwiseNode>(std::move(log_options), context);
+            log_options.inputs[Pointwise_attributes::input_names::IN_0]    = sum_output;
+            log_options.outputs[Pointwise_attributes::output_names::OUT_0] = log_output;
+            auto log_node = std::make_unique<PointwiseNode>(std::move(log_options), context);
             sub_nodes.emplace_back(std::move(log_node));
 
             // Lower options to add options
             auto add_options = Pointwise_attributes();
             add_options.set_name("add");
             add_options.set_mode(PointwiseMode_t::ADD);
-            add_options.inputs.IN_0   = max_output;
-            add_options.inputs.IN_1   = log_output;
-            add_options.outputs.OUT_0 = options.outputs.Stats;
-            auto add_node             = std::make_unique<PointwiseNode>(std::move(add_options), context);
+            add_options.inputs[Pointwise_attributes::input_names::IN_0]    = max_output;
+            add_options.inputs[Pointwise_attributes::input_names::IN_1]    = log_output;
+            add_options.outputs[Pointwise_attributes::output_names::OUT_0] = options.outputs.Stats;
+            auto add_node = std::make_unique<PointwiseNode>(std::move(add_options), context);
             sub_nodes.emplace_back(std::move(add_node));
         }
 
@@ -132,10 +132,10 @@ class SoftmaxNode : public INode {
         auto div_options = Pointwise_attributes();
         div_options.set_name("div");
         div_options.set_mode(PointwiseMode_t::DIV);
-        div_options.inputs.IN_0   = exp_output;
-        div_options.inputs.IN_1   = sum_output;
-        div_options.outputs.OUT_0 = options.outputs.S;
-        auto div_node             = std::make_unique<PointwiseNode>(std::move(div_options), context);
+        div_options.inputs[Pointwise_attributes::input_names::IN_0]    = exp_output;
+        div_options.inputs[Pointwise_attributes::input_names::IN_1]    = sum_output;
+        div_options.outputs[Pointwise_attributes::output_names::OUT_0] = options.outputs.S;
+        auto div_node = std::make_unique<PointwiseNode>(std::move(div_options), context);
         sub_nodes.emplace_back(std::move(div_node));
 
         return {error_code_t::OK, ""};
