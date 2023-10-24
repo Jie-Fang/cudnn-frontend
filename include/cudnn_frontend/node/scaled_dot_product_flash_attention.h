@@ -454,10 +454,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
                 .set_bernoulli_probability(1.0 -
                                            options.dropout_probability.value());  // As user sets dropout probability
-            rng_attributes.inputs.Seed   = options.inputs.Seed;
-            rng_attributes.inputs.Offset = options.inputs.Offset;
-            rng_attributes.outputs.Y     = rng_output;
-            auto rng_node                = std::make_unique<RngNode>(std::move(rng_attributes), context);
+            rng_attributes.inputs[Rng_attributes::input_names::Seed]   = options.inputs.Seed;
+            rng_attributes.inputs[Rng_attributes::input_names::Offset] = options.inputs.Offset;
+            rng_attributes.outputs[Rng_attributes::output_names::Y]    = rng_output;
+            auto rng_node = std::make_unique<RngNode>(std::move(rng_attributes), context);
             sub_nodes.emplace_back(std::move(rng_node));
 
             // Lower options to mask options
@@ -788,9 +788,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Rng_attributes rng_attr;
             rng_attr.set_distribution(RngDistribution_t::BERNOULLI);
             rng_attr.set_bernoulli_probability(1.0f - options.dropout_probability.value());
-            rng_attr.inputs.Seed   = options.inputs.Seed;
-            rng_attr.inputs.Offset = options.inputs.Offset;
-            rng_attr.outputs.Y = rng_output = make_tensor_(true, {b, h, s_q, s_kv});
+            rng_attr.inputs[Rng_attributes::input_names::Seed]   = options.inputs.Seed;
+            rng_attr.inputs[Rng_attributes::input_names::Offset] = options.inputs.Offset;
+            rng_attr.outputs[Rng_attributes::output_names::Y] = rng_output = make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(rng_attr), context));
         } else if (is_dropout_mask) {
             rng_output = options.inputs.Dropout_mask;

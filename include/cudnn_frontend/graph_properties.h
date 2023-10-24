@@ -862,16 +862,18 @@ class Reduction_attributes : public Attributes<Reduction_attributes> {
     }
 };
 
-class Rng_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Seed;
-        std::shared_ptr<Tensor_attributes> Offset;
-    } inputs;
+class Rng_attributes : public Attributes<Rng_attributes> {
+    friend class Attributes<Rng_attributes>;
+    friend class RngNode;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { Seed, Offset };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     RngDistribution_t distribution = RngDistribution_t::NOT_SET;
     std::vector<int64_t> dim       = {};
@@ -879,13 +881,9 @@ class Rng_attributes : public Operation {
     std::optional<int64_t> seed;
     std::optional<double> bernoulli_probability;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, Seed, Offset)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
+   public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rng_attributes,
                                    name,
-                                   tag,
                                    inputs,
                                    outputs,
                                    distribution,
@@ -893,8 +891,6 @@ class Rng_attributes : public Operation {
                                    stride,
                                    seed,
                                    bernoulli_probability)
-
-    Rng_attributes() : Operation(Tag::Rng) {}
 
     std::vector<int64_t>
     get_dim() const {
@@ -948,32 +944,6 @@ class Rng_attributes : public Operation {
     Rng_attributes&
     set_bernoulli_probability(std::optional<double> value) {
         bernoulli_probability = value;
-        return *this;
-    }
-
-    Rng_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Rng_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Rng_attributes& {
-        // Fill node's tensors
-        if (inputs.Seed) inputs.Seed->fill_from_context(context);
-        if (inputs.Offset) inputs.Offset->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };
