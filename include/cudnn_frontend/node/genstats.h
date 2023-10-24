@@ -10,11 +10,11 @@ namespace cudnn_frontend {
 namespace graph {
 
 class GenstatsNode : public INode {
-    Genstats_attributes options;
+    Genstats_attributes attributes;
 
    public:
-    GenstatsNode(Genstats_attributes&& options_, detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+    GenstatsNode(Genstats_attributes&& attributes_, detail::Context const& context)
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -23,12 +23,13 @@ class GenstatsNode : public INode {
 
     error_t
     infer_properties_node() override final {
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Only inferrencing from X works today.
-        auto X      = options.inputs.X;
-        auto SUM    = options.outputs.SUM;
-        auto SQ_SUM = options.outputs.SQ_SUM;
+        auto X      = attributes.inputs[Genstats_attributes::input_names::X];
+        auto SUM    = attributes.outputs[Genstats_attributes::output_names::SUM];
+        auto SQ_SUM = attributes.outputs[Genstats_attributes::output_names::SQ_SUM];
 
         auto const x_tensor_dim = X->get_dim();
         auto sum_tensor_dim     = SUM->get_dim();
@@ -67,12 +68,18 @@ class GenstatsNode : public INode {
     create_cudnn_tensors(int64_t& uid,
                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building GenstatsNode tensors " << options.name << "..." << std::endl;
+                    << "Building GenstatsNode tensors " << attributes.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X, uid, tensors));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.SUM, uid, tensors));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.SQ_SUM, uid, tensors));
-
+        for (auto const& [name, tensor] : attributes.inputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+        for (auto const& [name, tensor] : attributes.outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -82,30 +89,32 @@ class GenstatsNode : public INode {
         std::vector<cudnn_frontend::Operation_v8>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building GenstatsNode operations " << options.name << "..." << std::endl;
+                    << "Building GenstatsNode operations " << attributes.name << "..." << std::endl;
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
 
-            auto genstats_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR)
-                                          .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
-                                          .setGenStatsMode(CUDNN_GENSTATS_SUM_SQSUM)
-                                          .setSumDesc(*(tensors.at(options.outputs.SUM->get_uid())))
-                                          .setSqSumDesc(*(tensors.at(options.outputs.SQ_SUM->get_uid())))
-                                          .build();
+            auto genstats_operation =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR)
+                    .setxDesc(*(tensors.at(attributes.inputs[Genstats_attributes::input_names::X]->get_uid())))
+                    .setGenStatsMode(CUDNN_GENSTATS_SUM_SQSUM)
+                    .setSumDesc(*(tensors.at(attributes.outputs[Genstats_attributes::output_names::SUM]->get_uid())))
+                    .setSqSumDesc(
+                        *(tensors.at(attributes.outputs[Genstats_attributes::output_names::SQ_SUM]->get_uid())))
+                    .build();
 
-            // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {options.inputs.X, options.outputs.SUM, options.outputs.SQ_SUM};
-
-            for (auto const& tensor : tensors_involved_in_operation) {
+            operations.push_back(std::move(genstats_operation));
+            for (auto const& [name, tensor] : attributes.inputs) {
                 if (tensor && tensor->get_is_virtual() == false) {
                     uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
-
-            operations.push_back(std::move(genstats_operation));
-
+            for (auto const& [name, tensor] : attributes.outputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
@@ -117,7 +126,7 @@ class GenstatsNode : public INode {
 
     virtual void
     serialize(json& j) const override final {
-        j = options;
+        j = attributes;
     }
 };
 

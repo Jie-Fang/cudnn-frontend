@@ -512,15 +512,17 @@ Graph::conv_dgrad(std::shared_ptr<Tensor_attributes> dy,
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
-Graph::genstats(std::shared_ptr<Tensor_attributes> x, Genstats_attributes options) {
+Graph::genstats(std::shared_ptr<Tensor_attributes> x, Genstats_attributes attributes) {
     // Set outputs
-    auto SUM = options.outputs.SUM = output_tensor(options.get_name() + "_sum_output");
-    auto SQ_SUM = options.outputs.SQ_SUM = output_tensor(options.get_name() + "_sq_sum_output");
+    auto SUM = attributes.outputs[Genstats_attributes::output_names::SUM] =
+        output_tensor(attributes.name + "_sum_output");
+    auto SQ_SUM = attributes.outputs[Genstats_attributes::output_names::SQ_SUM] =
+        output_tensor(attributes.name + "_sq_sum_output");
 
     // Set inputs
-    options.inputs.X = x;
+    attributes.inputs[Genstats_attributes::input_names::X] = x;
 
-    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<GenstatsNode>(std::move(attributes), context));
 
     return {SUM, SQ_SUM};
 }

@@ -344,50 +344,19 @@ class BN_finalize_attributes : public Attributes<BN_finalize_attributes> {
     }
 };
 
-class Genstats_attributes : public Operation {
+class Genstats_attributes : public Attributes<Genstats_attributes> {
+    friend class Attributes<Genstats_attributes>;
+    friend class GenstatsNode;
+    friend class Graph;
+
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { SUM, SQ_SUM };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
    public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
-
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> SUM;
-        std::shared_ptr<Tensor_attributes> SQ_SUM;
-    } outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, SUM, SQ_SUM)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes, name, tag, inputs, outputs)
-
-    Genstats_attributes() : Operation(Tag::Genstats) {}
-
-    Genstats_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Genstats_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Genstats_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        outputs.SUM->fill_from_context(context);
-        outputs.SQ_SUM->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes, name, inputs, outputs)
 };
 
 class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
