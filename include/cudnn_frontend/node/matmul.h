@@ -26,20 +26,8 @@ class MatmulNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating matmul node " << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.inputs.find(Matmul_attributes::input_names::A) == attributes.inputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "matmul A not set.");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.inputs.find(Matmul_attributes::input_names::B) == attributes.inputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "matmul B not set.");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.outputs.find(Matmul_attributes::output_names::C) == attributes.outputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "matmul C not set.");
+        CUDNN_FE_VALIDATE_INPUT_TENSORS(Matmul_attributes::input_names::A, Matmul_attributes::input_names::B);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Matmul_attributes::output_names::C);
 
         return {error_code_t::OK, ""};
     }

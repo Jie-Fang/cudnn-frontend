@@ -29,30 +29,18 @@ class PointwiseNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.mode == PointwiseMode_t::NOT_SET, error_code_t::ATTRIBUTE_NOT_SET, "pointwise mode not set.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.inputs.find(Pointwise_attributes::input_names::IN_0) == attributes.inputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "pointwise input IN_0 not set.");
+        CUDNN_FE_VALIDATE_INPUT_TENSORS(Pointwise_attributes::input_names::IN_0);
 
         auto const port_count = get_pointwise_mode_port_count(attributes.mode);
         if (port_count >= 3) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                attributes.inputs.find(Pointwise_attributes::input_names::IN_1) == attributes.inputs.end(),
-                error_code_t::ATTRIBUTE_NOT_SET,
-                "pointwise input IN_1 not set.");
+            CUDNN_FE_VALIDATE_INPUT_TENSORS(Pointwise_attributes::input_names::IN_1);
         }
 
         if (port_count >= 4) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                attributes.inputs.find(Pointwise_attributes::input_names::IN_2) == attributes.inputs.end(),
-                error_code_t::ATTRIBUTE_NOT_SET,
-                "pointwise input IN_2 not set.");
+            CUDNN_FE_VALIDATE_INPUT_TENSORS(Pointwise_attributes::input_names::IN_2);
         }
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.outputs.find(Pointwise_attributes::output_names::OUT_0) == attributes.outputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "pointwise output OUT_0 not set in " + attributes.name);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Pointwise_attributes::output_names::OUT_0);
 
         return {error_code_t::OK, ""};
     }
