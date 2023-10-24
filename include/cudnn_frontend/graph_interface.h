@@ -260,30 +260,36 @@ Graph::bn_finalize(std::shared_ptr<Tensor_attributes> sum,
                    std::shared_ptr<Tensor_attributes> bias,
                    std::shared_ptr<Tensor_attributes> epsilon,
                    std::shared_ptr<Tensor_attributes> accum_count,
-                   BN_finalize_attributes options) {
+                   BN_finalize_attributes attributes) {
     // Set outputs
-    auto EQ_SCALE = options.outputs.EQ_SCALE = output_tensor(options.get_name() + "::EQ_SCALE");
-    auto EQ_BIAS = options.outputs.EQ_BIAS = output_tensor(options.get_name() + "::EQ_BIAS");
-    auto MEAN = options.outputs.MEAN = output_tensor(options.get_name() + "::MEAN");
-    auto INV_VARIANCE = options.outputs.INV_VARIANCE     = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto EQ_SCALE = attributes.outputs[BN_finalize_attributes::output_names::EQ_SCALE] =
+        output_tensor(attributes.name + "::EQ_SCALE");
+    auto EQ_BIAS = attributes.outputs[BN_finalize_attributes::output_names::EQ_BIAS] =
+        output_tensor(attributes.name + "::EQ_BIAS");
+    auto MEAN = attributes.outputs[BN_finalize_attributes::output_names::MEAN] =
+        output_tensor(attributes.name + "::MEAN");
+    auto INV_VARIANCE = attributes.outputs[BN_finalize_attributes::output_names::INV_VARIANCE] =
+        output_tensor(attributes.name + "::INV_VARIANCE");
     std::shared_ptr<Tensor_attributes> NEXT_RUNNING_MEAN = nullptr;
     std::shared_ptr<Tensor_attributes> NEXT_RUNNING_VAR  = nullptr;
-    if (options.inputs.PREV_RUNNING_MEAN && options.inputs.PREV_RUNNING_VAR && options.inputs.MOMENTUM) {
-        NEXT_RUNNING_MEAN = output_tensor(options.get_name() + "::NEXT_RUNNING_MEAN");
-        NEXT_RUNNING_VAR  = output_tensor(options.get_name() + "::NEXT_RUNNING_VAR");
+    if (attributes.inputs[BN_finalize_attributes::input_names::PREV_RUNNING_MEAN] &&
+        attributes.inputs[BN_finalize_attributes::input_names::PREV_RUNNING_VAR] &&
+        attributes.inputs[BN_finalize_attributes::input_names::MOMENTUM]) {
+        NEXT_RUNNING_MEAN = output_tensor(attributes.name + "::NEXT_RUNNING_MEAN");
+        NEXT_RUNNING_VAR  = output_tensor(attributes.name + "::NEXT_RUNNING_VAR");
     }
-    options.outputs.NEXT_RUNNING_MEAN = NEXT_RUNNING_MEAN;
-    options.outputs.NEXT_RUNNING_VAR  = NEXT_RUNNING_VAR;
+    attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_MEAN] = NEXT_RUNNING_MEAN;
+    attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_VAR]  = NEXT_RUNNING_VAR;
 
     // Set inputs
-    options.inputs.SUM         = sum;
-    options.inputs.SQ_SUM      = sq_sum;
-    options.inputs.SCALE       = scale;
-    options.inputs.BIAS        = bias;
-    options.inputs.EPSILON     = epsilon;
-    options.inputs.ACCUM_COUNT = accum_count;
+    attributes.inputs[BN_finalize_attributes::input_names::SUM]         = sum;
+    attributes.inputs[BN_finalize_attributes::input_names::SQ_SUM]      = sq_sum;
+    attributes.inputs[BN_finalize_attributes::input_names::SCALE]       = scale;
+    attributes.inputs[BN_finalize_attributes::input_names::BIAS]        = bias;
+    attributes.inputs[BN_finalize_attributes::input_names::EPSILON]     = epsilon;
+    attributes.inputs[BN_finalize_attributes::input_names::ACCUM_COUNT] = accum_count;
 
-    sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<BatchNormFinalizeNode>(std::move(attributes), context));
 
     return {EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR};
 }

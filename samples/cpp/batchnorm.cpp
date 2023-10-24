@@ -34,15 +34,32 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     auto sum =
         graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
-    auto sq_sum            = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));
-    auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean"));
-    auto prev_running_var  = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var"));
-    auto scale             = graph.tensor(fe::graph::Tensor_attributes().set_name("scale"));
-    auto bias              = graph.tensor(fe::graph::Tensor_attributes().set_name("bias"));
-    auto epsilon     = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_is_pass_by_value(true));
-    auto momentum    = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_is_pass_by_value(true));
+    auto sq_sum = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("sq_sum").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes()
+                                              .set_name("prev_running_mean")
+                                              .set_dim({1, 32, 1, 1})
+                                              .set_stride({32, 1, 32, 32}));
+    auto prev_running_var  = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("prev_running_var").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto scale = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto bias = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto epsilon     = graph.tensor(fe::graph::Tensor_attributes()
+                                    .set_name("epsilon")
+                                    .set_dim({1, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_is_pass_by_value(true));
+    auto momentum    = graph.tensor(fe::graph::Tensor_attributes()
+                                     .set_name("momentum")
+                                     .set_dim({1, 1, 1, 1})
+                                     .set_stride({1, 1, 1, 1})
+                                     .set_is_pass_by_value(true));
     auto accum_count = graph.tensor(fe::graph::Tensor_attributes()
                                         .set_name("accum_count")
+                                        .set_dim({1, 1, 1, 1})
+                                        .set_stride({1, 1, 1, 1})
                                         .set_is_pass_by_value(true)
                                         .set_data_type(fe::DataType_t::INT64));
 
