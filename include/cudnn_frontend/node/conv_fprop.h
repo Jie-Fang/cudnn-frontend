@@ -72,8 +72,15 @@ class ConvolutionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ConvolutionNode tensors " << attributes.name << "..." << std::endl;
 
-        for (auto const& tensor : attributes.get_tensors()) {
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+        for (auto const& [name, tensor] : attributes.inputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+        for (auto const& [name, tensor] : attributes.outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
         }
 
         return {error_code_t::OK, ""};
@@ -114,8 +121,13 @@ class ConvolutionNode : public INode {
                     .setBeta(0.f)
                     .build();
 
-            for (auto const& tensor : attributes.get_tensors()) {
-                if (tensor->get_is_virtual() == false) {
+            for (auto const& [name, tensor] : attributes.inputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
+            for (auto const& [name, tensor] : attributes.outputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
                     uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
