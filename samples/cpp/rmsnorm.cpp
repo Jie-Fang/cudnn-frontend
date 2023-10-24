@@ -39,10 +39,17 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
                               .set_data_type(fe::DataType_t::FLOAT)
                               .set_dim({batch_size * seq_length, hidden_size, 1, 1})
                               .set_stride({hidden_size, 1, hidden_size, hidden_size}));
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
+    auto scale = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, hidden_size, 1, 1})
+                                  .set_stride({hidden_size, 1, hidden_size, hidden_size})
+                                  .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
+    auto epsilon = graph.tensor(fe::graph::Tensor_attributes()
+                                    .set_name("epsilon")
+                                    .set_dim({1, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_data_type(fe::DataType_t::FLOAT));
 
     auto rmsnorm_options =
         fe::graph::Rmsnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon);
@@ -102,11 +109,22 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
                               .set_data_type(fe::DataType_t::FLOAT)
                               .set_dim({batch_size * seq_length, hidden_size, 1, 1})
                               .set_stride({hidden_size, 1, hidden_size, hidden_size}));
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
+    auto scale = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, hidden_size, 1, 1})
+                                  .set_stride({hidden_size, 1, hidden_size, hidden_size})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto bias  = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("bias")
+                                 .set_dim({1, hidden_size, 1, 1})
+                                 .set_stride({hidden_size, 1, hidden_size, hidden_size})
+                                 .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
+    auto epsilon = graph.tensor(fe::graph::Tensor_attributes()
+                                    .set_name("epsilon")
+                                    .set_dim({1, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_data_type(fe::DataType_t::FLOAT));
 
     auto rmsnorm_options = fe::graph::Rmsnorm_attributes()
                                .set_forward_phase(fe::NormFwdPhase_t::INFERENCE)
@@ -174,9 +192,16 @@ TEST_CASE("RmsNorm Backward", "[rmsnorm][graph]") {
                                .set_dim({batch_size * seq_length, hidden_size, 1, 1})
                                .set_stride({hidden_size, 1, hidden_size, hidden_size}));
 
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto inv_variance =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+    auto scale        = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, hidden_size, 1, 1})
+                                  .set_stride({hidden_size, 1, hidden_size, hidden_size})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_name("inv_variance")
+                                         .set_dim({batch_size * seq_length, 1, 1, 1})
+                                         .set_stride({1, 1, 1, 1})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
     auto DRMS_options        = fe::graph::Rmsnorm_backward_attributes().has_dbias(false);
     auto [DX, dscale, dbias] = graph.rmsnorm_backward(DY, X, scale, inv_variance, DRMS_options);

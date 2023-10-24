@@ -609,18 +609,19 @@ Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes 
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
                std::shared_ptr<Tensor_attributes> scale,
-               Rmsnorm_attributes options) {
+               Rmsnorm_attributes attributes) {
     // Set outputs
-    auto Y = options.outputs.Y                      = output_tensor(options.get_name() + "::Y");
-    std::shared_ptr<Tensor_attributes> INV_VARIANCE = nullptr;
-    if (options.forward_phase == NormFwdPhase_t::TRAINING) {
-        INV_VARIANCE = options.outputs.INV_VARIANCE = output_tensor(options.get_name() + "::INV_VARIANCE");
+    auto Y = attributes.outputs[Rmsnorm_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    std::shared_ptr<Tensor_attributes> INV_VARIANCE                  = nullptr;
+    if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
+        INV_VARIANCE = attributes.outputs[Rmsnorm_attributes::output_names::INV_VARIANCE] =
+            output_tensor(attributes.name + "::INV_VARIANCE");
     }
     // Set inputs
-    options.inputs.X     = x;
-    options.inputs.SCALE = scale;
+    attributes.inputs[Rmsnorm_attributes::input_names::X]     = x;
+    attributes.inputs[Rmsnorm_attributes::input_names::SCALE] = scale;
 
-    sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<RMSNormNode>(std::move(attributes), context));
 
     return {Y, INV_VARIANCE};
 }
@@ -630,22 +631,25 @@ Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
                         std::shared_ptr<Tensor_attributes> x,
                         std::shared_ptr<Tensor_attributes> scale,
                         std::shared_ptr<Tensor_attributes> inv_variance,
-                        Rmsnorm_backward_attributes options) {
+                        Rmsnorm_backward_attributes attributes) {
     // Set outputs
-    auto DX = options.outputs.DX = output_tensor(options.get_name() + "::DX");
-    auto DScale = options.outputs.DSCALE     = output_tensor(options.get_name() + "::Dscale");
+    auto DX = attributes.outputs[Rmsnorm_backward_attributes::output_names::DX] =
+        output_tensor(attributes.name + "::DX");
+    auto DScale = attributes.outputs[Rmsnorm_backward_attributes::output_names::DSCALE] =
+        output_tensor(attributes.name + "::Dscale");
     std::shared_ptr<Tensor_attributes> DBias = nullptr;
-    if (options.use_dbias.value_or(true)) {
-        DBias = options.outputs.DBIAS = output_tensor(options.get_name() + "::Dbias");
+    if (attributes.use_dbias.value_or(true)) {
+        DBias = attributes.outputs[Rmsnorm_backward_attributes::output_names::DBIAS] =
+            output_tensor(attributes.name + "::Dbias");
     }
 
     // Set inputs
-    options.inputs.DY           = dy;
-    options.inputs.X            = x;
-    options.inputs.SCALE        = scale;
-    options.inputs.INV_VARIANCE = inv_variance;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::DY]           = dy;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::X]            = x;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::SCALE]        = scale;
+    attributes.inputs[Rmsnorm_backward_attributes::input_names::INV_VARIANCE] = inv_variance;
 
-    sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(attributes), context));
 
     return {DX, DScale, DBias};
 }

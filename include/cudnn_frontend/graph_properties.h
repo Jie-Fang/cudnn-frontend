@@ -1325,29 +1325,21 @@ class Reshape_attributes : public Operation {
     }
 };
 
-class Rmsnorm_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> BIAS;
-        std::shared_ptr<Tensor_attributes> EPSILON;
-    } inputs;
+class Rmsnorm_attributes : public Attributes<Rmsnorm_attributes> {
+    friend class Attributes<Rmsnorm_attributes>;
+    friend class RMSNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } outputs;
+    enum class input_names { X, SCALE, BIAS, EPSILON };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, INV_VARIANCE };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X, SCALE, BIAS, EPSILON)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, tag, inputs, outputs, forward_phase)
-
-    Rmsnorm_attributes() : Operation(Tag::RMSNorm) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, inputs, outputs, forward_phase)
 
     Rmsnorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -1357,113 +1349,35 @@ class Rmsnorm_attributes : public Operation {
 
     Rmsnorm_attributes&
     set_bias(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.BIAS = value;
+        inputs[Rmsnorm_attributes::input_names::BIAS] = value;
         return *this;
     }
 
     Rmsnorm_attributes&
     set_epsilon(std::shared_ptr<Tensor_attributes>& value) {
-        inputs.EPSILON = value;
-        return *this;
-    }
-
-    Rmsnorm_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Rmsnorm_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    void
-    make_outputs(std::function<std::shared_ptr<Tensor_attributes>(std::string const&)> output_tensor) {
-        outputs.Y = output_tensor(name + "_Y_output");
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.INV_VARIANCE = output_tensor(name + "_INV_VARIANCE_output");
-        }
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Rmsnorm_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.EPSILON->fill_from_context(context);
-
-        outputs.Y->fill_from_context(context);
-        if (forward_phase == NormFwdPhase_t::TRAINING) {
-            outputs.INV_VARIANCE->fill_from_context(context);
-        }
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Rmsnorm_attributes::input_names::EPSILON] = value;
         return *this;
     }
 };
 
-class Rmsnorm_backward_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> DY;
-        std::shared_ptr<Tensor_attributes> X;
-        std::shared_ptr<Tensor_attributes> SCALE;
-        std::shared_ptr<Tensor_attributes> INV_VARIANCE;
-    } inputs;
+class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attributes> {
+    friend class Attributes<Rmsnorm_backward_attributes>;
+    friend class DRMSNormNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> DX;
-        std::shared_ptr<Tensor_attributes> DSCALE;
-        std::shared_ptr<Tensor_attributes> DBIAS;
-    } outputs;
+    enum class input_names { DY, X, SCALE, INV_VARIANCE };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, DY, X, SCALE, INV_VARIANCE)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, DX, DSCALE, DBIAS)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, tag, inputs, outputs)
-
+    enum class output_names { DX, DSCALE, DBIAS };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     std::optional<bool> use_dbias;
 
-    Rmsnorm_backward_attributes() : Operation(Tag::DRMSNorm) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, inputs, outputs)
 
     Rmsnorm_backward_attributes&
     has_dbias(bool value) {
         use_dbias = value;
-        return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Rmsnorm_backward_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        inputs.SCALE->fill_from_context(context);
-        inputs.DY->fill_from_context(context);
-        inputs.INV_VARIANCE->fill_from_context(context);
-
-        outputs.DX->fill_from_context(context);
-        outputs.DSCALE->fill_from_context(context);
-        if (outputs.DBIAS) outputs.DBIAS->fill_from_context(context);
-
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };
