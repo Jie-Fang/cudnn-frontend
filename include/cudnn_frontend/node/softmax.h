@@ -39,6 +39,7 @@ class SoftmaxNode : public INode {
                     << std::endl;
 
         attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Fill properties of virtual tensors
         auto const& p_dim = attributes.inputs[Softmax_attributes::input_names::P]->get_dim();

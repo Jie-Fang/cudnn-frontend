@@ -21,11 +21,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
     std::shared_ptr<Tensor_attributes> alibi_slopes;
 
    public:
-    Scaled_dot_product_flash_attention_attributes options;
+    Scaled_dot_product_flash_attention_attributes attributes;
 
-    ScaledDotProductFlashAttentionNode(Scaled_dot_product_flash_attention_attributes&& options_,
+    ScaledDotProductFlashAttentionNode(Scaled_dot_product_flash_attention_attributes&& attributes_,
                                        detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -35,26 +35,41 @@ class ScaledDotProductFlashAttentionNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating ScaledDotProductFlashAttentionNode " << options.name << "..." << std::endl;
+                    << "Validating ScaledDotProductFlashAttentionNode " << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.inputs.Q->get_stride().back() != 1 || options.inputs.K->get_stride().back() != 1 ||
-                options.inputs.V->get_stride().back() != 1 || options.outputs.O->get_stride().back() != 1,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "The stride for the last dimension corresponding to the embedding size per head"
-            " should be 1");
+        auto const& q    = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::Q);
+        bool const has_q = (q != attributes.inputs.end()) && (q->second != nullptr);
+        auto const& k    = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::K);
+        bool const has_k = (k != attributes.inputs.end()) && (k->second != nullptr);
+        auto const& v    = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::V);
+        bool const has_v = (v != attributes.inputs.end()) && (v->second != nullptr);
+        auto const& o    = attributes.outputs.find(Scaled_dot_product_flash_attention_attributes::output_names::O);
+        bool const has_o = (o != attributes.outputs.end()) && (o->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_q, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input q not set");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_k, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input k not set");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_v, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input v not set");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_o, error_code_t::ATTRIBUTE_NOT_SET, "Tensor output o not set");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.is_inference.has_value() == false,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(q->second->get_stride().back() != 1 || k->second->get_stride().back() != 1 ||
+                                           v->second->get_stride().back() != 1 || o->second->get_stride().back() != 1,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "The stride for the last dimension corresponding to the embedding size per head"
+                                       " should be 1");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.is_inference.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "is_infernece attribute not set");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.dropout_probability.has_value() && options.inputs.Dropout_mask,
+        auto const& dropout_mask =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::Dropout_mask);
+        bool const has_dropout_mask = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && has_dropout_mask,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Using both, custom dropout mask and internal-mask generation using dropout "
                                        "probability, is ill-formed.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0,
+            attributes.dropout_probability.has_value() && attributes.dropout_probability.value() == 1.0,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
@@ -62,17 +77,25 @@ class ScaledDotProductFlashAttentionNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.padding_mask && (!(options.inputs.SEQ_LEN_Q) || !(options.inputs.SEQ_LEN_KV)),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Padding mask requires seq_len_q and seq_len_kv to be set.");
+        auto const& seq_len_q =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q);
+        bool const has_seq_len_q = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (!options.padding_mask) && (options.inputs.SEQ_LEN_Q || options.inputs.SEQ_LEN_KV),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+        auto const& seq_len_kv =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV);
+        bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Padding mask requires seq_len_q and seq_len_kv to be set.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Attn_scale && options.attn_scale_value.has_value(),
+        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+
+        auto const& attn_scale =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale);
+        bool const has_attn_scale = (attn_scale != attributes.inputs.end()) && (attn_scale->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
@@ -82,22 +105,23 @@ class ScaledDotProductFlashAttentionNode : public INode {
     error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  "
-                    << options.name << "..." << std::endl;
+                    << attributes.name << "..." << std::endl;
 
         // DO NOT REMOVE
         // input data type is needed for:
         // - aType of bmm2
         // - dropout scale in pre 8.9.3
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Gather dims to fill properties of virtual tensors
-        auto const& q_dim = options.inputs.Q->get_dim();
+        auto const& q_dim = attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q]->get_dim();
         auto b            = q_dim[0];
         auto h            = q_dim[1];
         auto s_q          = q_dim[2];
-        auto const& k_dim = options.inputs.K->get_dim();
+        auto const& k_dim = attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K]->get_dim();
         auto s_kv         = k_dim[2];
-        auto const& v_dim = options.inputs.V->get_dim();
+        auto const& v_dim = attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::V]->get_dim();
         auto d_v          = v_dim[3];
 
         // cuDNN frontend API attention requires Q, K, V where
@@ -111,17 +135,17 @@ class ScaledDotProductFlashAttentionNode : public INode {
         // So the code below maps the K->KT
         std::vector<int64_t> temp_vec;
 
-        temp_vec = options.inputs.K->get_dim();
+        temp_vec = attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K]->get_dim();
         std::swap(temp_vec[2], temp_vec[3]);
-        options.inputs.K->set_dim(temp_vec);
+        attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K]->set_dim(temp_vec);
 
-        temp_vec = options.inputs.K->get_stride();
+        temp_vec = attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K]->get_stride();
         std::swap(temp_vec[2], temp_vec[3]);
-        options.inputs.K->set_stride(temp_vec);
+        attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K]->set_stride(temp_vec);
 
         std::shared_ptr<Tensor_attributes> last_output;
 
-        // Lower options to bmm1 options
+        // Lower attributes to bmm1 attributes
         auto bmm1_output = std::make_shared<Tensor_attributes>();
         bmm1_output
             ->set_is_virtual(true)
@@ -131,24 +155,30 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         Matmul_attributes bmm1_attributes;
         bmm1_attributes.set_name("bmm1");
-        bmm1_attributes.inputs[Matmul_attributes::input_names::A]          = options.inputs.Q;
-        bmm1_attributes.inputs[Matmul_attributes::input_names::B]          = options.inputs.K;
-        bmm1_attributes.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
-        bmm1_attributes.inputs[Matmul_attributes::input_names::N_override] = options.inputs.SEQ_LEN_KV;
+        bmm1_attributes.inputs[Matmul_attributes::input_names::A] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q];
+        bmm1_attributes.inputs[Matmul_attributes::input_names::B] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K];
+        bmm1_attributes.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q];
+        bmm1_attributes.inputs[Matmul_attributes::input_names::N_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV];
         last_output = bmm1_attributes.outputs[Matmul_attributes::output_names::C] = bmm1_output;
         auto bmm1_node = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
         sub_nodes.emplace_back(std::move(bmm1_node));
 
         // Optional scale
-        if (options.attn_scale_value.has_value()) {
-            options.inputs.Attn_scale = std::make_shared<Tensor_attributes>();
-            options.inputs.Attn_scale->set_dim({1, 1, 1, 1})
+        if (attributes.attn_scale_value.has_value()) {
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale] =
+                std::make_shared<Tensor_attributes>();
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale]
+                ->set_dim({1, 1, 1, 1})
                 .set_stride({1, 1, 1, 1})
                 .set_data_type(DataType_t::FLOAT)
                 .set_is_pass_by_value(true);
         }
-        if (options.inputs.Attn_scale) {
-            // Lower options to scale options
+        if (attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale]) {
+            // Lower attributes to scale attributes
             auto attn_scale_output = std::make_shared<Tensor_attributes>();
             attn_scale_output->set_is_virtual(true);
 
@@ -156,15 +186,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
             scale_attributes.set_name("attn_scale");
             scale_attributes.set_mode(PointwiseMode_t::MUL);
             scale_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            scale_attributes.inputs[Pointwise_attributes::input_names::IN_1] = options.inputs.Attn_scale;
+            scale_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale];
             last_output = scale_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = attn_scale_output;
             auto scale_node = std::make_unique<PointwiseNode>(std::move(scale_attributes), context);
             sub_nodes.emplace_back(std::move(scale_node));
         }
 
         // Optional bias
-        if (options.inputs.Bias) {
-            // Lower options to add options
+        if (attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias]) {
+            // Lower attributes to add attributes
             auto bias_output = std::make_shared<Tensor_attributes>();
             bias_output->set_is_virtual(true);
 
@@ -172,14 +203,15 @@ class ScaledDotProductFlashAttentionNode : public INode {
             add_attributes.set_name("bias");
             add_attributes.set_mode(PointwiseMode_t::ADD);
             add_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] = options.inputs.Bias;
+            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias];
             last_output = add_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = bias_output;
             auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
             sub_nodes.emplace_back(std::move(add_node));
         }
 
-        if (options.alibi_mask) {
-            // Lower options to generate row index options
+        if (attributes.alibi_mask) {
+            // Lower attributes to generate row index attributes
             auto row_index_output = std::make_shared<Tensor_attributes>();
             row_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
 
@@ -193,7 +225,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
             sub_nodes.emplace_back(std::move(row_index_node));
 
-            // Lower options to generate col index options
+            // Lower attributes to generate col index attributes
             auto col_index_output = std::make_shared<Tensor_attributes>();
             col_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
 
@@ -207,7 +239,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
             sub_nodes.emplace_back(std::move(col_index_node));
 
-            // Lower options to sub options
+            // Lower attributes to sub attributes
             auto sub_output = std::make_shared<Tensor_attributes>();
             sub_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
 
@@ -250,8 +282,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             sub_nodes.emplace_back(std::move(add_node));
         }
 
-        if (options.padding_mask) {
-            // Lower options to generate row index options
+        if (attributes.padding_mask) {
+            // Lower attributes to generate row index attributes
             auto row_index_output = std::make_shared<Tensor_attributes>();
             row_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
 
@@ -265,7 +297,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
             sub_nodes.emplace_back(std::move(row_index_node));
 
-            // Lower options to generate col index options
+            // Lower attributes to generate col index attributes
             auto col_index_output = std::make_shared<Tensor_attributes>();
             col_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
 
@@ -287,8 +319,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             row_less_seq_q_attributes.set_name("row_less_seq_q")
                 .set_mode(PointwiseMode_t::CMP_LT)
                 .set_compute_data_type(DataType_t::INT32);
-            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = row_index_output;
-            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_Q;
+            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_0] = row_index_output;
+            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q];
             row_less_seq_q_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_less_seq_q_output;
             auto row_less_seq_q_node = std::make_unique<PointwiseNode>(std::move(row_less_seq_q_attributes), context);
             sub_nodes.emplace_back(std::move(row_less_seq_q_node));
@@ -301,8 +334,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
             col_less_seq_kv_attributes.set_name("col_less_seq_kv")
                 .set_mode(PointwiseMode_t::CMP_LT)
                 .set_compute_data_type(DataType_t::INT32);
-            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = col_index_output;
-            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_KV;
+            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_0] = col_index_output;
+            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV];
             col_less_seq_kv_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_less_seq_kv_output;
             auto col_less_seq_kv_node = std::make_unique<PointwiseNode>(std::move(col_less_seq_kv_attributes), context);
             sub_nodes.emplace_back(std::move(col_less_seq_kv_node));
@@ -321,7 +355,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto logical_and_node = std::make_unique<PointwiseNode>(std::move(logical_and_attributes), context);
             sub_nodes.emplace_back(std::move(logical_and_node));
 
-            // Lower options to binary select options
+            // Lower attributes to binary select attributes
             negative_inf_padding = std::make_shared<Tensor_attributes>();
             negative_inf_padding->set_dim({1, 1, 1, 1})
                 .set_stride({1, 1, 1, 1})
@@ -344,8 +378,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
             sub_nodes.emplace_back(std::move(binary_select_node));
         }
 
-        if (options.causal_mask) {
-            // Lower options to generate row index options
+        if (attributes.causal_mask) {
+            // Lower attributes to generate row index attributes
             auto row_index_output = std::make_shared<Tensor_attributes>();
             row_index_output->set_is_virtual(true);
 
@@ -357,7 +391,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
             sub_nodes.emplace_back(std::move(row_index_node));
 
-            // Lower options to generate col index options
+            // Lower attributes to generate col index attributes
             auto col_index_output = std::make_shared<Tensor_attributes>();
             col_index_output->set_is_virtual(true);
 
@@ -369,7 +403,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
             sub_nodes.emplace_back(std::move(col_index_node));
 
-            // Lower options to greater than options
+            // Lower attributes to greater than attributes
             auto row_greater_than_col_output = std::make_shared<Tensor_attributes>();
             row_greater_than_col_output
                 ->set_is_virtual(true)
@@ -385,7 +419,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto greater_than_node = std::make_unique<PointwiseNode>(std::move(greater_than_attributes), context);
             sub_nodes.emplace_back(std::move(greater_than_node));
 
-            // Lower options to binary select options
+            // Lower attributes to binary select attributes
             negative_inf_causal = std::make_shared<Tensor_attributes>();
             negative_inf_causal->set_dim({1, 1, 1, 1})
                 .set_stride({1, 1, 1, 1})
@@ -408,13 +442,13 @@ class ScaledDotProductFlashAttentionNode : public INode {
             sub_nodes.emplace_back(std::move(binary_select_node));
         }
 
-        // Lower options to softmax options
+        // Lower attributes to softmax attributes
         auto softmax_output = std::make_shared<Tensor_attributes>();
         softmax_output->set_is_virtual(true);
 
         // Create a virtual output for stats if inference step otherwise output.Stats is already set
-        auto softmax_stats = options.outputs.Stats;
-        if (options.is_inference.value() == true) {
+        auto softmax_stats = attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::Stats];
+        if (attributes.is_inference.value() == true) {
             softmax_stats = std::make_shared<Tensor_attributes>();
             softmax_stats->set_is_virtual(true);
         }
@@ -430,18 +464,18 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         // Two cases for training: dropout present or not
         bool dropout_present = false;
-        if (options.dropout_probability.has_value()) {
+        if (attributes.dropout_probability.has_value()) {
             dropout_present = true;
             // Special case: Skip dropout when 0.0 probability. Only do for 8.9.3 and up as rng isn't optional earlier.
-            if (cudnnGetVersion() > 8902 && options.dropout_probability.value() == 0.0) {
+            if (cudnnGetVersion() > 8902 && attributes.dropout_probability.value() == 0.0) {
                 dropout_present = false;
             }
-        } else if (options.inputs.Dropout_mask) {
+        } else if (attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_mask]) {
             dropout_present = true;
         }
 
         if (dropout_present) {
-            // Lower options to rng options
+            // Lower attributes to rng attributes
             auto rng_output = std::make_shared<Tensor_attributes>();
             rng_output
                 ->set_is_virtual(true)
@@ -453,14 +487,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
             rng_attributes.set_name("rng");
             rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
                 .set_bernoulli_probability(1.0 -
-                                           options.dropout_probability.value());  // As user sets dropout probability
-            rng_attributes.inputs[Rng_attributes::input_names::Seed]   = options.inputs.Seed;
-            rng_attributes.inputs[Rng_attributes::input_names::Offset] = options.inputs.Offset;
-            rng_attributes.outputs[Rng_attributes::output_names::Y]    = rng_output;
+                                           attributes.dropout_probability.value());  // As user sets dropout probability
+            rng_attributes.inputs[Rng_attributes::input_names::Seed] =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Seed];
+            rng_attributes.inputs[Rng_attributes::input_names::Offset] =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Offset];
+            rng_attributes.outputs[Rng_attributes::output_names::Y] = rng_output;
             auto rng_node = std::make_unique<RngNode>(std::move(rng_attributes), context);
             sub_nodes.emplace_back(std::move(rng_node));
 
-            // Lower options to mask options
+            // Lower attributes to mask attributes
             auto dropout_mask_output = std::make_shared<Tensor_attributes>();
             dropout_mask_output->set_is_virtual(true);
 
@@ -473,7 +509,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             auto mask_node = std::make_unique<PointwiseNode>(std::move(mask_attributes), context);
             sub_nodes.emplace_back(std::move(mask_node));
 
-            // Lower options to dropout_scale options
+            // Lower attributes to dropout_scale attributes
             auto dropout_scale_output = std::make_shared<Tensor_attributes>();
             dropout_scale_output->set_is_virtual(true);
 
@@ -483,7 +519,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_is_pass_by_value(true)
 // Hard code data type input type as FE itself will place value in variant pack later
 #if CUDNN_VERSION < 8903
-                .set_data_type(options.inputs.Q->get_data_type());
+                .set_data_type(
+                    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q]->get_data_type());
 #else
                 .set_data_type(DataType_t::FLOAT);
 #endif
@@ -499,27 +536,35 @@ class ScaledDotProductFlashAttentionNode : public INode {
             sub_nodes.emplace_back(std::move(dropout_scale_node));
         }
 
-        // Lower options to bmm2 options
+        // Lower attributes to bmm2 attributes
         // Requirement by cudnn backend to take in bmm2 aType as i/o type.
-        last_output->set_data_type(options.inputs.Q->get_data_type());
+        last_output->set_data_type(
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q]->get_data_type());
 
         Matmul_attributes bmm2_attributes;
         bmm2_attributes.set_name("bmm2");
-        bmm2_attributes.inputs[Matmul_attributes::input_names::A]          = last_output;
-        bmm2_attributes.inputs[Matmul_attributes::input_names::B]          = options.inputs.V;
-        bmm2_attributes.outputs[Matmul_attributes::output_names::C]        = options.outputs.O;
-        bmm2_attributes.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
-        bmm2_attributes.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_KV;
+        bmm2_attributes.inputs[Matmul_attributes::input_names::A] = last_output;
+        bmm2_attributes.inputs[Matmul_attributes::input_names::B] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::V];
+        bmm2_attributes.outputs[Matmul_attributes::output_names::C] =
+            attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O];
+        bmm2_attributes.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q];
+        bmm2_attributes.inputs[Matmul_attributes::input_names::K_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV];
         auto bmm2_node = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
         sub_nodes.emplace_back(std::move(bmm2_node));
 
         // Set dims if user did not
-        if (options.outputs.O->get_dim().empty()) {
-            options.outputs.O->set_dim({b, h, s_q, d_v});
+        if (attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O]->get_dim().empty()) {
+            attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O]->set_dim(
+                {b, h, s_q, d_v});
         }
-        if (options.outputs.O->get_stride().empty()) {
-            auto const O_dim = options.outputs.O->get_dim();
-            options.outputs.O->set_stride({O_dim[3] * O_dim[2] * O_dim[1], O_dim[3] * O_dim[2], O_dim[3], 1});
+        if (attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O]->get_stride().empty()) {
+            auto const O_dim =
+                attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O]->get_dim();
+            attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O]->set_stride(
+                {O_dim[3] * O_dim[2] * O_dim[1], O_dim[3] * O_dim[2], O_dim[3], 1});
         }
 
         return {error_code_t::OK, ""};
@@ -527,7 +572,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
     virtual int64_t
     get_fe_workspace_size_node() const override final {
-        int64_t const h = options.inputs.Q->get_dim()[1];
+        auto const& q   = attributes.inputs.find(Scaled_dot_product_flash_attention_attributes::input_names::Q);
+        int64_t const h = q->second->get_dim()[1];
         return h * sizeof(float);
     }
 
@@ -536,27 +582,28 @@ class ScaledDotProductFlashAttentionNode : public INode {
         cudnnHandle_t handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) override {
-        if (options.dropout_probability.has_value() && options.dropout_probability.value() != 0.0) {
+        if (attributes.dropout_probability.has_value() && attributes.dropout_probability.value() != 0.0) {
 #if CUDNN_VERSION < 8903
-            half dropout_scale_value = (1.0f / (1.0f - options.dropout_probability.value()));
+            half dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
 #else
-            float dropout_scale_value = (1.0f / (1.0f - options.dropout_probability.value()));
+            float dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
 #endif
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
 
-        if (options.padding_mask) {
+        if (attributes.padding_mask) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
         }
 
-        if (options.causal_mask) {
+        if (attributes.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
 
-        if (options.alibi_mask) {
-            int64_t const h            = options.inputs.Q->get_dim()[1];
+        if (attributes.alibi_mask) {
+            int64_t const h =
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q]->get_dim()[1];
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
 
             cudaStream_t stream;
@@ -566,8 +613,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
         }
 
-        if (options.attn_scale_value.has_value()) {
-            tensor_to_pass_by_value.emplace(options.inputs.Attn_scale, options.attn_scale_value.value());
+        if (attributes.attn_scale_value.has_value()) {
+            tensor_to_pass_by_value.emplace(
+                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale],
+                attributes.attn_scale_value.value());
         }
 
         return {error_code_t::OK, ""};

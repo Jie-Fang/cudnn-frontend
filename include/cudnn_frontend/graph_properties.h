@@ -1190,27 +1190,28 @@ class Scaled_dot_product_attention_attributes : public Operation {
     }
 };
 
-class Scaled_dot_product_flash_attention_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> Q;
-        std::shared_ptr<Tensor_attributes> K;
-        std::shared_ptr<Tensor_attributes> V;
-        std::shared_ptr<Tensor_attributes> Attn_scale;
-        std::shared_ptr<Tensor_attributes> Bias;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_Q;
-        std::shared_ptr<Tensor_attributes> SEQ_LEN_KV;
-        std::shared_ptr<Tensor_attributes> Seed;
-        std::shared_ptr<Tensor_attributes> Offset;
-        std::shared_ptr<Tensor_attributes> Dropout_mask;
-        std::shared_ptr<Tensor_attributes> Dropout_scale;
-    } inputs;
+class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_dot_product_flash_attention_attributes> {
+    friend class Attributes<Scaled_dot_product_flash_attention_attributes>;
+    friend class ScaledDotProductFlashAttentionNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> O;
-        std::shared_ptr<Tensor_attributes> Stats;  // softmax stats dumped when in forward training mode. Users first
-                                                   // need to check whether its nullptr.
-    } outputs;
+    enum class input_names {
+        Q,
+        K,
+        V,
+        Attn_scale,
+        Bias,
+        SEQ_LEN_Q,
+        SEQ_LEN_KV,
+        Seed,
+        Offset,
+        Dropout_mask,
+        Dropout_scale
+    };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { O, Stats };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::optional<bool> is_inference;
     bool alibi_mask   = false;
@@ -1219,8 +1220,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
-    Scaled_dot_product_flash_attention_attributes() : Operation(Tag::Scaled_dot_product_flash_attention) {}
-
+   public:
     Scaled_dot_product_flash_attention_attributes&
     set_is_inference(bool const value) {
         is_inference = value;
@@ -1229,7 +1229,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
 
     Scaled_dot_product_flash_attention_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Attn_scale = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale] = value;
         return *this;
     }
 
@@ -1241,7 +1241,7 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
 
     Scaled_dot_product_flash_attention_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
-        inputs.Bias = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias] = value;
         return *this;
     }
 
@@ -1259,13 +1259,13 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
 
     Scaled_dot_product_flash_attention_attributes&
     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_Q = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q] = value;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_attributes&
     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs.SEQ_LEN_KV = value;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV] = value;
         return *this;
     }
 
@@ -1279,43 +1279,16 @@ class Scaled_dot_product_flash_attention_attributes : public Operation {
     set_dropout(float const probability,
                 std::shared_ptr<Tensor_attributes> seed,
                 std::shared_ptr<Tensor_attributes> offset) {
-        dropout_probability = probability;
-        inputs.Seed         = seed;
-        inputs.Offset       = offset;
+        dropout_probability                                                        = probability;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Seed]   = seed;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Offset] = offset;
         return *this;
     }
 
     Scaled_dot_product_flash_attention_attributes&
     set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
-        inputs.Dropout_mask  = mask;
-        inputs.Dropout_scale = scale;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_compute_data_type(DataType_t const value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Scaled_dot_product_flash_attention_attributes&
-    fill_from_context(detail::Context const& context) {
-        // Fill node's tensors
-        inputs.Q->fill_from_context(context);
-        inputs.K->fill_from_context(context);
-        inputs.V->fill_from_context(context);
-        outputs.O->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_mask]  = mask;
+        inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_scale] = scale;
         return *this;
     }
 };

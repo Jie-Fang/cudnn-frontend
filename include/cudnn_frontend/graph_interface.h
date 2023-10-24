@@ -703,21 +703,23 @@ inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
                                           std::shared_ptr<Tensor_attributes> k,
                                           std::shared_ptr<Tensor_attributes> v,
-                                          Scaled_dot_product_flash_attention_attributes options) {
+                                          Scaled_dot_product_flash_attention_attributes attributes) {
     // Make required output tensors
-    auto O = options.outputs.O = output_tensor(options.get_name() + "::O");
+    auto O = attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O] =
+        output_tensor(attributes.name + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (options.is_inference == false) {
-        Stats = options.outputs.Stats = output_tensor(options.get_name() + "::Stats");
+    if (attributes.is_inference == false) {
+        Stats = attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::Stats] =
+            output_tensor(attributes.name + "::Stats");
     }
 
     // Set inputs
-    options.inputs.Q = q;
-    options.inputs.K = k;
-    options.inputs.V = v;
+    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q] = q;
+    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K] = k;
+    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::V] = v;
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionNode>(std::move(attributes), context));
 
     return {O, Stats};
 }
