@@ -130,21 +130,6 @@ class Graph : public INode {
                                                                             Instancenorm_backward_attributes);
     std::array<std::shared_ptr<Tensor_attributes>, 2> genstats(std::shared_ptr<Tensor_attributes>, Genstats_attributes);
 
-    std::shared_ptr<Tensor_attributes> matmul(std::shared_ptr<Tensor_attributes>,
-                                              std::shared_ptr<Tensor_attributes>,
-                                              Matmul_attributes);
-
-    std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>, Pointwise_attributes);
-    std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>,
-                                                 std::shared_ptr<Tensor_attributes>,
-                                                 Pointwise_attributes);
-    std::shared_ptr<Tensor_attributes> pointwise(std::shared_ptr<Tensor_attributes>,
-                                                 std::shared_ptr<Tensor_attributes>,
-                                                 std::shared_ptr<Tensor_attributes>,
-                                                 Pointwise_attributes);
-
-    std::shared_ptr<Tensor_attributes> reduction(std::shared_ptr<Tensor_attributes>, Reduction_attributes);
-
     std::array<std::shared_ptr<Tensor_attributes>, 2> rmsnorm(std::shared_ptr<Tensor_attributes>,
                                                               std::shared_ptr<Tensor_attributes>,
                                                               Rmsnorm_attributes);
@@ -563,65 +548,6 @@ Graph::conv_wgrad(std::shared_ptr<Tensor_attributes> dy,
     return DW;
 }
 
-inline std::shared_ptr<Tensor_attributes>
-Graph::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes attributes) {
-    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-        output_tensor(attributes.name + "::OUT_0");
-
-    // Set inputs
-    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-
-    return OUT_0;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
-                 std::shared_ptr<Tensor_attributes> b,
-                 Pointwise_attributes attributes) {
-    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-        output_tensor(attributes.name + "::OUT_0");
-
-    // Set inputs
-    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
-    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-
-    return OUT_0;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
-                 std::shared_ptr<Tensor_attributes> b,
-                 std::shared_ptr<Tensor_attributes> c,
-                 Pointwise_attributes attributes) {
-    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-        output_tensor(attributes.name + "::OUT_0");
-
-    // Set inputs
-    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
-    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
-    attributes.inputs[Pointwise_attributes::input_names::IN_2] = c;
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-
-    return OUT_0;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes attributes) {
-    auto Y = attributes.outputs[Reduction_attributes::output_names::Y] = output_tensor(attributes.name + "_output");
-
-    // Set inputs
-    attributes.inputs[Reduction_attributes::input_names::X] = input;
-
-    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
-
-    return Y;
-}
-
 inline std::array<std::shared_ptr<Tensor_attributes>, 2>
 Graph::rmsnorm(std::shared_ptr<Tensor_attributes> x,
                std::shared_ptr<Tensor_attributes> scale,
@@ -668,21 +594,6 @@ Graph::rmsnorm_backward(std::shared_ptr<Tensor_attributes> dy,
     sub_nodes.emplace_back(std::make_unique<DRMSNormNode>(std::move(attributes), context));
 
     return {DX, DScale, DBias};
-}
-
-inline std::shared_ptr<Tensor_attributes>
-Graph::matmul(std::shared_ptr<Tensor_attributes> a,
-              std::shared_ptr<Tensor_attributes> b,
-              Matmul_attributes attributes) {
-    auto C = attributes.outputs[Matmul_attributes::output_names::C] = output_tensor(attributes.name + "::C");
-
-    // Set inputs
-    attributes.inputs[Matmul_attributes::input_names::A] = a;
-    attributes.inputs[Matmul_attributes::input_names::B] = b;
-
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(attributes), context));
-
-    return C;
 }
 
 // inline std::array<std::shared_ptr<Tensor_attributes>, 2>

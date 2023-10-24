@@ -47,101 +47,36 @@ class SoftmaxNode : public INode {
         auto h            = p_dim[1];
         auto s_q          = p_dim[2];
 
-        // Lower attributes to max attributes
-        auto max_output = std::make_shared<Tensor_attributes>();
-        max_output
-            ->set_is_virtual(true)
-            // Reduction today has no dim inferencing logic today. Hence, hardcoding output dim here.
-            .set_dim({b, h, s_q, 1})
-            .set_stride({h * s_q, s_q, 1, 1});
+        auto max_attributes    = Reduction_attributes().set_name("max").set_mode(ReductionMode_t::MAX);
+        auto const& max_output = reduction(attributes.inputs[Softmax_attributes::input_names::P], max_attributes);
+        max_output->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
 
-        auto max_attributes = Reduction_attributes();
-        max_attributes.set_name("max");
-        max_attributes.set_mode(ReductionMode_t::MAX);
-        max_attributes.inputs[Reduction_attributes::input_names::X] =
-            attributes.inputs[Softmax_attributes::input_names::P];
-        max_attributes.outputs[Reduction_attributes::output_names::Y] = max_output;
-        auto max_node = std::make_unique<ReductionNode>(std::move(max_attributes), context);
-        sub_nodes.emplace_back(std::move(max_node));
+        auto sub_attributes = Pointwise_attributes().set_name("sub").set_mode(PointwiseMode_t::SUB);
+        auto const& sub_output =
+            pointwise(attributes.inputs[Softmax_attributes::input_names::P], max_output, sub_attributes);
 
-        // Lower attributes to sub attributes
-        auto sub_output = std::make_shared<Tensor_attributes>();
-        sub_output->set_is_virtual(true);
+        auto exp_attributes    = Pointwise_attributes().set_name("exp").set_mode(PointwiseMode_t::EXP);
+        auto const& exp_output = pointwise(sub_output, exp_attributes);
 
-        Pointwise_attributes sub_attributes;
-        sub_attributes.set_name("sub");
-        sub_attributes.set_mode(PointwiseMode_t::SUB);
-        sub_attributes.inputs[Pointwise_attributes::input_names::IN_0] =
-            attributes.inputs[Softmax_attributes::input_names::P];
-        sub_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = max_output;
-        sub_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = sub_output;
-        auto sub_node = std::make_unique<PointwiseNode>(std::move(sub_attributes), context);
-        sub_nodes.emplace_back(std::move(sub_node));
-
-        // Lower attributes to exp attributes
-        auto exp_output = std::make_shared<Tensor_attributes>();
-        exp_output->set_is_virtual(true);
-
-        Pointwise_attributes exp_attributes;
-        exp_attributes.set_name("exp");
-        exp_attributes.set_mode(PointwiseMode_t::EXP);
-        exp_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = sub_output;
-        exp_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = exp_output;
-        auto exp_node = std::make_unique<PointwiseNode>(std::move(exp_attributes), context);
-        sub_nodes.emplace_back(std::move(exp_node));
-
-        // Lower attributes to reduce sum attributes
-        auto sum_output = std::make_shared<Tensor_attributes>();
-        sum_output
-            ->set_is_virtual(true)
-            // Reduction today has no dim inferencing logic today. Hence, hardcoding output dim here.
-            .set_dim({b, h, s_q, 1})
-            .set_stride({h * s_q, s_q, 1, 1});
-
-        auto sum_attributes = Reduction_attributes();
-        sum_attributes.set_name("sum");
-        sum_attributes.set_mode(ReductionMode_t::ADD);
-        sum_attributes.inputs[Reduction_attributes::input_names::X]   = exp_output;
-        sum_attributes.outputs[Reduction_attributes::output_names::Y] = sum_output;
-        auto sum_node = std::make_unique<ReductionNode>(std::move(sum_attributes), context);
-        sub_nodes.emplace_back(std::move(sum_node));
+        auto sum_attributes    = Reduction_attributes().set_name("sum").set_mode(ReductionMode_t::ADD);
+        auto const& sum_output = reduction(exp_output, sum_attributes);
+        sum_output->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
 
         // Another path to add when in flash attention mode.
         if (attributes.use_stats.value()) {
-            // Lower attributes to log attributes
-            auto log_output = std::make_shared<Tensor_attributes>();
-            log_output->set_is_virtual(true);
+            auto log_attributes    = Pointwise_attributes().set_name("log").set_mode(PointwiseMode_t::LOG);
+            auto const& log_output = pointwise(sum_output, log_attributes);
 
-            auto log_attributes = Pointwise_attributes();
-            log_attributes.set_name("log");
-            log_attributes.set_mode(PointwiseMode_t::LOG);
-            log_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = sum_output;
-            log_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = log_output;
-            auto log_node = std::make_unique<PointwiseNode>(std::move(log_attributes), context);
-            sub_nodes.emplace_back(std::move(log_node));
-
-            // Lower attributes to add attributes
-            auto add_attributes = Pointwise_attributes();
-            add_attributes.set_name("add");
-            add_attributes.set_mode(PointwiseMode_t::ADD);
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_0] = max_output;
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] = log_output;
-            add_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-                attributes.outputs[Softmax_attributes::output_names::Stats];
-            auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
-            sub_nodes.emplace_back(std::move(add_node));
+            auto add_attributes = Pointwise_attributes().set_name("add").set_mode(PointwiseMode_t::ADD);
+            // Special non-functional-style call. Needed because output already created and provided to user.
+            pointwise(
+                max_output, log_output, add_attributes, attributes.outputs[Softmax_attributes::output_names::Stats]);
         }
 
         // Lower attributes to div attributes
-        auto div_attributes = Pointwise_attributes();
-        div_attributes.set_name("div");
-        div_attributes.set_mode(PointwiseMode_t::DIV);
-        div_attributes.inputs[Pointwise_attributes::input_names::IN_0] = exp_output;
-        div_attributes.inputs[Pointwise_attributes::input_names::IN_1] = sum_output;
-        div_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-            attributes.outputs[Softmax_attributes::output_names::S];
-        auto div_node = std::make_unique<PointwiseNode>(std::move(div_attributes), context);
-        sub_nodes.emplace_back(std::move(div_node));
+        auto div_attributes = Pointwise_attributes().set_name("div").set_mode(PointwiseMode_t::DIV);
+        // Special non-functional-style call. Needed because output already created and provided to user.
+        pointwise(exp_output, sum_output, div_attributes, attributes.outputs[Softmax_attributes::output_names::S]);
 
         return {error_code_t::OK, ""};
     }

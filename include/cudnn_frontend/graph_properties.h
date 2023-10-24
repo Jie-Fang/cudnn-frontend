@@ -442,9 +442,8 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
 class Matmul_attributes : public Attributes<Matmul_attributes> {
     friend class Attributes<Matmul_attributes>;
     friend class MatmulNode;
-    friend class ScaledDotProductFlashAttentionNode;
     friend class ScaledDotProductFlashAttentionBackwardNode;
-    friend class Graph;
+    friend class INode;
 
     enum class input_names { A, B, M_override, N_override, K_override };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -454,15 +453,32 @@ class Matmul_attributes : public Attributes<Matmul_attributes> {
 
    public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, inputs, outputs)
+
+    Matmul_attributes&
+    set_m_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::M_override] = value;
+        return *this;
+    }
+
+    Matmul_attributes&
+    set_n_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::N_override] = value;
+        return *this;
+    }
+
+    Matmul_attributes&
+    set_k_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::K_override] = value;
+        return *this;
+    }
 };
 
 class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     friend class Attributes<Pointwise_attributes>;
     friend class PointwiseNode;
     friend class SoftmaxNode;
-    friend class ScaledDotProductFlashAttentionNode;
     friend class ScaledDotProductFlashAttentionBackwardNode;
-    friend class Graph;
+    friend class INode;
 
     enum class input_names { IN_0, IN_1, IN_2 };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -671,9 +687,8 @@ class Batchnorm_inference_attributes : public Attributes<Batchnorm_inference_att
 class Reduction_attributes : public Attributes<Reduction_attributes> {
     friend class Attributes<Reduction_attributes>;
     friend class ReductionNode;
-    friend class SoftmaxNode;
     friend class ScaledDotProductFlashAttentionBackwardNode;
-    friend class Graph;
+    friend class INode;
 
     enum class input_names { X };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -701,7 +716,7 @@ class Reduction_attributes : public Attributes<Reduction_attributes> {
 class Rng_attributes : public Attributes<Rng_attributes> {
     friend class Attributes<Rng_attributes>;
     friend class RngNode;
-    friend class ScaledDotProductFlashAttentionNode;
+    friend class INode;
     friend class ScaledDotProductFlashAttentionBackwardNode;
 
     enum class input_names { Seed, Offset };
@@ -1207,8 +1222,8 @@ class Scaled_dot_product_flash_attention_backward_attributes
 
 class Softmax_attributes : public Attributes<Softmax_attributes> {
     friend class Attributes<Softmax_attributes>;
-    friend class ScaledDotProductFlashAttentionNode;
     friend class SoftmaxNode;
+    friend class INode;
 
     enum class input_names { P };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -1216,6 +1231,13 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     enum class output_names { S, Stats };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     std::optional<bool> use_stats;
+
+   public:
+    Softmax_attributes&
+    has_stats(bool const value) {
+        use_stats = value;
+        return *this;
+    }
 };
 
 class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
