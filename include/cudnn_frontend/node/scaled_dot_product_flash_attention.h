@@ -812,8 +812,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Reduction_attributes reduction_add_dO_O_attr;
         reduction_add_dO_O_attr.set_name("reduction_add_dO_O");
         reduction_add_dO_O_attr.set_mode(ReductionMode_t::ADD);
-        reduction_add_dO_O_attr.inputs.X  = last_output;
-        reduction_add_dO_O_attr.outputs.Y = last_output = make_tensor_(true, {b, h, s_q, 1});
+        reduction_add_dO_O_attr.inputs[Reduction_attributes::input_names::X]   = last_output;
+        reduction_add_dO_O_attr.outputs[Reduction_attributes::output_names::Y] = last_output =
+            make_tensor_(true, {b, h, s_q, 1});
         sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(reduction_add_dO_O_attr), context));
 
         // pointwise mul: dropout_scale inverse

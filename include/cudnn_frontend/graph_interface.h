@@ -606,13 +606,13 @@ Graph::pointwise(std::shared_ptr<Tensor_attributes> a,
 }
 
 inline std::shared_ptr<Tensor_attributes>
-Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes options) {
-    auto Y = options.outputs.Y = output_tensor(options.get_name() + "_output");
+Graph::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes attributes) {
+    auto Y = attributes.outputs[Reduction_attributes::output_names::Y] = output_tensor(attributes.name + "_output");
 
     // Set inputs
-    options.inputs.X = input;
+    attributes.inputs[Reduction_attributes::input_names::X] = input;
 
-    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(options), context));
+    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
 
     return Y;
 }

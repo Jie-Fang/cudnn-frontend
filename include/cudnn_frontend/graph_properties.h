@@ -868,25 +868,23 @@ class Batchnorm_inference_attributes : public Operation {
     }
 };
 
-class Reduction_attributes : public Operation {
-   public:
-    struct Inputs {
-        std::shared_ptr<Tensor_attributes> X;
-    } inputs;
+class Reduction_attributes : public Attributes<Reduction_attributes> {
+    friend class Attributes<Reduction_attributes>;
+    friend class ReductionNode;
+    friend class SoftmaxNode;
+    friend class ScaledDotProductFlashAttentionBackwardNode;
+    friend class Graph;
 
-    struct Outputs {
-        std::shared_ptr<Tensor_attributes> Y;
-    } outputs;
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::optional<ReductionMode_t> mode;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Inputs, X)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Outputs, Y)
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, tag, inputs, outputs, mode)
-
-    Reduction_attributes() : Operation(Tag::Reduction) {}
+   public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, inputs, outputs, mode)
 
     std::optional<ReductionMode_t>
     get_mode() const {
@@ -896,31 +894,6 @@ class Reduction_attributes : public Operation {
     Reduction_attributes&
     set_mode(ReductionMode_t value) {
         mode = value;
-        return *this;
-    }
-
-    Reduction_attributes&
-    set_name(std::string const& value) {
-        name = value;
-        return *this;
-    }
-
-    Reduction_attributes&
-    set_compute_data_type(DataType_t value) {
-        compute_data_type = value;
-        return *this;
-    }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Reduction_attributes& {
-        // Fill node's tensors
-        inputs.X->fill_from_context(context);
-        outputs.Y->fill_from_context(context);
-
-        // Fill this node
-        if (get_compute_data_type() == DataType_t::NOT_SET) {
-            set_compute_data_type(context.get_compute_data_type());
-        }
         return *this;
     }
 };

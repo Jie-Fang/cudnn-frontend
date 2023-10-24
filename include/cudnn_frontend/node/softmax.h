@@ -57,9 +57,9 @@ class SoftmaxNode : public INode {
         auto max_options = Reduction_attributes();
         max_options.set_name("max");
         max_options.set_mode(ReductionMode_t::MAX);
-        max_options.inputs.X  = options.inputs.P;
-        max_options.outputs.Y = max_output;
-        auto max_node         = std::make_unique<ReductionNode>(std::move(max_options), context);
+        max_options.inputs[Reduction_attributes::input_names::X]   = options.inputs.P;
+        max_options.outputs[Reduction_attributes::output_names::Y] = max_output;
+        auto max_node = std::make_unique<ReductionNode>(std::move(max_options), context);
         sub_nodes.emplace_back(std::move(max_node));
 
         // Lower options to sub options
@@ -98,9 +98,9 @@ class SoftmaxNode : public INode {
         auto sum_options = Reduction_attributes();
         sum_options.set_name("sum");
         sum_options.set_mode(ReductionMode_t::ADD);
-        sum_options.inputs.X  = exp_output;
-        sum_options.outputs.Y = sum_output;
-        auto sum_node         = std::make_unique<ReductionNode>(std::move(sum_options), context);
+        sum_options.inputs[Reduction_attributes::input_names::X]   = exp_output;
+        sum_options.outputs[Reduction_attributes::output_names::Y] = sum_output;
+        auto sum_node = std::make_unique<ReductionNode>(std::move(sum_options), context);
         sub_nodes.emplace_back(std::move(sum_node));
 
         // Another path to add when in flash attention mode.
