@@ -639,11 +639,11 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     int64_t alibi_slopes_size = 0;
 
    public:
-    Scaled_dot_product_flash_attention_backward_attributes options;
+    Scaled_dot_product_flash_attention_backward_attributes attributes;
 
-    ScaledDotProductFlashAttentionBackwardNode(Scaled_dot_product_flash_attention_backward_attributes&& options_,
+    ScaledDotProductFlashAttentionBackwardNode(Scaled_dot_product_flash_attention_backward_attributes&& attributes_,
                                                detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -653,38 +653,83 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating ScaledDotProductFlashAttentionBackwardNode" << options.name << "..." << std::endl;
+                    << "Validating ScaledDotProductFlashAttentionBackwardNode" << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.inputs.Q->get_stride().back() != 1 || options.inputs.K->get_stride().back() != 1 ||
-                options.inputs.V->get_stride().back() != 1 || options.inputs.O->get_stride().back() != 1 ||
-                options.outputs.dQ->get_stride().back() != 1 || options.outputs.dV->get_stride().back() != 1 ||
-                options.outputs.dK->get_stride().back() != 1 || options.inputs.dO->get_stride().back() != 1,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "The stride for the last dimension corresponding to the hidden size per head"
-            " should be 1");
+        auto const& q = attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::Q);
+        bool const has_q = (q != attributes.inputs.end()) && (q->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_q, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input q not set");
+        auto const& k = attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::K);
+        bool const has_k = (k != attributes.inputs.end()) && (k->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_k, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input k not set");
+        auto const& v = attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::V);
+        bool const has_v = (v != attributes.inputs.end()) && (v->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_v, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input v not set");
+        auto const& o = attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::O);
+        bool const has_o = (o != attributes.inputs.end()) && (o->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_o, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input o not set");
+        auto const& dO =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::dO);
+        bool const has_dO = (dO != attributes.inputs.end()) && (dO->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dO, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input dO not set");
+        auto const& Stats =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::Stats);
+        bool const has_Stats = (Stats != attributes.inputs.end()) && (Stats->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_Stats, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input Stats not set");
+        auto const& dq =
+            attributes.outputs.find(Scaled_dot_product_flash_attention_backward_attributes::output_names::dQ);
+        bool const has_dq = (dq != attributes.outputs.end()) && (dq->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dq, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input dq not set");
+        auto const& dk =
+            attributes.outputs.find(Scaled_dot_product_flash_attention_backward_attributes::output_names::dK);
+        bool const has_dk = (dk != attributes.outputs.end()) && (dk->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dk, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input dk not set");
+        auto const& dv =
+            attributes.outputs.find(Scaled_dot_product_flash_attention_backward_attributes::output_names::dV);
+        bool const has_dv = (dv != attributes.outputs.end()) && (dv->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dv, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input dv not set");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.dropout_probability.has_value() && options.inputs.Dropout_mask,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(q->second->get_stride().back() != 1 || k->second->get_stride().back() != 1 ||
+                                           v->second->get_stride().back() != 1 || o->second->get_stride().back() != 1 ||
+                                           dq->second->get_stride().back() != 1 ||
+                                           dv->second->get_stride().back() != 1 ||
+                                           dk->second->get_stride().back() != 1 || dO->second->get_stride().back() != 1,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "The stride for the last dimension corresponding to the hidden size per head"
+                                       " should be 1");
+
+        auto const& dropout_mask =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_mask);
+        bool const has_dropout_mask = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && has_dropout_mask,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Using both, custom dropout mask and internal-mask generation using dropout "
                                        "probability, is ill-formed.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.dropout_probability.has_value() && options.dropout_probability.value() == 1.0,
+            attributes.dropout_probability.has_value() && attributes.dropout_probability.value() == 1.0,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            options.padding_mask && (!(options.inputs.SEQ_LEN_Q) || !(options.inputs.SEQ_LEN_KV)),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Padding mask requires seq_len_q and seq_len_kv to be set.");
+        auto const& seq_len_q =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q);
+        bool const has_seq_len_q = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (!options.padding_mask) && (options.inputs.SEQ_LEN_Q || options.inputs.SEQ_LEN_KV),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+        auto const& seq_len_kv =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV);
+        bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(options.inputs.Attn_scale && options.attn_scale_value.has_value(),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Padding mask requires seq_len_q and seq_len_kv to be set.");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+
+        auto const& attn_scale =
+            attributes.inputs.find(Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale);
+        bool const has_attn_scale = (attn_scale != attributes.inputs.end()) && (attn_scale->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
@@ -698,18 +743,21 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for ScaledDotProductFlashAttentionBackwardNode "
-                    << options.name << "..." << std::endl;
+                    << attributes.name << "..." << std::endl;
 
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Gather dims to fill properties of virtual tensors
-        auto const& q_dim = options.inputs.Q->get_dim();
-        auto b            = q_dim[0];
-        auto h            = q_dim[1];
-        auto s_q          = q_dim[2];
-        auto d            = q_dim[3];
-        auto const& k_dim = options.inputs.K->get_dim();
-        auto s_kv         = k_dim[2];
+        auto const& q_dim =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q]->get_dim();
+        auto b   = q_dim[0];
+        auto h   = q_dim[1];
+        auto s_q = q_dim[2];
+        auto d   = q_dim[3];
+        auto const& k_dim =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->get_dim();
+        auto s_kv = k_dim[2];
 
         // cuDNN frontend API attention requires Q, K, V where
         // Q = {b, h, s_q, d}
@@ -722,21 +770,23 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // So the code below maps the K->KT and V->VT
         std::vector<int64_t> temp_vec;
 
-        temp_vec = options.inputs.K->get_dim();
+        temp_vec = attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->get_dim();
         std::swap(temp_vec[2], temp_vec[3]);
-        options.inputs.K->set_dim(temp_vec);
+        attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->set_dim(temp_vec);
 
-        temp_vec = options.inputs.K->get_stride();
+        temp_vec =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->get_stride();
         std::swap(temp_vec[2], temp_vec[3]);
-        options.inputs.K->set_stride(temp_vec);
+        attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->set_stride(temp_vec);
 
-        temp_vec = options.inputs.V->get_dim();
+        temp_vec = attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V]->get_dim();
         std::swap(temp_vec[2], temp_vec[3]);
-        options.inputs.V->set_dim(temp_vec);
+        attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V]->set_dim(temp_vec);
 
-        temp_vec = options.inputs.V->get_stride();
+        temp_vec =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V]->get_stride();
         std::swap(temp_vec[2], temp_vec[3]);
-        options.inputs.V->set_stride(temp_vec);
+        attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V]->set_stride(temp_vec);
 
         std::shared_ptr<Tensor_attributes> last_output, exp_softmax_output, dp_scaled_output, rng_output;
 
@@ -748,34 +798,42 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         one_tensor->set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
 
         // alibi_slopes is passed by the node
-        if (options.alibi_mask) {
+        if (attributes.alibi_mask) {
             alibi_slopes = make_tensor_(false, {1, h, 1, 1});
             alibi_slopes->set_is_pass_by_value(false).set_data_type(DataType_t::FLOAT);
             alibi_slopes_size = h * sizeof(float);
         }
 
         // negative_inf_padding is passed by the node
-        if (options.padding_mask) {
+        if (attributes.padding_mask) {
             negative_inf_padding = make_tensor_(false, {1, 1, 1, 1});
             negative_inf_padding->set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
         }
 
         // negative_inf_causal is passed by the node
-        if (options.causal_mask) {
+        if (attributes.causal_mask) {
             negative_inf_causal = make_tensor_(false, {1, 1, 1, 1});
             negative_inf_causal->set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
         }
 
-        bool is_dropout_prob = (options.dropout_probability.has_value());
-        bool is_dropout_mask = (options.inputs.Dropout_mask != nullptr);
+        bool is_dropout_prob = (attributes.dropout_probability.has_value());
+        bool is_dropout_mask =
+            (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_mask] !=
+             nullptr);
 
         // if dropout_prob is used, then the node passes scale and scale inverse
         // if dropout_mask is used, then the user passes scale and scale_inverse
         if (is_dropout_prob) {
-            options.inputs.Dropout_scale = make_tensor_(true, {1, 1, 1, 1});
-            options.inputs.Dropout_scale->set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
-            options.inputs.Dropout_scale_inv = make_tensor_(true, {1, 1, 1, 1});
-            options.inputs.Dropout_scale_inv->set_is_pass_by_value(true).set_data_type(DataType_t::FLOAT);
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale] =
+                make_tensor_(true, {1, 1, 1, 1});
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale]
+                ->set_is_pass_by_value(true)
+                .set_data_type(DataType_t::FLOAT);
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv] =
+                make_tensor_(true, {1, 1, 1, 1});
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv]
+                ->set_is_pass_by_value(true)
+                .set_data_type(DataType_t::FLOAT);
         }
 
         // WAR non-virtual dQ_accum is required if it is not
@@ -836,13 +894,16 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         if (is_dropout_prob) {
             Rng_attributes rng_attr;
             rng_attr.set_distribution(RngDistribution_t::BERNOULLI);
-            rng_attr.set_bernoulli_probability(1.0f - options.dropout_probability.value());
-            rng_attr.inputs[Rng_attributes::input_names::Seed]   = options.inputs.Seed;
-            rng_attr.inputs[Rng_attributes::input_names::Offset] = options.inputs.Offset;
+            rng_attr.set_bernoulli_probability(1.0f - attributes.dropout_probability.value());
+            rng_attr.inputs[Rng_attributes::input_names::Seed] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Seed];
+            rng_attr.inputs[Rng_attributes::input_names::Offset] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Offset];
             rng_attr.outputs[Rng_attributes::output_names::Y] = rng_output = make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(rng_attr), context));
         } else if (is_dropout_mask) {
-            rng_output = options.inputs.Dropout_mask;
+            rng_output =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_mask];
         }
 
         // --------------"dO * o => softmax_sum" chain--------------------
@@ -851,8 +912,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_mul_dO_O_attr;
         pw_mul_dO_O_attr.set_name("pw_mul_dO_O");
         pw_mul_dO_O_attr.set_mode(PointwiseMode_t::MUL);
-        pw_mul_dO_O_attr.inputs[Pointwise_attributes::input_names::IN_0]    = options.inputs.dO;
-        pw_mul_dO_O_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.O;
+        pw_mul_dO_O_attr.inputs[Pointwise_attributes::input_names::IN_0] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::dO];
+        pw_mul_dO_O_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::O];
         pw_mul_dO_O_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
             make_tensor_(true, {b, h, s_q, d});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dO_O_attr), context));
@@ -871,9 +934,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         pw_mul_dropout_scale_inv_attr.set_name("pw_mul_dropout_scale_inv");
         pw_mul_dropout_scale_inv_attr.set_mode(PointwiseMode_t::MUL);
         pw_mul_dropout_scale_inv_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-        if (options.inputs.Dropout_scale_inv) {
+        if (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv]) {
             pw_mul_dropout_scale_inv_attr.inputs[Pointwise_attributes::input_names::IN_1] =
-                options.inputs.Dropout_scale_inv;
+                attributes
+                    .inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv];
         } else {
             // WAR dropout scale inverse is needed for non-dropout graphs
             pw_mul_dropout_scale_inv_attr.inputs[Pointwise_attributes::input_names::IN_1] = one_tensor;
@@ -891,47 +955,55 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: Q * K^T
         Matmul_attributes matmul_Q_KT_attr;
         matmul_Q_KT_attr.set_name("matmul_Q_KT");
-        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::A]          = options.inputs.Q;
-        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.K;
-        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
-        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::N_override] = options.inputs.SEQ_LEN_KV;
-        matmul_Q_KT_attr.outputs[Matmul_attributes::output_names::C]        = last_output =
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::A] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q];
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::B] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K];
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q];
+        matmul_Q_KT_attr.inputs[Matmul_attributes::input_names::N_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV];
+        matmul_Q_KT_attr.outputs[Matmul_attributes::output_names::C] = last_output =
             make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_Q_KT_attr), context));
 
-        if (options.attn_scale_value.has_value()) {
-            options.inputs.Attn_scale = std::make_shared<Tensor_attributes>();
-            options.inputs.Attn_scale->set_dim({1, 1, 1, 1})
+        if (attributes.attn_scale_value.has_value()) {
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale] =
+                std::make_shared<Tensor_attributes>();
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale]
+                ->set_dim({1, 1, 1, 1})
                 .set_stride({1, 1, 1, 1})
                 .set_data_type(DataType_t::FLOAT)
                 .set_is_pass_by_value(true);
         }
         // pointwise mul: P bmmScale
-        if (options.inputs.Attn_scale) {
+        if (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale]) {
             Pointwise_attributes pw_mul_S_bmm_scale_attr;
             pw_mul_S_bmm_scale_attr.set_name("pw_mul_S_bmm_scale");
             pw_mul_S_bmm_scale_attr.set_mode(PointwiseMode_t::MUL);
-            pw_mul_S_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            pw_mul_S_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Attn_scale;
+            pw_mul_S_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            pw_mul_S_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale];
             pw_mul_S_bmm_scale_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
                 make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_S_bmm_scale_attr), context));
         }
 
         // pointwise add: bias
-        if (options.inputs.Bias) {
+        if (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Bias]) {
             Pointwise_attributes add_bias_attr;
             add_bias_attr.set_name("add_bias");
             add_bias_attr.set_mode(PointwiseMode_t::ADD);
-            add_bias_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            add_bias_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Bias;
+            add_bias_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            add_bias_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Bias];
             add_bias_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
                 make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(add_bias_attr), context));
         }
 
         // alibi mask DAG
-        if (options.alibi_mask) {
+        if (attributes.alibi_mask) {
             std::shared_ptr<Tensor_attributes> row_idx_output    = make_tensor_(true, {b, h, s_q, s_kv});
             std::shared_ptr<Tensor_attributes> col_idx_output    = make_tensor_(true, {b, h, s_q, s_kv});
             std::shared_ptr<Tensor_attributes> sub_idx_output    = make_tensor_(true, {b, h, s_q, s_kv});
@@ -980,7 +1052,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(add_alibi_attr), context));
         }
 
-        if (options.padding_mask) {
+        if (attributes.padding_mask) {
             std::shared_ptr<Tensor_attributes> row_idx_output      = make_tensor_(true, {b, h, s_q, s_kv});
             std::shared_ptr<Tensor_attributes> row_mask_output     = make_tensor_(true, {b, h, s_q, s_kv});
             std::shared_ptr<Tensor_attributes> col_idx_output      = make_tensor_(true, {b, h, s_q, s_kv});
@@ -1009,16 +1081,18 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             Pointwise_attributes lt_row_sq_attr;
             lt_row_sq_attr.set_name("lt_row_sq_causal");
             lt_row_sq_attr.set_mode(PointwiseMode_t::CMP_LT).set_compute_data_type(DataType_t::BOOLEAN);
-            lt_row_sq_attr.inputs[Pointwise_attributes::input_names::IN_0]    = row_idx_output;
-            lt_row_sq_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_Q;
+            lt_row_sq_attr.inputs[Pointwise_attributes::input_names::IN_0] = row_idx_output;
+            lt_row_sq_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q];
             lt_row_sq_attr.outputs[Pointwise_attributes::output_names::OUT_0] = row_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(lt_row_sq_attr), context));
 
             Pointwise_attributes lt_col_skv_attr;
             lt_col_skv_attr.set_name("lt_col_skv_causal");
             lt_col_skv_attr.set_mode(PointwiseMode_t::CMP_LT).set_compute_data_type(DataType_t::BOOLEAN);
-            lt_col_skv_attr.inputs[Pointwise_attributes::input_names::IN_0]    = col_idx_output;
-            lt_col_skv_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.SEQ_LEN_KV;
+            lt_col_skv_attr.inputs[Pointwise_attributes::input_names::IN_0] = col_idx_output;
+            lt_col_skv_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV];
             lt_col_skv_attr.outputs[Pointwise_attributes::output_names::OUT_0] = col_mask_output;
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(lt_col_skv_attr), context));
 
@@ -1042,7 +1116,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         }
 
         // Causal Mask DAG
-        if (options.causal_mask) {
+        if (attributes.causal_mask) {
             std::shared_ptr<Tensor_attributes> row_idx_output     = make_tensor_(true, {b, h, s_q, s_kv});
             std::shared_ptr<Tensor_attributes> col_idx_output     = make_tensor_(true, {b, h, s_q, s_kv});
             std::shared_ptr<Tensor_attributes> causal_mask_output = make_tensor_(true, {b, h, s_q, s_kv});
@@ -1087,8 +1161,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         Pointwise_attributes pw_subtract_s_attr;
         pw_subtract_s_attr.set_name("pw_subtract_s");
         pw_subtract_s_attr.set_mode(PointwiseMode_t::SUB);
-        pw_subtract_s_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-        pw_subtract_s_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Stats;
+        pw_subtract_s_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+        pw_subtract_s_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Stats];
         pw_subtract_s_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
             make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_subtract_s_attr), context));
@@ -1116,12 +1191,13 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         }
 
         // pointwise dropout scale
-        if (options.inputs.Dropout_scale) {
+        if (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale]) {
             Pointwise_attributes pw_mul_dropout_scale;
             pw_mul_dropout_scale.set_name("pw_mul_dropout_scale");
             pw_mul_dropout_scale.set_mode(PointwiseMode_t::MUL);
-            pw_mul_dropout_scale.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            pw_mul_dropout_scale.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Dropout_scale;
+            pw_mul_dropout_scale.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            pw_mul_dropout_scale.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale];
             pw_mul_dropout_scale.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
                 make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dropout_scale), context));
@@ -1139,11 +1215,15 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: S^T * dO
         Matmul_attributes matmul_ST_dO_attr;
         matmul_ST_dO_attr.set_name("matmul_ST_dO");
-        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::A]          = last_output;
-        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.dO;
-        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_KV;
-        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_Q;
-        matmul_ST_dO_attr.outputs[Matmul_attributes::output_names::C]        = options.outputs.dV;
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::A] = last_output;
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::B] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::dO];
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV];
+        matmul_ST_dO_attr.inputs[Matmul_attributes::input_names::K_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q];
+        matmul_ST_dO_attr.outputs[Matmul_attributes::output_names::C] =
+            attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dV];
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_ST_dO_attr), context));
 
         // --------------"dO @ VT => dp_scaled_output => dK" chain--------------------
@@ -1151,11 +1231,15 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: dO * V^T
         Matmul_attributes matmul_dO_VT_attr;
         matmul_dO_VT_attr.set_name("matmul_dO_VT");
-        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::A]          = options.inputs.dO;
-        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.V;
-        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
-        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::N_override] = options.inputs.SEQ_LEN_KV;
-        matmul_dO_VT_attr.outputs[Matmul_attributes::output_names::C]        = last_output =
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::A] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::dO];
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::B] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V];
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q];
+        matmul_dO_VT_attr.inputs[Matmul_attributes::input_names::N_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV];
+        matmul_dO_VT_attr.outputs[Matmul_attributes::output_names::C] = last_output =
             make_tensor_(true, {b, h, s_q, s_kv});
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dO_VT_attr), context));
 
@@ -1194,24 +1278,26 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dP_attr), context));
 
         // pointwise: mul dP_dropout_scale
-        if (options.inputs.Dropout_scale) {
+        if (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale]) {
             Pointwise_attributes pw_mul_dP_dropout_scale_attr;
             pw_mul_dP_dropout_scale_attr.set_name("pw_mul_dP_dropout_scale");
             pw_mul_dP_dropout_scale_attr.set_mode(PointwiseMode_t::MUL);
             pw_mul_dP_dropout_scale_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            pw_mul_dP_dropout_scale_attr.inputs[Pointwise_attributes::input_names::IN_1] = options.inputs.Dropout_scale;
+            pw_mul_dP_dropout_scale_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale];
             pw_mul_dP_dropout_scale_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
                 make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dP_dropout_scale_attr), context));
         }
 
         // pointwise: mul dP_bmmScale
-        if (options.inputs.Attn_scale) {
+        if (attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale]) {
             Pointwise_attributes pw_mul_dP_bmm_scale_attr;
             pw_mul_dP_bmm_scale_attr.set_name("pw_mul_dP_bmm_scale");
             pw_mul_dP_bmm_scale_attr.set_mode(PointwiseMode_t::MUL);
-            pw_mul_dP_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            pw_mul_dP_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_1]    = options.inputs.Attn_scale;
+            pw_mul_dP_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
+            pw_mul_dP_bmm_scale_attr.inputs[Pointwise_attributes::input_names::IN_1] =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale];
             pw_mul_dP_bmm_scale_attr.outputs[Pointwise_attributes::output_names::OUT_0] = last_output =
                 make_tensor_(true, {b, h, s_q, s_kv});
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_mul_dP_bmm_scale_attr), context));
@@ -1230,22 +1316,29 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // matmul: dP^T * Q
         Matmul_attributes matmul_dPT_Q_attr;
         matmul_dPT_Q_attr.set_name("matmul_dPT_Q");
-        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::A]          = last_output;
-        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::B]          = options.inputs.Q;
-        matmul_dPT_Q_attr.outputs[Matmul_attributes::output_names::C]        = options.outputs.dK;
-        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_KV;
-        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_Q;
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::A] = last_output;
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::B] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q];
+        matmul_dPT_Q_attr.outputs[Matmul_attributes::output_names::C] =
+            attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dK];
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV];
+        matmul_dPT_Q_attr.inputs[Matmul_attributes::input_names::K_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q];
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dPT_Q_attr), context));
 
         // --------------"dp_scaled @ K => dQ" chain--------------------
 
-        auto const& kt_dim    = options.inputs.K->get_dim();
-        auto const& kt_stride = options.inputs.K->get_stride();
+        auto const& kt_dim =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->get_dim();
+        auto const& kt_stride =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]->get_stride();
 
         // transpose KT
         Reshape_attributes transpose_K_attr;
         transpose_K_attr.set_name("transpose_K");
-        transpose_K_attr.inputs[Reshape_attributes::input_names::X]   = options.inputs.K;
+        transpose_K_attr.inputs[Reshape_attributes::input_names::X] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K];
         transpose_K_attr.outputs[Reshape_attributes::output_names::Y] = last_output =
             make_tensor_(true,
                          {kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]},
@@ -1260,18 +1353,22 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         if (dQ_accum) {
             matmul_dP_K_attr.outputs[Matmul_attributes::output_names::C] = dQ_accum;
         } else {
-            matmul_dP_K_attr.outputs[Matmul_attributes::output_names::C] = options.outputs.dQ;
+            matmul_dP_K_attr.outputs[Matmul_attributes::output_names::C] =
+                attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dQ];
         }
-        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::M_override] = options.inputs.SEQ_LEN_Q;
-        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::K_override] = options.inputs.SEQ_LEN_KV;
+        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::M_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_Q];
+        matmul_dP_K_attr.inputs[Matmul_attributes::input_names::K_override] =
+            attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::SEQ_LEN_KV];
         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_dP_K_attr), context));
 
         if (dQ_accum) {
             Pointwise_attributes pw_identity_dQ_attr;
             pw_identity_dQ_attr.set_name("pw_identity_dQ");
             pw_identity_dQ_attr.set_mode(PointwiseMode_t::IDENTITY);
-            pw_identity_dQ_attr.inputs[Pointwise_attributes::input_names::IN_0]    = dQ_accum;
-            pw_identity_dQ_attr.outputs[Pointwise_attributes::output_names::OUT_0] = options.outputs.dQ;
+            pw_identity_dQ_attr.inputs[Pointwise_attributes::input_names::IN_0] = dQ_accum;
+            pw_identity_dQ_attr.outputs[Pointwise_attributes::output_names::OUT_0] =
+                attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dQ];
             sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(pw_identity_dQ_attr), context));
         }
 
@@ -1293,12 +1390,15 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             tensor_to_pass_by_value.emplace(one_tensor, 1.0f);
         }
 
-        if (options.attn_scale_value.has_value()) {
-            tensor_to_pass_by_value.emplace(options.inputs.Attn_scale, options.attn_scale_value.value());
+        if (attributes.attn_scale_value.has_value()) {
+            tensor_to_pass_by_value.emplace(
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale],
+                attributes.attn_scale_value.value());
         }
 
-        if (options.alibi_mask) {
-            int64_t const h       = options.inputs.Q->get_dim()[1];
+        if (attributes.alibi_mask) {
+            int64_t const h =
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q]->get_dim()[1];
             auto alibi_slopes_vec = detail::get_abili_slope(h);
 
             cudaStream_t stream;
@@ -1309,21 +1409,26 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             node_workspace = static_cast<char*>(node_workspace) + alibi_slopes_size;
         }
 
-        if (options.padding_mask) {
+        if (attributes.padding_mask) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
         }
 
-        if (options.causal_mask) {
+        if (attributes.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
 
-        if (options.dropout_probability.has_value()) {
-            float dropout_scale_value     = 1.0f / (1.0f - options.dropout_probability.value());
-            float dropout_scale_inv_value = (1.0f - options.dropout_probability.value());
-            tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
-            tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale_inv, dropout_scale_inv_value);
+        if (attributes.dropout_probability.has_value()) {
+            float dropout_scale_value     = 1.0f / (1.0f - attributes.dropout_probability.value());
+            float dropout_scale_inv_value = (1.0f - attributes.dropout_probability.value());
+            tensor_to_pass_by_value.emplace(
+                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale],
+                dropout_scale_value);
+            tensor_to_pass_by_value.emplace(
+                attributes
+                    .inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv],
+                dropout_scale_inv_value);
         }
 
         if (dQ_accum) {

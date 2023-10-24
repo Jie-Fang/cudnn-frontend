@@ -732,21 +732,25 @@ Graph::scaled_dot_product_flash_attention_backward(std::shared_ptr<Tensor_attrib
                                                    std::shared_ptr<Tensor_attributes> o,
                                                    std::shared_ptr<Tensor_attributes> dO,
                                                    std::shared_ptr<Tensor_attributes> Stats,
-                                                   Scaled_dot_product_flash_attention_backward_attributes options) {
+                                                   Scaled_dot_product_flash_attention_backward_attributes attributes) {
     // Set inputs
-    options.inputs.Q     = q;
-    options.inputs.K     = k;
-    options.inputs.V     = v;
-    options.inputs.O     = o;
-    options.inputs.dO    = dO;
-    options.inputs.Stats = Stats;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q]     = q;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::K]     = k;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::V]     = v;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::O]     = o;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::dO]    = dO;
+    attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Stats] = Stats;
 
     // Make required output tensors
-    auto dQ = options.outputs.dQ = output_tensor(options.get_name() + "::dQ");
-    auto dK = options.outputs.dK = output_tensor(options.get_name() + "::dK");
-    auto dV = options.outputs.dV = output_tensor(options.get_name() + "::dV");
+    auto dQ = attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dQ] =
+        output_tensor(attributes.name + "::dQ");
+    auto dK = attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dK] =
+        output_tensor(attributes.name + "::dK");
+    auto dV = attributes.outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dV] =
+        output_tensor(attributes.name + "::dV");
 
-    sub_nodes.emplace_back(std::make_unique<ScaledDotProductFlashAttentionBackwardNode>(std::move(options), context));
+    sub_nodes.emplace_back(
+        std::make_unique<ScaledDotProductFlashAttentionBackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV};
 }
