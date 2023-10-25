@@ -11,6 +11,9 @@ namespace cudnn_frontend {
 namespace graph {
 
 class DLNNode : public INode {
+    // Keep epsilon for pre-8906
+    std::shared_ptr<Tensor_attributes> epsilon;
+
    public:
     Layernorm_backward_attributes attributes;
 
@@ -92,6 +95,14 @@ class DLNNode : public INode {
         infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE]);
         infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]);
 
+        if (cudnnGetVersion() < 8906) {
+            epsilon = std::make_shared<Tensor_attributes>();
+            epsilon->set_is_pass_by_value(true)
+                .set_dim({1, 1, 1, 1})
+                .set_stride({1, 1, 1, 1})
+                .set_data_type(DataType_t::FLOAT);
+        }
+
         return {error_code_t::OK, ""};
     }
 
@@ -111,6 +122,11 @@ class DLNNode : public INode {
                 CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
             }
         }
+
+        if (epsilon) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(epsilon, uid, tensors));
+        }
+
         return {error_code_t::OK, ""};
     }
 
@@ -127,27 +143,32 @@ class DLNNode : public INode {
 #endif
 
             // Create the DLN operation.
-            auto DLN_operation =
-                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
-                    .setNormalizationMode(NormMode_t::LAYER_NORM)
-                    .setxDesc(
-                        *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::X]->get_uid())))
-                    .setdyDesc(
-                        *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::DY]->get_uid())))
-                    .setScale(
-                        *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::SCALE]->get_uid())))
-                    .setSavedMeanAndInvVar(
-                        *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::MEAN]->get_uid())),
-                        *(tensors.at(
-                            attributes.inputs[Layernorm_backward_attributes::input_names::INV_VARIANCE]->get_uid())))
-                    .setDScaleAndDBias(
-                        *(tensors.at(
-                            attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE]->get_uid())),
-                        *(tensors.at(
-                            attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]->get_uid())))
-                    .setdxDesc(
-                        *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DX]->get_uid())))
-                    .build();
+            auto&& DLN_op_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR);
+
+            DLN_op_builder.setNormalizationMode(NormMode_t::LAYER_NORM)
+                .setxDesc(*(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::X]->get_uid())))
+                .setdyDesc(*(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::DY]->get_uid())))
+                .setScale(
+                    *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::SCALE]->get_uid())))
+                .setSavedMeanAndInvVar(
+                    *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::MEAN]->get_uid())),
+                    *(tensors.at(
+                        attributes.inputs[Layernorm_backward_attributes::input_names::INV_VARIANCE]->get_uid())))
+                .setDScaleAndDBias(
+                    *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE]->get_uid())),
+                    *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]->get_uid())))
+                .setdxDesc(
+                    *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DX]->get_uid())))
+                .build();
+
+            if (epsilon) {
+                DLN_op_builder.setEpsilonTensor(*(tensors.at(epsilon->get_uid())));
+                uids_involved_in_operations.insert(epsilon->get_uid());
+            }
+
+            auto DLN_operation = DLN_op_builder.build();
+
             operations.push_back(std::move(DLN_operation));
             for (auto const& [name, tensor] : attributes.inputs) {
                 if (tensor && tensor->get_is_virtual() == false) {
@@ -171,6 +192,18 @@ class DLNNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+    }
+
+    error_t
+    pass_by_value_tensors_(
+        cudnnHandle_t,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
+        void*) override {
+        if (epsilon) {
+            // can pass in any dummy value
+            tensor_to_pass_by_value.emplace(epsilon, 0.0f);
+        }
+        return {error_code_t::OK, ""};
     }
 };
 

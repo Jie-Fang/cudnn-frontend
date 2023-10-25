@@ -226,8 +226,8 @@ init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
              py::arg("grad"),
              py::arg("input"),
              py::arg("scale"),
-             py::arg_v("mean", nullptr),
-             py::arg_v("inv_variance", nullptr),
+             py::arg("mean"),
+             py::arg("inv_variance"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
         .def("rmsnorm",
