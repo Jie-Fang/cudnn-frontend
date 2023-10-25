@@ -53,6 +53,13 @@ class BatchnormInferenceNode : public INode {
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating BatchnormInferenceNode " << attributes.name << "..." << std::endl;
+        CUDNN_FE_VALIDATE_INPUT_TENSORS(Batchnorm_inference_attributes::input_names::X, 
+                                        Batchnorm_inference_attributes::input_names::SCALE,
+                                        Batchnorm_inference_attributes::input_names::BIAS,
+                                        Batchnorm_inference_attributes::input_names::MEAN,
+                                        Batchnorm_inference_attributes::input_names::INV_VARIANCE);
+        
+        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Batchnorm_inference_attributes::output_names::Y);
 
         return {error_code_t::OK, ""};
     }

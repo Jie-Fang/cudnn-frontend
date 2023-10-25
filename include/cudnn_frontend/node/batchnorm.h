@@ -75,10 +75,23 @@ class BatchNormNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating BatchNormNode " << attributes.name << "..." << std::endl;
 
+        CUDNN_FE_VALIDATE_INPUT_TENSORS(Batchnorm_attributes::input_names::X, 
+                                        Batchnorm_attributes::input_names::SCALE,
+                                        Batchnorm_attributes::input_names::BIAS,
+                                        Batchnorm_attributes::input_names::PREV_RUNNING_MEAN,
+                                        Batchnorm_attributes::input_names::PREV_RUNNING_VAR,
+                                        Batchnorm_attributes::input_names::EPSILON,
+                                        Batchnorm_attributes::input_names::MOMENTUM);
+        
+        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Batchnorm_attributes::output_names::Y, 
+                                Batchnorm_attributes::output_names::MEAN,
+                                Batchnorm_attributes::output_names::INV_VARIANCE,
+                                Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN,
+                                Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
         // Norm forward phase should be set
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase == NormFwdPhase_t::NOT_SET,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase != NormFwdPhase_t::TRAINING,
                                        error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Forward phase not set of batchnorm node.");
+                                       "Forward phase not set of batchnorm node or if inference use batchnorm_inference node");
 
         return {error_code_t::OK, ""};
     }
@@ -129,7 +142,7 @@ class BatchNormNode : public INode {
             auto batchnorm_operation =
                 cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
                     .setNormalizationMode(NormMode_t::BATCH_NORM)
-                    .setNormFwdPhase(attributes.forward_phase)
+                    .setNormFwdPhase(NormFwdPhase_t::TRAINING)
                     .setxDesc(*(tensors[attributes.inputs[Batchnorm_attributes::input_names::X]->get_uid()]))
                     .setSavedMeanAndInvVar(
                         *(tensors[attributes.outputs[Batchnorm_attributes::output_names::MEAN]->get_uid()]),
