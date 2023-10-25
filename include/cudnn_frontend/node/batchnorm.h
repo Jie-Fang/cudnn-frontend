@@ -75,19 +75,19 @@ class BatchNormNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating BatchNormNode " << attributes.name << "..." << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Batchnorm_attributes::input_names::X, 
-                                        Batchnorm_attributes::input_names::SCALE,
-                                        Batchnorm_attributes::input_names::BIAS,
-                                        Batchnorm_attributes::input_names::PREV_RUNNING_MEAN,
-                                        Batchnorm_attributes::input_names::PREV_RUNNING_VAR,
-                                        Batchnorm_attributes::input_names::EPSILON,
-                                        Batchnorm_attributes::input_names::MOMENTUM);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::SCALE);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::BIAS);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::PREV_RUNNING_MEAN);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::PREV_RUNNING_VAR);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::EPSILON);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::MOMENTUM);
         
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Batchnorm_attributes::output_names::Y, 
-                                Batchnorm_attributes::output_names::MEAN,
-                                Batchnorm_attributes::output_names::INV_VARIANCE,
-                                Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN,
-                                Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::Y);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::MEAN);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::INV_VARIANCE);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
         // Norm forward phase should be set
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase != NormFwdPhase_t::TRAINING,
                                        error_code_t::ATTRIBUTE_NOT_SET,

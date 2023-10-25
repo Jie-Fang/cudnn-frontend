@@ -26,10 +26,10 @@ class WgradNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
             << "Validating Node Type::WGRAD " << attributes.name << "..." << std::endl;
         
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Conv_wgrad_attributes::input_names::X, 
-                            Conv_wgrad_attributes::input_names::DY);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_wgrad_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_wgrad_attributes::input_names::DY);
 
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Conv_wgrad_attributes::output_names::DW);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_wgrad_attributes::output_names::DW);
 
         return {error_code_t::OK, ""};
 

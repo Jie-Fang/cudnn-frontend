@@ -26,10 +26,10 @@ class ConvolutionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
             << "Validating Node Type::CONVOLUTION " << attributes.name << "..." << std::endl;
         
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Conv_fprop_attributes::input_names::X, 
-                            Conv_fprop_attributes::input_names::W);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_fprop_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_fprop_attributes::input_names::W);
 
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Conv_fprop_attributes::output_names::Y);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_fprop_attributes::output_names::Y);
 
         return {error_code_t::OK, ""};
 

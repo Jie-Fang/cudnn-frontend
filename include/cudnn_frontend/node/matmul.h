@@ -26,8 +26,9 @@ class MatmulNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating matmul node " << attributes.name << "..." << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Matmul_attributes::input_names::A, Matmul_attributes::input_names::B);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Matmul_attributes::output_names::C);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_attributes::input_names::A);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_attributes::input_names::B);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Matmul_attributes::output_names::C);
 
         return {error_code_t::OK, ""};
     }

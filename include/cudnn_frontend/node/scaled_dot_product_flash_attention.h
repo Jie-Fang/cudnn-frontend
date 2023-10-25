@@ -37,11 +37,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionNode " << attributes.name << "..." << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Scaled_dot_product_flash_attention_attributes::input_names::Q, 
-                                  Scaled_dot_product_flash_attention_attributes::input_names::K, 
-                                  Scaled_dot_product_flash_attention_attributes::input_names::V);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Scaled_dot_product_flash_attention_attributes::input_names::Q);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Scaled_dot_product_flash_attention_attributes::input_names::K);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Scaled_dot_product_flash_attention_attributes::input_names::V);
 
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Scaled_dot_product_flash_attention_attributes::output_names::O); 
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Scaled_dot_product_flash_attention_attributes::output_names::O); 
 
 
         #define CUDNN_FE_VALIDATE_STRIDE(port, port_map) \

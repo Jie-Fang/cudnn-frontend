@@ -26,10 +26,10 @@ class DgradNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
             << "Validating Node Type::DGRAD " << attributes.name << "..." << std::endl;
         
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Conv_dgrad_attributes::input_names::DY, 
-                            Conv_dgrad_attributes::input_names::W);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::DY); 
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::W);
 
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Conv_dgrad_attributes::output_names::DX);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_dgrad_attributes::output_names::DX);
 
         return {error_code_t::OK, ""};
     }

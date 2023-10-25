@@ -25,8 +25,8 @@ class ReductionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating reduction node " << attributes.name << "..." << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Reduction_attributes::input_names::X);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Reduction_attributes::output_names::Y);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Reduction_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Reduction_attributes::output_names::Y);
 
         return {error_code_t::OK, ""};
     }

@@ -260,44 +260,18 @@ to_json(json& j, const INode& p) {
     p.serialize(j);
 }
 
-// Macro magic to help loop over ports
-
-// 4 levels can evaluate 122 different VA_ARGS
-// 1+(3*(3*(3*(3*(1)+1)+1)+1)+1) 
-#define CUDNN_FE_EVAL0(...) __VA_ARGS__
-#define CUDNN_FE_EVAL1(...) CUDNN_FE_EVAL0(CUDNN_FE_EVAL0(CUDNN_FE_EVAL0(__VA_ARGS__)))
-#define CUDNN_FE_EVAL2(...) CUDNN_FE_EVAL1(CUDNN_FE_EVAL1(CUDNN_FE_EVAL1(__VA_ARGS__)))
-#define CUDNN_FE_EVAL3(...) CUDNN_FE_EVAL2(CUDNN_FE_EVAL2(CUDNN_FE_EVAL2(__VA_ARGS__)))
-#define CUDNN_FE_EVAL(...)  CUDNN_FE_EVAL3(CUDNN_FE_EVAL3(CUDNN_FE_EVAL3(__VA_ARGS__)))
-
-#define CUDNN_FE_MAP_END(...)
-#define CUDNN_FE_MAP_OUT
-
-#define CUDNN_FE_MAP_GET_END2() 0, CUDNN_FE_MAP_END
-#define CUDNN_FE_MAP_GET_END1(...) CUDNN_FE_MAP_GET_END2
-#define CUDNN_FE_MAP_GET_END(...) CUDNN_FE_MAP_GET_END1
-#define CUDNN_FE_MAP_NEXT0(test, next, ...) next CUDNN_FE_MAP_OUT
-#define CUDNN_FE_MAP_NEXT1(test, next) CUDNN_FE_MAP_NEXT0(test, next, 0)
-#define CUDNN_FE_MAP_NEXT(test, next)  CUDNN_FE_MAP_NEXT1(CUDNN_FE_MAP_GET_END test, next)
-
-#define CUDNN_FE_MAP0(f, x, peek, ...) f(x) CUDNN_FE_MAP_NEXT(peek, CUDNN_FE_MAP1)(f, peek, __VA_ARGS__)
-#define CUDNN_FE_MAP1(f, x, peek, ...) f(x) CUDNN_FE_MAP_NEXT(peek, CUDNN_FE_MAP0)(f, peek, __VA_ARGS__)
-
-#define CUDNN_FE_VALIDATE_INPUT_TENSORS(...) CUDNN_FE_EVAL(CUDNN_FE_MAP1(FE_VALIDATE_INPUT_TENSOR, __VA_ARGS__, ()()(), 0))
-#define CUDNN_FE_VALIDATE_OUTPUT_TENSORS(...) CUDNN_FE_EVAL(CUDNN_FE_MAP1(FE_VALIDATE_OUTPUT_TENSOR, __VA_ARGS__, ()()(), 0))
-
-#define FE_VALIDATE_TENSOR(port, map_) \
+#define CUDNN_FE_VALIDATE_TENSOR_(port, map_) \
     {                                                \
         auto t           = map_.find(port); \
         bool const has_t = (t != map_.end()) && (t->second != nullptr); \
         RETURN_CUDNN_FRONTEND_ERROR_IF(!has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
     }
 
-#define FE_VALIDATE_INPUT_TENSOR(port) \
-    FE_VALIDATE_TENSOR(port, attributes.inputs)
+#define CUDNN_FE_VALIDATE_INPUT_TENSOR(port) \
+    CUDNN_FE_VALIDATE_TENSOR_(port, attributes.inputs)
 
-#define FE_VALIDATE_OUTPUT_TENSOR(port) \
-    FE_VALIDATE_TENSOR(port, attributes.outputs)
+#define CUDNN_FE_VALIDATE_OUTPUT_TENSOR(port) \
+    CUDNN_FE_VALIDATE_TENSOR_(port, attributes.outputs)
 
 
 }  // namespace graph

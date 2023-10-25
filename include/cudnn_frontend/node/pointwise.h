@@ -29,18 +29,18 @@ class PointwiseNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.mode == PointwiseMode_t::NOT_SET, error_code_t::ATTRIBUTE_NOT_SET, "pointwise mode not set.");
 
-        CUDNN_FE_VALIDATE_INPUT_TENSORS(Pointwise_attributes::input_names::IN_0);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Pointwise_attributes::input_names::IN_0);
 
         auto const port_count = get_pointwise_mode_port_count(attributes.mode);
         if (port_count >= 3) {
-            CUDNN_FE_VALIDATE_INPUT_TENSORS(Pointwise_attributes::input_names::IN_1);
+            CUDNN_FE_VALIDATE_INPUT_TENSOR(Pointwise_attributes::input_names::IN_1);
         }
 
         if (port_count >= 4) {
-            CUDNN_FE_VALIDATE_INPUT_TENSORS(Pointwise_attributes::input_names::IN_2);
+            CUDNN_FE_VALIDATE_INPUT_TENSOR(Pointwise_attributes::input_names::IN_2);
         }
 
-        CUDNN_FE_VALIDATE_OUTPUT_TENSORS(Pointwise_attributes::output_names::OUT_0);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Pointwise_attributes::output_names::OUT_0);
 
         return {error_code_t::OK, ""};
     }
