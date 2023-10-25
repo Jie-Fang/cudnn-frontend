@@ -52,17 +52,34 @@ class ICudnn {
             props->set_uid(uid);
             uid++;
 
-            auto tensor = cudnn_frontend::TensorBuilder()
-                              .setDim(props->get_dim().size(), props->get_dim().data())
-                              .setStrides(props->get_stride().size(), props->get_stride().data())
-                              .setId(props->get_uid())
-                              .setAlignment(16)
-                              .setDataType(props->get_data_type())
-                              .setVirtual(props->get_is_virtual())
-                              .setByValue(props->get_is_pass_by_value())
-                              .setReorderType(props->get_reordering_type())
-                              .build();
-            tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+            if (auto ragged_offset_props = props->get_ragged_offset()) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors));
+
+                auto tensor = cudnn_frontend::TensorBuilder()
+                                  .setDim(props->get_dim().size(), props->get_dim().data())
+                                  .setStrides(props->get_stride().size(), props->get_stride().data())
+                                  .setId(props->get_uid())
+                                  .setAlignment(16)
+                                  .setDataType(props->get_data_type())
+                                  .setVirtual(props->get_is_virtual())
+                                  .setByValue(props->get_is_pass_by_value())
+                                  .setReorderType(props->get_reordering_type())
+                                  .setRaggedOffset(tensors.at(ragged_offset_props->get_uid()))
+                                  .build();
+                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+            } else {
+                auto tensor = cudnn_frontend::TensorBuilder()
+                                  .setDim(props->get_dim().size(), props->get_dim().data())
+                                  .setStrides(props->get_stride().size(), props->get_stride().data())
+                                  .setId(props->get_uid())
+                                  .setAlignment(16)
+                                  .setDataType(props->get_data_type())
+                                  .setVirtual(props->get_is_virtual())
+                                  .setByValue(props->get_is_pass_by_value())
+                                  .setReorderType(props->get_reordering_type())
+                                  .build();
+                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+            }
         } else {
             // Make sure tensor's uid is present in backend tensor registry.
             RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -120,11 +137,10 @@ class ICudnn {
             std::vector<void*> device_ptrs;
             std::vector<uid_t> uids;
             for (auto const& uid : variant_pack_uid) {
-                if (auto search = tensor_uid_to_pointer_map.find(uid); search == tensor_uid_to_pointer_map.end()) {
-                    std::string message =
-                        "[cudnn_frontend] ERROR: " + std::to_string(uid) + " does not exist in variant pack.";
-                    return {error_code_t::INVALID_VARIANT_PACK, message};
-                }
+                auto search = tensor_uid_to_pointer_map.find(uid);
+                RETURN_CUDNN_FRONTEND_ERROR_IF(search == tensor_uid_to_pointer_map.end(),
+                                               error_code_t::INVALID_VARIANT_PACK,
+                                               "Uid " + std::to_string(uid) + " does not exist in variant pack.");
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
                 uids.push_back(uid);
             }

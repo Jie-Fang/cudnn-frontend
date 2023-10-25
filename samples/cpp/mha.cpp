@@ -81,16 +81,18 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
                                      .set_dim({b, 1, s_q, s_kv})
                                      .set_stride({s_q * s_kv, s_q * s_kv, s_kv, 1}));
 
-    auto seed                                       = mha_graph.tensor(fe::graph::Tensor_attributes()
+    auto seed = mha_graph.tensor(fe::graph::Tensor_attributes()
                                      .set_name("Seed")
                                      .set_dim({1, 1, 1, 1})
                                      .set_stride({1, 1, 1, 1})
                                      .set_data_type(fe::DataType_t::INT32));
-    auto offset                                     = mha_graph.tensor(fe::graph::Tensor_attributes()
+
+    auto offset = mha_graph.tensor(fe::graph::Tensor_attributes()
                                        .set_name("Offset")
                                        .set_dim({1, 1, 1, 1})
                                        .set_stride({1, 1, 1, 1})
                                        .set_data_type(fe::DataType_t::INT32));
+
     auto scaled_dot_product_flash_attention_options = fe::graph::Scaled_dot_product_flash_attention_attributes()
                                                           .set_name("flash_attention")
                                                           .set_is_inference(is_inference)
@@ -485,4 +487,242 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
     checkCudaErr(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
+}
+
+TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
+#if CUDART_VERSION < 12000
+    SKIP("Test requires cuda toolkit 12.0 or above");
+    return;
+#endif
+    int64_t b    = 5;    // batch size
+    int64_t h    = 4;    // head dim
+    int64_t s_q  = 512;  // q tensor is padded to this seq length
+    int64_t s_kv = 512;  // k and v tensor is padded to this seq length
+    int64_t d    = 64;   // hidden dim
+
+    int64_t s = s_q;
+
+    float dropout_probability = 0.2f;
+
+    bool is_inference = false;
+
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph mha_graph;
+    mha_graph.set_io_data_type(fe::DataType_t::FP8_E4M3)
+        .set_intermediate_data_type(fe::DataType_t::FLOAT)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto Q_dQ_O_dO_dims = std::vector<int64_t>({b, h, s, d});
+
+    auto QKV_strides  = std::vector<int64_t>({s * 3 * h * d, d, 3 * h * d, 1});  // bs3hd
+    auto O_dO_strides = std::vector<int64_t>({s * h * d, d, h * d, 1});          // bhsd
+
+    auto Q =
+        mha_graph.tensor(fe::graph::Tensor_attributes().set_name("Q").set_dim(Q_dQ_O_dO_dims).set_stride(QKV_strides));
+    auto K =
+        mha_graph.tensor(fe::graph::Tensor_attributes().set_name("K").set_dim(Q_dQ_O_dO_dims).set_stride(QKV_strides));
+    auto V =
+        mha_graph.tensor(fe::graph::Tensor_attributes().set_name("V").set_dim(Q_dQ_O_dO_dims).set_stride(QKV_strides));
+
+    auto attn_scale = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                           .set_name("attn_scale")
+                                           .set_dim({1, 1, 1, 1})
+                                           .set_stride({1, 1, 1, 1})
+                                           .set_is_pass_by_value(true)
+                                           .set_data_type(fe::DataType_t::FLOAT));
+
+    auto seed = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                     .set_name("Seed")
+                                     .set_dim({1, 1, 1, 1})
+                                     .set_stride({1, 1, 1, 1})
+                                     .set_data_type(fe::DataType_t::INT64));
+
+    auto offset = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                       .set_name("Offset")
+                                       .set_dim({1, 1, 1, 1})
+                                       .set_stride({1, 1, 1, 1})
+                                       .set_data_type(fe::DataType_t::INT64));
+
+    auto descale_q = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                          .set_name("descale_Q")
+                                          .set_dim({1, 1, 1, 1})
+                                          .set_stride({1, 1, 1, 1})
+                                          .set_data_type(fe::DataType_t::FLOAT));
+
+    auto descale_k = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                          .set_name("descale_K")
+                                          .set_dim({1, 1, 1, 1})
+                                          .set_stride({1, 1, 1, 1})
+                                          .set_data_type(fe::DataType_t::FLOAT));
+
+    auto descale_v = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                          .set_name("descale_V")
+                                          .set_dim({1, 1, 1, 1})
+                                          .set_stride({1, 1, 1, 1})
+                                          .set_data_type(fe::DataType_t::FLOAT));
+
+    auto scale_s = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                        .set_name("scale_S")
+                                        .set_dim({1, 1, 1, 1})
+                                        .set_stride({1, 1, 1, 1})
+                                        .set_data_type(fe::DataType_t::FLOAT));
+
+    auto scale_o = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                        .set_name("scale_O")
+                                        .set_dim({1, 1, 1, 1})
+                                        .set_stride({1, 1, 1, 1})
+                                        .set_data_type(fe::DataType_t::FLOAT));
+
+    auto mnk_override = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                             .set_name("mnk_override")
+                                             .set_dim({b, 1, 1, 1})
+                                             .set_stride({1, 1, 1, 1})
+                                             .set_data_type(fe::DataType_t::INT32));
+
+    auto ragged_offset_QKV = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                                  .set_name("ragged_offset_QKV")
+                                                  .set_dim({b + 1, 1, 1, 1})
+                                                  .set_stride({1, 1, 1, 1})
+                                                  .set_data_type(fe::DataType_t::INT32));
+
+    auto ragged_offset_O = mha_graph.tensor(fe::graph::Tensor_attributes()
+                                                .set_name("ragged_offset_O")
+                                                .set_dim({b + 1, 1, 1, 1})
+                                                .set_stride({1, 1, 1, 1})
+                                                .set_data_type(fe::DataType_t::INT32));
+
+    auto sdpa_fp8_options = fe::graph::SDPA_FP8_attributes()
+                                .set_name("flash_attention")
+                                .set_is_inference(is_inference)
+                                .set_causal_mask(false)
+                                .set_attn_scale(attn_scale)
+                                .set_dropout(dropout_probability, seed, offset)
+                                .set_seq_len_q(mnk_override)
+                                .set_ragged_offset_qkv(ragged_offset_QKV)
+                                .set_ragged_offset_o(ragged_offset_O);
+
+    auto [O, M, Zinv, AMax_S, AMax_O] =
+        mha_graph.sdpa_fp8(Q, K, V, descale_q, descale_k, descale_v, scale_s, scale_o, sdpa_fp8_options);
+
+    O->set_output(true).set_stride(O_dO_strides);
+
+    if (M) {
+        M->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    }
+
+    if (Zinv) {
+        Zinv->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+    }
+
+// No dropout in flash attention only supported 8.9.3 onwards.
+#if (CUDNN_VERSION < 8903)
+    SKIP("MHA Graph requires cudnn 8.9 and up");
+    return;
+#endif
+    if (check_device_arch_newer_than("hopper") == false) {
+        SKIP("MHA Graph requires Hopper or above arch.");
+        return;
+    }
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(mha_graph.validate().is_good());
+
+    REQUIRE(mha_graph.build_operation_graph(handle).is_good());
+
+    auto plans = mha_graph.get_execution_plan_list({fe::HeurMode_t::A});
+
+    REQUIRE(plans.check_support(handle).is_good());
+
+    REQUIRE(mha_graph.set_execution_plans(plans).is_good());
+
+    //// Build variant pack
+    Surface<int8_t> qkvTensor(b * s_q * 3 * h * d, false);
+    Surface<int8_t> oTensor(b * s_q * h * d, false);
+    void* devPtrQ = qkvTensor.devPtr;
+    void* devPtrK = (qkvTensor.devPtr + h * d);
+    void* devPtrV = (qkvTensor.devPtr + 2 * h * d);
+    void* devPtrO = oTensor.devPtr;
+
+    float attn_scale_cpu = 0.5f;
+
+    Surface<float> descale_Q_Tensor(1, false);
+    Surface<float> descale_K_Tensor(1, false);
+    Surface<float> descale_V_Tensor(1, false);
+
+    Surface<float> scale_S_Tensor(1, false);
+    Surface<float> scale_O_Tensor(1, false);
+
+    Surface<float> AMax_S_Tensor(1, false);
+    Surface<float> AMax_O_Tensor(1, false);
+
+    Surface<int64_t> seed_Tensor(1, false);
+    Surface<int64_t> offset_Tensor(1, false);
+    std::vector<int64_t> seed_cpu   = {123456};
+    std::vector<int64_t> offset_cpu = {1};
+    checkCudaErr(cudaMemcpy(seed_Tensor.devPtr, seed_cpu.data(), sizeof(seed_cpu[0]), cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(offset_Tensor.devPtr, offset_cpu.data(), sizeof(offset_cpu[0]), cudaMemcpyHostToDevice));
+
+    Surface<int32_t> devActualSeqlenQ(b, false);
+    Surface<int32_t> devActualSeqlenKV(b, false);
+    std::vector<int32_t> hostActualSeqlen(b, static_cast<int32_t>(s));
+
+    checkCudaErr(cudaMemcpy(
+        devActualSeqlenQ.devPtr, hostActualSeqlen.data(), sizeof(hostActualSeqlen[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(
+        devActualSeqlenKV.devPtr, hostActualSeqlen.data(), sizeof(hostActualSeqlen[0]) * b, cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    Surface<int32_t> ragged_offset_QKV_Tensor(b + 1, false);
+    Surface<int32_t> ragged_offset_O_Tensor(b + 1, false);
+    std::vector<int32_t> ragged_offset(b + 1);
+
+    for (size_t i = 0; i < ragged_offset.size(); ++i) {
+        ragged_offset[i] = static_cast<int32_t>(static_cast<int32_t>(i) * s_q * 3 * h * d);
+    }
+    checkCudaErr(cudaMemcpy(ragged_offset_O_Tensor.devPtr,
+                            ragged_offset.data(),
+                            sizeof(ragged_offset[0]) * (b + 1),
+                            cudaMemcpyHostToDevice));
+    checkCudaErr(cudaMemcpy(ragged_offset_QKV_Tensor.devPtr,
+                            ragged_offset.data(),
+                            sizeof(ragged_offset[0]) * (b + 1),
+                            cudaMemcpyHostToDevice));
+    checkCudaErr(cudaDeviceSynchronize());
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {Q, devPtrQ},
+        {K, devPtrK},
+        {V, devPtrV},
+        {O, devPtrO},
+        {attn_scale, &attn_scale_cpu},
+        {seed, seed_Tensor.devPtr},
+        {offset, offset_Tensor.devPtr},
+        {descale_q, descale_Q_Tensor.devPtr},
+        {descale_k, descale_K_Tensor.devPtr},
+        {descale_v, descale_V_Tensor.devPtr},
+        {scale_s, scale_S_Tensor.devPtr},
+        {scale_o, scale_O_Tensor.devPtr},
+        {AMax_S, AMax_S_Tensor.devPtr},
+        {AMax_O, AMax_O_Tensor.devPtr},
+        {mnk_override, devActualSeqlenQ.devPtr},
+        {ragged_offset_QKV, ragged_offset_QKV_Tensor.devPtr},
+        {ragged_offset_O, ragged_offset_O_Tensor.devPtr}};
+
+    Surface<float> MTensor(b * h * s_q * 1, false);
+    Surface<float> ZinvTensor(b * h * s_q * 1, false);
+    if (is_inference == false) {
+        variant_pack[M]    = MTensor.devPtr;
+        variant_pack[Zinv] = MTensor.devPtr;
+    }
+
+    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    checkCudaErr(cudaDeviceSynchronize());
+
+    cudnnDestroy(handle);
+
+    (void)(s_kv);
 }
