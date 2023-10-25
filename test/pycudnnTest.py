@@ -22,6 +22,11 @@ if __name__ == "__main__":
     # TODO(@mbreughe): no meaning in the graph runner modes
     pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
     pct_parser.add_argument('--R', '-R', choices=['graphRunner', "grStream"])
+    # TODO(@mbreughe): option exclusive for grStream
+    pct_parser.add_argument('--stream_start_line', '--start_line', '--stream_start', action="store", dest='start_line', default=1, type=int, help="In stream mode, which line should be our first test?")
+    # TODO(@mbreughe): option exclusive for grStream
+    pct_parser.add_argument('--stream_group_size', action="store", dest='num_lines', type=int, default=None, help="In stream mode, how many tests do we want to batch?")
+
 
     cmd = " ".join(sys.argv)
     print("Running: {}".format(cmd))
@@ -43,7 +48,19 @@ if __name__ == "__main__":
     elif args.R == 'grStream':
         import shlex
         error_count = 0
+        line_count = 0
+
+        # Process each line in stdin, and run as a graphRunner command
         for line in sys.stdin:
+            line_count +=1
+            # Start at the line number indicated by the user
+            if line_count < args.start_line:
+                continue
+
+            # End at the line number indicated by the user
+            if (args.num_lines is not None) and (line_count >= args.start_line + args.num_lines):
+                break
+
             print("Running in stream mode: ", line.strip())
             args_stream, unknown_args_stream = pct_parser.parse_known_args(shlex.split(line))
             try:
