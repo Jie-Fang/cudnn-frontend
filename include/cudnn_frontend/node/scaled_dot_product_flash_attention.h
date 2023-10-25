@@ -143,27 +143,20 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
         std::shared_ptr<Tensor_attributes> last_output;
 
-        // Lower attributes to bmm1 attributes
-        auto bmm1_output = std::make_shared<Tensor_attributes>();
-        bmm1_output
-            ->set_is_virtual(true)
-            // Setting dims and strides as pointwise op wont have knowledge of how to do it for mha.
-            .set_dim({b, h, s_q, s_kv})
-            .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
-
-        Matmul_attributes bmm1_attributes;
-        bmm1_attributes.set_name("bmm1");
-        bmm1_attributes.inputs[Matmul_attributes::input_names::A] =
-            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q];
-        bmm1_attributes.inputs[Matmul_attributes::input_names::B] =
-            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K];
-        bmm1_attributes.inputs[Matmul_attributes::input_names::M_override] =
-            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q];
-        bmm1_attributes.inputs[Matmul_attributes::input_names::N_override] =
-            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV];
-        last_output = bmm1_attributes.outputs[Matmul_attributes::output_names::C] = bmm1_output;
-        auto bmm1_node = std::make_unique<MatmulNode>(std::move(bmm1_attributes), context);
-        sub_nodes.emplace_back(std::move(bmm1_node));
+        auto bmm1_attributes =
+            Matmul_attributes()
+                .set_name("bmm1")
+                .set_m_override(
+                    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q])
+                .set_n_override(
+                    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV]);
+        auto const& bmm1_output =
+            matmul(attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q],
+                   attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::K],
+                   bmm1_attributes);
+        // Setting dims and strides as pointwise op wont have knowledge of how to do it for mha.
+        bmm1_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+        last_output = bmm1_output;
 
         // Optional scale
         if (attributes.attn_scale_value.has_value()) {
@@ -176,78 +169,48 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_is_pass_by_value(true);
         }
         if (attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale]) {
-            // Lower attributes to scale attributes
-            auto attn_scale_output = std::make_shared<Tensor_attributes>();
-            attn_scale_output->set_is_virtual(true);
-
             Pointwise_attributes scale_attributes;
-            scale_attributes.set_name("attn_scale");
-            scale_attributes.set_mode(PointwiseMode_t::MUL);
-            scale_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            scale_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale];
-            last_output = scale_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = attn_scale_output;
-            auto scale_node = std::make_unique<PointwiseNode>(std::move(scale_attributes), context);
-            sub_nodes.emplace_back(std::move(scale_node));
+            scale_attributes.set_name("attn_scale").set_mode(PointwiseMode_t::MUL);
+            auto const& attn_scale_output =
+                pointwise(last_output,
+                          attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale],
+                          scale_attributes);
+            last_output = attn_scale_output;
         }
 
         // Optional bias
         if (attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias]) {
-            // Lower attributes to add attributes
-            auto bias_output = std::make_shared<Tensor_attributes>();
-            bias_output->set_is_virtual(true);
-
-            Pointwise_attributes add_attributes;
-            add_attributes.set_name("bias");
-            add_attributes.set_mode(PointwiseMode_t::ADD);
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias];
-            last_output = add_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = bias_output;
-            auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
-            sub_nodes.emplace_back(std::move(add_node));
+            auto add_attributes = Pointwise_attributes().set_name("bias").set_mode(PointwiseMode_t::ADD);
+            auto const& bias_output =
+                pointwise(last_output,
+                          attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Bias],
+                          add_attributes);
+            last_output = bias_output;
         }
 
         if (attributes.alibi_mask) {
-            // Lower attributes to generate row index attributes
-            auto row_index_output = std::make_shared<Tensor_attributes>();
-            row_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+            auto row_index_attributes = Pointwise_attributes()
+                                            .set_name("gen_row_index")
+                                            .set_mode(PointwiseMode_t::GEN_INDEX)
+                                            .set_axis(2)
+                                            .set_compute_data_type(DataType_t::INT32);
+            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+            row_index_output->set_data_type(DataType_t::INT32);
 
-            Pointwise_attributes row_index_attributes;
-            row_index_attributes.set_name("gen_row_index")
-                .set_mode(PointwiseMode_t::GEN_INDEX)
-                .set_axis(2)
-                .set_compute_data_type(DataType_t::INT32);
-            row_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            row_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_index_output;
-            auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
-            sub_nodes.emplace_back(std::move(row_index_node));
+            auto col_index_attributes = Pointwise_attributes()
+                                            .set_name("gen_col_index")
+                                            .set_mode(PointwiseMode_t::GEN_INDEX)
+                                            .set_axis(3)
+                                            .set_compute_data_type(DataType_t::INT32);
+            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+            col_index_output->set_data_type(DataType_t::INT32);
 
-            // Lower attributes to generate col index attributes
-            auto col_index_output = std::make_shared<Tensor_attributes>();
-            col_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
-
-            Pointwise_attributes col_index_attributes;
-            col_index_attributes.set_name("gen_col_index")
-                .set_mode(PointwiseMode_t::GEN_INDEX)
-                .set_axis(3)
-                .set_compute_data_type(DataType_t::INT32);
-            col_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            col_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_index_output;
-            auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
-            sub_nodes.emplace_back(std::move(col_index_node));
-
-            // Lower attributes to sub attributes
-            auto sub_output = std::make_shared<Tensor_attributes>();
-            sub_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
-
-            Pointwise_attributes sub_attributes;
-            sub_attributes.set_name("sub").set_mode(PointwiseMode_t::SUB).set_compute_data_type(DataType_t::INT32);
-            sub_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = col_index_output;
-            sub_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = row_index_output;
-            sub_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = sub_output;
-            auto sub_node = std::make_unique<PointwiseNode>(std::move(sub_attributes), context);
-            sub_nodes.emplace_back(std::move(sub_node));
+            auto sub_attributes = Pointwise_attributes()
+                                      .set_name("sub")
+                                      .set_mode(PointwiseMode_t::SUB)
+                                      .set_compute_data_type(DataType_t::INT32);
+            auto const& sub_output = pointwise(col_index_output, row_index_output, sub_attributes);
+            sub_output->set_data_type(DataType_t::INT32);
 
             // Multiply by alibi slope
             alibi_slopes = std::make_shared<Tensor_attributes>();
@@ -256,102 +219,59 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 // Hard code data type float as FE itself will compute and place in variant pack later
                 .set_data_type(DataType_t::FLOAT);
 
-            auto alibi_mask = std::make_shared<Tensor_attributes>();
-            alibi_mask->set_is_virtual(true);
-
-            Pointwise_attributes mul_attributes;
-            mul_attributes.set_name("mul").set_mode(PointwiseMode_t::MUL);
-            mul_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = sub_output;
-            mul_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = alibi_slopes;
-            mul_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = alibi_mask;
-            auto mul_node = std::make_unique<PointwiseNode>(std::move(mul_attributes), context);
-            sub_nodes.emplace_back(std::move(mul_node));
+            auto mul_attributes    = Pointwise_attributes().set_name("mul").set_mode(PointwiseMode_t::MUL);
+            auto const& alibi_mask = pointwise(sub_output, alibi_slopes, mul_attributes);
 
             // Add alibi_mask
-            auto add_output = std::make_shared<Tensor_attributes>();
-            add_output->set_is_virtual(true);
-
-            Pointwise_attributes add_attributes;
-            add_attributes.set_name("add").set_mode(PointwiseMode_t::ADD);
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            add_attributes.inputs[Pointwise_attributes::input_names::IN_1] = alibi_mask;
-            last_output = add_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = add_output;
-            auto add_node = std::make_unique<PointwiseNode>(std::move(add_attributes), context);
-            sub_nodes.emplace_back(std::move(add_node));
+            auto add_attributes    = Pointwise_attributes().set_name("add").set_mode(PointwiseMode_t::ADD);
+            auto const& add_output = pointwise(last_output, alibi_mask, add_attributes);
+            last_output            = add_output;
         }
 
         if (attributes.padding_mask) {
-            // Lower attributes to generate row index attributes
-            auto row_index_output = std::make_shared<Tensor_attributes>();
-            row_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+            auto row_index_attributes = Pointwise_attributes()
+                                            .set_name("gen_row_index")
+                                            .set_mode(PointwiseMode_t::GEN_INDEX)
+                                            .set_axis(2)
+                                            .set_compute_data_type(DataType_t::INT32);
+            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+            row_index_output->set_data_type(DataType_t::INT32);
 
-            Pointwise_attributes row_index_attributes;
-            row_index_attributes.set_name("gen_row_index")
-                .set_mode(PointwiseMode_t::GEN_INDEX)
-                .set_axis(2)
-                .set_compute_data_type(DataType_t::INT32);
-            row_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            row_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_index_output;
-            auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
-            sub_nodes.emplace_back(std::move(row_index_node));
+            auto col_index_attributes = Pointwise_attributes()
+                                            .set_name("gen_col_index")
+                                            .set_mode(PointwiseMode_t::GEN_INDEX)
+                                            .set_axis(3)
+                                            .set_compute_data_type(DataType_t::INT32);
+            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+            col_index_output->set_data_type(DataType_t::INT32);
 
-            // Lower attributes to generate col index attributes
-            auto col_index_output = std::make_shared<Tensor_attributes>();
-            col_index_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
+            auto row_less_seq_q_attributes = Pointwise_attributes()
+                                                 .set_name("row_less_seq_q")
+                                                 .set_mode(PointwiseMode_t::CMP_LT)
+                                                 .set_compute_data_type(DataType_t::INT32);
+            auto const& row_less_seq_q_output =
+                pointwise(row_index_output,
+                          attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q],
+                          row_less_seq_q_attributes);
+            row_less_seq_q_output->set_data_type(DataType_t::INT32);
 
-            Pointwise_attributes col_index_attributes;
-            col_index_attributes.set_name("gen_col_index")
-                .set_mode(PointwiseMode_t::GEN_INDEX)
-                .set_axis(3)
-                .set_compute_data_type(DataType_t::INT32);
-            col_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            col_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_index_output;
-            auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
-            sub_nodes.emplace_back(std::move(col_index_node));
+            auto col_less_seq_kv_attributes = Pointwise_attributes()
+                                                  .set_name("col_less_seq_kv")
+                                                  .set_mode(PointwiseMode_t::CMP_LT)
+                                                  .set_compute_data_type(DataType_t::INT32);
+            auto const& col_less_seq_kv_output =
+                pointwise(col_index_output,
+                          attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV],
+                          col_less_seq_kv_attributes);
+            col_less_seq_kv_output->set_data_type(DataType_t::INT32);
 
-            // Create operation for row index less than seq_q
-            auto row_less_seq_q_output = std::make_shared<Tensor_attributes>();
-            row_less_seq_q_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
-
-            Pointwise_attributes row_less_seq_q_attributes;
-            row_less_seq_q_attributes.set_name("row_less_seq_q")
-                .set_mode(PointwiseMode_t::CMP_LT)
-                .set_compute_data_type(DataType_t::INT32);
-            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_0] = row_index_output;
-            row_less_seq_q_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q];
-            row_less_seq_q_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_less_seq_q_output;
-            auto row_less_seq_q_node = std::make_unique<PointwiseNode>(std::move(row_less_seq_q_attributes), context);
-            sub_nodes.emplace_back(std::move(row_less_seq_q_node));
-
-            // Create operation for col index less than seq_q
-            auto col_less_seq_kv_output = std::make_shared<Tensor_attributes>();
-            col_less_seq_kv_output->set_is_virtual(true).set_data_type(DataType_t::INT32);
-
-            Pointwise_attributes col_less_seq_kv_attributes;
-            col_less_seq_kv_attributes.set_name("col_less_seq_kv")
-                .set_mode(PointwiseMode_t::CMP_LT)
-                .set_compute_data_type(DataType_t::INT32);
-            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_0] = col_index_output;
-            col_less_seq_kv_attributes.inputs[Pointwise_attributes::input_names::IN_1] =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV];
-            col_less_seq_kv_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_less_seq_kv_output;
-            auto col_less_seq_kv_node = std::make_unique<PointwiseNode>(std::move(col_less_seq_kv_attributes), context);
-            sub_nodes.emplace_back(std::move(col_less_seq_kv_node));
-
-            // Create operation logical AND that creates padding mask
-            auto logical_and_output = std::make_shared<Tensor_attributes>();
-            logical_and_output->set_is_virtual(true).set_data_type(DataType_t::BOOLEAN);
-
-            Pointwise_attributes logical_and_attributes;
-            logical_and_attributes.set_name("logical_and")
-                .set_mode(PointwiseMode_t::LOGICAL_AND)
-                .set_compute_data_type(DataType_t::BOOLEAN);
-            logical_and_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = row_less_seq_q_output;
-            logical_and_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = col_less_seq_kv_output;
-            logical_and_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = logical_and_output;
-            auto logical_and_node = std::make_unique<PointwiseNode>(std::move(logical_and_attributes), context);
-            sub_nodes.emplace_back(std::move(logical_and_node));
+            auto logical_and_attributes = Pointwise_attributes()
+                                              .set_name("logical_and")
+                                              .set_mode(PointwiseMode_t::LOGICAL_AND)
+                                              .set_compute_data_type(DataType_t::BOOLEAN);
+            auto const& logical_and_output =
+                pointwise(row_less_seq_q_output, col_less_seq_kv_output, logical_and_attributes);
+            logical_and_output->set_data_type(DataType_t::BOOLEAN);
 
             // Lower attributes to binary select attributes
             negative_inf_padding = std::make_shared<Tensor_attributes>();
@@ -361,61 +281,29 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 // Hard code data type float as FE itself will place FLOAT_MIN in variant pack later
                 .set_data_type(DataType_t::FLOAT);
 
-            auto padding_mask_output = std::make_shared<Tensor_attributes>();
-            padding_mask_output->set_is_virtual(true);
-
-            Pointwise_attributes binary_select_attributes;
-            binary_select_attributes.set_name("binary_select");
-            binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
-            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_1] = negative_inf_padding;
-            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_2] = logical_and_output;
-            last_output = binary_select_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-                padding_mask_output;
-            auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
-            sub_nodes.emplace_back(std::move(binary_select_node));
+            auto binary_select_attributes =
+                Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
+            auto const& padding_mask_output =
+                pointwise(last_output, negative_inf_padding, logical_and_output, binary_select_attributes);
+            last_output = padding_mask_output;
         }
 
         if (attributes.causal_mask) {
-            // Lower attributes to generate row index attributes
-            auto row_index_output = std::make_shared<Tensor_attributes>();
-            row_index_output->set_is_virtual(true);
+            auto row_index_attributes =
+                Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
+            auto const& row_index_output = pointwise(last_output, row_index_attributes);
 
-            Pointwise_attributes row_index_attributes;
-            row_index_attributes.set_name("gen_row_index");
-            row_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-            row_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            row_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_index_output;
-            auto row_index_node = std::make_unique<PointwiseNode>(std::move(row_index_attributes), context);
-            sub_nodes.emplace_back(std::move(row_index_node));
+            auto col_index_attributes =
+                Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
+            auto const& col_index_output = pointwise(last_output, col_index_attributes);
 
-            // Lower attributes to generate col index attributes
-            auto col_index_output = std::make_shared<Tensor_attributes>();
-            col_index_output->set_is_virtual(true);
-
-            Pointwise_attributes col_index_attributes;
-            col_index_attributes.set_name("gen_col_index");
-            col_index_attributes.set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-            col_index_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = last_output;
-            col_index_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = col_index_output;
-            auto col_index_node = std::make_unique<PointwiseNode>(std::move(col_index_attributes), context);
-            sub_nodes.emplace_back(std::move(col_index_node));
-
-            // Lower attributes to greater than attributes
-            auto row_greater_than_col_output = std::make_shared<Tensor_attributes>();
-            row_greater_than_col_output
-                ->set_is_virtual(true)
-                // Hard coding data type
-                .set_data_type(DataType_t::BOOLEAN);
-
-            Pointwise_attributes greater_than_attributes;
-            greater_than_attributes.set_name("row_greater_than_col");
-            greater_than_attributes.set_mode(PointwiseMode_t::CMP_GE).set_compute_data_type(DataType_t::BOOLEAN);
-            greater_than_attributes.inputs[Pointwise_attributes::input_names::IN_0]    = row_index_output;
-            greater_than_attributes.inputs[Pointwise_attributes::input_names::IN_1]    = col_index_output;
-            greater_than_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = row_greater_than_col_output;
-            auto greater_than_node = std::make_unique<PointwiseNode>(std::move(greater_than_attributes), context);
-            sub_nodes.emplace_back(std::move(greater_than_node));
+            auto greater_than_attributes = Pointwise_attributes()
+                                               .set_name("row_greater_than_col")
+                                               .set_mode(PointwiseMode_t::CMP_GE)
+                                               .set_compute_data_type(DataType_t::BOOLEAN);
+            auto const& row_greater_than_col_output =
+                pointwise(row_index_output, col_index_output, greater_than_attributes);
+            row_greater_than_col_output->set_data_type(DataType_t::BOOLEAN);
 
             // Lower attributes to binary select attributes
             negative_inf_causal = std::make_shared<Tensor_attributes>();
@@ -425,19 +313,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 // Hard code data type float as FE itself will place FLOAT_MIN in variant pack later
                 .set_data_type(DataType_t::FLOAT);
 
-            auto causal_mask_output = std::make_shared<Tensor_attributes>();
-            causal_mask_output->set_is_virtual(true);
-
-            Pointwise_attributes binary_select_attributes;
-            binary_select_attributes.set_name("binary_select");
-            binary_select_attributes.set_mode(PointwiseMode_t::BINARY_SELECT);
-            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_1] = negative_inf_causal;
-            binary_select_attributes.inputs[Pointwise_attributes::input_names::IN_2] = row_greater_than_col_output;
-            last_output = binary_select_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-                causal_mask_output;
-            auto binary_select_node = std::make_unique<PointwiseNode>(std::move(binary_select_attributes), context);
-            sub_nodes.emplace_back(std::move(binary_select_node));
+            auto binary_select_attributes =
+                Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
+            auto const& causal_mask_output =
+                pointwise(last_output, negative_inf_causal, row_greater_than_col_output, binary_select_attributes);
+            last_output = causal_mask_output;
         }
 
         // Lower attributes to softmax attributes
@@ -451,14 +331,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
             softmax_stats->set_is_virtual(true);
         }
 
-        Softmax_attributes softmax_attributes;
-        softmax_attributes.set_name("softmax");
-        softmax_attributes.use_stats                                  = true;  // As this is flash attention
-        softmax_attributes.inputs[Softmax_attributes::input_names::P] = last_output;
-        last_output = softmax_attributes.outputs[Softmax_attributes::output_names::S] = softmax_output;
-        softmax_attributes.outputs[Softmax_attributes::output_names::Stats]           = softmax_stats;
-        auto softmax_node = std::make_unique<SoftmaxNode>(std::move(softmax_attributes), context);
-        sub_nodes.emplace_back(std::move(softmax_node));
+        auto softmax_attributes =
+            Softmax_attributes().set_name("softmax").has_stats(true);  // As this is flash attention
+        // Special non-functional-style call. Needed because output already created and provided to user.
+        softmax(last_output, softmax_attributes, softmax_output, softmax_stats);
+        last_output = softmax_output;
 
         // Two cases for training: dropout present or not
         bool dropout_present = false;
@@ -473,43 +350,24 @@ class ScaledDotProductFlashAttentionNode : public INode {
         }
 
         if (dropout_present) {
-            // Lower attributes to rng attributes
-            auto rng_output = std::make_shared<Tensor_attributes>();
+            auto rng_attributes =
+                Rng_attributes()
+                    .set_name("rng")
+                    .set_distribution(RngDistribution_t::BERNOULLI)
+                    .set_bernoulli_probability(
+                        1.0 - attributes.dropout_probability.value());  // As user sets dropout probability
+            auto const& rng_output =
+                rng(attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Seed],
+                    attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Offset],
+                    rng_attributes);
             rng_output
-                ->set_is_virtual(true)
                 // Hard coding dims and strides as rng output can no inputs to infer it from.
-                .set_dim({b, h, s_q, s_kv})
+                ->set_dim({b, h, s_q, s_kv})
                 .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
-            Rng_attributes rng_attributes;
-            rng_attributes.set_name("rng");
-            rng_attributes.set_distribution(RngDistribution_t::BERNOULLI)
-                .set_bernoulli_probability(1.0 -
-                                           attributes.dropout_probability.value());  // As user sets dropout probability
-            rng_attributes.inputs[Rng_attributes::input_names::Seed] =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Seed];
-            rng_attributes.inputs[Rng_attributes::input_names::Offset] =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Offset];
-            rng_attributes.outputs[Rng_attributes::output_names::Y] = rng_output;
-            auto rng_node = std::make_unique<RngNode>(std::move(rng_attributes), context);
-            sub_nodes.emplace_back(std::move(rng_node));
-
-            // Lower attributes to mask attributes
-            auto dropout_mask_output = std::make_shared<Tensor_attributes>();
-            dropout_mask_output->set_is_virtual(true);
-
-            Pointwise_attributes mask_attributes;
-            mask_attributes.set_name("dropout_mask_mul");
-            mask_attributes.set_mode(PointwiseMode_t::MUL);
-            mask_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            mask_attributes.inputs[Pointwise_attributes::input_names::IN_1] = rng_output;
-            last_output = mask_attributes.outputs[Pointwise_attributes::output_names::OUT_0] = dropout_mask_output;
-            auto mask_node = std::make_unique<PointwiseNode>(std::move(mask_attributes), context);
-            sub_nodes.emplace_back(std::move(mask_node));
-
-            // Lower attributes to dropout_scale attributes
-            auto dropout_scale_output = std::make_shared<Tensor_attributes>();
-            dropout_scale_output->set_is_virtual(true);
+            auto mask_attributes = Pointwise_attributes().set_name("dropout_mask_mul").set_mode(PointwiseMode_t::MUL);
+            auto const& dropout_mask_output = pointwise(last_output, rng_output, mask_attributes);
+            last_output                     = dropout_mask_output;
 
             dropout_scale = std::make_shared<Tensor_attributes>();
             dropout_scale->set_dim({1, 1, 1, 1})
@@ -523,15 +381,10 @@ class ScaledDotProductFlashAttentionNode : public INode {
                 .set_data_type(DataType_t::FLOAT);
 #endif
 
-            Pointwise_attributes dropout_scale_attributes;
-            dropout_scale_attributes.set_name("dropout_scale");
-            dropout_scale_attributes.set_mode(PointwiseMode_t::MUL);
-            dropout_scale_attributes.inputs[Pointwise_attributes::input_names::IN_0] = last_output;
-            dropout_scale_attributes.inputs[Pointwise_attributes::input_names::IN_1] = dropout_scale;
-            last_output = dropout_scale_attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-                dropout_scale_output;
-            auto dropout_scale_node = std::make_unique<PointwiseNode>(std::move(dropout_scale_attributes), context);
-            sub_nodes.emplace_back(std::move(dropout_scale_node));
+            auto dropout_scale_attributes =
+                Pointwise_attributes().set_name("dropout_scale").set_mode(PointwiseMode_t::MUL);
+            auto const& dropout_scale_output = pointwise(last_output, dropout_scale, dropout_scale_attributes);
+            last_output                      = dropout_scale_output;
         }
 
         // Lower attributes to bmm2 attributes
@@ -539,19 +392,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
         last_output->set_data_type(
             attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q]->get_data_type());
 
-        Matmul_attributes bmm2_attributes;
-        bmm2_attributes.set_name("bmm2");
-        bmm2_attributes.inputs[Matmul_attributes::input_names::A] = last_output;
-        bmm2_attributes.inputs[Matmul_attributes::input_names::B] =
-            attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::V];
-        bmm2_attributes.outputs[Matmul_attributes::output_names::C] =
-            attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O];
-        bmm2_attributes.inputs[Matmul_attributes::input_names::M_override] =
+        auto const& seq_len_q =
             attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_Q];
-        bmm2_attributes.inputs[Matmul_attributes::input_names::K_override] =
+        auto const& seq_len_kv =
             attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::SEQ_LEN_KV];
-        auto bmm2_node = std::make_unique<MatmulNode>(std::move(bmm2_attributes), context);
-        sub_nodes.emplace_back(std::move(bmm2_node));
+        auto const& V = attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::V];
+        auto const& O = attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O];
+        auto bmm2_attributes =
+            Matmul_attributes().set_name("bmm2").set_m_override(seq_len_q).set_k_override(seq_len_kv);
+        // Special non-functional-style call. Needed because output already created and provided to user.
+        matmul(last_output, V, bmm2_attributes, O);
 
         // Set dims if user did not
         if (attributes.outputs[Scaled_dot_product_flash_attention_attributes::output_names::O]->get_dim().empty()) {
