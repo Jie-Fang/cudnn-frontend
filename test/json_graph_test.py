@@ -133,14 +133,15 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     #Other
     l_parser.add_argument("-backendEngine", dest='backendEngine', action='store', type=int, default=-1, required=False)
+    l_parser.add_argument("-Dforce_jit_dbg", action='store', default=None, type=int)
+
     # Ignored arguments
-    ignored_keys = ['d', "b", "S", 'gpuRef', "Dforce_jit_dbg", "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
+    ignored_keys = ['d', "b", "S", 'gpuRef', "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
     ignored_args = l_parser.add_argument_group('ignored_args')
     ignored_args.add_argument("-d", action='store', default=None)
     ignored_args.add_argument("-b", action='store_true', default=None)
     ignored_args.add_argument("-S", action='store_true', default=None)
     ignored_args.add_argument("-gpuRef", action='store_true', default=None)
-    ignored_args.add_argument("-Dforce_jit_dbg", action='store', default=None)
     ignored_args.add_argument("-engineCfgSweep", action='store', default=None, required=False)
     ignored_args.add_argument("-knobSplitKSlices", action='store', default=None, required=False)
     ignored_args.add_argument("-knobKernelCfg", action='store', default=None, required=False)
@@ -214,7 +215,19 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     try:
         concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
         reportCurrentTime("replace_abstract_test_params")
+        # TODO(@mbreughe): Make this safer
+        # Overwrite the environment variable that controls forced JIT-ing
+        force_jit_env_before = os.environ.get("CUDNN_FORCE_JIT_DBG", None)
+        if "Dforce_jit_dbg" in abstract_params:
+            os.environ["CUDNN_FORCE_JIT_DBG"] = str(legacy_args.Dforce_jit_dbg)
+
         run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+
+        # Now recover the environment variable
+        if force_jit_env_before is not None:
+            os.environ["CUDNN_FORCE_JIT_DBG"] = force_jit_env_before
+        elif "CUDNN_FORCE_JIT_DBG" in os.environ:
+            del os.environ["CUDNN_FORCE_JIT_DBG"]
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)
         raise e
