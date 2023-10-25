@@ -288,7 +288,7 @@ to_json(json& j, const INode& p) {
 
 #define FE_VALIDATE_TENSOR(port, map_) \
     {                                                \
-        auto const& t    = map_.find(port); \
+        auto t           = map_.find(port); \
         bool const has_t = (t != map_.end()) && (t->second != nullptr); \
         RETURN_CUDNN_FRONTEND_ERROR_IF(!has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
     }
