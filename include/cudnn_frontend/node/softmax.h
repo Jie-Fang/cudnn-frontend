@@ -31,8 +31,9 @@ class SoftmaxNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.use_stats.has_value() == false, error_code_t::ATTRIBUTE_NOT_SET, "use_stats attribute not set.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.use_M_Zinv.has_value() == false, error_code_t::ATTRIBUTE_NOT_SET, "use_M_Zinv attribute not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.use_M_Zinv.has_value() == false,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "use_M_Zinv attribute not set.");
 
         return {error_code_t::OK, ""};
     }
@@ -54,10 +55,14 @@ class SoftmaxNode : public INode {
         auto max_output = attributes.outputs[Softmax_attributes::output_names::M];
         if (!attributes.use_M_Zinv.value()) {
             max_output = std::make_shared<Tensor_attributes>();
-            max_output->set_name("M").set_is_virtual(true).set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
+            max_output->set_name("M").set_is_virtual(true);
         }
+        //////////////// TODO //////////////////////////
+        // Check Stride (Before setting dimension?)
+        max_output->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
+        ;
 
-        auto max_attributes    = Reduction_attributes().set_name("M").set_mode(ReductionMode_t::MAX);
+        auto max_attributes = Reduction_attributes().set_name("M").set_mode(ReductionMode_t::MAX);
         // Special non-functional-style call. Needed because output already created and provided to user.
         reduction(attributes.inputs[Softmax_attributes::input_names::P], max_attributes, max_output);
 
@@ -86,7 +91,8 @@ class SoftmaxNode : public INode {
         }
 
         if (attributes.use_M_Zinv.value()) {
-            auto reciprocal_attributes = Pointwise_attributes().set_name("reciprocal").set_mode(PointwiseMode_t::RECIPROCAL);
+            auto reciprocal_attributes =
+                Pointwise_attributes().set_name("reciprocal").set_mode(PointwiseMode_t::RECIPROCAL);
             // Special non-functional-style call. Needed because output already created and provided to user.
             pointwise(sum_output, reciprocal_attributes, attributes.outputs[Softmax_attributes::output_names::Zinv]);
         }
@@ -98,7 +104,10 @@ class SoftmaxNode : public INode {
         } else {
             auto mul_attributes = Pointwise_attributes().set_name("mul").set_mode(PointwiseMode_t::MUL);
             // Special non-functional-style call. Needed because output already created and provided to user.
-            pointwise(exp_output, attributes.outputs[Softmax_attributes::output_names::Zinv], mul_attributes, attributes.outputs[Softmax_attributes::output_names::S]);
+            pointwise(exp_output,
+                      attributes.outputs[Softmax_attributes::output_names::Zinv],
+                      mul_attributes,
+                      attributes.outputs[Softmax_attributes::output_names::S]);
         }
 
         return {error_code_t::OK, ""};
