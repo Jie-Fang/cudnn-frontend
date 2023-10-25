@@ -25,15 +25,8 @@ class ReductionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating reduction node " << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.inputs.find(Reduction_attributes::input_names::X) == attributes.inputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "reduction input not set.");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.outputs.find(Reduction_attributes::output_names::Y) == attributes.outputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "reduction Y not set.");
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Reduction_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Reduction_attributes::output_names::Y);
 
         return {error_code_t::OK, ""};
     }

@@ -260,6 +260,20 @@ to_json(json& j, const INode& p) {
     p.serialize(j);
 }
 
+#define CUDNN_FE_VALIDATE_TENSOR_(port, map_) \
+    {                                                \
+        auto t           = map_.find(port); \
+        bool const has_t = (t != map_.end()) && (t->second != nullptr); \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
+    }
+
+#define CUDNN_FE_VALIDATE_INPUT_TENSOR(port) \
+    CUDNN_FE_VALIDATE_TENSOR_(port, attributes.inputs)
+
+#define CUDNN_FE_VALIDATE_OUTPUT_TENSOR(port) \
+    CUDNN_FE_VALIDATE_TENSOR_(port, attributes.outputs)
+
+
 }  // namespace graph
 
 }  // namespace cudnn_frontend

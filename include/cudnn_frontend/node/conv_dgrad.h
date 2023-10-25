@@ -24,7 +24,12 @@ class DgradNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating DgradNode " << attributes.name << "..." << std::endl;
+            << "Validating Node Type::DGRAD " << attributes.name << "..." << std::endl;
+        
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::DY); 
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::W);
+
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_dgrad_attributes::output_names::DX);
 
         return {error_code_t::OK, ""};
     }
@@ -38,9 +43,9 @@ class DgradNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
-        auto DX = attributes.outputs[Conv_dgrad_attributes::output_names::DX];
-        auto W  = attributes.inputs[Conv_dgrad_attributes::input_names::W];
-        auto DY = attributes.inputs[Conv_dgrad_attributes::input_names::DY];
+        auto DX = attributes.outputs.find(Conv_dgrad_attributes::output_names::DX)->second;
+        auto W = attributes.inputs.find(Conv_dgrad_attributes::input_names::W)->second;
+        auto DY = attributes.inputs.find(Conv_dgrad_attributes::input_names::DY)->second;
 
         auto const w_tensor_dim  = W->get_dim();
         auto const dy_tensor_dim = DY->get_dim();

@@ -22,6 +22,20 @@ class WgradNode : public INode {
     }
 
     error_t
+    validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+            << "Validating Node Type::WGRAD " << attributes.name << "..." << std::endl;
+        
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_wgrad_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_wgrad_attributes::input_names::DY);
+
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_wgrad_attributes::output_names::DW);
+
+        return {error_code_t::OK, ""};
+
+    }
+    
+    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << attributes.name << "."
                     << std::endl;
@@ -46,14 +60,6 @@ class WgradNode : public INode {
             auto const& stride_order = detail::generate_NHWC_stride_order(DW_dim.size());
             DW->set_stride(detail::generate_stride(DW_dim, stride_order));
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating WgradNode " << attributes.name << "..." << std::endl;
 
         return {error_code_t::OK, ""};
     }
