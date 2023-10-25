@@ -11,12 +11,15 @@ utils.reportCurrentTime("import_json_graph_test")
 if __name__ == "__main__":
     pct_parser = argparse.ArgumentParser(prog='pycudnnTest')
     # TODO(@mbreughe): generalize this to a directory of python files
+    # TODO(@mbreughe): legacy json tests specify through -jsonPath (see json_graph_test.py). Make this mutually exclusive to -RgraphRunner and -RgrStream
     pct_parser.add_argument('--testPath', default="json_graph_defs/graphTests.json", 
                         help="This can be a json file or python file with graph definitions. "
                         "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py")
+    # TODO(@mbreughe): again this has no meaning in the graph runner modes
     pct_parser.add_argument('--testName', default=[], action="append", help="Test Name (multiple names are allowed and recommended for performance). Note: in python graph mode, no name means all tests in file are executed. ")
     pct_parser.add_argument('--verbose', '-v', action="store_true", default=False, help="Verbose output")
     pct_parser.add_argument('--vverbose', '-vv', action="store_true", default=False, help="Very verbose output")
+    # TODO(@mbreughe): no meaning in the graph runner modes
     pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
     pct_parser.add_argument('--R', '-R', choices=['graphRunner', "grStream"])
 
@@ -39,11 +42,19 @@ if __name__ == "__main__":
 
     elif args.R == 'grStream':
         import shlex
+        error_count = 0
         for line in sys.stdin:
+            print("Running in stream mode: ", line.strip())
             args_stream, unknown_args_stream = pct_parser.parse_known_args(shlex.split(line))
-            run_test_from_legacy_args(args_stream, unknown_args_stream)
-            utils.reportCurrentTime("done")
+            try:
+                run_test_from_legacy_args(args_stream, unknown_args_stream)
+            except utils.ImplementationError:
+                error_count +=1
 
+            utils.reportCurrentTime("done")
+        
+        if error_count > 0:
+            sys.exit(1)
         sys.exit(0)
 
     # Graphs defined in json file

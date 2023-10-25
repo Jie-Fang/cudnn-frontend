@@ -4,6 +4,10 @@ if LOG_RUNTIME:
     import time 
     g_clk_id = time.CLOCK_MONOTONIC_RAW
 
+class ImplementationError(Exception):
+    def __init__(self, reason):
+        self.reason = reason
+
 def getFwdConvInputDims(outputTensorDim, pad, filterDim, stride, dilation):
     inputTensorDim = [0] * len(outputTensorDim)
     inputTensorDim[0] = outputTensorDim[0]

@@ -1,4 +1,4 @@
-from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime
+from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime, ImplementationError
 import cudnn
 reportCurrentTime("import_cudnn")
 import json
@@ -7,11 +7,6 @@ import sys
 import argparse
 
 from test_graph import test_graph
-
-
-class ImplementationError(Exception):
-    def __init__(self, reason):
-        self.reason = reason
 
 def read_json_test_dict(fname):
     if not os.path.exists(fname):
@@ -76,7 +71,7 @@ def replace_abstract_test_params(json_test_def, abstract_params):
     return json_test_def
 
 def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
-    print("Running from legacy json graph definition")
+    print("Running json graph")
 
     kTEST_NAME = "jsonTestName"
     kDATA_TYPES = ['s', 'h', 'float', 'half', "g", "b"]
@@ -222,7 +217,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)
-        sys.exit(1)
+        raise e
 
 # @brief: A utility class to help parse graphRunner json graph definitions
 # @details: This is a utility class to extract infomration from a json graph definition (graphRunner json format)
@@ -319,7 +314,9 @@ class Legacy_operation:
 # @note: we could opt to store the mapping in a file like we do for operation
 # however, the mapping is much fewer, so we decide to avoid the overhead for now
 class Legacy_tensor:
-    mapping = {"dataType": "data_type", "dim": "dim"}
+    mapping = {"dataType": "data_type", "dim": "dim", "name": "name"}
+    # TODO(@mbreughe): implement the following fill related properties
+    mapping.update({"fill": "fill", "min": "min", "max": "max", "value": "value", "mean": "mean", "std_dev": "std_dev"})
 
     def __init__(self, jtensor):
         self.jtensor = jtensor
@@ -365,17 +362,19 @@ class Legacy_tensor:
                 pycudnn_props["stride"] = self.get_stride()
                 layout = self.jtensor["layout"]
                 # TODO(@mbreughe): fix this in test_graph.py
-                # It shouldn't be necessary to specify thsi through both strides and layout
+                # It shouldn't be necessary to specify this through both strides and layout
                 if layout == "NCHW" or str(layout) == '0':
                     pycudnn_props[key] = "NCHW"
                 elif layout == "NHWC" or str(layout) == '1':
                     pycudnn_props[key] = "NHWC"
-            else:
-                new_key = key
-                if key in Legacy_tensor.mapping:
+            
+            elif key in Legacy_tensor.mapping:
                     new_key = Legacy_tensor.mapping[key]
                 
-                pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
+                    pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
+
+            else:
+                raise ImplementationError("Unsupported tensor property \"{}\"".format(key))
 
         return pycudnn_props
 

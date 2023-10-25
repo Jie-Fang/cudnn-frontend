@@ -699,7 +699,7 @@ class test_graph:
                 print ("WARNING: reference and actual output shapes differ ({} resp., {})".format(Y_expected.shape, Y_actual.shape) )
 
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
-            print("cudnn and reference match")
+            print("PASSED: cudnn and reference match")
             number_outputs_tested += 1
         
         assert number_outputs_tested >= 1
