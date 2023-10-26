@@ -65,8 +65,8 @@ class GenstatsNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building GenstatsNode tensors " << attributes.name << "..." << std::endl;
 
@@ -87,7 +87,7 @@ class GenstatsNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building GenstatsNode operations " << attributes.name << "..." << std::endl;
 
@@ -95,16 +95,21 @@ class GenstatsNode : public INode {
         try {
 #endif
 
-            auto genstats_operation =
-                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR)
-                    .setxDesc(*(tensors.at(attributes.inputs[Genstats_attributes::input_names::X]->get_uid())))
-                    .setGenStatsMode(CUDNN_GENSTATS_SUM_SQSUM)
-                    .setSumDesc(*(tensors.at(attributes.outputs[Genstats_attributes::output_names::SUM]->get_uid())))
-                    .setSqSumDesc(
-                        *(tensors.at(attributes.outputs[Genstats_attributes::output_names::SQ_SUM]->get_uid())))
-                    .build();
+            auto&& genstats_operation_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR);
 
-            operations.push_back(std::move(genstats_operation));
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Genstats_attributes::input_names::X);
+            genstats_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
+
+            genstats_operation_builder.setGenStatsMode(CUDNN_GENSTATS_SUM_SQSUM);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(SUM, Genstats_attributes::output_names::SUM);
+            genstats_operation_builder.setSumDesc(*(tensors.at(SUM->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(SQ_SUM, Genstats_attributes::output_names::SQ_SUM);
+            genstats_operation_builder.setSqSumDesc(*(tensors.at(SQ_SUM->second->get_uid())));
+
+            operations.push_back(std::move(genstats_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

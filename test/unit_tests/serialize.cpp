@@ -103,11 +103,9 @@ TEST_CASE("Graph key", "[serialize]") {
     cudnnCreate(&handle);
 
     REQUIRE(graph.validate().is_good());
-    std::cout << json(graph).dump(4) << std::endl;
     auto key = graph.key();
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
-    std::cout << json(graph).dump(4) << std::endl;
     REQUIRE(key == graph.key());
 
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());

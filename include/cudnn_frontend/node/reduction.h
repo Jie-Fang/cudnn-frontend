@@ -60,8 +60,8 @@ class ReductionNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ReductionNode tensors " << attributes.name << "..." << std::endl;
 
@@ -82,7 +82,7 @@ class ReductionNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ReductionNode operations " << attributes.name << "..." << std::endl;
 
@@ -95,14 +95,18 @@ class ReductionNode : public INode {
                                             .setReductionOp(attributes.get_mode().value())
                                             .build();
 
-            auto reduction_operation =
-                cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR)
-                    .setxDesc(*(tensors.at(attributes.inputs[Reduction_attributes::input_names::X]->get_uid())))
-                    .setyDesc(*(tensors.at(attributes.outputs[Reduction_attributes::output_names::Y]->get_uid())))
-                    .setreductionDesc(reduction_descriptor)
-                    .build();
+            auto&& reduction_operation_builder =
+                cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
 
-            operations.push_back(std::move(reduction_operation));
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Reduction_attributes::input_names::X);
+            reduction_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Reduction_attributes::output_names::Y);
+            reduction_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
+
+            reduction_operation_builder.setreductionDesc(reduction_descriptor);
+
+            operations.push_back(std::move(reduction_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

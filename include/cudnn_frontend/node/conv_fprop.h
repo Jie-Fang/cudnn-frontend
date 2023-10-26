@@ -80,8 +80,8 @@ class ConvolutionNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ConvolutionNode tensors " << attributes.name << "..." << std::endl;
 
@@ -103,7 +103,7 @@ class ConvolutionNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ConvolutionNode operations " << attributes.name << "..." << std::endl;
 
@@ -124,16 +124,20 @@ class ConvolutionNode : public INode {
                                               .build();
 
             // Create the convolution operation.
-            auto convolution_operation =
-                cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                    .setxDesc(*(tensors[attributes.inputs[Conv_fprop_attributes::input_names::X]->get_uid()]))
-                    .setwDesc(*(tensors[attributes.inputs[Conv_fprop_attributes::input_names::W]->get_uid()]))
-                    .setyDesc(*(tensors[attributes.outputs[Conv_fprop_attributes::output_names::Y]->get_uid()]))
-                    .setcDesc(convolution_descriptor)
-                    .setAlpha(1.f)
-                    .setBeta(0.f)
-                    .build();
-            operations.push_back(std::move(convolution_operation));
+            auto&& convolution_operation_builder =
+                cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Conv_fprop_attributes::input_names::X);
+            convolution_operation_builder.setxDesc(*(tensors[X->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(W, Conv_fprop_attributes::input_names::W);
+            convolution_operation_builder.setwDesc(*(tensors[W->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Conv_fprop_attributes::output_names::Y);
+            convolution_operation_builder.setyDesc(*(tensors[Y->second->get_uid()]));
+
+            convolution_operation_builder.setcDesc(convolution_descriptor).setAlpha(1.f).setBeta(0.f);
+            operations.push_back(std::move(convolution_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

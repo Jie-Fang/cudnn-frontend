@@ -210,8 +210,9 @@ class INode : public ICudnn {
     }
     // Creates cudnn tensors for each node (and its sub nodes)
     virtual error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) {
+    create_cudnn_tensors(
+        int64_t& uid,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors));
         }
@@ -224,7 +225,7 @@ class INode : public ICudnn {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operation,
         std::vector<cudnn_frontend::Operation>& backend_operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(
                 uids_involved_in_operation, backend_operations, uid_to_backend_tensors));
@@ -387,9 +388,23 @@ to_json(json& j, const INode& p) {
             !has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
     }
 
+#define CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, map_)                                   \
+    auto tensor = map_.find(port);                                                                 \
+    {                                                                                              \
+        bool const has_t = (tensor != map_.end()) && (tensor->second != nullptr);                  \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                            \
+            !has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
+    }
+
 #define CUDNN_FE_VALIDATE_INPUT_TENSOR(port) CUDNN_FE_VALIDATE_TENSOR_(port, attributes.inputs)
 
 #define CUDNN_FE_VALIDATE_OUTPUT_TENSOR(port) CUDNN_FE_VALIDATE_TENSOR_(port, attributes.outputs)
+
+#define CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(tensor, port) \
+    CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, attributes.inputs)
+
+#define CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(tensor, port) \
+    CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, attributes.outputs)
 
 inline std::shared_ptr<Tensor_attributes>
 INode::matmul(std::shared_ptr<Tensor_attributes> a,
