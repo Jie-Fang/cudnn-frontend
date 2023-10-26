@@ -270,11 +270,15 @@ class Execution_plan_list {
     }
 
     error_t
-    build_plans(cudnnHandle_t handle, build_plan_policy const policy) {
+    build_plans(cudnnHandle_t handle, build_plan_policy const policy, bool const do_multithreaded_builds) {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(do_multithreaded_builds,
+                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                       "Doing multithreaded builds is not yet supported.");
+
         auto const& configs = get_filtered_engine_configs();
 
         switch (policy) {
-            case build_plan_policy::ONE:
+            case build_plan_policy::HEURISTICS_CHOICE:
                 // short circuit in case a plan was already created.
                 // This happens as check_support for v8 builds a plan.
                 // Should not happen in v9.
@@ -296,7 +300,7 @@ class Execution_plan_list {
                     }
                 }
                 break;
-            case build_plan_policy::ALL_SEQUENTIAL:
+            case build_plan_policy::ALL:
                 for (auto const& config : configs) {
                     std::shared_ptr<ExecutionPlan> plan;
                     auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
@@ -305,10 +309,6 @@ class Execution_plan_list {
                         execution_plans.push_back(std::move(plan));
                     }
                 }
-                break;
-            case build_plan_policy::ALL_PARALLEL:
-                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                        "Using build_plan_policy::ALL_PARALLEL is not yet supported."};
                 break;
         }
 
