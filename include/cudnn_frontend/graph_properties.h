@@ -176,6 +176,43 @@ class Attributes {
     }
 
    protected:
+    std::vector<int64_t>
+    get_non_virtual_uids() {
+        std::vector<int64_t> non_virtual_uids;
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto& [name, tensor] : derived->inputs) {
+            if (tensor && tensor->get_is_virtual() == false) {
+                non_virtual_uids.push_back(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    non_virtual_uids.push_back(ragged_offset->get_uid());
+                }
+            }
+        }
+        for (auto& [name, tensor] : derived->outputs) {
+            if (tensor && tensor->get_is_virtual() == false) {
+                non_virtual_uids.push_back(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    non_virtual_uids.push_back(ragged_offset->get_uid());
+                }
+            }
+        }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
+            for (auto& tensor : derived->peer_stats) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    non_virtual_uids.push_back(tensor->get_uid());
+                    if (auto ragged_offset = tensor->get_ragged_offset()) {
+                        non_virtual_uids.push_back(ragged_offset->get_uid());
+                    }
+                }
+            }
+        }
+
+        return non_virtual_uids;
+    }
+
     void
     fill_from_context(detail::Context const& context) {
         auto derived = static_cast<DerivedT const*>(this);
@@ -1254,7 +1291,7 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
         use_stats = value;
         return *this;
     }
-    
+
     Softmax_attributes&
     has_M_Zinv(bool const value) {
         use_M_Zinv = value;
@@ -1267,34 +1304,30 @@ class SDPA_FP8_attributes : public Attributes<SDPA_FP8_attributes> {
     friend class SDPA_FP8_Node;
     friend class Graph;
 
-    enum class input_names { Q,
-K,
-V,
-SEQ_LEN_Q,
-SEQ_LEN_KV,
-Attn_scale,
-Bias,
-Seed,
-Offset,
-Dropout_mask,
-Dropout_scale,
-descale_Q,
-descale_K,
-descale_V,
-scale_S,
-scale_O,
-ragged_offset_QKV,
-ragged_offset_O };
+    enum class input_names {
+        Q,
+        K,
+        V,
+        SEQ_LEN_Q,
+        SEQ_LEN_KV,
+        Attn_scale,
+        Bias,
+        Seed,
+        Offset,
+        Dropout_mask,
+        Dropout_scale,
+        descale_Q,
+        descale_K,
+        descale_V,
+        scale_S,
+        scale_O,
+        ragged_offset_QKV,
+        ragged_offset_O
+    };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    enum class output_names { O,
-Stats,
-M,
-Zinv,
-AMax_S,
-AMax_O };
+    enum class output_names { O, Stats, M, Zinv, AMax_S, AMax_O };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-
 
     std::optional<bool> is_inference;
     bool padding_mask = false;
@@ -1360,9 +1393,9 @@ AMax_O };
     set_dropout(float const probability,
                 std::shared_ptr<Tensor_attributes> seed,
                 std::shared_ptr<Tensor_attributes> offset) {
-        dropout_probability = probability;
-        inputs[SDPA_FP8_attributes::input_names::Seed]         = seed;
-        inputs[SDPA_FP8_attributes::input_names::Offset]       = offset;
+        dropout_probability                              = probability;
+        inputs[SDPA_FP8_attributes::input_names::Seed]   = seed;
+        inputs[SDPA_FP8_attributes::input_names::Offset] = offset;
         return *this;
     }
 
@@ -1373,7 +1406,6 @@ AMax_O };
         return *this;
     }
 };
-
 
 class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     friend class Attributes<Conv_wgrad_attributes>;

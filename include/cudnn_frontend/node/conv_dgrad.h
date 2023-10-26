@@ -24,9 +24,9 @@ class DgradNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-            << "Validating Node Type::DGRAD " << attributes.name << "..." << std::endl;
-        
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::DY); 
+                    << "Validating Node Type::DGRAD " << attributes.name << "..." << std::endl;
+
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::DY);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_dgrad_attributes::input_names::W);
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_dgrad_attributes::output_names::DX);
@@ -44,7 +44,7 @@ class DgradNode : public INode {
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
         auto DX = attributes.outputs.find(Conv_dgrad_attributes::output_names::DX)->second;
-        auto W = attributes.inputs.find(Conv_dgrad_attributes::input_names::W)->second;
+        auto W  = attributes.inputs.find(Conv_dgrad_attributes::input_names::W)->second;
         auto DY = attributes.inputs.find(Conv_dgrad_attributes::input_names::DY)->second;
 
         auto const w_tensor_dim  = W->get_dim();
@@ -117,22 +117,15 @@ class DgradNode : public INode {
                     .setBeta(0.f)
                     .build();
             operations.push_back(std::move(dgrad_operation));
-            for (auto const& [name, tensor] : attributes.inputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            for (auto const& [name, tensor] : attributes.outputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
+
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
         }
 #endif
 
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
     }
 

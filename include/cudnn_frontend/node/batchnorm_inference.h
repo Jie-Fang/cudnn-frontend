@@ -53,12 +53,12 @@ class BatchnormInferenceNode : public INode {
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating BatchnormInferenceNode " << attributes.name << "..." << std::endl;
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_inference_attributes::input_names::X); 
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_inference_attributes::input_names::X);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_inference_attributes::input_names::SCALE);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_inference_attributes::input_names::BIAS);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_inference_attributes::input_names::MEAN);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_inference_attributes::input_names::INV_VARIANCE);
-        
+
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_inference_attributes::output_names::Y);
 
         return {error_code_t::OK, ""};
@@ -113,22 +113,14 @@ class BatchnormInferenceNode : public INode {
                     .build();
 
             operations.push_back(std::move(batchnorm_operation));
-            for (auto const& [name, tensor] : attributes.inputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            for (auto const& [name, tensor] : attributes.outputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
         }
 #endif
 
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
     }
 
