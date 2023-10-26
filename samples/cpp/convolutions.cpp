@@ -65,9 +65,9 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::A});
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    REQUIRE(plans.check_support(handle).is_good());
+    REQUIRE(graph.check_support(handle).is_good());
 
     Surface<half> x_tensor(4 * 32 * 16 * 16, false);
     Surface<half> w_tensor(64 * 32 * 3 * 3, false);
@@ -75,12 +75,11 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     Surface<half> b_tensor(64, false);
     Surface<half> y_tensor(4 * 64 * 16 * 16, false);
 
-    Surface<int8_t> workspace(plans.get_max_workspace_size(), false);
+    Surface<int8_t> workspace(graph.get_max_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}, {W, w_tensor.devPtr}, {S, s_tensor.devPtr}, {B, b_tensor.devPtr}, {Y, y_tensor.devPtr}};
 
-    REQUIRE(plans.autotune(handle, variant_pack, workspace.devPtr).is_good());
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    // REQUIRE(plans.autotune(handle, variant_pack, workspace.devPtr).is_good());
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
@@ -137,11 +136,9 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::A});
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    REQUIRE(plans.check_support(handle).is_good());
-
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    REQUIRE(graph.check_support(handle).is_good());
 
     Surface<half> x_tensor(4 * 64 * 16 * 16, false);
     Surface<half> s_tensor(64, false);
@@ -234,13 +231,13 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::A});
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    auto status = plans.check_support(handle);
+    auto status = graph.check_support(handle);
 
     if (status.is_bad()) {
-        auto fallback_plans = graph.get_execution_plan_list({fe::HeurMode_t::FALLBACK});
-        REQUIRE(fallback_plans.check_support(handle).is_good());
+        REQUIRE(graph.create_execution_plans({fe::HeurMode_t::FALLBACK}).is_good());
+        REQUIRE(graph.check_support(handle).is_good());
     }
 
     Surface<half> x_tensor(4 * 64 * 16 * 16, false);

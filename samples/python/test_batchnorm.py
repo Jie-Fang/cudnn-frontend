@@ -70,7 +70,7 @@ def test_bn_relu_with_mask():
     graph.validate()
     graph.build_operation_graph()
     plans = graph.get_execution_plan_list([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-    plans.check_support()
+    plans.()
     graph.set_execution_plans(plans)
 
     saved_mean_actual = torch.zeros_like(scale_gpu)
