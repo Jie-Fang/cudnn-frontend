@@ -165,16 +165,6 @@ class LayerNormNode : public INode {
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
-            for (auto const& [name, tensor] : attributes.inputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            for (auto const& [name, tensor] : attributes.outputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
             if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
                 auto layernorm_operation =
                     cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
@@ -214,6 +204,8 @@ class LayerNormNode : public INode {
         }
 #endif
 
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
     }
 

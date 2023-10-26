@@ -82,16 +82,17 @@ class BatchNormNode : public INode {
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::PREV_RUNNING_VAR);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::EPSILON);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::MOMENTUM);
-        
+
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::Y);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::MEAN);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::INV_VARIANCE);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
         // Norm forward phase should be set
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase != NormFwdPhase_t::TRAINING,
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Forward phase not set of batchnorm node or if inference use batchnorm_inference node");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.forward_phase != NormFwdPhase_t::TRAINING,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Forward phase not set of batchnorm node or if inference use batchnorm_inference node");
 
         return {error_code_t::OK, ""};
     }
@@ -164,23 +165,6 @@ class BatchNormNode : public INode {
                     .setPeerStatTensor(peer_stats)
                     .build();
 
-            for (auto const& [name, tensor] : attributes.inputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            for (auto const& [name, tensor] : attributes.outputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            // Special case in BN where peer stats is also an input but is not present in inputs map
-            for (auto const& tensor : attributes.peer_stats) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-
             operations.push_back(std::move(batchnorm_operation));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
@@ -189,6 +173,8 @@ class BatchNormNode : public INode {
         }
 #endif
 
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
     }
 
