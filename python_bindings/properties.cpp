@@ -17,32 +17,32 @@ void
 throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::string const& error_msg);
 
 class HandleManagement {
+   public:
+    static void*
+    create_handle() {
+        cudnnHandle_t handle;
+        cudnnCreate(&handle);
+        return (void*)handle;
+    }
 
-public:
-static void*
-create_handle() {
-    cudnnHandle_t handle;
-    cudnnCreate(&handle);
-    return (void*)handle;
-}
+    static void
+    destroy_handle(void* handle) {
+        auto status = cudnnDestroy((cudnnHandle_t)handle);
+        throw_if(
+            status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnHandle Destroy failed");
+    }
 
-static void
-destroy_handle(void* handle) {
-    auto status = cudnnDestroy((cudnnHandle_t)handle);
-    throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnHandle Destroy failed");
-}
+    void
+    set_stream(void* handle, void* streamId) {
+        auto status = cudnnSetStream((cudnnHandle_t)handle, (cudaStream_t)streamId);
+        throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnSetStream failed");
+    }
 
-void
-set_stream(void *handle, void *streamId) {
-    auto status = cudnnSetStream((cudnnHandle_t)handle, (cudaStream_t) streamId);
-    throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnSetStream failed");
-}
-
-void
-get_stream(void *handle, void *streamId) {
-    auto status = cudnnGetStream((cudnnHandle_t)handle, (cudaStream_t *) streamId);
-    throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnGetStream failed");
-}
+    void
+    get_stream(void* handle, void* streamId) {
+        auto status = cudnnGetStream((cudnnHandle_t)handle, (cudaStream_t*)streamId);
+        throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnGetStream failed");
+    }
 };
 
 void
@@ -122,6 +122,11 @@ init_properties(py::module_& m) {
         .value("NORM2", cudnn_frontend::ReductionMode_t::NORM2)
         .value("MUL_NO_ZEROS", cudnn_frontend::ReductionMode_t::MUL_NO_ZEROS)
         .value("NOT_SET", cudnn_frontend::ReductionMode_t::NOT_SET);
+
+    py::enum_<cudnn_frontend::build_plan_policy>(m, "build_plan_policy")
+        .value("ONE", cudnn_frontend::build_plan_policy::ONE)
+        .value("ALL_SEQUENTIAL", cudnn_frontend::build_plan_policy::ALL_SEQUENTIAL)
+        .value("ALL_PARALLEL", cudnn_frontend::build_plan_policy::ALL_PARALLEL);
 }
 
 }  // namespace python_bindings

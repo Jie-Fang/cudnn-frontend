@@ -35,10 +35,6 @@ class INode : public ICudnn {
     // A closed set of types that are allowed to be passed by value today
     using pass_by_values_t = std::variant<half, float, void*>;
 
-    // Stores workspace size in bytes required by FE node
-    // It does NOT include cudnn backend workspace
-    size_t workspace_size;
-
     detail::Context context;
 
    private:
@@ -69,7 +65,16 @@ class INode : public ICudnn {
     get_cudnn_workspace_size() const {
         int64_t cudnn_workspace_size = get_cudnn_workspace_size_node();
         for (auto const& sub_node : sub_nodes) {
-            cudnn_workspace_size += sub_node->get_cudnn_workspace_size();
+            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size());
+        }
+        return cudnn_workspace_size;
+    }
+
+    int64_t
+    get_max_cudnn_workspace_size() const {
+        int64_t cudnn_workspace_size = get_max_cudnn_workspace_size_node();
+        for (auto const& sub_node : sub_nodes) {
+            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_max_cudnn_workspace_size());
         }
         return cudnn_workspace_size;
     }
@@ -168,9 +173,9 @@ class INode : public ICudnn {
             std::shared_ptr<Tensor_attributes> s,
             std::shared_ptr<Tensor_attributes> m,
             std::shared_ptr<Tensor_attributes> zinv) {
-        attributes.inputs[Softmax_attributes::input_names::P]       = p;
-        attributes.outputs[Softmax_attributes::output_names::S]     = s;
-        attributes.outputs[Softmax_attributes::output_names::M] = m;
+        attributes.inputs[Softmax_attributes::input_names::P]      = p;
+        attributes.outputs[Softmax_attributes::output_names::S]    = s;
+        attributes.outputs[Softmax_attributes::output_names::M]    = m;
         attributes.outputs[Softmax_attributes::output_names::Zinv] = zinv;
         sub_nodes.emplace_back(std::make_unique<SoftmaxNode>(std::move(attributes), context));
     }
@@ -199,7 +204,7 @@ class INode : public ICudnn {
     reduction(std::shared_ptr<Tensor_attributes> a,
               Reduction_attributes attributes,
               std::shared_ptr<Tensor_attributes> c) {
-        attributes.inputs[Reduction_attributes::input_names::X]    = a;
+        attributes.inputs[Reduction_attributes::input_names::X]   = a;
         attributes.outputs[Reduction_attributes::output_names::Y] = c;
         sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
     }
@@ -303,6 +308,13 @@ class INode : public ICudnn {
         return get_fe_workspace_size() + get_cudnn_workspace_size();
     }
 
+    int64_t
+    get_autotune_workspace_size() const {
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        return get_fe_workspace_size() + get_max_cudnn_workspace_size();
+    }
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
@@ -360,18 +372,17 @@ to_json(json& j, const INode& p) {
     p.serialize(j);
 }
 
-#define CUDNN_FE_VALIDATE_TENSOR_(port, map_) \
-    {                                                \
-        auto t           = map_.find(port); \
-        bool const has_t = (t != map_.end()) && (t->second != nullptr); \
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
+#define CUDNN_FE_VALIDATE_TENSOR_(port, map_)                                                      \
+    {                                                                                              \
+        auto t           = map_.find(port);                                                        \
+        bool const has_t = (t != map_.end()) && (t->second != nullptr);                            \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                            \
+            !has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
     }
 
-#define CUDNN_FE_VALIDATE_INPUT_TENSOR(port) \
-    CUDNN_FE_VALIDATE_TENSOR_(port, attributes.inputs)
+#define CUDNN_FE_VALIDATE_INPUT_TENSOR(port) CUDNN_FE_VALIDATE_TENSOR_(port, attributes.inputs)
 
-#define CUDNN_FE_VALIDATE_OUTPUT_TENSOR(port) \
-    CUDNN_FE_VALIDATE_TENSOR_(port, attributes.outputs)
+#define CUDNN_FE_VALIDATE_OUTPUT_TENSOR(port) CUDNN_FE_VALIDATE_TENSOR_(port, attributes.outputs)
 
 inline std::shared_ptr<Tensor_attributes>
 INode::matmul(std::shared_ptr<Tensor_attributes> a,

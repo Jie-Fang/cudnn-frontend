@@ -13,6 +13,7 @@
 
 #include "graph_properties.h"
 #include "graph_helpers.h"
+#include "plans.h"
 
 namespace cudnn_frontend {
 
@@ -34,8 +35,9 @@ class ICudnn {
     std::vector<cudnn_frontend::Operation> operations;
 
     std::vector<std::shared_ptr<OperationGraph_v8>> operation_graphs;
-    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
+
+    std::vector<graph::Execution_plan_list> plans;
 
     // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
@@ -52,34 +54,25 @@ class ICudnn {
             props->set_uid(uid);
             uid++;
 
+            auto&& tensor_builder = cudnn_frontend::TensorBuilder();
+
+            tensor_builder.setDim(props->get_dim().size(), props->get_dim().data())
+                .setStrides(props->get_stride().size(), props->get_stride().data())
+                .setId(props->get_uid())
+                .setAlignment(16)
+                .setDataType(props->get_data_type())
+                .setVirtual(props->get_is_virtual())
+                .setByValue(props->get_is_pass_by_value())
+                .setReorderType(props->get_reordering_type());
+
             if (auto ragged_offset_props = props->get_ragged_offset()) {
                 CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors));
-
-                auto tensor = cudnn_frontend::TensorBuilder()
-                                  .setDim(props->get_dim().size(), props->get_dim().data())
-                                  .setStrides(props->get_stride().size(), props->get_stride().data())
-                                  .setId(props->get_uid())
-                                  .setAlignment(16)
-                                  .setDataType(props->get_data_type())
-                                  .setVirtual(props->get_is_virtual())
-                                  .setByValue(props->get_is_pass_by_value())
-                                  .setReorderType(props->get_reordering_type())
-                                  .setRaggedOffset(tensors.at(ragged_offset_props->get_uid()))
-                                  .build();
-                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
-            } else {
-                auto tensor = cudnn_frontend::TensorBuilder()
-                                  .setDim(props->get_dim().size(), props->get_dim().data())
-                                  .setStrides(props->get_stride().size(), props->get_stride().data())
-                                  .setId(props->get_uid())
-                                  .setAlignment(16)
-                                  .setDataType(props->get_data_type())
-                                  .setVirtual(props->get_is_virtual())
-                                  .setByValue(props->get_is_pass_by_value())
-                                  .setReorderType(props->get_reordering_type())
-                                  .build();
-                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+                tensor_builder.setRaggedOffset(tensors.at(ragged_offset_props->get_uid()));
             }
+
+            auto tensor = tensor_builder.build();
+            tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+
         } else {
             // Make sure tensor's uid is present in backend tensor registry.
             RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -116,8 +109,18 @@ class ICudnn {
     int64_t
     get_cudnn_workspace_size_node() const {
         int64_t current_workspace_size = 0;
-        for (auto const& execution_plan : execution_plans) {
-            current_workspace_size += execution_plan->getWorkspaceSize();
+        for (auto const& execution_plan_list : plans) {
+            current_workspace_size =
+                std::max(current_workspace_size, execution_plan_list.get_best_candidate()->getWorkspaceSize());
+        }
+        return current_workspace_size;
+    }
+
+    int64_t
+    get_max_cudnn_workspace_size_node() const {
+        int64_t current_workspace_size = 0;
+        for (auto const& execution_plan_list : plans) {
+            current_workspace_size = std::max(current_workspace_size, execution_plan_list.get_autotune_workspace());
         }
         return current_workspace_size;
     }
@@ -126,10 +129,12 @@ class ICudnn {
     execute_cudnn_plans(cudnnHandle_t handle,
                         std::unordered_map<uid_t, void*> const& tensor_uid_to_pointer_map,
                         void* workspace_ptr) {
-        getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plans.size() << " Plans." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " Plans." << std::endl;
 
-        for (size_t i = 0; i < execution_plans.size(); ++i) {
-            auto const& execution_plan   = execution_plans[i];
+        for (size_t i = 0; i < plans.size(); ++i) {
+            auto const& execution_plan = plans[i].get_best_candidate();
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                execution_plan == nullptr, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
             auto const& variant_pack_uid = variant_pack_uids[i];
 
             getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
@@ -169,76 +174,4 @@ class ICudnn {
     }
 };
 
-namespace detail {
-inline error_t
-query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_graph,
-                            cudnn_frontend::EngineConfigList& configs,
-                            std::vector<HeurMode_t> const& modes) {
-    auto const& operation_graph_tag = operation_graph->getTag();
-    getLogger() << "[cudnn_frontend] INFO: "
-                << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
-
-    auto statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
-
-    getLogger() << "[cudnn_frontend] INFO: get_heuristics_list statuses: ";
-    for (size_t i = 0; i < statuses.size(); i++) {
-        getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
-    }
-    getLogger() << std::endl;
-
-    getLogger() << "[cudnn_frontend] INFO: config list has " << configs.size() << " configurations." << std::endl;
-
-    if (configs.empty()) {
-        getLogger() << "[cudnn_frontend] ERROR: No valid engine configs returned from heuristics.";
-        return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for " + operation_graph_tag};
-    }
-    return {error_code_t::OK, ""};
-}
-
-inline error_t
-query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operation_graphs,
-                 std::unordered_map<std::string, EngineConfigList>& op_graph_to_configs,
-                 std::vector<HeurMode_t> const& modes) {
-    for (auto const& operation_graph : operation_graphs) {
-        cudnn_frontend::EngineConfigList configs;
-        CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, modes));
-        op_graph_to_configs.emplace(operation_graph->getTag(), configs);
-    }
-    return {error_code_t::OK, ""};
-}
-
-inline error_t
-create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
-                            ManagedOpaqueDescriptor& config,
-                            std::string const& operation_graph_tag,
-                            cudnnHandle_t handle) {
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-    try {
-#endif
-        auto built_plan = cudnn_frontend::ExecutionPlanBuilder()
-                              .setHandle(handle)
-                              .setEngineConfig(config, operation_graph_tag)
-                              .build();
-        if (built_plan.get_status() != CUDNN_STATUS_SUCCESS) {
-            getLogger() << "[cudnn_frontend] ERROR: "
-                        << "Config failed with " << built_plan.get_error() << std::endl;
-            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: Config succeeded! Plan has built!\n";
-        getLogger() << "[cudnn_frontend] INFO: " << built_plan.describe() << std::endl;
-        plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-    } catch (cudnn_frontend::cudnnException& e) {
-        getLogger() << "[cudnn_frontend] ERROR: "
-                    << "Config failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
-        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
-    }
-#endif
-
-    return {error_code_t::OK, ""};
-}
-
-}  // namespace detail
 }  // namespace cudnn_frontend

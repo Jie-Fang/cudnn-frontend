@@ -24,17 +24,16 @@ class ConvolutionNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-            << "Validating Node Type::CONVOLUTION " << attributes.name << "..." << std::endl;
-        
+                    << "Validating Node Type::CONVOLUTION " << attributes.name << "..." << std::endl;
+
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_fprop_attributes::input_names::X);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_fprop_attributes::input_names::W);
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_fprop_attributes::output_names::Y);
 
         return {error_code_t::OK, ""};
-
     }
-    
+
     error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << attributes.name << "..."
@@ -44,9 +43,9 @@ class ConvolutionNode : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto &X = attributes.inputs.find(Conv_fprop_attributes::input_names::X)->second;
-        auto &W = attributes.inputs.find(Conv_fprop_attributes::input_names::W)->second;
-        auto &Y = attributes.outputs.find(Conv_fprop_attributes::output_names::Y)->second;
+        auto& X = attributes.inputs.find(Conv_fprop_attributes::input_names::X)->second;
+        auto& W = attributes.inputs.find(Conv_fprop_attributes::input_names::W)->second;
+        auto& Y = attributes.outputs.find(Conv_fprop_attributes::output_names::Y)->second;
 
         auto const x_tensor_dim = X->get_dim();
         auto const w_tensor_dim = W->get_dim();
@@ -134,18 +133,6 @@ class ConvolutionNode : public INode {
                     .setAlpha(1.f)
                     .setBeta(0.f)
                     .build();
-
-            for (auto const& [name, tensor] : attributes.inputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            for (auto const& [name, tensor] : attributes.outputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-
             operations.push_back(std::move(convolution_operation));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
@@ -154,6 +141,8 @@ class ConvolutionNode : public INode {
         }
 #endif
 
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
     }
 

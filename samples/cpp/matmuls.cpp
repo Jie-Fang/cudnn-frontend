@@ -62,11 +62,9 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::A});
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    REQUIRE(plans.check_support(handle).is_good());
-
-    REQUIRE(graph.set_execution_plans(plans).is_good());
+    REQUIRE(graph.check_support(handle).is_good());
 
     Surface<half> x_tensor(4 * 16 * 64, false);
     Surface<half> w_tensor(4 * 64 * 32, false);

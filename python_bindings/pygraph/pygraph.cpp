@@ -264,17 +264,15 @@ PyGraph::build_operation_graph() {
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
-PyPlans
-PyGraph::get_execution_plan_list(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
-    PyPlans pyplans;
-    pyplans.plans  = graph.get_execution_plan_list(modes);
-    pyplans.handle = handle;
-    return pyplans;
+void
+PyGraph::create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
+    auto status = graph.create_execution_plans(modes);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
 void
-PyGraph::set_execution_plans(PyPlans const& pyplans) {
-    auto status = graph.set_execution_plans(pyplans.plans);
+PyGraph::build_plans(build_plan_policy const policy) {
+    auto status = graph.build_plans(handle, policy);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
@@ -282,9 +280,15 @@ void
 PyGraph::build(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
     validate();
     build_operation_graph();
-    auto pyplans = get_execution_plan_list(modes);
-    pyplans.check_support();
-    set_execution_plans(pyplans);
+    create_execution_plans(modes);
+    check_support();
+    build_plans(cudnn_frontend::build_plan_policy::ONE);
+}
+
+void
+PyGraph::check_support() {
+    auto status = graph.check_support(handle);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
 int64_t
@@ -470,8 +474,9 @@ init_pygraph_submodule(py::module_& m) {
             )pbdoc")
         .def("validate", &PyGraph::validate)
         .def("build_operation_graph", &PyGraph::build_operation_graph)
-        .def("get_execution_plan_list", &PyGraph::get_execution_plan_list)
-        .def("set_execution_plans", &PyGraph::set_execution_plans)
+        .def("create_execution_plans", &PyGraph::create_execution_plans)
+        .def("check_support", &PyGraph::check_support)
+        .def("build_plans", &PyGraph::build_plans, py::arg("policy") = cudnn_frontend::build_plan_policy::ONE)
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute)
