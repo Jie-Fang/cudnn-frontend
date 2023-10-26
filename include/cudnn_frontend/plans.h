@@ -110,8 +110,10 @@ class Execution_plan_list {
     std::vector<bool> filtered_indices;
     int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
+    std::shared_ptr<ExecutionPlan> candidate = nullptr;
+
    public:
-    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
+    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans; // Filtered engine configs that have been made as plans
 
     void
     set_tag(std::string const& tag) {
@@ -237,7 +239,12 @@ class Execution_plan_list {
             auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
             if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(candidate != nullptr, 
+                    error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                    "[cudnn_frontend] Check support or build called already.");
+                
                 execution_plans.push_back(plan);
+                candidate = plan;
                 return {error_code_t::OK, ""};
             }
         }
@@ -254,6 +261,9 @@ class Execution_plan_list {
             auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
             if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
+                if (candidate == nullptr) {
+                    candidate = plan;
+                }
                 execution_plans.push_back(plan);
             }
         }
@@ -266,12 +276,23 @@ class Execution_plan_list {
     }
 
     int64_t
-    get_max_workspace_size() {
+    get_autotune_workspace() const {
         int64_t max_size = 0;
         for (auto& plan : execution_plans) {
             max_size = std::max(max_size, plan->getWorkspaceSize());
         }
         return max_size;
+    }
+
+    std::shared_ptr<ExecutionPlan> 
+    get_best_candidate() const { 
+        return candidate;
+    }
+
+    int64_t
+    get_workspace() const {
+        if (candidate == nullptr) {return -1;}
+        return candidate->getWorkspaceSize();
     }
 };
 

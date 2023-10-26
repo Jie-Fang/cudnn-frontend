@@ -69,7 +69,16 @@ class INode : public ICudnn {
     get_cudnn_workspace_size() const {
         int64_t cudnn_workspace_size = get_cudnn_workspace_size_node();
         for (auto const& sub_node : sub_nodes) {
-            cudnn_workspace_size += sub_node->get_cudnn_workspace_size();
+            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size());
+        }
+        return cudnn_workspace_size;
+    }
+
+    int64_t
+    get_max_cudnn_workspace_size() const {
+        int64_t cudnn_workspace_size = get_max_cudnn_workspace_size_node();
+        for (auto const& sub_node : sub_nodes) {
+            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_max_cudnn_workspace_size());
         }
         return cudnn_workspace_size;
     }
@@ -303,6 +312,13 @@ class INode : public ICudnn {
         return get_fe_workspace_size() + get_cudnn_workspace_size();
     }
 
+    int64_t
+    get_autotune_workspace_size() const {
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        return get_fe_workspace_size() + get_max_cudnn_workspace_size();
+    }
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,

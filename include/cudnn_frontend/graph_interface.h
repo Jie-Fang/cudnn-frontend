@@ -166,13 +166,10 @@ class Graph : public INode {
 
     error_t
     check_support(cudnnHandle_t h) {
-        CHECK_CUDNN_FRONTEND_ERROR(plans.check_support(h));
+        for (auto &plan_list : plans) {
+            CHECK_CUDNN_FRONTEND_ERROR(plan_list.check_support(h));
+        }
         return {error_code_t::OK, ""};
-    }
-
-    int64_t
-    get_max_workspace_size() {
-        return plans.get_max_workspace_size();
     }
 
     error_t
@@ -180,7 +177,9 @@ class Graph : public INode {
 
     Graph&
     filter_out_workspace_greater_than(int64_t const workspace) {
-        plans.set_max_workspace_allowed(workspace);
+        for (auto &plan_list : plans) {
+            plan_list.set_max_workspace_allowed(workspace);
+        }
         return *this;
     }
 
@@ -188,9 +187,11 @@ class Graph : public INode {
     filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
         // TODO: The error returned is not propagate to user.
         // Should the return value be changed to error_code_t too?
-        auto status = plans.filter_out_behavior_notes(notes);
-        if (status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
+        for (auto &plan_list : plans) {
+            auto status = plan_list.filter_out_behavior_notes(notes);
+            if (status.is_bad()) {
+                getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
+            }
         }
         return *this;
     }
@@ -199,9 +200,11 @@ class Graph : public INode {
     filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
         // TODO: The error returned is not propagate to user.
         // Should the return value be changed to error_code_t too?
-        auto status = plans.filter_out_numeric_notes(notes);
-        if (status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
+        for (auto &plan_list : plans) {
+            auto status = plan_list.filter_out_numeric_notes(notes);
+            if (status.is_bad()) {
+                getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
+            }
         }
         return *this;
     }
@@ -214,11 +217,18 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     CHECK_CUDNN_FRONTEND_ERROR(detail::query_heuristics(operation_graphs, op_graph_to_configs, mode));
 
     getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
-    plans.set_tag(op_graph_to_configs.begin()->first);
-    plans.set_engine_configs(op_graph_to_configs.begin()->second);
+    
+    for (auto const &op : op_graph_to_configs) {
+        Execution_plan_list plan_list;
 
-    getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
-    CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
+        plan_list.set_tag(op.first);
+        plan_list.set_engine_configs(op.second);
+
+        getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
+        CHECK_CUDNN_FRONTEND_ERROR(plan_list.query_properties());
+
+        plans.emplace_back(std::move(plan_list));
+    }
 
     return {error_code_t::OK, ""};
 }
@@ -227,10 +237,12 @@ inline error_t
 Graph::build_plans(cudnnHandle_t const &handle, int policy) {
 
     (void) policy;
-    if (plans.get_execution_plans().size() > 0) {
-
-    } else {
-        CHECK_CUDNN_FRONTEND_ERROR(plans.build_all_plans(handle));
+    
+    for (auto &plan_list : plans) {
+        if (plan_list.get_execution_plans().size() > 0) {
+        } else {
+            CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_all_plans(handle));
+        }
     }
 
     return {error_code_t::OK, ""};
