@@ -173,9 +173,9 @@ class Graph : public INode {
     }
 
     error_t
-    build_plans(cudnnHandle_t const &handle, int policy);
+    build_plans(cudnnHandle_t const &handle, build_plan_policy const policy = build_plan_policy::ONE);
 
-    Graph&
+    Graph &
     filter_out_workspace_greater_than(int64_t const workspace) {
         for (auto &plan_list : plans) {
             plan_list.set_max_workspace_allowed(workspace);
@@ -183,8 +183,8 @@ class Graph : public INode {
         return *this;
     }
 
-    Graph&
-    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
+    Graph &
+    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
         // TODO: The error returned is not propagate to user.
         // Should the return value be changed to error_code_t too?
         for (auto &plan_list : plans) {
@@ -196,8 +196,8 @@ class Graph : public INode {
         return *this;
     }
 
-    Graph&
-    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
+    Graph &
+    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
         // TODO: The error returned is not propagate to user.
         // Should the return value be changed to error_code_t too?
         for (auto &plan_list : plans) {
@@ -212,12 +212,11 @@ class Graph : public INode {
 
 inline error_t
 Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
-
     std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
     CHECK_CUDNN_FRONTEND_ERROR(detail::query_heuristics(operation_graphs, op_graph_to_configs, mode));
 
     getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
-    
+
     for (auto const &op : op_graph_to_configs) {
         Execution_plan_list plan_list;
 
@@ -234,17 +233,10 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 }
 
 inline error_t
-Graph::build_plans(cudnnHandle_t const &handle, int policy) {
-
-    (void) policy;
-    
+Graph::build_plans(cudnnHandle_t const &handle, build_plan_policy const policy) {
     for (auto &plan_list : plans) {
-        if (plan_list.get_execution_plans().size() > 0) {
-        } else {
-            CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_all_plans(handle));
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_plans(handle, policy));
     }
-
     return {error_code_t::OK, ""};
 }
 
@@ -724,8 +716,10 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Zinv = nullptr;
     Zinv = attributes.outputs[SDPA_FP8_attributes::output_names::Zinv] = output_tensor(attributes.name + "::Zinv");
 
-    auto AMax_S = attributes.outputs[SDPA_FP8_attributes::output_names::AMax_S] = output_tensor(attributes.name + "::AMax_S");
-    auto AMax_O = attributes.outputs[SDPA_FP8_attributes::output_names::AMax_O] = output_tensor(attributes.name + "::AMax_O");
+    auto AMax_S = attributes.outputs[SDPA_FP8_attributes::output_names::AMax_S] =
+        output_tensor(attributes.name + "::AMax_S");
+    auto AMax_O = attributes.outputs[SDPA_FP8_attributes::output_names::AMax_O] =
+        output_tensor(attributes.name + "::AMax_O");
 
     // Set inputs
     attributes.inputs[SDPA_FP8_attributes::input_names::Q] = q;

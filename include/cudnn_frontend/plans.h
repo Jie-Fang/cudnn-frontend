@@ -41,11 +41,11 @@ query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operatio
     for (auto const& operation_graph : operation_graphs) {
         cudnn_frontend::EngineConfigList configs;
         CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, modes));
-        
+
         cudnn_frontend::EngineConfigList good_configs;
 
-        for (auto &engine_config : configs) {
-            int64_t elem_count = 0;
+        for (auto& engine_config : configs) {
+            int64_t elem_count                        = 0;
             ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
             cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
             auto status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
@@ -54,12 +54,13 @@ query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operatio
                                                    1,
                                                    &elem_count,
                                                    &extractedEngine_);
-            if(status == CUDNN_STATUS_SUCCESS) {
+            if (status == CUDNN_STATUS_SUCCESS) {
                 good_configs.push_back(engine_config);
             }
         }
 
-        getLogger() << "[cudnn_frontend] INFO: config list has " << good_configs.size() << " good configurations." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: config list has " << good_configs.size() << " good configurations."
+                    << std::endl;
         op_graph_to_configs.emplace(operation_graph->getTag(), good_configs);
     }
     return {error_code_t::OK, ""};
@@ -67,7 +68,7 @@ query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operatio
 
 inline error_t
 create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
-                            ManagedOpaqueDescriptor& config,
+                            ManagedOpaqueDescriptor const& config,
                             std::string const& operation_graph_tag,
                             cudnnHandle_t handle) {
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
@@ -113,7 +114,8 @@ class Execution_plan_list {
     std::shared_ptr<ExecutionPlan> candidate = nullptr;
 
    public:
-    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans; // Filtered engine configs that have been made as plans
+    std::vector<std::shared_ptr<ExecutionPlan>>
+        execution_plans;  // Filtered engine configs that have been made as plans
 
     void
     set_tag(std::string const& tag) {
@@ -147,7 +149,9 @@ class Execution_plan_list {
                                                    1,
                                                    &elem_count,
                                                    &extractedEngine_);
-            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Engine failed.");
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
+                                           error_code_t::HEURISTIC_QUERY_FAILED,
+                                           "Heuristic query Engine failed.");
 
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
@@ -155,8 +159,10 @@ class Execution_plan_list {
                                               CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               nullptr);
-            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed");
-            
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
+                                           error_code_t::HEURISTIC_QUERY_FAILED,
+                                           "Heuristic query Numerical Note failed");
+
             numerics.resize(static_cast<size_t>(elem_count));
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
@@ -164,14 +170,18 @@ class Execution_plan_list {
                                               CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               numerics.data());
-            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed");
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
+                                           error_code_t::HEURISTIC_QUERY_FAILED,
+                                           "Heuristic query Numerical Note failed");
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
                                               CUDNN_TYPE_BEHAVIOR_NOTE,
                                               CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               nullptr);
-            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed");
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
+                                           error_code_t::HEURISTIC_QUERY_FAILED,
+                                           "Heuristic query Behavior Note failed");
 
             behavior.resize(static_cast<size_t>(elem_count));
             status = cudnnBackendGetAttribute(extractedEngine_,
@@ -180,7 +190,9 @@ class Execution_plan_list {
                                               CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               behavior.data());
-            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed");
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
+                                           error_code_t::HEURISTIC_QUERY_FAILED,
+                                           "Heuristic query Behavior Note failed");
             numeric_notes.emplace_back(numerics);
             behavior_notes.emplace_back(behavior);
         }
@@ -234,17 +246,24 @@ class Execution_plan_list {
     error_t
     check_support(cudnnHandle_t handle) {
         auto const& configs = get_filtered_engine_configs();
-        for (auto config : configs) {
+        for (auto const& config : configs) {
             std::shared_ptr<ExecutionPlan> plan;
             auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
             if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(candidate != nullptr, 
-                    error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                    "[cudnn_frontend] Check support or build called already.");
-                
-                execution_plans.push_back(plan);
-                candidate = plan;
+                RETURN_CUDNN_FRONTEND_ERROR_IF(candidate != nullptr,
+                                               error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                               "[cudnn_frontend] Check support or build called already.");
+
+                // No plans should be pushed here.
+                // But check_support in v8 incurs compilation cost.
+                // If not pushed, build_plans will incur compilation cost again.
+                // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
+                // if(cudnnGetVersion() < 9100)
+                {
+                    execution_plans.push_back(plan);
+                    candidate = plan;
+                }
                 return {error_code_t::OK, ""};
             }
         }
@@ -254,18 +273,48 @@ class Execution_plan_list {
     }
 
     error_t
-    build_all_plans(cudnnHandle_t handle) {
+    build_plans(cudnnHandle_t handle, build_plan_policy const policy) {
         auto const& configs = get_filtered_engine_configs();
-        for (auto config : configs) {
-            std::shared_ptr<ExecutionPlan> plan;
-            auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
-            if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                if (candidate == nullptr) {
-                    candidate = plan;
+        switch (policy) {
+            case build_plan_policy::ONE:
+                // short circuit in case a plan was already created.
+                // This happens as check_support for v8 builds a plan.
+                // Should not happen in v9.
+                // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
+                // if(cudnnGetVersion() < 9100)
+                {
+                    if (execution_plans.size() > 0) {
+                        return {error_code_t::OK, ""};
+                    }
                 }
-                execution_plans.push_back(plan);
-            }
+
+                for (auto const& config : configs) {
+                    std::shared_ptr<ExecutionPlan> plan;
+                    auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
+
+                    if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
+                        candidate = std::move(plan);
+                        execution_plans.push_back(candidate);
+                        break;
+                    }
+                }
+                break;
+            case build_plan_policy::ALL_SEQUENTIAL:
+                for (auto const& config : configs) {
+                    std::shared_ptr<ExecutionPlan> plan;
+                    auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
+
+                    if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
+                        candidate = std::move(plan);
+                        execution_plans.push_back(candidate);
+                    }
+                }
+                break;
+            case build_plan_policy::ALL_PARALLEL:
+                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                        "Using build_plan_policy::ALL_PARALLEL is not yet supported."};
+                break;
         }
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.empty(),
@@ -284,14 +333,16 @@ class Execution_plan_list {
         return max_size;
     }
 
-    std::shared_ptr<ExecutionPlan> 
-    get_best_candidate() const { 
+    std::shared_ptr<ExecutionPlan>
+    get_best_candidate() const {
         return candidate;
     }
 
     int64_t
     get_workspace() const {
-        if (candidate == nullptr) {return -1;}
+        if (candidate == nullptr) {
+            return -1;
+        }
         return candidate->getWorkspaceSize();
     }
 };
@@ -405,5 +456,5 @@ class Plans {
 };
 
 */
-}  // namespace cudnn_frontend
+}  // namespace graph
 }  // namespace cudnn_frontend

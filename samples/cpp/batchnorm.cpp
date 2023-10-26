@@ -337,8 +337,8 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::FALLBACK}).is_good());
 
     REQUIRE(graph.check_support(handle).is_good());
-    
-    REQUIRE(graph.build_plans(handle, 0).is_good());
+
+    REQUIRE(graph.build_plans(handle, fe::build_plan_policy::ALL_SEQUENTIAL).is_good());
 
     Surface<half> X_tensor(4 * 32 * 16 * 16, false);
     Surface<int8_t> Mask_tensor(4 * 32 * 16 * 16 / 8, false);
