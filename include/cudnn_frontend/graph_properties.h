@@ -39,8 +39,10 @@ class Tensor_attributes {
                                    stride,
                                    is_virtual,
                                    is_pass_by_value,
-                                   reordering_type,
-                                   uid)
+                                   reordering_type
+                                   /* uid */  // Not serializing uid is intentional. FE graphs do no need a uid. uid is
+                                              // only meant to act as a bridge between backend and frontend tensors.
+    )
 
     Tensor_attributes() = default;
 
