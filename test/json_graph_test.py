@@ -97,6 +97,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     # 1) we need to set nargs to 2, so argparse knows it expects 2 values (in case above this is layout and NCHW). 
     # 2), we need to specify action as append and build a list of kv values
     l_parser.add_argument("-kv", action='append', nargs=2, dest='key_values', default=[], help="kv values to be specified as [-kv=<key> <value>]+ e.g., -kv=layout NCHW.")
+    # TODO(@mbreughe): Add proper support for this 
     l_parser.add_argument("-minDevVer", default=0, type=int)
     l_parser.add_argument("-groupCount", default=1, type=int)
     l_parser.add_argument("-atol", default=0.1, type=float)
