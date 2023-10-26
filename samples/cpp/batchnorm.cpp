@@ -330,7 +330,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
-    REQUIRE(graph.build(handle, 0).is_good());
+    REQUIRE(graph.build_plans(handle, 0).is_good());
 
     Surface<half> X_tensor(4 * 32 * 16 * 16, false);
     Surface<int8_t> Mask_tensor(4 * 32 * 16 * 16 / 8, false);

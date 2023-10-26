@@ -177,7 +177,7 @@ class Graph : public INode {
     }
 
     error_t
-    build(cudnnHandle_t const &handle, int policy);
+    build_plans(cudnnHandle_t const &handle, int policy);
 
     Graph&
     filter_out_workspace_greater_than(int64_t const workspace) {
@@ -225,7 +225,7 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 }
 
 inline error_t
-Graph::build(cudnnHandle_t const &handle, int policy) {
+Graph::build_plans(cudnnHandle_t const &handle, int policy) {
 
     (void) policy;
     CHECK_CUDNN_FRONTEND_ERROR(plans.build_all_plans(handle));

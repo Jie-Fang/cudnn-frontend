@@ -28,7 +28,6 @@ pybind11_add_module(
     
     pycudnn.cpp
     properties.cpp
-    pyplans.cpp
     
     pygraph/pygraph.cpp
     pygraph/norm.cpp
