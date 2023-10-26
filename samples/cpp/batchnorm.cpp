@@ -330,6 +330,14 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
+    REQUIRE(graph.validate().is_good());
+
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::FALLBACK}).is_good());
+
+    REQUIRE(graph.check_support(handle).is_good());
+    
     REQUIRE(graph.build_plans(handle, 0).is_good());
 
     Surface<half> X_tensor(4 * 32 * 16 * 16, false);
