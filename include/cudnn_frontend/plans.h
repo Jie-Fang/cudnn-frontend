@@ -6,8 +6,274 @@
 #include "../cudnn_frontend_EngineConfig.h"
 #include "../cudnn_frontend_Logging.h"
 
-namespace cudnn_frontend::graph {
+namespace cudnn_frontend {
 
+namespace detail {
+inline error_t
+query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_graph,
+                            cudnn_frontend::EngineConfigList& configs,
+                            std::vector<HeurMode_t> const& modes) {
+    auto const& operation_graph_tag = operation_graph->getTag();
+    getLogger() << "[cudnn_frontend] INFO: "
+                << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
+
+    auto statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+
+    getLogger() << "[cudnn_frontend] INFO: get_heuristics_list statuses: ";
+    for (size_t i = 0; i < statuses.size(); i++) {
+        getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+    }
+    getLogger() << std::endl;
+
+    getLogger() << "[cudnn_frontend] INFO: config list has " << configs.size() << " configurations." << std::endl;
+
+    if (configs.empty()) {
+        getLogger() << "[cudnn_frontend] ERROR: No valid engine configs returned from heuristics.";
+        return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for " + operation_graph_tag};
+    }
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operation_graphs,
+                 std::unordered_map<std::string, EngineConfigList>& op_graph_to_configs,
+                 std::vector<HeurMode_t> const& modes) {
+    for (auto const& operation_graph : operation_graphs) {
+        cudnn_frontend::EngineConfigList configs;
+        CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, modes));
+        
+        cudnn_frontend::EngineConfigList good_configs;
+
+        for (auto &engine_config : configs) {
+            int64_t elem_count = 0;
+            ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+            cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
+            auto status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
+                                                   CUDNN_ATTR_ENGINECFG_ENGINE,
+                                                   CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                   1,
+                                                   &elem_count,
+                                                   &extractedEngine_);
+            if(status == CUDNN_STATUS_SUCCESS) {
+                good_configs.push_back(engine_config);
+            }
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: config list has " << good_configs.size() << " good configurations." << std::endl;
+        op_graph_to_configs.emplace(operation_graph->getTag(), good_configs);
+    }
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
+                            ManagedOpaqueDescriptor& config,
+                            std::string const& operation_graph_tag,
+                            cudnnHandle_t handle) {
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    try {
+#endif
+        auto built_plan = cudnn_frontend::ExecutionPlanBuilder()
+                              .setHandle(handle)
+                              .setEngineConfig(config, operation_graph_tag)
+                              .build();
+        if (built_plan.get_status() != CUDNN_STATUS_SUCCESS) {
+            getLogger() << "[cudnn_frontend] ERROR: "
+                        << "Config failed with " << built_plan.get_error() << std::endl;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
+        }
+
+        getLogger() << "[cudnn_frontend] INFO: Config succeeded! Plan has built!\n";
+        getLogger() << "[cudnn_frontend] INFO: " << built_plan.describe() << std::endl;
+        plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
+
+#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    } catch (cudnn_frontend::cudnnException& e) {
+        getLogger() << "[cudnn_frontend] ERROR: "
+                    << "Config failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
+        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
+    }
+#endif
+
+    return {error_code_t::OK, ""};
+}
+
+}  // namespace detail
+
+namespace graph {
+class Execution_plan_list {
+    std::string operation_tag;
+    EngineConfigList engine_configs;
+    std::vector<std::vector<cudnnBackendNumericalNote_t>> numeric_notes;
+    std::vector<std::vector<cudnnBackendNumericalNote_t>> behavior_notes;
+
+    std::vector<bool> filtered_indices;
+    int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
+
+   public:
+    std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
+
+    void
+    set_tag(std::string const& tag) {
+        operation_tag = tag;
+    }
+    void
+    set_engine_configs(EngineConfigList list) {
+        engine_configs = list;
+    }
+
+    std::vector<std::shared_ptr<ExecutionPlan>>&
+    get_execution_plans() {
+        return execution_plans;
+    }
+
+    error_t
+    query_properties() {
+        numeric_notes.reserve(engine_configs.size());
+        behavior_notes.reserve(engine_configs.size());
+        filtered_indices.resize(engine_configs.size());
+        for (auto& engine_config : engine_configs) {
+            int64_t elem_count = 0;
+            std::vector<cudnnBackendNumericalNote_t> numerics;
+            std::vector<cudnnBackendNumericalNote_t> behavior;
+
+            ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+            cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
+            auto status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
+                                                   CUDNN_ATTR_ENGINECFG_ENGINE,
+                                                   CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                   1,
+                                                   &elem_count,
+                                                   &extractedEngine_);
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Engine failed.");
+
+            status = cudnnBackendGetAttribute(extractedEngine_,
+                                              CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                              CUDNN_TYPE_NUMERICAL_NOTE,
+                                              CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                              &elem_count,
+                                              nullptr);
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed");
+            
+            numerics.resize(static_cast<size_t>(elem_count));
+            status = cudnnBackendGetAttribute(extractedEngine_,
+                                              CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                              CUDNN_TYPE_NUMERICAL_NOTE,
+                                              CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                              &elem_count,
+                                              numerics.data());
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed");
+            status = cudnnBackendGetAttribute(extractedEngine_,
+                                              CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                              CUDNN_TYPE_BEHAVIOR_NOTE,
+                                              CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                              &elem_count,
+                                              nullptr);
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed");
+
+            behavior.resize(static_cast<size_t>(elem_count));
+            status = cudnnBackendGetAttribute(extractedEngine_,
+                                              CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                              CUDNN_TYPE_BEHAVIOR_NOTE,
+                                              CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                              &elem_count,
+                                              behavior.data());
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed");
+            numeric_notes.emplace_back(numerics);
+            behavior_notes.emplace_back(behavior);
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
+        for (auto note : notes) {
+            for (auto i = 0u; i < engine_configs.size(); i++) {
+                if (std::find(numeric_notes[i].begin(), numeric_notes[i].end(), note) != numeric_notes[i].end()) {
+                    filtered_indices[i] = true;
+                }
+            }
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
+        for (auto note : notes) {
+            for (auto i = 0u; i < engine_configs.size(); i++) {
+                if (std::find(behavior_notes[i].begin(), behavior_notes[i].end(), note) != behavior_notes[i].end()) {
+                    filtered_indices[i] = true;
+                }
+            }
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    void
+    set_max_workspace_allowed(int64_t const workspace_allowed) {
+        max_workspace_allowed = workspace_allowed;
+    }
+
+    EngineConfigList
+    get_filtered_engine_configs() {
+        EngineConfigList filtered_engine_configs;
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << " Filtering engine_configs ..." << engine_configs.size() << std::endl;
+        for (auto i = 0u; i < engine_configs.size(); i++) {
+            if (filtered_indices[i] == false) {
+                filtered_engine_configs.push_back(engine_configs[i]);
+            }
+        }
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << " Filtered engine_configs ..." << filtered_engine_configs.size() << std::endl;
+        return filtered_engine_configs;
+    }
+
+    error_t
+    check_support(cudnnHandle_t handle) {
+        auto const& configs = get_filtered_engine_configs();
+        for (auto config : configs) {
+            std::shared_ptr<ExecutionPlan> plan;
+            auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
+
+            if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
+                execution_plans.push_back(plan);
+                return {error_code_t::OK, ""};
+            }
+        }
+
+        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                "[cudnn_frontend] Error: No execution plans built successfully."};
+    }
+
+    error_t
+    build_all_plans(cudnnHandle_t handle) {
+        auto const& configs = get_filtered_engine_configs();
+        for (auto config : configs) {
+            std::shared_ptr<ExecutionPlan> plan;
+            auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
+
+            if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
+                execution_plans.push_back(plan);
+            }
+        }
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.empty(),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "No execution plans finalized successfully. Hence, not supported.");
+
+        return {error_code_t::OK, ""};
+    }
+
+    int64_t
+    get_max_workspace_size() {
+        int64_t max_size = 0;
+        for (auto& plan : execution_plans) {
+            max_size = std::max(max_size, plan->getWorkspaceSize());
+        }
+        return max_size;
+    }
+};
 
 /*
 class Plans {
@@ -118,5 +384,5 @@ class Plans {
 };
 
 */
-
-}  // namespace cudnn_frontend::graph
+}  // namespace cudnn_frontend
+}  // namespace cudnn_frontend
