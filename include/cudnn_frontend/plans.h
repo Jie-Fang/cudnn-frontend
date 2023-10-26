@@ -57,9 +57,7 @@ class Execution_plan_list {
                                                    1,
                                                    &elem_count,
                                                    &extractedEngine_);
-            if (status != CUDNN_STATUS_SUCCESS) {
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Engine failed."};
-            }
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Engine failed.");
 
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
@@ -67,9 +65,8 @@ class Execution_plan_list {
                                               CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               nullptr);
-            if (status != CUDNN_STATUS_SUCCESS) {
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed"};
-            }
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed");
+            
             numerics.resize(static_cast<size_t>(elem_count));
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
@@ -77,18 +74,15 @@ class Execution_plan_list {
                                               CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               numerics.data());
-            if (status != CUDNN_STATUS_SUCCESS) {
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Notes failed"};
-            }
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Numerical Note failed");
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
                                               CUDNN_TYPE_BEHAVIOR_NOTE,
                                               CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               nullptr);
-            if (status != CUDNN_STATUS_SUCCESS) {
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed"};
-            }
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed");
+
             behavior.resize(static_cast<size_t>(elem_count));
             status = cudnnBackendGetAttribute(extractedEngine_,
                                               CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
@@ -96,9 +90,7 @@ class Execution_plan_list {
                                               CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
                                               &elem_count,
                                               behavior.data());
-            if (status != CUDNN_STATUS_SUCCESS) {
-                return {error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Notes failed"};
-            }
+            RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS), error_code_t::HEURISTIC_QUERY_FAILED, "Heuristic query Behavior Note failed");
             numeric_notes.emplace_back(numerics);
             behavior_notes.emplace_back(behavior);
         }

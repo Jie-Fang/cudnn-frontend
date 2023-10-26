@@ -228,7 +228,11 @@ inline error_t
 Graph::build_plans(cudnnHandle_t const &handle, int policy) {
 
     (void) policy;
-    CHECK_CUDNN_FRONTEND_ERROR(plans.build_all_plans(handle));
+    if (plans.get_execution_plans().size() > 0) {
+
+    } else {
+        CHECK_CUDNN_FRONTEND_ERROR(plans.build_all_plans(handle));
+    }
 
     return {error_code_t::OK, ""};
 }
