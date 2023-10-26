@@ -302,13 +302,13 @@ class PyGraph {
 
 
     void
-    deselect_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
+    deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
         graph.deselect_numeric_notes(notes);
         return;
     }
 
     void
-    deselect_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
+    deselect_behavior_notes(std::vector<BehaviorNote_t> const& notes) {
         graph.deselect_behavior_notes(notes);
         return;
     }
