@@ -179,7 +179,7 @@ class Attributes {
 
    protected:
     std::vector<int64_t>
-    get_non_virtual_uids() {
+    get_non_virtual_uids() const {
         std::vector<int64_t> non_virtual_uids;
         auto derived = static_cast<DerivedT const*>(this);
         for (auto& [name, tensor] : derived->inputs) {
