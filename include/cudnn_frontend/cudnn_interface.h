@@ -43,7 +43,7 @@ class ICudnn {
     error_t
     create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
                         int64_t& uid,
-                        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
+                        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const {
         // Check whether tensor already created
         // TODO: Do not reply on uid being 0?
         if (props->get_uid() == 0) {

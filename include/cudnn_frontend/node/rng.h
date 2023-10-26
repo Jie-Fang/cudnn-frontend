@@ -34,8 +34,8 @@ class RngNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode tensors " << attributes.name << "..." << std::endl;
 
@@ -92,7 +92,7 @@ class RngNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode operations " << attributes.name << "..." << std::endl;
 
@@ -100,33 +100,33 @@ class RngNode : public INode {
         try {
 #endif
 
-            if (attributes.get_distribution() == RngDistribution_t::BERNOULLI) {
-                auto rng_descriptor = cudnn_frontend::RngDescBuilder()
-                                          .setRngDistribution(attributes.get_distribution())
-                                          .setBernoulliDistProbability(attributes.get_bernoulli_probability().value())
-                                          .build();
+            RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.get_distribution() != RngDistribution_t::BERNOULLI,
+                                           error_code_t::ATTRIBUTE_NOT_SET,
+                                           "no other distribution except bernoulli supported.");
 
-                if (attributes.inputs[Rng_attributes::input_names::Seed]) {
-                    auto Rng_operation =
-                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
-                            .setyDesc(*(tensors.at(attributes.outputs[Rng_attributes::output_names::Y]->get_uid())))
-                            .setRngDesc(rng_descriptor)
-                            .setSeedDesc(*(tensors.at(attributes.inputs[Rng_attributes::input_names::Seed]->get_uid())))
-                            .setOffsetDesc(
-                                *(tensors.at(attributes.inputs[Rng_attributes::input_names::Offset]->get_uid())))
-                            .build();
-                    operations.push_back(std::move(Rng_operation));
+            auto rng_descriptor = cudnn_frontend::RngDescBuilder()
+                                      .setRngDistribution(attributes.get_distribution())
+                                      .setBernoulliDistProbability(attributes.get_bernoulli_probability().value())
+                                      .build();
 
-                } else {
-                    auto Rng_operation =
-                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR)
-                            .setyDesc(*(tensors.at(attributes.outputs[Rng_attributes::output_names::Y]->get_uid())))
-                            .setRngDesc(rng_descriptor)
-                            .setSeed(attributes.get_seed().value())
-                            .build();
-                    operations.push_back(std::move(Rng_operation));
-                }
+            auto&& Rng_operation_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Rng_attributes::output_names::Y);
+            Rng_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
+
+            Rng_operation_builder.setRngDesc(rng_descriptor);
+
+            if (attributes.seed.has_value()) {
+                Rng_operation_builder.setSeed(attributes.get_seed().value());
+            } else {
+                CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Seed, Rng_attributes::input_names::Seed);
+                Rng_operation_builder.setSeedDesc(*(tensors.at(Seed->second->get_uid())));
+
+                CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Offset, Rng_attributes::input_names::Offset);
+                Rng_operation_builder.setOffsetDesc(*(tensors.at(Offset->second->get_uid())));
             }
+
+            operations.push_back(std::move(Rng_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

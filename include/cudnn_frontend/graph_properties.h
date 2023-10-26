@@ -39,8 +39,10 @@ class Tensor_attributes {
                                    stride,
                                    is_virtual,
                                    is_pass_by_value,
-                                   reordering_type,
-                                   uid)
+                                   reordering_type
+                                   /* uid */  // Not serializing uid is intentional. FE graphs do no need a uid. uid is
+                                              // only meant to act as a bridge between backend and frontend tensors.
+    )
 
     Tensor_attributes() = default;
 
@@ -177,7 +179,7 @@ class Attributes {
 
    protected:
     std::vector<int64_t>
-    get_non_virtual_uids() {
+    get_non_virtual_uids() const {
         std::vector<int64_t> non_virtual_uids;
         auto derived = static_cast<DerivedT const*>(this);
         for (auto& [name, tensor] : derived->inputs) {
