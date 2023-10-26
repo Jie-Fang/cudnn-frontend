@@ -161,61 +161,77 @@ class Graph : public INode {
                                                                std::shared_ptr<Tensor_attributes>,
                                                                SDPA_FP8_attributes);
 
-    Plans
-    get_execution_plan_list(std::vector<HeurMode_t> const &mode);
+    error_t
+    create_execution_plans(std::vector<HeurMode_t> const &mode);
 
     error_t
-    set_execution_plans(Plans const &plan) {
-        if (plan.list_of_engine_configs.get_candidate() == nullptr) {
-            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                    "[cudnn_frontend] ERROR: No validate candidate for plan execution"};
-        }
-        execution_plans.emplace_back(plan.list_of_engine_configs.get_candidate());
-
+    check_support(cudnnHandle_t h) {
+        CHECK_CUDNN_FRONTEND_ERROR(plans.check_support(h));
         return {error_code_t::OK, ""};
     }
 
+    int64_t
+    get_max_workspace_size() {
+        return plans.get_max_workspace_size();
+    }
+
     error_t
-    build(cudnnHandle_t const &handle, std::vector<HeurMode_t> const &mode);
+    build_plans(cudnnHandle_t const &handle, int policy);
+
+    Graph&
+    filter_out_workspace_greater_than(int64_t const workspace) {
+        plans.set_max_workspace_allowed(workspace);
+        return *this;
+    }
+
+    Graph&
+    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
+        // TODO: The error returned is not propagate to user.
+        // Should the return value be changed to error_code_t too?
+        auto status = plans.filter_out_behavior_notes(notes);
+        if (status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
+        }
+        return *this;
+    }
+
+    Graph&
+    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
+        // TODO: The error returned is not propagate to user.
+        // Should the return value be changed to error_code_t too?
+        auto status = plans.filter_out_numeric_notes(notes);
+        if (status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
+        }
+        return *this;
+    }
 };
 
-inline Plans
-Graph::get_execution_plan_list(std::vector<HeurMode_t> const &mode) {
-    Plans plan_list;
-    // TODO: The error returned is not propagate to user.
-    // Should the return value be changed to error_code_t too?
+inline error_t
+Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 
     std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
-    auto status = detail::query_heuristics(operation_graphs, op_graph_to_configs, mode);
-    if (status.is_bad()) {
-        getLogger() << "[cudnn_frontend] ERROR: Failed to build." << std::endl;
-        return plan_list;
-    }
+    CHECK_CUDNN_FRONTEND_ERROR(detail::query_heuristics(operation_graphs, op_graph_to_configs, mode));
 
     getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
-    auto &engine_configs = plan_list.list_of_engine_configs;
-    engine_configs.set_tag(op_graph_to_configs.begin()->first);
-    engine_configs.set_engine_configs(op_graph_to_configs.begin()->second);
+    plans.set_tag(op_graph_to_configs.begin()->first);
+    plans.set_engine_configs(op_graph_to_configs.begin()->second);
 
     getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
-    status = engine_configs.query_properties();
-    if (status.is_bad()) {
-        getLogger() << "[cudnn_frontend] ERROR: Querying engine configs failed." << std::endl;
-    }
-    return plan_list;
+    CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
+
+    return {error_code_t::OK, ""};
 }
 
 inline error_t
-Graph::build(cudnnHandle_t const &handle, std::vector<HeurMode_t> const &modes) {
-    CHECK_CUDNN_FRONTEND_ERROR(validate());
+Graph::build_plans(cudnnHandle_t const &handle, int policy) {
 
-    CHECK_CUDNN_FRONTEND_ERROR(build_operation_graph(handle));
+    (void) policy;
+    if (plans.get_execution_plans().size() > 0) {
 
-    auto plans = get_execution_plan_list(modes);
-
-    CHECK_CUDNN_FRONTEND_ERROR(plans.check_support(handle));
-
-    CHECK_CUDNN_FRONTEND_ERROR(set_execution_plans(plans));
+    } else {
+        CHECK_CUDNN_FRONTEND_ERROR(plans.build_all_plans(handle));
+    }
 
     return {error_code_t::OK, ""};
 }

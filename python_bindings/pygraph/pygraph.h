@@ -7,7 +7,6 @@
 #include "pybind11/stl.h"
 
 #include "cudnn_frontend.h"
-#include "../pyplans.h"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -279,11 +278,14 @@ class PyGraph {
     void
     build_operation_graph();
 
-    PyPlans
-    get_execution_plan_list(std::vector<cudnn_frontend::HeurMode_t> const&);
+    void
+    create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const&);
 
     void
-    set_execution_plans(PyPlans const&);
+    build_plans();
+
+    void
+    check_support();
 
     void
     build(std::vector<cudnn_frontend::HeurMode_t> const&);
