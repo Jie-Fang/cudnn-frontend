@@ -578,8 +578,9 @@ class test_graph:
         elif self.backend_engine == -3:
             heurs.append(cudnn.heur_mode.FALLBACK)
         else:
-            print("MB Unkown heuristic, using A")
+            print("MB Unkown heuristic, trying A and FALLBACK")
             heurs.append(cudnn.heur_mode.A)
+            heurs.append(cudnn.heur_mode.FALLBACK)
         graph.build(heurs)
         utils.reportCurrentTime("graph.build")
         

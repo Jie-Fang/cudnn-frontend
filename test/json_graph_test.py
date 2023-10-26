@@ -133,7 +133,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-formatAll", type=int, choices=[0,1])
 
     #Other
-    l_parser.add_argument("-backendEngine", dest='backendEngine', action='store', type=int, default=-1, required=False)
+    l_parser.add_argument("-backendEngine", dest='backendEngine', action='store', default=-1, required=False)
     l_parser.add_argument("-Dforce_jit_dbg", action='store', default=None, type=int)
 
     # Ignored arguments
