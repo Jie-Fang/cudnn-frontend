@@ -28,7 +28,6 @@ namespace cudnn_frontend::graph {
 class Graph : public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> tensors;
-    Execution_plan_list plans;
 
     std::shared_ptr<Tensor_attributes>
     output_tensor(std::string const &name) {

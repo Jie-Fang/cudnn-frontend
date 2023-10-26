@@ -166,9 +166,9 @@ def test_gemm_relu_more_explicit(in_dim, expected_gemm_out_dim):
 
     cudnn_graph.validate()
     cudnn_graph.build_operation_graph()
-    cudnn_plans = cudnn_graph.get_execution_plan_list([cudnn.heur_mode.A])
-    cudnn_plans.check_support()
-    cudnn_graph.set_execution_plans(cudnn_plans)
+    cudnn_graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+    cudnn_graph.check_support()
+    cudnn_graph.build_plans()
     print(cudnn_graph)
 
     workspace = torch.empty(cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
@@ -212,7 +212,7 @@ def test_conv_relu():
     
     graph.validate()
     graph.build_operation_graph()
-    graph.create_execution_plans([cudnn.heur_mode.A])
+    graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     graph.check_support()
     graph.build_plans()
 
