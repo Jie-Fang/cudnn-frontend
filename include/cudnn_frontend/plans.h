@@ -111,7 +111,7 @@ class Execution_plan_list {
     std::vector<bool> filtered_indices;
     int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
-    std::shared_ptr<ExecutionPlan> candidate = nullptr;
+    std::shared_ptr<ExecutionPlan> candidate;
 
    public:
     std::vector<std::shared_ptr<ExecutionPlan>>
@@ -251,7 +251,7 @@ class Execution_plan_list {
             auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
             if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(candidate != nullptr,
+                RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.size(),
                                                error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                                "[cudnn_frontend] Check support or build called already.");
 
@@ -260,10 +260,7 @@ class Execution_plan_list {
                 // If not pushed, build_plans will incur compilation cost again.
                 // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
                 // if(cudnnGetVersion() < 9100)
-                {
-                    execution_plans.push_back(plan);
-                    candidate = plan;
-                }
+                { execution_plans.push_back(std::move(plan)); }
                 return {error_code_t::OK, ""};
             }
         }
@@ -294,8 +291,7 @@ class Execution_plan_list {
                     auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
                     if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                        candidate = std::move(plan);
-                        execution_plans.push_back(candidate);
+                        execution_plans.push_back(std::move(plan));
                         break;
                     }
                 }
@@ -306,8 +302,7 @@ class Execution_plan_list {
                     auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
                     if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                        candidate = std::move(plan);
-                        execution_plans.push_back(candidate);
+                        execution_plans.push_back(std::move(plan));
                     }
                 }
                 break;
@@ -335,15 +330,8 @@ class Execution_plan_list {
 
     std::shared_ptr<ExecutionPlan>
     get_best_candidate() const {
-        return candidate;
-    }
-
-    int64_t
-    get_workspace() const {
-        if (candidate == nullptr) {
-            return -1;
-        }
-        return candidate->getWorkspaceSize();
+        if (execution_plans.empty()) return nullptr;
+        return execution_plans.front();
     }
 };
 
