@@ -282,7 +282,7 @@ class PyGraph {
     create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const&);
 
     void
-    build_plans();
+    build_plans(build_plan_policy const);
 
     void
     check_support();

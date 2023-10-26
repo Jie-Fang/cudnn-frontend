@@ -37,7 +37,7 @@ class ICudnn {
     std::vector<std::shared_ptr<OperationGraph_v8>> operation_graphs;
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
-    graph::Execution_plan_list plans;
+    std::vector<graph::Execution_plan_list> plans;
 
     // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
@@ -109,8 +109,18 @@ class ICudnn {
     int64_t
     get_cudnn_workspace_size_node() const {
         int64_t current_workspace_size = 0;
-        for (auto const& execution_plan : plans.execution_plans) {
-            current_workspace_size += execution_plan->getWorkspaceSize();
+        for (auto const& execution_plan_list : plans) {
+            current_workspace_size =
+                std::max(current_workspace_size, execution_plan_list.get_best_candidate()->getWorkspaceSize());
+        }
+        return current_workspace_size;
+    }
+
+    int64_t
+    get_max_cudnn_workspace_size_node() const {
+        int64_t current_workspace_size = 0;
+        for (auto const& execution_plan_list : plans) {
+            current_workspace_size = std::max(current_workspace_size, execution_plan_list.get_autotune_workspace());
         }
         return current_workspace_size;
     }
@@ -119,12 +129,12 @@ class ICudnn {
     execute_cudnn_plans(cudnnHandle_t handle,
                         std::unordered_map<uid_t, void*> const& tensor_uid_to_pointer_map,
                         void* workspace_ptr) {
-        getLogger() << "[cudnn_frontend] INFO: Executing " << plans.execution_plans.size() << " Plans." << std::endl;
-        RETURN_CUDNN_FRONTEND_ERROR_IF(plans.execution_plans.size() == 0, error_code_t::GRAPH_EXECUTION_FAILED,
-                                                "No plan found to execute!!");
+        getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " Plans." << std::endl;
 
-        for (size_t i = 0; i < plans.execution_plans.size(); ++i) {
-            auto const& execution_plan   = plans.execution_plans[i];
+        for (size_t i = 0; i < plans.size(); ++i) {
+            auto const& execution_plan = plans[i].get_best_candidate();
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                execution_plan == nullptr, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
             auto const& variant_pack_uid = variant_pack_uids[i];
 
             getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
@@ -163,6 +173,5 @@ class ICudnn {
         return {error_code_t::OK, ""};
     }
 };
-
 
 }  // namespace cudnn_frontend

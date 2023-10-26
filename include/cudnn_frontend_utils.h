@@ -254,6 +254,25 @@ to_string(cudnnRngDistribution_t distribution) {
 }
 #endif
 
+enum class build_plan_policy {
+    // Builds and stores the "first successful" plan from the list returned by hueristics.
+    // heuristics list is traversed sequentially and in decreasing order of potential performance.
+    ONE,
+    // Builds and stores the "all successful" plan from the list returned by hueristics.
+    // And does so in using a single-threaded manner.
+    ALL_SEQUENTIAL,
+    // Builds and stores the "all successful" plan from the list returned by hueristics.
+    // And does so in using a multi-thread manner.
+    ALL_PARALLEL,
+};
+
+NLOHMANN_JSON_SERIALIZE_ENUM(build_plan_policy,
+                             {
+                                 {build_plan_policy::ONE, "ONE"},
+                                 {build_plan_policy::ALL_SEQUENTIAL, "ALL_SEQUENTIAL"},
+                                 {build_plan_policy::ALL_PARALLEL, "ALL_PARALLEL"},
+                             })
+
 enum class TensorReordering_t {
     NONE,
     INT8x32,
