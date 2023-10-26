@@ -258,6 +258,11 @@ PyGraph::validate() {
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
+size_t
+PyGraph::key() {
+    return graph.key();
+}
+
 void
 PyGraph::build_operation_graph() {
     auto status = graph.build_operation_graph(handle);
@@ -473,6 +478,7 @@ init_pygraph_submodule(py::module_& m) {
                     cudnn_tensor: The result of reduction operation.
             )pbdoc")
         .def("validate", &PyGraph::validate)
+        .def("key", &PyGraph::key)
         .def("build_operation_graph", &PyGraph::build_operation_graph)
         .def("create_execution_plans", &PyGraph::create_execution_plans)
         .def("check_support", &PyGraph::check_support)

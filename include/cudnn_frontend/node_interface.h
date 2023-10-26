@@ -364,7 +364,14 @@ class INode : public ICudnn {
         }
     };
 
-    virtual ~INode(){};
+    size_t
+    key() {
+        json j;
+        serialize(j);
+        return std::hash<json>{}(j);
+    }
+
+    virtual ~INode() = default;
 };
 
 [[maybe_unused]] static void

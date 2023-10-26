@@ -275,6 +275,9 @@ class PyGraph {
     void
     validate();
 
+    size_t
+    key();
+
     void
     build_operation_graph();
 
