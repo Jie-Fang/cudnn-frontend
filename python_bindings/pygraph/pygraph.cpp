@@ -277,7 +277,8 @@ PyGraph::create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const& m
 
 void
 PyGraph::build_plans(build_plan_policy const policy) {
-    auto status = graph.build_plans(handle, policy);
+    // TODO: Add multithreaded support in python
+    auto status = graph.build_plans(handle, policy, false);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
@@ -287,7 +288,7 @@ PyGraph::build(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
     build_operation_graph();
     create_execution_plans(modes);
     check_support();
-    build_plans(cudnn_frontend::build_plan_policy::ONE);
+    build_plans(cudnn_frontend::build_plan_policy::HEURISTICS_CHOICE);
 }
 
 void
@@ -482,7 +483,9 @@ init_pygraph_submodule(py::module_& m) {
         .def("build_operation_graph", &PyGraph::build_operation_graph)
         .def("create_execution_plans", &PyGraph::create_execution_plans)
         .def("check_support", &PyGraph::check_support)
-        .def("build_plans", &PyGraph::build_plans, py::arg("policy") = cudnn_frontend::build_plan_policy::ONE)
+        .def("build_plans",
+             &PyGraph::build_plans,
+             py::arg("policy") = cudnn_frontend::build_plan_policy::HEURISTICS_CHOICE)
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
         .def("execute", &PyGraph::execute)

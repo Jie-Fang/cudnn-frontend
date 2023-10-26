@@ -124,9 +124,8 @@ init_properties(py::module_& m) {
         .value("NOT_SET", cudnn_frontend::ReductionMode_t::NOT_SET);
 
     py::enum_<cudnn_frontend::build_plan_policy>(m, "build_plan_policy")
-        .value("ONE", cudnn_frontend::build_plan_policy::ONE)
-        .value("ALL_SEQUENTIAL", cudnn_frontend::build_plan_policy::ALL_SEQUENTIAL)
-        .value("ALL_PARALLEL", cudnn_frontend::build_plan_policy::ALL_PARALLEL);
+        .value("HEURISTICS_CHOICE", cudnn_frontend::build_plan_policy::HEURISTICS_CHOICE)
+        .value("ALL", cudnn_frontend::build_plan_policy::ALL);
 }
 
 }  // namespace python_bindings
