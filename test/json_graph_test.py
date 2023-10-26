@@ -1,16 +1,12 @@
+from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime, ImplementationError
+import cudnn
+reportCurrentTime("import_cudnn")
 import json
 import os
-import cudnn
-import pytest
 import sys
 import argparse
 
-from test_graph import test_graph, operation
-from utils import getFwdConvDilatedFilterDim, getFwdConvPaddedImageDim, getFwdConvOutputDim, computeStrideNdTransposedPacked
-
-class ImplementationError(Exception):
-    def __init__(self, reason):
-        self.reason = reason
+from test_graph import test_graph
 
 def read_json_test_dict(fname):
     if not os.path.exists(fname):
@@ -18,12 +14,13 @@ def read_json_test_dict(fname):
 
     with open(fname) as ifh:
         json_tests = json.load(ifh)
+    reportCurrentTime("read_json_test_dict")
     return json_tests
 
 # @raises ImplementationError
 # TODO: keep track of which parameters were actually used (i.e., was as cli parameter specified that was never used? E.g., filtC)
 def replace_single_param(json_test_def, abstract_params):
-    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w"]
+    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w", "r", "s"]
     FORMAT_ALL = "formatAll"
     IO_DATA_TYPE = "P"
     INT_LISTS = ["dimOut", "dimA", "filtA", "convStrideA", "dilationA", "padA"]
@@ -70,14 +67,27 @@ def replace_abstract_test_params(json_test_def, abstract_params):
                 json_test_def[index] = replace_single_param(item, abstract_params)
             else:
                 replace_abstract_test_params(item, abstract_params)
-            
+      
     return json_test_def
 
 def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
-    print("Running from legacy json graph definition")
+    print("Running json graph")
+
     kTEST_NAME = "jsonTestName"
     kDATA_TYPES = ['s', 'h', 'float', 'half', "g", "b"]
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+    # A quick sanitizing of the remaining arguments to be further parsed by run_test_from_legacy_args
+    sanitized_graphRunner_args = []
+    for item in unparsed_graphRunner_args:
+        if not "=" in item:
+            sanitized_graphRunner_args.append(item)
+        else:
+            stripped = item.strip('=')
+            if "=" in stripped:
+                sanitized_graphRunner_args.extend(item.split("="))
+            else:
+                sanitized_graphRunner_args.append(stripped)
     
     # General args
     l_parser = argparse.ArgumentParser("legacy_graph_runner", allow_abbrev=False)
@@ -87,6 +97,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     # 1) we need to set nargs to 2, so argparse knows it expects 2 values (in case above this is layout and NCHW). 
     # 2), we need to specify action as append and build a list of kv values
     l_parser.add_argument("-kv", action='append', nargs=2, dest='key_values', default=[], help="kv values to be specified as [-kv=<key> <value>]+ e.g., -kv=layout NCHW.")
+    # TODO(@mbreughe): Add proper support for this 
     l_parser.add_argument("-minDevVer", default=0, type=int)
     l_parser.add_argument("-groupCount", default=1, type=int)
     l_parser.add_argument("-atol", default=0.1, type=float)
@@ -120,22 +131,25 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-Tcomp", choices=kDATA_TYPES)
     # Format related
     l_parser.add_argument("-formatAll", type=int, choices=[0,1])
+
+    #Other
+    l_parser.add_argument("-backendEngine", dest='backendEngine', action='store', default=-1, required=False)
+    l_parser.add_argument("-Dforce_jit_dbg", action='store', default=None, type=int)
+
     # Ignored arguments
-    ignored_keys = ['d', "b", "S", 'gpuRef', "Dforce_jit_dbg", "backendEngine", "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
+    ignored_keys = ['d', "b", "S", 'gpuRef', "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
     ignored_args = l_parser.add_argument_group('ignored_args')
     ignored_args.add_argument("-d", action='store', default=None)
     ignored_args.add_argument("-b", action='store_true', default=None)
     ignored_args.add_argument("-S", action='store_true', default=None)
     ignored_args.add_argument("-gpuRef", action='store_true', default=None)
-    ignored_args.add_argument("-Dforce_jit_dbg", action='store', default=None)
-    ignored_args.add_argument("-backendEngine", action='store', default=None, required=False)
     ignored_args.add_argument("-engineCfgSweep", action='store', default=None, required=False)
     ignored_args.add_argument("-knobSplitKSlices", action='store', default=None, required=False)
     ignored_args.add_argument("-knobKernelCfg", action='store', default=None, required=False)
     ignored_args.add_argument("-serialization", action='store', default=None, required=False)
 
     # First parsing pass
-    legacy_args = l_parser.parse_args(unparsed_graphRunner_args)
+    legacy_args = l_parser.parse_args(sanitized_graphRunner_args)
     
     abstract_params = vars(legacy_args)
 
@@ -194,30 +208,30 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     json_test_name = legacy_args.jsonTestName
 
+    reportCurrentTime("arg_parse_2")
     json_tests = read_json_test_dict(legacy_args.json_fname)
     
     assert json_test_name in json_tests
     abstract_test_dict = json_tests[json_test_name]
     try:
         concrete_test_dict = replace_abstract_test_params(abstract_test_dict, abstract_params)
-        run_test_from_json_definition(concrete_test_dict)
+        reportCurrentTime("replace_abstract_test_params")
+        # TODO(@mbreughe): Make this safer
+        # Overwrite the environment variable that controls forced JIT-ing
+        force_jit_env_before = os.environ.get("CUDNN_FORCE_JIT_DBG", None)
+        if "Dforce_jit_dbg" in abstract_params:
+            os.environ["CUDNN_FORCE_JIT_DBG"] = str(legacy_args.Dforce_jit_dbg)
+
+        run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+
+        # Now recover the environment variable
+        if force_jit_env_before is not None:
+            os.environ["CUDNN_FORCE_JIT_DBG"] = force_jit_env_before
+        elif "CUDNN_FORCE_JIT_DBG" in os.environ:
+            del os.environ["CUDNN_FORCE_JIT_DBG"]
     except ImplementationError as e:
         print("MB Unsupported: ", e.reason)
-        sys.exit(1)
-
-# A helper function to read json dictionaries
-# @note: scope tells us that the dictionary is being loaded only once
-@pytest.fixture(scope="module")
-def json_dict(request):
-    fname = request.param
-    return read_json_test_dict(fname)
-
-# Main entry point for json defined graphs
-# @param json_dict: implicit call to a fixture using the json file name provided on the command line
-# @param test_name: the specific test to be ran
-def test_json_graph(json_dict, test_name):
-    assert test_name in json_dict
-    run_test_from_json_definition(json_dict[test_name])
+        raise e
 
 # @brief: A utility class to help parse graphRunner json graph definitions
 # @details: This is a utility class to extract infomration from a json graph definition (graphRunner json format)
@@ -314,7 +328,9 @@ class Legacy_operation:
 # @note: we could opt to store the mapping in a file like we do for operation
 # however, the mapping is much fewer, so we decide to avoid the overhead for now
 class Legacy_tensor:
-    mapping = {"dataType": "data_type", "dim": "dim"}
+    mapping = {"dataType": "data_type", "dim": "dim", "name": "name"}
+    # TODO(@mbreughe): implement the following fill related properties
+    mapping.update({"fill": "fill", "min": "min", "max": "max", "value": "value", "mean": "mean", "std_dev": "std_dev"})
 
     def __init__(self, jtensor):
         self.jtensor = jtensor
@@ -360,17 +376,19 @@ class Legacy_tensor:
                 pycudnn_props["stride"] = self.get_stride()
                 layout = self.jtensor["layout"]
                 # TODO(@mbreughe): fix this in test_graph.py
-                # It shouldn't be necessary to specify thsi through both strides and layout
+                # It shouldn't be necessary to specify this through both strides and layout
                 if layout == "NCHW" or str(layout) == '0':
                     pycudnn_props[key] = "NCHW"
                 elif layout == "NHWC" or str(layout) == '1':
                     pycudnn_props[key] = "NHWC"
-            else:
-                new_key = key
-                if key in Legacy_tensor.mapping:
+            
+            elif key in Legacy_tensor.mapping:
                     new_key = Legacy_tensor.mapping[key]
                 
-                pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
+                    pycudnn_props[new_key] = Legacy_value.translate_to_pycudnn_value(key, value)
+
+            else:
+                raise ImplementationError("Unsupported tensor property \"{}\"".format(key))
 
         return pycudnn_props
 
@@ -465,8 +483,9 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
     return jtensor_dict
 
 # @brief: main function to run json graphs
-def run_test_from_json_definition(json_dict):
+def run_test_from_json_definition(json_dict, backendEngine=-1):
     testGraph = test_graph()
+    testGraph.set_backend_engine(backendEngine)
 
     jtensor_dict = json_dict["tensors"]
     jnode_list = json_dict["nodes"]
@@ -516,9 +535,10 @@ def run_test_from_json_definition(json_dict):
     # Create a TestTensor for every input tensor
     for jtensor in input_tensors:
         legacy_tensor = Legacy_tensor(jtensor)
+        
         t = testGraph.tensor(**legacy_tensor.get_tensor_properties())
         TGTensors[jtensor["name"]] = t
-
+    
     # Finalize the connections by adding inputs and properties to the operation nodes
     for name, (test_graph_op, legacy_op) in Operations.items():
         test_graph_op.set_kwargs(create_kwargs(legacy_op, TGTensors))
@@ -534,6 +554,8 @@ def run_test_from_json_definition(json_dict):
     if "tolerances" in json_dict:
         atol = float(json_dict["tolerances"]["abs"])
         rtol = float(json_dict["tolerances"]["rel"])
+
+    reportCurrentTime("test_setup")      
     testGraph.cudnn_execute_and_compare_to_reference(atol=atol, rtol=rtol)
 
 # @brief: Create a pycudnn node from the legacy_op

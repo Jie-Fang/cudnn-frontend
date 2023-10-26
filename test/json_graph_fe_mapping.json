@@ -8,6 +8,13 @@
                     "output": ["Y"],
                     "properties": {}
                 },
+                "CUDNN_POINTWISE_RELU_BWD":
+                {
+                    "operation": "relu_backward",
+                    "input": {"X": "input", "dY": "loss"},
+                    "output": ["dX"],
+                    "properties": {}
+                },
             "CUDNN_POINTWISE_ADD":
                 {
                     "operation": "add",
