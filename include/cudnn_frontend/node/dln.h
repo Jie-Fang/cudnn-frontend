@@ -3,19 +3,22 @@
 #include "../../cudnn_frontend_Heuristics.h"
 #include "../../cudnn_frontend_Logging.h"
 
-#include "../cudnn_frontend_graph_helpers.h"
-#include "../cudnn_frontend_node_interface.h"
+#include "../graph_helpers.h"
+#include "../node_interface.h"
 
 namespace cudnn_frontend {
 
 namespace graph {
 
 class DLNNode : public INode {
-   public:
-    Layernorm_backward_attributes options;
+    // Keep epsilon for pre-8906
+    std::shared_ptr<Tensor_attributes> epsilon;
 
-    DLNNode(Layernorm_backward_attributes&& options_, detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+   public:
+    Layernorm_backward_attributes attributes;
+
+    DLNNode(Layernorm_backward_attributes&& attributes_, detail::Context const& context)
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -25,28 +28,24 @@ class DLNNode : public INode {
     error_t
     validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating DLNNode " << options.name << "..." << std::endl;
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!(options.inputs.MEAN) && !(options.inputs.INV_VARIANCE) &&
-                                           !(options.inputs.EPSILON) && !(options.inputs.SCALE),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Either saved mean/inv_variance/scale or epsilon required.");
+                    << "Validating DLNNode " << attributes.name << "..." << std::endl;
 
         return {error_code_t::OK, ""};
     }
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DLN node " << options.name << "..."
+        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DLN node " << attributes.name << "..."
                     << std::endl;
 
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferencing from X works today.
-        auto X                  = options.inputs.X;
+        auto X                  = attributes.inputs[Layernorm_backward_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
 
-        auto DY            = options.inputs.DY;
+        auto DY            = attributes.inputs[Layernorm_backward_attributes::input_names::DY];
         auto dy_tensor_dim = DY->get_dim();
 
         // Only infer dims and strides if user did not set them
@@ -61,7 +60,7 @@ class DLNNode : public INode {
             DY->set_stride(detail::generate_stride(DY_dim, stride_order));
         }
 
-        auto DX            = options.outputs.DX;
+        auto DX            = attributes.outputs[Layernorm_backward_attributes::output_names::DX];
         auto dx_tensor_dim = DX->get_dim();
         // Only infer dims and strides if user did not set them
         if (dx_tensor_dim.empty()) {
@@ -78,33 +77,6 @@ class DLNNode : public INode {
         auto scale_bias_dim = X->get_dim();
         scale_bias_dim[0]   = 1;
 
-        auto stats_dim = X->get_dim();
-        for (size_t i = 1; i < stats_dim.size(); i++) {
-            stats_dim[i] = 1;
-        }
-
-        auto mean = options.inputs.MEAN;
-        if (mean->get_dim().empty()) {
-            mean->set_dim(stats_dim);
-        }
-        if (mean->get_stride().empty()) {
-            auto const& mean_dim = mean->get_dim();
-            // Default to NHWC
-            auto const& stride_order = detail::generate_NHWC_stride_order(mean_dim.size());
-            mean->set_stride(detail::generate_stride(mean_dim, stride_order));
-        }
-
-        auto inv_var = options.inputs.INV_VARIANCE;
-        if (inv_var->get_dim().empty()) {
-            inv_var->set_dim(stats_dim);
-        }
-        if (inv_var->get_stride().empty()) {
-            auto const& inv_var_dim = inv_var->get_dim();
-            // Default to NHWC
-            auto const& stride_order = detail::generate_NHWC_stride_order(inv_var_dim.size());
-            inv_var->set_stride(detail::generate_stride(inv_var_dim, stride_order));
-        }
-
         // Set channel length tensors
         auto infer_scale_bias_tensors = [&scale_bias_dim](std::shared_ptr<Tensor_attributes>& T) {
             auto tensor_dim = T->get_dim();
@@ -120,106 +92,94 @@ class DLNNode : public INode {
             }
         };
 
-        infer_scale_bias_tensors(options.inputs.SCALE);
-        infer_scale_bias_tensors(options.outputs.DSCALE);
-        infer_scale_bias_tensors(options.outputs.DBIAS);
+        infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE]);
+        infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]);
 
-        // Set scalar tensors
-        auto infer_scalar_tensors = [&x_tensor_dim](std::shared_ptr<Tensor_attributes>& T) {
-            auto tensor_dim = T->get_dim();
-            // Only infer dims and strides if user did not set them
-            if (tensor_dim.empty()) {
-                tensor_dim.resize(x_tensor_dim.size(), 1);
-                T->set_dim(tensor_dim);
-            }
-            if (T->get_stride().empty()) {
-                auto const& T_dim = T->get_dim();
-                // Default to NHWC
-                auto const& stride_order = detail::generate_NHWC_stride_order(T_dim.size());
-                T->set_stride(detail::generate_stride(T_dim, stride_order));
-            }
-        };
-        if (options.inputs.EPSILON) infer_scalar_tensors(options.inputs.EPSILON);
+        if (cudnnGetVersion() < 8906) {
+            epsilon = std::make_shared<Tensor_attributes>();
+            epsilon->set_is_pass_by_value(true)
+                .set_dim({1, 1, 1, 1})
+                .set_stride({1, 1, 1, 1})
+                .set_data_type(DataType_t::FLOAT);
+        }
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.DY->set_uid(ICudnn::create_new_uid());
-        options.inputs.SCALE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.MEAN) options.inputs.MEAN->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.INV_VARIANCE) options.inputs.INV_VARIANCE->set_uid(ICudnn::create_new_uid());
-        if (options.inputs.EPSILON) options.inputs.EPSILON->set_uid(ICudnn::create_new_uid());
-        options.outputs.DX->set_uid(ICudnn::create_new_uid());
-        options.outputs.DSCALE->set_uid(ICudnn::create_new_uid());
-        options.outputs.DBIAS->set_uid(ICudnn::create_new_uid());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createTensors() override final {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DLNNode tensors " << options.name << "..." << std::endl;
+                    << "Building DLNNode tensors " << attributes.name << "..." << std::endl;
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.DY));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.SCALE));
-        if (options.inputs.MEAN) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.MEAN));
-        if (options.inputs.INV_VARIANCE) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.INV_VARIANCE));
-        if (options.inputs.EPSILON) CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.EPSILON));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DX));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DSCALE));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.DBIAS));
+        for (auto const& [name, tensor] : attributes.inputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+        for (auto const& [name, tensor] : attributes.outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+
+        if (epsilon) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(epsilon, uid, tensors));
+        }
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createOperations() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DLNNode operations " << options.name << "..." << std::endl;
+                    << "Building DLNNode operations " << attributes.name << "..." << std::endl;
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
 
             // Create the DLN operation.
-            auto DLN_operation = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
-                                     .setNormalizationMode(NormMode_t::LAYER_NORM)
-                                     .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
-                                     .setdyDesc(*(tensors.at(options.inputs.DY->get_uid())))
-                                     .setScale(*(tensors.at(options.inputs.SCALE->get_uid())))
-                                     .setSavedMeanAndInvVar(*(tensors.at(options.inputs.MEAN->get_uid())),
-                                                            *(tensors.at(options.inputs.INV_VARIANCE->get_uid())))
-                                     .setDScaleAndDBias(*(tensors.at(options.outputs.DSCALE->get_uid())),
-                                                        *(tensors.at(options.outputs.DBIAS->get_uid())))
-                                     .setEpsilonTensor(*(tensors.at(options.inputs.EPSILON->get_uid())))
-                                     .setdxDesc(*(tensors.at(options.outputs.DX->get_uid())))
-                                     .build();
+            auto&& DLN_op_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR);
 
-            // Push all real tensors as required for operation execution.
-            std::vector<std::shared_ptr<Tensor_attributes>> tensors_involved_in_operation = {
-                options.inputs.X,
-                options.inputs.DY,
-                options.inputs.SCALE,
-                options.inputs.MEAN,
-                options.inputs.INV_VARIANCE,
-                options.inputs.EPSILON,
-                options.outputs.DX,
-                options.outputs.DSCALE,
-                options.outputs.DBIAS};
+            DLN_op_builder.setNormalizationMode(NormMode_t::LAYER_NORM)
+                .setxDesc(*(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::X]->get_uid())))
+                .setdyDesc(*(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::DY]->get_uid())))
+                .setScale(
+                    *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::SCALE]->get_uid())))
+                .setSavedMeanAndInvVar(
+                    *(tensors.at(attributes.inputs[Layernorm_backward_attributes::input_names::MEAN]->get_uid())),
+                    *(tensors.at(
+                        attributes.inputs[Layernorm_backward_attributes::input_names::INV_VARIANCE]->get_uid())))
+                .setDScaleAndDBias(
+                    *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE]->get_uid())),
+                    *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]->get_uid())))
+                .setdxDesc(
+                    *(tensors.at(attributes.outputs[Layernorm_backward_attributes::output_names::DX]->get_uid())))
+                .build();
 
-            std::vector<uid_t> uids_in_operation;
-            for (auto const& tensor : tensors_involved_in_operation) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
-                }
+            if (epsilon) {
+                DLN_op_builder.setEpsilonTensor(*(tensors.at(epsilon->get_uid())));
+                uids_involved_in_operations.insert(epsilon->get_uid());
             }
 
-            operations.push_back({std::move(DLN_operation), std::move(uids_in_operation)});
+            auto DLN_operation = DLN_op_builder.build();
 
+            operations.push_back(std::move(DLN_operation));
+            for (auto const& [name, tensor] : attributes.inputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
+            for (auto const& [name, tensor] : attributes.outputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
@@ -231,7 +191,20 @@ class DLNNode : public INode {
 
     virtual void
     serialize(json& j) const override final {
-        j = options;
+        j = attributes;
+    }
+
+    error_t
+    pass_by_value_tensors_(
+        cudnnHandle_t,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
+        void*) override {
+        if (epsilon) {
+            // can pass in any dummy value
+            tensor_to_pass_by_value.emplace(epsilon, 0.0f);
+        }
+        return {error_code_t::OK, ""};
     }
 };
 

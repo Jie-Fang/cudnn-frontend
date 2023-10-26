@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 
-#include "cudnn_frontend_node_interface.h"
 #include "../cudnn_frontend_EngineConfig.h"
 #include "../cudnn_frontend_Logging.h"
 
@@ -130,10 +129,9 @@ class Execution_plan_list {
         return {error_code_t::OK, ""};
     }
 
-    error_t
+    void
     set_max_workspace_allowed(int64_t const workspace_allowed) {
         max_workspace_allowed = workspace_allowed;
-        return {error_code_t::OK, ""};
     }
 
     EngineConfigList

@@ -34,15 +34,32 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     auto sum =
         graph.tensor(fe::graph::Tensor_attributes().set_name("sum").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
-    auto sq_sum            = graph.tensor(fe::graph::Tensor_attributes().set_name("sq_sum"));
-    auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean"));
-    auto prev_running_var  = graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var"));
-    auto scale             = graph.tensor(fe::graph::Tensor_attributes().set_name("scale"));
-    auto bias              = graph.tensor(fe::graph::Tensor_attributes().set_name("bias"));
-    auto epsilon     = graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_is_pass_by_value(true));
-    auto momentum    = graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_is_pass_by_value(true));
+    auto sq_sum = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("sq_sum").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes()
+                                              .set_name("prev_running_mean")
+                                              .set_dim({1, 32, 1, 1})
+                                              .set_stride({32, 1, 32, 32}));
+    auto prev_running_var  = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("prev_running_var").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto scale = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("scale").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto bias = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("bias").set_dim({1, 32, 1, 1}).set_stride({32, 1, 32, 32}));
+    auto epsilon     = graph.tensor(fe::graph::Tensor_attributes()
+                                    .set_name("epsilon")
+                                    .set_dim({1, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_is_pass_by_value(true));
+    auto momentum    = graph.tensor(fe::graph::Tensor_attributes()
+                                     .set_name("momentum")
+                                     .set_dim({1, 1, 1, 1})
+                                     .set_stride({1, 1, 1, 1})
+                                     .set_is_pass_by_value(true));
     auto accum_count = graph.tensor(fe::graph::Tensor_attributes()
                                         .set_name("accum_count")
+                                        .set_dim({1, 1, 1, 1})
+                                        .set_stride({1, 1, 1, 1})
                                         .set_is_pass_by_value(true)
                                         .set_data_type(fe::DataType_t::INT64));
 
@@ -68,7 +85,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
+    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::FALLBACK});
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -119,26 +136,50 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
         .set_compute_data_type(fe::DataType_t::FLOAT);
 
-    auto X = graph.tensor(fe::graph::Tensor_attributes()
+    auto X                 = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({4, 32, 16, 16})
                               .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
-    auto prev_running_mean =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_mean").set_data_type(fe::DataType_t::FLOAT));
-    auto prev_running_var =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("prev_running_var").set_data_type(fe::DataType_t::FLOAT));
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
+    auto prev_running_mean = graph.tensor(fe::graph::Tensor_attributes()
+                                              .set_name("prev_running_mean")
+                                              .set_dim({1, 32, 1, 1})
+                                              .set_stride({32, 1, 32, 32})
+                                              .set_data_type(fe::DataType_t::FLOAT));
+    auto prev_running_var  = graph.tensor(fe::graph::Tensor_attributes()
+                                             .set_name("prev_running_var")
+                                             .set_dim({1, 32, 1, 1})
+                                             .set_stride({32, 1, 32, 32})
+                                             .set_data_type(fe::DataType_t::FLOAT));
+    auto scale             = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, 32, 1, 1})
+                                  .set_stride({32, 1, 32, 32})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto bias              = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("bias")
+                                 .set_dim({1, 32, 1, 1})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
 
-    auto peer_stats_0 =
-        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    auto peer_stats_1 =
-        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_0 = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_dim({2, 4 * 32, 1, 1})
+                                         .set_stride({4 * 32, 1, 4 * 32, 4 * 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_1 = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_dim({2, 4 * 32, 1, 1})
+                                         .set_stride({4 * 32, 1, 4 * 32, 4 * 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("epsilon").set_data_type(fe::DataType_t::FLOAT));
-    auto momentum =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("momentum").set_data_type(fe::DataType_t::FLOAT));
+    auto epsilon  = graph.tensor(fe::graph::Tensor_attributes()
+                                    .set_name("epsilon")
+                                    .set_dim({1, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_data_type(fe::DataType_t::FLOAT));
+    auto momentum = graph.tensor(fe::graph::Tensor_attributes()
+                                     .set_name("momentum")
+                                     .set_dim({1, 1, 1, 1})
+                                     .set_stride({1, 1, 1, 1})
+                                     .set_data_type(fe::DataType_t::FLOAT));
 
     auto batchnorm_options = fe::graph::Batchnorm_attributes()
                                  .set_forward_phase(fe::NormFwdPhase_t::TRAINING)
@@ -177,7 +218,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
+    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::FALLBACK});
 
     REQUIRE(plans.check_support(handle).is_good());
 
@@ -251,15 +292,30 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
                               .set_dim({4, 32, 16, 16})
                               .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
 
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto mean  = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
-    auto inv_variance =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+    auto scale        = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, 32, 1, 11})
+                                  .set_stride({32, 1, 32, 32})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto mean         = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("mean")
+                                 .set_dim({1, 32, 1, 11})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_name("inv_variance")
+                                         .set_dim({1, 32, 1, 11})
+                                         .set_stride({32, 1, 32, 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
-    auto peer_stats_0 =
-        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
-    auto peer_stats_1 =
-        graph.tensor(fe::graph::Tensor_attributes().set_dim({2, 4 * 32, 1, 1}).set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_0 = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_dim({2, 4 * 32, 1, 1})
+                                         .set_stride({4 * 32, 1, 4 * 32, 4 * 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
+    auto peer_stats_1 = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_dim({2, 4 * 32, 1, 1})
+                                         .set_stride({4 * 32, 1, 4 * 32, 4 * 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
     auto DBN_options = fe::graph::Batchnorm_backward_attributes()
                            .set_saved_mean_and_inv_variance(mean, inv_variance)
@@ -331,11 +387,26 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
                                  .set_dim({4, 32, 16, 16})
                                  .set_stride({32 * 16 * 16, 1, 32 * 16, 32}));
 
-    auto scale = graph.tensor(fe::graph::Tensor_attributes().set_name("scale").set_data_type(fe::DataType_t::FLOAT));
-    auto bias  = graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_data_type(fe::DataType_t::FLOAT));
-    auto mean  = graph.tensor(fe::graph::Tensor_attributes().set_name("mean").set_data_type(fe::DataType_t::FLOAT));
-    auto inv_variance =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("inv_variance").set_data_type(fe::DataType_t::FLOAT));
+    auto scale        = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("scale")
+                                  .set_dim({1, 32, 1, 1})
+                                  .set_stride({32, 1, 32, 32})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+    auto bias         = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("bias")
+                                 .set_dim({1, 32, 1, 1})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
+    auto mean         = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("mean")
+                                 .set_dim({1, 32, 1, 1})
+                                 .set_stride({32, 1, 32, 32})
+                                 .set_data_type(fe::DataType_t::FLOAT));
+    auto inv_variance = graph.tensor(fe::graph::Tensor_attributes()
+                                         .set_name("inv_variance")
+                                         .set_dim({1, 32, 1, 1})
+                                         .set_stride({32, 1, 32, 32})
+                                         .set_data_type(fe::DataType_t::FLOAT));
 
     auto batchnorm_inference_attributes = fe::graph::Batchnorm_inference_attributes();
     auto BN_Y = graph.batchnorm_inference(BN_X, mean, inv_variance, scale, bias, batchnorm_inference_attributes);
@@ -366,7 +437,7 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    auto plans = graph.get_execution_plan_list(fe::HeurMode_t::FALLBACK);
+    auto plans = graph.get_execution_plan_list({fe::HeurMode_t::FALLBACK});
 
     REQUIRE(plans.check_support(handle).is_good());
 

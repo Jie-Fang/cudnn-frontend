@@ -4,17 +4,17 @@
 #include "../../cudnn_frontend_Heuristics.h"
 #include "../../cudnn_frontend_Logging.h"
 
-#include "../cudnn_frontend_graph_helpers.h"
-#include "../cudnn_frontend_node_interface.h"
+#include "../graph_helpers.h"
+#include "../node_interface.h"
 
 namespace cudnn_frontend::graph {
 
 class ConvolutionNode : public INode {
    public:
-    Conv_fprop_attributes options;
+    Conv_fprop_attributes attributes;
 
-    ConvolutionNode(Conv_fprop_attributes&& options_, detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+    ConvolutionNode(Conv_fprop_attributes&& attributes_, detail::Context const& context)
+        : INode(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -22,16 +22,31 @@ class ConvolutionNode : public INode {
     }
 
     error_t
+    validate_node() const override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+            << "Validating Node Type::CONVOLUTION " << attributes.name << "..." << std::endl;
+        
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_fprop_attributes::input_names::X);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_fprop_attributes::input_names::W);
+
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_fprop_attributes::output_names::Y);
+
+        return {error_code_t::OK, ""};
+
+    }
+    
+    error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << options.name << "..."
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << attributes.name << "..."
                     << std::endl;
 
-        options.fill_from_context(context);
+        attributes.fill_from_context(context);
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
-        auto X = options.inputs.X;
-        auto W = options.inputs.W;
-        auto Y = options.outputs.Y;
+        auto &X = attributes.inputs.find(Conv_fprop_attributes::input_names::X)->second;
+        auto &W = attributes.inputs.find(Conv_fprop_attributes::input_names::W)->second;
+        auto &Y = attributes.outputs.find(Conv_fprop_attributes::output_names::Y)->second;
 
         auto const x_tensor_dim = X->get_dim();
         auto const w_tensor_dim = W->get_dim();
@@ -40,9 +55,9 @@ class ConvolutionNode : public INode {
         // Only infer dims and strides if user did not set them
         if (y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
-            auto const& padding  = options.get_padding();
-            auto const& stride   = options.get_stride();
-            auto const& dilation = options.get_dilation();
+            auto const& padding  = attributes.get_padding();
+            auto const& stride   = attributes.get_stride();
+            auto const& dilation = attributes.get_dilation();
             // N
             y_tensor_dim[0] = x_tensor_dim[0];
             // PQ
@@ -66,68 +81,72 @@ class ConvolutionNode : public INode {
     }
 
     error_t
-    assign_uids_node() override final {
-        options.inputs.X->set_uid(ICudnn::create_new_uid());
-        options.inputs.W->set_uid(ICudnn::create_new_uid());
-        options.outputs.Y->set_uid(ICudnn::create_new_uid());
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        getLogger() << "[cudnn_frontend] INFO: "
+                    << "Building ConvolutionNode tensors " << attributes.name << "..." << std::endl;
+
+        for (auto const& [name, tensor] : attributes.inputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+        for (auto const& [name, tensor] : attributes.outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+            }
+        }
+
         return {error_code_t::OK, ""};
     }
 
     error_t
-    createTensors() override final {
+    create_cudnn_operations(
+        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::vector<cudnn_frontend::Operation_v8>& operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building ConvolutionNode tensors " << options.name << "..." << std::endl;
-
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.X));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.inputs.W));
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(options.outputs.Y));
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    createOperations() override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building ConvolutionNode operations " << options.name << "..." << std::endl;
+                    << "Building ConvolutionNode operations " << attributes.name << "..." << std::endl;
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         try {
 #endif
 
             // convolution descriptor
-            int64_t const spatial_dim_count = options.get_padding().size();
+            int64_t const spatial_dim_count = attributes.get_padding().size();
             auto convolution_descriptor     = cudnn_frontend::ConvDescBuilder()
-                                              .setComputeType(options.get_compute_data_type())
+                                              .setComputeType(attributes.compute_data_type)
                                               .setMathMode(CUDNN_CROSS_CORRELATION)
                                               .setSpatialDimCount(spatial_dim_count)
-                                              .setSpatialStride(spatial_dim_count, options.get_stride().data())
-                                              .setPrePadding(spatial_dim_count, options.get_padding().data())
-                                              .setPostPadding(spatial_dim_count, options.get_padding().data())
-                                              .setDilation(spatial_dim_count, options.get_dilation().data())
+                                              .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
+                                              .setPrePadding(spatial_dim_count, attributes.get_padding().data())
+                                              .setPostPadding(spatial_dim_count, attributes.get_padding().data())
+                                              .setDilation(spatial_dim_count, attributes.get_dilation().data())
                                               .build();
 
             // Create the convolution operation.
             auto convolution_operation =
                 cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR)
-                    .setxDesc(*(tensors.at(options.inputs.X->get_uid())))
-                    .setwDesc(*(tensors.at(options.inputs.W->get_uid())))
-                    .setyDesc(*(tensors.at(options.outputs.Y->get_uid())))
+                    .setxDesc(*(tensors[attributes.inputs[Conv_fprop_attributes::input_names::X]->get_uid()]))
+                    .setwDesc(*(tensors[attributes.inputs[Conv_fprop_attributes::input_names::W]->get_uid()]))
+                    .setyDesc(*(tensors[attributes.outputs[Conv_fprop_attributes::output_names::Y]->get_uid()]))
                     .setcDesc(convolution_descriptor)
                     .setAlpha(1.f)
                     .setBeta(0.f)
                     .build();
 
-            // Push all real tensors as required for operation execution.
-            auto const& tensors_involved_in_operation = {options.inputs.X, options.inputs.W, options.outputs.Y};
-
-            std::vector<uid_t> uids_in_operation;
-            for (auto const& tensor : tensors_involved_in_operation) {
+            for (auto const& [name, tensor] : attributes.inputs) {
                 if (tensor && tensor->get_is_virtual() == false) {
-                    uids_in_operation.push_back(tensor->get_uid());
+                    uids_involved_in_operations.insert(tensor->get_uid());
+                }
+            }
+            for (auto const& [name, tensor] : attributes.outputs) {
+                if (tensor && tensor->get_is_virtual() == false) {
+                    uids_involved_in_operations.insert(tensor->get_uid());
                 }
             }
 
-            operations.push_back({std::move(convolution_operation), std::move(uids_in_operation)});
+            operations.push_back(std::move(convolution_operation));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
@@ -140,7 +159,7 @@ class ConvolutionNode : public INode {
 
     virtual void
     serialize(json& j) const override final {
-        j = options;
+        j = attributes;
     }
 };
 

@@ -114,7 +114,6 @@ class PyGraph {
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& epsilon,
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name);
 
@@ -221,6 +220,24 @@ class PyGraph {
                      bool const has_dbias,
                      cudnn_frontend::DataType_t const& compute_data_type,
                      std::string const& name);
+
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+    instancenorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
+                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
+                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& epsilon,
+                 cudnn_frontend::DataType_t const& compute_data_type,
+                 std::string const& name);
+
+    std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
+    instancenorm_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& dy,
+                          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& x,
+                          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& scale,
+                          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& mean,
+                          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& inv_variance,
+                          cudnn_frontend::DataType_t const& compute_data_type,
+                          std::string const& name);
 
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,

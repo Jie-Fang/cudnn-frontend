@@ -11,58 +11,86 @@
 #include "../cudnn_frontend_ExecutionPlan.h"
 #include "../cudnn_frontend_VariantPack.h"
 
-#include "cudnn_frontend_graph_properties.h"
-#include "cudnn_frontend_graph_helpers.h"
+#include "graph_properties.h"
+#include "graph_helpers.h"
 
 namespace cudnn_frontend {
 
 class ICudnn {
-   public:
+   protected:
     using uid_t = int64_t;
 
-    static uid_t
-    create_new_uid() {
-        static uid_t uid = 0;
-        uid++;
-        return uid;
-    }
-
-   protected:
-    inline static std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>> tensors;
-
-    struct operation_with_uids {
-        cudnn_frontend::Operation_v8 operation;
-        std::vector<uid_t> uids;
-    };
-    std::vector<operation_with_uids> operations;
+    //// Store tensors and operations as they (probably?) need to be kept alive.
+    //
+    // The tensor mapping from fe::Tensor to be::Tensor.
+    //
+    // sub nodes share fe::Tensor. Example, in a conv-bias graph, conv output Y and bias input IN_0 are the same
+    // fe::Tensor. But both sub ndoes need to work together to make sure only one be::Tensor is created. Hence this
+    // uid_to_backend_tensors acts as the global registry for each sub node to use.
+    //
+    // Key cannot be fe::Tensor, or shared_ptr<fe::Tensor>, or underlying object address of fe::Tensor.
+    // Hence using uid, as that uniquely identifies both types of tensors.
+    std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> uid_to_tensors;
+    std::vector<cudnn_frontend::Operation> operations;
 
     std::vector<std::shared_ptr<OperationGraph_v8>> operation_graphs;
     std::vector<std::shared_ptr<ExecutionPlan>> execution_plans;
-
-    // uid_t in a variant pack have to be unique, so keep a set of them.
     std::vector<std::unordered_set<uid_t>> variant_pack_uids;
 
+    // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
-    create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props) {
+    create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
+                        int64_t& uid,
+                        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) {
         // Check whether tensor already created
-        auto const uid = props->get_uid();
-        if (tensors.find(uid) != tensors.end()) {
-            getLogger() << "[cudnn_frontend] INFO: Backend tensor already created for Id: " << uid << ".\n";
-            return {error_code_t::OK, ""};
-        }
+        // TODO: Do not reply on uid being 0?
+        if (props->get_uid() == 0) {
+            // Make sure no other tensor somehow already has claimed uid.
+            RETURN_CUDNN_FRONTEND_ERROR_IF(tensors.find(uid) != tensors.end(),
+                                           error_code_t::ATTRIBUTE_NOT_SET,
+                                           "Trying to assign same uid to possibily two different tensors.");
+            props->set_uid(uid);
+            uid++;
 
-        // Create new backend tensor
-        auto tensor = cudnn_frontend::TensorBuilder()
-                          .setDim(props->get_dim().size(), props->get_dim().data())
-                          .setStrides(props->get_stride().size(), props->get_stride().data())
-                          .setId(uid)
-                          .setAlignment(16)
-                          .setDataType(props->get_data_type())
-                          .setVirtual(props->get_is_virtual())
-                          .setByValue(props->get_is_pass_by_value())
-                          .setReorderType(props->get_reordering_type())
-                          .build();
-        tensors.emplace(uid, std::make_shared<Tensor>(std::move(tensor)));
+            if (auto ragged_offset_props = props->get_ragged_offset()) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors));
+
+                auto tensor = cudnn_frontend::TensorBuilder()
+                                  .setDim(props->get_dim().size(), props->get_dim().data())
+                                  .setStrides(props->get_stride().size(), props->get_stride().data())
+                                  .setId(props->get_uid())
+                                  .setAlignment(16)
+                                  .setDataType(props->get_data_type())
+                                  .setVirtual(props->get_is_virtual())
+                                  .setByValue(props->get_is_pass_by_value())
+                                  .setReorderType(props->get_reordering_type())
+                                  .setRaggedOffset(tensors.at(ragged_offset_props->get_uid()))
+                                  .build();
+                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+            } else {
+                auto tensor = cudnn_frontend::TensorBuilder()
+                                  .setDim(props->get_dim().size(), props->get_dim().data())
+                                  .setStrides(props->get_stride().size(), props->get_stride().data())
+                                  .setId(props->get_uid())
+                                  .setAlignment(16)
+                                  .setDataType(props->get_data_type())
+                                  .setVirtual(props->get_is_virtual())
+                                  .setByValue(props->get_is_pass_by_value())
+                                  .setReorderType(props->get_reordering_type())
+                                  .build();
+                tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+            }
+        } else {
+            // Make sure tensor's uid is present in backend tensor registry.
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                tensors.find(props->get_uid()) == tensors.end(),
+                error_code_t::ATTRIBUTE_NOT_SET,
+                "Backend tensor already not found for non-zero Id: " + std::to_string(props->get_uid()));
+
+            getLogger() << "[cudnn_frontend] INFO: Backend tensor already created for Id: " +
+                               std::to_string(props->get_uid())
+                        << std::endl;
+        }
 
         return {error_code_t::OK, ""};
     }
@@ -70,8 +98,8 @@ class ICudnn {
     error_t
     create_cudnn_operation_graphs(cudnnHandle_t handle) {
         std::vector<Operation const*> cudnn_operations;
-        for (auto const& operation_with_uid : operations) {
-            cudnn_operations.push_back(&(operation_with_uid.operation));
+        for (auto const& operation : operations) {
+            cudnn_operations.push_back(&operation);
         }
         auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder()
                                          .setHandle(handle)
@@ -80,14 +108,6 @@ class ICudnn {
 
         operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
         getLogger() << "[cudnn_frontend] INFO: Successfully built Operation Graphs." << std::endl;
-
-        // Push variant pack tensors required for this operation graph
-        std::unordered_set<uid_t> variant_pack_for_operation_graph;
-        for (auto const& operation_with_uid : operations) {
-            variant_pack_for_operation_graph.insert(std::begin(operation_with_uid.uids),
-                                                    std::end(operation_with_uid.uids));
-        }
-        variant_pack_uids.emplace_back(variant_pack_for_operation_graph);
 
         return {error_code_t::OK, ""};
     }
@@ -117,11 +137,10 @@ class ICudnn {
             std::vector<void*> device_ptrs;
             std::vector<uid_t> uids;
             for (auto const& uid : variant_pack_uid) {
-                if (auto search = tensor_uid_to_pointer_map.find(uid); search == tensor_uid_to_pointer_map.end()) {
-                    std::string message =
-                        "[cudnn_frontend] ERROR: " + std::to_string(uid) + " does not exist in variant pack.";
-                    return {error_code_t::INVALID_VARIANT_PACK, message};
-                }
+                auto search = tensor_uid_to_pointer_map.find(uid);
+                RETURN_CUDNN_FRONTEND_ERROR_IF(search == tensor_uid_to_pointer_map.end(),
+                                               error_code_t::INVALID_VARIANT_PACK,
+                                               "Uid " + std::to_string(uid) + " does not exist in variant pack.");
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
                 uids.push_back(uid);
             }

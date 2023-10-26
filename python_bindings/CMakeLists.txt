@@ -26,7 +26,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 pybind11_add_module(
     cudnn
     
-    main.cpp
+    pycudnn.cpp
     properties.cpp
     pyplans.cpp
     
@@ -43,7 +43,6 @@ target_link_libraries(
 
     PRIVATE dlpack
     PRIVATE CUDA::cudart
-    PRIVATE CUDA::cublas
     PRIVATE CUDA::nvrtc
     PRIVATE CUDNN::cudnn_all
 )

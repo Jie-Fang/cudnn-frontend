@@ -3,8 +3,8 @@
 #include "../../cudnn_frontend_Heuristics.h"
 #include "../../cudnn_frontend_Logging.h"
 
-#include "../cudnn_frontend_graph_helpers.h"
-#include "../cudnn_frontend_node_interface.h"
+#include "../graph_helpers.h"
+#include "../node_interface.h"
 
 #include "matmul.h"
 #include "pointwise.h"
@@ -39,16 +39,14 @@ class ScaledDotProductAttentionNode : public INode {
         }
 
         if (options.dropout_probability.has_value() && options.dropout_probability.value() == 1) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "Dropout probability cannot be 1 as corresponding scale wont be well formed.";
+            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "Dropout probability cannot be 1 as corresponding scale wont be well formed.";
             return {status, message};
         }
 
         if (options.dropout_probability.has_value() && options.inputs.Dropout_mask) {
-            auto status = error_code_t::ATTRIBUTE_NOT_SET;
-            std::string message =
-                "Both, dropout probability and custom dropout mask, cannot be set together.";
+            auto status         = error_code_t::ATTRIBUTE_NOT_SET;
+            std::string message = "Both, dropout probability and custom dropout mask, cannot be set together.";
             return {status, message};
         }
 
@@ -330,6 +328,7 @@ class ScaledDotProductAttentionNode : public INode {
     virtual error_t
     pass_by_value_tensors_(
         cudnnHandle_t,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void*) override {
         half dropout_scale_value = options.dropout_scale;
