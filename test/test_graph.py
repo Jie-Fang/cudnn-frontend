@@ -410,10 +410,22 @@ class test_graph:
         self.io_data_type = io_data_type
         self.intermediate_data_type = intermediate_data_type
         self.compute_data_type = compute_data_type
-        self.backend_engine = -1
+        self.set_backend_engine(-1)
 
     def set_backend_engine(self, engine):
-        self.backend_engine = engine
+        self.heuristics = []
+        if engine == -1:
+            self.set_heuristics([cudnn.heur_mode.A])
+        elif engine == -2:
+            self.set_heuristics([cudnn.heur_mode.B])
+        elif engine == -3:
+            self.set_heuristics([cudnn.heur_mode.FALLBACK])
+        else:
+            print("MB Unkown heuristic, trying A and FALLBACK")
+            self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+
+    def set_heuristics(self, heuristics):
+        self.heuristics = heuristics
 
     def getOutputs(self):
         return self.output_tensors
@@ -569,19 +581,7 @@ class test_graph:
 
         utils.reportCurrentTime("recursive_tree_build")
 
-        # Building graph
-        heurs = []
-        if self.backend_engine == -1:
-            heurs.append(cudnn.heur_mode.A)
-        elif self.backend_engine == -2:
-            heurs.append(cudnn.heur_mode.B)
-        elif self.backend_engine == -3:
-            heurs.append(cudnn.heur_mode.FALLBACK)
-        else:
-            print("MB Unkown heuristic, trying A and FALLBACK")
-            heurs.append(cudnn.heur_mode.A)
-            heurs.append(cudnn.heur_mode.FALLBACK)
-        graph.build(heurs)
+        graph.build(self.heuristics)
         utils.reportCurrentTime("graph.build")
         
         # Clear the "is_visited" status of the nodes

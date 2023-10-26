@@ -53,6 +53,7 @@ def test_batchnorm(jparams, testgraph):
         pytest.skip("BN not supported below cudnn 8.7")
 
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)
+    testgraph.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     
     N, C, H, W = jparams["in_dim"]
     X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF, layout = "NHWC") 
