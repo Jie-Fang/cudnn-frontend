@@ -178,7 +178,7 @@ class Graph : public INode {
                 bool const do_multithreaded_builds = false);
 
     Graph &
-    filter_out_workspace_greater_than(int64_t const workspace) {
+    deselect_workspace_greater_than(int64_t const workspace) {
         for (auto &plan_list : plans) {
             plan_list.set_max_workspace_allowed(workspace);
         }
@@ -186,7 +186,7 @@ class Graph : public INode {
     }
 
     Graph &
-    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
+    deselect_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
         // TODO: The error returned is not propagate to user.
         // Should the return value be changed to error_code_t too?
         for (auto &plan_list : plans) {
@@ -199,7 +199,7 @@ class Graph : public INode {
     }
 
     Graph &
-    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
+    deselect_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
         // TODO: The error returned is not propagate to user.
         // Should the return value be changed to error_code_t too?
         for (auto &plan_list : plans) {
