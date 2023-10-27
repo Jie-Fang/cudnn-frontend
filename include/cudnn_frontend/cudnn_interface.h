@@ -128,7 +128,7 @@ class ICudnn {
     error_t
     execute_cudnn_plans(cudnnHandle_t handle,
                         std::unordered_map<uid_t, void*> const& tensor_uid_to_pointer_map,
-                        void* workspace_ptr) {
+                        void* workspace_ptr) const {
         getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " Plans." << std::endl;
 
         for (size_t i = 0; i < plans.size(); ++i) {
