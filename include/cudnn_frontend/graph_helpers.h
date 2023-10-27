@@ -157,6 +157,14 @@ allowAllConfig(cudnnBackendDescriptor_t engine_config) {
 
 namespace detail {
 
+inline bool
+is_activation_backward_mode(PointwiseMode_t const mode) {
+    return ((mode == PointwiseMode_t::RELU_BWD) || (mode == PointwiseMode_t::TANH_BWD) ||
+            (mode == PointwiseMode_t::SIGMOID_BWD) || (mode == PointwiseMode_t::ELU_BWD) ||
+            (mode == PointwiseMode_t::GELU_BWD) || (mode == PointwiseMode_t::GELU_APPROX_TANH_BWD) ||
+            (mode == PointwiseMode_t::SOFTPLUS_BWD) || (mode == PointwiseMode_t::SWISH_BWD));
+}
+
 // Creates dense, non-overlapping strides from given dim and stride_order.
 // For example, if a is a 4D tensor with dimensions labeled NCHW, then strided(a, (3, 0, 2, 1)) produces
 // strides where the C dimension has a corresponding stride of one.
