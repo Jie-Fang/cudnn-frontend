@@ -136,15 +136,12 @@ init_properties(py::module_& m) {
         .value("WINOGRAD", cudnn_frontend::NumericalNote_t::WINOGRAD)
         .value("WINOGRAD_TILE_4x4", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_4x4)
         .value("WINOGRAD_TILE_6x6", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_6x6)
-        .value("WINOGRAD_TILE_13x13", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_13x13)
-        .value("TYPE_COUNT", cudnn_frontend::NumericalNote_t::TYPE_COUNT);
+        .value("WINOGRAD_TILE_13x13", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_13x13);
 
-    
     py::enum_<cudnn_frontend::BehaviorNote_t>(m, "behavior_note")
         .value("RUNTIME_COMPILATION", cudnn_frontend::BehaviorNote_t::RUNTIME_COMPILATION)
         .value("REQUIRES_FILTER_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER)
-        .value("REQUIRES_BIAS_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER)
-        .value("TYPE_COUNT", cudnn_frontend::BehaviorNote_t::TYPE_COUNT);
+        .value("REQUIRES_BIAS_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER);
 }
 
 }  // namespace python_bindings
