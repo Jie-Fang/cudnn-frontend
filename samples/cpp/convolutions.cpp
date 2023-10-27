@@ -34,11 +34,11 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
     using graph_and_tensors = std::tuple<
                                     std::shared_ptr<fe::graph::Graph>,
-                                    std::shared_ptr<const fe::graph::Tensor_attributes>, // X
-                                    std::shared_ptr<const fe::graph::Tensor_attributes>, // W
-                                    std::shared_ptr<const fe::graph::Tensor_attributes>, // S
-                                    std::shared_ptr<const fe::graph::Tensor_attributes>, // B
-                                    std::shared_ptr<const fe::graph::Tensor_attributes>  // Y
+                                    std::shared_ptr<fe::graph::Tensor_attributes>, // X
+                                    std::shared_ptr<fe::graph::Tensor_attributes>, // W
+                                    std::shared_ptr<fe::graph::Tensor_attributes>, // S
+                                    std::shared_ptr<fe::graph::Tensor_attributes>, // B
+                                    std::shared_ptr<fe::graph::Tensor_attributes>  // Y
                             >;
 
     std::unordered_map<std::size_t, graph_and_tensors> user_maintained_cache;
@@ -97,17 +97,9 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
         REQUIRE(graph->build_plans(handle).is_good());
 
+        user_maintained_cache.insert({key, std::make_tuple(graph, X, W, S, B, Y)});
 
-        // Freezing the tensor_properties
-        std::shared_ptr<const fe::graph::Tensor_attributes> X_ = X;
-        std::shared_ptr<const fe::graph::Tensor_attributes> W_ = Y;
-        std::shared_ptr<const fe::graph::Tensor_attributes> S_ = S;
-        std::shared_ptr<const fe::graph::Tensor_attributes> B_ = B;
-        std::shared_ptr<const fe::graph::Tensor_attributes> Y_ = Y; 
-
-        user_maintained_cache.insert({key, std::make_tuple(graph, X_, W_, S_, B_, Y_)});
-
-        return std::make_tuple(graph, X_, W_, S_, B_, Y_);
+        return std::make_tuple(graph, X, W, S, B, Y);
     };
 
     cudnnHandle_t handle;
@@ -124,14 +116,14 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
     Surface<half> y_tensor(n * k * h * w, false); // Should be p, q. 
 
     Surface<int8_t> workspace(graph->get_workspace_size(), false);
-    std::unordered_map<std::shared_ptr<const fe::graph::Tensor_attributes>, void*> variant_pack = {
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}, {W, w_tensor.devPtr}, {S, s_tensor.devPtr}, {B, b_tensor.devPtr}, {Y, y_tensor.devPtr}};
 
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
     auto [graph_, X_, W_, B_, S_, Y_] = lookup_cache_or_build_graph(handle);
 
-    std::unordered_map<std::shared_ptr<const fe::graph::Tensor_attributes>, void*> variant_pack_ = {
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack_ = {
         {X_, x_tensor.devPtr}, {W_, w_tensor.devPtr}, {S_, s_tensor.devPtr}, {B_, b_tensor.devPtr}, {Y_, y_tensor.devPtr}};
 
     REQUIRE(graph_->execute(handle, variant_pack_, workspace.devPtr).is_good());
