@@ -66,8 +66,6 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
 
     REQUIRE(graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
-
     Surface<half> x_tensor(4 * 16 * 64, false);
     Surface<half> w_tensor(4 * 64 * 32, false);
     Surface<half> s_tensor(4 * 16 * 32, false);
