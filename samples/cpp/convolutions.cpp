@@ -69,6 +69,8 @@ TEST_CASE("CSBR Graph", "[conv][graph]") {
 
     REQUIRE(graph.check_support(handle).is_good());
 
+    REQUIRE(graph.build_plans(handle).is_good());
+
     Surface<half> x_tensor(4 * 32 * 16 * 16, false);
     Surface<half> w_tensor(64 * 32 * 3 * 3, false);
     Surface<half> s_tensor(64, false);
@@ -139,6 +141,8 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
     REQUIRE(graph.check_support(handle).is_good());
+
+    REQUIRE(graph.build_plans(handle).is_good());
 
     Surface<half> x_tensor(4 * 64 * 16 * 16, false);
     Surface<half> s_tensor(64, false);
@@ -235,9 +239,13 @@ TEST_CASE("DBARCS", "[conv][genstats][graph]") {
 
     auto status = graph.check_support(handle);
 
+    REQUIRE(graph.build_plans(handle).is_good());
+
     if (status.is_bad()) {
         REQUIRE(graph.create_execution_plans({fe::HeurMode_t::FALLBACK}).is_good());
         REQUIRE(graph.check_support(handle).is_good());
+
+        REQUIRE(graph.build_plans(handle).is_good());
     }
 
     Surface<half> x_tensor(4 * 64 * 16 * 16, false);

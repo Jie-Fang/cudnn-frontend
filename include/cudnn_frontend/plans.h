@@ -251,16 +251,8 @@ class Execution_plan_list {
             auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
 
             if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.size(),
-                                               error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                                               "[cudnn_frontend] Check support or build called already.");
-
-                // No plans should be pushed here.
-                // But check_support in v8 incurs compilation cost.
-                // If not pushed, build_plans will incur compilation cost again.
-                // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
-                // if(cudnnGetVersion() < 9100)
-                { execution_plans.push_back(std::move(plan)); }
+                // Just return and do not store execution_plan
+                // User has to call build_plans for storing execution_plan.
                 return {error_code_t::OK, ""};
             }
         }
@@ -279,17 +271,6 @@ class Execution_plan_list {
 
         switch (policy) {
             case build_plan_policy::HEURISTICS_CHOICE:
-                // short circuit in case a plan was already created.
-                // This happens as check_support for v8 builds a plan.
-                // Should not happen in v9.
-                // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
-                // if(cudnnGetVersion() < 9100)
-                {
-                    if (execution_plans.size() > 0) {
-                        return {error_code_t::OK, ""};
-                    }
-                }
-
                 for (auto const& config : configs) {
                     std::shared_ptr<ExecutionPlan> plan;
                     auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
