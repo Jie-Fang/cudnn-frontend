@@ -478,6 +478,9 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The result of reduction operation.
             )pbdoc")
+        .def("deselect_numeric_notes", &PyGraph::deselect_numeric_notes)
+        .def("deselect_behavior_notes", &PyGraph::deselect_behavior_notes)
+        .def("deselect_workspace_greater_than", &PyGraph::deselect_workspace_greater_than)
         .def("validate", &PyGraph::validate)
         .def("key", &PyGraph::key)
         .def("build_operation_graph", &PyGraph::build_operation_graph)
