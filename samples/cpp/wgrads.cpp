@@ -76,6 +76,8 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
 
     REQUIRE(graph.check_support(handle).is_good());
 
+    REQUIRE(graph.build_plans(handle).is_good());
+
     Surface<half> x_tensor(4 * 64 * 16 * 16, false);
     Surface<half> s_tensor(64, false);
     Surface<half> b_tensor(64, false);
