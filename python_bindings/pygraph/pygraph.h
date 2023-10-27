@@ -74,11 +74,13 @@ class PyGraph {
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    tensor_like(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& pyobj, std::string const&);
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     tensor_like(py::object const& pyobj);
 
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
-    batchnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+    batchnorm(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_mean,
@@ -299,6 +301,24 @@ class PyGraph {
     void
     execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object> var_pack,
             py::object workspace);
+
+    void
+    deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
+        graph.deselect_numeric_notes(notes);
+        return;
+    }
+
+    void
+    deselect_behavior_notes(std::vector<BehaviorNote_t> const& notes) {
+        graph.deselect_behavior_notes(notes);
+        return;
+    }
+
+    void
+    deselect_workspace_greater_than(int64_t const workspace) {
+        graph.deselect_workspace_greater_than(workspace);
+        return;
+    }
 };
 
 }  // namespace cudnn_frontend::python_bindings

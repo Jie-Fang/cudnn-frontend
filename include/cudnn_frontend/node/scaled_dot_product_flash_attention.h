@@ -436,7 +436,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
         cudnnHandle_t handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* node_workspace) override {
+        void* node_workspace) const override final {
         if (attributes.dropout_probability.has_value() && attributes.dropout_probability.value() != 0.0) {
 #if CUDNN_VERSION < 8903
             half dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
@@ -457,8 +457,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
         }
 
         if (attributes.alibi_mask) {
-            int64_t const h =
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Q]->get_dim()[1];
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, Scaled_dot_product_flash_attention_attributes::input_names::Q);
+            int64_t const h            = Q->second->get_dim()[1];
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
 
             cudaStream_t stream;
@@ -469,9 +469,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
         }
 
         if (attributes.attn_scale_value.has_value()) {
-            tensor_to_pass_by_value.emplace(
-                attributes.inputs[Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale],
-                attributes.attn_scale_value.value());
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(
+                Attn_scale, Scaled_dot_product_flash_attention_attributes::input_names::Attn_scale);
+            tensor_to_pass_by_value.emplace(Attn_scale->second, attributes.attn_scale_value.value());
         }
 
         return {error_code_t::OK, ""};
@@ -1209,20 +1209,21 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         cudnnHandle_t handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* node_workspace) override {
+        void* node_workspace) const override final {
         if (one_tensor) {
             tensor_to_pass_by_value.emplace(one_tensor, 1.0f);
         }
 
         if (attributes.attn_scale_value.has_value()) {
-            tensor_to_pass_by_value.emplace(
-                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale],
-                attributes.attn_scale_value.value());
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(
+                Attn_scale, Scaled_dot_product_flash_attention_backward_attributes::input_names::Attn_scale);
+            tensor_to_pass_by_value.emplace(Attn_scale->second, attributes.attn_scale_value.value());
         }
 
         if (attributes.alibi_mask) {
-            int64_t const h =
-                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Q]->get_dim()[1];
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(
+                Q, Scaled_dot_product_flash_attention_backward_attributes::input_names::Q);
+            int64_t const h       = Q->second->get_dim()[1];
             auto alibi_slopes_vec = detail::get_abili_slope(h);
 
             cudaStream_t stream;
@@ -1246,13 +1247,15 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         if (attributes.dropout_probability.has_value()) {
             float dropout_scale_value     = 1.0f / (1.0f - attributes.dropout_probability.value());
             float dropout_scale_inv_value = (1.0f - attributes.dropout_probability.value());
-            tensor_to_pass_by_value.emplace(
-                attributes.inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale],
-                dropout_scale_value);
-            tensor_to_pass_by_value.emplace(
-                attributes
-                    .inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv],
-                dropout_scale_inv_value);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(
+                Dropout_scale, Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale);
+            tensor_to_pass_by_value.emplace(Dropout_scale->second, dropout_scale_value);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(
+                Dropout_scale_inv,
+                Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv);
+            tensor_to_pass_by_value.emplace(Dropout_scale_inv->second, dropout_scale_inv_value);
         }
 
         if (dQ_accum) {

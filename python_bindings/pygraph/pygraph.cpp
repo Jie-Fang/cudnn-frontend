@@ -120,6 +120,11 @@ PyGraph::tensor(std::vector<int64_t> const& dim,
 }
 
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+PyGraph::tensor_like(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& tensor, std::string const& name) {
+    return graph.tensor_like(tensor, name);
+}
+
+std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::tensor_like(py::object const& pyobj) {
     throw_if(!py::hasattr(pyobj, "__dlpack__"),
              cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
@@ -342,7 +347,12 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("handle", nullptr))
-        .def("tensor_like", &PyGraph::tensor_like)
+        .def("tensor_like",
+             py::overload_cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const&, std::string const&>(
+                 &PyGraph::tensor_like),
+             py::arg("input"),
+             py::arg_v("name", ""))
+        .def("tensor_like", py::overload_cast<py::object const&>(&PyGraph::tensor_like))
         .def("tensor",
              &PyGraph::tensor,
              py::arg{"dim"},
@@ -478,6 +488,9 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The result of reduction operation.
             )pbdoc")
+        .def("deselect_numeric_notes", &PyGraph::deselect_numeric_notes)
+        .def("deselect_behavior_notes", &PyGraph::deselect_behavior_notes)
+        .def("deselect_workspace_greater_than", &PyGraph::deselect_workspace_greater_than)
         .def("validate", &PyGraph::validate)
         .def("key", &PyGraph::key)
         .def("build_operation_graph", &PyGraph::build_operation_graph)

@@ -126,6 +126,22 @@ init_properties(py::module_& m) {
     py::enum_<cudnn_frontend::build_plan_policy>(m, "build_plan_policy")
         .value("HEURISTICS_CHOICE", cudnn_frontend::build_plan_policy::HEURISTICS_CHOICE)
         .value("ALL", cudnn_frontend::build_plan_policy::ALL);
+
+    py::enum_<cudnn_frontend::NumericalNote_t>(m, "numerical_note")
+        .value("TENSOR_CORE", cudnn_frontend::NumericalNote_t::TENSOR_CORE)
+        .value("DOWN_CONVERT_INPUTS", cudnn_frontend::NumericalNote_t::DOWN_CONVERT_INPUTS)
+        .value("REDUCED_PRECISION_REDUCTION", cudnn_frontend::NumericalNote_t::REDUCED_PRECISION_REDUCTION)
+        .value("FFT", cudnn_frontend::NumericalNote_t::FFT)
+        .value("NONDETERMINISTIC", cudnn_frontend::NumericalNote_t::NONDETERMINISTIC)
+        .value("WINOGRAD", cudnn_frontend::NumericalNote_t::WINOGRAD)
+        .value("WINOGRAD_TILE_4x4", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_4x4)
+        .value("WINOGRAD_TILE_6x6", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_6x6)
+        .value("WINOGRAD_TILE_13x13", cudnn_frontend::NumericalNote_t::WINOGRAD_TILE_13x13);
+
+    py::enum_<cudnn_frontend::BehaviorNote_t>(m, "behavior_note")
+        .value("RUNTIME_COMPILATION", cudnn_frontend::BehaviorNote_t::RUNTIME_COMPILATION)
+        .value("REQUIRES_FILTER_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER)
+        .value("REQUIRES_BIAS_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER);
 }
 
 }  // namespace python_bindings

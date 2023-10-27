@@ -199,7 +199,7 @@ class DLNNode : public INode {
         cudnnHandle_t,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void*) override {
+        void*) const override final {
         if (epsilon) {
             // can pass in any dummy value
             tensor_to_pass_by_value.emplace(epsilon, 0.0f);
