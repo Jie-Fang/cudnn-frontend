@@ -62,6 +62,9 @@ class Graph : public INode {
     std::shared_ptr<Tensor_attributes>
     tensor(Tensor_attributes const &tensor);
 
+    std::shared_ptr<Tensor_attributes>
+    tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string const &name = std::string{});
+
     std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
@@ -271,6 +274,26 @@ Graph::set_compute_data_type(DataType_t const type) {
 inline std::shared_ptr<Tensor_attributes>
 Graph::tensor(Tensor_attributes const &tensor) {
     auto tensor_ptr = std::make_shared<Tensor_attributes>(tensor);
+    tensors.emplace(tensor_ptr);
+    return tensor_ptr;
+}
+
+// tensor_like is meant to create "useable" copies of a tensor.
+// By usable, it means not copying over the uids, as uids are FE-level(internal) detail.
+// It also means not copying over names, which are user-level(external) detail. But user is given option to provide a
+// new name.
+inline std::shared_ptr<Tensor_attributes>
+Graph::tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string const &name) {
+    auto tensor_ptr = std::make_shared<Tensor_attributes>(*tensor);
+
+    // reset the uid of the cloned tensor
+    // uids are not meant to be copied by tensor_like
+    // When lowering to cudnn backend, both tensors involved here will get unique uids.
+    tensor_ptr->set_uid(0);
+
+    // reset the name too. Defaults to empty string.
+    tensor_ptr->set_name(name);
+
     tensors.emplace(tensor_ptr);
     return tensor_ptr;
 }

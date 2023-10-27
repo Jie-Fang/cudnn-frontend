@@ -74,6 +74,9 @@ class PyGraph {
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    tensor_like(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& pyobj, std::string const&);
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     tensor_like(py::object const& pyobj);
 
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>

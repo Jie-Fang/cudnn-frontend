@@ -47,8 +47,8 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
     auto scale_output = graph.pointwise(Z, S, scale_options);
 
     auto bias_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
-    auto B =
-        graph.tensor(fe::graph::Tensor_attributes().set_name("bias").set_dim({4, 16, 32}).set_stride({16 * 32, 32, 1}));
+    auto B            = graph.tensor_like(S);
+    B->set_name("bias");
     auto bias_output = graph.pointwise(scale_output, B, bias_options);
 
     auto relu_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::RELU_FWD);
