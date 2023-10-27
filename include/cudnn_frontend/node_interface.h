@@ -92,7 +92,7 @@ class INode : public ICudnn {
     pass_by_value_tensors_(cudnnHandle_t,
                            std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
                            std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&,
-                           void*) {
+                           void*) const {
         return {error_code_t::OK, ""};
     }
 
@@ -101,7 +101,7 @@ class INode : public ICudnn {
         cudnnHandle_t const& handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* fe_workspace) {
+        void* fe_workspace) const {
         void* node_workspace = fe_workspace;
         CHECK_CUDNN_FRONTEND_ERROR(
             pass_by_value_tensors_(handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
@@ -319,7 +319,7 @@ class INode : public ICudnn {
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
-            void* workspace) {
+            void* workspace) const {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
             tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);

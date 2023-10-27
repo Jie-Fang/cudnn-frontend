@@ -116,10 +116,10 @@ def test_in(param_extract):
     bwd_graph = cudnn.pygraph(intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
     DY = bwd_graph.tensor(name = "DY", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    X_bwd = bwd_graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
-    scale_bwd = bwd_graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = convert_to_cudnn_type(scale_gpu.dtype))
-    mean_bwd = bwd_graph.tensor(name = "mean", dim = mean_actual.size(), stride = mean_actual.stride(), data_type = convert_to_cudnn_type(mean_actual.dtype))
-    inv_var_bwd = bwd_graph.tensor(name = "inv_var", dim = inv_var_actual.size(), stride = inv_var_actual.stride(), data_type = convert_to_cudnn_type(inv_var_actual.dtype))
+    X_bwd = bwd_graph.tensor_like(X, name = 'X')
+    scale_bwd = bwd_graph.tensor_like(scale, name = 'scale')
+    mean_bwd = bwd_graph.tensor_like(mean, name = 'mean')
+    inv_var_bwd = bwd_graph.tensor_like(inv_var, name = 'inv_var')
 
     DX, Dscale, Dbias = bwd_graph.layernorm_backward(name = "DLN", 
                             grad = DY,

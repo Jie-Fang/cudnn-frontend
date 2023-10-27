@@ -330,7 +330,7 @@ class ScaledDotProductAttentionNode : public INode {
         cudnnHandle_t,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void*) override {
+        void*) const override final {
         half dropout_scale_value = options.dropout_scale;
         tensor_to_pass_by_value.emplace(options.inputs.Dropout_scale, dropout_scale_value);
 

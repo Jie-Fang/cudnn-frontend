@@ -115,7 +115,7 @@ class PointwiseNode : public INode {
                 cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR);
             pointwise_operation_builder.setpwDesc(pointwise_descriptor);
 
-            if (attributes.mode == PointwiseMode_t::RELU_BWD) {
+            if (detail::is_activation_backward_mode(attributes.mode)) {
                 CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(IN_0, Pointwise_attributes::input_names::IN_0);
                 pointwise_operation_builder.setdyDesc(*(tensors.at(IN_0->second->get_uid())));
 

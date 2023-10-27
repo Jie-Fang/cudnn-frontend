@@ -258,7 +258,7 @@ class SDPA_FP8_Node : public INode {
         cudnnHandle_t,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void*) override {
+        void*) const override final {
         if (attributes.dropout_probability.has_value()) {
             float dropout_scale_value = (1.f / (1.0f - attributes.dropout_probability.value()));
 
@@ -268,7 +268,8 @@ class SDPA_FP8_Node : public INode {
         // sdpa_fp8 creates a non virtual KT.
         // User does not know about it and should not provide device pointer for it.
         // But the backend will ask for it.
-        void* k_ptr = tensor_to_pointer_map.at(attributes.inputs[SDPA_FP8_attributes::input_names::K]);
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(K, SDPA_FP8_attributes::input_names::K);
+        void* k_ptr = tensor_to_pointer_map.at(K->second);
         tensor_to_pass_by_value.emplace(KT, k_ptr);
 
         return {error_code_t::OK, ""};
