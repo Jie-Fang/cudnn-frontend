@@ -517,15 +517,13 @@ enum class BehaviorNote_t {
     RUNTIME_COMPILATION,
     REQUIRES_FILTER_INT8x32_REORDER,
     REQUIRES_BIAS_INT8x32_REORDER,
-    TYPE_COUNT,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(BehaviorNote_t,
                              {
-                                {BehaviorNote_t::RUNTIME_COMPILATION,"RUNTIME_COMPILATION"},
-                                {BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER,"REQUIRES_FILTER_INT8x32_REORDER"},
-                                {BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER,"REQUIRES_BIAS_INT8x32_REORDER"},
-                                {BehaviorNote_t::TYPE_COUNT,"TYPE_COUNT"},
+                                 {BehaviorNote_t::RUNTIME_COMPILATION, "RUNTIME_COMPILATION"},
+                                 {BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER, "REQUIRES_FILTER_INT8x32_REORDER"},
+                                 {BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER, "REQUIRES_BIAS_INT8x32_REORDER"},
                              })
 
 enum class NumericalNote_t {
@@ -538,21 +536,19 @@ enum class NumericalNote_t {
     WINOGRAD_TILE_4x4,
     WINOGRAD_TILE_6x6,
     WINOGRAD_TILE_13x13,
-    TYPE_COUNT,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(NumericalNote_t,
                              {
-                                {NumericalNote_t::TENSOR_CORE,"TENSOR_CORE"},
-                                {NumericalNote_t::DOWN_CONVERT_INPUTS,"DOWN_CONVERT_INPUTS"},
-                                {NumericalNote_t::REDUCED_PRECISION_REDUCTION,"REDUCED_PRECISION_REDUCTION"},
-                                {NumericalNote_t::FFT,"FFT"},
-                                {NumericalNote_t::NONDETERMINISTIC,"NONDETERMINISTIC"},
-                                {NumericalNote_t::WINOGRAD,"WINOGRAD"},
-                                {NumericalNote_t::WINOGRAD_TILE_4x4,"WINOGRAD_TILE_4x4"},
-                                {NumericalNote_t::WINOGRAD_TILE_6x6,"WINOGRAD_TILE_6x6"},
-                                {NumericalNote_t::WINOGRAD_TILE_13x13,"WINOGRAD_TILE_13x13"},
-                                {NumericalNote_t::TYPE_COUNT,"TYPE_COUNT"},
+                                 {NumericalNote_t::TENSOR_CORE, "TENSOR_CORE"},
+                                 {NumericalNote_t::DOWN_CONVERT_INPUTS, "DOWN_CONVERT_INPUTS"},
+                                 {NumericalNote_t::REDUCED_PRECISION_REDUCTION, "REDUCED_PRECISION_REDUCTION"},
+                                 {NumericalNote_t::FFT, "FFT"},
+                                 {NumericalNote_t::NONDETERMINISTIC, "NONDETERMINISTIC"},
+                                 {NumericalNote_t::WINOGRAD, "WINOGRAD"},
+                                 {NumericalNote_t::WINOGRAD_TILE_4x4, "WINOGRAD_TILE_4x4"},
+                                 {NumericalNote_t::WINOGRAD_TILE_6x6, "WINOGRAD_TILE_6x6"},
+                                 {NumericalNote_t::WINOGRAD_TILE_13x13, "WINOGRAD_TILE_13x13"},
                              })
 
 enum class DataType_t {
@@ -1278,12 +1274,8 @@ convert_to_cudnn_type(cudnn_frontend::NumericalNote_t const mode, cudnnBackendNu
         case NumericalNote_t::WINOGRAD_TILE_13x13:
             cudnn_mode = CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-        case NumericalNote_t::TYPE_COUNT:
-            cudnn_mode = CUDNN_NUMERICAL_NOTE_TYPE_COUNT;
-            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
     }
     return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-
 }
 
 static inline cudnnStatus_t
@@ -1297,9 +1289,6 @@ convert_to_cudnn_type(cudnn_frontend::BehaviorNote_t const mode, cudnnBackendBeh
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
         case BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER:
             cudnn_mode = CUDNN_BEHAVIOR_NOTE_REQUIRES_BIAS_INT8x32_REORDER;
-            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-        case BehaviorNote_t::TYPE_COUNT:
-            cudnn_mode = CUDNN_BEHAVIOR_NOTE_TYPE_COUNT;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
     }
     return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;

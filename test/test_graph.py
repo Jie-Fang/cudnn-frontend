@@ -33,7 +33,7 @@ class PytorchReference:
     
     @staticmethod
     def batchnorm(kwargs, test_tensor_out_list):
-        is_training = kwargs["norm_forward_phase"] == cudnn.norm_forward_phase.TRAINING
+        is_training = True
         momentum = kwargs["momentum"].item()
         epsilon=kwargs["epsilon"].item()
         # TODO(https://nvbugs/4272638): A bug with the cudnn backend disabled prevents correct behavior of batchnorm

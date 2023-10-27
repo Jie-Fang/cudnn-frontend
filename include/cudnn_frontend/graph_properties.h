@@ -687,16 +687,8 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     enum class output_names { Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
-    NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
-
    public:
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs, forward_phase)
-
-    Batchnorm_attributes&
-    set_forward_phase(NormFwdPhase_t const value) {
-        forward_phase = value;
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs)
 
     Batchnorm_attributes&
     set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean,

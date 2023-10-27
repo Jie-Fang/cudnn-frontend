@@ -180,7 +180,6 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
                                      .set_data_type(fe::DataType_t::FLOAT));
 
     auto batchnorm_options = fe::graph::Batchnorm_attributes()
-                                 .set_forward_phase(fe::NormFwdPhase_t::TRAINING)
                                  .set_epsilon(epsilon)
                                  .set_previous_running_stats(prev_running_mean, prev_running_var, momentum)
                                  .set_peer_stats({peer_stats_0, peer_stats_1});
