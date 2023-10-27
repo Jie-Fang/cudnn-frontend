@@ -16,8 +16,7 @@ namespace cudnn_frontend {
 namespace python_bindings {
 
 std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
-PyGraph::batchnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
-                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+PyGraph::batchnorm(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
                    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
                    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
                    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_mean,
@@ -28,7 +27,6 @@ PyGraph::batchnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
                    cudnn_frontend::DataType_t const& compute_data_type,
                    std::string const& name) {
     auto attributes = cudnn_frontend::graph::Batchnorm_attributes()
-                          .set_forward_phase(forward_phase)
                           .set_compute_data_type(compute_data_type)
                           .set_epsilon(epsilon)
                           .set_previous_running_stats(in_running_mean, in_running_var, momentum)
@@ -182,7 +180,6 @@ void
 init_pygraph_norm_submodule(py::class_<PyGraph>& m) {
     m.def("batchnorm",
           &PyGraph::batchnorm,
-          py::arg("norm_forward_phase"),
           py::arg("input"),
           py::arg("scale"),
           py::arg("bias"),

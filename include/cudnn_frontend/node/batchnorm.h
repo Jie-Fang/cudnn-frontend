@@ -88,11 +88,6 @@ class BatchNormNode : public INode {
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::INV_VARIANCE);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
-        // Norm forward phase should be set
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.forward_phase != NormFwdPhase_t::TRAINING,
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Forward phase not set of batchnorm node or if inference use batchnorm_inference node");
 
         return {error_code_t::OK, ""};
     }
