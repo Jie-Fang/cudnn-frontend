@@ -145,7 +145,7 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
 
     REQUIRE(mha_graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
+    REQUIRE(mha_graph.build_plans(handle).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -290,7 +290,7 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
 
     REQUIRE(mha_graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
+    REQUIRE(mha_graph.build_plans(handle).is_good());
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
@@ -433,7 +433,7 @@ TEST_CASE("Flash backward", "[graph][mha][flash][backward]") {
 
     REQUIRE(mha_graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
+    REQUIRE(mha_graph.build_plans(handle).is_good());
 
     // build variant pack
     // inputs
@@ -635,7 +635,7 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][flash][forward]") {
 
     REQUIRE(mha_graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
+    REQUIRE(mha_graph.build_plans(handle).is_good());
 
     //// Build variant pack
     Surface<int8_t> qkvTensor(b * s_q * 3 * h * d, false);
