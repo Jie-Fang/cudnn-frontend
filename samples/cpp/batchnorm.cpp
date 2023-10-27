@@ -89,8 +89,6 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 
     REQUIRE(graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
-
     Surface<float> Sum_tensor(32, false);
     Surface<float> Sq_sum_tensor(32, false);
     Surface<float> Mean_tensor(32, false);
@@ -221,8 +219,6 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
 
     REQUIRE(graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
-
     Surface<half> X_tensor(4 * 32 * 16 * 16, false);
     Surface<float> Mean_tensor(32, false);
     Surface<float> Var_tensor(32, false);
@@ -341,8 +337,6 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
 
     REQUIRE(graph.check_support(handle).is_good());
 
-    REQUIRE(graph.build_plans(handle).is_good());
-
     REQUIRE(graph.build_plans(handle, fe::build_plan_policy::ALL).is_good());
 
     Surface<half> X_tensor(4 * 32 * 16 * 16, false);
@@ -449,8 +443,6 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::FALLBACK}).is_good());
 
     REQUIRE(graph.check_support(handle).is_good());
-
-    REQUIRE(graph.build_plans(handle).is_good());
 
     Surface<half> BN_X_tensor(4 * 32 * 16 * 16, false);
     Surface<half> DY_tensor(4 * 32 * 16 * 16, false);
