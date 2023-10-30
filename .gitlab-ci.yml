@@ -371,7 +371,7 @@ test:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.4.27_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .test:template
@@ -396,7 +396,7 @@ pycudnntest:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.4.27_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .pycudnntest:template
@@ -440,7 +440,7 @@ pytest:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.5.29_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .pytest:template
