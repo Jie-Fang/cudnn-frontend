@@ -412,16 +412,18 @@ class test_graph:
         self.compute_data_type = compute_data_type
         self.set_backend_engine(-1)
 
-    def set_backend_engine(self, engine):
+    def set_backend_engine(self, backendEngine):
         self.heuristics = []
-        if engine == -1:
+        # Some backendEngines are ints, some are strings. Make them all string.
+        engine = str(backendEngine)
+        if engine == "-1":
             self.set_heuristics([cudnn.heur_mode.A])
-        elif engine == -2:
+        elif engine == "-2":
             self.set_heuristics([cudnn.heur_mode.B])
-        elif engine == -3:
+        elif engine == "-3":
             self.set_heuristics([cudnn.heur_mode.FALLBACK])
         else:
-            print("MB Unkown heuristic, trying A and FALLBACK")
+            print("MB Unkown heuristic for backendEngine {} (type {}), trying A and FALLBACK".format(engine, type(engine)))
             self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
 
     def set_heuristics(self, heuristics):
