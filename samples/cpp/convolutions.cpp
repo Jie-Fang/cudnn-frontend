@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 

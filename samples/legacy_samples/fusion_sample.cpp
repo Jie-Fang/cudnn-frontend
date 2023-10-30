@@ -22,7 +22,7 @@
 
 #include "fusion_sample.h"
 #include <cudnn_frontend.h>
-#include "error_util.h"
+#include "../utils/error_util.h"
 
 bool
 allowAll(cudnnBackendDescriptor_t engine_config) {

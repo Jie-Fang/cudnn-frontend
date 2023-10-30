@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../helpers.h"
+#include "../utils/helpers.h"
 
 #include <cuda_runtime_api.h>
 #include <cudnn_frontend.h>
