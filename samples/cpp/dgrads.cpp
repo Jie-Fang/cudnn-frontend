@@ -150,8 +150,8 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
 #if (CUDNN_VERSION < 8900)
     SKIP("DgradDreluBNBwdWeight requires cudnn 8.9 and up");
 #endif
-    if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("DgradDreluBNBwdWeight requires ampere and above architecture.");
+    if (!is_ampere_arch() && !is_hopper_arch()) {
+        SKIP("DgradDreluBNBwdWeight requires ampere or hopper architecture.");
     }
 
     cudnnHandle_t handle;
