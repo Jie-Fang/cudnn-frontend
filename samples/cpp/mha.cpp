@@ -89,7 +89,7 @@ auto lookup_cache_or_build_graph(cudnnHandle_t handle, cache_type &user_maintain
                                                         .set_is_inference(is_inference);
 
     if (is_attn_scale) {
-        scaled_dot_product_flash_attention_options.set_attn_scale(nullptr);
+        scaled_dot_product_flash_attention_options.set_attn_scale(attn_scale);
     };
 
     scaled_dot_product_flash_attention_options.set_alibi_mask(alibi_mask);
