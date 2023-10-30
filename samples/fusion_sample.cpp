@@ -4134,10 +4134,12 @@ run_bn_bwd_weight(int64_t* xDim,
         struct cudaDeviceProp prop;
         checkCudaErrors(cudaGetDeviceProperties(&prop, 0));
 
-        // this example is only for Ampere cards
-        if (prop.major != 8 &&
+        // this example is only for Ampere and Hopper cards
+        bool is_supported_on_ampere = is_ampere_arch();
+        bool is_supported_on_hopper = is_hopper_arch() && (cudnnGetVersion() >= 8700);
+        if (((!is_supported_on_hopper) && (!is_supported_on_ampere)) &&
             (e.getCudnnStatus() == CUDNN_STATUS_ARCH_MISMATCH || e.getCudnnStatus() == CUDNN_STATUS_NOT_SUPPORTED)) {
-            std::cout << "Example is only supported for Ampere GPUs" << std::endl;
+            SKIP("Example is only supported for Ampere and Hopper GPUs");
         } else {
             std::cout << "[ERROR] Exception " << e.what() << std::endl;
             CHECK(false);
