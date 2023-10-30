@@ -255,8 +255,20 @@ class random_tensor_generator(test_node):
             #self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
+            # Generalization of self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last) for 5D
             if self.get_layout() == "NHWC":
-                self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
+                size = self.output[0].ref_data.size()
+                stride = list(self.output[0].ref_data.stride())
+
+                dim_W = len(size) - 1
+                dim_H = dim_W - 1
+                dim_C = dim_H - 1
+
+                stride[dim_C] = 1
+                stride[dim_W] = size[dim_C] * stride[dim_C]
+                stride[dim_H] = stride[dim_W] * size[dim_W]
+
+                self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
     
     def get_value(self):
         self.initialize_random_tensor()
