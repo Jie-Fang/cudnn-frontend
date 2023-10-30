@@ -20,7 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "helpers.h"
+#include "../utils/helpers.h"
 
 size_t
 get_compute_capability() {
