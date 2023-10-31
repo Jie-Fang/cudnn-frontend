@@ -494,7 +494,6 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
 class Matmul_attributes : public Attributes<Matmul_attributes> {
     friend class Attributes<Matmul_attributes>;
     friend class MatmulNode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
     friend class INode;
 
     enum class input_names { A, B, M_override, N_override, K_override };
@@ -529,7 +528,6 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     friend class Attributes<Pointwise_attributes>;
     friend class PointwiseNode;
     friend class SoftmaxNode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
     friend class INode;
 
     enum class input_names { IN_0, IN_1, IN_2 };
@@ -731,7 +729,6 @@ class Batchnorm_inference_attributes : public Attributes<Batchnorm_inference_att
 class Reduction_attributes : public Attributes<Reduction_attributes> {
     friend class Attributes<Reduction_attributes>;
     friend class ReductionNode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
     friend class INode;
 
     enum class input_names { X };
@@ -761,7 +758,6 @@ class Rng_attributes : public Attributes<Rng_attributes> {
     friend class Attributes<Rng_attributes>;
     friend class RngNode;
     friend class INode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
 
     enum class input_names { Seed, Offset };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -846,7 +842,6 @@ class Reshape_attributes : public Attributes<Reshape_attributes> {
     friend class Attributes<Reshape_attributes>;
     friend class ReshapeNode;
     friend class INode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
 
     enum class input_names { X };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
