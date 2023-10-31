@@ -261,12 +261,16 @@ class random_tensor_generator(test_node):
             #self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
-            # Generalization of self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last) for 5D
             if self.get_layout() == "NHWC":
                 size = self.output[0].ref_data.size()
-                assert len(size) < 6 and len(size) > 3
-                stride = utils.create_nhwc_strides(size)
-                self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
+                if len(size) == 4:
+                    self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
+                elif len(size) == 5:
+                    # Technically we could reuse this for len(size) == 4, but some tests are showing small numerical errors
+                    stride = utils.create_nhwc_strides(size)
+                    self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
+                else:
+                    assert len(size) < 6 and len(size) > 3
     
     def get_value(self):
         self.initialize_random_tensor()
