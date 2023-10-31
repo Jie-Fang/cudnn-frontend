@@ -23,7 +23,13 @@ class PytorchReference:
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv_fprop(kwargs, test_tensor_out_list):
-        return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        # determine whether we need 2d or 3d convolution
+        if len(kwargs["image"].shape) == 4:
+            return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        elif len(kwargs["image"].shape) == 5:
+            return [torch.nn.functional.conv3d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        else:
+            assert False
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
@@ -258,16 +264,8 @@ class random_tensor_generator(test_node):
             # Generalization of self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last) for 5D
             if self.get_layout() == "NHWC":
                 size = self.output[0].ref_data.size()
-                stride = list(self.output[0].ref_data.stride())
-
-                dim_W = len(size) - 1
-                dim_H = dim_W - 1
-                dim_C = dim_H - 1
-
-                stride[dim_C] = 1
-                stride[dim_W] = size[dim_C] * stride[dim_C]
-                stride[dim_H] = stride[dim_W] * size[dim_W]
-
+                assert len(size) < 6 and len(size) > 3
+                stride = utils.create_nhwc_strides(size)
                 self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
     
     def get_value(self):

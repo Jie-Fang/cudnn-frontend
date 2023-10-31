@@ -1,4 +1,4 @@
-from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime, ImplementationError
+from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime, ImplementationError, create_nhwc_strides
 import cudnn
 reportCurrentTime("import_cudnn")
 import json
@@ -361,11 +361,7 @@ class Legacy_tensor:
             strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
         elif layout == "NHWC" or str(layout) == '1':
             #TODO (@mbreughe): get this to work with the formula above
-            strides = [1,1,1,1]
-            strides[1] = 1
-            strides[3] = dim[1]
-            strides[2] = strides[3] * dim[3]
-            strides[0] = strides[2] * dim[2]
+            strides = create_nhwc_strides(dim)
 
         return strides
 
@@ -417,14 +413,16 @@ def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     X_tensor_name = legacy_op.get_io_tensor_name("X")
     if X_tensor_name is None:
         X_tensor_name = legacy_op.get_io_tensor_name("dX")
-
-    # Note that this is limited to 4 dimensions. It is here to mimic what we had for legacy reasons
-    dimOut = [None] * 4
+    
     for jtensor in jtensor_dict:
         if jtensor["name"] == X_tensor_name:
             X_tensor_dim = jtensor["dim"]
         elif jtensor["name"] == filter_tensor_name:
             filter_tensor_dim = jtensor["dim"]
+
+    spatial_dims = len(X_tensor_dim) - 2
+
+    dimOut = [None] * (2+spatial_dims)
     
     dimOut[0] = X_tensor_dim[0]
     dimOut[1] = filter_tensor_dim[0]
@@ -432,7 +430,7 @@ def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     padA = legacy_op.jnode["pad"]
     stdA = legacy_op.jnode["stride"]
     dilA = legacy_op.jnode["dilation"]
-    for d in range(0,2):
+    for d in range(0,spatial_dims):
         dimOut[d+2] = getFwdConvOutputDim(X_tensor_dim[d+2], padA[d], filter_tensor_dim[d+2],
                                     stdA[d], dilA[d])
     
