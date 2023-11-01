@@ -177,7 +177,7 @@ class Graph : public INode {
 
     error_t
     build_plans(cudnnHandle_t const &handle,
-                build_plan_policy const policy     = build_plan_policy::HEURISTICS_CHOICE,
+                BuildPlanPolicy_t const policy     = BuildPlanPolicy_t::HEURISTICS_CHOICE,
                 bool const do_multithreaded_builds = false);
 
     Graph &
@@ -221,6 +221,18 @@ class Graph : public INode {
         }
         return *this;
     }
+
+    error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
+             void* workspace,
+             void* user_impl = nullptr) {
+        for (auto &plan_list : plans) {
+            CHECK_CUDNN_FRONTEND_ERROR(plan_list.autotune(handle, variants, workspace, user_impl));
+        }
+        return {error_code_t::OK, ""};
+    }
+
 };
 
 inline error_t
@@ -246,7 +258,7 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 }
 
 inline error_t
-Graph::build_plans(cudnnHandle_t const &handle, build_plan_policy const policy, bool const do_multithreaded_builds) {
+Graph::build_plans(cudnnHandle_t const &handle, BuildPlanPolicy_t const policy, bool const do_multithreaded_builds) {
     for (auto &plan_list : plans) {
         CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_plans(handle, policy, do_multithreaded_builds));
     }
