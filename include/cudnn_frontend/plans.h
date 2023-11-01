@@ -270,7 +270,7 @@ class Execution_plan_list {
     }
 
     error_t
-    build_plans(cudnnHandle_t handle, build_plan_policy const policy, bool const do_multithreaded_builds) {
+    build_plans(cudnnHandle_t handle, BuildPlanPolicy_t const policy, bool const do_multithreaded_builds) {
         RETURN_CUDNN_FRONTEND_ERROR_IF(do_multithreaded_builds,
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                        "Doing multithreaded builds is not yet supported.");
@@ -278,7 +278,7 @@ class Execution_plan_list {
         auto const& configs = get_filtered_engine_configs();
 
         switch (policy) {
-            case build_plan_policy::HEURISTICS_CHOICE:
+            case BuildPlanPolicy_t::HEURISTICS_CHOICE:
                 // short circuit in case a plan was already created.
                 // This happens as check_support for v8 builds a plan.
                 // Should not happen in v9.
@@ -300,7 +300,7 @@ class Execution_plan_list {
                     }
                 }
                 break;
-            case build_plan_policy::ALL:
+            case BuildPlanPolicy_t::ALL:
                 for (auto const& config : configs) {
                     std::shared_ptr<ExecutionPlan> plan;
                     auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
@@ -332,6 +332,112 @@ class Execution_plan_list {
     get_best_candidate() const {
         if (execution_plans.empty()) return nullptr;
         return execution_plans.front();
+    }
+
+    static error_t
+    autotune_default_impl(std::vector<std::shared_ptr<ExecutionPlan>> &execution_plans,
+                          cudnnHandle_t handle,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
+                          void* workspace,
+                          void*) {
+
+        // Create the variant pack for all the plans to use.
+        std::vector<int64_t> uids;
+        std::vector<void*> ptrs;
+        for (auto it : variants) {
+            if (it.first != nullptr) {
+                uids.push_back(it.first->get_uid());
+                ptrs.push_back(it.second);
+            }
+        }
+
+        auto variantPack = VariantPackBuilder()
+                               .setDataPointers(ptrs.size(), ptrs.data())
+                               .setUids(uids.size(), uids.data())
+                               .setWorkspacePointer(workspace)
+                               .build();
+
+        std::vector<std::shared_ptr<ExecutionPlan>> time_sorted_plans;
+
+        auto plan_cmp = [](std::shared_ptr<ExecutionPlan> a, std::shared_ptr<ExecutionPlan> b) {
+            return a->getExecutionTime() < b->getExecutionTime();
+        };
+
+        std::set<std::shared_ptr<ExecutionPlan>, decltype(plan_cmp)> timed_execution_plans(plan_cmp);
+
+        const int maxIterCount         = 100;
+        const float threshhold         = 0.95f;
+        uint64_t successful_plan_count = 0;
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+        cudaDeviceSynchronize();
+
+        cudaStream_t stream = nullptr;
+        cudnnGetStream(handle, &stream);
+
+        for (auto plan : execution_plans) {
+            float time_ms       = 0.0f;
+            float final_time_ms = 0.0f;
+            float min_time_ms   = std::numeric_limits<float>::max();
+
+            // Warm-up run
+            auto warmup_status = cudnnBackendExecute(handle, plan->get_raw_desc(), variantPack.get_raw_desc());
+            if (warmup_status != CUDNN_STATUS_SUCCESS) {
+                getLogger() << "[cudnn_frontend] Plan " << plan->getTag() << " failed with " << to_string(warmup_status)
+                            << std::endl;
+                continue;
+            }
+            successful_plan_count++;
+            cudaDeviceSynchronize();
+
+            for (int i = 0; i < maxIterCount; i++) {
+                cudaEventRecord(start, stream);
+
+                cudnnBackendExecute(handle, plan->get_raw_desc(), variantPack.get_raw_desc());
+
+                cudaEventRecord(stop, stream);
+                cudaEventSynchronize(stop);
+                cudaEventElapsedTime(&time_ms, start, stop);
+
+                final_time_ms = std::min(min_time_ms, time_ms);
+                if (time_ms / min_time_ms < threshhold) {
+                    min_time_ms = final_time_ms;
+                } else {
+                    break;
+                }
+            }
+
+            getLogger() << "[cudnn_frontend] Plan " << plan->getTag() << " took " << std::setw(10) << final_time_ms
+                        << std::endl;
+            plan->setExecutionTime(final_time_ms);
+            timed_execution_plans.insert(plan);
+        }
+
+        execution_plans.clear();
+        for (auto sorted_plan : timed_execution_plans) {
+            execution_plans.push_back(sorted_plan);
+        }
+
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+
+        getLogger() << "Autotuned " << successful_plan_count << " plans." << std::endl;
+        return {error_code_t::OK, ""};
+    }
+
+    std::function<
+        error_t(std::vector<std::shared_ptr<ExecutionPlan>> &, 
+                cudnnHandle_t, std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>, void*, void*)>
+        autotune_impl = &Execution_plan_list::autotune_default_impl;
+
+    error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
+             void* workspace,
+             void* user_impl = nullptr) {
+        auto error = autotune_impl(execution_plans, handle, variants, workspace, user_impl);
+        return error;
     }
 };
 

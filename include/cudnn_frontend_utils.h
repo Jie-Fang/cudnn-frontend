@@ -254,7 +254,7 @@ to_string(cudnnRngDistribution_t distribution) {
 }
 #endif
 
-enum class build_plan_policy {
+enum class BuildPlanPolicy_t {
     // Builds and stores the "first successful" plan from the list returned by heuristics.
     // heuristics list is traversed sequentially and in decreasing order of potential performance.
     HEURISTICS_CHOICE,
@@ -262,10 +262,10 @@ enum class build_plan_policy {
     ALL,
 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(build_plan_policy,
+NLOHMANN_JSON_SERIALIZE_ENUM(BuildPlanPolicy_t,
                              {
-                                 {build_plan_policy::HEURISTICS_CHOICE, "HEURISTICS_CHOICE"},
-                                 {build_plan_policy::ALL, "ALL"},
+                                 {BuildPlanPolicy_t::HEURISTICS_CHOICE, "HEURISTICS_CHOICE"},
+                                 {BuildPlanPolicy_t::ALL, "ALL"},
                              })
 
 enum class TensorReordering_t {

@@ -316,6 +316,7 @@ class INode : public ICudnn {
         // - FE node workspace (example: alibiSlope for fmha)
         return get_fe_workspace_size() + get_max_cudnn_workspace_size();
     }
+    
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,

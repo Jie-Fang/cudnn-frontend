@@ -123,9 +123,9 @@ init_properties(py::module_& m) {
         .value("MUL_NO_ZEROS", cudnn_frontend::ReductionMode_t::MUL_NO_ZEROS)
         .value("NOT_SET", cudnn_frontend::ReductionMode_t::NOT_SET);
 
-    py::enum_<cudnn_frontend::build_plan_policy>(m, "build_plan_policy")
-        .value("HEURISTICS_CHOICE", cudnn_frontend::build_plan_policy::HEURISTICS_CHOICE)
-        .value("ALL", cudnn_frontend::build_plan_policy::ALL);
+    py::enum_<cudnn_frontend::BuildPlanPolicy_t>(m, "build_plan_policy")
+        .value("HEURISTICS_CHOICE", cudnn_frontend::BuildPlanPolicy_t::HEURISTICS_CHOICE)
+        .value("ALL", cudnn_frontend::BuildPlanPolicy_t::ALL);
 
     py::enum_<cudnn_frontend::NumericalNote_t>(m, "numerical_note")
         .value("TENSOR_CORE", cudnn_frontend::NumericalNote_t::TENSOR_CORE)
