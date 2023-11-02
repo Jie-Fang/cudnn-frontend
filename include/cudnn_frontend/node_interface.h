@@ -208,6 +208,18 @@ class INode : public ICudnn {
         attributes.outputs[Reduction_attributes::output_names::Y] = c;
         sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
     }
+
+    void
+    rng(std::shared_ptr<Tensor_attributes> seed,
+        std::shared_ptr<Tensor_attributes> offset,
+        Reduction_attributes attributes,
+        std::shared_ptr<Tensor_attributes> y) {
+        attributes.inputs[Rng_attributes::input_names::Seed]   = seed;
+        attributes.inputs[Rng_attributes::input_names::Offset] = offset;
+        attributes.outputs[Rng_attributes::output_names::Y] = y;
+        sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(attributes), context));
+    }
+
     // Creates cudnn tensors for each node (and its sub nodes)
     virtual error_t
     create_cudnn_tensors(
