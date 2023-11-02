@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.18)
 
 Include(FetchContent)
 
-# Find the cuda compiler
-find_package(CUDAToolkit)
-
 # Fetch and build catch2
 FetchContent_Declare(
   Catch2
@@ -12,9 +9,6 @@ FetchContent_Declare(
   GIT_TAG        v3.3.2
 )
 FetchContent_MakeAvailable(Catch2)
-
-# Find cudnn
-include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/cuDNN.cmake)
 
 add_executable(
     samples
@@ -68,13 +62,9 @@ endif()
 
 target_link_libraries(
     samples
+
     cudnn_frontend
     Catch2::Catch2WithMain
-
-    CUDA::cudart
-    CUDA::nvrtc
-    
-    CUDNN::cudnn_all
 )
 
 # cuDNN dlopen's its libraries
