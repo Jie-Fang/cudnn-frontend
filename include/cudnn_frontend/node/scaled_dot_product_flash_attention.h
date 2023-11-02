@@ -102,6 +102,13 @@ class ScaledDotProductFlashAttentionNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
+        auto it         = attributes.inputs.find(input_names::Q);
+        auto q_dim      = it->second->get_dim();
+        auto hidden_dim = q_dim[3];
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false), error_code_t::GRAPH_NOT_SUPPORTED,
+                                    "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+
         return {error_code_t::OK, ""};
     }
 
@@ -573,6 +580,13 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
 
+        auto it         = attributes.inputs.find(input_names::Q);
+        auto q_dim      = it->second->get_dim();
+        auto hidden_dim = q_dim[3];
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false), error_code_t::GRAPH_NOT_SUPPORTED,
+                                    "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        
         return {error_code_t::OK, ""};
     }
 

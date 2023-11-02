@@ -62,6 +62,13 @@ class SDPA_FP8_Node : public INode {
         //                                error_code_t::ATTRIBUTE_NOT_SET,
         //                                "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
+        auto it         = attributes.inputs.find(SDPA_FP8_attributes::input_names::Q);
+        auto q_dim      = it->second->get_dim();
+        auto hidden_dim = q_dim[3];
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false), error_code_t::GRAPH_NOT_SUPPORTED,
+                                    "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        
         return {error_code_t::OK, ""};
     }
 
