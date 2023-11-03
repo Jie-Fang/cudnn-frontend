@@ -106,14 +106,16 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto q_dim      = it->second->get_dim();
         auto hidden_dim = q_dim[3];
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false), error_code_t::GRAPH_NOT_SUPPORTED,
-                                    "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
 
-        auto attn_mask =  attributes.inputs.find(input_names::Bias);
+        auto attn_mask = attributes.inputs.find(input_names::Bias);
         if (attn_mask != attributes.inputs.end() && attn_mask->second != nullptr) {
             auto attn_mask_dtype = attn_mask->second->get_data_type();
-            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN), error_code_t::GRAPH_NOT_SUPPORTED,
-                                    "Attn mask data type cannot be boolean");
+            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Attn mask data type cannot be boolean");
         }
 
         return {error_code_t::OK, ""};
@@ -591,14 +593,16 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         auto q_dim      = it->second->get_dim();
         auto hidden_dim = q_dim[3];
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false), error_code_t::GRAPH_NOT_SUPPORTED,
-                                    "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
-        
-        auto attn_mask =  attributes.inputs.find(input_names::Bias);
+        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+
+        auto attn_mask = attributes.inputs.find(input_names::Bias);
         if (attn_mask != attributes.inputs.end() && attn_mask->second != nullptr) {
             auto attn_mask_dtype = attn_mask->second->get_data_type();
-            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN), error_code_t::GRAPH_NOT_SUPPORTED,
-                                    "Attn mask data type cannot be boolean");
+            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Attn mask data type cannot be boolean");
         }
 
         return {error_code_t::OK, ""};
