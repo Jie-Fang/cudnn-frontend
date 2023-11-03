@@ -335,12 +335,11 @@ class Execution_plan_list {
     }
 
     static error_t
-    autotune_default_impl(std::vector<std::shared_ptr<ExecutionPlan>> &execution_plans,
+    autotune_default_impl(std::vector<std::shared_ptr<ExecutionPlan>>& execution_plans,
                           cudnnHandle_t handle,
                           std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
                           void* workspace,
                           void*) {
-
         // Create the variant pack for all the plans to use.
         std::vector<int64_t> uids;
         std::vector<void*> ptrs;
@@ -426,9 +425,11 @@ class Execution_plan_list {
         return {error_code_t::OK, ""};
     }
 
-    std::function<
-        error_t(std::vector<std::shared_ptr<ExecutionPlan>> &, 
-                cudnnHandle_t, std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>, void*, void*)>
+    std::function<error_t(std::vector<std::shared_ptr<ExecutionPlan>>&,
+                          cudnnHandle_t,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>,
+                          void*,
+                          void*)>
         autotune_impl = &Execution_plan_list::autotune_default_impl;
 
     error_t
