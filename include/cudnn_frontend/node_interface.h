@@ -212,7 +212,7 @@ class INode : public ICudnn {
     void
     rng(std::shared_ptr<Tensor_attributes> seed,
         std::shared_ptr<Tensor_attributes> offset,
-        Reduction_attributes attributes,
+        Rng_attributes attributes,
         std::shared_ptr<Tensor_attributes> y) {
         attributes.inputs[Rng_attributes::input_names::Seed]   = seed;
         attributes.inputs[Rng_attributes::input_names::Offset] = offset;

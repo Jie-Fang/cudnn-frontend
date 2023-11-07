@@ -253,6 +253,7 @@ class PyGraph {
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                        bool const use_causal_mask,
                                        py::object const& dropout,
+                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                                        cudnn_frontend::DataType_t const& compute_data_type,
                                        std::string const& name);
 
@@ -271,6 +272,7 @@ class PyGraph {
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                                 bool const use_causal_mask,
                                                 py::object const& dropout,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                                                 cudnn_frontend::DataType_t const& compute_data_type,
                                                 std::string const& name);
 

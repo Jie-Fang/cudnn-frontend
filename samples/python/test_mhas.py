@@ -120,6 +120,8 @@ def compute_ref(
     is_alibi=False,
     padding=None,
     is_causal=False,
+    dropout_prob=0.0,
+    rng_dump=None,
     compute_stats=False,
     device="cuda",
 ):
@@ -170,6 +172,10 @@ def compute_ref(
     if padding is not None:
         p = p * p_mask
 
+    if dropout_prob != 0.0:
+        assert rng_dump != None, "PyTorch reference must have rng_dump for dropout"
+        p = (p * rng_dump) / (1 - dropout_prob)
+
     o = torch.einsum("bhqk,bhkd->bhqd", p, v)
 
     if compute_stats:
@@ -187,7 +193,7 @@ alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
 layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
-dropout_options = [False]
+dropout_options = [False, True]
 is_infer_options = [False, True]
 bias_options = [False, True]
 input_type_options = [torch.float16, torch.bfloat16]
@@ -308,6 +314,8 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
+    rng_dump_gpu = torch.empty((b, h, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
+
     o_gpu = torch.empty(*shape_o, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
     stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda") if not is_infer else None
 
@@ -331,6 +339,8 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         offset = graph.tensor_like(offset_gpu)
         dropout_tuple = (dropout_prob, seed, offset)
 
+    rng_dump = graph.tensor_like(rng_dump_gpu) if is_dropout else None
+
     o, stats = graph.scaled_dot_product_flash_attention(
         name="scaled_dot_product_flash_attention",
         q=q,
@@ -345,6 +355,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
         dropout=dropout_tuple if is_dropout else None,
+        rng_dump=rng_dump,
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
@@ -366,6 +377,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seq_len_kv: seq_len_kv_gpu,
         o: o_gpu,
         stats: stats_gpu,
+        rng_dump: rng_dump_gpu
     }
 
     if is_dropout:
@@ -388,6 +400,9 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         seq_len_q_ref = seq_len_q_gpu.detach().flatten()
         seq_len_kv_ref = seq_len_kv_gpu.detach().flatten()
 
+    if is_dropout:
+        rng_dump_ref = rng_dump_gpu.detach().float()
+
     ret = compute_ref(
         q_ref,
         k_ref,
@@ -398,6 +413,8 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
         compute_stats=(is_infer == False),
+        dropout_prob=dropout_prob,
+        rng_dump=rng_dump_ref if is_dropout else None,
     )
     if is_infer == False:
         o_ref, stats_ref = ret
@@ -663,8 +680,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
 
 if __name__ == "__main__":
     """
-    option_forward = (input_type, layout, is_alibi, is_padding, is_causal, is_dropout, is_bias, is_infer)
-    option_backward = (input_type, layout, is_alibi, is_padding, is_causal, is_dropout, is_bias)
+    option_forward = (input_type, layout, is_alibi, is_bias, is_padding, is_causal, is_dropout, is_infer)
+    option_backward = (input_type, layout, is_alibi, is_bias, is_padding, is_causal, is_dropout)
     test_scale_dot_product_flash_attention((torch.float16, "bs3hd", False, False, False, False, False, False), print_compare=True)
     test_scale_dot_product_flash_attention_backward((torch.float16, "bs3hd", False, False, False, False, False), print_compare=True)
     """

@@ -1158,6 +1158,7 @@ class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_d
     Scaled_dot_product_flash_attention_attributes&
     set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
         outputs[Scaled_dot_product_flash_attention_attributes::output_names::RNG_DUMP] = value;
+        return *this;
     }
 };
 
@@ -1217,7 +1218,7 @@ class Scaled_dot_product_flash_attention_backward_attributes
 
     Scaled_dot_product_flash_attention_backward_attributes&
     set_dbias(std::shared_ptr<Tensor_attributes> value) {
-        inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::dBias] = value;
+        outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dBias] = value;
         return *this;
     }
 
@@ -1275,6 +1276,7 @@ class Scaled_dot_product_flash_attention_backward_attributes
     Scaled_dot_product_flash_attention_backward_attributes&
     set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
         outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::RNG_DUMP] = value;
+        return *this;
     }
 };
 

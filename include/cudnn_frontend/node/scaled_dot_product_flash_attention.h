@@ -343,18 +343,28 @@ class ScaledDotProductFlashAttentionNode : public INode {
         }
 
         if (dropout_present) {
-            auto rng_attributes =
-                Rng_attributes()
-                    .set_name("rng")
-                    .set_distribution(RngDistribution_t::BERNOULLI)
-                    .set_bernoulli_probability(
-                        1.0 - attributes.dropout_probability.value());  // As user sets dropout probability
-            auto const& rng_output =
-                rng(attributes.inputs[input_names::Seed], attributes.inputs[input_names::Offset], rng_attributes);
-            rng_output
-                // Hard coding dims and strides as rng output can no inputs to infer it from.
-                ->set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            if (attributes.outputs[output_names::RNG_DUMP] != nullptr) {
+                rng_output = attributes.outputs[output_names::RNG_DUMP];
+                rng(attributes.inputs[input_names::Seed],
+                    attributes.inputs[input_names::Offset],
+                    Rng_attributes()
+                        .set_name("rng")
+                        .set_distribution(RngDistribution_t::BERNOULLI)
+                        .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()),
+                    rng_output);
+            } else {
+                rng_output = rng(
+                    attributes.inputs[input_names::Seed],
+                    attributes.inputs[input_names::Offset],
+                    Rng_attributes()
+                        .set_name("rng")
+                        .set_distribution(RngDistribution_t::BERNOULLI)
+                        .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
+                rng_output
+                    // Hard coding dims and strides as rng output can no inputs to infer it from.
+                    ->set_dim({b, h, s_q, s_kv})
+                    .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            }
 
             auto mask_attributes = Pointwise_attributes().set_name("dropout_mask_mul").set_mode(PointwiseMode_t::MUL);
             auto const& dropout_mask_output = pointwise(last_output, rng_output, mask_attributes);
