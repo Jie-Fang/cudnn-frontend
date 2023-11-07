@@ -524,8 +524,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
 
     bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type) if is_bias else None
 
-    seq_len_q_gpu = torch.randint(s_q, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
-    seq_len_kv_gpu = torch.randint(s_kv, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
