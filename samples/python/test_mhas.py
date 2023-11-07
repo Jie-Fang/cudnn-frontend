@@ -458,6 +458,9 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     if is_padding and cudnn.backend_version() < 8903:
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
+    if is_dropout:
+        pytest.skip("Reference is not implemented for sdpa flash attention backward with dropout")
+
     s_q_choices = [256, 512, 1024]
     d_choices = [64, 128]
 
