@@ -163,7 +163,7 @@ def compute_ref(
         alibi_mask = distance.to(dtype=torch.float32) * get_slopes(h, device=device)
         s = s + alibi_mask
     if padding is not None:
-        s = s.masked_fill(p_mask, float("-inf"))
+        s = s.masked_fill(s_mask, float("-inf"))
     if is_causal:
         causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device).triu_(diagonal=1)
         s = s.masked_fill(causal_mask, float("-inf"))
@@ -253,6 +253,9 @@ def test_scale_dot_product_flash_attention(param_extract_forward, print_compare=
 
     if is_padding and cudnn.backend_version() < 8903:
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
+
+    if is_dropout and cudnn.backend_version() < 8906:
+        pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
 
     s_q_choices = [256, 512, 1024, 2048]
     d_choices = [64, 128]
@@ -458,8 +461,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
     if is_padding and cudnn.backend_version() < 8903:
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
-    if is_dropout:
-        pytest.skip("Reference is not implemented for sdpa flash attention backward with dropout")
+    if is_dropout and cudnn.backend_version() < 8906:
+        pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
 
     s_q_choices = [256, 512, 1024]
     d_choices = [64, 128]
@@ -521,33 +524,87 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
 
     bias_gpu = torch.randn(b, 1, s_q, s_kv, requires_grad=False, device="cuda", dtype=input_type) if is_bias else None
 
-    seq_len_q_gpu = torch.randint(0, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
-    seq_len_kv_gpu = torch.randint(0, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_q_gpu = torch.randint(s_q, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_kv_gpu = torch.randint(s_kv, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
-    o_gpu, stats_gpu = compute_ref(
-        q_gpu,
-        k_gpu,
-        v_gpu,
+    rng_dump_gpu = torch.empty((b, h, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
+
+    o_gpu = torch.empty(*shape_o, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
+    stats_gpu = torch.empty(b, h, s_q, 1, dtype=torch.float32, device="cuda")
+
+    # forward cuDNN graph
+    graph = cudnn.pygraph(
+        io_data_type=convert_to_cudnn_type(input_type),
+        intermediate_data_type=cudnn.data_type.FLOAT,
+        compute_data_type=cudnn.data_type.FLOAT,
+    )
+    q = graph.tensor_like(q_gpu)
+    k = graph.tensor_like(k_gpu)
+    v = graph.tensor_like(v_gpu)
+
+    bias = graph.tensor_like(bias_gpu) if is_bias else None
+
+    seq_len_q = graph.tensor_like(seq_len_q_gpu) if is_padding else None
+    seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if is_padding else None
+
+    if is_dropout:
+        seed = graph.tensor_like(seed_gpu)
+        offset = graph.tensor_like(offset_gpu)
+        dropout_tuple = (dropout_prob, seed, offset)
+
+    rng_dump = graph.tensor_like(rng_dump_gpu) if is_dropout else None
+
+    o, stats = graph.scaled_dot_product_flash_attention(
+        name="scaled_dot_product_flash_attention",
+        q=q,
+        k=k,
+        v=v,
+        is_inference=False,
         attn_scale=attn_scale,
-        bias=bias_gpu,
-        is_alibi=is_alibi,
-        padding=(seq_len_q_gpu, seq_len_kv_gpu) if is_padding else None,
-        is_causal=is_causal,
-        compute_stats=True,
+        bias=bias,
+        use_alibi_mask=is_alibi,
+        use_padding_mask=is_padding,
+        seq_len_q=seq_len_q,
+        seq_len_kv=seq_len_kv,
+        use_causal_mask=is_causal,
+        dropout=dropout_tuple if is_dropout else None,
+        rng_dump=rng_dump,
     )
 
-    if layout == "sbh3d":
-        o_gpu = torch.einsum("bhsd->sbhd", o_gpu)
-    elif layout == "bs3hd":
-        o_gpu = torch.einsum("bhsd->bshd", o_gpu)
-    o_gpu = o_gpu.contiguous().to(dtype=input_type).detach().clone().as_strided(shape_o, stride_o)
-    stats_gpu = stats_gpu.contiguous().to(dtype=torch.float32).detach().clone()
+    o.set_output(True).set_dim(shape_o).set_stride(stride_o)
+    stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
+    
+    graph.validate()
+    graph.build_operation_graph()
+    graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+    graph.check_support()
+    graph.build_plans()
 
-    # cuDNN graph
+    variant_pack = {
+        q: q_gpu,
+        k: k_gpu,
+        v: v_gpu,
+        bias: bias_gpu,
+        seq_len_q: seq_len_q_gpu,
+        seq_len_kv: seq_len_kv_gpu,
+        o: o_gpu,
+        stats: stats_gpu,
+        rng_dump: rng_dump_gpu
+    }
+
+    if is_dropout:
+        variant_pack[seed] = seed_gpu
+        variant_pack[offset] = offset_gpu
+
+    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    graph.execute(variant_pack, workspace)
+    torch.cuda.synchronize()
+
+    # backward cuDNN graph
     graph = cudnn.pygraph(
         io_data_type=convert_to_cudnn_type(input_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
@@ -638,6 +695,9 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         seq_len_q_ref = seq_len_q_gpu.detach().flatten()
         seq_len_kv_ref = seq_len_kv_gpu.detach().flatten()
 
+    if is_dropout:
+        rng_dump_ref = rng_dump_gpu.detach().float()
+
     o_ref = compute_ref(
         q_ref,
         k_ref,
@@ -647,6 +707,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward, prin
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
+        dropout_prob=dropout_prob,
+        rng_dump=rng_dump_ref if is_dropout else None,
         compute_stats=False,
     )
 
