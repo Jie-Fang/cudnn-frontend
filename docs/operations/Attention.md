@@ -96,7 +96,9 @@ Returns:
 ```
 
 ### Scaled Dot Product Flash Attention Backward
-Computes the query, key and value gradient tensors for scaled dot product flash attention. Optionally, can set dropout probability, causal mask.
+Computes the query, key and value gradient tensors for scaled dot product flash attention.
+
+The user can also optionally configure attention scale, bias mask, alibi mask, padding mask, causal mask, and dropout for this operation.
 
 The dimensions for
 
