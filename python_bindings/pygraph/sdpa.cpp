@@ -254,6 +254,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     stats (cudnn_tensor): The softmax statistics from the forward pass.
                     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
+                    dBias (Optional[cudnn_tensor]): The dBias data for attention. Default is None.
                     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
                     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
                     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
