@@ -766,9 +766,9 @@ if __name__ == "__main__":
     test_scale_dot_product_flash_attention_backward((torch.float16, "bs3hd", False, False, False, False, False))
     """
 
-    # print("==========running forward tests==========")
-    # for option in all_options_forward:
-    #     test_scale_dot_product_flash_attention(option)
+    print("==========running forward tests==========")
+    for option in all_options_forward:
+        test_scale_dot_product_flash_attention(option)
 
     print("==========running backward tests==========")
     for option in all_options_backward:
