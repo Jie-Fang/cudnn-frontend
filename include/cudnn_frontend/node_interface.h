@@ -216,7 +216,7 @@ class INode : public ICudnn {
         std::shared_ptr<Tensor_attributes> y) {
         attributes.inputs[Rng_attributes::input_names::Seed]   = seed;
         attributes.inputs[Rng_attributes::input_names::Offset] = offset;
-        attributes.outputs[Rng_attributes::output_names::Y] = y;
+        attributes.outputs[Rng_attributes::output_names::Y]    = y;
         sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(attributes), context));
     }
 
@@ -328,7 +328,7 @@ class INode : public ICudnn {
         // - FE node workspace (example: alibiSlope for fmha)
         return get_fe_workspace_size() + get_max_cudnn_workspace_size();
     }
-    
+
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,

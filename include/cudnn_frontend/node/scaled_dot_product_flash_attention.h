@@ -353,13 +353,12 @@ class ScaledDotProductFlashAttentionNode : public INode {
                         .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()),
                     rng_output);
             } else {
-                rng_output = rng(
-                    attributes.inputs[input_names::Seed],
-                    attributes.inputs[input_names::Offset],
-                    Rng_attributes()
-                        .set_name("rng")
-                        .set_distribution(RngDistribution_t::BERNOULLI)
-                        .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
+                rng_output = rng(attributes.inputs[input_names::Seed],
+                                 attributes.inputs[input_names::Offset],
+                                 Rng_attributes()
+                                     .set_name("rng")
+                                     .set_distribution(RngDistribution_t::BERNOULLI)
+                                     .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
                 rng_output
                     // Hard coding dims and strides as rng output can no inputs to infer it from.
                     ->set_dim({b, h, s_q, s_kv})
@@ -1005,6 +1004,12 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                 pointwise(last_output,
                           attributes.inputs[input_names::Dropout_scale],
                           Pointwise_attributes().set_name("mul_dS_dropout_scale").set_mode(PointwiseMode_t::MUL));
+        }
+
+        if (attributes.outputs[output_names::dBias]) {
+            reduction(last_output,
+                      Reduction_attributes().set_name("red_dP_dBias").set_mode(ReductionMode_t::ADD),
+                      attributes.outputs[output_names::dBias]);
         }
 
         // (optional) last_output = last_output * bmm_scale

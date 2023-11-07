@@ -266,6 +266,7 @@ class PyGraph {
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
                                                 py::object const& attn_scale,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dBias,
                                                 bool const use_alibi_mask,
                                                 bool const use_padding_mask,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,

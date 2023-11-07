@@ -104,6 +104,7 @@ PyGraph::scaled_dot_product_flash_attention_backward(
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
     py::object const& attn_scale,
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dBias,
     bool const use_alibi_mask,
     bool const use_padding_mask,
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
@@ -115,6 +116,7 @@ PyGraph::scaled_dot_product_flash_attention_backward(
     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Scaled_dot_product_flash_attention_backward_attributes()
                           .set_bias(bias)
+                          .set_dbias(dBias)
                           .set_alibi_mask(use_alibi_mask)
                           .set_padding_mask(use_padding_mask)
                           .set_seq_len_q(seq_len_q)
@@ -230,6 +232,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
              py::arg("stats"),
              py::arg_v("attn_scale", py::none()),
              py::arg_v("bias", nullptr),
+             py::arg_v("dBias", nullptr),
              py::arg_v("use_alibi_mask", false),
              py::arg_v("use_padding_mask", false),
              py::arg_v("seq_len_q", nullptr),
