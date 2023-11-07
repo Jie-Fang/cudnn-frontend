@@ -254,9 +254,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     if is_padding and cudnn.backend_version() < 8903:
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
-    if is_dropout and cudnn.backend_version() < 8906:
-        pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
-
     s_q_choices = [256, 512, 1024, 2048]
     d_choices = [64, 128]
 
@@ -392,6 +389,9 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     torch.cuda.synchronize()
 
     # compare with torch reference
+    if is_dropout and cudnn.backend_version() < 8906:
+        pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
+
     q_ref = q_gpu.detach().float()
     k_ref = k_gpu.detach().float()
     v_ref = v_gpu.detach().float()
@@ -462,10 +462,16 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
     if is_dropout and cudnn.backend_version() < 8906:
-        pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
+        pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
+
+    if is_bias and cudnn.backend_version() < 8906:
+        pytest.skip("dBias is only supported 8.9.6 onwards.")
+
+    if is_bias and torch.cuda.get_device_capability()[0] < 9:    
+        pytest.skip("dBias is only supported on hopper onwards.")
 
     if is_bias and is_padding:
-        pytest.skip("dBias reference is not supported with padding mask")
+        pytest.skip("dBias is not supported with padding mask")
 
     s_q_choices = [256, 512, 1024]
     d_choices = [64, 128]
@@ -760,9 +766,9 @@ if __name__ == "__main__":
     test_scale_dot_product_flash_attention_backward((torch.float16, "bs3hd", False, False, False, False, False))
     """
 
-    print("==========running forward tests==========")
-    for option in all_options_forward:
-        test_scale_dot_product_flash_attention(option)
+    # print("==========running forward tests==========")
+    # for option in all_options_forward:
+    #     test_scale_dot_product_flash_attention(option)
 
     print("==========running backward tests==========")
     for option in all_options_backward:
