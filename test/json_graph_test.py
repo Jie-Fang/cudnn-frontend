@@ -93,6 +93,8 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser = argparse.ArgumentParser("legacy_graph_runner", allow_abbrev=False)
     l_parser.add_argument("-" + kTEST_NAME, required=True)
     l_parser.add_argument("-jsonPath", dest="json_fname", action='store', default=os.path.join(SCRIPT_DIR, "json_graph_defs",  "fusionGraphTests.json"))
+    l_parser.add_argument("-T", dest="timing_loop", action="store", type=int, default=0, help="positive value: the number of times to run the kernel, no refcheck; 0: run kernel once, run refcheck")
+
     # These are somewhat complicated. We expect something like -kv=layout NCHH. In addition, multiple -kv invocations can happen. This means 2 things:
     # 1) we need to set nargs to 2, so argparse knows it expects 2 values (in case above this is layout and NCHW). 
     # 2), we need to specify action as append and build a list of kv values
@@ -223,7 +225,14 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         if "Dforce_jit_dbg" in abstract_params:
             os.environ["CUDNN_FORCE_JIT_DBG"] = str(legacy_args.Dforce_jit_dbg)
 
-        run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+        if legacy_args.timing_loop == 0:
+            run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+        else:
+            testGraph = setup_test_graph_from_json(concrete_test_dict, legacy_args.backendEngine)
+            testGraph.build_cudnn_graph()
+            testGraph.cudnn_execute(int(legacy_args.timing_loop))
+
+            
 
         # Now recover the environment variable
         if force_jit_env_before is not None:
@@ -481,8 +490,7 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
     jtensor_dict = replace_abstract_test_params(jtensor_dict, implicit_params)
     return jtensor_dict
 
-# @brief: main function to run json graphs
-def run_test_from_json_definition(json_dict, backendEngine=-1):
+def setup_test_graph_from_json(json_dict, backendEngine=-1):
     testGraph = test_graph()
     testGraph.set_backend_engine(backendEngine)
 
@@ -542,11 +550,17 @@ def run_test_from_json_definition(json_dict, backendEngine=-1):
     for name, (test_graph_op, legacy_op) in Operations.items():
         test_graph_op.set_kwargs(create_kwargs(legacy_op, TGTensors))
 
+    return testGraph
+
+# @brief: main function to run json graphs with reference check
+# @TODO(mbreughe): rename this function
+def run_test_from_json_definition(json_dict, backendEngine=-1):
+    testGraph = setup_test_graph_from_json(json_dict, backendEngine=-1)
+
     # TODO(@mbreughe)
     # we can do a front-end test by using the json dimensions of the virtual tensors
 
     graph = testGraph.build_cudnn_graph()
-
     # Read in rtol/atol from json
     atol = 1e-2
     rtol = 1e-2

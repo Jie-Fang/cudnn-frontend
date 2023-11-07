@@ -31,6 +31,21 @@ class PytorchReference:
         else:
             assert False
 
+    @staticmethod
+    def conv_dgrad(kwargs, test_tensor_out_list):
+        # This turns out to be ambiguous (a single (loss, filter) tensor pair can map to multiple dX tensor sizes)
+        # input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
+        input_size = test_tensor_out_list[0].dim
+        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [dX]
+    
+    @staticmethod
+    def conv_wgrad(kwargs, test_tensor_out_list):
+        # TODO(@mbreughe): derive dimensions algebraic instead!!
+        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
+        return [dW]
+
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
@@ -81,20 +96,7 @@ class PytorchReference:
         output = torch.mul(kwargs["a"], kwargs["b"])
         return [output]
 
-    @staticmethod
-    def conv_dgrad(kwargs, test_tensor_out_list):
-        # This turns out to be ambiguous (a single (loss, filter) tensor pair can map to multiple dX tensor sizes)
-        # input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
-        input_size = test_tensor_out_list[0].dim
-        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
-        return [dX]
     
-    @staticmethod
-    def conv_wgrad(kwargs, test_tensor_out_list):
-        # TODO(@mbreughe): derive dimensions algebraic instead!!
-        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
-        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
-        return [dW]
 
     @staticmethod
     def reduction(kwargs, test_tensor_out_list):
@@ -676,10 +678,7 @@ class test_graph:
 
         return (workspace, variant_pack)
     
-    # @brief: Run the cudnn implementation and the reference, and compare
-    # @note: This assumes build_cudnn_graph has already been run
-    # @pre: build_cudnn_graph needs to be called first
-    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+    def cudnn_execute(self, timingLoop=1):
         # Set the random seed here: all random tensors that are entry nodes
         # are created by create_workspace_and_variantpack().
         # TODO(@mbreughe): verify the above statement and move seed initialization
@@ -690,8 +689,16 @@ class test_graph:
 
         # Run the cudnn graph
         print("Executing graph through cudnn")
-        self.cudnn_graph.execute(variant_pack, workspace)
+        for i in range(timingLoop):
+            self.cudnn_graph.execute(variant_pack, workspace)
         utils.reportCurrentTime("graph.execute")
+
+    # @brief: Run the cudnn implementation and the reference, and compare
+    # @note: This assumes build_cudnn_graph has already been run
+    # @pre: build_cudnn_graph needs to be called first
+    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+        # Set up workspace and variant pack, then execute.
+        self.cudnn_execute(timingLoop=1)
 
         # Run the reference
         print("Computing reference")
