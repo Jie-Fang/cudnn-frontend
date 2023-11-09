@@ -33,15 +33,12 @@ class PytorchReference:
 
     @staticmethod
     def conv_dgrad(kwargs, test_tensor_out_list):
-        # This turns out to be ambiguous (a single (loss, filter) tensor pair can map to multiple dX tensor sizes)
-        # input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
-        input_size = test_tensor_out_list[0].dim
+        input_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
         dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
         return [dX]
     
     @staticmethod
     def conv_wgrad(kwargs, test_tensor_out_list):
-        # TODO(@mbreughe): derive dimensions algebraic instead!!
         filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
         dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
         return [dW]
