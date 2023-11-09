@@ -23,7 +23,25 @@ class PytorchReference:
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv_fprop(kwargs, test_tensor_out_list):
-        return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        # determine whether we need 2d or 3d convolution
+        if len(kwargs["image"].shape) == 4:
+            return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        elif len(kwargs["image"].shape) == 5:
+            return [torch.nn.functional.conv3d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        else:
+            assert False
+
+    @staticmethod
+    def conv_dgrad(kwargs, test_tensor_out_list):
+        input_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [dX]
+    
+    @staticmethod
+    def conv_wgrad(kwargs, test_tensor_out_list):
+        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
+        return [dW]
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
@@ -75,20 +93,7 @@ class PytorchReference:
         output = torch.mul(kwargs["a"], kwargs["b"])
         return [output]
 
-    @staticmethod
-    def conv_dgrad(kwargs, test_tensor_out_list):
-        # This turns out to be ambiguous (a single (loss, filter) tensor pair can map to multiple dX tensor sizes)
-        # input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
-        input_size = test_tensor_out_list[0].dim
-        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
-        return [dX]
     
-    @staticmethod
-    def conv_wgrad(kwargs, test_tensor_out_list):
-        # TODO(@mbreughe): derive dimensions algebraic instead!!
-        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
-        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
-        return [dW]
 
     @staticmethod
     def reduction(kwargs, test_tensor_out_list):
@@ -256,7 +261,15 @@ class random_tensor_generator(test_node):
             self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
             if self.get_layout() == "NHWC":
-                self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
+                size = self.output[0].ref_data.size()
+                if len(size) == 4:
+                    self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
+                elif len(size) == 5:
+                    # Technically we could reuse this for len(size) == 4, but some tests are showing small numerical errors
+                    stride = utils.create_nhwc_strides(size)
+                    self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
+                else:
+                    assert len(size) < 6 and len(size) > 3
     
     def get_value(self):
         self.initialize_random_tensor()
@@ -412,16 +425,18 @@ class test_graph:
         self.compute_data_type = compute_data_type
         self.set_backend_engine(-1)
 
-    def set_backend_engine(self, engine):
+    def set_backend_engine(self, backendEngine):
         self.heuristics = []
-        if engine == -1:
+        # Some backendEngines are ints, some are strings. Make them all string.
+        engine = str(backendEngine)
+        if engine == "-1":
             self.set_heuristics([cudnn.heur_mode.A])
-        elif engine == -2:
+        elif engine == "-2":
             self.set_heuristics([cudnn.heur_mode.B])
-        elif engine == -3:
+        elif engine == "-3":
             self.set_heuristics([cudnn.heur_mode.FALLBACK])
         else:
-            print("MB Unkown heuristic, trying A and FALLBACK")
+            print("MB Unkown heuristic for backendEngine {} (type {}), trying A and FALLBACK".format(engine, type(engine)))
             self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
 
     def set_heuristics(self, heuristics):
@@ -660,10 +675,7 @@ class test_graph:
 
         return (workspace, variant_pack)
     
-    # @brief: Run the cudnn implementation and the reference, and compare
-    # @note: This assumes build_cudnn_graph has already been run
-    # @pre: build_cudnn_graph needs to be called first
-    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+    def cudnn_execute(self, timingLoop=1):
         # Set the random seed here: all random tensors that are entry nodes
         # are created by create_workspace_and_variantpack().
         # TODO(@mbreughe): verify the above statement and move seed initialization
@@ -674,8 +686,16 @@ class test_graph:
 
         # Run the cudnn graph
         print("Executing graph through cudnn")
-        self.cudnn_graph.execute(variant_pack, workspace)
+        for i in range(timingLoop):
+            self.cudnn_graph.execute(variant_pack, workspace)
         utils.reportCurrentTime("graph.execute")
+
+    # @brief: Run the cudnn implementation and the reference, and compare
+    # @note: This assumes build_cudnn_graph has already been run
+    # @pre: build_cudnn_graph needs to be called first
+    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+        # Set up workspace and variant pack, then execute.
+        self.cudnn_execute(timingLoop=1)
 
         # Run the reference
         print("Computing reference")

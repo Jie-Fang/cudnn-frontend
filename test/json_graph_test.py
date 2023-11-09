@@ -1,4 +1,4 @@
-from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime, ImplementationError
+from utils import getFwdConvOutputDim, computeStrideNdTransposedPacked, reportCurrentTime, ImplementationError, create_nhwc_strides
 import cudnn
 reportCurrentTime("import_cudnn")
 import json
@@ -93,6 +93,8 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser = argparse.ArgumentParser("legacy_graph_runner", allow_abbrev=False)
     l_parser.add_argument("-" + kTEST_NAME, required=True)
     l_parser.add_argument("-jsonPath", dest="json_fname", action='store', default=os.path.join(SCRIPT_DIR, "json_graph_defs",  "fusionGraphTests.json"))
+    l_parser.add_argument("-T", dest="timing_loop", action="store", type=int, default=0, help="positive value: the number of times to run the kernel, no refcheck; 0: run kernel once, run refcheck")
+
     # These are somewhat complicated. We expect something like -kv=layout NCHH. In addition, multiple -kv invocations can happen. This means 2 things:
     # 1) we need to set nargs to 2, so argparse knows it expects 2 values (in case above this is layout and NCHW). 
     # 2), we need to specify action as append and build a list of kv values
@@ -104,7 +106,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-rtol", default=0.1, type=float)
     # Convolution related params (TODO(@mbreughe): add grouping)
     l_parser.add_argument("-x", "-convMode", dest='convMode', action='store_const', const='CUDNN_CROSS_CORRELATION', default='CUDNN_CONVOLUTION')
-    l_parser.add_argument("-dim", default=2)
+    l_parser.add_argument("-dim", type=int, default=2)
     l_parser.add_argument("-pad_d", action='store', default=0)
     l_parser.add_argument("-pad_h", action='store', default=0)
     l_parser.add_argument("-pad_w", action='store', default=0)
@@ -126,6 +128,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-Pin", choices=kDATA_TYPES)
     l_parser.add_argument("-Pout", choices=kDATA_TYPES)
     l_parser.add_argument("-Pcomp", choices=kDATA_TYPES)
+    l_parser.add_argument("-P", help="Data type for both I/O in case Pin or Pout is not specified", choices=kDATA_TYPES)
     l_parser.add_argument("-Tin", choices=kDATA_TYPES)
     l_parser.add_argument("-Tout", choices=kDATA_TYPES)
     l_parser.add_argument("-Tcomp", choices=kDATA_TYPES)
@@ -222,7 +225,14 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         if "Dforce_jit_dbg" in abstract_params:
             os.environ["CUDNN_FORCE_JIT_DBG"] = str(legacy_args.Dforce_jit_dbg)
 
-        run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+        if legacy_args.timing_loop == 0:
+            run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+        else:
+            testGraph = setup_test_graph_from_json(concrete_test_dict, legacy_args.backendEngine)
+            testGraph.build_cudnn_graph()
+            testGraph.cudnn_execute(int(legacy_args.timing_loop))
+
+            
 
         # Now recover the environment variable
         if force_jit_env_before is not None:
@@ -360,11 +370,7 @@ class Legacy_tensor:
             strides = computeStrideNdTransposedPacked(nbDims, dim, axes_order)
         elif layout == "NHWC" or str(layout) == '1':
             #TODO (@mbreughe): get this to work with the formula above
-            strides = [1,1,1,1]
-            strides[1] = 1
-            strides[3] = dim[1]
-            strides[2] = strides[3] * dim[3]
-            strides[0] = strides[2] * dim[2]
+            strides = create_nhwc_strides(dim)
 
         return strides
 
@@ -416,14 +422,16 @@ def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     X_tensor_name = legacy_op.get_io_tensor_name("X")
     if X_tensor_name is None:
         X_tensor_name = legacy_op.get_io_tensor_name("dX")
-
-    # Note that this is limited to 4 dimensions. It is here to mimic what we had for legacy reasons
-    dimOut = [None] * 4
+    
     for jtensor in jtensor_dict:
         if jtensor["name"] == X_tensor_name:
             X_tensor_dim = jtensor["dim"]
         elif jtensor["name"] == filter_tensor_name:
             filter_tensor_dim = jtensor["dim"]
+
+    spatial_dims = len(X_tensor_dim) - 2
+
+    dimOut = [None] * (2+spatial_dims)
     
     dimOut[0] = X_tensor_dim[0]
     dimOut[1] = filter_tensor_dim[0]
@@ -431,7 +439,7 @@ def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     padA = legacy_op.jnode["pad"]
     stdA = legacy_op.jnode["stride"]
     dilA = legacy_op.jnode["dilation"]
-    for d in range(0,2):
+    for d in range(0,spatial_dims):
         dimOut[d+2] = getFwdConvOutputDim(X_tensor_dim[d+2], padA[d], filter_tensor_dim[d+2],
                                     stdA[d], dilA[d])
     
@@ -482,8 +490,7 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
     jtensor_dict = replace_abstract_test_params(jtensor_dict, implicit_params)
     return jtensor_dict
 
-# @brief: main function to run json graphs
-def run_test_from_json_definition(json_dict, backendEngine=-1):
+def setup_test_graph_from_json(json_dict, backendEngine=-1):
     testGraph = test_graph()
     testGraph.set_backend_engine(backendEngine)
 
@@ -543,11 +550,17 @@ def run_test_from_json_definition(json_dict, backendEngine=-1):
     for name, (test_graph_op, legacy_op) in Operations.items():
         test_graph_op.set_kwargs(create_kwargs(legacy_op, TGTensors))
 
+    return testGraph
+
+# @brief: main function to run json graphs with reference check
+# @TODO(mbreughe): rename this function
+def run_test_from_json_definition(json_dict, backendEngine=-1):
+    testGraph = setup_test_graph_from_json(json_dict, backendEngine)
+
     # TODO(@mbreughe)
     # we can do a front-end test by using the json dimensions of the virtual tensors
 
     graph = testGraph.build_cudnn_graph()
-
     # Read in rtol/atol from json
     atol = 1e-2
     rtol = 1e-2
