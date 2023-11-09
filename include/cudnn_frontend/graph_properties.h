@@ -37,6 +37,13 @@ class Tensor_attributes {
             dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' dims not set.");
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' strides not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(dim.size() != stride.size(),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Tensor '" + name + "' does not equal dimensinoality in dim and stride.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            is_virtual && is_pass_by_value,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Tensor '" + name + "' can't be both virutal and pass_by_value at the same time.");
 
         return {error_code_t::OK, ""};
     }
