@@ -270,11 +270,15 @@ class Execution_plan_list {
     }
 
     error_t
-    build_plans(cudnnHandle_t handle, build_plan_policy const policy) {
+    build_plans(cudnnHandle_t handle, BuildPlanPolicy_t const policy, bool const do_multithreaded_builds) {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(do_multithreaded_builds,
+                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                       "Doing multithreaded builds is not yet supported.");
+
         auto const& configs = get_filtered_engine_configs();
 
         switch (policy) {
-            case build_plan_policy::ONE:
+            case BuildPlanPolicy_t::HEURISTICS_CHOICE:
                 // short circuit in case a plan was already created.
                 // This happens as check_support for v8 builds a plan.
                 // Should not happen in v9.
@@ -296,7 +300,7 @@ class Execution_plan_list {
                     }
                 }
                 break;
-            case build_plan_policy::ALL_SEQUENTIAL:
+            case BuildPlanPolicy_t::ALL:
                 for (auto const& config : configs) {
                     std::shared_ptr<ExecutionPlan> plan;
                     auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
@@ -305,10 +309,6 @@ class Execution_plan_list {
                         execution_plans.push_back(std::move(plan));
                     }
                 }
-                break;
-            case build_plan_policy::ALL_PARALLEL:
-                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                        "Using build_plan_policy::ALL_PARALLEL is not yet supported."};
                 break;
         }
 
@@ -333,26 +333,21 @@ class Execution_plan_list {
         if (execution_plans.empty()) return nullptr;
         return execution_plans.front();
     }
-};
-
-/*
-class Plans {
-   public:
 
     static error_t
-    autotune_default_impl(Plans* plans,
+    autotune_default_impl(std::vector<std::shared_ptr<ExecutionPlan>>& execution_plans,
                           cudnnHandle_t handle,
                           std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
                           void* workspace,
                           void*) {
-        auto& execution_plans = plans->list_of_engine_configs.get_execution_plans();
-
         // Create the variant pack for all the plans to use.
         std::vector<int64_t> uids;
         std::vector<void*> ptrs;
         for (auto it : variants) {
-            uids.push_back(it.first->get_uid());
-            ptrs.push_back(it.second);
+            if (it.first != nullptr) {
+                uids.push_back(it.first->get_uid());
+                ptrs.push_back(it.second);
+            }
         }
 
         auto variantPack = VariantPackBuilder()
@@ -366,6 +361,7 @@ class Plans {
         auto plan_cmp = [](std::shared_ptr<ExecutionPlan> a, std::shared_ptr<ExecutionPlan> b) {
             return a->getExecutionTime() < b->getExecutionTime();
         };
+
         std::set<std::shared_ptr<ExecutionPlan>, decltype(plan_cmp)> timed_execution_plans(plan_cmp);
 
         const int maxIterCount         = 100;
@@ -379,7 +375,7 @@ class Plans {
         cudaStream_t stream = nullptr;
         cudnnGetStream(handle, &stream);
 
-        for (auto plan : plans->list_of_engine_configs.get_execution_plans()) {
+        for (auto plan : execution_plans) {
             float time_ms       = 0.0f;
             float final_time_ms = 0.0f;
             float min_time_ms   = std::numeric_limits<float>::max();
@@ -429,20 +425,22 @@ class Plans {
         return {error_code_t::OK, ""};
     }
 
-    std::function<
-        error_t(Plans*, cudnnHandle_t, std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>, void*, void*)>
-        autotune_impl = &Plans::autotune_default_impl;
+    std::function<error_t(std::vector<std::shared_ptr<ExecutionPlan>>&,
+                          cudnnHandle_t,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>,
+                          void*,
+                          void*)>
+        autotune_impl = &Execution_plan_list::autotune_default_impl;
 
     error_t
     autotune(cudnnHandle_t handle,
              std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
              void* workspace,
              void* user_impl = nullptr) {
-        auto error = autotune_impl(this, handle, variants, workspace, user_impl);
+        auto error = autotune_impl(execution_plans, handle, variants, workspace, user_impl);
         return error;
     }
 };
 
-*/
 }  // namespace graph
 }  // namespace cudnn_frontend

@@ -48,7 +48,6 @@ def test_bn_relu_with_mask():
     comparison = graph.tensor(name = "zeros", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = convert_to_cudnn_type(x_gpu.dtype))
     
     (Y_before_relu, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
-                                                                                        , norm_forward_phase = cudnn.norm_forward_phase.TRAINING
                                                                                         , input = X
                                                                                         , scale = scale, bias = bias
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var
@@ -131,7 +130,6 @@ def test_bn():
     momentum = graph.tensor(name = "momentum", dim = momentum_cpu.size(), stride = momentum_cpu.stride(), is_pass_by_value = True)
     
     (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = graph.batchnorm(name = "BN"
-                                                                                        , norm_forward_phase = cudnn.norm_forward_phase.TRAINING
                                                                                         , input = X
                                                                                         , scale = scale, bias = bias
                                                                                         , in_running_mean = in_running_mean, in_running_var = in_running_var

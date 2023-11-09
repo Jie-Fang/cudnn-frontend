@@ -22,7 +22,7 @@ class WgradNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating Node Type::WGRAD " << attributes.name << "..." << std::endl;
 
@@ -31,16 +31,16 @@ class WgradNode : public INode {
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_wgrad_attributes::output_names::DW);
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << attributes.name << "."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
         auto X  = attributes.inputs[Conv_wgrad_attributes::input_names::X];
@@ -64,8 +64,17 @@ class WgradNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building WgradNode tensors " << attributes.name << "..." << std::endl;
 
@@ -86,7 +95,7 @@ class WgradNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building WgradNode operations " << attributes.name << "..." << std::endl;
 
@@ -107,16 +116,21 @@ class WgradNode : public INode {
                                         .build();
 
             // Create the wgrad operation.
-            auto wgrad_operation =
-                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR)
-                    .setxDesc(*(tensors.at(attributes.inputs[Conv_wgrad_attributes::input_names::X]->get_uid())))
-                    .setdyDesc(*(tensors.at(attributes.inputs[Conv_wgrad_attributes::input_names::DY]->get_uid())))
-                    .setdwDesc(*(tensors.at(attributes.outputs[Conv_wgrad_attributes::output_names::DW]->get_uid())))
-                    .setcDesc(wgrad_descriptor)
-                    .setAlpha(1.f)
-                    .setBeta(0.f)
-                    .build();
-            operations.push_back(std::move(wgrad_operation));
+            auto&& wgrad_operation_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Conv_wgrad_attributes::input_names::X);
+            wgrad_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(DY, Conv_wgrad_attributes::input_names::DY);
+            wgrad_operation_builder.setdyDesc(*(tensors.at(DY->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(DW, Conv_wgrad_attributes::output_names::DW);
+            wgrad_operation_builder.setdwDesc(*(tensors.at(DW->second->get_uid())));
+
+            wgrad_operation_builder.setcDesc(wgrad_descriptor).setAlpha(1.f).setBeta(0.f);
+
+            operations.push_back(std::move(wgrad_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

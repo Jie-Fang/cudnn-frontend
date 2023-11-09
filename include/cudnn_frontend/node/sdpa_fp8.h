@@ -29,7 +29,7 @@ class SDPA_FP8_Node : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SDPA_FP8_Node " << attributes.name << "..." << std::endl;
 
@@ -62,16 +62,41 @@ class SDPA_FP8_Node : public INode {
         //                                error_code_t::ATTRIBUTE_NOT_SET,
         //                                "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
+        auto it         = attributes.inputs.find(SDPA_FP8_attributes::input_names::Q);
+        auto q_dim      = it->second->get_dim();
+        auto hidden_dim = q_dim[3];
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+
+        auto attn_mask = attributes.inputs.find(SDPA_FP8_attributes::input_names::Bias);
+        if (attn_mask != attributes.inputs.end() && attn_mask->second != nullptr) {
+            auto attn_mask_dtype = attn_mask->second->get_data_type();
+            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Attn mask data type cannot be boolean");
+        }
+
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for sdpa_fp8 node  " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto q_dim = attributes.inputs[SDPA_FP8_attributes::input_names::Q]->get_dim();
         auto k_dim = attributes.inputs[SDPA_FP8_attributes::input_names::K]->get_dim();
@@ -258,7 +283,7 @@ class SDPA_FP8_Node : public INode {
         cudnnHandle_t,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void*) override {
+        void*) const override final {
         if (attributes.dropout_probability.has_value()) {
             float dropout_scale_value = (1.f / (1.0f - attributes.dropout_probability.value()));
 
@@ -268,7 +293,8 @@ class SDPA_FP8_Node : public INode {
         // sdpa_fp8 creates a non virtual KT.
         // User does not know about it and should not provide device pointer for it.
         // But the backend will ask for it.
-        void* k_ptr = tensor_to_pointer_map.at(attributes.inputs[SDPA_FP8_attributes::input_names::K]);
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(K, SDPA_FP8_attributes::input_names::K);
+        void* k_ptr = tensor_to_pointer_map.at(K->second);
         tensor_to_pass_by_value.emplace(KT, k_ptr);
 
         return {error_code_t::OK, ""};

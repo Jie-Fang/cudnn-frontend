@@ -22,12 +22,11 @@ class BatchNormNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto X                  = attributes.inputs[Batchnorm_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
@@ -71,10 +70,11 @@ class BatchNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating BatchNormNode " << attributes.name << "..." << std::endl;
 
+        // Ensure all needed input output tensors are valid
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::X);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::SCALE);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::BIAS);
@@ -88,18 +88,27 @@ class BatchNormNode : public INode {
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::INV_VARIANCE);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN);
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
-        // Norm forward phase should be set
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.forward_phase != NormFwdPhase_t::TRAINING,
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Forward phase not set of batchnorm node or if inference use batchnorm_inference node");
+
+        // Validate inputs
+        // The iteration over graph happens in topological order, so previous nodes should have set input tensor
+        // properties, if the user did not set them initially.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchNormNode tensors " << attributes.name << "..." << std::endl;
 
@@ -127,7 +136,7 @@ class BatchNormNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchNormNode operations " << attributes.name << "..." << std::endl;
 
@@ -140,32 +149,51 @@ class BatchNormNode : public INode {
                 peer_stats.emplace_back(std::move(*(tensors[peer_stat->get_uid()])));
             }
 
-            auto batchnorm_operation =
-                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                    .setNormalizationMode(NormMode_t::BATCH_NORM)
-                    .setNormFwdPhase(NormFwdPhase_t::TRAINING)
-                    .setxDesc(*(tensors[attributes.inputs[Batchnorm_attributes::input_names::X]->get_uid()]))
-                    .setSavedMeanAndInvVar(
-                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::MEAN]->get_uid()]),
-                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::INV_VARIANCE]->get_uid()]))
-                    .setScaleAndBias(*(tensors[attributes.inputs[Batchnorm_attributes::input_names::SCALE]->get_uid()]),
-                                     *(tensors[attributes.inputs[Batchnorm_attributes::input_names::BIAS]->get_uid()]))
-                    .setPrevRunningMeanAndVar(
-                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_MEAN]->get_uid()]),
-                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::PREV_RUNNING_VAR]->get_uid()]))
-                    .setNextRunningMeanAndVar(
-                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN]
-                                      ->get_uid()]),
-                        *(tensors[attributes.outputs[Batchnorm_attributes::output_names::NEXT_RUNNING_VAR]->get_uid()]))
-                    .setEpsilonTensor(
-                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::EPSILON]->get_uid()]))
-                    .setExpDecayFactorTensor(
-                        *(tensors[attributes.inputs[Batchnorm_attributes::input_names::MOMENTUM]->get_uid()]))
-                    .setyDesc(*(tensors[attributes.outputs[Batchnorm_attributes::output_names::Y]->get_uid()]))
-                    .setPeerStatTensor(peer_stats)
-                    .build();
+            auto&& batchnorm_operation_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
 
-            operations.push_back(std::move(batchnorm_operation));
+            batchnorm_operation_builder.setNormalizationMode(NormMode_t::BATCH_NORM)
+                .setNormFwdPhase(NormFwdPhase_t::TRAINING);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Batchnorm_attributes::input_names::X);
+            batchnorm_operation_builder.setxDesc(*(tensors[X->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(MEAN, Batchnorm_attributes::output_names::MEAN);
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(INV_VARIANCE, Batchnorm_attributes::output_names::INV_VARIANCE);
+            batchnorm_operation_builder.setSavedMeanAndInvVar(*(tensors[MEAN->second->get_uid()]),
+                                                              *(tensors[INV_VARIANCE->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(SCALE, Batchnorm_attributes::input_names::SCALE);
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(BIAS, Batchnorm_attributes::input_names::BIAS);
+            batchnorm_operation_builder.setScaleAndBias(*(tensors[SCALE->second->get_uid()]),
+                                                        *(tensors[BIAS->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(PREV_RUNNING_MEAN,
+                                                      Batchnorm_attributes::input_names::PREV_RUNNING_MEAN);
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(PREV_RUNNING_VAR,
+                                                      Batchnorm_attributes::input_names::PREV_RUNNING_VAR);
+            batchnorm_operation_builder.setPrevRunningMeanAndVar(*(tensors[PREV_RUNNING_MEAN->second->get_uid()]),
+                                                                 *(tensors[PREV_RUNNING_VAR->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(NEXT_RUNNING_MEAN,
+                                                       Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN);
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(NEXT_RUNNING_VAR,
+                                                       Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
+            batchnorm_operation_builder.setNextRunningMeanAndVar(*(tensors[NEXT_RUNNING_MEAN->second->get_uid()]),
+                                                                 *(tensors[NEXT_RUNNING_VAR->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(EPSILON, Batchnorm_attributes::input_names::EPSILON);
+            batchnorm_operation_builder.setEpsilonTensor(*(tensors[EPSILON->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(MOMENTUM, Batchnorm_attributes::input_names::MOMENTUM);
+            batchnorm_operation_builder.setExpDecayFactorTensor(*(tensors[MOMENTUM->second->get_uid()]));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Batchnorm_attributes::output_names::Y);
+            batchnorm_operation_builder.setyDesc(*(tensors[Y->second->get_uid()]));
+
+            batchnorm_operation_builder.setPeerStatTensor(peer_stats);
+
+            operations.push_back(std::move(batchnorm_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {

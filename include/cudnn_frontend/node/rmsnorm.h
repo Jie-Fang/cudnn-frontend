@@ -22,12 +22,11 @@ class RMSNormNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for rmsnorm node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto X                  = attributes.inputs[Rmsnorm_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
@@ -65,7 +64,7 @@ class RMSNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating RMSNormNode " << attributes.name << "..." << std::endl;
 
@@ -74,12 +73,23 @@ class RMSNormNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Forward phase not set of rmsnorm node.");
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
         return {error_code_t::OK, ""};
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RMSNormNode tensors " << attributes.name << "..." << std::endl;
 
@@ -99,7 +109,7 @@ class RMSNormNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RMSNormNode operations " << attributes.name << "..." << std::endl;
 
@@ -107,69 +117,36 @@ class RMSNormNode : public INode {
         try {
 #endif
 
-            if (attributes.inputs[Rmsnorm_attributes::input_names::BIAS]) {
-                if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
-                    auto rmsnorm_operation =
-                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                            .setNormalizationMode(NormMode_t::RMS_NORM)
-                            .setNormFwdPhase(attributes.forward_phase)
-                            .setxDesc(*(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::X]->get_uid())))
-                            .setSavedInvVar(*(tensors.at(
-                                attributes.outputs[Rmsnorm_attributes::output_names::INV_VARIANCE]->get_uid())))
-                            .setScaleAndBias(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::SCALE]->get_uid())),
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::BIAS]->get_uid())))
-                            .setEpsilonTensor(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::EPSILON]->get_uid())))
-                            .setyDesc(*(tensors.at(attributes.outputs[Rmsnorm_attributes::output_names::Y]->get_uid())))
-                            .build();
-                    operations.push_back(std::move(rmsnorm_operation));
-                } else {
-                    auto rmsnorm_operation =
-                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                            .setNormalizationMode(NormMode_t::RMS_NORM)
-                            .setNormFwdPhase(attributes.forward_phase)
-                            .setxDesc(*(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::X]->get_uid())))
-                            .setScaleAndBias(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::SCALE]->get_uid())),
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::BIAS]->get_uid())))
-                            .setEpsilonTensor(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::EPSILON]->get_uid())))
-                            .setyDesc(*(tensors.at(attributes.outputs[Rmsnorm_attributes::output_names::Y]->get_uid())))
-                            .build();
-                    operations.push_back(std::move(rmsnorm_operation));
-                }
-            } else {
-                if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
-                    auto rmsnorm_operation =
-                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                            .setNormalizationMode(NormMode_t::RMS_NORM)
-                            .setNormFwdPhase(attributes.forward_phase)
-                            .setxDesc(*(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::X]->get_uid())))
-                            .setSavedInvVar(*(tensors.at(
-                                attributes.outputs[Rmsnorm_attributes::output_names::INV_VARIANCE]->get_uid())))
-                            .setScale(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::SCALE]->get_uid())))
-                            .setEpsilonTensor(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::EPSILON]->get_uid())))
-                            .setyDesc(*(tensors.at(attributes.outputs[Rmsnorm_attributes::output_names::Y]->get_uid())))
-                            .build();
-                    operations.push_back(std::move(rmsnorm_operation));
-                } else {
-                    auto rmsnorm_operation =
-                        cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR)
-                            .setNormalizationMode(NormMode_t::RMS_NORM)
-                            .setNormFwdPhase(attributes.forward_phase)
-                            .setxDesc(*(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::X]->get_uid())))
-                            .setScale(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::SCALE]->get_uid())))
-                            .setEpsilonTensor(
-                                *(tensors.at(attributes.inputs[Rmsnorm_attributes::input_names::EPSILON]->get_uid())))
-                            .setyDesc(*(tensors.at(attributes.outputs[Rmsnorm_attributes::output_names::Y]->get_uid())))
-                            .build();
-                    operations.push_back(std::move(rmsnorm_operation));
-                }
+            auto&& rmsnorm_operation_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
+
+            rmsnorm_operation_builder.setNormalizationMode(NormMode_t::RMS_NORM)
+                .setNormFwdPhase(attributes.forward_phase);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Rmsnorm_attributes::input_names::X);
+            rmsnorm_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(SCALE, Rmsnorm_attributes::input_names::SCALE);
+            rmsnorm_operation_builder.setScale(*(tensors.at(SCALE->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(EPSILON, Rmsnorm_attributes::input_names::EPSILON);
+            rmsnorm_operation_builder.setEpsilonTensor(*(tensors.at(EPSILON->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Rmsnorm_attributes::output_names::Y);
+            rmsnorm_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
+
+            if (attributes.forward_phase == NormFwdPhase_t::TRAINING) {
+                CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(INV_VARIANCE,
+                                                           Rmsnorm_attributes::output_names::INV_VARIANCE);
+                rmsnorm_operation_builder.setSavedInvVar(*(tensors.at(INV_VARIANCE->second->get_uid())));
             }
+
+            auto BIAS = attributes.inputs.find(Rmsnorm_attributes::input_names::BIAS);
+            if ((BIAS != attributes.inputs.end()) && (BIAS->second != nullptr)) {
+                rmsnorm_operation_builder.setBias(*(tensors.at(BIAS->second->get_uid())));
+            }
+
+            operations.push_back(std::move(rmsnorm_operation_builder.build()));
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
             throw cudnnException(e.what(), e.getCudnnStatus());
@@ -200,7 +177,7 @@ class DRMSNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DRMSNormNode node " << attributes.name << "..." << std::endl;
 
@@ -208,16 +185,17 @@ class DRMSNormNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "DRMSNormNode node needs has_bias(bool) to be called.");
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DRMSNorm node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferencing from X works today.
         auto X                  = attributes.inputs[Rmsnorm_backward_attributes::input_names::X];
@@ -279,8 +257,17 @@ class DRMSNormNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
+        const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DRMSNormNode tensors " << attributes.name << "..." << std::endl;
 
@@ -302,7 +289,7 @@ class DRMSNormNode : public INode {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<cudnn_frontend::Operation_v8>& operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) override final {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DRMSNormNode operations " << attributes.name << "..." << std::endl;
 
@@ -310,59 +297,36 @@ class DRMSNormNode : public INode {
         try {
 #endif
 
-            for (auto const& [name, tensor] : attributes.inputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
-            for (auto const& [name, tensor] : attributes.outputs) {
-                if (tensor && tensor->get_is_virtual() == false) {
-                    uids_involved_in_operations.insert(tensor->get_uid());
-                }
-            }
+            auto&& DRMSNorm_operation_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR);
+
+            DRMSNorm_operation_builder.setNormalizationMode(NormMode_t::RMS_NORM);
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Rmsnorm_backward_attributes::input_names::X);
+            DRMSNorm_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(DY, Rmsnorm_backward_attributes::input_names::DY);
+            DRMSNorm_operation_builder.setdyDesc(*(tensors.at(DY->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(SCALE, Rmsnorm_backward_attributes::input_names::SCALE);
+            DRMSNorm_operation_builder.setScale(*(tensors.at(SCALE->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(INV_VARIANCE,
+                                                      Rmsnorm_backward_attributes::input_names::INV_VARIANCE);
+            DRMSNorm_operation_builder.setSavedInvVar(*(tensors.at(INV_VARIANCE->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(DSCALE, Rmsnorm_backward_attributes::output_names::DSCALE);
+            DRMSNorm_operation_builder.setDScale(*(tensors.at(DSCALE->second->get_uid())));
 
             if (attributes.use_dbias.value()) {
-                // Create the DRMSNorm operation.
-                auto DRMSNorm_operation =
-                    cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
-                        .setNormalizationMode(NormMode_t::RMS_NORM)
-                        .setxDesc(
-                            *(tensors.at(attributes.inputs[Rmsnorm_backward_attributes::input_names::X]->get_uid())))
-                        .setdyDesc(
-                            *(tensors.at(attributes.inputs[Rmsnorm_backward_attributes::input_names::DY]->get_uid())))
-                        .setScale(*(
-                            tensors.at(attributes.inputs[Rmsnorm_backward_attributes::input_names::SCALE]->get_uid())))
-                        .setSavedInvVar(*(tensors.at(
-                            attributes.inputs[Rmsnorm_backward_attributes::input_names::INV_VARIANCE]->get_uid())))
-                        .setDScaleAndDBias(
-                            *(tensors.at(
-                                attributes.outputs[Rmsnorm_backward_attributes::output_names::DSCALE]->get_uid())),
-                            *(tensors.at(
-                                attributes.outputs[Rmsnorm_backward_attributes::output_names::DBIAS]->get_uid())))
-                        .setdxDesc(
-                            *(tensors.at(attributes.outputs[Rmsnorm_backward_attributes::output_names::DX]->get_uid())))
-                        .build();
-                operations.push_back(std::move(DRMSNorm_operation));
-            } else {
-                // Create the DRMSNorm operation.
-                auto DRMSNorm_operation =
-                    cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR)
-                        .setNormalizationMode(NormMode_t::RMS_NORM)
-                        .setxDesc(
-                            *(tensors.at(attributes.inputs[Rmsnorm_backward_attributes::input_names::X]->get_uid())))
-                        .setdyDesc(
-                            *(tensors.at(attributes.inputs[Rmsnorm_backward_attributes::input_names::DY]->get_uid())))
-                        .setScale(*(
-                            tensors.at(attributes.inputs[Rmsnorm_backward_attributes::input_names::SCALE]->get_uid())))
-                        .setSavedInvVar(*(tensors.at(
-                            attributes.inputs[Rmsnorm_backward_attributes::input_names::INV_VARIANCE]->get_uid())))
-                        .setDScale(*(tensors.at(
-                            attributes.outputs[Rmsnorm_backward_attributes::output_names::DSCALE]->get_uid())))
-                        .setdxDesc(
-                            *(tensors.at(attributes.outputs[Rmsnorm_backward_attributes::output_names::DX]->get_uid())))
-                        .build();
-                operations.push_back(std::move(DRMSNorm_operation));
+                CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(DBIAS, Rmsnorm_backward_attributes::output_names::DBIAS);
+                DRMSNorm_operation_builder.setDBias(*(tensors.at(DBIAS->second->get_uid())));
             }
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(DX, Rmsnorm_backward_attributes::output_names::DX);
+            DRMSNorm_operation_builder.setdxDesc(*(tensors.at(DX->second->get_uid())));
+
+            operations.push_back(std::move(DRMSNorm_operation_builder.build()));
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
@@ -370,6 +334,8 @@ class DRMSNormNode : public INode {
         }
 #endif
 
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
     }
 

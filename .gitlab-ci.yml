@@ -59,9 +59,12 @@ stages:
 .thunder:template:
     stage: thunder
     script:
-        - git clone -b ${THUNDER_BRANCH_NAME} https://vedaanta-nvidia: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@github.com/Lightning-AI/lightning-thunder.git
-        - python lightning-thunder/setup.py develop
-        - pytest lightning-thunder/thunder/tests/test_cudnn_executor.py -v
+        - git clone https://vedaanta-nvidia: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@github.com/Lightning-AI/lightning-thunder.git
+        - cd lightning-thunder
+        - git checkout ${THUNDER_BRANCH_NAME}
+        - python setup.py develop
+        - pytest thunder/tests/test_cudnn_executor.py -v
+    allow_failure: true
 
 .L4_graph_runner_large:template:
     stage: L4_graph_runner
@@ -371,7 +374,7 @@ test:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.4.27_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .test:template
@@ -396,7 +399,7 @@ pycudnntest:cudnn_8.9.4.27:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.4.27_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .pycudnntest:template
@@ -440,7 +443,7 @@ pytest:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.5.29_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .pytest:template
@@ -482,7 +485,7 @@ test:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .test:template
@@ -492,7 +495,7 @@ pytest:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .pytest:template
@@ -503,7 +506,7 @@ pycudnntest:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .pycudnntest:template
@@ -513,7 +516,7 @@ L4_graph_runner:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
     parallel:
         matrix:
-            - ARCH: ["Hopper", "Ampere"]
+            - ARCH: ["Ada", "Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends: .L4_graph_runner:template
@@ -575,7 +578,7 @@ L4_graph_runner:cudnn_8.9.6.44:
 #         - .L4_graph_runner:template
 #     needs: ["build:cudnn_9.0.0_latest"]
     
-thunder:cudnn_8.9.2.31:
+thunder:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
     needs: []
     parallel:
@@ -584,23 +587,8 @@ thunder:cudnn_8.9.2.31:
     tags:
         - ${ARCH}
     before_script:
-        - pip install nvidia-cudnn-cu12==8.9.2.26
-        - export CUDNN_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn
-        - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
-    extends:
-        - .thunder:template
-
-thunder:cudnn_8.9.4.27:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
-    needs: []
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
-    before_script:
-        - pip install nvidia-cudnn-cu12==8.9.4.25
-        - export CUDNN_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn
+        - apt update
+        - apt upgrade -y --allow-change-held-packages libcudnn8=8.9.5.29-1+cuda12.2 libcudnn8-dev=8.9.5.29-1+cuda12.2
         - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
     extends:
         - .thunder:template

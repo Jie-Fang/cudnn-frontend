@@ -31,6 +31,28 @@ class Tensor_attributes {
 
     std::shared_ptr<Tensor_attributes> ragged_offset;
 
+    error_t
+    validate() const {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' dims not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' strides not set.");
+
+        return {error_code_t::OK, ""};
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Tensor_attributes& {
+        if (get_data_type() == DataType_t::NOT_SET) {
+            if (get_is_virtual()) {
+                set_data_type(context.get_intermediate_data_type());
+            } else {
+                set_data_type(context.get_io_data_type());
+            }
+        }
+        return *this;
+    }
+
    public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor_attributes,
                                    name,
@@ -39,8 +61,10 @@ class Tensor_attributes {
                                    stride,
                                    is_virtual,
                                    is_pass_by_value,
-                                   reordering_type,
-                                   uid)
+                                   reordering_type
+                                   /* uid */  // Not serializing uid is intentional. FE graphs do no need a uid. uid is
+                                              // only meant to act as a bridge between backend and frontend tensors.
+    )
 
     Tensor_attributes() = default;
 
@@ -147,18 +171,6 @@ class Tensor_attributes {
         ragged_offset = value;
         return *this;
     }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Tensor_attributes& {
-        if (get_data_type() == DataType_t::NOT_SET) {
-            if (get_is_virtual()) {
-                set_data_type(context.get_intermediate_data_type());
-            } else {
-                set_data_type(context.get_io_data_type());
-            }
-        }
-        return *this;
-    }
 };
 
 class Batchnorm_attributes;
@@ -177,7 +189,7 @@ class Attributes {
 
    protected:
     std::vector<int64_t>
-    get_non_virtual_uids() {
+    get_non_virtual_uids() const {
         std::vector<int64_t> non_virtual_uids;
         auto derived = static_cast<DerivedT const*>(this);
         for (auto& [name, tensor] : derived->inputs) {
@@ -257,18 +269,12 @@ class Attributes {
         return self();
     }
 
-    // Common input tensor validate functions
     error_t
     validate_inputs() const {
         auto derived = static_cast<DerivedT const*>(this);
         for (auto const& [enum_name, tensor] : derived->inputs) {
             if (tensor) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->dim.empty(),
-                                               error_code_t::ATTRIBUTE_NOT_SET,
-                                               "Tensor '" + tensor->name + "' dims not set.");
-                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->stride.empty(),
-                                               error_code_t::ATTRIBUTE_NOT_SET,
-                                               "Tensor '" + tensor->name + "' strides not set.");
+                CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
             }
         }
 
@@ -277,14 +283,22 @@ class Attributes {
                       std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
             for (auto const& tensor : derived->peer_stats) {
                 if (tensor) {
-                    RETURN_CUDNN_FRONTEND_ERROR_IF(
-                        tensor->dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats dims not set.");
-                    RETURN_CUDNN_FRONTEND_ERROR_IF(
-                        tensor->stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats strides not set.");
+                    CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
                 }
             }
         }
 
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    validate_outputs() const {
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto const& [enum_name, tensor] : derived->outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
+            }
+        }
         return {error_code_t::OK, ""};
     }
 };
@@ -492,7 +506,6 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
 class Matmul_attributes : public Attributes<Matmul_attributes> {
     friend class Attributes<Matmul_attributes>;
     friend class MatmulNode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
     friend class INode;
 
     enum class input_names { A, B, M_override, N_override, K_override };
@@ -527,7 +540,6 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     friend class Attributes<Pointwise_attributes>;
     friend class PointwiseNode;
     friend class SoftmaxNode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
     friend class INode;
 
     enum class input_names { IN_0, IN_1, IN_2 };
@@ -685,16 +697,8 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     enum class output_names { Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
-    NormFwdPhase_t forward_phase = NormFwdPhase_t::NOT_SET;
-
    public:
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs, forward_phase)
-
-    Batchnorm_attributes&
-    set_forward_phase(NormFwdPhase_t const value) {
-        forward_phase = value;
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs)
 
     Batchnorm_attributes&
     set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean,
@@ -737,7 +741,6 @@ class Batchnorm_inference_attributes : public Attributes<Batchnorm_inference_att
 class Reduction_attributes : public Attributes<Reduction_attributes> {
     friend class Attributes<Reduction_attributes>;
     friend class ReductionNode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
     friend class INode;
 
     enum class input_names { X };
@@ -767,7 +770,6 @@ class Rng_attributes : public Attributes<Rng_attributes> {
     friend class Attributes<Rng_attributes>;
     friend class RngNode;
     friend class INode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
 
     enum class input_names { Seed, Offset };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -852,7 +854,6 @@ class Reshape_attributes : public Attributes<Reshape_attributes> {
     friend class Attributes<Reshape_attributes>;
     friend class ReshapeNode;
     friend class INode;
-    friend class ScaledDotProductFlashAttentionBackwardNode;
 
     enum class input_names { X };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -1083,7 +1084,7 @@ class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_d
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    enum class output_names { O, Stats };
+    enum class output_names { O, Stats, RNG_DUMP };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::optional<bool> is_inference;
@@ -1164,6 +1165,13 @@ class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_d
         inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_scale] = scale;
         return *this;
     }
+
+    // For debugging purposes only.
+    Scaled_dot_product_flash_attention_attributes&
+    set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
+        outputs[Scaled_dot_product_flash_attention_attributes::output_names::RNG_DUMP] = value;
+        return *this;
+    }
 };
 
 class Scaled_dot_product_flash_attention_backward_attributes
@@ -1191,7 +1199,7 @@ class Scaled_dot_product_flash_attention_backward_attributes
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    enum class output_names { dQ, dK, dV };
+    enum class output_names { dQ, dK, dV, dBias, RNG_DUMP };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     bool alibi_mask   = false;
@@ -1217,6 +1225,12 @@ class Scaled_dot_product_flash_attention_backward_attributes
     Scaled_dot_product_flash_attention_backward_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Bias] = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_dbias(std::shared_ptr<Tensor_attributes> value) {
+        outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dBias] = value;
         return *this;
     }
 
@@ -1267,6 +1281,13 @@ class Scaled_dot_product_flash_attention_backward_attributes
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_mask]      = mask;
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale]     = scale;
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv] = scale_inv;
+        return *this;
+    }
+
+    // For debugging purposes only.
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
+        outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::RNG_DUMP] = value;
         return *this;
     }
 };

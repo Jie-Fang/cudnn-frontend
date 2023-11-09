@@ -46,14 +46,13 @@ class INode : public ICudnn {
     }
 
     virtual error_t
-    infer_properties_node() {
-        return {error_code_t::OK, ""};
-    };
+    pre_validate_node() const = 0;
 
     virtual error_t
-    validate_node() const {
-        return {error_code_t::OK, ""};
-    };
+    expand_and_infer_properties() = 0;
+
+    virtual error_t
+    post_validate_node() const = 0;
 
     virtual int64_t
     get_fe_workspace_size_node() const {
@@ -92,7 +91,7 @@ class INode : public ICudnn {
     pass_by_value_tensors_(cudnnHandle_t,
                            std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
                            std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&,
-                           void*) {
+                           void*) const {
         return {error_code_t::OK, ""};
     }
 
@@ -101,7 +100,7 @@ class INode : public ICudnn {
         cudnnHandle_t const& handle,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* fe_workspace) {
+        void* fe_workspace) const {
         void* node_workspace = fe_workspace;
         CHECK_CUDNN_FRONTEND_ERROR(
             pass_by_value_tensors_(handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
@@ -208,10 +207,23 @@ class INode : public ICudnn {
         attributes.outputs[Reduction_attributes::output_names::Y] = c;
         sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
     }
+
+    void
+    rng(std::shared_ptr<Tensor_attributes> seed,
+        std::shared_ptr<Tensor_attributes> offset,
+        Rng_attributes attributes,
+        std::shared_ptr<Tensor_attributes> y) {
+        attributes.inputs[Rng_attributes::input_names::Seed]   = seed;
+        attributes.inputs[Rng_attributes::input_names::Offset] = offset;
+        attributes.outputs[Rng_attributes::output_names::Y]    = y;
+        sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(attributes), context));
+    }
+
     // Creates cudnn tensors for each node (and its sub nodes)
     virtual error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) {
+    create_cudnn_tensors(
+        int64_t& uid,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors));
         }
@@ -224,7 +236,7 @@ class INode : public ICudnn {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operation,
         std::vector<cudnn_frontend::Operation>& backend_operations,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) {
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(
                 uids_involved_in_operation, backend_operations, uid_to_backend_tensors));
@@ -262,15 +274,18 @@ class INode : public ICudnn {
     error_t
     validate() {
         // validate self
-        CHECK_CUDNN_FRONTEND_ERROR(validate_node());
+        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
 
         // infer_properties self
-        CHECK_CUDNN_FRONTEND_ERROR(infer_properties_node());
+        CHECK_CUDNN_FRONTEND_ERROR(expand_and_infer_properties());
 
         // validate sub nodes
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->validate());
         }
+
+        // validate self
+        CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
 
         return {error_code_t::OK, ""};
     }
@@ -315,10 +330,11 @@ class INode : public ICudnn {
         // - FE node workspace (example: alibiSlope for fmha)
         return get_fe_workspace_size() + get_max_cudnn_workspace_size();
     }
+
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
-            void* workspace) {
+            void* workspace) const {
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
             tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
@@ -364,7 +380,14 @@ class INode : public ICudnn {
         }
     };
 
-    virtual ~INode(){};
+    size_t
+    key() {
+        json j;
+        serialize(j);
+        return std::hash<json>{}(j);
+    }
+
+    virtual ~INode() = default;
 };
 
 [[maybe_unused]] static void
@@ -380,9 +403,23 @@ to_json(json& j, const INode& p) {
             !has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
     }
 
+#define CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, map_)                                   \
+    auto tensor = map_.find(port);                                                                 \
+    {                                                                                              \
+        bool const has_t = (tensor != map_.end()) && (tensor->second != nullptr);                  \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                            \
+            !has_t, error_code_t::ATTRIBUTE_NOT_SET, std::string("Tensor ") + #port + " not set"); \
+    }
+
 #define CUDNN_FE_VALIDATE_INPUT_TENSOR(port) CUDNN_FE_VALIDATE_TENSOR_(port, attributes.inputs)
 
 #define CUDNN_FE_VALIDATE_OUTPUT_TENSOR(port) CUDNN_FE_VALIDATE_TENSOR_(port, attributes.outputs)
+
+#define CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(tensor, port) \
+    CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, attributes.inputs)
+
+#define CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(tensor, port) \
+    CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, attributes.outputs)
 
 inline std::shared_ptr<Tensor_attributes>
 INode::matmul(std::shared_ptr<Tensor_attributes> a,

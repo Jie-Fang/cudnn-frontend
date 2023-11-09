@@ -44,6 +44,21 @@ class Graph : public INode {
     //     std::shared_ptr<Tensor_attributes>,
     //     Scaled_dot_product_attention_attributes);
 
+    error_t
+    pre_validate_node() const override final {
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        return {error_code_t::OK, ""};
+    }
+
    public:
     Graph() : INode(detail::Context{}) {}
 
@@ -61,6 +76,9 @@ class Graph : public INode {
 
     std::shared_ptr<Tensor_attributes>
     tensor(Tensor_attributes const &tensor);
+
+    std::shared_ptr<Tensor_attributes>
+    tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string const &name = std::string{});
 
     std::array<std::shared_ptr<Tensor_attributes>, 3> layernorm(std::shared_ptr<Tensor_attributes>,
                                                                 std::shared_ptr<Tensor_attributes>,
@@ -173,10 +191,12 @@ class Graph : public INode {
     }
 
     error_t
-    build_plans(cudnnHandle_t const &handle, build_plan_policy const policy = build_plan_policy::ONE);
+    build_plans(cudnnHandle_t const &handle,
+                BuildPlanPolicy_t const policy     = BuildPlanPolicy_t::HEURISTICS_CHOICE,
+                bool const do_multithreaded_builds = false);
 
     Graph &
-    filter_out_workspace_greater_than(int64_t const workspace) {
+    deselect_workspace_greater_than(int64_t const workspace) {
         for (auto &plan_list : plans) {
             plan_list.set_max_workspace_allowed(workspace);
         }
@@ -184,11 +204,15 @@ class Graph : public INode {
     }
 
     Graph &
-    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const &notes) {
-        // TODO: The error returned is not propagate to user.
-        // Should the return value be changed to error_code_t too?
+    deselect_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
+        std::vector<cudnnBackendBehaviorNote_t> backend_notes;
+        for (auto &note : notes) {
+            cudnnBackendBehaviorNote_t backend_note;
+            detail::convert_to_cudnn_type(note, backend_note);
+            backend_notes.push_back(backend_note);
+        }
         for (auto &plan_list : plans) {
-            auto status = plan_list.filter_out_behavior_notes(notes);
+            auto status = plan_list.filter_out_behavior_notes(backend_notes);
             if (status.is_bad()) {
                 getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
             }
@@ -197,16 +221,31 @@ class Graph : public INode {
     }
 
     Graph &
-    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const &notes) {
-        // TODO: The error returned is not propagate to user.
-        // Should the return value be changed to error_code_t too?
+    deselect_numeric_notes(std::vector<NumericalNote_t> const &notes) {
+        std::vector<cudnnBackendNumericalNote_t> backend_notes;
+        for (auto &note : notes) {
+            cudnnBackendNumericalNote_t backend_note;
+            detail::convert_to_cudnn_type(note, backend_note);
+            backend_notes.push_back(backend_note);
+        }
         for (auto &plan_list : plans) {
-            auto status = plan_list.filter_out_numeric_notes(notes);
+            auto status = plan_list.filter_out_numeric_notes(backend_notes);
             if (status.is_bad()) {
                 getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
             }
         }
         return *this;
+    }
+
+    error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> variants,
+             void *workspace,
+             void *user_impl = nullptr) {
+        for (auto &plan_list : plans) {
+            CHECK_CUDNN_FRONTEND_ERROR(plan_list.autotune(handle, variants, workspace, user_impl));
+        }
+        return {error_code_t::OK, ""};
     }
 };
 
@@ -233,9 +272,9 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 }
 
 inline error_t
-Graph::build_plans(cudnnHandle_t const &handle, build_plan_policy const policy) {
+Graph::build_plans(cudnnHandle_t const &handle, BuildPlanPolicy_t const policy, bool const do_multithreaded_builds) {
     for (auto &plan_list : plans) {
-        CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_plans(handle, policy));
+        CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_plans(handle, policy, do_multithreaded_builds));
     }
     return {error_code_t::OK, ""};
 }
@@ -261,6 +300,26 @@ Graph::set_compute_data_type(DataType_t const type) {
 inline std::shared_ptr<Tensor_attributes>
 Graph::tensor(Tensor_attributes const &tensor) {
     auto tensor_ptr = std::make_shared<Tensor_attributes>(tensor);
+    tensors.emplace(tensor_ptr);
+    return tensor_ptr;
+}
+
+// tensor_like is meant to create "useable" copies of a tensor.
+// By usable, it means not copying over the uids, as uids are FE-level(internal) detail.
+// It also means not copying over names, which are user-level(external) detail. But user is given option to provide a
+// new name.
+inline std::shared_ptr<Tensor_attributes>
+Graph::tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string const &name) {
+    auto tensor_ptr = std::make_shared<Tensor_attributes>(*tensor);
+
+    // reset the uid of the cloned tensor
+    // uids are not meant to be copied by tensor_like
+    // When lowering to cudnn backend, both tensors involved here will get unique uids.
+    tensor_ptr->set_uid(0);
+
+    // reset the name too. Defaults to empty string.
+    tensor_ptr->set_name(name);
+
     tensors.emplace(tensor_ptr);
     return tensor_ptr;
 }

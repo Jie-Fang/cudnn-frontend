@@ -74,11 +74,13 @@ class PyGraph {
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    tensor_like(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& pyobj, std::string const&);
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     tensor_like(py::object const& pyobj);
 
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
-    batchnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
+    batchnorm(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& in_running_mean,
@@ -251,6 +253,7 @@ class PyGraph {
                                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                        bool const use_causal_mask,
                                        py::object const& dropout,
+                                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                                        cudnn_frontend::DataType_t const& compute_data_type,
                                        std::string const& name);
 
@@ -263,17 +266,22 @@ class PyGraph {
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
                                                 py::object const& attn_scale,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dBias,
                                                 bool const use_alibi_mask,
                                                 bool const use_padding_mask,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                                                 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                                                 bool const use_causal_mask,
                                                 py::object const& dropout,
+                                                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                                                 cudnn_frontend::DataType_t const& compute_data_type,
                                                 std::string const& name);
 
     void
     validate();
+
+    size_t
+    key();
 
     void
     build_operation_graph();
@@ -282,7 +290,7 @@ class PyGraph {
     create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const&);
 
     void
-    build_plans(build_plan_policy const);
+    build_plans(BuildPlanPolicy_t const);
 
     void
     check_support();
@@ -296,6 +304,24 @@ class PyGraph {
     void
     execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object> var_pack,
             py::object workspace);
+
+    void
+    deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
+        graph.deselect_numeric_notes(notes);
+        return;
+    }
+
+    void
+    deselect_behavior_notes(std::vector<BehaviorNote_t> const& notes) {
+        graph.deselect_behavior_notes(notes);
+        return;
+    }
+
+    void
+    deselect_workspace_greater_than(int64_t const workspace) {
+        graph.deselect_workspace_greater_than(workspace);
+        return;
+    }
 };
 
 }  // namespace cudnn_frontend::python_bindings
