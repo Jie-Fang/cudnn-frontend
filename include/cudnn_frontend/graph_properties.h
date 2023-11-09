@@ -31,6 +31,28 @@ class Tensor_attributes {
 
     std::shared_ptr<Tensor_attributes> ragged_offset;
 
+    error_t
+    validate() const {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' dims not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' strides not set.");
+
+        return {error_code_t::OK, ""};
+    }
+
+    auto
+    fill_from_context(detail::Context const& context) -> Tensor_attributes& {
+        if (get_data_type() == DataType_t::NOT_SET) {
+            if (get_is_virtual()) {
+                set_data_type(context.get_intermediate_data_type());
+            } else {
+                set_data_type(context.get_io_data_type());
+            }
+        }
+        return *this;
+    }
+
    public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor_attributes,
                                    name,
@@ -149,18 +171,6 @@ class Tensor_attributes {
         ragged_offset = value;
         return *this;
     }
-
-    auto
-    fill_from_context(detail::Context const& context) -> Tensor_attributes& {
-        if (get_data_type() == DataType_t::NOT_SET) {
-            if (get_is_virtual()) {
-                set_data_type(context.get_intermediate_data_type());
-            } else {
-                set_data_type(context.get_io_data_type());
-            }
-        }
-        return *this;
-    }
 };
 
 class Batchnorm_attributes;
@@ -259,18 +269,12 @@ class Attributes {
         return self();
     }
 
-    // Common input tensor validate functions
     error_t
     validate_inputs() const {
         auto derived = static_cast<DerivedT const*>(this);
         for (auto const& [enum_name, tensor] : derived->inputs) {
             if (tensor) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->dim.empty(),
-                                               error_code_t::ATTRIBUTE_NOT_SET,
-                                               "Tensor '" + tensor->name + "' dims not set.");
-                RETURN_CUDNN_FRONTEND_ERROR_IF(tensor->stride.empty(),
-                                               error_code_t::ATTRIBUTE_NOT_SET,
-                                               "Tensor '" + tensor->name + "' strides not set.");
+                CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
             }
         }
 
@@ -279,14 +283,22 @@ class Attributes {
                       std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
             for (auto const& tensor : derived->peer_stats) {
                 if (tensor) {
-                    RETURN_CUDNN_FRONTEND_ERROR_IF(
-                        tensor->dim.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats dims not set.");
-                    RETURN_CUDNN_FRONTEND_ERROR_IF(
-                        tensor->stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "peer_stats strides not set.");
+                    CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
                 }
             }
         }
 
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    validate_outputs() const {
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto const& [enum_name, tensor] : derived->outputs) {
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
+            }
+        }
         return {error_code_t::OK, ""};
     }
 };

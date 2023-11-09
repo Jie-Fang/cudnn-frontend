@@ -28,7 +28,7 @@ class ScaledDotProductAttentionNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductAttentionNode " << options.name << "..." << std::endl;
 
@@ -54,7 +54,7 @@ class ScaledDotProductAttentionNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node "
                     << options.name << "..." << std::endl;
 

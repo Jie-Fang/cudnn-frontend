@@ -29,7 +29,7 @@ class SDPA_FP8_Node : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SDPA_FP8_Node " << attributes.name << "..." << std::endl;
 
@@ -78,16 +78,25 @@ class SDPA_FP8_Node : public INode {
                                            "Attn mask data type cannot be boolean");
         }
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for sdpa_fp8 node  " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto q_dim = attributes.inputs[SDPA_FP8_attributes::input_names::Q]->get_dim();
         auto k_dim = attributes.inputs[SDPA_FP8_attributes::input_names::K]->get_dim();

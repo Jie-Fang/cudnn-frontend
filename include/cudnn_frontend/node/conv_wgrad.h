@@ -22,7 +22,7 @@ class WgradNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating Node Type::WGRAD " << attributes.name << "..." << std::endl;
 
@@ -31,16 +31,16 @@ class WgradNode : public INode {
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_wgrad_attributes::output_names::DW);
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << attributes.name << "."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
         auto X  = attributes.inputs[Conv_wgrad_attributes::input_names::X];
@@ -59,6 +59,15 @@ class WgradNode : public INode {
             auto const& stride_order = detail::generate_NHWC_stride_order(DW_dim.size());
             DW->set_stride(detail::generate_stride(DW_dim, stride_order));
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

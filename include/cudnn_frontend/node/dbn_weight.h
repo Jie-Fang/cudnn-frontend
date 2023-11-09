@@ -23,12 +23,18 @@ class DBNWeightNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    pre_validate_node() const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node " << attributes.name
                     << "..." << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferencing from DY works today.
         auto DY                  = attributes.inputs[DBN_weight_attributes::input_names::DY];
@@ -69,6 +75,15 @@ class DBNWeightNode : public INode {
         infer_per_channel_tensors(attributes.outputs[DBN_weight_attributes::output_names::EQ_BIAS]);
         infer_per_channel_tensors(attributes.outputs[DBN_weight_attributes::output_names::EQ_SCALE_DY]);
         infer_per_channel_tensors(attributes.outputs[DBN_weight_attributes::output_names::EQ_SCALE_X]);
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

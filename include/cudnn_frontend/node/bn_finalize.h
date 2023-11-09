@@ -23,12 +23,18 @@ class BatchNormFinalizeNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    pre_validate_node() const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node  " << attributes.name
                     << "..." << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto SUM                  = attributes.inputs[BN_finalize_attributes::input_names::SUM];
         auto const sum_tensor_dim = SUM->get_dim();
@@ -54,6 +60,15 @@ class BatchNormFinalizeNode : public INode {
         infer_per_channel_tensors(attributes.outputs[BN_finalize_attributes::output_names::INV_VARIANCE]);
         infer_per_channel_tensors(attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_MEAN]);
         infer_per_channel_tensors(attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_VAR]);
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

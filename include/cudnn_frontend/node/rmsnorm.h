@@ -22,12 +22,11 @@ class RMSNormNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for rmsnorm node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto X                  = attributes.inputs[Rmsnorm_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
@@ -65,7 +64,7 @@ class RMSNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating RMSNormNode " << attributes.name << "..." << std::endl;
 
@@ -73,6 +72,17 @@ class RMSNormNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase == NormFwdPhase_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Forward phase not set of rmsnorm node.");
+
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }
@@ -167,7 +177,7 @@ class DRMSNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DRMSNormNode node " << attributes.name << "..." << std::endl;
 
@@ -175,16 +185,17 @@ class DRMSNormNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "DRMSNormNode node needs has_bias(bool) to be called.");
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DRMSNorm node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferencing from X works today.
         auto X                  = attributes.inputs[Rmsnorm_backward_attributes::input_names::X];
@@ -241,6 +252,15 @@ class DRMSNormNode : public INode {
         if (attributes.use_dbias.value()) {
             infer_scale_bias_tensors(attributes.outputs[Rmsnorm_backward_attributes::output_names::DBIAS]);
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

@@ -46,14 +46,13 @@ class INode : public ICudnn {
     }
 
     virtual error_t
-    infer_properties_node() {
-        return {error_code_t::OK, ""};
-    };
+    pre_validate_node() const = 0;
 
     virtual error_t
-    validate_node() const {
-        return {error_code_t::OK, ""};
-    };
+    expand_and_infer_properties() = 0;
+
+    virtual error_t
+    post_validate_node() const = 0;
 
     virtual int64_t
     get_fe_workspace_size_node() const {
@@ -263,15 +262,18 @@ class INode : public ICudnn {
     error_t
     validate() {
         // validate self
-        CHECK_CUDNN_FRONTEND_ERROR(validate_node());
+        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
 
         // infer_properties self
-        CHECK_CUDNN_FRONTEND_ERROR(infer_properties_node());
+        CHECK_CUDNN_FRONTEND_ERROR(expand_and_infer_properties());
 
         // validate sub nodes
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->validate());
         }
+
+        // validate self
+        CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
 
         return {error_code_t::OK, ""};
     }

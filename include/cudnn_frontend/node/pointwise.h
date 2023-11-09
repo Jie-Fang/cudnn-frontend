@@ -22,7 +22,7 @@ class PointwiseNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating pointwise node " << attributes.name << "..." << std::endl;
 
@@ -42,16 +42,17 @@ class PointwiseNode : public INode {
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Pointwise_attributes::output_names::OUT_0);
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Only inferrencing from IN_0 to OUT_0 works today.
         auto in_0_tensor  = attributes.inputs[Pointwise_attributes::input_names::IN_0];
@@ -66,6 +67,15 @@ class PointwiseNode : public INode {
         if (out_0_tensor->get_stride().empty()) {
             out_0_tensor->set_stride(in_0_tensor->get_stride());
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }
