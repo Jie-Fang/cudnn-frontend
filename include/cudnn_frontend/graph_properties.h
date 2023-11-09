@@ -1072,7 +1072,7 @@ class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_d
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    enum class output_names { O, Stats };
+    enum class output_names { O, Stats, RNG_DUMP };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     std::optional<bool> is_inference;
@@ -1153,6 +1153,13 @@ class Scaled_dot_product_flash_attention_attributes : public Attributes<Scaled_d
         inputs[Scaled_dot_product_flash_attention_attributes::input_names::Dropout_scale] = scale;
         return *this;
     }
+
+    // For debugging purposes only.
+    Scaled_dot_product_flash_attention_attributes&
+    set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
+        outputs[Scaled_dot_product_flash_attention_attributes::output_names::RNG_DUMP] = value;
+        return *this;
+    }
 };
 
 class Scaled_dot_product_flash_attention_backward_attributes
@@ -1180,7 +1187,7 @@ class Scaled_dot_product_flash_attention_backward_attributes
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
 
-    enum class output_names { dQ, dK, dV };
+    enum class output_names { dQ, dK, dV, dBias, RNG_DUMP };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     bool alibi_mask   = false;
@@ -1206,6 +1213,12 @@ class Scaled_dot_product_flash_attention_backward_attributes
     Scaled_dot_product_flash_attention_backward_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Bias] = value;
+        return *this;
+    }
+
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_dbias(std::shared_ptr<Tensor_attributes> value) {
+        outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::dBias] = value;
         return *this;
     }
 
@@ -1256,6 +1269,13 @@ class Scaled_dot_product_flash_attention_backward_attributes
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_mask]      = mask;
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale]     = scale;
         inputs[Scaled_dot_product_flash_attention_backward_attributes::input_names::Dropout_scale_inv] = scale_inv;
+        return *this;
+    }
+
+    // For debugging purposes only.
+    Scaled_dot_product_flash_attention_backward_attributes&
+    set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
+        outputs[Scaled_dot_product_flash_attention_backward_attributes::output_names::RNG_DUMP] = value;
         return *this;
     }
 };

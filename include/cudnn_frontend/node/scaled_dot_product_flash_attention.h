@@ -359,18 +359,27 @@ class ScaledDotProductFlashAttentionNode : public INode {
         }
 
         if (dropout_present) {
-            auto rng_attributes =
-                Rng_attributes()
-                    .set_name("rng")
-                    .set_distribution(RngDistribution_t::BERNOULLI)
-                    .set_bernoulli_probability(
-                        1.0 - attributes.dropout_probability.value());  // As user sets dropout probability
-            auto const& rng_output =
-                rng(attributes.inputs[input_names::Seed], attributes.inputs[input_names::Offset], rng_attributes);
-            rng_output
-                // Hard coding dims and strides as rng output can no inputs to infer it from.
-                ->set_dim({b, h, s_q, s_kv})
-                .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            if (attributes.outputs[output_names::RNG_DUMP] != nullptr) {
+                rng_output = attributes.outputs[output_names::RNG_DUMP];
+                rng(attributes.inputs[input_names::Seed],
+                    attributes.inputs[input_names::Offset],
+                    Rng_attributes()
+                        .set_name("rng")
+                        .set_distribution(RngDistribution_t::BERNOULLI)
+                        .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()),
+                    rng_output);
+            } else {
+                rng_output = rng(attributes.inputs[input_names::Seed],
+                                 attributes.inputs[input_names::Offset],
+                                 Rng_attributes()
+                                     .set_name("rng")
+                                     .set_distribution(RngDistribution_t::BERNOULLI)
+                                     .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
+                rng_output
+                    // Hard coding dims and strides as rng output can no inputs to infer it from.
+                    ->set_dim({b, h, s_q, s_kv})
+                    .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            }
 
             auto mask_attributes = Pointwise_attributes().set_name("dropout_mask_mul").set_mode(PointwiseMode_t::MUL);
             auto const& dropout_mask_output = pointwise(last_output, rng_output, mask_attributes);
@@ -714,45 +723,52 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         // ---------------------input tensor workarounds---------------------------
 
-        // WAR non-virtual dQ_accum is required if it is not
+        // workspace optimization is only supported on
         // cudnn verision >= 8.9.5
         // device version >= hopper
         // sizeof(dp tensor) <= max_dp_workspace
-        // non-virtual dQ_accum is passed by the node
-        bool war_use_non_virtual_dQAccum = true;
 
-        if (cudnnGetVersion() >= 8905) {
-            struct cudaDeviceProp prop;
-            CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
-            if (prop.major >= 9) {
-                // default upper limit for workspace 256MB
-                int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
+        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=unset  - enable workspace opt. until the default 256MB limit.
+        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=-1     - always enable workspace opt.
+        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=0      - always disable workspace opt.
+        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=n      - enable workspace opt. until the n byte limit
+        bool use_workspace_opt = false;
 
-                // allow setting the upper limit with envvars
-                char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
-                if (env_dp_workspace_limit_char) {
-                    try {
-                        std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
-                        max_dp_workspace_bytes = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
-                    } catch (...) {
-                        RETURN_CUDNN_FRONTEND_ERROR_IF(true,
-                                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                                       "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
-                                                       "(int64_t; in bytes)");
-                    }
+        struct cudaDeviceProp prop;
+        CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
+        if (cudnnGetVersion() >= 8905 && prop.major >= 9) {
+            // default upper limit for workspace 256MB
+            int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
+
+            // allow setting the upper limit with envvars
+            char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
+            if (env_dp_workspace_limit_char) {
+                try {
+                    std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
+                    max_dp_workspace_bytes = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
+                } catch (...) {
+                    RETURN_CUDNN_FRONTEND_ERROR_IF(true,
+                                                   error_code_t::ATTRIBUTE_NOT_SET,
+                                                   "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
+                                                   "(int64_t; in bytes)");
                 }
+            }
 
-                int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
-                int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
-                int64_t required_dp_workspace_bytes = b * h * workspace_s_q * workspace_s_kv * 2;
+            int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
+            int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
+            int64_t required_dp_workspace_bytes = b * h * workspace_s_q * workspace_s_kv * 2;
 
-                if (required_dp_workspace_bytes <= max_dp_workspace_bytes) {
-                    war_use_non_virtual_dQAccum = false;
-                }
+            if (max_dp_workspace_bytes == -1) {
+                use_workspace_opt = true;
+            } else if (max_dp_workspace_bytes == 0) {
+                use_workspace_opt = false;
+            } else {
+                use_workspace_opt = (required_dp_workspace_bytes <= max_dp_workspace_bytes);
             }
         }
 
-        if (war_use_non_virtual_dQAccum) {
+        // non-virtual dQ_accum is how the backend API signals workspace optimization
+        if (!use_workspace_opt) {
             dQ_accum = std::make_shared<Tensor_attributes>();
             dQ_accum->set_is_virtual(false);
             dQ_accum->set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1});
@@ -763,13 +779,24 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         // --------------RNG node--------------------
 
         if (is_dropout_prob) {
-            rng_output = rng(attributes.inputs[input_names::Seed],
-                             attributes.inputs[input_names::Offset],
-                             Rng_attributes()
-                                 .set_name("rng")
-                                 .set_distribution(RngDistribution_t::BERNOULLI)
-                                 .set_bernoulli_probability(1.0f - attributes.dropout_probability.value()));
-            rng_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            if (attributes.outputs[output_names::RNG_DUMP] != nullptr) {
+                rng_output = attributes.outputs[output_names::RNG_DUMP];
+                rng(attributes.inputs[input_names::Seed],
+                    attributes.inputs[input_names::Offset],
+                    Rng_attributes()
+                        .set_name("rng")
+                        .set_distribution(RngDistribution_t::BERNOULLI)
+                        .set_bernoulli_probability(1.0f - attributes.dropout_probability.value()),
+                    rng_output);
+            } else {
+                rng_output = rng(attributes.inputs[input_names::Seed],
+                                 attributes.inputs[input_names::Offset],
+                                 Rng_attributes()
+                                     .set_name("rng")
+                                     .set_distribution(RngDistribution_t::BERNOULLI)
+                                     .set_bernoulli_probability(1.0f - attributes.dropout_probability.value()));
+                rng_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+            }
         } else if (is_dropout_mask) {
             rng_output = attributes.inputs[input_names::Dropout_mask];
         }
@@ -788,15 +815,10 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         last_output->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
 
         // softmax_sum = last_output * dropout_scale
-        std::shared_ptr<Tensor_attributes> temp_tensor;
-        if (attributes.inputs[input_names::Dropout_scale_inv]) {
-            temp_tensor = attributes.inputs[input_names::Dropout_scale_inv];
-        } else {
-            // WAR dropout scale inverse is needed for non-dropout graphs
-            temp_tensor = one_tensor;
-        }
         last_output = pointwise(last_output,
-                                temp_tensor,
+                                attributes.inputs[input_names::Dropout_scale_inv]
+                                    ? attributes.inputs[input_names::Dropout_scale_inv]
+                                    : one_tensor,
                                 Pointwise_attributes().set_name("scale_dropout_inv").set_mode(PointwiseMode_t::MUL));
 
         softmax_sum = last_output;
@@ -1014,6 +1036,12 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                 pointwise(last_output,
                           attributes.inputs[input_names::Dropout_scale],
                           Pointwise_attributes().set_name("mul_dS_dropout_scale").set_mode(PointwiseMode_t::MUL));
+        }
+
+        if (attributes.outputs[output_names::dBias]) {
+            reduction(last_output,
+                      Reduction_attributes().set_name("red_dP_dBias").set_mode(ReductionMode_t::ADD),
+                      attributes.outputs[output_names::dBias]);
         }
 
         // (optional) last_output = last_output * bmm_scale
