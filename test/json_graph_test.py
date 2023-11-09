@@ -555,7 +555,7 @@ def setup_test_graph_from_json(json_dict, backendEngine=-1):
 # @brief: main function to run json graphs with reference check
 # @TODO(mbreughe): rename this function
 def run_test_from_json_definition(json_dict, backendEngine=-1):
-    testGraph = setup_test_graph_from_json(json_dict, backendEngine=-1)
+    testGraph = setup_test_graph_from_json(json_dict, backendEngine)
 
     # TODO(@mbreughe)
     # we can do a front-end test by using the json dimensions of the virtual tensors
