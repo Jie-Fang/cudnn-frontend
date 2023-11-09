@@ -24,7 +24,7 @@ class SoftmaxNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SoftmaxNode " << attributes.name << "..." << std::endl;
 
@@ -35,16 +35,17 @@ class SoftmaxNode : public INode {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "use_M_Zinv attribute not set.");
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node " << attributes.name << "."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Fill properties of virtual tensors
         auto const& p_dim = attributes.inputs[Softmax_attributes::input_names::P]->get_dim();
@@ -109,6 +110,15 @@ class SoftmaxNode : public INode {
                       mul_attributes,
                       attributes.outputs[Softmax_attributes::output_names::S]);
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

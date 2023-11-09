@@ -22,12 +22,11 @@ class LayerNormNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for layernorm node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto X                  = attributes.inputs[Layernorm_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
@@ -124,7 +123,7 @@ class LayerNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating LayerNormNode " << attributes.name << "..." << std::endl;
 
@@ -132,6 +131,17 @@ class LayerNormNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase == NormFwdPhase_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Forward phase not set of layernorm node.");
+
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

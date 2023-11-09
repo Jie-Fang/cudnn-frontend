@@ -44,6 +44,21 @@ class Graph : public INode {
     //     std::shared_ptr<Tensor_attributes>,
     //     Scaled_dot_product_attention_attributes);
 
+    error_t
+    pre_validate_node() const override final {
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        return {error_code_t::OK, ""};
+    }
+
    public:
     Graph() : INode(detail::Context{}) {}
 

@@ -22,7 +22,7 @@ class ConvolutionNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating Node Type::CONVOLUTION " << attributes.name << "..." << std::endl;
 
@@ -31,16 +31,16 @@ class ConvolutionNode : public INode {
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_fprop_attributes::output_names::Y);
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for conv node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, W) -> Y works today.
         auto& X = attributes.inputs.find(Conv_fprop_attributes::input_names::X)->second;
@@ -75,6 +75,15 @@ class ConvolutionNode : public INode {
             auto const& stride_order = detail::generate_NHWC_stride_order(Y_dim.size());
             Y->set_stride(detail::generate_stride(Y_dim, stride_order));
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

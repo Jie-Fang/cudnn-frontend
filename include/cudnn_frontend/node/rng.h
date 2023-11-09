@@ -21,7 +21,7 @@ class RngNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating RngNode " << attributes.name << "..." << std::endl;
 
@@ -29,6 +29,8 @@ class RngNode : public INode {
             attributes.outputs.find(Rng_attributes::output_names::Y) == attributes.outputs.end(),
             error_code_t::ATTRIBUTE_NOT_SET,
             "rng output not set.");
+
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         return {error_code_t::OK, ""};
     }
@@ -53,14 +55,13 @@ class RngNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for rng node " << attributes.name << "..."
                     << std::endl;
 
         auto y_tensor = attributes.outputs[Rng_attributes::output_names::Y];
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // If user does not set shape and layout of the generated tensor,
         // Get it from node attributes
@@ -84,6 +85,15 @@ class RngNode : public INode {
         if (y_tensor->get_dim().empty() || y_tensor->get_stride().empty()) {
             return {error_code_t::SHAPE_DEDUCTION_FAILED, "RNG node output shape deduction failed"};
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

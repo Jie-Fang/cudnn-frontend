@@ -14,6 +14,9 @@
 namespace cudnn_frontend::graph {
 
 class ScaledDotProductFlashAttentionNode : public INode {
+    using input_names  = Scaled_dot_product_flash_attention_attributes::input_names;
+    using output_names = Scaled_dot_product_flash_attention_attributes::output_names;
+
     std::shared_ptr<Tensor_attributes> rng_output;
     std::shared_ptr<Tensor_attributes> dropout_scale;
     std::shared_ptr<Tensor_attributes> negative_inf_causal;
@@ -33,12 +36,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionNode " << attributes.name << "..." << std::endl;
-
-        using input_names  = Scaled_dot_product_flash_attention_attributes::input_names;
-        using output_names = Scaled_dot_product_flash_attention_attributes::output_names;
 
         CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
@@ -59,7 +59,6 @@ class ScaledDotProductFlashAttentionNode : public INode {
         CUDNN_FE_VALIDATE_STRIDE(input_names::Q, attributes.inputs);
         CUDNN_FE_VALIDATE_STRIDE(input_names::K, attributes.inputs);
         CUDNN_FE_VALIDATE_STRIDE(input_names::V, attributes.inputs);
-        CUDNN_FE_VALIDATE_STRIDE(output_names::O, attributes.outputs);
 
 #undef CUDNN_FE_VALIDATE_STRIDE
 
@@ -118,23 +117,20 @@ class ScaledDotProductFlashAttentionNode : public INode {
                                            "Attn mask data type cannot be boolean");
         }
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  "
                     << attributes.name << "..." << std::endl;
-
-        using input_names  = Scaled_dot_product_flash_attention_attributes::input_names;
-        using output_names = Scaled_dot_product_flash_attention_attributes::output_names;
 
         // DO NOT REMOVE
         // input data type is needed for:
         // - aType of bmm2
         // - dropout scale in pre 8.9.3
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Gather dims to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();
@@ -428,11 +424,33 @@ class ScaledDotProductFlashAttentionNode : public INode {
         return {error_code_t::OK, ""};
     }
 
+    error_t
+    post_validate_node() const override final {
+#define CUDNN_FE_VALIDATE_STRIDE(port, port_map)                                                                \
+    {                                                                                                           \
+        auto const& t = port_map.find(port);                                                                    \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                                         \
+            t->second->get_stride().back() != 1,                                                                \
+            error_code_t::GRAPH_NOT_SUPPORTED,                                                                  \
+            "The stride for the last dimension corresponding to the embedding size per head should be 1 for " + \
+                std::string(#port));                                                                            \
+    }
+
+        CUDNN_FE_VALIDATE_STRIDE(output_names::O, attributes.outputs);
+
+#undef CUDNN_FE_VALIDATE_STRIDE
+
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
     virtual int64_t
     get_fe_workspace_size_node() const override final {
-        using input_names = Scaled_dot_product_flash_attention_attributes::input_names;
-        auto const& q     = attributes.inputs.find(input_names::Q);
-        int64_t const h   = q->second->get_dim()[1];
+        auto const& q   = attributes.inputs.find(input_names::Q);
+        int64_t const h = q->second->get_dim()[1];
         return h * sizeof(float);
     }
 
@@ -442,8 +460,6 @@ class ScaledDotProductFlashAttentionNode : public INode {
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) const override final {
-        using input_names = Scaled_dot_product_flash_attention_attributes::input_names;
-
         if (attributes.dropout_probability.has_value() && attributes.dropout_probability.value() != 0.0) {
 #if CUDNN_VERSION < 8903
             half dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
@@ -512,7 +528,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << attributes.name << "..." << std::endl;
 
@@ -614,11 +630,21 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                                            "Attn mask data type cannot be boolean");
         }
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for ScaledDotProductFlashAttentionBackwardNode "
                     << attributes.name << "..." << std::endl;
 
@@ -626,7 +652,6 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         using output_names = Scaled_dot_product_flash_attention_backward_attributes::output_names;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // Gather dims to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();

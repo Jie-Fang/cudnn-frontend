@@ -22,12 +22,11 @@ class InstanceNormNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for instancenorm node " << attributes.name
                     << "..." << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         auto X                  = attributes.inputs[Instancenorm_attributes::input_names::X];
         auto const x_tensor_dim = X->get_dim();
@@ -80,7 +79,7 @@ class InstanceNormNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating InstanceNormNode " << attributes.name << "..." << std::endl;
 
@@ -88,6 +87,17 @@ class InstanceNormNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.forward_phase == NormFwdPhase_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Forward phase not set of instancenorm node.");
+
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }
@@ -181,20 +191,21 @@ class DINNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DINNode " << attributes.name << "..." << std::endl;
+
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DIN node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferencing from X works today.
         auto X                  = attributes.inputs[Instancenorm_backward_attributes::input_names::X];
@@ -255,6 +266,15 @@ class DINNode : public INode {
 
         infer_scale_bias_tensors(attributes.outputs[Instancenorm_backward_attributes::output_names::DSCALE]);
         infer_scale_bias_tensors(attributes.outputs[Instancenorm_backward_attributes::output_names::DBIAS]);
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

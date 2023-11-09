@@ -22,7 +22,7 @@ class DgradNode : public INode {
     }
 
     error_t
-    validate_node() const override final {
+    pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating Node Type::DGRAD " << attributes.name << "..." << std::endl;
 
@@ -31,16 +31,16 @@ class DgradNode : public INode {
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_dgrad_attributes::output_names::DX);
 
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
     error_t
-    infer_properties_node() override final {
+    expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         // TODO: Only inferrencing from (X, DY) -> DW works today.
         auto DX = attributes.outputs.find(Conv_dgrad_attributes::output_names::DX)->second;
@@ -59,6 +59,15 @@ class DgradNode : public INode {
             auto const& stride_order = detail::generate_NHWC_stride_order(DX_dim.size());
             DX->set_stride(detail::generate_stride(DX_dim, stride_order));
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

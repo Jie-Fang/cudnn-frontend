@@ -22,9 +22,15 @@ class GenstatsNode : public INode {
     }
 
     error_t
-    infer_properties_node() override final {
-        attributes.fill_from_context(context);
+    pre_validate_node() const override final {
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_and_infer_properties() override final {
+        attributes.fill_from_context(context);
 
         // Only inferrencing from X works today.
         auto X      = attributes.inputs[Genstats_attributes::input_names::X];
@@ -60,6 +66,15 @@ class GenstatsNode : public INode {
             auto const& stride_order = detail::generate_NHWC_stride_order(SQ_SUM_dim.size());
             SQ_SUM->set_stride(detail::generate_stride(SQ_SUM_dim, stride_order));
         }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate_node() const override final {
+        // Validate outputs
+        // All properties of output tensors should have been set now.
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }
