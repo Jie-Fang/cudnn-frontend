@@ -426,7 +426,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
 
     if is_padding:
         # zero out padded region of the output for comparison
-        for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
+        for i, m in enumerate(seq_len_q_ref):
             o_ref[i, :, m:, :] = 0
             o_gpu[i, :, m:, :] = 0
             if is_infer == False:
@@ -616,9 +616,9 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
 
     if cudnn.backend_version() < 8906 and is_padding:
         # zero out padded region of the output and stats
-        for i, (m, n) in enumerate(zip(seq_len_q_gpu, seq_len_q_gpu)):
-            o_gpu[i, :, m, :] = 0
-            stats_gpu[i, :, m, :] = 0
+        for i, m in enumerate(seq_len_q_gpu):
+            o_gpu[i, :, m:, :] = 0
+            stats_gpu[i, :, m:, :] = 0
 
     # backward cuDNN graph
     graph = cudnn.pygraph(
