@@ -1,14 +1,16 @@
+import utils
 import cudnn
+utils.reportCurrentTime("import_cudnn")
 import torch
+utils.reportCurrentTime("import_torch")
 from typing import Any
 from dataclasses import dataclass, asdict, field
 import copy
-import utils
+utils.reportCurrentTime("import_test_graph_deps")
+
 
 # Globally ensure cudnn is disabled for everything torch related
 torch.backends.cudnn.enabled = False 
-# TODO(@barretw): ensure output is deterministic and reproducible for L4 tests
-torch.manual_seed(0)
 
 # @brief: Reference code
 # @details: the methods mirror cudnn.pygraph methods and class constructors(__init__)
@@ -21,7 +23,25 @@ class PytorchReference:
     # @details: all this function needs to do is unpack the cudnn.pygraph function arguments and pass them to the pytorch equivalent
     @staticmethod
     def conv_fprop(kwargs, test_tensor_out_list):
-        return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        # determine whether we need 2d or 3d convolution
+        if len(kwargs["image"].shape) == 4:
+            return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        elif len(kwargs["image"].shape) == 5:
+            return [torch.nn.functional.conv3d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+        else:
+            assert False
+
+    @staticmethod
+    def conv_dgrad(kwargs, test_tensor_out_list):
+        input_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
+        return [dX]
+    
+    @staticmethod
+    def conv_wgrad(kwargs, test_tensor_out_list):
+        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
+        return [dW]
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
@@ -31,7 +51,7 @@ class PytorchReference:
     
     @staticmethod
     def batchnorm(kwargs, test_tensor_out_list):
-        is_training = kwargs["norm_forward_phase"] == cudnn.norm_forward_phase.TRAINING
+        is_training = True
         momentum = kwargs["momentum"].item()
         epsilon=kwargs["epsilon"].item()
         # TODO(https://nvbugs/4272638): A bug with the cudnn backend disabled prevents correct behavior of batchnorm
@@ -73,18 +93,7 @@ class PytorchReference:
         output = torch.mul(kwargs["a"], kwargs["b"])
         return [output]
 
-    @staticmethod
-    def conv_dgrad(kwargs, test_tensor_out_list):
-        input_size = utils.getFwdConvInputDims(kwargs["loss"].size(), kwargs["padding"], kwargs["filter"].size(), kwargs["stride"], kwargs["dilation"] )
-        dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
-        return [dX]
     
-    @staticmethod
-    def conv_wgrad(kwargs, test_tensor_out_list):
-        # TODO(@mbreughe): derive dimensions algebraic instead!!
-        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
-        dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
-        return [dW]
 
     @staticmethod
     def reduction(kwargs, test_tensor_out_list):
@@ -105,6 +114,12 @@ class PytorchReference:
         
         output = output.reshape(out_dims)
         return [output]
+    
+    @staticmethod
+    def relu_backward(kwargs, test_tensor_out_list):
+        dX = torch.where(kwargs["input"] > 0, kwargs["loss"], 0)
+        dX = dX.to(convert_to_torch_type(test_tensor_out_list[0].data_type))
+        return [dX]
 
 
 # Base class for Tensor and operation nodes
@@ -157,7 +172,6 @@ class test_node:
 
     def run_reftree_recursive(self):
         if not self.is_visited() and self.is_prereq_satisfied():
-            #print ("Checking {}".format(self.name))
             self.run_ref()
             self.set_visited()
             for node in self.consumer_nodes:
@@ -247,7 +261,15 @@ class random_tensor_generator(test_node):
             self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
             
             if self.get_layout() == "NHWC":
-                self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
+                size = self.output[0].ref_data.size()
+                if len(size) == 4:
+                    self.output[0].ref_data = self.output[0].ref_data.to(memory_format=torch.channels_last)
+                elif len(size) == 5:
+                    # Technically we could reuse this for len(size) == 4, but some tests are showing small numerical errors
+                    stride = utils.create_nhwc_strides(size)
+                    self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, size, stride)
+                else:
+                    assert len(size) < 6 and len(size) > 3
     
     def get_value(self):
         self.initialize_random_tensor()
@@ -331,12 +353,6 @@ class test_tensor:
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_stride(stride)
 
-    def set_dim(self, dim):
-        self.dim = dim
-
-        if self.cudnn_tensor is not None:
-            self.cudnn_tensor.set_dim(dim)
-
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
@@ -348,9 +364,6 @@ class test_tensor:
 
         if "stride" in dir(self):
             self.cudnn_tensor.set_stride(self.stride)
-
-        if "dim" in dir(self):
-            self.cudnn_tensor.set_dim(self.dim)
     
 
 def convert_to_cudnn_type(torch_type):
@@ -399,6 +412,9 @@ class test_graph:
     __test__ = False
     # Add data types, custom test name ,etc.
     def __init__(self, io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT):
+        # TODO(@barretw): ensure output is deterministic and reproducible for L4 tests
+        torch.manual_seed(0)
+        
         self.uid_counter = 0
         self.nodes = []
         self.entrance_nodes = []
@@ -407,6 +423,24 @@ class test_graph:
         self.io_data_type = io_data_type
         self.intermediate_data_type = intermediate_data_type
         self.compute_data_type = compute_data_type
+        self.set_backend_engine(-1)
+
+    def set_backend_engine(self, backendEngine):
+        self.heuristics = []
+        # Some backendEngines are ints, some are strings. Make them all string.
+        engine = str(backendEngine)
+        if engine == "-1":
+            self.set_heuristics([cudnn.heur_mode.A])
+        elif engine == "-2":
+            self.set_heuristics([cudnn.heur_mode.B])
+        elif engine == "-3":
+            self.set_heuristics([cudnn.heur_mode.FALLBACK])
+        else:
+            print("MB Unkown heuristic for backendEngine {} (type {}), trying A and FALLBACK".format(engine, type(engine)))
+            self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+
+    def set_heuristics(self, heuristics):
+        self.heuristics = heuristics
 
     def getOutputs(self):
         return self.output_tensors
@@ -541,13 +575,15 @@ class test_graph:
     def build_cudnn_graph(self):
         # Setting up graph
         graph = cudnn.pygraph(self.graph_name, io_data_type = self.io_data_type, intermediate_data_type = self.intermediate_data_type, compute_data_type = self.compute_data_type)
-        
+        utils.reportCurrentTime("cudnn.pygraph")
+
         # TODO(@mbreughe): Change this. We don't want to invoke cudnn calls this way since we change the order
         # a developer may have intended. It is useful when building from json graphs, but not when 
         # manually setting up graphs. This is like building a house of cards.
         self.clear_node_meta_data()
         for node in self.entrance_nodes:
             node.build_cudnntree_recursive(graph)
+        
         
         # Once we constructed the cudnn graph, it's time to apply any explicit modifiers to each node's output tensors
         # test_graph creates dummy output tensors to allow constructing of a graph.
@@ -558,13 +594,17 @@ class test_graph:
         # Setting implicit output nodes"
         self.mark_implicit_output_nodes()
 
-        # Building graph
-        graph.build([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        utils.reportCurrentTime("recursive_tree_build")
+
+        graph.build(self.heuristics)
+        utils.reportCurrentTime("graph.build")
         
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()
 
         self.cudnn_graph = graph
+
+        utils.reportCurrentTime("post_build")
         return graph
     
     # @brief: check whether correct shape inferencing took place
@@ -609,6 +649,7 @@ class test_graph:
 
         # Clear the "is_visited" status of the nodes
         self.clear_node_meta_data()
+        utils.reportCurrentTime("calc_reference")
         return output
     
     def create_workspace_and_variantpack(self):
@@ -630,12 +671,11 @@ class test_graph:
                     self.output_tensors.append(output_tensor)
                     variant_pack[output.cudnn_tensor] = self.output_tensors[-1]
 
+        utils.reportCurrentTime("create_workspace_and_variantpack")
+
         return (workspace, variant_pack)
     
-    # @brief: Run the cudnn implementation and the reference, and compare
-    # @note: This assumes build_cudnn_graph has already been run
-    # @pre: build_cudnn_graph needs to be called first
-    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+    def cudnn_execute(self, timingLoop=1):
         # Set the random seed here: all random tensors that are entry nodes
         # are created by create_workspace_and_variantpack().
         # TODO(@mbreughe): verify the above statement and move seed initialization
@@ -646,7 +686,16 @@ class test_graph:
 
         # Run the cudnn graph
         print("Executing graph through cudnn")
-        self.cudnn_graph.execute(variant_pack, workspace)
+        for i in range(timingLoop):
+            self.cudnn_graph.execute(variant_pack, workspace)
+        utils.reportCurrentTime("graph.execute")
+
+    # @brief: Run the cudnn implementation and the reference, and compare
+    # @note: This assumes build_cudnn_graph has already been run
+    # @pre: build_cudnn_graph needs to be called first
+    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
+        # Set up workspace and variant pack, then execute.
+        self.cudnn_execute(timingLoop=1)
 
         # Run the reference
         print("Computing reference")
@@ -667,8 +716,14 @@ class test_graph:
             if Y_expected.dtype != Y_actual.dtype:
                 print ("WARNING: reference and actual output types differ ({} resp., {})".format(Y_expected.dtype, Y_actual.dtype) )
 
+            if Y_expected.shape != Y_actual.shape:
+                print ("WARNING: reference and actual output shapes differ ({} resp., {})".format(Y_expected.shape, Y_actual.shape) )
+
             torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
-            print("cudnn and reference match")
+            
             number_outputs_tested += 1
         
         assert number_outputs_tested >= 1
+        print("PASSED: cudnn and reference match")
+
+        utils.reportCurrentTime("assert_close")
