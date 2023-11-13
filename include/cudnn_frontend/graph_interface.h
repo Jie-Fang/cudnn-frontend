@@ -18,7 +18,6 @@
 #include "node/reshape.h"
 // #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
-#include "node/sdpa_fp8.h"
 
 #include "plans.h"
 #include "graph_helpers.h"
@@ -168,16 +167,6 @@ class Graph : public INode {
         std::shared_ptr<Tensor_attributes>,
         std::shared_ptr<Tensor_attributes>,
         Scaled_dot_product_flash_attention_backward_attributes);
-
-    std::array<std::shared_ptr<Tensor_attributes>, 5> sdpa_fp8(std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               std::shared_ptr<Tensor_attributes>,
-                                                               SDPA_FP8_attributes);
 
     error_t
     create_execution_plans(std::vector<HeurMode_t> const &mode);
@@ -754,46 +743,6 @@ Graph::scaled_dot_product_flash_attention_backward(std::shared_ptr<Tensor_attrib
         std::make_unique<ScaledDotProductFlashAttentionBackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV};
-}
-
-inline std::array<std::shared_ptr<Tensor_attributes>, 5>
-Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
-                std::shared_ptr<Tensor_attributes> k,
-                std::shared_ptr<Tensor_attributes> v,
-                std::shared_ptr<Tensor_attributes> descale_q,
-                std::shared_ptr<Tensor_attributes> descale_k,
-                std::shared_ptr<Tensor_attributes> descale_v,
-                std::shared_ptr<Tensor_attributes> scale_s,
-                std::shared_ptr<Tensor_attributes> scale_o,
-                SDPA_FP8_attributes attributes) {
-    // Make required output tensors
-    auto O = attributes.outputs[SDPA_FP8_attributes::output_names::O] = output_tensor(attributes.name + "::O");
-
-    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> M = nullptr;
-    M = attributes.outputs[SDPA_FP8_attributes::output_names::M] = output_tensor(attributes.name + "::M");
-
-    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Zinv = nullptr;
-    Zinv = attributes.outputs[SDPA_FP8_attributes::output_names::Zinv] = output_tensor(attributes.name + "::Zinv");
-
-    auto AMax_S = attributes.outputs[SDPA_FP8_attributes::output_names::AMax_S] =
-        output_tensor(attributes.name + "::AMax_S");
-    auto AMax_O = attributes.outputs[SDPA_FP8_attributes::output_names::AMax_O] =
-        output_tensor(attributes.name + "::AMax_O");
-
-    // Set inputs
-    attributes.inputs[SDPA_FP8_attributes::input_names::Q] = q;
-    attributes.inputs[SDPA_FP8_attributes::input_names::K] = k;
-    attributes.inputs[SDPA_FP8_attributes::input_names::V] = v;
-
-    attributes.inputs[SDPA_FP8_attributes::input_names::descale_Q] = descale_q;
-    attributes.inputs[SDPA_FP8_attributes::input_names::descale_K] = descale_k;
-    attributes.inputs[SDPA_FP8_attributes::input_names::descale_V] = descale_v;
-    attributes.inputs[SDPA_FP8_attributes::input_names::scale_S]   = scale_s;
-    attributes.inputs[SDPA_FP8_attributes::input_names::scale_O]   = scale_o;
-
-    sub_nodes.emplace_back(std::make_unique<SDPA_FP8_Node>(std::move(attributes), context));
-
-    return {O, M, Zinv, AMax_S, AMax_O};
 }
 
 }  // namespace cudnn_frontend::graph
