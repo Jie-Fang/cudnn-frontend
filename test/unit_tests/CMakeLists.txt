@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
 
-# Find the cuda compiler
-find_package(CUDAToolkit)
-
 Include(FetchContent)
 
 # Fetch and build catch2
@@ -13,13 +10,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-# Find cudnn
-include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
-
 add_executable(
     unit_tests
 
     serialize.cpp
+    validate.cpp
 )
 
 if (MSVC)
@@ -45,8 +40,6 @@ target_link_libraries(
     unit_tests
     cudnn_frontend
     Catch2::Catch2WithMain
-    CUDA::cudart
-    CUDNN::cudnn_all
 )
 
 # cuDNN dlopen's its libraries

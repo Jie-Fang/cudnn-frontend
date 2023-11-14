@@ -1,3 +1,13 @@
+LOG_RUNTIME = False
+
+if LOG_RUNTIME:
+    import time 
+    g_clk_id = time.CLOCK_MONOTONIC_RAW
+
+class ImplementationError(Exception):
+    def __init__(self, reason):
+        self.reason = reason
+
 def getFwdConvInputDims(outputTensorDim, pad, filterDim, stride, dilation):
     inputTensorDim = [0] * len(outputTensorDim)
     inputTensorDim[0] = outputTensorDim[0]
@@ -42,3 +52,33 @@ def computeStrideNdTransposedPacked(nbDims, dims, axesOrder):
         strides[inverseTranspose[dim]] = dims[inverseTranspose[dim + 1]] * strides[inverseTranspose[dim + 1]]
     
     return strides
+
+def reportCurrentTime(msg):
+    if LOG_RUNTIME:
+        cur_time = time.clock_gettime_ns(g_clk_id)
+        print("[MB_PROFILE] {} {}".format(msg, cur_time))
+
+def create_nhwc_strides(dims):
+    nbDims = len(dims)
+    # Only support NCHW and NCDHW
+    assert nbDims > 3 and nbDims < 6
+    stride = [1] * nbDims
+
+    dim_N = 0
+    dim_C = 1
+    dim_W = nbDims - 1
+    dim_H = dim_W - 1
+    if nbDims == 5:
+        dim_D = dim_H - 1
+    
+    stride[dim_C] = 1
+    stride[dim_W] = dims[dim_C] * stride[dim_C]
+    stride[dim_H] = stride[dim_W] * dims[dim_W]
+
+    if nbDims == 5:
+        stride[dim_D] = stride[dim_H] * dims[dim_H]
+        stride[dim_N] = stride[dim_D] * dims[dim_D]
+    else:
+        stride[dim_N] = stride[dim_H] * dims[dim_H]
+
+    return stride
