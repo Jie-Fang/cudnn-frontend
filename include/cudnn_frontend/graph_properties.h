@@ -200,6 +200,7 @@ class Attributes {
         std::vector<int64_t> non_virtual_uids;
         auto derived = static_cast<DerivedT const*>(this);
         for (auto& [name, tensor] : derived->inputs) {
+            (void)name;
             if (tensor && tensor->get_is_virtual() == false) {
                 non_virtual_uids.push_back(tensor->get_uid());
                 if (auto ragged_offset = tensor->get_ragged_offset()) {
@@ -208,6 +209,7 @@ class Attributes {
             }
         }
         for (auto& [name, tensor] : derived->outputs) {
+            (void)name;
             if (tensor && tensor->get_is_virtual() == false) {
                 non_virtual_uids.push_back(tensor->get_uid());
                 if (auto ragged_offset = tensor->get_ragged_offset()) {
@@ -236,11 +238,13 @@ class Attributes {
     fill_from_context(detail::Context const& context) {
         auto derived = static_cast<DerivedT const*>(this);
         for (auto& [name, tensor] : derived->inputs) {
+            (void)name;
             if (tensor) {
                 tensor->fill_from_context(context);
             }
         }
         for (auto& [name, tensor] : derived->outputs) {
+            (void)name;
             if (tensor) {
                 tensor->fill_from_context(context);
             }
@@ -280,6 +284,7 @@ class Attributes {
     validate_inputs() const {
         auto derived = static_cast<DerivedT const*>(this);
         for (auto const& [enum_name, tensor] : derived->inputs) {
+            (void)enum_name;
             if (tensor) {
                 CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
             }
@@ -302,6 +307,7 @@ class Attributes {
     validate_outputs() const {
         auto derived = static_cast<DerivedT const*>(this);
         for (auto const& [enum_name, tensor] : derived->outputs) {
+            (void)enum_name;
             if (tensor) {
                 CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
             }

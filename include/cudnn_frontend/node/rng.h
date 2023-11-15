@@ -42,11 +42,13 @@ class RngNode : public INode {
                     << "Building RngNode tensors " << attributes.name << "..." << std::endl;
 
         for (auto const& [name, tensor] : attributes.inputs) {
+            (void)name;
             if (tensor) {
                 CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
             }
         }
         for (auto const& [name, tensor] : attributes.outputs) {
+            (void)name;
             if (tensor) {
                 CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
             }
