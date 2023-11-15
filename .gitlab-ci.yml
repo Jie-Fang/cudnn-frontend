@@ -69,7 +69,7 @@ stages:
 .L4_graph_runner_large:template:
     stage: L4_graph_runner
     script:
-        - ci/run_L4_graph_runner_large.sh
+        - ci/run_L4_streams.sh
 
 analysis:clang-format:
     image: ubuntu:jammy
@@ -521,6 +521,19 @@ L4_graph_runner:cudnn_8.9.6.44:
         - ${ARCH}
     extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.9.6.44"]
+
+# TODO(@mbreughe): change this to use latest 8.9.6 version
+L4_graph_runner_large:cudnn_8.9.6.44:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
+    parallel:
+        matrix:
+            - ARCH: ["Ampere", "Hopper"]
+    tags:
+        - ${ARCH}
+    extends: .L4_graph_runner_large:template
+    needs: ["build:cudnn_8.9.6.44"]
+    only:
+        - schedules
     
 # build:cudnn_9.0.0_latest:
 #     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_torch
