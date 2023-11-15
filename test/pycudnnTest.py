@@ -65,7 +65,8 @@ if __name__ == "__main__":
             args_stream, unknown_args_stream = pct_parser.parse_known_args(shlex.split(line))
             try:
                 run_test_from_legacy_args(args_stream, unknown_args_stream)
-            except (utils.ImplementationError, AssertionError):
+            except Exception as e:
+                print(e)
                 error_count +=1
                 print("ERROR: {}".format(line.strip()))
 
