@@ -65,6 +65,8 @@ lookup_cache_or_build_graph(cudnnHandle_t handle, cache_type& user_maintained_ca
           seq_len_override,
           use_dropout_mask] = std::make_tuple(args...);
 
+    (void)use_dropout_mask;
+
     auto graph = std::make_shared<fe::graph::Graph>();
     graph->set_io_data_type(fe::DataType_t::HALF)
         .set_intermediate_data_type(fe::DataType_t::FLOAT)
@@ -249,6 +251,9 @@ TEST_CASE("Flash with rng dropout", "[graph][mha][flash][forward]") {
                                     seq_len_override,
                                     use_dropout_mask);
 
+    (void)dropout_mask;
+    (void)dropout_scale;
+
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
     Surface<half> oTensor(b * s_q * h * d, false);
@@ -363,6 +368,13 @@ TEST_CASE("Flash with no dropout", "[graph][mha][flash][forward]") {
                                     0.0f,
                                     seq_len_override,
                                     use_dropout_mask);
+
+    (void)seq_q;
+    (void)seq_kv;
+    (void)seed;
+    (void)offset;
+    (void)dropout_mask;
+    (void)dropout_scale;
 
     //// Build variant pack
     Surface<half> qkvTensor(b * s_q * 3 * h * d, false);
