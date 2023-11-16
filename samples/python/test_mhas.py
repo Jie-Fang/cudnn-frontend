@@ -241,7 +241,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
         pytest.skip("Padding mask is only supported 8.9.3 onwards.")
 
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
-        pytest.skip("Padding mask is only supported 8.9.3 onwards.")
+        pytest.skip("GQA and MQA is only supported 8.9.3 onwards.")
 
     s_q_choices = [256, 512, 1024, 2048]
     d_choices = [64, 128]
@@ -257,11 +257,11 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
         h_kv = 6
     elif head_group == "group_query":
         if layout != "non_interleaved":
-            pytest.skip("Group query attention is only supported with non-interleaved layouts")
+            pytest.skip("GQA only supports non-interleaved layout")
         h_kv = 6 // 3
     elif head_group == "multi_query":
         if layout != "non_interleaved":
-            pytest.skip("Multi query attention is only supported with non-interleaved layouts")
+            pytest.skip("MQA only supports non-interleaved layout")
         h_kv = 1
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
@@ -782,11 +782,11 @@ if __name__ == "__main__":
         try:
             test_scale_dot_product_flash_attention(option)
         except pytest.skip.Exception as e:
-            print(f"Skipped test {option}: {e}")
+            print(f"Skipped {option}: {e}")
 
     print("==========running backward tests==========")
     for option in all_options_backward:
         try:
             test_scale_dot_product_flash_attention_backward(option)
         except pytest.skip.Exception as e:
-            print(f"Skipped test {option}: {e}")
+            print(f"Skipped {option}: {e}")
