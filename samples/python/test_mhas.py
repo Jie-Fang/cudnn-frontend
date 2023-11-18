@@ -235,6 +235,9 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
         is_infer,
     ) = param_extract_forward
 
+    if head_group != "multi_head" and cudnn.backend_version() < 8907:
+        pytest.skip("GQA and MQA is only supported 8.9.3 onwards.")
+
     if is_alibi and cudnn.backend_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
 
@@ -243,10 +246,6 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
 
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
-
-    if head_group != "multi_head" and cudnn.backend_version() < 8907:
-        pytest.skip("GQA and MQA is only supported 8.9.3 onwards.")
-
     s_q_choices = [256, 512, 1024, 2048]
     d_choices = [64, 128]
 
@@ -461,14 +460,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
         is_dropout,
     ) = param_extract_backward
 
-    if is_alibi and cudnn.backend_version() < 8904:
-        pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
-
-    if is_padding and cudnn.backend_version() < 8903:
-        pytest.skip("Padding mask is only supported 8.9.3 onwards.")
-
-    if is_dropout and cudnn.backend_version() < 8906:
-        pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
+    if head_group != "multi_head" and cudnn.backend_version() < 8907:
+        pytest.skip("GQA and MQA is only supported 8.9.3 onwards.")
 
     if is_bias and cudnn.backend_version() < 8906:
         pytest.skip("dBias is only supported 8.9.6 onwards.")
@@ -478,6 +471,16 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
 
     if is_bias and is_padding:
         pytest.skip("dBias is not supported with padding mask")
+
+
+    if is_alibi and cudnn.backend_version() < 8904:
+        pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
+
+    if is_padding and cudnn.backend_version() < 8903:
+        pytest.skip("Padding mask is only supported 8.9.3 onwards.")
+
+    if is_dropout and cudnn.backend_version() < 8906:
+        pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
 
     s_q_choices = [256]
     d_choices = [128]
