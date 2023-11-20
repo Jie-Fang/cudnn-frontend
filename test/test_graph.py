@@ -698,12 +698,34 @@ class test_graph:
         # Now we will run two methodologies to measure the time (with warm caches)
 
         # Methodology using CUPTI
-        with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
-            for i in range(timingLoop):
+        runtimes = []
+        for i in range(timingLoop):
+                with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
                     self.cudnn_graph.execute(variant_pack, workspace)
+                
+                # Find runtime for the graph we just executed
+                end_time = 0
+                start_time = max(e.time_range.start for e in prof.events())
+                trace_started = False
+                print("Start calc")
+                for event in prof.events():
+                    print (event.name)
+                    # Any event before this is not counted (this avoids measuring cuda memset and the very first launch latency)
+                    if event.name == "cuLaunchKernel":
+                        trace_started = True
+                    if not trace_started:
+                        continue
+                    if event.cuda_time > 0:
+                        print(event.time_range.start, event.time_range.end, event.cuda_time)
+                        if event.time_range.end > end_time:
+                            end_time = event.time_range.end
+                        if event.time_range.start < start_time:
+                            start_time = event.time_range.start
+                runtimes.append(end_time-start_time)
+        
+        print(runtimes)
+
         utils.reportCurrentTime("graph.execute")
-        # TODO: This is incorrect: it records the entire timingLoop as a single kernel
-        #print(prof.key_averages().table())
 
         # Store all the recorded times
         cupti_times = {}
@@ -715,6 +737,8 @@ class test_graph:
                     cupti_times[kernel_name] = []
                 assert event.cuda_time == event.cuda_time_total
                 cupti_times[kernel_name].append(event.cuda_time)
+        
+        print(cupti_times)
 
         # If multiple kernels were encountered, only keep the largest one (others may be format conversions, etc.)
         if len(cupti_times.keys()) > 1:
