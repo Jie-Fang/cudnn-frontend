@@ -69,15 +69,23 @@ def compare_tensors(expected, actual, name, rtol=2e-2, atol=2e-2, fudge=1e-9):
 
 
 def get_alibi_slopes(n_heads, device="cuda"):
+    # Get the closest power of 2 to `n_heads`.
+    # If `n_heads` is not a power of 2, then we first calculate slopes to the closest (smaller) power of 2,
+    # and then add the remaining slopes.
     n = 2 ** math.floor(math.log2(n_heads))
     m_0 = 2.0 ** (-8.0 / n)
     m = torch.pow(m_0, torch.arange(1, 1 + n))
 
+    # If `n_heads` is not a power of 2, then we add the remaining slopes.
+    # We calculate the remaining slopes for $n * 2$ (avoiding slopes added previously).
+    # And pick the slopes upto `n_heads`.
     if n < n_heads:
         m_hat_0 = 2.0 ** (-4.0 / n)
         m_hat = torch.pow(m_hat_0, torch.arange(1, 1 + 2 * (n_heads - n), 2))
+        # Concatenate the slopes with the remaining slopes.
         m = torch.cat([m, m_hat])
 
+    # Reshape the tensor to [1, num_heads, 1, 1]
     m = m.view(1, -1, 1, 1).to(device=device)
     return m
 
@@ -97,20 +105,22 @@ def compute_ref(
     device="cuda",
 ):
     b, h_q, s_q, d = q.shape
-    _, h_kv, s_kv, _ = k.shape
+    _, h_k, s_kv, _ = k.shape
+    _, h_v, s_kv, _ = v.shape
 
-    assert k.shape == (b, h_kv, s_kv, d)
-    assert v.shape == (b, h_kv, s_kv, d)
+    assert k.shape == (b, h_k, s_kv, d)
+    assert v.shape == (b, h_v, s_kv, d)
 
-    if h_q != h_kv:
-        assert h_q % h_kv == 0
-
-        # expand tensors for GQA and MQA
+    # expand tensors for GQA and MQA
+    if h_q != h_k:
+        assert h_q % h_k == 0
         k = k.unsqueeze(2)
-        k = k.expand(-1, -1, h_q // h_kv, -1, -1)
+        k = k.expand(-1, -1, h_q // h_k, -1, -1)
         k = k.reshape(k.size(0), -1, k.size(3), k.size(4))
+    if h_q != h_v:
+        assert h_q % h_v == 0
         v = v.unsqueeze(2)
-        v = v.expand(-1, -1, h_q // h_kv, -1, -1)
+        v = v.expand(-1, -1, h_q // h_v, -1, -1)
         v = v.reshape(v.size(0), -1, v.size(3), v.size(4))
 
     if padding is not None:
@@ -246,30 +256,29 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
 
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
-    s_q_choices = [256, 512, 1024, 2048]
-    d_choices = [64, 128]
 
     b = 2 # batch size
-    h_q = 6 # query number of heads
-    s_q = random.choice(s_q_choices) # query sequence length
+    s_q = random.choice([256, 512, 1024, 2048]) # query sequence length
     s_kv = s_q # key value sequence length
-    d = random.choice(d_choices) # word embedding size
+    d = random.choice([64, 128]) # word embedding size
 
-    # key value number of heads
+    # number of heads
+    h_q = 6
     if head_group == "multi_head":
-        h_kv = 6
+        h_k = h_v = 6
     elif head_group == "group_query":
         if layout != "non_interleaved":
             pytest.skip("GQA only supports non-interleaved layout")
-        h_kv = 6 // 3
+        h_k = 3
+        h_v = 2
     elif head_group == "multi_query":
         if layout != "non_interleaved":
             pytest.skip("MQA only supports non-interleaved layout")
-        h_kv = 1
+        h_k = h_v = 1
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
-    h_qkv = h_q + 2 * h_kv
+    h_qkv = h_q + h_k + h_v
 
     print(f"{str(param_extract_forward)} s={s_q} d={d}")
 
@@ -277,34 +286,34 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     dropout_prob = 0.1 if is_dropout else 0.0
 
     shape_q = (b, h_q, s_q, d)
-    shape_k = (b, h_kv, s_kv, d)
-    shape_v = (b, h_kv, s_kv, d)
+    shape_k = (b, h_k, s_kv, d)
+    shape_v = (b, h_v, s_kv, d)
     shape_o = (b, h_q, s_q, d)
 
     if layout == "sbh3d":
         stride_q = (h_q * 3 * d, 3 * d, b * h_q * 3 * d, 1)
-        stride_k = (h_kv * 3 * d, 3 * d, b * h_kv * 3 * d, 1)
-        stride_v = (h_kv * 3 * d, 3 * d, b * h_kv * 3 * d, 1)
+        stride_k = (h_k * 3 * d, 3 * d, b * h_k * 3 * d, 1)
+        stride_v = (h_v * 3 * d, 3 * d, b * h_v * 3 * d, 1)
         stride_o = (h_q * d, d, b * h_q * d, 1)
-        offset_q = d * 0
-        offset_k = d * 1
-        offset_v = d * 2
+        offset_q = 0
+        offset_k = offset_q + d
+        offset_v = offset_k + d
     elif layout == "bs3hd":
         stride_q = (s_q * 3 * h_q * d, d, 3 * h_q * d, 1)
-        stride_k = (s_kv * 3 * h_kv * d, d, 3 * h_kv * d, 1)
-        stride_v = (s_kv * 3 * h_kv * d, d, 3 * h_kv * d, 1)
+        stride_k = (s_kv * 3 * h_k * d, d, 3 * h_v * d, 1)
+        stride_v = (s_kv * 3 * h_v * d, d, 3 * h_v * d, 1)
         stride_o = (s_q * h_q * d, d, h_q * d, 1)
-        offset_q = h_q * d * 0
-        offset_k = h_kv * d * 1
-        offset_v = h_kv * d * 2
+        offset_q = 0
+        offset_k = offset_q + h_q * d
+        offset_v = offset_k + h_k * d
     elif layout == "non_interleaved":
         stride_q = (h_q * s_q * d, s_q * d, d, 1)
-        stride_k = (h_kv * s_kv * d, s_kv * d, d, 1)
-        stride_v = (h_kv * s_kv * d, s_kv * d, d, 1)
+        stride_k = (h_k * s_kv * d, s_kv * d, d, 1)
+        stride_v = (h_v * s_kv * d, s_kv * d, d, 1)
         stride_o = (h_q * s_q * d, s_q * d, d, 1)
         offset_q = 0
         offset_k = offset_q + b * h_q * s_q * d
-        offset_v = offset_k + b * h_kv * s_kv * d
+        offset_v = offset_k + b * h_k * s_kv * d
     else:
         assert False, "Layout should be either sbh3d or bs3hd or non_interleaved"
 
@@ -482,30 +491,28 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
 
-    s_q_choices = [256]
-    d_choices = [128]
-
     b = 2 # batch size
-    h_q = 6 # query number of heads
-    s_q = random.choice(s_q_choices) # query sequence length
+    s_q = random.choice([256, 512, 1024]) # query sequence length
     s_kv = s_q # key value sequence length
-    d = random.choice(d_choices) # word embedding size
+    d = random.choice([64, 128]) # word embedding size
 
-    # key value number of heads
+    # number of heads
+    h_q = 6
     if head_group == "multi_head":
-        h_kv = 6
+        h_k = h_v = 6
     elif head_group == "group_query":
         if layout != "non_interleaved":
             pytest.skip("GQA only supports non-interleaved layout")
-        h_kv = 6 // 3
+        h_k = 3
+        h_v = 2
     elif head_group == "multi_query":
         if layout != "non_interleaved":
             pytest.skip("MQA only supports non-interleaved layout")
-        h_kv = 1
+        h_k = h_v = 1
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
-    h_qkv = h_q + 2 * h_kv
+    h_qkv = h_q + h_k + h_v
 
     print(f"{str(param_extract_backward)} s={s_q} d={d}")
 
@@ -513,34 +520,34 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     dropout_prob = 0.1 if is_dropout else 0.0
 
     shape_q = (b, h_q, s_q, d)
-    shape_k = (b, h_kv, s_kv, d)
-    shape_v = (b, h_kv, s_kv, d)
+    shape_k = (b, h_k, s_kv, d)
+    shape_v = (b, h_v, s_kv, d)
     shape_o = (b, h_q, s_q, d)
 
     if layout == "sbh3d":
         stride_q = (h_q * 3 * d, 3 * d, b * h_q * 3 * d, 1)
-        stride_k = (h_kv * 3 * d, 3 * d, b * h_kv * 3 * d, 1)
-        stride_v = (h_kv * 3 * d, 3 * d, b * h_kv * 3 * d, 1)
+        stride_k = (h_k * 3 * d, 3 * d, b * h_k * 3 * d, 1)
+        stride_v = (h_v * 3 * d, 3 * d, b * h_v * 3 * d, 1)
         stride_o = (h_q * d, d, b * h_q * d, 1)
-        offset_q = d * 0
-        offset_k = d * 1
-        offset_v = d * 2
+        offset_q = 0
+        offset_k = offset_q + d
+        offset_v = offset_k + d
     elif layout == "bs3hd":
         stride_q = (s_q * 3 * h_q * d, d, 3 * h_q * d, 1)
-        stride_k = (s_kv * 3 * h_kv * d, d, 3 * h_kv * d, 1)
-        stride_v = (s_kv * 3 * h_kv * d, d, 3 * h_kv * d, 1)
+        stride_k = (s_kv * 3 * h_k * d, d, 3 * h_v * d, 1)
+        stride_v = (s_kv * 3 * h_v * d, d, 3 * h_v * d, 1)
         stride_o = (s_q * h_q * d, d, h_q * d, 1)
-        offset_q = h_q * d * 0
-        offset_k = h_kv * d * 1
-        offset_v = h_kv * d * 2
+        offset_q = 0
+        offset_k = offset_q + h_q * d
+        offset_v = offset_k + h_k * d
     elif layout == "non_interleaved":
         stride_q = (h_q * s_q * d, s_q * d, d, 1)
-        stride_k = (h_kv * s_kv * d, s_kv * d, d, 1)
-        stride_v = (h_kv * s_kv * d, s_kv * d, d, 1)
+        stride_k = (h_k * s_kv * d, s_kv * d, d, 1)
+        stride_v = (h_v * s_kv * d, s_kv * d, d, 1)
         stride_o = (h_q * s_q * d, s_q * d, d, 1)
         offset_q = 0
         offset_k = offset_q + b * h_q * s_q * d
-        offset_v = offset_k + b * h_kv * s_kv * d
+        offset_v = offset_k + b * h_k * s_kv * d
     else:
         assert False, "Layout should be either sbh3d or bs3hd or non_interleaved"
 
