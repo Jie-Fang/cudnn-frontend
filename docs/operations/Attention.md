@@ -7,7 +7,7 @@
 
 This operation computes the scaled dot product attention, which is defined as :
 
-$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{\text{sequence length}}}\right)V$
+$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V$
 
 It is applicable for both training and inference phases, with an option to generate a stats tensor to be used for backwards training computation.
 
@@ -55,7 +55,7 @@ Where,
 #### Group-query attention (GQA) and Multi-query attention (MQA)
 
 - As described in the paper [GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints](https://arxiv.org/abs/2305.13245),
-- When $H_{k}$ and $H_{v}$ is less than $H_{q}$ and a factors of $H_{q}$, this operation will perform group-query attention (GQA) computation.
+- When $H_{k}$ and $H_{v}$ is less than $H_{q}$ and factors of $H_{q}$, this operation will perform group-query attention (GQA) computation.
 - When $H_{k}$ and $H_{v}$ are both set to 1, this operation perform multi-query attention (MQA) computation.
 
 #### Limitations:

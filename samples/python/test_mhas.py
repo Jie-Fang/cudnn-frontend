@@ -246,7 +246,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     ) = param_extract_forward
 
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
-        pytest.skip("GQA and MQA is only supported 8.9.3 onwards.")
+        pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
     if is_alibi and cudnn.backend_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
@@ -470,7 +470,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     ) = param_extract_backward
 
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
-        pytest.skip("GQA and MQA is only supported 8.9.3 onwards.")
+        pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
     if is_bias and cudnn.backend_version() < 8906:
         pytest.skip("dBias is only supported 8.9.6 onwards.")
@@ -534,7 +534,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
         offset_v = offset_k + d
     elif layout == "bs3hd":
         stride_q = (s_q * 3 * h_q * d, d, 3 * h_q * d, 1)
-        stride_k = (s_kv * 3 * h_k * d, d, 3 * h_v * d, 1)
+        stride_k = (s_kv * 3 * h_k * d, d, 3 * h_k * d, 1)
         stride_v = (s_kv * 3 * h_v * d, d, 3 * h_v * d, 1)
         stride_o = (s_q * h_q * d, d, h_q * d, 1)
         offset_q = 0
