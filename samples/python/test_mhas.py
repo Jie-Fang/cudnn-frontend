@@ -237,8 +237,8 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
         input_type,
         layout,
         head_group,
-        is_alibi,
         is_bias,
+        is_alibi,
         is_padding,
         is_causal,
         is_dropout,
@@ -257,20 +257,19 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
 
-    b = 2 # batch size
+    b = 3 # batch size
     s_q = random.choice([256, 512, 1024, 2048]) # query sequence length
     s_kv = s_q # key value sequence length
     d = random.choice([64, 128]) # word embedding size
 
     # number of heads
-    h_q = 6
+    h_q = 4
     if head_group == "multi_head":
-        h_k = h_v = 6
+        h_k = h_v = 4
     elif head_group == "group_query":
         if layout != "non_interleaved":
             pytest.skip("GQA only supports non-interleaved layout")
-        h_k = 3
-        h_v = 2
+        h_k = h_v = 2
     elif head_group == "multi_query":
         if layout != "non_interleaved":
             pytest.skip("MQA only supports non-interleaved layout")
@@ -462,8 +461,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
         input_type,
         layout,
         head_group,
-        is_alibi,
         is_bias,
+        is_alibi,
         is_padding,
         is_causal,
         is_dropout,
@@ -481,7 +480,6 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     if is_bias and is_padding:
         pytest.skip("dBias is not supported with padding mask")
 
-
     if is_alibi and cudnn.backend_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
 
@@ -491,20 +489,19 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
 
-    b = 2 # batch size
+    b = 3 # batch size
     s_q = random.choice([256, 512, 1024]) # query sequence length
     s_kv = s_q # key value sequence length
     d = random.choice([64, 128]) # word embedding size
 
     # number of heads
-    h_q = 6
+    h_q = 4
     if head_group == "multi_head":
-        h_k = h_v = 6
+        h_k = h_v = 4
     elif head_group == "group_query":
         if layout != "non_interleaved":
             pytest.skip("GQA only supports non-interleaved layout")
-        h_k = 3
-        h_v = 2
+        h_k = h_v = 2
     elif head_group == "multi_query":
         if layout != "non_interleaved":
             pytest.skip("MQA only supports non-interleaved layout")
@@ -798,10 +795,10 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
 
 if __name__ == "__main__":
     """
-    option_forward = (input_type, layout, is_alibi, is_bias, is_padding, is_causal, is_dropout, is_infer)
-    option_backward = (input_type, layout, is_alibi, is_bias, is_padding, is_causal, is_dropout)
-    test_scale_dot_product_flash_attention((torch.float16, "bs3hd", False, False, False, False, False, False))
-    test_scale_dot_product_flash_attention_backward((torch.float16, "bs3hd", False, False, False, False, False))
+    option_forward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout, is_infer)
+    option_backward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout)
+    test_scale_dot_product_flash_attention((torch.float16, "bs3hd", "multi_head", False, False, False, False, False, False))
+    test_scale_dot_product_flash_attention_backward((torch.float16, "bs3hd", "multi_head", False, False, False, False, False))
     """
 
     print("==========running forward tests==========")
