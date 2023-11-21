@@ -1,4 +1,6 @@
+# Module scope variables -- can be set from pycudnnTest.py
 LOG_RUNTIME = False
+DISABLE_CUPTI = True
 
 if LOG_RUNTIME:
     import time 
@@ -82,3 +84,87 @@ def create_nhwc_strides(dims):
         stride[dim_N] = stride[dim_H] * dims[dim_H]
 
     return stride
+
+def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
+    import torch
+    # For now we will run two methodologies to measure the time (with warm caches)
+
+    # Methodology using CUPTI
+    cupti_runtimes = []
+    kernel_names = set()
+    if DISABLE_CUPTI:
+         for i in range(timingLoop):
+            cudnn_graph.execute(variant_pack, workspace)
+    else:
+        for i in range(timingLoop):
+            with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
+                cudnn_graph.execute(variant_pack, workspace)
+            
+            # Calculate runtime for the graph we just executed
+            end_time = 0
+            start_time = max(e.time_range.start for e in prof.events())
+            trace_started = False
+            # The calculation needs to take into account that some kernels may overlap in time. 
+            # Also, we want to avoid measuring launch latency.
+            # Therefore we 1) skip anything before the first cuLaunchKernel, and 2) find the earliest kernel start time
+            # and latest kernel end time
+            for event in prof.events():
+                # Any event before this is not counted (this avoids measuring cuda memsets and the very first launch latency)
+                if "LaunchKernel" in event.name:
+                    trace_started = True
+                if not trace_started:
+                    continue
+                if event.cuda_time > 0:
+                    kernel_names.add(event.name)
+                    if event.time_range.end > end_time:
+                        end_time = event.time_range.end
+                    if event.time_range.start < start_time:
+                        start_time = event.time_range.start
+            cupti_runtimes.append(end_time-start_time)
+
+    # TODO(@mbreughe): Remove this
+    # Methodology with events and delay kernel
+    # For ease of implementation, we will fake the delay kernel by running the graph "warmup_runs_using_events" number of times
+    # We use as single measurement to estimate the number of iterations to fit in 1 ms (the time used by heuristics today.)
+    delay_kernel_time_us = 1000
+
+    start=torch.cuda.Event(enable_timing=True)
+    end=torch.cuda.Event(enable_timing=True)
+
+    start.record()
+    cudnn_graph.execute(variant_pack, workspace)
+    end.record()
+    torch.cuda.synchronize()
+    estimate_kernel_us = start.elapsed_time(end) * 1000
+    
+    if estimate_kernel_us >= delay_kernel_time_us:
+        warmup_runs_using_events = 1
+    else:
+        warmup_runs_using_events=int(delay_kernel_time_us/estimate_kernel_us)+1
+
+    events_time_us = []
+    for i in range(timingLoop):
+        # Run the fake delay kernel
+        #TODO(@mbreughe): Make this a different kernel
+        for warmup_run in range(warmup_runs_using_events):
+            cudnn_graph.execute(variant_pack, workspace)
+        start.record()
+        cudnn_graph.execute(variant_pack, workspace)
+        end.record()
+        torch.cuda.synchronize()
+        events_time_us.append(start.elapsed_time(end) * 1000)
+    
+    min_avg_max = lambda L: (min(L), sum(L)/len(L), max(L))
+    
+    events_runtimes = min_avg_max(events_time_us)
+    
+    print("[MB_TIME] delay_kernel (us):", *events_runtimes)
+
+    if not DISABLE_CUPTI:
+        cupti_runtime_stats = min_avg_max(cupti_runtimes)
+        print("[MB_TIME] cupti (us):", *cupti_runtime_stats)
+        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}".format(*cupti_runtime_stats, *events_runtimes))
+        print("[MB_TIME] Kernels found in this cudnn graph: {}".format(*kernel_names))
+        return cupti_runtime_stats
+    else:
+        return (-1,-1,-1)

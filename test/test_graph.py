@@ -692,107 +692,11 @@ class test_graph:
         self.cudnn_graph.execute(variant_pack, workspace)
 
         # TODO(@mbreughe:) Handle the case for -T1. Right now, -T1 and -T0 both run the graph only once, without timing
-        if not (timingLoop > 1):
-            return
-
-        # Now we will run two methodologies to measure the time (with warm caches)
-
-        # Methodology using CUPTI
-        runtimes = []
-        for i in range(timingLoop):
-                with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
-                    self.cudnn_graph.execute(variant_pack, workspace)
-                
-                # Find runtime for the graph we just executed
-                end_time = 0
-                start_time = max(e.time_range.start for e in prof.events())
-                trace_started = False
-                print("Start calc")
-                for event in prof.events():
-                    print (event.name)
-                    # Any event before this is not counted (this avoids measuring cuda memset and the very first launch latency)
-                    if event.name == "cuLaunchKernel":
-                        trace_started = True
-                    if not trace_started:
-                        continue
-                    if event.cuda_time > 0:
-                        print(event.time_range.start, event.time_range.end, event.cuda_time)
-                        if event.time_range.end > end_time:
-                            end_time = event.time_range.end
-                        if event.time_range.start < start_time:
-                            start_time = event.time_range.start
-                runtimes.append(end_time-start_time)
-        
-        print(runtimes)
+        if (timingLoop > 1):
+            # TODO(@mbreughe): Support cold caches by using multiple variant_packs
+            (min_rt, avg_rt, max_rt) = utils.measure_gpu_runtime(self.cudnn_graph, variant_pack, workspace, timingLoop)
 
         utils.reportCurrentTime("graph.execute")
-
-        # Store all the recorded times
-        cupti_times = {}
-        for event in prof.events():
-            kernel_name = event.name
-            # If a cuda kernel was executed
-            if event.cuda_time > 0:
-                if not (kernel_name) in cupti_times:
-                    cupti_times[kernel_name] = []
-                assert event.cuda_time == event.cuda_time_total
-                cupti_times[kernel_name].append(event.cuda_time)
-        
-        print(cupti_times)
-
-        # If multiple kernels were encountered, only keep the largest one (others may be format conversions, etc.)
-        if len(cupti_times.keys()) > 1:
-            avg = 0
-            for key in cupti_times.keys():
-                new_avg = sum(cupti_times[key])/len(cupti_times[key])
-                if new_avg > avg:
-                    selected_kernel_name = key
-                    avg = new_avg
-            print("WARNING: found multiple kernels ({}). Picking {}".format(cupti_times.keys(), selected_kernel_name))
-        else:
-            selected_kernel_name = list(cupti_times.keys())[0]
-
-        cupti_kernel_times_us = cupti_times[selected_kernel_name]
-                
-
-        
-        # Methodology with events and delay kernel
-        # For ease of implementation, we will fake the delay kernel by running the graph "warmup_runs_using_events" number of times
-        # We use the measurement above to estimate the number of iterations to fit in 1 ms (the time used by heuristics today.)
-        delay_kernel_time_us = 1000
-        
-        if min(cupti_kernel_times_us) >= delay_kernel_time_us:
-            warmup_runs_using_events = 1
-        else:
-            warmup_runs_using_events=int(delay_kernel_time_us/min(cupti_kernel_times_us))+1
-        
-        #print ("minimum time ({}) --> needs {} runs".format(min(cupti_kernel_times_us), warmup_runs_using_events))
-
-        warmup_runs_using_events *= 10
-
-        start=torch.cuda.Event(enable_timing=True)
-        end=torch.cuda.Event(enable_timing=True)
-        events_time_us = []
-        for i in range(timingLoop):
-            # Run the fake delay kernel
-            #TODO(@mbreughe): Make this a different kernel
-            for warmup_run in range(warmup_runs_using_events):
-                self.cudnn_graph.execute(variant_pack, workspace)
-            start.record()
-            self.cudnn_graph.execute(variant_pack, workspace)
-            end.record()
-            torch.cuda.synchronize()
-            events_time_us.append(start.elapsed_time(end) * 1000)
-        
-        min_avg_max = lambda L: (min(L), sum(L)/len(L), max(L))
-        cupti_runtimes = min_avg_max(cupti_kernel_times_us)
-        events_runtimes = min_avg_max(events_time_us)
-        
-        print("[MB_TIME] kernel name: ", selected_kernel_name)
-        print("[MB_TIME] cupti (us):", *cupti_runtimes)
-        print("[MB_TIME] delay_kernel (us):", *events_runtimes)
-
-        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}, {}".format(selected_kernel_name, *cupti_runtimes, *events_runtimes))
 
     # @brief: Run the cudnn implementation and the reference, and compare
     # @note: This assumes build_cudnn_graph has already been run
