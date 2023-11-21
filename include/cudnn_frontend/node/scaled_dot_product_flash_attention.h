@@ -449,8 +449,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
 
     virtual int64_t
     get_fe_workspace_size_node() const override final {
-        auto const& q   = attributes.inputs.find(input_names::Q);
-        int64_t const h = q->second->get_dim()[1];
+        auto const& q             = attributes.inputs.find(input_names::Q);
+        int64_t const h           = q->second->get_dim()[1];
         int64_t alibi_slopes_size = h * sizeof(float);
         return (alibi_slopes_size + 15) & ~15;
     }
@@ -484,7 +484,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
             int64_t const h            = Q->second->get_dim()[1];
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
-            int64_t alibi_slopes_size = h * sizeof(float);
+            int64_t alibi_slopes_size  = h * sizeof(float);
 
             cudaStream_t stream;
             CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
@@ -1195,8 +1195,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         if (attributes.alibi_mask) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
-            int64_t const h_q     = Q->second->get_dim()[1];
-            auto alibi_slopes_vec = detail::get_abili_slope(h_q);
+            int64_t const h_q                = Q->second->get_dim()[1];
+            auto alibi_slopes_vec            = detail::get_abili_slope(h_q);
             int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
 
             cudaStream_t stream;
