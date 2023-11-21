@@ -91,7 +91,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
 
     # Methodology using CUPTI
     cupti_runtimes = []
-    kernel_names = set()
+    kernel_times = {}
     if DISABLE_CUPTI:
          for i in range(timingLoop):
             cudnn_graph.execute(variant_pack, workspace)
@@ -109,13 +109,16 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
             # Therefore we 1) skip anything before the first cuLaunchKernel, and 2) find the earliest kernel start time
             # and latest kernel end time
             for event in prof.events():
+                #print(event.cuda_time, event.name, event.time_range.start, event.time_range.end)
                 # Any event before this is not counted (this avoids measuring cuda memsets and the very first launch latency)
                 if "LaunchKernel" in event.name:
                     trace_started = True
                 if not trace_started:
                     continue
                 if event.cuda_time > 0:
-                    kernel_names.add(event.name)
+                    if not event.name in kernel_times:
+                        kernel_times[event.name] = []
+                    kernel_times[event.name].append(event.cuda_time)
                     if event.time_range.end > end_time:
                         end_time = event.time_range.end
                     if event.time_range.start < start_time:
@@ -163,8 +166,10 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     if not DISABLE_CUPTI:
         cupti_runtime_stats = min_avg_max(cupti_runtimes)
         print("[MB_TIME] cupti (us):", *cupti_runtime_stats)
-        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}".format(*cupti_runtime_stats, *events_runtimes))
-        print("[MB_TIME] Kernels found in this cudnn graph: {}".format(*kernel_names))
+        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats, *events_runtimes))
+        print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max (including overlapped times):".format(len(kernel_times)))
+        for kernel in kernel_times:
+            print(kernel, min_avg_max(kernel_times[kernel]))
         return cupti_runtime_stats
     else:
         return (-1,-1,-1)
