@@ -451,7 +451,8 @@ class ScaledDotProductFlashAttentionNode : public INode {
     get_fe_workspace_size_node() const override final {
         auto const& q   = attributes.inputs.find(input_names::Q);
         int64_t const h = q->second->get_dim()[1];
-        return h * sizeof(float);
+        int64_t alibi_slopes_size = h * sizeof(float);
+        return (alibi_slopes_size + 15) & ~15;
     }
 
     virtual error_t
@@ -483,11 +484,12 @@ class ScaledDotProductFlashAttentionNode : public INode {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
             int64_t const h            = Q->second->get_dim()[1];
             auto h_alibi_slopes_vector = detail::get_abili_slope(h);
+            int64_t alibi_slopes_size = h * sizeof(float);
 
             cudaStream_t stream;
             CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
             CHECK_CUDA_ERROR(cudaMemcpyAsync(
-                node_workspace, h_alibi_slopes_vector.data(), h * sizeof(float), cudaMemcpyHostToDevice, stream));
+                node_workspace, h_alibi_slopes_vector.data(), alibi_slopes_size, cudaMemcpyHostToDevice, stream));
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
         }
 
