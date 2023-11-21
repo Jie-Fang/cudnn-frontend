@@ -257,19 +257,20 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
 
-    b = 3 # batch size
+    b = 2 # batch size
     s_q = random.choice([256, 512, 1024, 2048]) # query sequence length
     s_kv = s_q # key value sequence length
     d = random.choice([64, 128]) # word embedding size
 
     # number of heads
-    h_q = 4
+    h_q = 6
     if head_group == "multi_head":
-        h_k = h_v = 4
+        h_k = h_v = 6
     elif head_group == "group_query":
         if layout != "non_interleaved":
             pytest.skip("GQA only supports non-interleaved layout")
-        h_k = h_v = 2
+        h_k = 3
+        h_v = 2
     elif head_group == "multi_query":
         if layout != "non_interleaved":
             pytest.skip("MQA only supports non-interleaved layout")
@@ -489,19 +490,20 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
 
-    b = 3 # batch size
+    b = 2 # batch size
     s_q = random.choice([256, 512, 1024]) # query sequence length
     s_kv = s_q # key value sequence length
     d = random.choice([64, 128]) # word embedding size
 
     # number of heads
-    h_q = 4
+    h_q = 6
     if head_group == "multi_head":
-        h_k = h_v = 4
+        h_k = h_v = 6
     elif head_group == "group_query":
         if layout != "non_interleaved":
             pytest.skip("GQA only supports non-interleaved layout")
-        h_k = h_v = 2
+        h_k = 3
+        h_v = 2
     elif head_group == "multi_query":
         if layout != "non_interleaved":
             pytest.skip("MQA only supports non-interleaved layout")

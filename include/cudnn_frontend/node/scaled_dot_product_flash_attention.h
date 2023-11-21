@@ -1170,7 +1170,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     virtual int64_t
     get_fe_workspace_size_node() const override final {
         // set in infer_properties_node()
-        return alibi_slopes_size + dQ_accum_size + softmax_sum_size;
+        int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
+        return alibi_slopes_size_padded + dQ_accum_size + softmax_sum_size;
     }
 
     error_t
@@ -1194,13 +1195,14 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
             int64_t const h_q     = Q->second->get_dim()[1];
             auto alibi_slopes_vec = detail::get_abili_slope(h_q);
+            int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
 
             cudaStream_t stream;
             CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
             CHECK_CUDA_ERROR(cudaMemcpyAsync(
-                node_workspace, alibi_slopes_vec.data(), h_q * sizeof(float), cudaMemcpyHostToDevice, stream));
+                node_workspace, alibi_slopes_vec.data(), alibi_slopes_size, cudaMemcpyHostToDevice, stream));
             tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
-            node_workspace = static_cast<char*>(node_workspace) + alibi_slopes_size;
+            node_workspace = static_cast<char*>(node_workspace) + alibi_slopes_size_padded;
         }
 
         if (attributes.padding_mask) {
