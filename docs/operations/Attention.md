@@ -37,17 +37,19 @@ When multiple masking options are enabled, they are applied in the listed order 
 - Value tensor should have dimensions $(B, H_{v}, S_{kv}, D)$ with input/output datatype.
 - Output tensor should have dimensions $(B, H_{q}, S_{q}, D)$ with input/output datatype.
 - (Optional) When `is_inference` is false, the stats tensor should have dimensions $(B, H_{q}, S_{q}, 1)$ with float32 datatype.
-- (Optional) When bias mask is enabled, the bias tensor has dimensions $(B, H_{q}, S_{q}, S_{kv})$ with float32 datatype.
+- (Optional) When bias mask is enabled, the bias tensor has dimensions $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$ with input/output datatype.  
+The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
 - (Optional) When padding mask is enabled, the sequence length q, and sequence length kv tensors should have shape $(B, 1, 1, 1)$ with int32 datatype.
-- (Optional) When philox RNG dropout mask is enabled, the gpu RNG seed and offset tensors should have size $(1, 1, 1, 1)$ with int32 or int64 datatype.  
-- (Optional) When a user provided dropout mask is enabled, a dropout mask tensor should have shape $(B, H_{q}, S_{q}, S_{kv})$ with bool datatype.
+- (Optional) When philox RNG dropout mask is enabled, the RNG seed and offset tensors should have size $(1, 1, 1, 1)$ with int32 or int64 datatype.
+- (Optional) When a user provided dropout mask is enabled, a dropout mask tensor should have shape $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$ with input/output datatype.  
+The dimensions that are passed as 1 will apply a broadcasted mask over attention weights.
 
 Where,
 
 - $B$ is the batch size
 - $H_{q}$ is the number of query heads
 - $H_{k}$ is the number of key heads
-- $H_{k}$ is the number of value heads
+- $H_{v}$ is the number of value heads
 - $S_{q}$ is the sequence length of the query
 - $S_{kv}$ is the sequence length of the key and value
 - $D$ is the embedding dimension per head
@@ -60,7 +62,7 @@ Where,
 
 #### Limitations:
 
-- All input and output tensor datatypes must be float16 or bfloat16 datatype.
+- All input and output tensor datatypes must be float16 or bfloat16 datatype except the softmax stats output tensor, which must be float32.
 - The dimension of the embedding dimension per head $D$ must be a multiple of 8 with maximum value 128.
 - the stride of the embedding dimension per head $D$ for all the tensors above must be 1.
 - this operation is only supported on GPUs with NVIDIA Ampere architecture (SM80) or newer.
