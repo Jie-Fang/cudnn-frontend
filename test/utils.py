@@ -153,7 +153,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
             prof.step()
     
     # lambda function for quick stats
-    min_avg_max_ratio = lambda L: (min(L), sum(L)/len(L), max(L), (max(L)-min(L))/max(L))
+    min_avg_max_ratio = lambda L: (min(L), sum(L)/len(L), max(L), (max(L)-min(L))/max(L)) if L else (0,0,0,0)
 
     cupti_runtime_stats = min_avg_max_ratio(cupti_runtimes)
     print("[MB_TIME] Summary (num kernels, min (us), avg (us), max (us), (max-min)/max): {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats))
