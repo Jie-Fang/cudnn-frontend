@@ -92,38 +92,52 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     # Methodology using CUPTI
     cupti_runtimes = []
     kernel_times = {}
+
+    def process_profile(prof):
+        # Calculate runtime for the graph we just executed
+        end_time = 0
+        start_time = max(e.time_range.start for e in prof.events())
+        trace_started = False
+        # The calculation needs to take into account that some kernels may overlap in time. 
+        # Also, we want to avoid measuring launch latency.
+        # Therefore we 1) skip anything before the first cuLaunchKernel, and 2) find the earliest kernel start time
+        # and latest kernel end time
+        for event in prof.events():
+            print(event.cuda_time, event.name, event.time_range.start, event.time_range.end)
+            # Any event before this is not counted (this avoids measuring cuda memsets and the very first launch latency)
+            if "LaunchKernel" in event.name:
+                trace_started = True
+            if not trace_started:
+                continue
+            if event.cuda_time > 0:
+                if not event.name in kernel_times:
+                    kernel_times[event.name] = []
+                kernel_times[event.name].append(event.cuda_time)
+                if event.time_range.end > end_time:
+                    end_time = event.time_range.end
+                if event.time_range.start < start_time:
+                    start_time = event.time_range.start
+
+        # If we ended the profiling loop with a warmup run, no useful kernels will have been profiled
+        if not trace_started:
+            return
+        print(end_time-start_time)
+        cupti_runtimes.append(end_time-start_time)
+        
     if DISABLE_CUPTI:
          for i in range(timingLoop):
             cudnn_graph.execute(variant_pack, workspace)
     else:
-        for i in range(timingLoop):
-            with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA]) as prof:
+        warmup = 1
+        skip_first = 2
+        total_runs = timingLoop + skip_first
+        total_runs += total_runs % 2
+        prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=1)
+        with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA], schedule=prof_schedule, on_trace_ready=process_profile) as prof:
+            for i in range(total_runs):
                 cudnn_graph.execute(variant_pack, workspace)
+                prof.step()
             
-            # Calculate runtime for the graph we just executed
-            end_time = 0
-            start_time = max(e.time_range.start for e in prof.events())
-            trace_started = False
-            # The calculation needs to take into account that some kernels may overlap in time. 
-            # Also, we want to avoid measuring launch latency.
-            # Therefore we 1) skip anything before the first cuLaunchKernel, and 2) find the earliest kernel start time
-            # and latest kernel end time
-            for event in prof.events():
-                #print(event.cuda_time, event.name, event.time_range.start, event.time_range.end)
-                # Any event before this is not counted (this avoids measuring cuda memsets and the very first launch latency)
-                if "LaunchKernel" in event.name:
-                    trace_started = True
-                if not trace_started:
-                    continue
-                if event.cuda_time > 0:
-                    if not event.name in kernel_times:
-                        kernel_times[event.name] = []
-                    kernel_times[event.name].append(event.cuda_time)
-                    if event.time_range.end > end_time:
-                        end_time = event.time_range.end
-                    if event.time_range.start < start_time:
-                        start_time = event.time_range.start
-            cupti_runtimes.append(end_time-start_time)
 
     # TODO(@mbreughe): Remove this
     # Methodology with events and delay kernel
@@ -157,19 +171,19 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         torch.cuda.synchronize()
         events_time_us.append(start.elapsed_time(end) * 1000)
     
-    min_avg_max = lambda L: (min(L), sum(L)/len(L), max(L))
+    min_avg_max_ratio = lambda L: (min(L), sum(L)/len(L), max(L), (max(L)-min(L))/max(L))
     
-    events_runtimes = min_avg_max(events_time_us)
+    events_runtimes = min_avg_max_ratio(events_time_us)
     
     print("[MB_TIME] delay_kernel (us):", *events_runtimes)
 
     if not DISABLE_CUPTI:
-        cupti_runtime_stats = min_avg_max(cupti_runtimes)
+        cupti_runtime_stats = min_avg_max_ratio(cupti_runtimes)
         print("[MB_TIME] cupti (us):", *cupti_runtime_stats)
-        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats, *events_runtimes))
-        print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max (including overlapped times):".format(len(kernel_times)))
+        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats, *events_runtimes))
+        print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max/Ratio (including overlapped times):".format(len(kernel_times)))
         for kernel in kernel_times:
-            print(kernel, min_avg_max(kernel_times[kernel]))
-        return cupti_runtime_stats
+            print(kernel, min_avg_max_ratio(kernel_times[kernel]))
+        return (cupti_runtime_stats[0], cupti_runtime_stats[1], cupti_runtime_stats[2])
     else:
         return (-1,-1,-1)
