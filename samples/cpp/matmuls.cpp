@@ -54,7 +54,7 @@ TEST_CASE("Matmul", "[matmul][graph]") {
                             .set_dim({b, k, n})
                             .set_stride({k * n, n, 1})
                             .set_data_type(fe::DataType_t::BFLOAT16);
-    auto B            = graph.tensor(B_attributes);
+    auto B = graph.tensor(B_attributes);
 
     auto matmul_attributes =
         fe::graph::Matmul_attributes().set_name("GEMM").set_compute_data_type(fe::DataType_t::FLOAT);
@@ -109,7 +109,7 @@ TEST_CASE("Abs + Matmul", "[matmul][graph]") {
                             .set_dim({b, k, n})
                             .set_stride({k * n, n, 1})
                             .set_data_type(fe::DataType_t::BFLOAT16);
-    auto B            = graph.tensor(B_attributes);
+    auto B = graph.tensor(B_attributes);
 
     // Add abs operation
     auto pw_0_attributes = fe::graph::Pointwise_attributes()
@@ -173,15 +173,13 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                             .set_dim({b, k, n})
                             .set_stride({k * n, n, 1})
                             .set_data_type(fe::DataType_t::BFLOAT16);
-    auto B            = graph.tensor(B_attributes);
+    auto B = graph.tensor(B_attributes);
 
     // Create Bias vector
-    auto Bias_attributes = fe::graph::Tensor_attributes()
-                            .set_name("Bias")
-                            .set_dim({b, m, 1})
-                            .set_stride({m, 1, 1})
-                            .set_data_type(fe::DataType_t::BFLOAT16);
-    auto Bias            = graph.tensor(Bias_attributes);
+    auto Bias_attributes =
+        fe::graph::Tensor_attributes().set_name("Bias").set_dim({b, m, 1}).set_stride({m, 1, 1}).set_data_type(
+            fe::DataType_t::BFLOAT16);
+    auto Bias = graph.tensor(Bias_attributes);
 
     // Add ADD operation
     auto pw_0_attributes = fe::graph::Pointwise_attributes()
@@ -210,7 +208,7 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     Surface<float> C_gpu(b * m * n, false);
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
-        {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C, C_gpu.devPtr}};
+        {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C, C_gpu.devPtr}, {Bias, Bias_gpu.devPtr}};
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
