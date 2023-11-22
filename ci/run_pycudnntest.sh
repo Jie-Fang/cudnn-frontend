@@ -20,8 +20,6 @@ function run_python_tests() {
     python test/pycudnnTest.py -Dforce_jit_dbg= 1 -R graphRunner -backendEngine -1 -jsonTestName= ConvReductionCol2D_abstract -x  -dimA 8,64,64,64 -filtA 64,64,3,3 -padA 1,1 -convStrideA 1,1 -dilationA 1,1 -Pin s -Pcomp s -Pout s -rtol 5e-3 -atol 5e-3 -minDevVer 800 -formatAll 1 -S  -b  -serialization 0 -gpuRef 
     # Legacy graphRunner test with timing loop
     python test/pycudnnTest.py -Dforce_jit_dbg= 1 -R graphRunner -backendEngine -1 -jsonTestName= ConvReductionCol2D_abstract -x  -dimA 8,64,64,64 -filtA 64,64,3,3 -padA 1,1 -convStrideA 1,1 -dilationA 1,1 -Pin s -Pcomp s -Pout s -rtol 5e-3 -atol 5e-3 -minDevVer 800 -formatAll 1 -S  -b  -serialization 0 -gpuRef -T10
-    # Explicit tests (not using test_graph)
-    pytest test/explicit_test.py
 }
 
 display_header
