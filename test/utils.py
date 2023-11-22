@@ -93,6 +93,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     cupti_runtimes = []
     kernel_times = {}
 
+    # Callback function to process a profile
     def process_profile(prof):
         # Calculate runtime for the graph we just executed
         end_time = 0
@@ -117,12 +118,16 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
                     end_time = event.time_range.end
                 if event.time_range.start < start_time:
                     start_time = event.time_range.start
-
-        # If we ended the profiling loop with a warmup run, no useful kernels will have been profiled
-        if not trace_started:
+        # We discard the first, and potentially the last run.
+        # First: always seems to be much longer than the rest, even if we set skip_first=N
+        # Last: If we ended the profiling loop with a warmup run, no useful kernels will have been profiled (trace_started will never be set)
+        if process_profile.first_iteration or not trace_started:
+            process_profile.first_iteration = False
             return
         print(end_time-start_time)
         cupti_runtimes.append(end_time-start_time)
+    
+    process_profile.first_iteration = True
         
     if DISABLE_CUPTI:
          for i in range(timingLoop):
@@ -130,9 +135,14 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     else:
         warmup = 1
         skip_first = 2
+        active = 1
         total_runs = timingLoop + skip_first
-        total_runs += total_runs % 2
-        prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=1)
+
+        # We need to have at least 2 non-skipped cycles.
+        # Otherwise the profile will be empty
+        assert total_runs >= skip_first + 2 * (warmup+active+skip_first)
+
+        prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=active)
         with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA], schedule=prof_schedule, on_trace_ready=process_profile) as prof:
             for i in range(total_runs):
                 cudnn_graph.execute(variant_pack, workspace)
@@ -160,6 +170,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         warmup_runs_using_events=int(delay_kernel_time_us/estimate_kernel_us)+1
 
     events_time_us = []
+    is_first_timing_run = True
     for i in range(timingLoop):
         # Run the fake delay kernel
         #TODO(@mbreughe): Make this a different kernel
@@ -169,7 +180,11 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         cudnn_graph.execute(variant_pack, workspace)
         end.record()
         torch.cuda.synchronize()
-        events_time_us.append(start.elapsed_time(end) * 1000)
+        # Skip the first timing run
+        if is_first_timing_run:
+            is_first_timing_run = False
+        else:
+            events_time_us.append(start.elapsed_time(end) * 1000)
     
     min_avg_max_ratio = lambda L: (min(L), sum(L)/len(L), max(L), (max(L)-min(L))/max(L))
     
