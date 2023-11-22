@@ -86,9 +86,14 @@ def create_nhwc_strides(dims):
 # TODO: update with multiple variant_pack/workspaces to support cold caches
 def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     import torch
-    # For now we will run two methodologies to measure the time (with warm caches)
 
-    # Methodology using CUPTI
+    # If CUPTI is disabled, still run the graph timingLoop times, just don't profile it here
+    # This can be useful in case we want to run through nsys
+    if DISABLE_CUPTI:
+        for i in range(timingLoop):
+            cudnn_graph.execute(variant_pack, workspace)
+        return (-1,-1,-1)
+
     cupti_runtimes = []
     kernel_times = {}
 
@@ -127,81 +132,33 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         cupti_runtimes.append(end_time-start_time)
     
     process_profile.first_iteration = True
-        
-    if DISABLE_CUPTI:
-         for i in range(timingLoop):
-            cudnn_graph.execute(variant_pack, workspace)
-    else:
-        warmup = 1
-        skip_first = 2
-        active = 1
-        total_runs = timingLoop + skip_first
-
-        # We need to have at least 2 non-skipped cycles.
-        # Otherwise the profile will be empty
-        assert total_runs >= skip_first + 2 * (warmup+active+skip_first)
-
-        # The profile schedule works as follows:
-        # 1) the first skip_first runs in the loop are not profiled
-        # 2) From then on, we run sets of (warmup+active) runs of which the first warmup runs are not profiled
-        # 3) Data on active runs is processed by the on_trace_ready callback function
-        prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=active)
-        with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA], schedule=prof_schedule, on_trace_ready=process_profile) as prof:
-            for i in range(total_runs):
-                cudnn_graph.execute(variant_pack, workspace)
-                prof.step()
-            
-
-    # TODO(@mbreughe): Remove this
-    # Methodology with events and delay kernel
-    # For ease of implementation, we will fake the delay kernel by running the graph "warmup_runs_using_events" number of times
-    # We use as single measurement to estimate the number of iterations to fit in 1 ms (the time used by heuristics today.)
-    delay_kernel_time_us = 1000
-
-    start=torch.cuda.Event(enable_timing=True)
-    end=torch.cuda.Event(enable_timing=True)
-
-    start.record()
-    cudnn_graph.execute(variant_pack, workspace)
-    end.record()
-    torch.cuda.synchronize()
-    estimate_kernel_us = start.elapsed_time(end) * 1000
     
-    if estimate_kernel_us >= delay_kernel_time_us:
-        warmup_runs_using_events = 1
-    else:
-        warmup_runs_using_events=int(delay_kernel_time_us/estimate_kernel_us)+1
+    # The profile schedule works as follows:
+    # 1) the first skip_first runs in the loop are not profiled
+    # 2) From then on, we run sets of (warmup+active) runs of which the first warmup runs are not profiled
+    # 3) Data on active runs is processed by the on_trace_ready callback function
+    warmup = 1
+    skip_first = 2
+    active = 1
+    total_runs = timingLoop + skip_first
+    prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=active)
 
-    events_time_us = []
-    is_first_timing_run = True
-    for i in range(timingLoop):
-        # Run the fake delay kernel
-        #TODO(@mbreughe): Make this a different kernel
-        for warmup_run in range(warmup_runs_using_events):
+    # We need to have at least 2 non-skipped cycles.
+    # Otherwise the profile will be empty
+    assert total_runs >= skip_first + 2 * (warmup+active+skip_first)
+
+    with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA], schedule=prof_schedule, on_trace_ready=process_profile) as prof:
+        for i in range(total_runs):
             cudnn_graph.execute(variant_pack, workspace)
-        start.record()
-        cudnn_graph.execute(variant_pack, workspace)
-        end.record()
-        torch.cuda.synchronize()
-        # Skip the first timing run
-        if is_first_timing_run:
-            is_first_timing_run = False
-        else:
-            events_time_us.append(start.elapsed_time(end) * 1000)
+            prof.step()
     
+    # lambda function for quick stats
     min_avg_max_ratio = lambda L: (min(L), sum(L)/len(L), max(L), (max(L)-min(L))/max(L))
-    
-    events_runtimes = min_avg_max_ratio(events_time_us)
-    
-    print("[MB_TIME] delay_kernel (us):", *events_runtimes)
 
-    if not DISABLE_CUPTI:
-        cupti_runtime_stats = min_avg_max_ratio(cupti_runtimes)
-        print("[MB_TIME] cupti (us):", *cupti_runtime_stats)
-        print("[MB_TIME] Summary: {}, {}, {}, {}, {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats, *events_runtimes))
-        print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max/Ratio (including overlapped times):".format(len(kernel_times)))
-        for kernel in kernel_times:
-            print(kernel, min_avg_max_ratio(kernel_times[kernel]))
-        return (cupti_runtime_stats[0], cupti_runtime_stats[1], cupti_runtime_stats[2])
-    else:
-        return (-1,-1,-1)
+    cupti_runtime_stats = min_avg_max_ratio(cupti_runtimes)
+    print("[MB_TIME] Summary (num kernels, min (us), avg (us), max (us), (max-min)/max): {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats))
+    print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max/Ratio (including overlapped times):".format(len(kernel_times)))
+    for kernel in kernel_times:
+        print("[MB_TIME]", kernel, min_avg_max_ratio(kernel_times[kernel]))
+    return (cupti_runtime_stats[0], cupti_runtime_stats[1], cupti_runtime_stats[2])
+        
