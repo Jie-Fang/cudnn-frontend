@@ -45,8 +45,6 @@ def computeStrideNdTransposedPacked(nbDims, dims, axesOrder):
     inverseTranspose = dict()
     for i in range(nbDims):
         inverseTranspose[axesOrder[i]] = i
-
-    print (dims)
     
     strides = [1] * nbDims
     strides[inverseTranspose[nbDims - 1]] = 1
@@ -85,6 +83,7 @@ def create_nhwc_strides(dims):
 
     return stride
 
+# TODO: update with multiple variant_pack/workspaces to support cold caches
 def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     import torch
     # For now we will run two methodologies to measure the time (with warm caches)
@@ -94,6 +93,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
     kernel_times = {}
 
     # Callback function to process a profile
+    # This will update cupti_runtimes and kernel_times
     def process_profile(prof):
         # Calculate runtime for the graph we just executed
         end_time = 0
@@ -104,7 +104,6 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         # Therefore we 1) skip anything before the first cuLaunchKernel, and 2) find the earliest kernel start time
         # and latest kernel end time
         for event in prof.events():
-            print(event.cuda_time, event.name, event.time_range.start, event.time_range.end)
             # Any event before this is not counted (this avoids measuring cuda memsets and the very first launch latency)
             if "LaunchKernel" in event.name:
                 trace_started = True
@@ -124,7 +123,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         if process_profile.first_iteration or not trace_started:
             process_profile.first_iteration = False
             return
-        print(end_time-start_time)
+        
         cupti_runtimes.append(end_time-start_time)
     
     process_profile.first_iteration = True
@@ -142,6 +141,10 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         # Otherwise the profile will be empty
         assert total_runs >= skip_first + 2 * (warmup+active+skip_first)
 
+        # The profile schedule works as follows:
+        # 1) the first skip_first runs in the loop are not profiled
+        # 2) From then on, we run sets of (warmup+active) runs of which the first warmup runs are not profiled
+        # 3) Data on active runs is processed by the on_trace_ready callback function
         prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=active)
         with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA], schedule=prof_schedule, on_trace_ready=process_profile) as prof:
             for i in range(total_runs):
