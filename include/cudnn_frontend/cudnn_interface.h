@@ -132,12 +132,7 @@ class ICudnn {
         getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " Plans." << std::endl;
 
         for (size_t i = 0; i < plans.size(); ++i) {
-            auto const& execution_plan = plans[i].get_best_candidate();
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                execution_plan == nullptr, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
             auto const& variant_pack_uid = variant_pack_uids[i];
-
-            getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
 
             std::vector<void*> device_ptrs;
             std::vector<uid_t> uids;
@@ -149,25 +144,9 @@ class ICudnn {
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
                 uids.push_back(uid);
             }
-            auto variant_pack = VariantPackBuilder()
-                                    .setDataPointers(device_ptrs.size(), device_ptrs.data())
-                                    .setUids(uids.size(), uids.data())
-                                    .setWorkspacePointer(workspace_ptr)
-                                    .build();
-            if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
-                std::string message = "[cudnn_frontend] ERROR: Variant pack creation failed with " +
-                                      std::string(variant_pack.get_error());
-                return {error_code_t::INVALID_VARIANT_PACK, message};
-            }
-            getLogger() << "[cudnn_frontend] INFO: Built variant pack for " << execution_plan->getTag() << "..."
-                        << std::endl;
 
-            auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
-            if (status != CUDNN_STATUS_SUCCESS) {
-                std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
-                return {error_code_t::GRAPH_EXECUTION_FAILED, message};
-            }
-            getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
+            CHECK_CUDNN_FRONTEND_ERROR(
+                detail::execute(handle, plans[i].get_best_candidate(), device_ptrs, uids, workspace_ptr));
         }
 
         return {error_code_t::OK, ""};

@@ -9,6 +9,38 @@
 namespace cudnn_frontend {
 
 namespace detail {
+
+inline error_t
+execute(cudnnHandle_t handle,
+        std::shared_ptr<ExecutionPlan> const& plan,
+        std::vector<void*>& device_ptrs,
+        std::vector<int64_t> const& uids,
+        void* workspace_ptr) {
+    RETURN_CUDNN_FRONTEND_ERROR_IF(plan == nullptr, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
+    getLogger() << "[cudnn_frontend] INFO: Executing " << plan->getTag() << "..." << std::endl;
+
+    auto variant_pack = VariantPackBuilder()
+                            .setDataPointers(device_ptrs.size(), device_ptrs.data())
+                            .setUids(uids.size(), uids.data())
+                            .setWorkspacePointer(workspace_ptr)
+                            .build();
+    if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
+        std::string message =
+            "[cudnn_frontend] ERROR: Variant pack creation failed with " + std::string(variant_pack.get_error());
+        return {error_code_t::INVALID_VARIANT_PACK, message};
+    }
+    getLogger() << "[cudnn_frontend] INFO: Built variant pack for " << plan->getTag() << "..." << std::endl;
+
+    auto status = cudnnBackendExecute(handle, plan->get_raw_desc(), variant_pack.get_raw_desc());
+    if (status != CUDNN_STATUS_SUCCESS) {
+        std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
+        return {error_code_t::GRAPH_EXECUTION_FAILED, message};
+    }
+    getLogger() << "[cudnn_frontend] INFO: Executed " << plan->getTag() << "." << std::endl;
+
+    return {error_code_t::OK, ""};
+}
+
 inline error_t
 query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_graph,
                             cudnn_frontend::EngineConfigList& configs,
