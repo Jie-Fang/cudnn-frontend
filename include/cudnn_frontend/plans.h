@@ -370,7 +370,7 @@ class Execution_plan_list {
     autotune_default_impl(std::vector<std::shared_ptr<ExecutionPlan>>& execution_plans,
                           cudnnHandle_t handle,
                           std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
-                          void* workspace,
+                          void* workspace_ptr,
                           void*) {
         // Create the variant pack for all the plans to use.
         std::vector<int64_t> uids;
@@ -381,12 +381,6 @@ class Execution_plan_list {
                 ptrs.push_back(it.second);
             }
         }
-
-        auto variantPack = VariantPackBuilder()
-                               .setDataPointers(ptrs.size(), ptrs.data())
-                               .setUids(uids.size(), uids.data())
-                               .setWorkspacePointer(workspace)
-                               .build();
 
         std::vector<std::shared_ptr<ExecutionPlan>> time_sorted_plans;
 
@@ -413,19 +407,14 @@ class Execution_plan_list {
             float min_time_ms   = std::numeric_limits<float>::max();
 
             // Warm-up run
-            auto warmup_status = cudnnBackendExecute(handle, plan->get_raw_desc(), variantPack.get_raw_desc());
-            if (warmup_status != CUDNN_STATUS_SUCCESS) {
-                getLogger() << "[cudnn_frontend] Plan " << plan->getTag() << " failed with " << to_string(warmup_status)
-                            << std::endl;
-                continue;
-            }
+            CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle, plan, ptrs, uids, workspace_ptr));
             successful_plan_count++;
             cudaDeviceSynchronize();
 
             for (int i = 0; i < maxIterCount; i++) {
                 cudaEventRecord(start, stream);
 
-                cudnnBackendExecute(handle, plan->get_raw_desc(), variantPack.get_raw_desc());
+                auto status = detail::execute(handle, plan, ptrs, uids, workspace_ptr);
 
                 cudaEventRecord(stop, stream);
                 cudaEventSynchronize(stop);
