@@ -527,6 +527,8 @@ class Matmul_attributes : public Attributes<Matmul_attributes> {
     enum class output_names { C };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
+    double padding_value = 0.0;
+
    public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, inputs, outputs)
 
@@ -545,6 +547,12 @@ class Matmul_attributes : public Attributes<Matmul_attributes> {
     Matmul_attributes&
     set_k_override(std::shared_ptr<Tensor_attributes> const& value) {
         inputs[input_names::K_override] = value;
+        return *this;
+    }
+
+    Matmul_attributes&
+    set_padding(double const padding_val) {
+        padding_value = padding_val;
         return *this;
     }
 };

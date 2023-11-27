@@ -159,6 +159,7 @@ class PyGraph {
     matmul(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& A,
            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& B,
            cudnn_frontend::DataType_t const& compute_data_type,
+           double const padding,
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>

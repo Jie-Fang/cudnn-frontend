@@ -490,6 +490,8 @@ build:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
     stage: build
     extends: .build:template
+    only:
+        - schedules
 
 test:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
@@ -500,6 +502,8 @@ test:cudnn_8.9.6.44:
         - ${ARCH}
     extends: .test:template
     needs: ["build:cudnn_8.9.6.44"]
+    only:
+        - schedules
     
 pytest:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
@@ -511,6 +515,8 @@ pytest:cudnn_8.9.6.44:
     extends: .pytest:template
     needs: ["build:cudnn_8.9.6.44"]
     resource_group: memory_heavy_${ARCH}
+    only:
+        - schedules
     
 pycudnntest:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
@@ -521,6 +527,8 @@ pycudnntest:cudnn_8.9.6.44:
         - ${ARCH}
     extends: .pycudnntest:template
     needs: ["build:cudnn_8.9.6.44"]
+    only:
+        - schedules
     
 L4_graph_runner:cudnn_8.9.6.44:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.2_cudnn_8.9.6.44_torch
@@ -531,6 +539,8 @@ L4_graph_runner:cudnn_8.9.6.44:
         - ${ARCH}
     extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.9.6.44"]
+    only:
+        - schedules
 
 # TODO(@mbreughe): change this to use latest 8.9.6 version
 L4_graph_runner_large:cudnn_8.9.6.44:

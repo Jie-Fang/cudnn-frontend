@@ -167,6 +167,11 @@ class ScaledDotProductFlashAttentionNode : public INode {
                                    .set_name("bmm1")
                                    .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
                                    .set_n_override(attributes.inputs[input_names::SEQ_LEN_KV]);
+
+        if (attributes.padding_mask) {
+            bmm1_attributes.set_padding(0.0);
+        }
+
         auto const& bmm1_output =
             matmul(attributes.inputs[input_names::Q], attributes.inputs[input_names::K], bmm1_attributes);
         // Setting dims and strides as pointwise op wont have knowledge of how to do it for mha.
