@@ -23,7 +23,7 @@ def get_cc():
     (major, minor) = torch.cuda.get_device_capability()
     return major*10 + minor
 
-@pytest.mark.skipif(cudnn.backend_version() < 8905, reason="requires cudnn 8.9.5 or higher")
+@pytest.mark.skipif(cudnn.backend_version() < 8906, reason="requires cudnn 8.9.6 or higher")
 @pytest.mark.skipif(torch.cuda.get_device_capability()[0] < 9, reason="requires Hopper or newer arch")
 def test_int8_bf16_matmul():
     # matmul problem size 

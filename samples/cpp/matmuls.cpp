@@ -79,10 +79,10 @@ TEST_CASE("Mixed Precision Matmul", "[matmul][graph]") {
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    if (is_hopper_arch() && cudnnGetVersion() >= 8905) {
+    if (is_hopper_arch() && cudnnGetVersion() >= 8906) {
         REQUIRE(graph.check_support(handle).is_good());
     } else {
-        SKIP("mixed precision gemm not supported pre-Hopper or pre-cudnn-8.9.5");
+        SKIP("int8_bf16 mixe precision gemm not supported pre-Hopper or pre-cudnn-8.9.6");
     }
 
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
