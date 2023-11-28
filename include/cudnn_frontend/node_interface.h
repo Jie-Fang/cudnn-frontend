@@ -89,26 +89,42 @@ class INode : public ICudnn {
 
     virtual error_t
     pass_by_value_tensors_(cudnnHandle_t,
-                           std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
                            std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>&,
                            void*) const {
         return {error_code_t::OK, ""};
     }
 
     error_t
-    gather_pass_by_value_tensors(
+    gather_pass_by_value_tensors_(
         cudnnHandle_t const& handle,
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* fe_workspace) const {
         void* node_workspace = fe_workspace;
-        CHECK_CUDNN_FRONTEND_ERROR(
-            pass_by_value_tensors_(handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(pass_by_value_tensors_(handle, tensor_to_pass_by_value, node_workspace));
         node_workspace = static_cast<char*>(node_workspace) + get_fe_workspace_size_node();
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->gather_pass_by_value_tensors(
-                handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
+            CHECK_CUDNN_FRONTEND_ERROR(
+                sub_node->gather_pass_by_value_tensors_(handle, tensor_to_pass_by_value, node_workspace));
             node_workspace = static_cast<char*>(node_workspace) + sub_node->get_fe_workspace_size_node();
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    extend_tensor_map_with_pass_by_value_tensors_(
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) const {
+        for (auto& [tensor, value] : tensor_to_pass_by_value) {
+            if (half* half_value_ptr = std::get_if<half>(&value)) {
+                tensor_to_pointer_map.emplace(tensor, half_value_ptr);
+            } else if (float* float_value_ptr = std::get_if<float>(&value)) {
+                tensor_to_pointer_map.emplace(tensor, float_value_ptr);
+            } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
+                tensor_to_pointer_map.emplace(tensor, *void_value_ptr);
+            } else {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(
+                    true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
+            }
         }
         return {error_code_t::OK, ""};
     }
@@ -339,21 +355,10 @@ class INode : public ICudnn {
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t> tensor_to_pass_by_value;
-        CHECK_CUDNN_FRONTEND_ERROR(
-            gather_pass_by_value_tensors(handle, tensor_to_pointer_map, tensor_to_pass_by_value, workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(gather_pass_by_value_tensors_(handle, tensor_to_pass_by_value, workspace));
 
-        for (auto& [tensor, value] : tensor_to_pass_by_value) {
-            if (half* half_value_ptr = std::get_if<half>(&value)) {
-                tensor_to_pointer_map.emplace(tensor, half_value_ptr);
-            } else if (float* float_value_ptr = std::get_if<float>(&value)) {
-                tensor_to_pointer_map.emplace(tensor, float_value_ptr);
-            } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
-                tensor_to_pointer_map.emplace(tensor, *void_value_ptr);
-            } else {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(
-                    true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
-            }
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_to_pointer_map, tensor_to_pass_by_value));
 
         // offset workspace by the already used fe graph workspace
         // this is where cudnn backend can start using workspace for its execution plans
