@@ -25,6 +25,78 @@
 
 #include <cudnn_frontend.h>
 
+TEST_CASE("Mixed Precision Matmul", "[matmul][graph]") {
+    namespace fe = cudnn_frontend;
+
+    // matmul problem size
+    int64_t const b = 16;
+    int64_t const m = 32;
+    int64_t const n = 64;
+    int64_t const k = 128;
+
+    // Initialize input tensors
+    Surface<int8_t> A_gpu(b * m * k, false);
+    // note this is a bf16 tensor, but half is used just for memory allocation
+    Surface<half> B_gpu(b * k * n, false);
+
+    // Make cudnn graph
+    fe::graph::Graph graph{};
+
+    // Create the two non-virtual input tensors A and B.
+    // There are read from global memory.
+    auto A_attributes = fe::graph::Tensor_attributes()
+                            .set_name("A")
+                            .set_dim({b, m, k})
+                            .set_stride({m * k, k, 1})
+                            .set_data_type(fe::DataType_t::INT8);
+    auto A            = graph.tensor(A_attributes);
+    auto B_attributes = fe::graph::Tensor_attributes()
+                            .set_name("B")
+                            .set_dim({b, k, n})
+                            .set_stride({k * n, n, 1})
+                            .set_data_type(fe::DataType_t::BFLOAT16);
+    auto B = graph.tensor(B_attributes);
+
+    // Cast the input tensors to required mma precision
+    auto identity_attributes = fe::graph::Pointwise_attributes()
+                                   .set_name("Cast_A")
+                                   .set_mode(fe::PointwiseMode_t::IDENTITY)
+                                   // INT8->FLOAT->BF16 to maintain precision
+                                   .set_compute_data_type(fe::DataType_t::FLOAT);
+    auto A_casted = graph.pointwise(A, identity_attributes);
+    A_casted->set_data_type(fe::DataType_t::BFLOAT16);
+
+    auto matmul_attributes =
+        fe::graph::Matmul_attributes().set_name("GEMM").set_compute_data_type(fe::DataType_t::FLOAT);
+    auto C = graph.matmul(A_casted, B, matmul_attributes);
+    C->set_output(true).set_data_type(fe::DataType_t::BFLOAT16);
+
+    REQUIRE(graph.validate().is_good());
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
+
+    if (is_hopper_arch() && cudnnGetVersion() >= 8905) {
+        REQUIRE(graph.check_support(handle).is_good());
+    } else {
+        SKIP("mixed precision gemm not supported pre-Hopper or pre-cudnn-8.9.5");
+    }
+
+    REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
+
+    //// Run cudnn graph
+    // note this is a bf16 tensor, but half is used just for memory allocation
+    Surface<half> C_gpu(b * m * n, false);
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C, C_gpu.devPtr}};
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+    checkCudnnErr(cudnnDestroy(handle));
+}
+
 TEST_CASE("Matmul", "[matmul][graph]") {
     namespace fe = cudnn_frontend;
 
