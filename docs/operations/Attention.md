@@ -13,7 +13,7 @@ It is applicable for both training and inference phases, with an option to gener
 
 #### Configurable Options:
 
-- Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{sequence length}}}$. Set to 1.0 by default.
+- Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default.
 - Bias mask: Applies an additive bias mask to attention scores. Users must pass a bias tensor as specified in the tensors section below.
 - Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 - Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. Users must pass a per-batch sequence length as specified in the tensors section below.
@@ -32,10 +32,10 @@ When multiple masking options are enabled, they are applied in the listed order 
 
 #### Tensors:
 
-- Query tensor should have dimensions $(B, H_{q}, S_{q}, D)$ with input/output datatype.
-- Key tensor should have dimensions $(B, H_{k}, S_{kv}, D)$ with input/output datatype.
-- Value tensor should have dimensions $(B, H_{v}, S_{kv}, D)$ with input/output datatype.
-- Output tensor should have dimensions $(B, H_{q}, S_{q}, D)$ with input/output datatype.
+- Query tensor should have dimensions $(B, H_{q}, S_{q}, D_{qk})$ with input/output datatype.
+- Key tensor should have dimensions $(B, H_{k}, S_{kv}, D_{qk})$ with input/output datatype.
+- Value tensor should have dimensions $(B, H_{v}, S_{kv}, D_{v})$ with input/output datatype.
+- Output tensor should have dimensions $(B, H_{q}, S_{q}, D_{v})$ with input/output datatype.
 - (Optional) When `is_inference` is false, the stats tensor should have dimensions $(B, H_{q}, S_{q}, 1)$ with float32 datatype.
 - (Optional) When bias mask is enabled, the bias tensor has dimensions $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$ with input/output datatype.  
 The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
@@ -52,7 +52,8 @@ Where,
 - $H_{v}$ is the number of value heads
 - $S_{q}$ is the sequence length of the query
 - $S_{kv}$ is the sequence length of the key and value
-- $D$ is the embedding dimension per head
+- $D_{qk}$ is the embedding dimension per head of query and key
+- $D_{v}$ is the embedding dimension per head of value
 
 #### Group-query attention (GQA) and Multi-query attention (MQA)
 
@@ -63,8 +64,8 @@ Where,
 #### Limitations:
 
 - All input and output tensor datatypes must be float16 or bfloat16 datatype except the softmax stats output tensor, which must be float32.
-- The dimension of the embedding dimension per head $D$ must be a multiple of 8 with maximum value 128.
-- the stride of the embedding dimension per head $D$ for all the tensors above must be 1.
+- The dimension of the embedding dimension per head $D_{qk}$ and $D_{v}$ must be a multiple of 8 with maximum value 128.
+- the stride of the embedding dimension per head $D_{qk}$ and $D_{v}$ for all the tensors above must be 1.
 - this operation is only supported on GPUs with NVIDIA Ampere architecture (SM80) or newer.
 
 **API:**

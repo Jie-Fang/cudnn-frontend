@@ -139,17 +139,15 @@ class ScaledDotProductFlashAttentionNode : public INode {
         auto s_q          = q_dim[2];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
         auto s_kv         = k_dim[2];
-        auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
-        auto d_v          = v_dim[3];
 
         // cuDNN frontend API attention requires Q, K, V where
-        // Q = {b, h, s_q, d_qk}
-        // K = {b, h, s_kv, d_qk}
-        // V = {b, h, s_kv, d_v}
+        // Q = {b, h_q, s_q, d_qk}
+        // K = {b, h_k, s_kv, d_qk}
+        // V = {b, h_v, s_kv, d_v}
         // but cuDNN backend API attention requires Q, KT, V
-        // Q = {b, h, s_q, d_qk}
-        // KT = {b, h, d_qk, s_kv}
-        // V = {b, h, s_kv, d_v}
+        // Q = {b, h_q, s_q, d_qk}
+        // KT = {b, h_k, d_qk, s_kv}
+        // V = {b, h_v, s_kv, d_v}
         // So the code below maps the K->KT
         std::vector<int64_t> temp_vec;
 
@@ -411,16 +409,6 @@ class ScaledDotProductFlashAttentionNode : public INode {
         // Special non-functional-style call. Needed because output already created and provided to user.
         matmul(last_output, V, bmm2_attributes, O);
 
-        // Set dims if user did not
-        if (attributes.outputs[output_names::O]->get_dim().empty()) {
-            attributes.outputs[output_names::O]->set_dim({b, h, s_q, d_v});
-        }
-        if (attributes.outputs[output_names::O]->get_stride().empty()) {
-            auto const O_dim = attributes.outputs[output_names::O]->get_dim();
-            attributes.outputs[output_names::O]->set_stride(
-                {O_dim[3] * O_dim[2] * O_dim[1], O_dim[3] * O_dim[2], O_dim[3], 1});
-        }
-
         return {error_code_t::OK, ""};
     }
 
@@ -503,6 +491,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
 };
 
 class ScaledDotProductFlashAttentionBackwardNode : public INode {
+    using input_names  = Scaled_dot_product_flash_attention_backward_attributes::input_names;
+    using output_names = Scaled_dot_product_flash_attention_backward_attributes::output_names;
+
    private:
     // non-virtual node cpu tensors
     std::shared_ptr<Tensor_attributes> one_tensor;
@@ -533,9 +524,6 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating ScaledDotProductFlashAttentionBackwardNode" << attributes.name << "..." << std::endl;
-
-        using input_names  = Scaled_dot_product_flash_attention_backward_attributes::input_names;
-        using output_names = Scaled_dot_product_flash_attention_backward_attributes::output_names;
 
         auto const& q    = attributes.inputs.find(input_names::Q);
         bool const has_q = (q != attributes.inputs.end()) && (q->second != nullptr);
@@ -650,9 +638,6 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for ScaledDotProductFlashAttentionBackwardNode "
                     << attributes.name << "..." << std::endl;
 
-        using input_names  = Scaled_dot_product_flash_attention_backward_attributes::input_names;
-        using output_names = Scaled_dot_product_flash_attention_backward_attributes::output_names;
-
         attributes.fill_from_context(context);
 
         // Gather dims to fill properties of virtual tensors
@@ -660,21 +645,22 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         auto b            = q_dim[0];
         auto h_q          = q_dim[1];
         auto s_q          = q_dim[2];
-        auto d            = q_dim[3];
+        auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
         auto h_k          = k_dim[1];
         auto s_kv         = k_dim[2];
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
         auto h_v          = v_dim[1];
+        auto d_v          = v_dim[3];
 
         // cuDNN frontend API attention requires Q, K, V where
-        // Q = {b, h_q, s_q, d}
-        // K = {b, h_k, s_kv, d}
-        // V = {b, h_v, s_kv, d}
+        // Q = {b, h_q, s_q, d_qk}
+        // K = {b, h_k, s_kv, d_qk}
+        // V = {b, h_v, s_kv, d_v}
         // but cuDNN backend API attention requires Q, KT, VT
-        // Q = {b, h_q, s_q, d}
-        // KT = {b, h_k, d, s_kv}
-        // VT = {b, h_v, d, s_kv}
+        // Q = {b, h_q, s_q, d_qk}
+        // KT = {b, h_k, d_qk, s_kv}
+        // VT = {b, h_v, d_v, s_kv}
         // So the code below maps the K->KT and V->VT
         std::vector<int64_t> temp_vec;
 
@@ -801,9 +787,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         if (!use_workspace_opt) {
             dQ_accum = std::make_shared<Tensor_attributes>();
             dQ_accum->set_is_virtual(false);
-            dQ_accum->set_dim({b, h_q, s_q, d}).set_stride({h_q * s_q * d, s_q * d, d, 1});
+            dQ_accum->set_dim({b, h_q, s_q, d_qk}).set_stride({h_q * s_q * d_qk, s_q * d_qk, d_qk, 1});
             dQ_accum->set_data_type(DataType_t::FLOAT).set_reordering_type(TensorReordering_t::F16x16);
-            dQ_accum_size = b * h_q * s_q * d * sizeof(float);
+            dQ_accum_size = b * h_q * s_q * d_qk * sizeof(float);
         }
 
         // --------------RNG node--------------------
@@ -837,9 +823,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         last_output = pointwise(attributes.inputs[input_names::dO],
                                 attributes.inputs[input_names::O],
                                 Pointwise_attributes().set_name("mul_dO_O").set_mode(PointwiseMode_t::MUL));
-        last_output->set_dim({b, h_q, s_q, d}).set_stride({h_q * s_q * d, s_q * d, h_q * d, 1});
+        last_output->set_dim({b, h_q, s_q, d_v}).set_stride({h_q * s_q * d_v, s_q * d_v, h_q * d_v, 1});
 
-        // last_output = reduce(last_output, "b hq sq d -> b hq sq 1")
+        // last_output = reduce(last_output, "b hq sq dv -> b hq sq 1")
         last_output =
             reduction(last_output, Reduction_attributes().set_name("reduce_dO_o").set_mode(ReductionMode_t::ADD));
         last_output->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
@@ -855,7 +841,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         // --------------"Q @ KT => exp_softmax => dV" chain--------------------
 
-        // s = einsum(q, k, "b hq sq d, b hq skv d -> b hq sq skv")
+        // s = einsum(q, k, "b hq sq dqk, b (hk g) skv dqk -> b hq sq skv", g=hq//hk)
         last_output = matmul(attributes.inputs[input_names::Q],
                              attributes.inputs[input_names::K],
                              Matmul_attributes()
@@ -1021,7 +1007,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                           Pointwise_attributes().set_name("mul_p_dropout_scale").set_mode(PointwiseMode_t::MUL));
         }
 
-        // dV = einsum(p, dO, "b hq sq skv", "b hq sq d -> b hq skv d")
+        // dV = einsum(p, dO, "b hq sq skv", "b hq sq dv -> b hq skv dv")
+        // if GQA, then dV = reduce(dV, "b (hv g) skv dv -> b hv skv dv", g=hq//hv)
         // as reshape + matmul
         last_output = reshape(last_output, Reshape_attributes().set_name("reshape_p"));
         last_output->set_dim({b, h_q, s_kv, s_q}).set_stride({h_q * s_q * s_kv, s_q * s_kv, 1, s_kv});
@@ -1044,7 +1031,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                                      .set_name("matmul_pT_dO")
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
-            last_output->set_dim({b, h_q, s_kv, d}).set_stride({h_q * s_kv * d, s_kv * d, d, 1});
+            last_output->set_dim({b, h_q, s_kv, d_v}).set_stride({h_q * s_kv * d_v, s_kv * d_v, d_v, 1});
             last_output->set_data_type(context.get_io_data_type());
             reduction(last_output,
                       Reduction_attributes().set_name("red_dV_head").set_mode(ReductionMode_t::ADD),
@@ -1053,7 +1040,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         // --------------"dO @ VT => dS_output => dK" chain--------------------
 
-        // dP = einsum(dO, v, "b hq sq d, b hq skv d -> b hq sq skv")
+        // dP = einsum(dO, v, "b hq sq dv, b (hv g) skv dv -> b hq sq skv", g=hq//hv)
         last_output = matmul(attributes.inputs[input_names::dO],
                              attributes.inputs[input_names::V],
                              Matmul_attributes()
@@ -1100,7 +1087,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
         dS_output = last_output;
 
-        // dK = einsum(dS, Q, "b hq sq skv", "b hq sq d -> b hq skv d")
+        // dK = einsum(dS, Q, "b hq sq skv", "b hq sq dqk -> b hq skv dqk")
+        // if GQA, then dK = reduce(dK, "b (hk g) skv dqk -> b hk skv dqk", hq//hk)
         // as reshape + matmul
         last_output = reshape(last_output, Reshape_attributes().set_name("reshape_dS"));
         last_output->set_dim({b, h_q, s_kv, s_q}).set_stride({h_q * s_q * s_kv, s_q * s_kv, 1, s_kv});
@@ -1123,7 +1111,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
                                      .set_name("matmul_dST_Q")
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
-            last_output->set_dim({b, h_q, s_kv, d}).set_stride({h_q * s_kv * d, s_kv * d, d, 1});
+            last_output->set_dim({b, h_q, s_kv, d_qk}).set_stride({h_q * s_kv * d_qk, s_kv * d_qk, d_qk, 1});
             last_output->set_data_type(context.get_io_data_type());
             reduction(last_output,
                       Reduction_attributes().set_name("red_dK_head").set_mode(ReductionMode_t::ADD),
@@ -1135,7 +1123,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         auto const& kt_dim    = attributes.inputs[input_names::K]->get_dim();
         auto const& kt_stride = attributes.inputs[input_names::K]->get_stride();
 
-        // dQ = einsum(dS, K, "b h sq skv, b h skv d -> b h sq d")
+        // dQ = einsum(dS, K, "b hq sq skv, b (hk g) skv dqk -> b hq sq dqk", g=hq//hk)
         // as reshape + matmul
         last_output = reshape(attributes.inputs[input_names::K], Reshape_attributes().set_name("reshape_k"));
         last_output->set_dim({kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]})
@@ -1172,6 +1160,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     virtual int64_t
     get_fe_workspace_size_node() const override final {
         // set in infer_properties_node()
+        // align alibi slopes memory to 16 bytes
         int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
         return alibi_slopes_size_padded + dQ_accum_size + softmax_sum_size;
     }
