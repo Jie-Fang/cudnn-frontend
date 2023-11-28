@@ -42,7 +42,7 @@ def test_int8_bf16_matmul():
     B = graph.tensor_like(B_gpu)
     
     # Cast the input tensors to required mma precision
-    A_casted = graph.identity(input = A, compute_data_type=cudnn.data_type.BFLOAT16)
+    A_casted = graph.identity(input = A, compute_data_type=cudnn.data_type.FLOAT)
     A_casted.set_data_type(cudnn.data_type.BFLOAT16)
     
     C = graph.matmul(name = "matmul", A = A_casted, B = B, compute_data_type=cudnn.data_type.FLOAT)
