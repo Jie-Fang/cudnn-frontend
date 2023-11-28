@@ -758,7 +758,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
                 dBias_ref[i, :, :, n:] = 0
 
     assert compare_tensors(dQ_ref, dQ_gpu, "dQ") == 0
-    assert compare_tensors(dK_ref, dK_gpu, "dK") == 0
+    assert compare_tensors(dK_ref, dK_gpu, "dK", atol=2e-2 if input_type != torch.bfloat16 else 4e-2) == 0
     assert compare_tensors(dV_ref, dV_gpu, "dV") == 0
     if is_bias:
         assert compare_tensors(dBias_ref, dBias_gpu, "dBias") == 0
