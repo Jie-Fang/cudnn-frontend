@@ -193,9 +193,9 @@ def compute_ref(
     return o
 
 
-input_type_options = [torch.float16]
-layout_options = ["bs3hd", "sbh3d"]
-head_group_options = ["group_query", "multi_query"]
+input_type_options = [torch.float16, torch.bfloat16]
+layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
+head_group_options = ["multi_head", "group_query", "multi_query"]
 bias_options = [False, True]
 alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
