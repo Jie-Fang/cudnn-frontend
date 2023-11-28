@@ -348,6 +348,30 @@ class INode : public ICudnn {
     }
 
     error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
+             void* workspace,
+             void* user_impl = nullptr) {
+        // Add pass_by_value data pointers to tensor_uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
+        // execute.
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t> tensor_to_pass_by_value;
+        CHECK_CUDNN_FRONTEND_ERROR(gather_pass_by_value_tensors_(handle, tensor_to_pass_by_value, workspace));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_to_pointer_map, tensor_to_pass_by_value));
+
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
+
+        for (auto& plan_list : plans) {
+            CHECK_CUDNN_FRONTEND_ERROR(plan_list.autotune(handle, tensor_to_pointer_map, cudnn_workspace, user_impl));
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
             void* workspace) const {

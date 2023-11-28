@@ -369,13 +369,13 @@ class Execution_plan_list {
     static error_t
     autotune_default_impl(std::vector<std::shared_ptr<ExecutionPlan>>& execution_plans,
                           cudnnHandle_t handle,
-                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
                           void* workspace_ptr,
                           void*) {
         // Create the variant pack for all the plans to use.
         std::vector<int64_t> uids;
         std::vector<void*> ptrs;
-        for (auto it : variants) {
+        for (auto it : tensor_to_pointer_map) {
             if (it.first != nullptr) {
                 uids.push_back(it.first->get_uid());
                 ptrs.push_back(it.second);
@@ -448,17 +448,17 @@ class Execution_plan_list {
 
     std::function<error_t(std::vector<std::shared_ptr<ExecutionPlan>>&,
                           cudnnHandle_t,
-                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
                           void*,
                           void*)>
         autotune_impl = &Execution_plan_list::autotune_default_impl;
 
     error_t
     autotune(cudnnHandle_t handle,
-             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> variants,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const& tensor_to_pointer_map,
              void* workspace,
              void* user_impl = nullptr) {
-        auto error = autotune_impl(execution_plans, handle, variants, workspace, user_impl);
+        auto error = autotune_impl(execution_plans, handle, tensor_to_pointer_map, workspace, user_impl);
         return error;
     }
 };

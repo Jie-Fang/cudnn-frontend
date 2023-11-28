@@ -242,17 +242,6 @@ class Graph : public INode {
         return *this;
     }
 
-    error_t
-    autotune(cudnnHandle_t handle,
-             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> variants,
-             void *workspace,
-             void *user_impl = nullptr) {
-        for (auto &plan_list : plans) {
-            CHECK_CUDNN_FRONTEND_ERROR(plan_list.autotune(handle, variants, workspace, user_impl));
-        }
-        return {error_code_t::OK, ""};
-    }
-
     std::string
     print(void) const {
         std::stringstream ss;
