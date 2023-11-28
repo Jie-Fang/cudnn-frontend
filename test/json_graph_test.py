@@ -133,13 +133,19 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-Tout", choices=kDATA_TYPES)
     l_parser.add_argument("-Tcomp", choices=kDATA_TYPES)
     # Format related
-    l_parser.add_argument("-formatAll", type=int, choices=[0,1])
+    format_options = l_parser.add_argument_group("format_options")
+    format_options.add_argument("-formatIn", type=int, choices=[0,1])
+    format_options.add_argument("-formatOut", type=int, choices=[0,1])
+    format_options.add_argument("-filtFormat", type=int, choices=[0,1])
+    # TODO(@mbreughe): make this mutually exclusive with the rest (Cannot use python's add_mutual_exclusive_group here. I tried.)
+    format_options.add_argument("-formatAll", type=int, choices=[0,1])
 
     #Other
     l_parser.add_argument("-backendEngine", dest='backendEngine', action='store', default=-1, required=False)
     l_parser.add_argument("-Dforce_jit_dbg", action='store', default=None, type=int)
 
     # Ignored arguments
+    # TODO(@mbreughe): Extracted ignored_keys from ignored_args
     ignored_keys = ['d', "b", "S", 'gpuRef', "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
     ignored_args = l_parser.add_argument_group('ignored_args')
     ignored_args.add_argument("-d", action='store', default=None)
