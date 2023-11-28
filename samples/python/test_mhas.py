@@ -341,14 +341,13 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     # batch size
     b = 2
     # query sequence length
-    s_q = random.choice([256, 512, 1024, 2048])  
+    s_q = random.choice([256, 512, 1024, 2048])
     # key+value sequence length
     s_kv = random.choice([256, 512, 1024, 2048]) if layout == "non_interleaved" else s_q
     # query+key embedding dimension per head
     d_qk = random.choice([64, 128])
     # value embedding dimension per head
     d_v = random.choice([64, 128]) if layout == "non_interleaved" else d_qk
-
     # number of heads
     h_q = 6
     if head_group == "multi_head":
@@ -363,6 +362,9 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
+    if d_qk != d_v and cudnn.backend_version() < 8906:
+        pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
+
     print(f"{str(param_extract_forward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
@@ -376,7 +378,12 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     qkv_num_elems = math.prod(shape_q) + math.prod(shape_k) + math.prod(shape_v)
 
     (stride_q, stride_k, stride_v, stride_o, offset_q, offset_k, offset_v) = generate_layout(
-        layout, head_group, shape_q, shape_k, shape_v, shape_o,
+        layout,
+        head_group,
+        shape_q,
+        shape_k,
+        shape_v,
+        shape_o,
     )
 
     qkv_gpu = torch.randn(qkv_num_elems, dtype=input_type, device="cuda") - 0.5
@@ -440,7 +447,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
     if is_infer == False:
         stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-    
+
     graph.validate()
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -456,7 +463,7 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
         seq_len_kv: seq_len_kv_gpu,
         o: o_gpu,
         stats: stats_gpu,
-        rng_dump: rng_dump_gpu
+        rng_dump: rng_dump_gpu,
     }
 
     if is_dropout:
@@ -537,7 +544,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     if is_bias and cudnn.backend_version() < 8906:
         pytest.skip("dBias is only supported 8.9.6 onwards.")
 
-    if is_bias and torch.cuda.get_device_capability()[0] < 9:    
+    if is_bias and torch.cuda.get_device_capability()[0] < 9:
         pytest.skip("dBias is only supported on hopper onwards.")
 
     if is_bias and is_padding:
@@ -555,14 +562,13 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     # batch size
     b = 2
     # query sequence length
-    s_q = random.choice([256, 512, 1024])  
+    s_q = random.choice([256, 512, 1024])
     # key+value sequence length
     s_kv = random.choice([256, 512, 1024]) if layout == "non_interleaved" else s_q
     # query+key embedding dimension per head
     d_qk = random.choice([64, 128])
     # value embedding dimension per head
     d_v = random.choice([64, 128]) if layout == "non_interleaved" else d_qk
-
     # number of heads
     h_q = 6
     if head_group == "multi_head":
@@ -577,7 +583,10 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
-    print(f"{str(param_extract_backward)} {s_q=} {s_kv=} {d_qk=} {d_v=}")
+    if d_qk != d_v and cudnn.backend_version() < 8906:
+        pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
+
+    print(f"{str(param_extract_backward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -590,7 +599,12 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     qkv_num_elems = math.prod(shape_q) + math.prod(shape_k) + math.prod(shape_v)
 
     (stride_q, stride_k, stride_v, stride_o, offset_q, offset_k, offset_v) = generate_layout(
-        layout, head_group, shape_q, shape_k, shape_v, shape_o,
+        layout,
+        head_group,
+        shape_q,
+        shape_k,
+        shape_v,
+        shape_o,
     )
 
     qkv_gpu = torch.randn(qkv_num_elems, dtype=input_type, device="cuda") - 0.5
@@ -661,7 +675,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
     stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
-    
+
     graph.validate()
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -677,7 +691,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
         seq_len_kv: seq_len_kv_gpu,
         o: o_gpu,
         stats: stats_gpu,
-        rng_dump: rng_dump_gpu
+        rng_dump: rng_dump_gpu,
     }
 
     if is_dropout:
@@ -740,7 +754,7 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
     dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
     dK.set_output(True).set_dim(dK_gpu.size()).set_stride(dK_gpu.stride())
     dV.set_output(True).set_dim(dV_gpu.size()).set_stride(dV_gpu.stride())
-    
+
     graph.validate()
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
