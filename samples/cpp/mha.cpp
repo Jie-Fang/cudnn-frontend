@@ -151,7 +151,7 @@ lookup_cache_or_build_graph(cudnnHandle_t handle, cache_type& user_maintained_ca
 
     auto [O, stats] = graph->sdpa(Q, K, V, sdpa_options);
 
-    O->set_output(true).set_stride({h * d, d, b * h * d, 1});
+    O->set_output(true).set_dim({b, h, s_q, d}).set_stride({h * d, d, b * h * d, 1});
 
     // Check that Stats tensor is real, which is only when its training step
     if (is_inference) {
