@@ -94,7 +94,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-" + kTEST_NAME, required=True)
     l_parser.add_argument("-jsonPath", dest="json_fname", action='store', default=os.path.join(SCRIPT_DIR, "json_graph_defs",  "fusionGraphTests.json"))
     l_parser.add_argument("-T", dest="timing_loop", action="store", type=int, default=0, help="positive value: the number of times to run the kernel, no refcheck; 0: run kernel once, run refcheck")
-
+    l_parser.add_argument("-p", dest="pseudo_random_generator", action="store", choices=["r"], help="Only normal distribution (\"r\") supported")
     # These are somewhat complicated. We expect something like -kv=layout NCHH. In addition, multiple -kv invocations can happen. This means 2 things:
     # 1) we need to set nargs to 2, so argparse knows it expects 2 values (in case above this is layout and NCHW). 
     # 2), we need to specify action as append and build a list of kv values
@@ -110,12 +110,16 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-pad_d", action='store', default=0)
     l_parser.add_argument("-pad_h", action='store', default=0)
     l_parser.add_argument("-pad_w", action='store', default=0)
+    l_parser.add_argument("-u", action='store', default=1)
+    l_parser.add_argument("-v", action='store', default=1)
     l_parser.add_argument("-dimA", default=None) # Alterantively we can use nargs='+' and specify as -dimA 1 2 3 4 (without comma's)
     l_parser.add_argument("-filtA", default=None)
     l_parser.add_argument("-dimOut", default=None) # Don't specify a default as there is special logic for it in replace_implicit_params
     l_parser.add_argument("-convStrideA")   # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
     l_parser.add_argument("-dilationA")     # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
     l_parser.add_argument("-padA")          # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
+    l_parser.add_argument("-A", type=int, choices=[1], help="Dummy argument to support default convolution with alpha=1")
+    l_parser.add_argument("-B", type=int, choices=[0], help="Dummy argument to support default convolution with beta=0")
     # GEMM related params
     l_parser.add_argument("-gemm_B", type=int, action="store")
     l_parser.add_argument("-gemm_M", type=int, action="store")
@@ -146,7 +150,6 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     # Ignored arguments
     # TODO(@mbreughe): Extracted ignored_keys from ignored_args
-    ignored_keys = ['d', "b", "S", 'gpuRef', "engineCfgSweep", "knobSplitKSlices","knobKernelCfg", "serialization"]
     ignored_args = l_parser.add_argument_group('ignored_args')
     ignored_args.add_argument("-d", action='store', default=None)
     ignored_args.add_argument("-b", action='store_true', default=None)
@@ -156,6 +159,10 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     ignored_args.add_argument("-knobSplitKSlices", action='store', default=None, required=False)
     ignored_args.add_argument("-knobKernelCfg", action='store', default=None, required=False)
     ignored_args.add_argument("-serialization", action='store', default=None, required=False)
+    ignored_args.add_argument("-pref", action='store', default=None, required=False)
+    ignored_args.add_argument("-Pmath", action='store', default=None, required=False)
+
+    ignored_keys = [argument.dest for argument in ignored_args._group_actions]
 
     # First parsing pass
     legacy_args = l_parser.parse_args(sanitized_graphRunner_args)
@@ -187,16 +194,28 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
             raise ValueError()
         abstract_params['padA'] = padA
     
+    if abstract_params['convStrideA'] is None:
+        convStrideA = [1] * spatial_dims
+        if spatial_dims == 3:
+            convStrideA[0] = int(abstract_params["u"])
+            convStrideA[1] = int(abstract_params["v"])
+            convStrideA[2] = 1
+        elif spatial_dims == 2:
+            convStrideA[0] = int(abstract_params["u"])
+            convStrideA[1] = int(abstract_params["v"])
+        else:
+            raise ValueError()
+        abstract_params['convStrideA'] = convStrideA
+    
     # dilation default is array of ones
     # stride default is 1, which is derived from cpp harness: first it's 0, but then getConvNdDesc and json_util override it with 1
-    ones = [1] * spatial_dims
-    for param_name in ["convStrideA", "dilationA"]:
+    for param_name in ["dilationA"]:
         if abstract_params[param_name] is None:
-            abstract_params[param_name] = ones
+            abstract_params[param_name] = [1] * spatial_dims
 
     # Ignored arguments:
     for key in ignored_keys:
-        if abstract_params[key] is not None:
+        if key in abstract_params and abstract_params[key] is not None:
             print ("Note: Argument -{} ignored.".format(key))
             del abstract_params[key]
 
