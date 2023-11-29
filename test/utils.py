@@ -1,4 +1,6 @@
+# Module scope variables -- can be set from pycudnnTest.py
 LOG_RUNTIME = False
+DISABLE_CUPTI = True
 
 if LOG_RUNTIME:
     import time 
@@ -43,8 +45,6 @@ def computeStrideNdTransposedPacked(nbDims, dims, axesOrder):
     inverseTranspose = dict()
     for i in range(nbDims):
         inverseTranspose[axesOrder[i]] = i
-
-    print (dims)
     
     strides = [1] * nbDims
     strides[inverseTranspose[nbDims - 1]] = 1
@@ -82,3 +82,83 @@ def create_nhwc_strides(dims):
         stride[dim_N] = stride[dim_H] * dims[dim_H]
 
     return stride
+
+# TODO: update with multiple variant_pack/workspaces to support cold caches
+def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
+    import torch
+
+    # If CUPTI is disabled, still run the graph timingLoop times, just don't profile it here
+    # This can be useful in case we want to run through nsys
+    if DISABLE_CUPTI:
+        for i in range(timingLoop):
+            cudnn_graph.execute(variant_pack, workspace)
+        return (-1,-1,-1)
+
+    cupti_runtimes = []
+    kernel_times = {}
+
+    # Callback function to process a profile
+    # This will update cupti_runtimes and kernel_times
+    def process_profile(prof):
+        # Calculate runtime for the graph we just executed
+        end_time = 0
+        start_time = max(e.time_range.start for e in prof.events())
+        trace_started = False
+        # The calculation needs to take into account that some kernels may overlap in time. 
+        # Also, we want to avoid measuring launch latency.
+        # Therefore we 1) skip anything before the first cuLaunchKernel, and 2) find the earliest kernel start time
+        # and latest kernel end time
+        for event in prof.events():
+            # Any event before this is not counted (this avoids measuring cuda memsets and the very first launch latency)
+            if "LaunchKernel" in event.name:
+                trace_started = True
+            if not trace_started:
+                continue
+            if event.cuda_time > 0:
+                if not event.name in kernel_times:
+                    kernel_times[event.name] = []
+                kernel_times[event.name].append(event.cuda_time)
+                if event.time_range.end > end_time:
+                    end_time = event.time_range.end
+                if event.time_range.start < start_time:
+                    start_time = event.time_range.start
+        # We discard the first, and potentially the last run.
+        # First: always seems to be much longer than the rest, even if we set skip_first=N
+        # Last: If we ended the profiling loop with a warmup run, no useful kernels will have been profiled (trace_started will never be set)
+        if process_profile.first_iteration or not trace_started:
+            process_profile.first_iteration = False
+            return
+        
+        cupti_runtimes.append(end_time-start_time)
+    
+    process_profile.first_iteration = True
+    
+    # The profile schedule works as follows:
+    # 1) the first skip_first runs in the loop are not profiled
+    # 2) From then on, we run sets of (warmup+active) runs of which the first warmup runs are not profiled
+    # 3) Data on active runs is processed by the on_trace_ready callback function
+    warmup = 1
+    skip_first = 2
+    active = 1
+    total_runs = timingLoop + skip_first
+    prof_schedule = torch.profiler.schedule(wait=0, skip_first=skip_first, warmup=warmup, active=active)
+
+    # We need to have at least 2 non-skipped cycles.
+    # Otherwise the profile will be empty
+    assert total_runs >= skip_first + 2 * (warmup+active+skip_first)
+
+    with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CUDA], schedule=prof_schedule, on_trace_ready=process_profile) as prof:
+        for i in range(total_runs):
+            cudnn_graph.execute(variant_pack, workspace)
+            prof.step()
+    
+    # lambda function for quick stats
+    min_avg_max_ratio = lambda L: (min(L), sum(L)/len(L), max(L), (max(L)-min(L))/max(L)) if L else (0,0,0,0)
+
+    cupti_runtime_stats = min_avg_max_ratio(cupti_runtimes)
+    print("[MB_TIME] Summary (num kernels, min (us), avg (us), max (us), (max-min)/max): {}, {}, {}, {}, {}".format(len(kernel_times), *cupti_runtime_stats))
+    print("[MB_TIME] Found {} kernels found in this cudnn graph. Min/Avg/Max/Ratio (including overlapped times):".format(len(kernel_times)))
+    for kernel in kernel_times:
+        print("[MB_TIME]", kernel, min_avg_max_ratio(kernel_times[kernel]))
+    return (cupti_runtime_stats[0], cupti_runtime_stats[1], cupti_runtime_stats[2])
+        
