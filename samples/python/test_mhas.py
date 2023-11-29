@@ -313,7 +313,7 @@ def param_extract_forward(request):
 
 
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_scale_dot_product_flash_attention(param_extract_forward):
+def test_sdpa(param_extract_forward):
     (
         input_type,
         layout,
@@ -526,7 +526,7 @@ def param_extract_backward(request):
 
 
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_scale_dot_product_flash_attention_backward(param_extract_backward):
+def test_sdpa_backward(param_extract_backward):
     (
         input_type,
         layout,
@@ -856,20 +856,20 @@ if __name__ == "__main__":
     """
     option_forward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout, is_infer)
     option_backward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout)
-    test_scale_dot_product_flash_attention((torch.float16, "bs3hd", "multi_head", False, False, False, False, False, False))
-    test_scale_dot_product_flash_attention_backward((torch.float16, "bs3hd", "multi_head", False, False, False, False, False))
+    test_sdpa((torch.float16, "bs3hd", "multi_head", False, False, False, False, False, False))
+    test_sdpa_backward((torch.float16, "bs3hd", "multi_head", False, False, False, False, False))
     """
 
     print("==========running forward tests==========")
     for option in all_options_forward:
         try:
-            test_scale_dot_product_flash_attention(option)
+            test_sdpa(option)
         except pytest.skip.Exception as e:
             print(f"Skipped {option}: {e}")
 
     print("==========running backward tests==========")
     for option in all_options_backward:
         try:
-            test_scale_dot_product_flash_attention_backward(option)
+            test_sdpa_backward(option)
         except pytest.skip.Exception as e:
             print(f"Skipped {option}: {e}")
