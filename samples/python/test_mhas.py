@@ -427,8 +427,8 @@ def test_scale_dot_product_flash_attention(param_extract_forward):
 
     rng_dump = graph.tensor_like(rng_dump_gpu) if is_dropout else None
 
-    o, stats = graph.scaled_dot_product_flash_attention(
-        name="scaled_dot_product_flash_attention",
+    o, stats = graph.sdpa(
+        name="sdpa",
         q=q,
         k=k,
         v=v,
@@ -656,8 +656,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
 
     rng_dump = graph.tensor_like(rng_dump_gpu) if is_dropout else None
 
-    o, stats = graph.scaled_dot_product_flash_attention(
-        name="scaled_dot_product_flash_attention",
+    o, stats = graph.sdpa(
+        name="sdpa",
         q=q,
         k=k,
         v=v,
@@ -732,8 +732,8 @@ def test_scale_dot_product_flash_attention_backward(param_extract_backward):
         offset = graph.tensor_like(offset_gpu)
         dropout_tuple = (dropout_prob, seed, offset)
 
-    dQ, dK, dV = graph.scaled_dot_product_flash_attention_backward(
-        name="scaled_dot_product_flash_attention",
+    dQ, dK, dV = graph.sdpa_backward(
+        name="sdpa_backward",
         q=q,
         k=k,
         v=v,
