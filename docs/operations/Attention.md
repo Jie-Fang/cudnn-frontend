@@ -1,15 +1,15 @@
 ## Table of Contents
-1. [Scaled Dot Product Flash Attention](#scaled-dot-product-flash-attention)
-2. [Scaled Dot Product Flash Attention Backward](#scaled-dot-product-flash-attention-backward)
+1. [Scaled Dot Product Attention](#scaled-dot-product-attention)
+2. [Scaled Dot Product Attention Backward](#scaled-dot-product-attention-backward)
 3. [Miscellaneous](#miscellaneous)
 
-### Scaled Dot Product Flash Attention
+### Scaled Dot Product Attention
 
-This operation computes the scaled dot product attention, which is defined as :
+This operation computes the scaled dot product attention, as
 
 $\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V$
 
-It is applicable for both training and inference phases, with an option to generate a stats tensor to be used for backwards training computation.
+using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). It is applicable for both training and inference phases, with an option to generate a stats tensor to be used for backwards training computation.
 
 #### Configurable Options:
 
@@ -72,55 +72,54 @@ Where,
 
 ```cpp
 std::array<std::shared_ptr<Tensor_attributes>, 2> 
-scaled_dot_product_flash_attention
-    (std::shared_ptr<Tensor_attributes> q,
+sdpa(std::shared_ptr<Tensor_attributes> q,
      std::shared_ptr<Tensor_attributes> k,
      std::shared_ptr<Tensor_attributes> v,
-     Scaled_dot_product_flash_attention_attributes options);
+     SDPA_attributes options);
 ```
 
 The function returns an array of two tensors: `[output, softmax_stats]`.
 
-The `options` parameter of type `Scaled_dot_product_flash_attention_attributes` is used to control the attributes of the forward operation, as detailed below:
+The `options` parameter of type `SDPA_attributes` is used to control the attributes of the forward operation, as detailed below:
 
 ```cpp
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_is_inference(bool const value);
 
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_attn_scale(std::shared_ptr<Tensor_attributes> value);
 
-Scaled_dot_product_flash_attention_attributes&
+SDPA_attributes&
 set_attn_scale(float const value);
 
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_bias(std::shared_ptr<Tensor_attributes> value);
 
-Scaled_dot_product_flash_attention_attributes&
+SDPA_attributes&
 set_alibi_mask(bool const value)
 
-Scaled_dot_product_flash_attention_attributes&
+SDPA_attributes&
 set_padding_mask(bool const value);
 
-Scaled_dot_product_flash_attention_attributes&
+SDPA_attributes&
 set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
 
-Scaled_dot_product_flash_attention_attributes&
+SDPA_attributes&
 set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_causal_mask(bool const value);
 
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> seed,
             std::shared_ptr<Tensor_attributes> offset);
 
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_dropout(std::shared_ptr<Tensor_attributes> mask,
             std::shared_ptr<Tensor_attributes> scale);
 
-Scaled_dot_product_flash_attention_attributes &
+SDPA_attributes &
 set_compute_data_type(DataType_t value)
 ```
 
@@ -144,13 +143,13 @@ Args:
     name (Optional[str]): The name of the operation.
 
 Returns:
-    o (cudnn_tensor): The result of scaled dot-product flash attention.
+    o (cudnn_tensor): The result of scaled dot-product attention.
     stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
 ```
 
-### Scaled Dot Product Flash Attention Backward
+### Scaled Dot Product Attention Backward
 
-This operation computes gradient tensors for scaled dot product attention. The user is required to pass the stats tensor from the forward operation to the backward operation as input.
+This operation computes gradient tensors for scaled dot product attention using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691). The user is required to pass the stats tensor from the forward operation to the backward operation as input.
 
 #### Configurable Options:
 
@@ -167,59 +166,58 @@ All the limitations mentioned in the forward operation are applicable in the bac
 #### API:
 ```cpp
 std::array<std::shared_ptr<Tensor_attributes>, 3>
-scaled_dot_product_flash_attention_backward
-    (std::shared_ptr<Tensor_attributes> q,
-     std::shared_ptr<Tensor_attributes> k,
-     std::shared_ptr<Tensor_attributes> v,
-     std::shared_ptr<Tensor_attributes> o,
-     std::shared_ptr<Tensor_attributes> dO,
-     std::shared_ptr<Tensor_attributes> stats,
-     Scaled_dot_product_flash_attention_backward_attributes);
+sdpa_backward(std::shared_ptr<Tensor_attributes> q,
+              std::shared_ptr<Tensor_attributes> k,
+              std::shared_ptr<Tensor_attributes> v,
+              std::shared_ptr<Tensor_attributes> o,
+              std::shared_ptr<Tensor_attributes> dO,
+              std::shared_ptr<Tensor_attributes> stats,
+              SDPA_backward_attributes);
 ```
 
 The function returns an array of three tensors: `[dQ, dK, dV]`.
 
-The `options` parameter of type `Scaled_dot_product_flash_attention_backward_attributes` is used to control the attributes of backward operation, as detailed below:
+The `options` parameter of type `SDPA_backward_attributes` is used to control the attributes of backward operation, as detailed below:
 
 ```cpp
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_attn_scale(std::shared_ptr<Tensor_attributes> value)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_attn_scale(float const value);
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_bias(std::shared_ptr<Tensor_attributes> value)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_dbias(std::shared_ptr<Tensor_attributes> value)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_alibi_mask(bool const value)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_padding_mask(bool const value);
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_causal_mask(bool const value)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> seed,
             std::shared_ptr<Tensor_attributes> offset)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_dropout(std::shared_ptr<Tensor_attributes> mask,
             std::shared_ptr<Tensor_attributes> scale,
             std::shared_ptr<Tensor_attributes> scale_inv)
 
-Scaled_dot_product_flash_attention_backward_attributes&
+SDPA_backward_attributes&
 set_compute_data_type(DataType_t const value)
 ```
 
@@ -245,9 +243,9 @@ Args:
     name (Optional[str]): The name of the operation.
 
 Returns:
-    dQ (cudnn_tensor): The query gradient tensor of scaled dot-product flash attention.
-    dK (cudnn_tensor): The key gradient tensor of scaled dot-product flash attention.
-    dV (cudnn_tensor): The value gradient tensor of scaled dot-product flash attention.
+    dQ (cudnn_tensor): The query gradient tensor of scaled dot-product attention.
+    dK (cudnn_tensor): The key gradient tensor of scaled dot-product attention.
+    dV (cudnn_tensor): The value gradient tensor of scaled dot-product attention.
 ```
 
 ### Miscellaneous
@@ -256,7 +254,7 @@ Returns:
     - `cudnnBackend<enum_name>` -> `cudnn_frontend::<enum_name>`
     - `cudnn<enum_name>` -> `cudnn_frontend::<enum_name>`
 - To dump the dropout mask generated by the Philox RNG dropout implementation for debugging purposes, users can use the `rng_dump` option. This option requires users to pass a tensor of dimensions $(B, H_{q}, S_{q}, S_{kv})$ 
-- Scaled Dot Product Flash Attention Backward improves performance by using an optional dP workspace tensor. This tensor's memory consumption increases quadratically with the sequence length. The following describes the behavior of the `CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT` environment variable, which allows the user to change the GPU memory limit for this workspace tensor:
+- Scaled Dot Product Attention Backward improves performance by using an optional dP workspace tensor. This tensor's memory consumption increases quadratically with the sequence length. The following describes the behavior of the `CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT` environment variable, which allows the user to change the GPU memory limit for this workspace tensor:
   - `CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT = unset`  
     The optimization will utilize workspace memory until reaching the default limit of 256MB.
   - `CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT = -1`  
