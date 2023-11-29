@@ -13,9 +13,9 @@
 
 namespace cudnn_frontend::graph {
 
-class ScaledDotProductFlashAttentionNode : public INode {
-    using input_names  = Scaled_dot_product_flash_attention_attributes::input_names;
-    using output_names = Scaled_dot_product_flash_attention_attributes::output_names;
+class SDPANode : public INode {
+    using input_names  = SDPA_attributes::input_names;
+    using output_names = SDPA_attributes::output_names;
 
     std::shared_ptr<Tensor_attributes> rng_output;
     std::shared_ptr<Tensor_attributes> dropout_scale;
@@ -24,10 +24,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
     std::shared_ptr<Tensor_attributes> alibi_slopes;
 
    public:
-    Scaled_dot_product_flash_attention_attributes attributes;
+    SDPA_attributes attributes;
 
-    ScaledDotProductFlashAttentionNode(Scaled_dot_product_flash_attention_attributes&& attributes_,
-                                       detail::Context const& context)
+    SDPANode(SDPA_attributes&& attributes_, detail::Context const& context)
         : INode(context), attributes(std::move(attributes_)) {}
 
     Type
@@ -38,7 +37,7 @@ class ScaledDotProductFlashAttentionNode : public INode {
     error_t
     pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating ScaledDotProductFlashAttentionNode " << attributes.name << "..." << std::endl;
+                    << "Validating SDPANode " << attributes.name << "..." << std::endl;
 
         CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
         CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
@@ -495,9 +494,9 @@ class ScaledDotProductFlashAttentionNode : public INode {
     }
 };
 
-class ScaledDotProductFlashAttentionBackwardNode : public INode {
-    using input_names  = Scaled_dot_product_flash_attention_backward_attributes::input_names;
-    using output_names = Scaled_dot_product_flash_attention_backward_attributes::output_names;
+class SDPABackwardNode : public INode {
+    using input_names  = SDPA_backward_attributes::input_names;
+    using output_names = SDPA_backward_attributes::output_names;
 
    private:
     // non-virtual node cpu tensors
@@ -514,10 +513,9 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     int64_t alibi_slopes_size = 0;
 
    public:
-    Scaled_dot_product_flash_attention_backward_attributes attributes;
+    SDPA_backward_attributes attributes;
 
-    ScaledDotProductFlashAttentionBackwardNode(Scaled_dot_product_flash_attention_backward_attributes&& attributes_,
-                                               detail::Context const& context)
+    SDPABackwardNode(SDPA_backward_attributes&& attributes_, detail::Context const& context)
         : INode(context), attributes(std::move(attributes_)) {}
 
     Type
@@ -528,7 +526,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
     error_t
     pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating ScaledDotProductFlashAttentionBackwardNode" << attributes.name << "..." << std::endl;
+                    << "Validating SDPABackwardNode" << attributes.name << "..." << std::endl;
 
         auto const& q    = attributes.inputs.find(input_names::Q);
         bool const has_q = (q != attributes.inputs.end()) && (q->second != nullptr);
@@ -640,8 +638,8 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
 
     error_t
     expand_and_infer_properties() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for ScaledDotProductFlashAttentionBackwardNode "
-                    << attributes.name << "..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for SDPABackwardNode " << attributes.name
+                    << "..." << std::endl;
 
         attributes.fill_from_context(context);
 
@@ -1176,7 +1174,7 @@ class ScaledDotProductFlashAttentionBackwardNode : public INode {
         std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) const override final {
-        using input_names = Scaled_dot_product_flash_attention_backward_attributes::input_names;
+        using input_names = SDPA_backward_attributes::input_names;
 
         if (one_tensor) {
             tensor_to_pass_by_value.emplace(one_tensor, 1.0f);
