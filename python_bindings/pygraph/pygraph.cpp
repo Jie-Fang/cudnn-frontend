@@ -226,8 +226,10 @@ PyGraph::matmul(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& A,
                 cudnn_frontend::DataType_t const& compute_data_type,
                 double const padding,
                 std::string const& name) {
-    auto attributes =
-        cudnn_frontend::graph::Matmul_attributes().set_compute_data_type(compute_data_type).set_name(name).set_padding(padding);
+    auto attributes = cudnn_frontend::graph::Matmul_attributes()
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name)
+                          .set_padding(padding);
 
     auto C = graph.matmul(A, B, attributes);
     return C;
