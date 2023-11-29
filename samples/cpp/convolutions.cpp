@@ -25,6 +25,62 @@
 
 #include <cudnn_frontend.h>
 
+TEST_CASE("Convolution fprop", "[conv][graph][caching]") {
+    namespace fe = cudnn_frontend;
+
+    int64_t n = 16, c = 128, h = 56, w = 56, k = 256, r = 3, s = 3;
+
+    auto build_new_graph = [=](cudnnHandle_t handle) {
+        auto graph = std::make_shared<fe::graph::Graph>();
+        graph->set_io_data_type(fe::DataType_t::HALF).set_compute_data_type(fe::DataType_t::FLOAT);
+
+        auto X = graph->tensor(fe::graph::Tensor_attributes()
+                                   .set_name("image")
+                                   .set_dim({n, c, h, w})
+                                   .set_stride({c * h * w, 1, c * w, c}));
+
+        auto W = graph->tensor(fe::graph::Tensor_attributes()
+                                   .set_name("filter")
+                                   .set_dim({k, c, r, s})
+                                   .set_stride({c * r * s, 1, c * s, c}));
+
+        auto conv_options =
+            fe::graph::Conv_fprop_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
+        auto Y = graph->conv_fprop(X, W, conv_options);
+
+        Y->set_output(true);
+
+        REQUIRE(graph->validate().is_good());
+
+        REQUIRE(graph->build_operation_graph(handle).is_good());
+
+        REQUIRE(graph->create_execution_plans({fe::HeurMode_t::A}).is_good());
+
+        REQUIRE(graph->check_support(handle).is_good());
+
+        REQUIRE(graph->build_plans(handle).is_good());
+
+        return std::make_tuple(graph, X, W, Y);
+    };
+
+    cudnnHandle_t handle;
+
+    checkCudnnErr(cudnnCreate(&handle));
+
+    auto [graph, X, W, Y] = build_new_graph(handle);
+
+    Surface<half> x_tensor(n * c * h * w, false);
+    Surface<half> w_tensor(k * c * r * s, false);
+    Surface<half> y_tensor(n * k * h * w, false);  // Should be p, q.
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {X, x_tensor.devPtr}, {W, w_tensor.devPtr}, {Y, y_tensor.devPtr}};
+
+    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
+    cudnnDestroy(handle);
+}
+
 TEST_CASE("CSBR Graph", "[conv][graph][caching]") {
     namespace fe = cudnn_frontend;
 
@@ -230,7 +286,7 @@ TEST_CASE("SBRCS", "[conv][genstats][graph]") {
     cudnnDestroy(handle);
 }
 
-TEST_CASE("Conv Int8 Graph", "[conv][graph][caching]") {
+TEST_CASE("Conv with Int8 datatypes", "[conv][graph][caching]") {
     namespace fe = cudnn_frontend;
 
     int64_t n = 1, c = 64, h = 32, w = 32, k = 4, r = 3, s = 3;
