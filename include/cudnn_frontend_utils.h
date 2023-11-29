@@ -628,6 +628,7 @@ get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
         case PointwiseMode_t::SOFTPLUS_BWD:
         case PointwiseMode_t::SWISH_BWD:
         case PointwiseMode_t::GELU_APPROX_TANH_BWD:
+        case PointwiseMode_t::POW:
             return 3;
 
         case PointwiseMode_t::SQRT:
@@ -642,7 +643,6 @@ get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
         case PointwiseMode_t::LOG:
         case PointwiseMode_t::NEG:
         case PointwiseMode_t::MOD:
-        case PointwiseMode_t::POW:
         case PointwiseMode_t::ABS:
         case PointwiseMode_t::CEIL:
         case PointwiseMode_t::FLOOR:
