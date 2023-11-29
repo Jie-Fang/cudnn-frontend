@@ -39,32 +39,88 @@ class SDPANode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SDPANode " << attributes.name << "..." << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::V);
-
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::O);
-
-#define CUDNN_FE_VALIDATE_STRIDE(port, port_map)                                                                \
+        // check that Q, K, V, O tensors has been assigned
+        // check that dim and strides has been assigned and last stride is 1
+#define CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(port, port_map)                                                       \
     {                                                                                                           \
-        auto const& t = port_map.find(port);                                                                    \
+        std::shared_ptr<Tensor_attributes> tensor_ptr = port_map.at(port);                                      \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(tensor_ptr->get_dim().size() != 4,                                       \
+                                       error_code_t::ATTRIBUTE_NOT_SET,                                         \
+                                       "The dim for " + std::string(#port) + " is invalid");                    \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(tensor_ptr->get_stride().size() != 4,                                    \
+                                       error_code_t::ATTRIBUTE_NOT_SET,                                         \
+                                       "The stride for " + std::string(#port) + " is invalid");                 \
         RETURN_CUDNN_FRONTEND_ERROR_IF(                                                                         \
-            t->second->get_stride().back() != 1,                                                                \
+            tensor_ptr->get_stride()[3] != 1,                                                                   \
             error_code_t::GRAPH_NOT_SUPPORTED,                                                                  \
             "The stride for the last dimension corresponding to the embedding size per head should be 1 for " + \
                 std::string(#port));                                                                            \
     }
 
-        CUDNN_FE_VALIDATE_STRIDE(input_names::Q, attributes.inputs);
-        CUDNN_FE_VALIDATE_STRIDE(input_names::K, attributes.inputs);
-        CUDNN_FE_VALIDATE_STRIDE(input_names::V, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Q, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::K, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::V);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::O);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::O, attributes.outputs);
 
-#undef CUDNN_FE_VALIDATE_STRIDE
-
+        // validate options for is_inference and stats tensor
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.is_inference.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
-                                       "is_infernece attribute not set");
+                                       "is_inference attribute not set");
 
+        if (attributes.is_inference.value() == false) {
+            CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::Stats);
+        }
+
+#undef CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE
+
+        // validate backend limitations for the operation
+        int64_t h_q  = attributes.inputs.at(input_names::Q)->get_dim()[1];
+        int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
+        int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
+        int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
+        int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
+        RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For group-query attention, number of heads for key and query must be a factor "
+                                       "of number of heads for query");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+
+        // validate options for attn_scale
+        auto const& attn_scale    = attributes.inputs.find(input_names::Attn_scale);
+        bool const has_attn_scale = (attn_scale != attributes.inputs.end()) && (attn_scale->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "attn_scale with tensor and value cannot be set at the same time.");
+
+        // validate options for bias mask
+        auto bias_mask = attributes.inputs.find(input_names::Bias);
+        if (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr) {
+            auto bias_mask_dtype = bias_mask->second->get_data_type();
+            RETURN_CUDNN_FRONTEND_ERROR_IF((bias_mask_dtype == DataType_t::BOOLEAN),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Bias mask data type cannot be boolean");
+        }
+
+        // validate options for padding mask
+        auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
+        bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
+        auto const& seq_len_kv    = attributes.inputs.find(input_names::SEQ_LEN_KV);
+        bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Padding mask requires seq_len_q and seq_len_kv to be set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+
+        // validate options for dropout mask
         auto const& dropout_mask    = attributes.inputs.find(input_names::Dropout_mask);
         bool const has_dropout_mask = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && has_dropout_mask,
@@ -77,44 +133,10 @@ class SDPANode : public INode {
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
+        // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
-
-        auto const& seq_len_q    = attributes.inputs.find(input_names::SEQ_LEN_Q);
-        bool const has_seq_len_q = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
-
-        auto const& seq_len_kv    = attributes.inputs.find(input_names::SEQ_LEN_KV);
-        bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Padding mask requires seq_len_q and seq_len_kv to be set.");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
-
-        auto const& attn_scale    = attributes.inputs.find(input_names::Attn_scale);
-        bool const has_attn_scale = (attn_scale != attributes.inputs.end()) && (attn_scale->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "attn_scale with tensor and value cannot be set at the same time.");
-
-        auto it         = attributes.inputs.find(input_names::Q);
-        auto q_dim      = it->second->get_dim();
-        auto hidden_dim = q_dim[3];
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
-
-        auto attn_mask = attributes.inputs.find(input_names::Bias);
-        if (attn_mask != attributes.inputs.end() && attn_mask->second != nullptr) {
-            auto attn_mask_dtype = attn_mask->second->get_data_type();
-            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN),
-                                           error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "Attn mask data type cannot be boolean");
-        }
 
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
@@ -131,7 +153,7 @@ class SDPANode : public INode {
         // - dropout scale in pre 8.9.3
         attributes.fill_from_context(context);
 
-        // Gather dims to fill properties of virtual tensors
+        // Gather dim to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();
         auto b            = q_dim[0];
         auto h            = q_dim[1];
@@ -171,7 +193,7 @@ class SDPANode : public INode {
 
         auto const& bmm1_output =
             matmul(attributes.inputs[input_names::Q], attributes.inputs[input_names::K], bmm1_attributes);
-        // Setting dims and strides as pointwise op wont have knowledge of how to do it for mha.
+        // Setting dim and strides as pointwise op wont have knowledge of how to do it for mha.
         bmm1_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
         last_output = bmm1_output;
 
@@ -374,7 +396,7 @@ class SDPANode : public INode {
                                      .set_distribution(RngDistribution_t::BERNOULLI)
                                      .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
                 rng_output
-                    // Hard coding dims and strides as rng output can no inputs to infer it from.
+                    // Hard coding dim and strides as rng output can no inputs to infer it from.
                     ->set_dim({b, h, s_q, s_kv})
                     .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
             }
@@ -528,100 +550,105 @@ class SDPABackwardNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SDPABackwardNode" << attributes.name << "..." << std::endl;
 
-        auto const& q    = attributes.inputs.find(input_names::Q);
-        bool const has_q = (q != attributes.inputs.end()) && (q->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_q, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input q not set");
-        auto const& k    = attributes.inputs.find(input_names::K);
-        bool const has_k = (k != attributes.inputs.end()) && (k->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_k, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input k not set");
-        auto const& v    = attributes.inputs.find(input_names::V);
-        bool const has_v = (v != attributes.inputs.end()) && (v->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_v, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input v not set");
-        auto const& o    = attributes.inputs.find(input_names::O);
-        bool const has_o = (o != attributes.inputs.end()) && (o->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_o, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input o not set");
-        auto const& dO    = attributes.inputs.find(input_names::dO);
-        bool const has_dO = (dO != attributes.inputs.end()) && (dO->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dO, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input dO not set");
-        auto const& stats    = attributes.inputs.find(input_names::Stats);
-        bool const has_stats = (stats != attributes.inputs.end()) && (stats->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_stats, error_code_t::ATTRIBUTE_NOT_SET, "Tensor input stats not set");
-        auto const& dQ    = attributes.outputs.find(output_names::dQ);
-        bool const has_dQ = (dQ != attributes.outputs.end()) && (dQ->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dQ, error_code_t::ATTRIBUTE_NOT_SET, "Tensor output dQ not set");
-        auto const& dK    = attributes.outputs.find(output_names::dK);
-        bool const has_dK = (dK != attributes.outputs.end()) && (dK->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dK, error_code_t::ATTRIBUTE_NOT_SET, "Tensor output dK not set");
-        auto const& dV    = attributes.outputs.find(output_names::dV);
-        bool const has_dV = (dV != attributes.outputs.end()) && (dV->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_dV, error_code_t::ATTRIBUTE_NOT_SET, "Tensor output dV not set");
+        // check that Q, K, V, O, stats, dO, dQ, dK, dV tensors has been assigned
+        // check that dim and strides has been assigned and last stride is 1
+#define CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(port, port_map)                                                       \
+    {                                                                                                           \
+        std::shared_ptr<Tensor_attributes> tensor_ptr = port_map.at(port);                                      \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(tensor_ptr->get_dim().size() != 4,                                       \
+                                       error_code_t::ATTRIBUTE_NOT_SET,                                         \
+                                       "The dim for " + std::string(#port) + " is invalid");                    \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(tensor_ptr->get_stride().size() != 4,                                    \
+                                       error_code_t::ATTRIBUTE_NOT_SET,                                         \
+                                       "The stride for " + std::string(#port) + " is invalid");                 \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                                         \
+            tensor_ptr->get_stride()[3] != 1,                                                                   \
+            error_code_t::GRAPH_NOT_SUPPORTED,                                                                  \
+            "The stride for the last dimension corresponding to the embedding size per head should be 1 for " + \
+                std::string(#port));                                                                            \
+    }
 
-        bool last_dim_is_one = q->second->get_stride().back() == 1;
-        last_dim_is_one &= k->second->get_stride().back() == 1;
-        last_dim_is_one &= v->second->get_stride().back() == 1;
-        last_dim_is_one &= o->second->get_stride().back() == 1;
-        last_dim_is_one &= *(stats->second->get_stride().end() - 1) == 1;
-        last_dim_is_one &= *(stats->second->get_stride().end() - 2) == 1;
-        last_dim_is_one &= dQ->second->get_stride().back() == 1;
-        last_dim_is_one &= dK->second->get_stride().back() == 1;
-        last_dim_is_one &= dV->second->get_stride().back() == 1;
-        last_dim_is_one &= dO->second->get_stride().back() == 1;
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            !last_dim_is_one,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "The stride for the last dimension corresponding to the hidden size per head should be 1");
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Q, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::K, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::V);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::O);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::O, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Stats);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Stats, attributes.inputs);
+        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::dO);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::dO, attributes.inputs);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::dQ);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::dQ, attributes.outputs);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::dK);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::dK, attributes.outputs);
+        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::dV);
+        CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::dV, attributes.outputs);
 
-        auto const& dropout_mask = attributes.inputs.find(input_names::Dropout_mask);
-        auto const& seq_len_q    = attributes.inputs.find(input_names::SEQ_LEN_Q);
-        auto const& seq_len_kv   = attributes.inputs.find(input_names::SEQ_LEN_KV);
-        auto const& attn_scale   = attributes.inputs.find(input_names::Attn_scale);
+#undef CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE
 
+        // validate backend limitations for the operation
+        int64_t h_q  = attributes.inputs.at(input_names::Q)->get_dim()[1];
+        int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
+        int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
+        int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
+        int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
+        RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For group-query attention, number of heads for key and query must be a factor "
+                                       "of number of heads for query");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+
+        // validate options for attn_scale
+        auto const& attn_scale    = attributes.inputs.find(input_names::Attn_scale);
+        bool const has_attn_scale = (attn_scale != attributes.inputs.end()) && (attn_scale->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "attn_scale with tensor and value cannot be set at the same time.");
+
+        // validate options for bias mask
+        auto bias_mask = attributes.inputs.find(input_names::Bias);
+        if (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr) {
+            auto bias_mask_dtype = bias_mask->second->get_data_type();
+            RETURN_CUDNN_FRONTEND_ERROR_IF((bias_mask_dtype == DataType_t::BOOLEAN),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Bias mask data type cannot be boolean");
+        }
+
+        // validate options for padding mask
+        auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
+        bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
+        auto const& seq_len_kv    = attributes.inputs.find(input_names::SEQ_LEN_KV);
+        bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Padding mask requires seq_len_q and seq_len_kv to be set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+
+        // validate options for dropout mask
+        auto const& dropout_mask    = attributes.inputs.find(input_names::Dropout_mask);
         bool const has_dropout_mask = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.dropout_probability.has_value() && has_dropout_mask,
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "Using both, custom dropout mask and internal-mask generation using dropout probability, is ill-formed.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && has_dropout_mask,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "Using both, custom dropout mask and internal-mask generation using dropout "
+                                       "probability, is ill-formed.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.dropout_probability.has_value() && attributes.dropout_probability.value() == 1.0,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
-        bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
-        bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Padding mask requires seq_len_q and seq_len_kv to be set.");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
-
-        bool const has_attn_scale = (attn_scale != attributes.inputs.end()) && (attn_scale->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "attn_scale with tensor and value cannot be set at the same time.");
-
+        // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
-
-        auto it         = attributes.inputs.find(input_names::Q);
-        auto q_dim      = it->second->get_dim();
-        auto hidden_dim = q_dim[3];
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF((((hidden_dim <= 128) && (hidden_dim % 8 == 0)) == false),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
-
-        auto attn_mask = attributes.inputs.find(input_names::Bias);
-        if (attn_mask != attributes.inputs.end() && attn_mask->second != nullptr) {
-            auto attn_mask_dtype = attn_mask->second->get_data_type();
-            RETURN_CUDNN_FRONTEND_ERROR_IF((attn_mask_dtype == DataType_t::BOOLEAN),
-                                           error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "Attn mask data type cannot be boolean");
-        }
 
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
@@ -643,7 +670,7 @@ class SDPABackwardNode : public INode {
 
         attributes.fill_from_context(context);
 
-        // Gather dims to fill properties of virtual tensors
+        // Gather dim to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();
         auto b            = q_dim[0];
         auto h_q          = q_dim[1];
