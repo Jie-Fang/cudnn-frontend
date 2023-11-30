@@ -99,10 +99,10 @@ def test_mixed_precision_matmul(A_data_type, B_data_type, MMA_data_type):
     A_casted.set_data_type(convert_to_cudnn_type(MMA_data_type))
     
     # Casting input tensor B is only supported from cudnn v9
-    if B_data_type != MMA_data_type and cudnn.backend_version() < 9000:
+    if B_data_type != MMA_data_type and cudnn.backend_version() < 90000:
         pytest.skip("mixed precision on B only supported from cudnn v9.")
     
-    if cudnn.backend_version() < 9000:
+    if cudnn.backend_version() < 90000:
         # Do not create a cast node
         B_casted = B
     else:
