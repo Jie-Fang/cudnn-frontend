@@ -120,6 +120,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-padA")          # DO NOT SPECIFY A DEFAULT. It will get taken care of in the second parsing pass
     l_parser.add_argument("-A", type=int, choices=[1], help="Dummy argument to support default convolution with alpha=1")
     l_parser.add_argument("-B", type=int, choices=[0], help="Dummy argument to support default convolution with beta=0")
+    l_parser.add_argument("-n", help="Deprecated. This overrides the N dimension of a convolution.")
     # GEMM related params
     l_parser.add_argument("-gemm_B", type=int, action="store")
     l_parser.add_argument("-gemm_M", type=int, action="store")
@@ -179,7 +180,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     # Remove the unparsed key_values
     del abstract_params['key_values']
 
-    # Second parsing pass: Some params' default value is default on other specifications
+    # Second parsing pass: Some params' default value is dependent on other specifications
     spatial_dims = abstract_params["dim"]
     if abstract_params['padA'] is None:
         padA = [0] * spatial_dims
@@ -212,6 +213,17 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     for param_name in ["dilationA"]:
         if abstract_params[param_name] is None:
             abstract_params[param_name] = [1] * spatial_dims
+
+    # Deprecated:
+    if abstract_params["n"] is not None:
+        if abstract_params["dimA"] is not None:
+            disassembled = abstract_params["dimA"].split(",")
+            disassembled[0] = abstract_params["n"]
+            abstract_params["dimA"] = ",".join(disassembled)
+        if abstract_params["dimOut"] is not None:
+            disassembled = abstract_params["dimOut"].split(",")
+            disassembled[0] = abstract_params["n"]
+            abstract_params["dimOut"] = ",".join(disassembled)
 
     # Ignored arguments:
     for key in ignored_keys:

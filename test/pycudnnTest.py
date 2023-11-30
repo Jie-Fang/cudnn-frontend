@@ -10,7 +10,7 @@ utils.reportCurrentTime("import_json_graph_test")
 
 if __name__ == "__main__":
     # We disable help here, as each specific mode has it's own set of options and associated help
-    pct_parser = argparse.ArgumentParser(prog='pycudnnTest', add_help=False)
+    pct_parser = argparse.ArgumentParser(prog='pycudnnTest', add_help=False, allow_abbrev=False)
         
     pct_parser.add_argument('--R', '-R', choices=['graphRunner', "grStream"])
 
@@ -26,9 +26,9 @@ if __name__ == "__main__":
                         help="This can be a json file or python file with graph definitions. "
                         "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py")
     pct_parser.add_argument('--testName', default=[], action="append", help="Test Name (multiple names are allowed and recommended for performance). Note: in python graph mode, no name means all tests in file are executed. ")
-    pct_parser.add_argument('--verbose', '-v', action="store_true", default=False, help="Verbose output")
-    pct_parser.add_argument('--vverbose', '-vv', action="store_true", default=False, help="Very verbose output")
-    pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
+    pct_parser.add_argument('--verbose', action="store_true", default=False, help="Verbose output")
+    pct_parser.add_argument('--vverbose', action="store_true", default=False, help="Very verbose output")
+    pct_parser.add_argument('--threads', action="store", default=1, help="Number of threads to parallelize tests across.")
 
     cmd = " ".join(sys.argv)
     print("Running: {}".format(cmd))
