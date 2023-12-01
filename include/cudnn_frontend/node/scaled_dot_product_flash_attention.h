@@ -813,6 +813,12 @@ class SDPABackwardNode : public INode {
             }
         }
 
+        // WAR force dP workspace implementation if dBias is enabled
+        // since dBias only works with workspace implementation
+        if (attributes.outputs[output_names::dBias]) {
+            use_workspace_opt = true;
+        }
+
         // non-virtual dQ_accum is how the backend API signals workspace optimization
         if (!use_workspace_opt) {
             dQ_accum = std::make_shared<Tensor_attributes>();

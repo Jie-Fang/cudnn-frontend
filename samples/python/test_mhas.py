@@ -5,6 +5,7 @@ import math
 
 import itertools
 import random
+import os
 
 
 def convert_to_cudnn_type(torch_type):
@@ -558,6 +559,9 @@ def test_sdpa_backward(param_extract_backward):
 
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
+
+    # test both dP workspace optimization by lowering dP workspace limit to 8MB
+    os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = str(8 * 1024 * 1024)
 
     # batch size
     b = 2
