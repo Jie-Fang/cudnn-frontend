@@ -81,6 +81,9 @@ TEST_CASE("Matmul", "[matmul][graph]") {
 }
 
 TEST_CASE("Mixed Precision Matmul", "[matmul][graph]") {
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
     namespace fe = cudnn_frontend;
 
     // matmul problem size
@@ -217,6 +220,15 @@ TEST_CASE("Abs + Matmul", "[matmul][graph]") {
 
 TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     namespace fe = cudnn_frontend;
+
+    if (cudnnGetVersion() < 8600) {
+        SKIP("Test requires cuDNN version 8.6.0 or above");
+        return;
+    }
+
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
 
     // matmul problem size
     int64_t const b = 16;
