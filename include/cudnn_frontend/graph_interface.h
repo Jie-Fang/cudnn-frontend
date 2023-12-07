@@ -252,6 +252,14 @@ class Graph : public INode {
         }
         return {error_code_t::OK, ""};
     }
+
+    std::string
+    print(void) const {
+        std::stringstream ss;
+        json j = *this;
+        ss << j.dump(4);
+        return ss.str();
+    }
 };
 
 inline error_t
@@ -753,6 +761,12 @@ Graph::sdpa_backward(std::shared_ptr<Tensor_attributes> q,
     sub_nodes.emplace_back(std::make_unique<SDPABackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV};
+}
+
+static inline std::ostream &
+operator<<(std::ostream &os, Graph const &graph) {
+    os << graph.print();
+    return os;
 }
 
 }  // namespace cudnn_frontend::graph
