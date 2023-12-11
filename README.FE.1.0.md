@@ -162,8 +162,7 @@ Samples are meant to illustrate FE v1.0 API usage to users.
 - `samples/cpp` contains samples that use C++ API.
 - `samples/python` contains samples that use python API.
 
-C++ samples are written using [Catch2](https://github.com/catchorg/Catch2) test framework.  
-Python samples are written using [pytest](https://github.com/pytest-dev/pytest) and [pytorch](https://pytorch.org), with both requiring external installation.
+Python samples are jupyter notebooks with step by step guide on using FE v1 API.
 
 ## Operations
 

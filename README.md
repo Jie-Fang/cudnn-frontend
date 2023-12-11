@@ -70,8 +70,9 @@ Install FE python API by running: `CUDAToolkit_ROOT=/path/to/cuda CUDNN_PATH=/pa
 To provide a custom CUDA, export environment variable: `CUDAToolkit_ROOT`.  
 To provide a custom CUDNN, export environment variable: `CUDNN_PATH`.
 
+Test whether installation is successfull by running some tests:
 ```
-    pytest samples/python
+    pytest tests/python
 ```
 
 NOTE: Only v1.0 API is exposed via python bindings.
