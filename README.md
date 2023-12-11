@@ -72,7 +72,7 @@ To provide a custom CUDNN, export environment variable: `CUDNN_PATH`.
 
 Test whether installation is successfull by running some tests:
 ```
-    pytest tests/python
+    pytest tests/python_fe
 ```
 
 NOTE: Only v1.0 API is exposed via python bindings.
