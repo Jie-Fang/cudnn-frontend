@@ -12,11 +12,12 @@ namespace detail {
 
 inline error_t
 execute(cudnnHandle_t handle,
-        std::shared_ptr<ExecutionPlan> const& plan,
+        ExecutionPlan* plan,
         std::vector<void*>& device_ptrs,
         std::vector<int64_t> const& uids,
         void* workspace_ptr) {
-    RETURN_CUDNN_FRONTEND_ERROR_IF(plan == nullptr, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
+    // TODO: below line fails with MSVC. warning C4127: conditional expression is constant
+    // RETURN_CUDNN_FRONTEND_ERROR_IF(!plan, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
     getLogger() << "[cudnn_frontend] INFO: Executing " << plan->getTag() << "..." << std::endl;
 
     auto variant_pack = VariantPackBuilder()
@@ -407,14 +408,14 @@ class Execution_plan_list {
             float min_time_ms   = std::numeric_limits<float>::max();
 
             // Warm-up run
-            CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle, plan, ptrs, uids, workspace_ptr));
+            CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle, plan.get(), ptrs, uids, workspace_ptr));
             successful_plan_count++;
             cudaDeviceSynchronize();
 
             for (int i = 0; i < maxIterCount; i++) {
                 cudaEventRecord(start, stream);
 
-                auto status = detail::execute(handle, plan, ptrs, uids, workspace_ptr);
+                auto status = detail::execute(handle, plan.get(), ptrs, uids, workspace_ptr);
 
                 cudaEventRecord(stop, stream);
                 cudaEventSynchronize(stop);

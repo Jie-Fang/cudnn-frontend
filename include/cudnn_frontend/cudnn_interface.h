@@ -154,7 +154,7 @@ class ICudnn {
 
             // Run the best plan in this plan list
             CHECK_CUDNN_FRONTEND_ERROR(
-                detail::execute(handle, plans[i].get_best_candidate(), device_ptrs, uids, workspace_ptr));
+                detail::execute(handle, plans[i].get_best_candidate().get(), device_ptrs, uids, workspace_ptr));
         }
 
         return {error_code_t::OK, ""};
