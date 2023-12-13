@@ -107,6 +107,7 @@ class RMSNormNode : public INode {
         }
         return {error_code_t::OK, ""};
     }
+    
     error_t
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,

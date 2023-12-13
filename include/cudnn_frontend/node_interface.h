@@ -260,6 +260,17 @@ class INode : public ICudnn {
         return {error_code_t::OK, ""};
     }
 
+    std::unordered_set<int64_t>
+    collect_pre_assigned_uids(void) const {
+        std::unordered_set<int64_t> pre_assigned_uids;
+        for (auto const &sub_node : sub_nodes) {
+            auto x = sub_node->attributes.get_non_virtual_uids();
+            for (auto uid : x) {
+                pre_assigned_uids.insert(uid);
+            }
+        }
+    }
+
     // An implicitly topological-sorted vector of sub nodes.
     // The sorted order is a side effect of functional API.
     std::vector<std::unique_ptr<INode>> sub_nodes;
@@ -352,7 +363,6 @@ class INode : public ICudnn {
              std::unordered_map<int64_t, void*>& tensor_uid_to_pointer_map,
              void* workspace,
              void* user_impl = nullptr) {
-
         // Add pass_by_value data pointers to tensor_uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -367,7 +377,8 @@ class INode : public ICudnn {
         void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
 
         for (auto& plan_list : plans) {
-            CHECK_CUDNN_FRONTEND_ERROR(plan_list.autotune(handle, tensor_uid_to_pointer_map, cudnn_workspace, user_impl));
+            CHECK_CUDNN_FRONTEND_ERROR(
+                plan_list.autotune(handle, tensor_uid_to_pointer_map, cudnn_workspace, user_impl));
         }
         return {error_code_t::OK, ""};
     }
@@ -377,7 +388,6 @@ class INode : public ICudnn {
              std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
              void* workspace,
              void* user_impl = nullptr) {
-
         // First get all the uids from the map
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
@@ -391,7 +401,6 @@ class INode : public ICudnn {
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
             void* workspace) const {
-
         // First get all the uids from the map
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {

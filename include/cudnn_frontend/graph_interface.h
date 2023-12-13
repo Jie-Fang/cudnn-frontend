@@ -27,9 +27,8 @@ namespace cudnn_frontend::graph {
 class Graph : public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> tensors;
-    std::unordered_set<int64_t> pre_assigned_uids;
 
-    void 
+    void
     add_to_tensor_map(std::shared_ptr<Tensor_attributes> tensor) {
         tensors.emplace(tensor);
     }

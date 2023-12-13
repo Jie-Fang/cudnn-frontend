@@ -28,7 +28,7 @@ class Tensor_attributes {
     bool is_pass_by_value              = false;
     TensorReordering_t reordering_type = TensorReordering_t::NONE;
     int64_t uid                        = 0;
-    bool    uid_assigned               = false;
+    bool uid_assigned                  = false;
 
     std::shared_ptr<Tensor_attributes> ragged_offset;
 
@@ -174,15 +174,15 @@ class Tensor_attributes {
     }
 
     auto
-    clear_uid(void) -> Tensor_attributes &{
-        uid = 0;
+    clear_uid(void) -> Tensor_attributes& {
+        uid          = 0;
         uid_assigned = false;
         return *this;
     }
-    
+
     auto
     set_uid(int64_t value) -> Tensor_attributes& {
-        uid = value;
+        uid          = value;
         uid_assigned = true;
         return *this;
     }
