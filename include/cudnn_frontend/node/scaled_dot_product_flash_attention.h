@@ -472,7 +472,6 @@ class SDPANode : public INode {
     virtual error_t
     pass_by_value_tensors_(
         cudnnHandle_t handle,
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) const override final {
         if (attributes.dropout_probability.has_value() && attributes.dropout_probability.value() != 0.0) {
@@ -1204,7 +1203,6 @@ class SDPABackwardNode : public INode {
     error_t
     pass_by_value_tensors_(
         cudnnHandle_t handle,
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, void*> const&,
         std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
         void* node_workspace) const override final {
         using input_names = SDPA_backward_attributes::input_names;

@@ -126,22 +126,24 @@ class ICudnn {
     }
 
     error_t
-    execute_cudnn_plans(cudnnHandle_t handle,
-                        std::unordered_map<uid_t, void*> const& tensor_uid_to_pointer_map,
-                        void* workspace_ptr) const {
+    execute_cudnn_plans(
+        cudnnHandle_t handle,
+        std::unordered_map<std::shared_ptr<graph::Tensor_attributes>, void*> const& tensor_to_pointer_map,
+        void* workspace_ptr) const {
         getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " Plans." << std::endl;
 
+        // First get all the uids from the map
+        std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
+        for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
+            tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
+        }
+
+        // Go over each plan list
         for (size_t i = 0; i < plans.size(); ++i) {
-            auto const& execution_plan = plans[i].get_best_candidate();
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                execution_plan == nullptr, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
-            auto const& variant_pack_uid = variant_pack_uids[i];
-
-            getLogger() << "[cudnn_frontend] INFO: Executing " << execution_plan->getTag() << "..." << std::endl;
-
+            // Make sure device pointer is provided for all uids expected for this plan
             std::vector<void*> device_ptrs;
             std::vector<uid_t> uids;
-            for (auto const& uid : variant_pack_uid) {
+            for (auto const& uid : variant_pack_uids[i]) {
                 auto search = tensor_uid_to_pointer_map.find(uid);
                 RETURN_CUDNN_FRONTEND_ERROR_IF(search == tensor_uid_to_pointer_map.end(),
                                                error_code_t::INVALID_VARIANT_PACK,
@@ -149,25 +151,10 @@ class ICudnn {
                 device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
                 uids.push_back(uid);
             }
-            auto variant_pack = VariantPackBuilder()
-                                    .setDataPointers(device_ptrs.size(), device_ptrs.data())
-                                    .setUids(uids.size(), uids.data())
-                                    .setWorkspacePointer(workspace_ptr)
-                                    .build();
-            if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
-                std::string message = "[cudnn_frontend] ERROR: Variant pack creation failed with " +
-                                      std::string(variant_pack.get_error());
-                return {error_code_t::INVALID_VARIANT_PACK, message};
-            }
-            getLogger() << "[cudnn_frontend] INFO: Built variant pack for " << execution_plan->getTag() << "..."
-                        << std::endl;
 
-            auto status = cudnnBackendExecute(handle, execution_plan->get_raw_desc(), variant_pack.get_raw_desc());
-            if (status != CUDNN_STATUS_SUCCESS) {
-                std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
-                return {error_code_t::GRAPH_EXECUTION_FAILED, message};
-            }
-            getLogger() << "[cudnn_frontend] INFO: Executed " << execution_plan->getTag() << "." << std::endl;
+            // Run the best plan in this plan list
+            CHECK_CUDNN_FRONTEND_ERROR(
+                detail::execute(handle, plans[i].get_best_candidate().get(), device_ptrs, uids, workspace_ptr));
         }
 
         return {error_code_t::OK, ""};
