@@ -36,21 +36,46 @@ class RngNode : public INode {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid, std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors)
-        const override final {
+    collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
+        for (auto& [name, tensor] : attributes.inputs) {
+            (void)name;
+            if (tensor && tensor->has_uid()) {
+                pre_assigned_uids.insert(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    pre_assigned_uids.insert(ragged_offset->get_uid());
+                }
+            }
+        }
+        for (auto& [name, tensor] : attributes.outputs) {
+            (void)name;
+            if (tensor && tensor->has_uid()) {
+                pre_assigned_uids.insert(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    pre_assigned_uids.insert(ragged_offset->get_uid());
+                }
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                         std::unordered_set<int64_t> const& invalid_uids) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode tensors " << attributes.name << "..." << std::endl;
 
         for (auto const& [name, tensor] : attributes.inputs) {
             (void)name;
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
             }
         }
         for (auto const& [name, tensor] : attributes.outputs) {
             (void)name;
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors));
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
             }
         }
         return {error_code_t::OK, ""};

@@ -237,11 +237,11 @@ class INode : public ICudnn {
 
     // Creates cudnn tensors for each node (and its sub nodes)
     virtual error_t
-    create_cudnn_tensors(
-        int64_t& uid,
-        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
+    create_cudnn_tensors(int64_t& uid,
+                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors,
+                         std::unordered_set<int64_t> const& invalid_uids) const {
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors));
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors, invalid_uids));
         }
         return {error_code_t::OK, ""};
     }
@@ -260,15 +260,12 @@ class INode : public ICudnn {
         return {error_code_t::OK, ""};
     }
 
-    std::unordered_set<int64_t>
-    collect_pre_assigned_uids(void) const {
-        std::unordered_set<int64_t> pre_assigned_uids;
-        for (auto const &sub_node : sub_nodes) {
-            auto x = sub_node->attributes.get_non_virtual_uids();
-            for (auto uid : x) {
-                pre_assigned_uids.insert(uid);
-            }
+    virtual error_t
+    collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const {
+        for (auto const& sub_node : sub_nodes) {
+            auto x = sub_node->collect_pre_assigned_uids(pre_assigned_uids);
         }
+        return {error_code_t::OK, ""};
     }
 
     // An implicitly topological-sorted vector of sub nodes.
@@ -324,8 +321,14 @@ class INode : public ICudnn {
         // TODO: Maybe just use uid_to_tensors size as uid each time?
         int64_t uid = 1;
 
+        std::unordered_set<int64_t> pre_assigned_uids;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pre_assigned_uids(pre_assigned_uids));
+        while (pre_assigned_uids.find(uid) != pre_assigned_uids.end()) {
+            uid++;
+        }
+
         // Lower each sub node to cudnn backend.
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid, uid_to_tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid, uid_to_tensors, pre_assigned_uids));
 
         // INode needs to keep track of all uids that an operation graph uses.
         // This is because cudnn backend will not accept extra tensors in variant pack.

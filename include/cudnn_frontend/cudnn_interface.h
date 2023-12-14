@@ -43,7 +43,8 @@ class ICudnn {
     error_t
     create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
                         uid_t& uid,
-                        std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const {
+                        std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                        std::unordered_set<uid_t> const& invalid_uids) const {
         // Check whether tensor already created
         // Make sure no other tensor somehow already has claimed uid.
 
@@ -55,7 +56,9 @@ class ICudnn {
 
         if (props->has_uid() == false) {
             props->set_uid(uid);
-            uid++;
+            do {
+                uid++;
+            } while (invalid_uids.find(uid) != invalid_uids.end());
         }
 
         auto&& tensor_builder = cudnn_frontend::TensorBuilder();
@@ -70,7 +73,7 @@ class ICudnn {
             .setReorderType(props->get_reordering_type());
 
         if (auto ragged_offset_props = props->get_ragged_offset()) {
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors, invalid_uids));
             tensor_builder.setRaggedOffset(tensors.at(ragged_offset_props->get_uid()));
         }
 
