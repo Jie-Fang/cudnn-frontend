@@ -20,6 +20,9 @@ class SDPANode : public INode {
     std::shared_ptr<Tensor_attributes> rng_output;
     std::shared_ptr<Tensor_attributes> dropout_scale;
     std::shared_ptr<Tensor_attributes> negative_inf_causal;
+    // scalar seq_kv only needs to be passed in case there in no padding mask and seq_kv is not multiple of 64.
+    // Also future versions of cudnn will not need it, hence tensor is pre-fixed with WAR.
+    std::shared_ptr<Tensor_attributes> WAR_scalar_max_seq_kv;
     std::shared_ptr<Tensor_attributes> negative_inf_padding;
     std::shared_ptr<Tensor_attributes> alibi_slopes;
 
@@ -261,6 +264,8 @@ class SDPANode : public INode {
             last_output            = add_output;
         }
 
+        // There are two cases of applying padding mask
+        // 1. when actual seq_len is less than max_seq_len
         if (attributes.padding_mask) {
             auto row_index_attributes = Pointwise_attributes()
                                             .set_name("gen_row_index")
@@ -314,6 +319,39 @@ class SDPANode : public INode {
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
             auto const& padding_mask_output =
                 pointwise(last_output, negative_inf_padding, logical_and_output, binary_select_attributes);
+            last_output = padding_mask_output;
+        }
+
+        // 2. (bug in cudnn backend) no padding with max_seq_len%64!=0
+        if ((s_kv % 64 != 0) && (!(attributes.padding_mask))) {
+            auto col_index_attributes =
+                Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
+            auto col_index_output = pointwise(last_output, col_index_attributes);
+
+            WAR_scalar_max_seq_kv = std::make_shared<Tensor_attributes>();
+            WAR_scalar_max_seq_kv->set_dim({1, 1, 1, 1})
+                .set_stride({1, 1, 1, 1})
+                .set_is_pass_by_value(true)
+                // Hard code data type int32 as FE itself will place FLOAT_MIN in variant pack later
+                .set_data_type(DataType_t::INT32);
+
+            auto col_less_seq_kv_attributes =
+                Pointwise_attributes().set_name("col_less_seq_kv").set_mode(PointwiseMode_t::CMP_LT);
+            auto col_less_seq_kv_output =
+                pointwise(col_index_output, WAR_scalar_max_seq_kv, col_less_seq_kv_attributes);
+
+            // Lower attributes to binary select attributes
+            negative_inf_padding = std::make_shared<Tensor_attributes>();
+            negative_inf_padding->set_dim({1, 1, 1, 1})
+                .set_stride({1, 1, 1, 1})
+                .set_is_pass_by_value(true)
+                // Hard code data type float as FE itself will place FLOAT_MIN in variant pack later
+                .set_data_type(DataType_t::FLOAT);
+
+            auto binary_select_attributes =
+                Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
+            auto padding_mask_output =
+                pointwise(last_output, negative_inf_padding, col_less_seq_kv_output, binary_select_attributes);
             last_output = padding_mask_output;
         }
 
@@ -484,12 +522,18 @@ class SDPANode : public INode {
             tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
         }
 
-        if (attributes.padding_mask) {
+        if (negative_inf_padding) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
         }
 
-        if (attributes.causal_mask) {
+        if (WAR_scalar_max_seq_kv) {
+            auto const& v_dim = attributes.inputs.at(input_names::V)->get_dim();
+            int32_t s_kv      = static_cast<int32_t>(v_dim[2]);
+            tensor_to_pass_by_value.emplace(WAR_scalar_max_seq_kv, s_kv);
+        }
+
+        if (negative_inf_causal) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
             tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
         }
