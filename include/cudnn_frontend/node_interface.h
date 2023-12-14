@@ -251,7 +251,7 @@ class INode : public ICudnn {
     virtual error_t
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operation,
-        std::vector<cudnn_frontend::Operation>& backend_operations,
+        std::vector<std::shared_ptr<cudnn_frontend::Operation>>& backend_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(
@@ -270,7 +270,7 @@ class INode : public ICudnn {
 
     // An implicitly topological-sorted vector of sub nodes.
     // The sorted order is a side effect of functional API.
-    std::vector<std::unique_ptr<INode>> sub_nodes;
+    std::vector<std::shared_ptr<INode>> sub_nodes;
 
    public:
     virtual Type
