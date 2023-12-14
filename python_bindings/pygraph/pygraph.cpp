@@ -331,6 +331,22 @@ PyGraph::execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tenso
     return;
 }
 
+void
+PyGraph::execute(std::unordered_map<int64_t, py::object> var_pack, py::object workspace) {
+    std::unordered_map<int64_t, void*> var_pack_;
+    for (auto const& [uid, pyobject] : var_pack) {
+        var_pack_.emplace(uid, extract_data_pointer(pyobject));
+    }
+
+    void* workspace_ptr = extract_data_pointer(workspace);
+
+    // TODO: Probably concatenate in a macro?
+    auto status = graph.execute(handle, var_pack_, workspace_ptr);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+    return;
+}
+
 std::vector<int64_t>
 default_vector(void) {
     return {};
@@ -505,7 +521,13 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("policy") = cudnn_frontend::BuildPlanPolicy_t::HEURISTICS_CHOICE)
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
-        .def("execute", &PyGraph::execute)
+        .def(
+            "execute",
+            static_cast<void (PyGraph::*)(
+                std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object>, py::object)>(
+                &PyGraph::execute))
+        .def("execute",
+             static_cast<void (PyGraph::*)(std::unordered_map<int64_t, py::object>, py::object)>(&PyGraph::execute))
         .def("__repr__", [](PyGraph const& pygraph) {
             std::stringstream ss;
             json j = pygraph.graph;

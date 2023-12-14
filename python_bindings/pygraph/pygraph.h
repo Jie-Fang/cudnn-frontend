@@ -307,6 +307,9 @@ class PyGraph {
             py::object workspace);
 
     void
+    execute(std::unordered_map<int64_t, py::object> var_pack, py::object workspace);
+
+    void
     deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
         graph.deselect_numeric_notes(notes);
         return;
