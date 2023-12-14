@@ -33,7 +33,7 @@ class SoftmaxNode;
 class INode : public ICudnn {
    public:
     // A closed set of types that are allowed to be passed by value today
-    using pass_by_values_t = std::variant<half, float, void*>;
+    using pass_by_values_t = std::variant<int32_t, half, float, void*>;
 
     detail::Context context;
 
@@ -117,6 +117,8 @@ class INode : public ICudnn {
         for (auto& [tensor, value] : tensor_to_pass_by_value) {
             if (half* half_value_ptr = std::get_if<half>(&value)) {
                 tensor_to_pointer_map.emplace(tensor->get_uid(), half_value_ptr);
+            } else if (int32_t* int32_t_value_ptr = std::get_if<int32_t>(&value)) {
+                tensor_to_pointer_map.emplace(tensor->get_uid(), int32_t_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {
                 tensor_to_pointer_map.emplace(tensor->get_uid(), float_value_ptr);
             } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
