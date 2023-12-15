@@ -328,6 +328,45 @@ class Attributes {
         }
         return {error_code_t::OK, ""};
     }
+
+    error_t
+    get_prefilled_uids(std::unordered_set<int64_t>& pre_assigned_uids) const {
+        auto derived = static_cast<DerivedT const*>(this);
+
+        for (auto& [name, tensor] : derived->inputs) {
+            (void)name;
+            if (tensor && tensor->has_uid()) {
+                pre_assigned_uids.insert(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    pre_assigned_uids.insert(ragged_offset->get_uid());
+                }
+            }
+        }
+        for (auto& [name, tensor] : derived->outputs) {
+            (void)name;
+            if (tensor && tensor->has_uid()) {
+                pre_assigned_uids.insert(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    pre_assigned_uids.insert(ragged_offset->get_uid());
+                }
+            }
+        }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
+            for (auto& tensor : derived->peer_stats) {
+                if (tensor && tensor->has_uid()) {
+                    pre_assigned_uids.insert(tensor->get_uid());
+                    if (auto ragged_offset = tensor->get_ragged_offset()) {
+                        pre_assigned_uids.insert(ragged_offset->get_uid());
+                    }
+                }
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
 };
 
 class BN_finalize_attributes : public Attributes<BN_finalize_attributes> {

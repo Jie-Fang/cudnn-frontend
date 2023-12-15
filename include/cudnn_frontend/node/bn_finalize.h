@@ -24,26 +24,7 @@ class BatchNormFinalizeNode : public INode {
 
     error_t
     collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
-        for (auto& [name, tensor] : attributes.inputs) {
-            (void)name;
-            if (tensor && tensor->has_uid()) {
-                pre_assigned_uids.insert(tensor->get_uid());
-                if (auto ragged_offset = tensor->get_ragged_offset()) {
-                    pre_assigned_uids.insert(ragged_offset->get_uid());
-                }
-            }
-        }
-        for (auto& [name, tensor] : attributes.outputs) {
-            (void)name;
-            if (tensor && tensor->has_uid()) {
-                pre_assigned_uids.insert(tensor->get_uid());
-                if (auto ragged_offset = tensor->get_ragged_offset()) {
-                    pre_assigned_uids.insert(ragged_offset->get_uid());
-                }
-            }
-        }
-
-        return {error_code_t::OK, ""};
+        return attributes.get_prefilled_uids(pre_assigned_uids);
     }
 
     error_t
