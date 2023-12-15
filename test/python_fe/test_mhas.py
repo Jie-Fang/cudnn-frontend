@@ -569,13 +569,13 @@ def test_sdpa_backward(param_extract_backward):
     # batch size
     b = 2
     # query sequence length
-    s_q = random.choice([256, 512, 1024])
+    s_q = random.choice([256, 512, 1024, 2048])
     # key+value sequence length
-    s_kv = random.choice([256, 512, 1024]) if layout == "non_interleaved" else s_q
+    s_kv = random.choice([8, 16, 24, 32, 256, 512, 1024, 2048]) if layout == "non_interleaved" else s_q
     # query+key embedding dimension per head
-    d_qk = random.choice([64, 128])
+    d_qk = random.choice([32, 56, 64, 128])
     # value embedding dimension per head
-    d_v = random.choice([64, 128]) if layout == "non_interleaved" else d_qk
+    d_v = random.choice([64, 96, 128]) if layout == "non_interleaved" else d_qk
     # number of heads
     h_q = 6
     if head_group == "multi_head":
