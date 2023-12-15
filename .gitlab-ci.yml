@@ -553,7 +553,7 @@ L4_graph_runner_large:cudnn_8.9.6.50:
     tags:
         - ${ARCH}
     extends: .L4_graph_runner_large:template
-    needs: ["build:cudnn_8.9.6.44"]
+    needs: ["build:cudnn_8.9.6.50"]
     only:
         - schedules
 
