@@ -12,8 +12,6 @@ function display_header() {
 }
 
 function run_python_streams() {
-    export CUDNN_FRONTEND_LOG_FILE=stdout
-    export CUDNN_FRONTEND_LOG_INFO=1
     export PYTHONPATH=build/python_bindings
 
     # TODO: replace this with the commented out code if we want to run a single process for all tests (this ensures all tests are run even if errors are encountered)

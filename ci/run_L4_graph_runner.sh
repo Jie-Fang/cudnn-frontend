@@ -8,8 +8,6 @@ function display_header() {
 }
 
 function run_python_tests() {
-    export CUDNN_FRONTEND_LOG_FILE=stdout
-    export CUDNN_FRONTEND_LOG_INFO=1
     export PYTHONPATH=build/python_bindings
     
     #Legacy graph test (TODO(@mbreughe): add to a list instead)

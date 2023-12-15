@@ -8,11 +8,9 @@ function display_header() {
 }
 
 function run_python_tests() {
-    export CUDNN_FRONTEND_LOG_FILE=stdout
-    export CUDNN_FRONTEND_LOG_INFO=1
     export PYTHONPATH=build/python_bindings
     
-    pytest test/python_fe
+    pytest test/python_fe -n 4
 }
 
 display_header
