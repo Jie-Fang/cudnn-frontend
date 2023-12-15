@@ -591,27 +591,15 @@ L4_graph_runner:cudnn_8.9.7.29:
     extends: .L4_graph_runner:template
     needs: ["build:cudnn_8.9.7.29"]
 
-L4_graph_runner_large:cudnn_8.9.7.29:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.7.29_12.2
-    parallel:
-        matrix:
-            - ARCH: ["Ampere", "Hopper"]
-    tags:
-        - ${ARCH}
-    extends: .L4_graph_runner_large:template
-    needs: ["build:cudnn_8.9.7.29"]
-    only:
-        - schedules
-
 build:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3_torch
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
     stage: build
     extends:
         - .fetch_cudnn_v9:template
         - .build:template
 
 test:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3_torch
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -623,7 +611,7 @@ test:cudnn_9.0.0_latest:
     needs: ["build:cudnn_9.0.0_latest"]
     
 pytest:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3_torch
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -636,7 +624,7 @@ pytest:cudnn_9.0.0_latest:
     resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3_torch
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -648,7 +636,7 @@ pycudnntest:cudnn_9.0.0_latest:
     needs: ["build:cudnn_9.0.0_latest"]
     
 L4_graph_runner:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3_torch
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -659,6 +647,20 @@ L4_graph_runner:cudnn_9.0.0_latest:
         - .L4_graph_runner:template
     needs: ["build:cudnn_9.0.0_latest"]
     
+L4_graph_runner_large:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    parallel:
+        matrix:
+            - ARCH: ["Ampere", "Hopper"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_v9:template
+        - .L4_graph_runner_large:template
+    needs: ["build:cudnn_9.0.0_latest"]
+    only:
+        - schedules
+
 thunder:cudnn_8.9.5.29:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
     needs: []
