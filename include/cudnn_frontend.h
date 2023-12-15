@@ -97,6 +97,9 @@
  *      - Simpler samples on how to use the new API.
  */
 
+#include <cudnn.h>
+#include <cudnn_backend.h>
+
 #include "cudnn_frontend_ConvDesc.h"
 #include "cudnn_frontend_Heuristics.h"
 #include "cudnn_frontend_Engine.h"
