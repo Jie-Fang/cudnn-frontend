@@ -73,10 +73,13 @@ TEST_CASE("Convolution fprop", "[conv][graph][caching]") {
     Surface<half> w_tensor(k * c * r * s, false);
     Surface<half> y_tensor(n * k * h * w, false);  // Should be p, q.
 
-    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
-        {X, x_tensor.devPtr}, {W, w_tensor.devPtr}, {Y, y_tensor.devPtr}};
+    std::unordered_map<int64_t, void*> variant_pack = {
+        {X->get_uid(), x_tensor.devPtr}, {W->get_uid(), w_tensor.devPtr}, {Y->get_uid(), y_tensor.devPtr}};
 
     Surface<int8_t> workspace(graph->get_workspace_size(), false);
+
+    std::cout << *graph << std::endl;
+
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

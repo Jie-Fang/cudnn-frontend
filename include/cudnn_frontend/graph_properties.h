@@ -28,6 +28,7 @@ class Tensor_attributes {
     bool is_pass_by_value              = false;
     TensorReordering_t reordering_type = TensorReordering_t::NONE;
     int64_t uid                        = 0;
+    bool uid_assigned                  = false;
 
     std::shared_ptr<Tensor_attributes> ragged_offset;
 
@@ -167,9 +168,22 @@ class Tensor_attributes {
         return uid;
     }
 
+    int64_t
+    has_uid() const {
+        return uid_assigned;
+    }
+
+    auto
+    clear_uid(void) -> Tensor_attributes& {
+        uid          = 0;
+        uid_assigned = false;
+        return *this;
+    }
+
     auto
     set_uid(int64_t value) -> Tensor_attributes& {
-        uid = value;
+        uid          = value;
+        uid_assigned = true;
         return *this;
     }
 
@@ -312,6 +326,45 @@ class Attributes {
                 CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
             }
         }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    get_prefilled_uids(std::unordered_set<int64_t>& pre_assigned_uids) const {
+        auto derived = static_cast<DerivedT const*>(this);
+
+        for (auto& [name, tensor] : derived->inputs) {
+            (void)name;
+            if (tensor && tensor->has_uid()) {
+                pre_assigned_uids.insert(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    pre_assigned_uids.insert(ragged_offset->get_uid());
+                }
+            }
+        }
+        for (auto& [name, tensor] : derived->outputs) {
+            (void)name;
+            if (tensor && tensor->has_uid()) {
+                pre_assigned_uids.insert(tensor->get_uid());
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    pre_assigned_uids.insert(ragged_offset->get_uid());
+                }
+            }
+        }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
+            for (auto& tensor : derived->peer_stats) {
+                if (tensor && tensor->has_uid()) {
+                    pre_assigned_uids.insert(tensor->get_uid());
+                    if (auto ragged_offset = tensor->get_ragged_offset()) {
+                        pre_assigned_uids.insert(ragged_offset->get_uid());
+                    }
+                }
+            }
+        }
+
         return {error_code_t::OK, ""};
     }
 };

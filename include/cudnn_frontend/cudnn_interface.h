@@ -42,48 +42,43 @@ class ICudnn {
     // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
     create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
-                        int64_t& uid,
-                        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const {
+                        uid_t& uid,
+                        std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                        std::unordered_set<uid_t> const& invalid_uids) const {
         // Check whether tensor already created
-        // TODO: Do not reply on uid being 0?
-        if (props->get_uid() == 0) {
-            // Make sure no other tensor somehow already has claimed uid.
-            RETURN_CUDNN_FRONTEND_ERROR_IF(tensors.find(uid) != tensors.end(),
-                                           error_code_t::ATTRIBUTE_NOT_SET,
-                                           "Trying to assign same uid to possibily two different tensors.");
-            props->set_uid(uid);
-            uid++;
+        // Make sure no other tensor somehow already has claimed uid.
 
-            auto&& tensor_builder = cudnn_frontend::TensorBuilder();
-
-            tensor_builder.setDim(props->get_dim().size(), props->get_dim().data())
-                .setStrides(props->get_stride().size(), props->get_stride().data())
-                .setId(props->get_uid())
-                .setAlignment(16)
-                .setDataType(props->get_data_type())
-                .setVirtual(props->get_is_virtual())
-                .setByValue(props->get_is_pass_by_value())
-                .setReorderType(props->get_reordering_type());
-
-            if (auto ragged_offset_props = props->get_ragged_offset()) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors));
-                tensor_builder.setRaggedOffset(tensors.at(ragged_offset_props->get_uid()));
-            }
-
-            auto tensor = tensor_builder.build();
-            tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
-
-        } else {
-            // Make sure tensor's uid is present in backend tensor registry.
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                tensors.find(props->get_uid()) == tensors.end(),
-                error_code_t::ATTRIBUTE_NOT_SET,
-                "Backend tensor already not found for non-zero Id: " + std::to_string(props->get_uid()));
-
-            getLogger() << "[cudnn_frontend] INFO: Backend tensor already created for Id: " +
-                               std::to_string(props->get_uid())
-                        << std::endl;
+        auto tensor_uid = props->has_uid() ? props->get_uid() : uid;
+        if (tensors.find(tensor_uid) != tensors.end()) {
+            getLogger() << "[cudnn_frontend] INFO: Shared Tensor" << uid << " already created." << std::endl;
+            return {error_code_t::OK, ""};
         }
+
+        if (props->has_uid() == false) {
+            props->set_uid(uid);
+            do {
+                uid++;
+            } while (invalid_uids.find(uid) != invalid_uids.end());
+        }
+
+        auto&& tensor_builder = cudnn_frontend::TensorBuilder();
+
+        tensor_builder.setDim(props->get_dim().size(), props->get_dim().data())
+            .setStrides(props->get_stride().size(), props->get_stride().data())
+            .setId(props->get_uid())
+            .setAlignment(16)
+            .setDataType(props->get_data_type())
+            .setVirtual(props->get_is_virtual())
+            .setByValue(props->get_is_pass_by_value())
+            .setReorderType(props->get_reordering_type());
+
+        if (auto ragged_offset_props = props->get_ragged_offset()) {
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, uid, tensors, invalid_uids));
+            tensor_builder.setRaggedOffset(tensors.at(ragged_offset_props->get_uid()));
+        }
+
+        auto tensor = tensor_builder.build();
+        tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
 
         return {error_code_t::OK, ""};
     }
@@ -126,17 +121,10 @@ class ICudnn {
     }
 
     error_t
-    execute_cudnn_plans(
-        cudnnHandle_t handle,
-        std::unordered_map<std::shared_ptr<graph::Tensor_attributes>, void*> const& tensor_to_pointer_map,
-        void* workspace_ptr) const {
-        getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " Plans." << std::endl;
-
-        // First get all the uids from the map
-        std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
-        for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
-            tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
-        }
+    execute_cudnn_plans_with_uid(cudnnHandle_t handle,
+                                 std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map,
+                                 void* workspace_ptr) const {
+        getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " plans." << std::endl;
 
         // Go over each plan list
         for (size_t i = 0; i < plans.size(); ++i) {

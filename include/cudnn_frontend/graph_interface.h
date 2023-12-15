@@ -28,11 +28,16 @@ class Graph : public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> tensors;
 
+    void
+    add_to_tensor_map(std::shared_ptr<Tensor_attributes> tensor) {
+        tensors.emplace(tensor);
+    }
+
     std::shared_ptr<Tensor_attributes>
     output_tensor(std::string const &name) {
         auto tensor = std::make_shared<Tensor_attributes>();
         tensor->set_name(name).set_is_virtual(true);
-        tensors.emplace(tensor);
+        add_to_tensor_map(tensor);
         return tensor;
     }
 
@@ -302,7 +307,7 @@ Graph::set_compute_data_type(DataType_t const type) {
 inline std::shared_ptr<Tensor_attributes>
 Graph::tensor(Tensor_attributes const &tensor) {
     auto tensor_ptr = std::make_shared<Tensor_attributes>(tensor);
-    tensors.emplace(tensor_ptr);
+    add_to_tensor_map(tensor_ptr);
     return tensor_ptr;
 }
 
@@ -317,12 +322,11 @@ Graph::tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string
     // reset the uid of the cloned tensor
     // uids are not meant to be copied by tensor_like
     // When lowering to cudnn backend, both tensors involved here will get unique uids.
-    tensor_ptr->set_uid(0);
+    tensor_ptr->clear_uid();
 
     // reset the name too. Defaults to empty string.
     tensor_ptr->set_name(name);
 
-    tensors.emplace(tensor_ptr);
     return tensor_ptr;
 }
 
