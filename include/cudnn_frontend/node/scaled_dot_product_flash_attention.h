@@ -328,7 +328,7 @@ class SDPANode : public INode {
         }
 
         // 2. (bug in cudnn backend) no padding with max_seq_len%64!=0
-        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnnGetVersion() < 9000)) {
+        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnnGetVersion() < 90000)) {
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
             auto col_index_output = pointwise(last_output, col_index_attributes);
