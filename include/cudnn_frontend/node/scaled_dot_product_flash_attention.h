@@ -114,11 +114,16 @@ class SDPANode : public INode {
         auto const& v_dim = attributes.inputs.at(input_names::V)->get_dim();
         auto s_kv         = v_dim[2];
         if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnnGetVersion() < 90000)) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF((cudnnGetVersion() <= 8905), error_code_t::GRAPH_NOT_SUPPORTED, "s_kv not a multiple of 64 required cudnn version atleast 8.9.5");
-            auto const& dropout_mask    = attributes.inputs.find(input_names::Dropout_mask);
-            bool const has_dropout_mask = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
+            RETURN_CUDNN_FRONTEND_ERROR_IF((cudnnGetVersion() <= 8905),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "s_kv not a multiple of 64 required cudnn version atleast 8.9.5");
+            auto const& dropout_mask = attributes.inputs.find(input_names::Dropout_mask);
+            bool const has_dropout_mask =
+                (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
             bool const has_dropout = attributes.dropout_probability.has_value() || has_dropout_mask;
-            RETURN_CUDNN_FRONTEND_ERROR_IF(has_dropout, error_code_t::GRAPH_NOT_SUPPORTED, "s_kv not a multiple of 64 is not supported with cudnn version below 9.0.0");
+            RETURN_CUDNN_FRONTEND_ERROR_IF(has_dropout,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "s_kv not a multiple of 64 is not supported with cudnn version below 9.0.0");
         }
 
         // validate options for padding mask
