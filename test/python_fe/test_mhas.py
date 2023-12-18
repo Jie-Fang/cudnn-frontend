@@ -366,8 +366,8 @@ def test_sdpa(param_extract_forward):
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
-    if is_dropout and (s_kv % 64 != 0):
-        pytest.skip("BUG: dropout mask dump with not-multiple-of-64 seq_kv fails.")
+    if is_dropout and (s_kv % 64 != 0) and cudnn.backend_version() < 90000:
+        pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
 
     print(f"{str(param_extract_forward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 

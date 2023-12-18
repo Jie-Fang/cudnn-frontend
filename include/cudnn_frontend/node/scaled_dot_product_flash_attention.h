@@ -116,6 +116,21 @@ class SDPANode : public INode {
                                            "Bias mask data type cannot be boolean");
         }
 
+        auto const& v_dim = attributes.inputs.at(input_names::V)->get_dim();
+        auto s_kv         = v_dim[2];
+        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnnGetVersion() < 90000)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((cudnnGetVersion() <= 8905),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "s_kv not a multiple of 64 required cudnn version atleast 8.9.5");
+            auto const& dropout_mask = attributes.inputs.find(input_names::Dropout_mask);
+            bool const has_dropout_mask =
+                (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
+            bool const has_dropout = attributes.dropout_probability.has_value() || has_dropout_mask;
+            RETURN_CUDNN_FRONTEND_ERROR_IF(has_dropout,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "s_kv not a multiple of 64 is not supported with cudnn version below 9.0.0");
+        }
+
         // validate options for padding mask
         auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
         bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
@@ -328,7 +343,7 @@ class SDPANode : public INode {
         }
 
         // 2. (bug in cudnn backend) no padding with max_seq_len%64!=0
-        if ((s_kv % 64 != 0) && (!(attributes.padding_mask))) {
+        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnnGetVersion() < 90000)) {
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
             auto col_index_output = pointwise(last_output, col_index_attributes);
