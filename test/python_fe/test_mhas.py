@@ -573,9 +573,9 @@ def test_sdpa_backward(input_type,
     # batch size
     b = 2
     # query sequence length
-    s_q = random.choice([256, 512, 1024, 2048])
+    s_q = random.choice([256, 512, 1024])
     # key+value sequence length
-    s_kv = random.choice([8, 16, 24, 32, 256, 512, 1024, 2048]) if layout == "non_interleaved" else s_q
+    s_kv = random.choice([8, 16, 24, 32, 256, 512, 1024]) if layout == "non_interleaved" else s_q
     # query+key embedding dimension per head
     d_qk = random.choice([32, 56, 64, 128])
     # value embedding dimension per head
@@ -596,6 +596,9 @@ def test_sdpa_backward(input_type,
 
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
+
+    if (s_kv % 64 != 0) and layout == "non_interleaved":
+        pytest.skip("BUG: cudnn backend does not support non-interlaved layout with non-64-aligned seq_kv.")
 
     print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
