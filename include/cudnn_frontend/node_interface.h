@@ -374,13 +374,15 @@ class INode : public ICudnn {
         for (auto& [tensor, value] : tensor_to_pass_by_value) {
             if (half* half_value_ptr = std::get_if<half>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), half_value_ptr);
+            } else if (int32_t* int32_t_value_ptr = std::get_if<int32_t>(&value)) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), int32_t_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), float_value_ptr);
             } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), *void_value_ptr);
             } else {
                 RETURN_CUDNN_FRONTEND_ERROR_IF(
-                    true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
+                    true, error_code_t::INVALID_VARIANT_PACK, "Execute unexpected type for pass by value tensor.");
             }
         }
 
