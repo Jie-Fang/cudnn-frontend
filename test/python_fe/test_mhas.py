@@ -314,9 +314,16 @@ def param_extract_forward(request):
 
 
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_sdpa(param_extract_forward):
-    (
-        input_type,
+@pytest.mark.parametrize("input_type", input_type_options)
+@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("head_group", head_group_options)
+@pytest.mark.parametrize("is_bias", bias_options)
+@pytest.mark.parametrize("is_alibi", alibi_mask_options)
+@pytest.mark.parametrize("is_padding", padding_mask_options)
+@pytest.mark.parametrize("is_causal", causal_mask_options)
+@pytest.mark.parametrize("is_dropout", dropout_options)
+@pytest.mark.parametrize("is_infer", is_infer_options)
+def test_sdpa(input_type,
         layout,
         head_group,
         is_bias,
@@ -324,9 +331,7 @@ def test_sdpa(param_extract_forward):
         is_padding,
         is_causal,
         is_dropout,
-        is_infer,
-    ) = param_extract_forward
-
+        is_infer):
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
         pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
@@ -369,7 +374,7 @@ def test_sdpa(param_extract_forward):
     if is_dropout and (s_kv % 64 != 0) and cudnn.backend_version() < 90000:
         pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
 
-    print(f"{str(param_extract_forward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -524,24 +529,23 @@ def test_sdpa(param_extract_forward):
         assert compare_tensors(stats_ref, stats_gpu, "stats") == 0
 
 
-@pytest.fixture(params=all_options_backward)
-def param_extract_backward(request):
-    return request.param
-
-
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_sdpa_backward(param_extract_backward):
-    (
-        input_type,
+@pytest.mark.parametrize("input_type", input_type_options)
+@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("head_group", head_group_options)
+@pytest.mark.parametrize("is_bias", bias_options)
+@pytest.mark.parametrize("is_alibi", alibi_mask_options)
+@pytest.mark.parametrize("is_padding", padding_mask_options)
+@pytest.mark.parametrize("is_causal", causal_mask_options)
+@pytest.mark.parametrize("is_dropout", dropout_options)
+def test_sdpa_backward(input_type,
         layout,
         head_group,
         is_bias,
         is_alibi,
         is_padding,
         is_causal,
-        is_dropout,
-    ) = param_extract_backward
-
+        is_dropout):
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
         pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
@@ -571,11 +575,11 @@ def test_sdpa_backward(param_extract_backward):
     # query sequence length
     s_q = random.choice([256, 512, 1024])
     # key+value sequence length
-    s_kv = random.choice([256, 512, 1024]) if layout == "non_interleaved" else s_q
+    s_kv = random.choice([8, 16, 24, 32, 256, 512, 1024]) if layout == "non_interleaved" else s_q
     # query+key embedding dimension per head
-    d_qk = random.choice([64, 128])
+    d_qk = random.choice([32, 56, 64, 128])
     # value embedding dimension per head
-    d_v = random.choice([64, 128]) if layout == "non_interleaved" else d_qk
+    d_v = random.choice([64, 96, 128]) if layout == "non_interleaved" else d_qk
     # number of heads
     h_q = 6
     if head_group == "multi_head":
@@ -593,7 +597,10 @@ def test_sdpa_backward(param_extract_backward):
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
-    print(f"{str(param_extract_backward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    if (s_kv % 64 != 0) and layout == "non_interleaved":
+        pytest.skip("BUG: cudnn backend does not support non-interlaved layout with non-64-aligned seq_kv.")
+
+    print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
