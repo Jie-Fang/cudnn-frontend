@@ -314,9 +314,16 @@ def param_extract_forward(request):
 
 
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_sdpa(param_extract_forward):
-    (
-        input_type,
+@pytest.mark.parametrize("input_type", input_type_options)
+@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("head_group", head_group_options)
+@pytest.mark.parametrize("is_bias", bias_options)
+@pytest.mark.parametrize("is_alibi", alibi_mask_options)
+@pytest.mark.parametrize("is_padding", padding_mask_options)
+@pytest.mark.parametrize("is_causal", causal_mask_options)
+@pytest.mark.parametrize("is_dropout", dropout_options)
+@pytest.mark.parametrize("is_infer", is_infer_options)
+def test_sdpa(input_type,
         layout,
         head_group,
         is_bias,
@@ -324,9 +331,7 @@ def test_sdpa(param_extract_forward):
         is_padding,
         is_causal,
         is_dropout,
-        is_infer,
-    ) = param_extract_forward
-
+        is_infer):
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
         pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
@@ -369,7 +374,7 @@ def test_sdpa(param_extract_forward):
     if is_dropout and (s_kv % 64 != 0) and cudnn.backend_version() < 90000:
         pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
 
-    print(f"{str(param_extract_forward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -524,24 +529,23 @@ def test_sdpa(param_extract_forward):
         assert compare_tensors(stats_ref, stats_gpu, "stats") == 0
 
 
-@pytest.fixture(params=all_options_backward)
-def param_extract_backward(request):
-    return request.param
-
-
 @pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
-def test_sdpa_backward(param_extract_backward):
-    (
-        input_type,
+@pytest.mark.parametrize("input_type", input_type_options)
+@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("head_group", head_group_options)
+@pytest.mark.parametrize("is_bias", bias_options)
+@pytest.mark.parametrize("is_alibi", alibi_mask_options)
+@pytest.mark.parametrize("is_padding", padding_mask_options)
+@pytest.mark.parametrize("is_causal", causal_mask_options)
+@pytest.mark.parametrize("is_dropout", dropout_options)
+def test_sdpa_backward(input_type,
         layout,
         head_group,
         is_bias,
         is_alibi,
         is_padding,
         is_causal,
-        is_dropout,
-    ) = param_extract_backward
-
+        is_dropout):
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
         pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
@@ -593,7 +597,7 @@ def test_sdpa_backward(param_extract_backward):
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
-    print(f"{str(param_extract_backward)} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
