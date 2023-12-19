@@ -131,6 +131,13 @@ class SDPANode : public INode {
                                            "s_kv not a multiple of 64 is not supported with cudnn version below 9.0.0");
         }
 
+        if (((s_kv % 64 != 0) || (d_qk % 64 != 0)) && (cudnnGetVersion() <= 8905)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                true,
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "s_kv not a multiple of 64 or d not a multiple of 64 is not supported with cudnn version below 8.9.6");
+        }
+
         // validate options for padding mask
         auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
         bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
