@@ -33,7 +33,7 @@ class SoftmaxNode;
 class INode : public ICudnn {
    public:
     // A closed set of types that are allowed to be passed by value today
-    using pass_by_values_t = std::variant<half, float, void*>;
+    using pass_by_values_t = std::variant<int32_t, half, float, void*>;
 
     detail::Context context;
 
@@ -109,6 +109,27 @@ class INode : public ICudnn {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->gather_pass_by_value_tensors(
                 handle, tensor_to_pointer_map, tensor_to_pass_by_value, node_workspace));
             node_workspace = static_cast<char*>(node_workspace) + sub_node->get_fe_workspace_size_node();
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    extend_tensor_map_with_pass_by_value_tensors_(
+        std::unordered_map<int64_t, void*>& tensor_to_pointer_map,
+        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value) const {
+        for (auto& [tensor, value] : tensor_to_pass_by_value) {
+            if (half* half_value_ptr = std::get_if<half>(&value)) {
+                tensor_to_pointer_map.emplace(tensor->get_uid(), half_value_ptr);
+            } else if (int32_t* int32_t_value_ptr = std::get_if<int32_t>(&value)) {
+                tensor_to_pointer_map.emplace(tensor->get_uid(), int32_t_value_ptr);
+            } else if (float* float_value_ptr = std::get_if<float>(&value)) {
+                tensor_to_pointer_map.emplace(tensor->get_uid(), float_value_ptr);
+            } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
+                tensor_to_pointer_map.emplace(tensor->get_uid(), *void_value_ptr);
+            } else {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(
+                    true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
+            }
         }
         return {error_code_t::OK, ""};
     }
@@ -353,13 +374,15 @@ class INode : public ICudnn {
         for (auto& [tensor, value] : tensor_to_pass_by_value) {
             if (half* half_value_ptr = std::get_if<half>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), half_value_ptr);
+            } else if (int32_t* int32_t_value_ptr = std::get_if<int32_t>(&value)) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), int32_t_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), float_value_ptr);
             } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), *void_value_ptr);
             } else {
                 RETURN_CUDNN_FRONTEND_ERROR_IF(
-                    true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
+                    true, error_code_t::INVALID_VARIANT_PACK, "Execute unexpected type for pass by value tensor.");
             }
         }
 
