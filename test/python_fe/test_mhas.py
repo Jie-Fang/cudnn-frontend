@@ -374,6 +374,9 @@ def test_sdpa(input_type,
     if is_dropout and (s_kv % 64 != 0) and cudnn.backend_version() < 90000:
         pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
 
+    if ((d_qk % 64 != 0) or (s_kv % 64 != 0)) and cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
+        
     print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
