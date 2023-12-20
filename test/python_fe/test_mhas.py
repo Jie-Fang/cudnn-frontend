@@ -569,7 +569,7 @@ def test_sdpa_backward(input_type,
 
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
-
+    
     # test both dP workspace optimization by lowering dP workspace limit to 8MB
     os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = str(8 * 1024 * 1024)
 
@@ -601,7 +601,10 @@ def test_sdpa_backward(input_type,
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
     if (s_kv % 64 != 0) and layout == "non_interleaved":
-        pytest.skip("BUG: cudnn backend does not support non-interlaved layout with non-64-aligned seq_kv.")
+        pytest.skip("cudnn backend does not support non-interlaved layout with non-64-aligned seq_kv.")
+        
+    if ((d_qk % 64 != 0) or (s_kv % 64 != 0)) and cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
 
     print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
