@@ -165,7 +165,14 @@ TEST_CASE("conv graph serialization", "[graph][serialize]") {
                                     .set_compute_data_type(fe::DataType_t::FLOAT);
 
     auto o = graph.pointwise(y, b, pointwise_attributes);
-    o->set_output(true).set_data_type(fe::DataType_t::HALF);
+
+    auto reduction_attributes = fe::graph::Reduction_attributes()
+                                    .set_name("reduction")
+                                    .set_mode(fe::ReductionMode_t::ADD)
+                                    .set_compute_data_type(fe::DataType_t::FLOAT);
+    auto r = graph.reduction(o, reduction_attributes);
+
+    r->set_output(true).set_data_type(fe::DataType_t::HALF);
 
     REQUIRE(graph.validate().is_good());
 

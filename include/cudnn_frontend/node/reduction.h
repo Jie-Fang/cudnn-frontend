@@ -142,6 +142,7 @@ class ReductionNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"({"tag": "REDUCTION"})"_json);
     }
 };
 

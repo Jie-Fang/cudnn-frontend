@@ -274,6 +274,10 @@ class Graph : public INode {
                         auto pointwise_attributes = j_sub_node.get<Pointwise_attributes>();
                         sub_nodes.emplace_back(
                             std::make_unique<PointwiseNode>(std::move(pointwise_attributes), detail::Context()));
+                    } else if (tag == "REDUCTION") {
+                        auto reduction_attributes = j_sub_node.get<Reduction_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<ReductionNode>(std::move(reduction_attributes), detail::Context()));
                     }
                 }
             }
