@@ -117,3 +117,46 @@ TEST_CASE("Graph key", "[serialize]") {
     REQUIRE(graph.build_plans(handle).is_good());
     REQUIRE(key == graph.key());
 }
+
+TEST_CASE("conv graph serialization", "[graph][serialize]") {
+    namespace fe = cudnn_frontend;
+
+    fe::graph::Graph graph;
+
+    auto x = graph.tensor(fe::graph::Tensor_attributes());
+    x->set_name("image")
+        .set_dim({4, 32, 16, 16})
+        .set_stride({32 * 16 * 16, 1, 32 * 16, 32})
+        .set_is_virtual(false)
+        .set_is_pass_by_value(false)
+        .set_reordering_type(fe::TensorReordering_t::NONE)
+        .set_data_type(fe::DataType_t::HALF);
+
+    auto w = graph.tensor(fe::graph::Tensor_attributes());
+    w->set_name("weight")
+        .set_dim({64, 32, 3, 3})
+        .set_stride({32 * 3 * 3, 1, 32 * 3, 32})
+        .set_is_virtual(false)
+        .set_is_pass_by_value(false)
+        .set_reordering_type(fe::TensorReordering_t::NONE)
+        .set_data_type(fe::DataType_t::HALF);
+
+    auto conv_fprop_attributes = fe::graph::Conv_fprop_attributes()
+                                     .set_name("conv_fprop")
+                                     .set_padding({1, 1})
+                                     .set_stride({1, 1})
+                                     .set_dilation({1, 1})
+                                     .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto y = graph.conv_fprop(x, w, conv_fprop_attributes);
+    y->set_output(true).set_data_type(fe::DataType_t::HALF);
+
+    REQUIRE(graph.validate().is_good());
+
+    json j = graph;
+    fe::graph::Graph graph_deserialized;
+    REQUIRE(graph_deserialized.deserialize(j).is_good());
+    json j2 = graph_deserialized;
+
+    REQUIRE(j == j2);
+}

@@ -259,6 +259,25 @@ class Graph : public INode {
         }
     };
 
+    // TODO: temparorily placed in graphs class. This function needs to be a free standing function.
+    error_t
+    deserialize(const json &j) {
+        if (j.contains("nodes") && j["nodes"].is_array()) {
+            for (const auto &j_sub_node : j["nodes"]) {
+                if (j_sub_node.contains("tag") && j_sub_node["tag"].is_string()) {
+                    auto tag = j_sub_node["tag"].get<std::string>();
+                    if (tag == "CONV_FPROP") {
+                        auto conv_fprop_attributes = j_sub_node.get<Conv_fprop_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<ConvolutionNode>(std::move(conv_fprop_attributes), detail::Context()));
+                    }
+                }
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     std::string
     print(void) const {
         std::stringstream ss;
