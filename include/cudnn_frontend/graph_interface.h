@@ -278,6 +278,10 @@ class Graph : public INode {
                         auto reduction_attributes = j_sub_node.get<Reduction_attributes>();
                         sub_nodes.emplace_back(
                             std::make_unique<ReductionNode>(std::move(reduction_attributes), detail::Context()));
+                    } else if (tag == "SDPA_FWD") {
+                        auto sDPA_attributes = j_sub_node.get<SDPA_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<SDPANode>(std::move(sDPA_attributes), detail::Context()));
                     }
                 }
             }

@@ -588,6 +588,7 @@ class SDPANode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"({"tag": "SDPA_FWD"})"_json);
     }
 };
 

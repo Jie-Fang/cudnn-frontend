@@ -183,3 +183,91 @@ TEST_CASE("conv graph serialization", "[graph][serialize]") {
 
     REQUIRE(j == j2);
 }
+
+TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
+    namespace fe = cudnn_frontend;
+
+    fe::graph::Graph graph;
+    graph.set_io_data_type(fe::DataType_t::HALF)
+        .set_intermediate_data_type(fe::DataType_t::FLOAT)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    int64_t b    = 3;     // batch size
+    int64_t h    = 4;     // head dim
+    int64_t s_q  = 1024;  // q tensor is padded to this seq length
+    int64_t s_kv = 1024;  // k and v tensor is padded to this seq length
+    int64_t d    = 128;   // hidden dim
+
+    auto Q = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("Q")
+                              .set_dim({b, h, s_q, d})
+                              .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
+    auto K = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("K")
+                              .set_dim({b, h, s_kv, d})
+                              .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
+    auto V = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("V")
+                              .set_dim({b, h, s_kv, d})
+                              .set_stride({3 * h * d, 3 * d, 3 * b * h * d, 1}));
+
+    auto attn_scale = graph.tensor(fe::graph::Tensor_attributes()
+                                       .set_name("attn_scale")
+                                       .set_dim({1, 1, 1, 1})
+                                       .set_stride({1, 1, 1, 1})
+                                       .set_is_pass_by_value(true)
+                                       .set_data_type(fe::DataType_t::FLOAT));
+
+    auto seed   = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("Seed")
+                                 .set_dim({1, 1, 1, 1})
+                                 .set_stride({1, 1, 1, 1})
+                                 .set_data_type(fe::DataType_t::INT32));
+    auto offset = graph.tensor(fe::graph::Tensor_attributes()
+                                   .set_name("Offset")
+                                   .set_dim({1, 1, 1, 1})
+                                   .set_stride({1, 1, 1, 1})
+                                   .set_data_type(fe::DataType_t::INT32));
+
+    auto bias = graph.tensor(fe::graph::Tensor_attributes()
+                                 .set_name("bias")
+                                 .set_dim({b, 1, s_q, s_kv})
+                                 .set_stride({s_q * s_kv, s_q * s_kv, s_kv, 1}));
+
+    auto seq_q  = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("seq_q")
+                                  .set_dim({b, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT32));
+    auto seq_kv = graph.tensor(fe::graph::Tensor_attributes()
+                                   .set_name("seq_kv")
+                                   .set_dim({b, 1, 1, 1})
+                                   .set_stride({1, 1, 1, 1})
+                                   .set_data_type(fe::DataType_t::INT32));
+
+    auto sdpa_options = fe::graph::SDPA_attributes()
+                            .set_name("flash_attention")
+                            .set_is_inference(false)
+                            .set_attn_scale(attn_scale)
+                            .set_alibi_mask(true)
+                            .set_causal_mask(false)
+                            .set_dropout(0.1, seed, offset)
+                            .set_bias(bias)
+                            .set_padding_mask(true)
+                            .set_seq_len_q(seq_q)
+                            .set_seq_len_kv(seq_kv);
+
+    auto [O, stats] = graph.sdpa(Q, K, V, sdpa_options);
+
+    O->set_output(true).set_dim({b, h, s_q, d}).set_stride({h * d, d, b * h * d, 1});
+    stats->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+
+    REQUIRE(graph.validate().is_good());
+
+    json j = graph;
+    fe::graph::Graph graph_deserialized;
+    REQUIRE(graph_deserialized.deserialize(j).is_good());
+    json j2 = graph_deserialized;
+
+    REQUIRE(j == j2);
+}
