@@ -471,17 +471,6 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     }
 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(Conv_fprop_attributes::input_names,
-                             {
-                                 {Conv_fprop_attributes::input_names::X, "X"},
-                                 {Conv_fprop_attributes::input_names::W, "W"},
-                             })
-
-NLOHMANN_JSON_SERIALIZE_ENUM(Conv_fprop_attributes::output_names,
-                             {
-                                 {Conv_fprop_attributes::output_names::Y, "Y"},
-                             })
-
 class Batchnorm_backward_attributes : public Attributes<Batchnorm_backward_attributes> {
     friend class Attributes<Batchnorm_backward_attributes>;
     friend class DBNNode;
@@ -664,18 +653,6 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
         return *this;
     }
 };
-
-NLOHMANN_JSON_SERIALIZE_ENUM(Pointwise_attributes::input_names,
-                             {
-                                 {Pointwise_attributes::input_names::IN_0, "IN_0"},
-                                 {Pointwise_attributes::input_names::IN_1, "IN_1"},
-                                 {Pointwise_attributes::input_names::IN_2, "IN_2"},
-                             })
-
-NLOHMANN_JSON_SERIALIZE_ENUM(Pointwise_attributes::output_names,
-                             {
-                                 {Pointwise_attributes::output_names::OUT_0, "OUT_0"},
-                             })
 
 class Instancenorm_backward_attributes : public Attributes<Instancenorm_backward_attributes> {
     friend class Attributes<Instancenorm_backward_attributes>;
