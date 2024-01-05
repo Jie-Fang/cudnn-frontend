@@ -251,7 +251,7 @@ TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
                             .set_attn_scale(attn_scale)
                             .set_alibi_mask(true)
                             .set_causal_mask(false)
-                            .set_dropout(0.1, seed, offset)
+                            .set_dropout(0.1f, seed, offset)
                             .set_bias(bias)
                             .set_padding_mask(true)
                             .set_seq_len_q(seq_q)
@@ -336,7 +336,7 @@ TEST_CASE("sdpa backward graph serialization", "[graph][serialize]") {
                                      .set_causal_mask(true)
                                      .set_attn_scale(attn_scale)
                                      .set_bias(bias)
-                                     .set_dropout(0.1, dropout_seed, dropout_offset);
+                                     .set_dropout(0.1f, dropout_seed, dropout_offset);
 
     auto [dQ, dK, dV] = graph.sdpa_backward(q, k, v, o, dO, stats, sdpa_backward_options);
 
