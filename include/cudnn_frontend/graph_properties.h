@@ -1169,6 +1169,17 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     std::optional<float> attn_scale_value;
 
    public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_attributes,
+                                   name,
+                                   inputs,
+                                   outputs,
+                                   is_inference,
+                                   alibi_mask,
+                                   padding_mask,
+                                   causal_mask,
+                                   dropout_probability,
+                                   attn_scale_value)
+
     SDPA_attributes&
     set_is_inference(bool const value) {
         is_inference = value;
@@ -1283,6 +1294,16 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     std::optional<float> attn_scale_value;
 
    public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_backward_attributes,
+                                   name,
+                                   inputs,
+                                   outputs,
+                                   alibi_mask,
+                                   padding_mask,
+                                   causal_mask,
+                                   dropout_probability,
+                                   attn_scale_value)
+
     SDPA_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_backward_attributes::input_names::Attn_scale] = value;
@@ -1383,6 +1404,8 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     std::optional<bool> use_M_Zinv;
 
    public:
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Softmax_attributes, name, inputs, outputs, use_stats, use_M_Zinv)
+
     Softmax_attributes&
     has_stats(bool const value) {
         use_stats = value;

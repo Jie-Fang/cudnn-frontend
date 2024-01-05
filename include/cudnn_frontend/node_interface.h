@@ -439,15 +439,9 @@ class INode : public ICudnn {
 
     INode(detail::Context const& context) : context(context) {}
 
+    // Make sure each node implements a public serialize function
     virtual void
-    serialize(json& j) const {
-        j["nodes"];
-        for (auto const& sub_node : sub_nodes) {
-            json j_sub_node;
-            sub_node->serialize(j_sub_node);
-            j["nodes"].push_back(j_sub_node);
-        }
-    };
+    serialize(json& j) const = 0;
 
     size_t
     key() {

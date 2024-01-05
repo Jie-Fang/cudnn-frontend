@@ -247,6 +247,18 @@ class Graph : public INode {
         return *this;
     }
 
+    virtual void
+    serialize(json &j) const override final {
+        // Different from serialization of other INodes.
+        // Go over each subnode and serialize them.
+        j["nodes"];
+        for (auto const &sub_node : sub_nodes) {
+            json j_sub_node;
+            sub_node->serialize(j_sub_node);
+            j["nodes"].push_back(j_sub_node);
+        }
+    };
+
     std::string
     print(void) const {
         std::stringstream ss;

@@ -584,6 +584,11 @@ class SDPANode : public INode {
 
         return {error_code_t::OK, ""};
     }
+
+    virtual void
+    serialize(json& j) const override final {
+        j = attributes;
+    }
 };
 
 class SDPABackwardNode : public INode {
@@ -1341,6 +1346,11 @@ class SDPABackwardNode : public INode {
         }
 
         return {error_code_t::OK, ""};
+    }
+
+    virtual void
+    serialize(json& j) const override final {
+        j = attributes;
     }
 };
 
