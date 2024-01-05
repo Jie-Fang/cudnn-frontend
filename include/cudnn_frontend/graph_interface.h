@@ -247,6 +247,53 @@ class Graph : public INode {
         return *this;
     }
 
+    virtual void
+    serialize(json &j) const override final {
+        // Different from serialization of other INodes.
+        // Go over each subnode and serialize them.
+        j["nodes"];
+        for (auto const &sub_node : sub_nodes) {
+            json j_sub_node;
+            sub_node->serialize(j_sub_node);
+            j["nodes"].push_back(j_sub_node);
+        }
+    };
+
+    // TODO: temparorily placed in graphs class. This function needs to be a free standing function.
+    error_t
+    deserialize(const json &j) {
+        if (j.contains("nodes") && j["nodes"].is_array()) {
+            for (const auto &j_sub_node : j["nodes"]) {
+                if (j_sub_node.contains("tag") && j_sub_node["tag"].is_string()) {
+                    auto tag = j_sub_node["tag"].get<std::string>();
+                    if (tag == "CONV_FPROP") {
+                        auto conv_fprop_attributes = j_sub_node.get<Conv_fprop_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<ConvolutionNode>(std::move(conv_fprop_attributes), detail::Context()));
+                    } else if (tag == "POINTWISE") {
+                        auto pointwise_attributes = j_sub_node.get<Pointwise_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<PointwiseNode>(std::move(pointwise_attributes), detail::Context()));
+                    } else if (tag == "REDUCTION") {
+                        auto reduction_attributes = j_sub_node.get<Reduction_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<ReductionNode>(std::move(reduction_attributes), detail::Context()));
+                    } else if (tag == "SDPA_FWD") {
+                        auto sdpa_attributes = j_sub_node.get<SDPA_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<SDPANode>(std::move(sdpa_attributes), detail::Context()));
+                    } else if (tag == "SDPA_BWD") {
+                        auto sdpa_bwd_attributes = j_sub_node.get<SDPA_backward_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<SDPABackwardNode>(std::move(sdpa_bwd_attributes), detail::Context()));
+                    }
+                }
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     std::string
     print(void) const {
         std::stringstream ss;

@@ -584,6 +584,12 @@ class SDPANode : public INode {
 
         return {error_code_t::OK, ""};
     }
+
+    virtual void
+    serialize(json& j) const override final {
+        j = attributes;
+        j.update(R"({"tag": "SDPA_FWD"})"_json);
+    }
 };
 
 class SDPABackwardNode : public INode {
@@ -1341,6 +1347,12 @@ class SDPABackwardNode : public INode {
         }
 
         return {error_code_t::OK, ""};
+    }
+
+    virtual void
+    serialize(json& j) const override final {
+        j = attributes;
+        j.update(R"({"tag": "SDPA_BWD"})"_json);
     }
 };
 

@@ -122,6 +122,7 @@
 #include "cudnn_frontend_Resample.h"
 
 #include "cudnn_frontend/graph_interface.h"
+#include "cudnn_frontend/utils/serialize.h"
 
 #define CUDNN_FRONTEND_MAJOR_VERSION 1
 #define CUDNN_FRONTEND_MINOR_VERSION 0
