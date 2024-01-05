@@ -1352,6 +1352,7 @@ class SDPABackwardNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"({"tag": "SDPA_BWD"})"_json);
     }
 };
 

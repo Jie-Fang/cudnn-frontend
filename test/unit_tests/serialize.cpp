@@ -271,3 +271,85 @@ TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
 
     REQUIRE(j == j2);
 }
+
+TEST_CASE("sdpa backward graph serialization", "[graph][serialize]") {
+    namespace fe = cudnn_frontend;
+
+    int64_t b    = 3;     // batch size
+    int64_t h    = 4;     // head dim
+    int64_t s_q  = 1024;  // q tensor is padded to this seq length
+    int64_t s_kv = 1024;  // k and v tensor is padded to this seq length
+    int64_t d    = 128;   // hidden dim
+
+    fe::graph::Graph graph;
+    graph.set_io_data_type(fe::DataType_t::HALF)
+        .set_intermediate_data_type(fe::DataType_t::FLOAT)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    std::shared_ptr<fe::graph::Tensor_attributes> bias, dropout_seed, dropout_offset;
+
+    auto q = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("Q").set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1}));
+    auto k = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("K")
+                              .set_dim({b, h, s_kv, d})
+                              .set_stride({h * s_kv * d, s_kv * d, d, 1}));
+    auto v = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("V")
+                              .set_dim({b, h, s_kv, d})
+                              .set_stride({h * s_kv * d, s_kv * d, d, 1}));
+    auto o = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("O").set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1}));
+    auto dO = graph.tensor(
+        fe::graph::Tensor_attributes().set_name("dO").set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1}));
+    auto stats = graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("stats")
+                                  .set_dim({b, h, s_q, 1})
+                                  .set_stride({h * s_q, s_q, 1, 1})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+
+    auto attn_scale = graph.tensor(fe::graph::Tensor_attributes()
+                                       .set_name("attn_scale")
+                                       .set_dim({1, 1, 1, 1})
+                                       .set_stride({1, 1, 1, 1})
+                                       .set_is_pass_by_value(true)
+                                       .set_data_type(fe::DataType_t::FLOAT));
+
+    bias = graph.tensor(fe::graph::Tensor_attributes()
+                            .set_name("bias")
+                            .set_dim({b, 1, s_q, s_kv})
+                            .set_stride({s_q * s_kv, s_q * s_kv, s_kv, 1}));
+
+    dropout_seed   = graph.tensor(fe::graph::Tensor_attributes()
+                                    .set_name("Seed")
+                                    .set_dim({1, 1, 1, 1})
+                                    .set_stride({1, 1, 1, 1})
+                                    .set_data_type(fe::DataType_t::INT32));
+    dropout_offset = graph.tensor(fe::graph::Tensor_attributes()
+                                      .set_name("Offset")
+                                      .set_dim({1, 1, 1, 1})
+                                      .set_stride({1, 1, 1, 1})
+                                      .set_data_type(fe::DataType_t::INT32));
+
+    auto sdpa_backward_options = fe::graph::SDPA_backward_attributes()
+                                     .set_name("flash_attention_backward")
+                                     .set_causal_mask(true)
+                                     .set_attn_scale(attn_scale)
+                                     .set_bias(bias)
+                                     .set_dropout(0.1, dropout_seed, dropout_offset);
+
+    auto [dQ, dK, dV] = graph.sdpa_backward(q, k, v, o, dO, stats, sdpa_backward_options);
+
+    dQ->set_output(true).set_dim({b, h, s_q, d}).set_stride({h * s_q * d, s_q * d, d, 1});
+    dK->set_output(true).set_dim({b, h, s_kv, d}).set_stride({h * s_kv * d, s_kv * d, d, 1});
+    dV->set_output(true).set_dim({b, h, s_kv, d}).set_stride({h * s_kv * d, s_kv * d, d, 1});
+
+    REQUIRE(graph.validate().is_good());
+
+    json j = graph;
+    fe::graph::Graph graph_deserialized;
+    REQUIRE(graph_deserialized.deserialize(j).is_good());
+    json j2 = graph_deserialized;
+
+    REQUIRE(j == j2);
+}
