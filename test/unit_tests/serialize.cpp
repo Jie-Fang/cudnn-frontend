@@ -149,7 +149,23 @@ TEST_CASE("conv graph serialization", "[graph][serialize]") {
                                      .set_compute_data_type(fe::DataType_t::FLOAT);
 
     auto y = graph.conv_fprop(x, w, conv_fprop_attributes);
-    y->set_output(true).set_data_type(fe::DataType_t::HALF);
+
+    auto b = graph.tensor(fe::graph::Tensor_attributes());
+    b->set_name("bias")
+        .set_dim({1, 32, 1, 1})
+        .set_stride({32, 1, 32, 32})
+        .set_is_virtual(false)
+        .set_is_pass_by_value(false)
+        .set_reordering_type(fe::TensorReordering_t::NONE)
+        .set_data_type(fe::DataType_t::HALF);
+
+    auto pointwise_attributes = fe::graph::Pointwise_attributes()
+                                    .set_name("bias")
+                                    .set_mode(fe::PointwiseMode_t::ADD)
+                                    .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto o = graph.pointwise(y, b, pointwise_attributes);
+    o->set_output(true).set_data_type(fe::DataType_t::HALF);
 
     REQUIRE(graph.validate().is_good());
 

@@ -270,6 +270,10 @@ class Graph : public INode {
                         auto conv_fprop_attributes = j_sub_node.get<Conv_fprop_attributes>();
                         sub_nodes.emplace_back(
                             std::make_unique<ConvolutionNode>(std::move(conv_fprop_attributes), detail::Context()));
+                    } else if (tag == "POINTWISE") {
+                        auto pointwise_attributes = j_sub_node.get<Pointwise_attributes>();
+                        sub_nodes.emplace_back(
+                            std::make_unique<PointwiseNode>(std::move(pointwise_attributes), detail::Context()));
                     }
                 }
             }
