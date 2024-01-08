@@ -59,16 +59,17 @@ class ConvolutionNode : public INode {
         // Only infer dims and strides if user did not set them
         if (y_tensor_dim.empty()) {
             y_tensor_dim.resize(x_tensor_dim.size());
-            auto const& padding  = attributes.get_padding();
-            auto const& stride   = attributes.get_stride();
-            auto const& dilation = attributes.get_dilation();
+            auto const& pre_padding  = attributes.get_pre_padding();
+            auto const& post_padding = attributes.get_post_padding();
+            auto const& stride       = attributes.get_stride();
+            auto const& dilation     = attributes.get_dilation();
             // N
             y_tensor_dim[0] = x_tensor_dim[0];
             // PQ
             for (size_t dim = 2; dim < x_tensor_dim.size(); ++dim) {
-                y_tensor_dim[dim] =
-                    1 + (x_tensor_dim[dim] - dilation[dim - 2] * (w_tensor_dim[dim] - 1) - 1 + 2 * padding[dim - 2]) /
-                            stride[dim - 2];
+                y_tensor_dim[dim] = 1 + (x_tensor_dim[dim] - dilation[dim - 2] * (w_tensor_dim[dim] - 1) - 1 +
+                                         pre_padding[dim - 2] + post_padding[dim - 2]) /
+                                            stride[dim - 2];
             }
             // K
             y_tensor_dim[1] = w_tensor_dim[0];
@@ -129,14 +130,14 @@ class ConvolutionNode : public INode {
 #endif
 
             // convolution descriptor
-            int64_t const spatial_dim_count = attributes.get_padding().size();
+            int64_t const spatial_dim_count = attributes.get_pre_padding().size();
             auto convolution_descriptor     = cudnn_frontend::ConvDescBuilder()
                                               .setComputeType(attributes.compute_data_type)
                                               .setMathMode(CUDNN_CROSS_CORRELATION)
                                               .setSpatialDimCount(spatial_dim_count)
                                               .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
-                                              .setPrePadding(spatial_dim_count, attributes.get_padding().data())
-                                              .setPostPadding(spatial_dim_count, attributes.get_padding().data())
+                                              .setPrePadding(spatial_dim_count, attributes.get_pre_padding().data())
+                                              .setPostPadding(spatial_dim_count, attributes.get_post_padding().data())
                                               .setDilation(spatial_dim_count, attributes.get_dilation().data())
                                               .build();
 

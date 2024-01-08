@@ -44,8 +44,11 @@ TEST_CASE("Convolution fprop", "[conv][graph][caching]") {
                                    .set_dim({k, c, r, s})
                                    .set_stride({c * r * s, 1, c * s, c}));
 
-        auto conv_options =
-            fe::graph::Conv_fprop_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
+        auto conv_options = fe::graph::Conv_fprop_attributes()
+                                .set_pre_padding({1, 1})
+                                .set_post_padding({0, 0})
+                                .set_stride({1, 1})
+                                .set_dilation({1, 1});
         auto Y = graph->conv_fprop(X, W, conv_options);
 
         Y->set_output(true);

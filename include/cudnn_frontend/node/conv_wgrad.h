@@ -112,14 +112,14 @@ class WgradNode : public INode {
 #endif
 
             // wgrad descriptor
-            int64_t const spatial_dim_count = attributes.get_padding().size();
+            int64_t const spatial_dim_count = attributes.get_pre_padding().size();
             auto wgrad_descriptor           = cudnn_frontend::ConvDescBuilder()
                                         .setComputeType(attributes.compute_data_type)
                                         .setMathMode(CUDNN_CROSS_CORRELATION)
                                         .setSpatialDimCount(spatial_dim_count)
                                         .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
-                                        .setPrePadding(spatial_dim_count, attributes.get_padding().data())
-                                        .setPostPadding(spatial_dim_count, attributes.get_padding().data())
+                                        .setPrePadding(spatial_dim_count, attributes.get_pre_padding().data())
+                                        .setPostPadding(spatial_dim_count, attributes.get_post_padding().data())
                                         .setDilation(spatial_dim_count, attributes.get_dilation().data())
                                         .build();
 
