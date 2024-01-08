@@ -37,7 +37,7 @@ def test_conv_bias_relu():
     W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
     B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = convert_to_cudnn_type(B_gpu.dtype))
 
-    conv_output = graph.conv_fprop(image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
+    conv_output = graph.conv_fprop(image = X, weight = W, pre_padding = padding, post_padding = padding, stride = stride, dilation = dilation)
 
     bias_output = graph.bias(name = "bias", input = conv_output, bias = B)
 
