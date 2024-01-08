@@ -98,7 +98,6 @@
  */
 
 #include <cudnn.h>
-#include <cudnn_backend.h>
 
 #include "cudnn_frontend_ConvDesc.h"
 #include "cudnn_frontend_Heuristics.h"
