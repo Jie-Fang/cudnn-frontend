@@ -168,13 +168,15 @@ PyGraph::tensor_like(py::object const& pyobj) {
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
                     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
-                    std::vector<int64_t> const& padding,
+                    std::vector<int64_t> const& pre_padding,
+                    std::vector<int64_t> const& post_padding,
                     std::vector<int64_t> const& stride,
                     std::vector<int64_t> const& dilation,
                     cudnn_frontend::DataType_t const& compute_data_type,
                     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Conv_fprop_attributes()
-                          .set_padding(padding)
+                          .set_pre_padding(pre_padding)
+                          .set_post_padding(post_padding)
                           .set_stride(stride)
                           .set_dilation(dilation)
                           .set_compute_data_type(compute_data_type)
@@ -187,13 +189,15 @@ PyGraph::conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& i
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::conv_dgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
                     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& filter,
-                    std::vector<int64_t> const& padding,
+                    std::vector<int64_t> const& pre_padding,
+                    std::vector<int64_t> const& post_padding,
                     std::vector<int64_t> const& stride,
                     std::vector<int64_t> const& dilation,
                     cudnn_frontend::DataType_t const& compute_data_type,
                     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Conv_dgrad_attributes()
-                          .set_padding(padding)
+                          .set_pre_padding(pre_padding)
+                          .set_post_padding(post_padding)
                           .set_stride(stride)
                           .set_dilation(dilation)
                           .set_compute_data_type(compute_data_type)
@@ -205,13 +209,15 @@ PyGraph::conv_dgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& l
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::conv_wgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
                     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
-                    std::vector<int64_t> const& padding,
+                    std::vector<int64_t> const& pre_padding,
+                    std::vector<int64_t> const& post_padding,
                     std::vector<int64_t> const& stride,
                     std::vector<int64_t> const& dilation,
                     cudnn_frontend::DataType_t const& compute_data_type,
                     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Conv_wgrad_attributes()
-                          .set_padding(padding)
+                          .set_pre_padding(pre_padding)
+                          .set_post_padding(post_padding)
                           .set_stride(stride)
                           .set_dilation(dilation)
                           .set_compute_data_type(compute_data_type)
@@ -399,11 +405,31 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
+        .def(
+            "conv_fprop",
+            [](PyGraph& self,
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
+               std::vector<int64_t> const& padding,
+               std::vector<int64_t> const& stride,
+               std::vector<int64_t> const& dilation,
+               cudnn_frontend::DataType_t const& compute_data_type,
+               std::string const& name) {
+                return self.conv_fprop(image, weight, padding, padding, stride, dilation, compute_data_type, name);
+            },
+            py::arg("image"),
+            py::arg("weight"),
+            py::arg_v{"padding", default_vector()},
+            py::arg_v{"stride", default_vector()},
+            py::arg_v{"dilation", default_vector()},
+            py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+            py::arg_v("name", ""))
         .def("conv_fprop",
              &PyGraph::conv_fprop,
              py::arg("image"),
              py::arg("weight"),
-             py::arg_v{"padding", default_vector()},
+             py::arg_v{"pre_padding", default_vector()},
+             py::arg_v{"post_padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()},
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -414,7 +440,8 @@ init_pygraph_submodule(py::module_& m) {
                 Args:
                     image (cudnn_tensor): The image tensor.
                     weight (cudnn_tensor): The weight tensor.
-                    padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
+                    pre_padding (Optional[List[int]]): The pre padding values for the operation. Default is an empty list.
+                    post_padding (Optional[List[int]]): The post padding values for the operation. Default is an empty list.
                     stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
@@ -423,11 +450,31 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The created tensor.
             )pbdoc")
+        .def(
+            "conv_wgrad",
+            [](PyGraph& self,
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
+               std::vector<int64_t> const& padding,
+               std::vector<int64_t> const& stride,
+               std::vector<int64_t> const& dilation,
+               cudnn_frontend::DataType_t const& compute_data_type,
+               std::string const& name) {
+                return self.conv_wgrad(image, loss, padding, padding, stride, dilation, compute_data_type, name);
+            },
+            py::arg("image"),
+            py::arg("loss"),
+            py::arg_v{"padding", default_vector()},
+            py::arg_v{"stride", default_vector()},
+            py::arg_v{"dilation", default_vector()},
+            py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+            py::arg_v("name", ""))
         .def("conv_wgrad",
              &PyGraph::conv_wgrad,
              py::arg("image"),
              py::arg("loss"),
-             py::arg_v{"padding", default_vector()},
+             py::arg_v{"pre_padding", default_vector()},
+             py::arg_v{"post_padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()},
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -438,8 +485,8 @@ init_pygraph_submodule(py::module_& m) {
                 Args:
                     image (cudnn_tensor): The image tensor.
                     loss (cudnn_tensor): The loss tensor.
-                    padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
-                    stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
+                    pre_padding (Optional[List[int]]): The pre padding values for the operation. Default is an empty list.
+                    post_padding (Optional[List[int]]): The post padding values for the operation. Default is an empty list.                    stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): A name for the operation to be performed.
@@ -447,11 +494,31 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The created tensor.
             )pbdoc")
+        .def(
+            "conv_dgrad",
+            [](PyGraph& self,
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
+               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& filter,
+               std::vector<int64_t> const& padding,
+               std::vector<int64_t> const& stride,
+               std::vector<int64_t> const& dilation,
+               cudnn_frontend::DataType_t const& compute_data_type,
+               std::string const& name) {
+                return self.conv_dgrad(loss, filter, padding, padding, stride, dilation, compute_data_type, name);
+            },
+            py::arg("loss"),
+            py::arg("filter"),
+            py::arg_v{"padding", default_vector()},
+            py::arg_v{"stride", default_vector()},
+            py::arg_v{"dilation", default_vector()},
+            py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+            py::arg_v("name", ""))
         .def("conv_dgrad",
              &PyGraph::conv_dgrad,
              py::arg("loss"),
              py::arg("filter"),
-             py::arg_v{"padding", default_vector()},
+             py::arg_v{"pre_padding", default_vector()},
+             py::arg_v{"post_padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()},
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -462,7 +529,8 @@ init_pygraph_submodule(py::module_& m) {
                 Args:
                     loss (cudnn_tensor): The loss tensor.
                     filter (cudnn_tensor): The filter tensor.
-                    padding (Optional[List[int]]): The padding values for the operation. Default is an empty list.
+                    pre_padding (Optional[List[int]]): The pre padding values for the operation. Default is an empty list.
+                    post_padding (Optional[List[int]]): The post padding values for the operation. Default is an empty list.
                     stride (Optional[List[int]]): The stride values for the operation. Default is an empty list.
                     dilation (Optional[List[int]]): The dilation values for the operation. Default is an empty list.
                     compute_data_type (Optional[pycudnn.data_type]): The data type for computation. Default is NOT_SET.

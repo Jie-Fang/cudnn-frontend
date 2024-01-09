@@ -131,7 +131,8 @@ class PyGraph {
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
-               std::vector<int64_t> const& padding,
+               std::vector<int64_t> const& pre_padding,
+               std::vector<int64_t> const& post_padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
                cudnn_frontend::DataType_t const& compute_data_type,
@@ -140,7 +141,8 @@ class PyGraph {
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     conv_dgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& filter,
-               std::vector<int64_t> const& padding,
+               std::vector<int64_t> const& pre_padding,
+               std::vector<int64_t> const& post_padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
                cudnn_frontend::DataType_t const& compute_data_type,
@@ -149,7 +151,8 @@ class PyGraph {
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     conv_wgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
-               std::vector<int64_t> const& padding,
+               std::vector<int64_t> const& pre_padding,
+               std::vector<int64_t> const& post_padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
                cudnn_frontend::DataType_t const& compute_data_type,

@@ -422,7 +422,8 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     friend class ConvolutionNode;
     friend class Graph;
 
-    std::vector<int64_t> padding;
+    std::vector<int64_t> pre_padding;
+    std::vector<int64_t> post_padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
@@ -431,16 +432,41 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes, name, inputs, outputs, padding, stride, dilation)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes,
+                                   name,
+                                   inputs,
+                                   outputs,
+                                   pre_padding,
+                                   post_padding,
+                                   stride,
+                                   dilation)
 
     std::vector<int64_t>
-    get_padding() const {
-        return padding;
+    get_pre_padding() const {
+        return pre_padding;
+    }
+
+    std::vector<int64_t>
+    get_post_padding() const {
+        return post_padding;
     }
 
     Conv_fprop_attributes&
     set_padding(std::vector<int64_t> value) {
-        padding = value;
+        pre_padding  = value;
+        post_padding = value;
+        return *this;
+    }
+
+    Conv_fprop_attributes&
+    set_pre_padding(std::vector<int64_t> value) {
+        pre_padding = value;
+        return *this;
+    }
+
+    Conv_fprop_attributes&
+    set_post_padding(std::vector<int64_t> value) {
+        post_padding = value;
         return *this;
     }
 
@@ -514,7 +540,8 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     friend class DgradNode;
     friend class Graph;
 
-    std::vector<int64_t> padding;
+    std::vector<int64_t> pre_padding;
+    std::vector<int64_t> post_padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
@@ -523,16 +550,41 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { DX };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes, name, inputs, outputs, padding, stride, dilation)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes,
+                                   name,
+                                   inputs,
+                                   outputs,
+                                   pre_padding,
+                                   post_padding,
+                                   stride,
+                                   dilation)
 
     std::vector<int64_t>
-    get_padding() const {
-        return padding;
+    get_pre_padding() const {
+        return pre_padding;
+    }
+
+    std::vector<int64_t>
+    get_post_padding() const {
+        return post_padding;
     }
 
     Conv_dgrad_attributes&
     set_padding(std::vector<int64_t> value) {
-        padding = value;
+        pre_padding  = value;
+        post_padding = value;
+        return *this;
+    }
+
+    Conv_dgrad_attributes&
+    set_pre_padding(std::vector<int64_t> value) {
+        pre_padding = value;
+        return *this;
+    }
+
+    Conv_dgrad_attributes&
+    set_post_padding(std::vector<int64_t> value) {
+        post_padding = value;
         return *this;
     }
 
@@ -1491,7 +1543,8 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     friend class WgradNode;
     friend class Graph;
 
-    std::vector<int64_t> padding;
+    std::vector<int64_t> pre_padding;
+    std::vector<int64_t> post_padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
@@ -1501,16 +1554,41 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
 
     enum class output_names { DW };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes, name, inputs, outputs, padding, stride, dilation)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes,
+                                   name,
+                                   inputs,
+                                   outputs,
+                                   pre_padding,
+                                   post_padding,
+                                   stride,
+                                   dilation)
 
     std::vector<int64_t>
-    get_padding() const {
-        return padding;
+    get_pre_padding() const {
+        return pre_padding;
+    }
+
+    std::vector<int64_t>
+    get_post_padding() const {
+        return post_padding;
     }
 
     Conv_wgrad_attributes&
     set_padding(std::vector<int64_t> value) {
-        padding = value;
+        pre_padding  = value;
+        post_padding = value;
+        return *this;
+    }
+
+    Conv_wgrad_attributes&
+    set_pre_padding(std::vector<int64_t> value) {
+        pre_padding = value;
+        return *this;
+    }
+
+    Conv_wgrad_attributes&
+    set_post_padding(std::vector<int64_t> value) {
+        post_padding = value;
         return *this;
     }
 
