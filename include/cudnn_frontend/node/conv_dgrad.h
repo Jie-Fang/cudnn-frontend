@@ -156,6 +156,7 @@ class DgradNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "CONV_DGRAD"})"_json);
     }
 };
 
