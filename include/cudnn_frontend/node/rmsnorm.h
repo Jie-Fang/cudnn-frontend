@@ -168,6 +168,7 @@ class RMSNormNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "RMS_NORM"})"_json);
     }
 
     error_t
@@ -364,6 +365,7 @@ class DRMSNormNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "RMS_NORM_BPROP"})"_json);
     }
 };
 

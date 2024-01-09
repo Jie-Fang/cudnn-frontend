@@ -228,6 +228,7 @@ class LayerNormNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "LAYER_NORM"})"_json);
     }
 };
 

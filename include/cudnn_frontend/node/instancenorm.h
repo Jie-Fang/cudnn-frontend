@@ -180,6 +180,7 @@ class InstanceNormNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "INSTANCE_NORM"})"_json);
     }
 
     error_t
@@ -375,6 +376,7 @@ class DINNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "INSTANCE_NORM_BPROP"})"_json);
     }
 };
 

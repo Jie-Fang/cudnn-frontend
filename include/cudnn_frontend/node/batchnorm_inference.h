@@ -153,6 +153,7 @@ class BatchnormInferenceNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "BATCHNORM_INFERENCE"})"_json);
     }
 };
 

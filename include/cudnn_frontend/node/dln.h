@@ -212,16 +212,14 @@ class DLNNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "LAYER_NORM_BPROP"})"_json);
     }
 
     error_t
-    pass_by_value_tensors_(
-        cudnnHandle_t,
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void*) const override final {
+    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
         if (epsilon) {
             // can pass in any dummy value
-            tensor_to_pass_by_value.emplace(epsilon, 0.0f);
+            tensor_to_pass_by_value.emplace(epsilon->get_uid(), 0.0f);
         }
         return {error_code_t::OK, ""};
     }

@@ -247,6 +247,9 @@ class Graph : public INode {
         return *this;
     }
 
+    using INode::deserialize;
+    using INode::serialize;
+
     virtual void
     serialize(json &j) const override final {
         // Different from serialization of other INodes.

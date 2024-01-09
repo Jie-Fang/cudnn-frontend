@@ -162,6 +162,7 @@ class RngNode : public INode {
     virtual void
     serialize(json& j) const override final {
         j = attributes;
+        j.update(R"( {"tag": "RNG"})"_json);
     }
 };
 

@@ -535,51 +535,48 @@ class SDPANode : public INode {
     }
 
     virtual error_t
-    pass_by_value_tensors_(
-        cudnnHandle_t handle,
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* node_workspace) const override final {
+    workspace_modifications_tensors_(
+        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& workspace_modifications,
+        int64_t& offset) const override final {
+        if (attributes.alibi_mask) {
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
+            int64_t const h_q     = Q->second->get_dim()[1];
+            auto alibi_slopes_vec = detail::get_abili_slope(h_q);
+            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_pair(offset, alibi_slopes_vec));
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    virtual error_t
+    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
         if (attributes.dropout_probability.has_value() && attributes.dropout_probability.value() != 0.0) {
 #if CUDNN_VERSION < 8903
             half dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
 #else
             float dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
 #endif
-            tensor_to_pass_by_value.emplace(dropout_scale, dropout_scale_value);
+            tensor_to_pass_by_value.emplace(dropout_scale->get_uid(), dropout_scale_value);
         }
 
         if (negative_inf_padding) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
-            tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
+            tensor_to_pass_by_value.emplace(negative_inf_padding->get_uid(), negative_inf_value);
         }
 
         if (WAR_scalar_max_seq_kv) {
             auto const& v_dim = attributes.inputs.at(input_names::V)->get_dim();
             int32_t s_kv      = static_cast<int32_t>(v_dim[2]);
-            tensor_to_pass_by_value.emplace(WAR_scalar_max_seq_kv, s_kv);
+            tensor_to_pass_by_value.emplace(WAR_scalar_max_seq_kv->get_uid(), s_kv);
         }
 
         if (negative_inf_causal) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
-            tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
-        }
-
-        if (attributes.alibi_mask) {
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
-            int64_t const h            = Q->second->get_dim()[1];
-            auto h_alibi_slopes_vector = detail::get_abili_slope(h);
-            int64_t alibi_slopes_size  = h * sizeof(float);
-
-            cudaStream_t stream;
-            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
-            CHECK_CUDA_ERROR(cudaMemcpyAsync(
-                node_workspace, h_alibi_slopes_vector.data(), alibi_slopes_size, cudaMemcpyHostToDevice, stream));
-            tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
+            tensor_to_pass_by_value.emplace(negative_inf_causal->get_uid(), negative_inf_value);
         }
 
         if (attributes.attn_scale_value.has_value()) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Attn_scale, input_names::Attn_scale);
-            tensor_to_pass_by_value.emplace(Attn_scale->second, attributes.attn_scale_value.value());
+            tensor_to_pass_by_value.emplace(Attn_scale->second->get_uid(), attributes.attn_scale_value.value());
         }
 
         return {error_code_t::OK, ""};
@@ -1282,44 +1279,55 @@ class SDPABackwardNode : public INode {
         return alibi_slopes_size_padded + dQ_accum_size + softmax_sum_size;
     }
 
+    virtual error_t
+    workspace_modifications_tensors_(
+        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& workspace_modifications,
+        int64_t& offset) const override final {
+        if (attributes.alibi_mask) {
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
+            int64_t const h_q     = Q->second->get_dim()[1];
+            auto alibi_slopes_vec = detail::get_abili_slope(h_q);
+            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_pair(offset, alibi_slopes_vec));
+            int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
+            offset                           = offset + alibi_slopes_size_padded;
+        }
+
+        if (dQ_accum && !dQ_accum->get_is_virtual()) {
+            std::vector<float> dQ_accum_vec(dQ_accum_size / sizeof(float), 0.0f);
+            workspace_modifications.emplace(dQ_accum->get_uid(), std::make_pair(offset, dQ_accum_vec));
+            offset = offset + dQ_accum_size;
+        }
+
+        if (softmax_sum && !softmax_sum->get_is_virtual()) {
+            // There is no requirement for softmax_sum to be memset to 0
+            std::vector<float> f_vec = {};
+            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_pair(offset, f_vec));
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     error_t
-    pass_by_value_tensors_(
-        cudnnHandle_t handle,
-        std::unordered_map<std::shared_ptr<Tensor_attributes>, pass_by_values_t>& tensor_to_pass_by_value,
-        void* node_workspace) const override final {
+    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
         using input_names = SDPA_backward_attributes::input_names;
 
         if (one_tensor) {
-            tensor_to_pass_by_value.emplace(one_tensor, 1.0f);
+            tensor_to_pass_by_value.emplace(one_tensor->get_uid(), 1.0f);
         }
 
         if (attributes.attn_scale_value.has_value()) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Attn_scale, input_names::Attn_scale);
-            tensor_to_pass_by_value.emplace(Attn_scale->second, attributes.attn_scale_value.value());
-        }
-
-        if (attributes.alibi_mask) {
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
-            int64_t const h_q                = Q->second->get_dim()[1];
-            auto alibi_slopes_vec            = detail::get_abili_slope(h_q);
-            int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
-
-            cudaStream_t stream;
-            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
-            CHECK_CUDA_ERROR(cudaMemcpyAsync(
-                node_workspace, alibi_slopes_vec.data(), alibi_slopes_size, cudaMemcpyHostToDevice, stream));
-            tensor_to_pass_by_value.emplace(alibi_slopes, node_workspace);
-            node_workspace = static_cast<char*>(node_workspace) + alibi_slopes_size_padded;
+            tensor_to_pass_by_value.emplace(Attn_scale->second->get_uid(), attributes.attn_scale_value.value());
         }
 
         if (attributes.padding_mask) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
-            tensor_to_pass_by_value.emplace(negative_inf_padding, negative_inf_value);
+            tensor_to_pass_by_value.emplace(negative_inf_padding->get_uid(), negative_inf_value);
         }
 
         if (attributes.causal_mask) {
             float negative_inf_value = std::numeric_limits<float>::lowest();
-            tensor_to_pass_by_value.emplace(negative_inf_causal, negative_inf_value);
+            tensor_to_pass_by_value.emplace(negative_inf_causal->get_uid(), negative_inf_value);
         }
 
         if (attributes.dropout_probability.has_value()) {
@@ -1327,23 +1335,10 @@ class SDPABackwardNode : public INode {
             float dropout_scale_inv_value = (1.0f - attributes.dropout_probability.value());
 
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Dropout_scale, input_names::Dropout_scale);
-            tensor_to_pass_by_value.emplace(Dropout_scale->second, dropout_scale_value);
+            tensor_to_pass_by_value.emplace(Dropout_scale->second->get_uid(), dropout_scale_value);
 
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Dropout_scale_inv, input_names::Dropout_scale_inv);
-            tensor_to_pass_by_value.emplace(Dropout_scale_inv->second, dropout_scale_inv_value);
-        }
-
-        if (dQ_accum && !dQ_accum->get_is_virtual()) {
-            cudaStream_t stream;
-            CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
-            CHECK_CUDA_ERROR(cudaMemsetAsync(node_workspace, 0, dQ_accum_size, stream));
-            tensor_to_pass_by_value.emplace(dQ_accum, node_workspace);
-            node_workspace = static_cast<char*>(node_workspace) + dQ_accum_size;
-        }
-
-        if (softmax_sum && !softmax_sum->get_is_virtual()) {
-            // There is no requirement for softmax_sum to be memset to 0
-            tensor_to_pass_by_value.emplace(softmax_sum, node_workspace);
+            tensor_to_pass_by_value.emplace(Dropout_scale_inv->second->get_uid(), dropout_scale_inv_value);
         }
 
         return {error_code_t::OK, ""};
