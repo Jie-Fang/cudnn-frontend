@@ -785,7 +785,7 @@ get_abili_slope(int64_t const n_heads) {
 #pragma warning(push)
 #pragma warning(disable : 4244)  // this could be ommited with c++17 and contexpr
 #endif
-    int n = 1 << static_cast<int>(log2f(n_heads));
+    int n = 1 << static_cast<int>(log2(static_cast<double>(n_heads)));
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -794,12 +794,12 @@ get_abili_slope(int64_t const n_heads) {
     }
 
     for (int i = 0; i < 2 * (n_heads - n); i += 2) {
-        slope.push_back((float)(i + 1.0f) * 0.5f);
+        slope.push_back(static_cast<float>(i + 1) * 0.5f);
     }
 
     for (float& elem : slope) {
-        elem *= -8.0;
-        elem /= n;
+        elem *= -8.0f;
+        elem /= static_cast<float>(n);
         elem = powf(2.0, elem);
     }
 
