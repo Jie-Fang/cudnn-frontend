@@ -51,3 +51,18 @@ TEST_CASE("Validate conv node", "[conv][validate]") {
     // Check that error message contains name of tensor
     REQUIRE(status.get_message().find(X->get_name()) != std::string::npos);
 }
+
+TEST_CASE("Move", "[move]") {
+    namespace fe = cudnn_frontend;
+    auto validate = [](fe::graph::Graph graph) {
+        REQUIRE(graph.validate().is_good());
+    };
+    auto construct = []() {
+        fe::graph::Graph graph;
+        REQUIRE(graph.validate().is_good());
+        return graph;
+    };
+    fe::graph::Graph graph = construct();
+    REQUIRE(graph.validate().is_good());
+    validate(std::move(graph));
+}
