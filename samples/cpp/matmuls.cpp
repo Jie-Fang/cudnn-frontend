@@ -97,10 +97,10 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
     int64_t const k = 128;
 
     // Initialize input tensors with int8_t as proxy for fp8
-    Surface<int8_t> A_gpu(b * m * k, false); 
+    Surface<int8_t> A_gpu(b * m * k, false);
     Surface<int8_t> B_gpu(b * k * n, false);
 
-    Surface<float> A_descale_gpu(1, false); 
+    Surface<float> A_descale_gpu(1, false);
     Surface<float> B_descale_gpu(1, false);
 
     fe::graph::Graph graph{};
@@ -112,7 +112,7 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
                             .set_dim({b, m, k})
                             .set_stride({m * k, k, 1})
                             .set_data_type(fe::DataType_t::FP8_E4M3);
-    auto A            = graph.tensor(A_attributes);
+    auto A = graph.tensor(A_attributes);
 
     auto B_attributes = fe::graph::Tensor_attributes()
                             .set_name("B")
@@ -121,16 +121,12 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
                             .set_data_type(fe::DataType_t::FP8_E4M3);
     auto B = graph.tensor(B_attributes);
 
-    auto A_descale_attributes = fe::graph::Tensor_attributes()
-                            .set_name("A")
-                            .set_dim({1, 1 ,1})
-                            .set_stride({1, 1, 1})
-                            .set_data_type(fe::DataType_t::FLOAT);
-    auto B_descale_attributes = fe::graph::Tensor_attributes()
-                           .set_name("B")
-                           .set_dim({1, 1,1})
-                           .set_stride({1, 1, 1})
-                           .set_data_type(fe::DataType_t::FLOAT);
+    auto A_descale_attributes =
+        fe::graph::Tensor_attributes().set_name("A").set_dim({1, 1, 1}).set_stride({1, 1, 1}).set_data_type(
+            fe::DataType_t::FLOAT);
+    auto B_descale_attributes =
+        fe::graph::Tensor_attributes().set_name("B").set_dim({1, 1, 1}).set_stride({1, 1, 1}).set_data_type(
+            fe::DataType_t::FLOAT);
 
     auto A_descale = graph.tensor(A_descale_attributes);
     auto B_descale = graph.tensor(B_descale_attributes);
@@ -171,12 +167,16 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
     Surface<float> C_gpu(b * m * n, false);
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
-        {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C_after_pw_1, C_gpu.devPtr}, {A_descale, A_descale_gpu.devPtr}, {B_descale, B_descale_gpu.devPtr}};
+        {A, A_gpu.devPtr},
+        {B, B_gpu.devPtr},
+        {C_after_pw_1, C_gpu.devPtr},
+        {A_descale, A_descale_gpu.devPtr},
+        {B_descale, B_descale_gpu.devPtr}};
 
     std::cout << graph.print() << std::endl;
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     checkCudnnErr(cudnnDestroy(handle));
-} 
+}
 
 TEST_CASE("Mixed Precision Matmul", "[matmul][graph]") {
     if (cudnnGetCudartVersion() < 12000) {
