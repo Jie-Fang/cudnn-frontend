@@ -291,26 +291,24 @@ TEST_CASE("Int8 Matmul", "[matmul][graph]") {
     auto B = graph.tensor(B_attributes);
 
     auto Bias_attributes = cudnn_frontend::graph::Tensor_attributes()
-                        .set_name("Bias")
-                        .set_dim({b, m, n})
-                        .set_data_type(cudnn_frontend::DataType_t::FLOAT)
-                        .set_stride({m * n, n, 1});
+                               .set_name("Bias")
+                               .set_dim({b, m, n})
+                               .set_data_type(cudnn_frontend::DataType_t::FLOAT)
+                               .set_stride({m * n, n, 1});
     auto Bias = graph.tensor(Bias_attributes);
 
     // Add MATMUL operation
-    auto matmul_attributes =
-        cudnn_frontend::graph::Matmul_attributes()
-            .set_compute_data_type(cudnn_frontend::DataType_t::INT32)
-            .set_name("GEMM");
+    auto matmul_attributes = cudnn_frontend::graph::Matmul_attributes()
+                                 .set_compute_data_type(cudnn_frontend::DataType_t::INT32)
+                                 .set_name("GEMM");
     auto C = graph.matmul(A, B, matmul_attributes);
     C->set_data_type(cudnn_frontend::DataType_t::FLOAT);
 
     // Add ADD operation
     auto add_attributes = cudnn_frontend::graph::Pointwise_attributes()
-                            .set_name("pw1_add")
-                            .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
-                            .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT)
-                            ;
+                              .set_name("pw1_add")
+                              .set_mode(cudnn_frontend::PointwiseMode_t::ADD)
+                              .set_compute_data_type(cudnn_frontend::DataType_t::FLOAT);
     auto C_after_add = graph.pointwise(C, Bias, add_attributes);
     C_after_add->set_output(true).set_data_type(cudnn_frontend::DataType_t::FLOAT);
     REQUIRE(graph.validate().is_good());

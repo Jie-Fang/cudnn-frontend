@@ -883,6 +883,7 @@ if __name__ == "__main__":
     print("==========running forward tests==========")
     for option in all_options_forward:
         try:
+            print(f"Running {option}")
             test_sdpa(option)
         except pytest.skip.Exception as e:
             print(f"Skipped {option}: {e}")
