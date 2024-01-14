@@ -600,9 +600,9 @@ def test_sdpa_backward(input_type,
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
-    if (s_kv % 64 != 0) and layout == "non_interleaved":
-        pytest.skip("cudnn backend does not support non-interlaved layout with non-64-aligned seq_kv.")
-        
+    if (s_kv % 64 != 0) and is_bias:
+        pytest.skip("cudnn backend does not support bias with non-64-aligned seq_kv or seq_q.")
+
     if ((d_qk % 64 != 0) or (s_kv % 64 != 0)) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
 
