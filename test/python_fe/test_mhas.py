@@ -371,6 +371,9 @@ def test_sdpa(input_type,
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
+    if (s_q % 64 != 0) and cudnn.backend_version() == 8907:
+        pytest.xfail("s_q not a multiple of 64 is not supported with cudnn version 8.9.7.")
+
     if is_dropout and (s_kv % 64 != 0) and cudnn.backend_version() < 90000:
         pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
 
@@ -599,6 +602,12 @@ def test_sdpa_backward(input_type,
 
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
+
+    if (s_kv % 64 != 0) and (is_dropout or is_padding)and cudnn.backend_version() < 90000:
+        pytest.xfail("s_kv not a multiple of 64 with dropout dump or padding mask is not supported before cudnn version 9.0.0.")
+
+    if (s_q % 64 != 0) and (cudnn.backend_version() == 8907):
+        pytest.xfail("s_q not a multiple of 64 is not supported with cudnn version 8.9.7.")
 
     if ((s_kv % 64 != 0) or (s_q % 64 != 0)) and is_bias:
         pytest.skip("cudnn backend does not support bias with non-64-aligned seq_kv or seq_q.")

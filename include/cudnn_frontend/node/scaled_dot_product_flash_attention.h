@@ -126,9 +126,10 @@ class SDPANode : public INode {
             bool const has_dropout_mask =
                 (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
             bool const has_dropout = attributes.dropout_probability.has_value() || has_dropout_mask;
-            RETURN_CUDNN_FRONTEND_ERROR_IF(has_dropout,
-                                           error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "s_kv not a multiple of 64 is not supported with cudnn version below 9.0.0");
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                has_dropout,
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "s_kv not a multiple of 64 with dropout enabled is not supported with cudnn version below 9.0.0");
         }
 
         if (((s_kv % 64 != 0) || (d_qk % 64 != 0)) && (cudnnGetVersion() <= 8905)) {
