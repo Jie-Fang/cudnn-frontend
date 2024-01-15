@@ -375,14 +375,23 @@ def test_sdpa(input_type,
         if cudnn.backend_version() == 8907:
             pytest.xfail("s_q not a multiple of 64 is not supported with cudnn version 8.9.7.")
 
+        # https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4414692&cmtNo=
         if torch.cuda.get_device_capability()[0] < 9 and cudnn.backend_version() == 90000:
             pytest.xfail("s_q not a multiple of 64 is not supported with Ampere and earlier cards.")
 
-    if is_dropout and (s_kv % 64 != 0) and cudnn.backend_version() < 90000:
-        pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
+    if (s_kv % 64 != 0):
+        if is_dropout and cudnn.backend_version() < 90000:
+            pytest.skip("Dropout mask dump with not-multiple-of-64 seq_kv is not supported.")
 
-    if ((d_qk % 64 != 0) or (s_kv % 64 != 0)) and cudnn.backend_version() < 8906:
-        pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
+        if cudnn.backend_version() < 8906:
+            pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
+
+        # https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4414692&cmtNo=
+        if torch.cuda.get_device_capability()[0] < 9 and cudnn.backend_version() == 90000:
+            pytest.xfail("s_kv not a multiple of 64 is not supported with Ampere and earlier cards.")
+
+    if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
         
     print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
@@ -614,14 +623,28 @@ def test_sdpa_backward(input_type,
         if cudnn.backend_version() == 8907:
             pytest.xfail("s_q not a multiple of 64 is not supported with cudnn version 8.9.7.")
 
+        # https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4414692&cmtNo=
         if torch.cuda.get_device_capability()[0] < 9 and cudnn.backend_version() == 90000:
             pytest.xfail("s_q not a multiple of 64 is not supported with Ampere and earlier cards.")
 
-    if ((s_kv % 64 != 0) or (s_q % 64 != 0)) and is_bias:
-        pytest.skip("cudnn backend does not support bias with non-64-aligned seq_kv or seq_q.")
+        # https://nvbugswb.nvidia.com/NVBugs5/redir.aspx?url=/4445591
+        if is_bias:
+            pytest.skip("cudnn backend does not support bias with non-64-aligned seq_q.")
 
-    if ((d_qk % 64 != 0) or (s_kv % 64 != 0)) and cudnn.backend_version() < 8906:
-        pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
+    if (s_kv % 64 != 0):
+        # https://nvbugswb.nvidia.com/NVBugs5/redir.aspx?url=/4445591
+        if is_bias:
+            pytest.skip("cudnn backend does not support bias with non-64-aligned seq_kv.")
+
+        # https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4414692&cmtNo=
+        if torch.cuda.get_device_capability()[0] < 9 and cudnn.backend_version() == 90000:
+            pytest.xfail("s_kv not a multiple of 64 is not supported with Ampere and earlier cards.")
+
+        if cudnn.backend_version() < 8906:
+            pytest.skip("not-multiple-of-64 seq_kv is not supported below 8.9.6")
+
+    if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
     print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
