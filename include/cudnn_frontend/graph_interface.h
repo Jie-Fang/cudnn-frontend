@@ -215,16 +215,10 @@ class Graph : public INode {
 
     Graph &
     deselect_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
-        std::vector<cudnnBackendBehaviorNote_t> backend_notes;
-        for (auto &note : notes) {
-            cudnnBackendBehaviorNote_t backend_note;
-            detail::convert_to_cudnn_type(note, backend_note);
-            backend_notes.push_back(backend_note);
-        }
         for (auto &plan_list : plans) {
-            auto status = plan_list.filter_out_behavior_notes(backend_notes);
+            auto status = plan_list.deselect_behavior_notes(notes);
             if (status.is_bad()) {
-                getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
+                getLogger() << status.get_message() << std::endl;
             }
         }
         return *this;
@@ -232,16 +226,10 @@ class Graph : public INode {
 
     Graph &
     deselect_numeric_notes(std::vector<NumericalNote_t> const &notes) {
-        std::vector<cudnnBackendNumericalNote_t> backend_notes;
-        for (auto &note : notes) {
-            cudnnBackendNumericalNote_t backend_note;
-            detail::convert_to_cudnn_type(note, backend_note);
-            backend_notes.push_back(backend_note);
-        }
         for (auto &plan_list : plans) {
-            auto status = plan_list.filter_out_numeric_notes(backend_notes);
+            auto status = plan_list.deselect_numeric_notes(notes);
             if (status.is_bad()) {
-                getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
+                getLogger() << status.get_message() << std::endl;
             }
         }
         return *this;

@@ -264,10 +264,17 @@ class Execution_plan_list {
     }
 
     error_t
-    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
-        for (auto note : notes) {
+    deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
+        for (auto& note : notes) {
+            cudnnBackendNumericalNote_t backend_note;
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(detail::convert_to_cudnn_type(note, backend_note) != CUDNN_STATUS_SUCCESS,
+                                           error_code_t::CUDNN_BACKEND_API_FAILED,
+                                           "Unexpected behaviour note provided.");
+
             for (auto i = 0u; i < engine_configs.size(); i++) {
-                if (std::find(numeric_notes[i].begin(), numeric_notes[i].end(), note) != numeric_notes[i].end()) {
+                if (std::find(numeric_notes[i].begin(), numeric_notes[i].end(), backend_note) !=
+                    numeric_notes[i].end()) {
                     filtered_indices[i] = true;
                 }
             }
@@ -276,10 +283,17 @@ class Execution_plan_list {
     }
 
     error_t
-    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
-        for (auto note : notes) {
+    deselect_behavior_notes(std::vector<BehaviorNote_t> const& notes) {
+        for (auto& note : notes) {
+            cudnnBackendBehaviorNote_t backend_note;
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(detail::convert_to_cudnn_type(note, backend_note) != CUDNN_STATUS_SUCCESS,
+                                           error_code_t::CUDNN_BACKEND_API_FAILED,
+                                           "Unexpected behaviour note provided.");
+
             for (auto i = 0u; i < engine_configs.size(); i++) {
-                if (std::find(behavior_notes[i].begin(), behavior_notes[i].end(), note) != behavior_notes[i].end()) {
+                if (std::find(behavior_notes[i].begin(), behavior_notes[i].end(), backend_note) !=
+                    behavior_notes[i].end()) {
                     filtered_indices[i] = true;
                 }
             }
