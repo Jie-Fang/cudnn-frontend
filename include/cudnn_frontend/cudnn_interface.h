@@ -77,8 +77,24 @@ class ICudnn {
             tensor_builder.setRaggedOffset(tensors.at(ragged_offset_props->get_uid()));
         }
 
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+        // disable exception macro is defined. Calling build will not throw.
+        // Check status of desc and return error.
         auto tensor = tensor_builder.build();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            tensor.get_status() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, tensor.get_error());
         tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+#else
+        // build() can throw
+        // wrap in try catch
+        try {
+            auto tensor = tensor_builder.build();
+            tensors.emplace(props->get_uid(), std::make_shared<Tensor>(std::move(tensor)));
+        } catch (cudnn_frontend::cudnnException& e) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
+        }
+#endif
 
         return {error_code_t::OK, ""};
     }
