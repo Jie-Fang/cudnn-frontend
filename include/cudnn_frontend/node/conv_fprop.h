@@ -36,6 +36,15 @@ class ConvolutionNode : public INode {
 
         CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_fprop_attributes::output_names::Y);
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.get_pre_padding().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Pre padding not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.get_post_padding().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Post padding not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.get_stride().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Conv strides not set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.get_dilation().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Conv dilation not set.");
+
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
@@ -125,44 +134,50 @@ class ConvolutionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ConvolutionNode operations " << attributes.name << "..." << std::endl;
 
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        // convolution descriptor
+        int64_t const spatial_dim_count = attributes.get_pre_padding().size();
+        auto convolution_descriptor     = cudnn_frontend::ConvDescBuilder()
+                                          .setComputeType(attributes.compute_data_type)
+                                          .setMathMode(CUDNN_CROSS_CORRELATION)
+                                          .setSpatialDimCount(spatial_dim_count)
+                                          .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
+                                          .setPrePadding(spatial_dim_count, attributes.get_pre_padding().data())
+                                          .setPostPadding(spatial_dim_count, attributes.get_post_padding().data())
+                                          .setDilation(spatial_dim_count, attributes.get_dilation().data())
+                                          .build();
+
+        // Create the convolution operation.
+        auto&& convolution_operation_builder =
+            cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR);
+
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Conv_fprop_attributes::input_names::X);
+        convolution_operation_builder.setxDesc(*(tensors[X->second->get_uid()]));
+
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(W, Conv_fprop_attributes::input_names::W);
+        convolution_operation_builder.setwDesc(*(tensors[W->second->get_uid()]));
+
+        CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Conv_fprop_attributes::output_names::Y);
+        convolution_operation_builder.setyDesc(*(tensors[Y->second->get_uid()]));
+
+        convolution_operation_builder.setcDesc(convolution_descriptor).setAlpha(1.f).setBeta(0.f);
+
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+        // disable exception macro is defined. Calling build will not throw.
+        // Check status of desc and return error.
+        auto operation = convolution_operation_builder.build();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(operation.get_status() != CUDNN_STATUS_SUCCESS,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       operation.get_error());
+        operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
+#else
+        // build() can throw
+        // wrap in try catch
         try {
-#endif
-
-            // convolution descriptor
-            int64_t const spatial_dim_count = attributes.get_pre_padding().size();
-            auto convolution_descriptor     = cudnn_frontend::ConvDescBuilder()
-                                              .setComputeType(attributes.compute_data_type)
-                                              .setMathMode(CUDNN_CROSS_CORRELATION)
-                                              .setSpatialDimCount(spatial_dim_count)
-                                              .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
-                                              .setPrePadding(spatial_dim_count, attributes.get_pre_padding().data())
-                                              .setPostPadding(spatial_dim_count, attributes.get_post_padding().data())
-                                              .setDilation(spatial_dim_count, attributes.get_dilation().data())
-                                              .build();
-
-            // Create the convolution operation.
-            auto&& convolution_operation_builder =
-                cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR);
-
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Conv_fprop_attributes::input_names::X);
-            convolution_operation_builder.setxDesc(*(tensors[X->second->get_uid()]));
-
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(W, Conv_fprop_attributes::input_names::W);
-            convolution_operation_builder.setwDesc(*(tensors[W->second->get_uid()]));
-
-            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Conv_fprop_attributes::output_names::Y);
-            convolution_operation_builder.setyDesc(*(tensors[Y->second->get_uid()]));
-
-            convolution_operation_builder.setcDesc(convolution_descriptor).setAlpha(1.f).setBeta(0.f);
-
             auto operation = convolution_operation_builder.build();
-
             operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
-            throw cudnnException(e.what(), e.getCudnnStatus());
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
         }
 #endif
 
