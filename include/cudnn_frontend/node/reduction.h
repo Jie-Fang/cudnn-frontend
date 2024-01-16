@@ -104,33 +104,39 @@ class ReductionNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building ReductionNode operations " << attributes.name << "..." << std::endl;
 
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
+                                        .setComputeType(attributes.compute_data_type)
+                                        .setReductionOp(attributes.get_mode().value())
+                                        .build();
+
+        auto&& reduction_operation_builder =
+            cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
+
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Reduction_attributes::input_names::X);
+        reduction_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
+
+        CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Reduction_attributes::output_names::Y);
+        reduction_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
+
+        reduction_operation_builder.setreductionDesc(reduction_descriptor);
+
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+        // disable exception macro is defined. Calling build will not throw.
+        // Check status of desc and return error.
+        auto operation = reduction_operation_builder.build();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(operation.get_status() != CUDNN_STATUS_SUCCESS,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       operation.get_error());
+        operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
+#else
+        // build() can throw
+        // wrap in try catch
         try {
-#endif
-
-            auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
-                                            .setComputeType(attributes.compute_data_type)
-                                            .setReductionOp(attributes.get_mode().value())
-                                            .build();
-
-            auto&& reduction_operation_builder =
-                cudnn_frontend::OperationBuilder(CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR);
-
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(X, Reduction_attributes::input_names::X);
-            reduction_operation_builder.setxDesc(*(tensors.at(X->second->get_uid())));
-
-            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Reduction_attributes::output_names::Y);
-            reduction_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
-
-            reduction_operation_builder.setreductionDesc(reduction_descriptor);
-
             auto operation = reduction_operation_builder.build();
-
             operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
-            throw cudnnException(e.what(), e.getCudnnStatus());
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
         }
 #endif
 
