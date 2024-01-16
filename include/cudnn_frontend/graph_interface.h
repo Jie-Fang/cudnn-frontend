@@ -192,6 +192,9 @@ class Graph : public INode {
     error_t
     create_execution_plans(std::vector<HeurMode_t> const &mode);
 
+    std::vector<size_t>
+    get_execution_plan_count();
+
     error_t
     check_support(cudnnHandle_t h) {
         for (auto &plan_list : plans) {
@@ -293,6 +296,15 @@ class Graph : public INode {
         return ss.str();
     }
 };
+
+inline std::vector<size_t>
+Graph::get_execution_plan_count() {
+    std::vector<size_t> plan_count;
+    for (auto &plan_list : plans) {
+        plan_count.push_back(plan_list.get_count());
+    }
+    return plan_count;
+}
 
 inline error_t
 Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {

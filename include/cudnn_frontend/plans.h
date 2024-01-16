@@ -429,6 +429,11 @@ class Execution_plan_list {
         return max_size;
     }
 
+    size_t
+    get_count() {
+        return execution_plans.size();
+    }
+
     std::shared_ptr<ExecutionPlan>
     get_best_candidate() const {
         if (!candidate) return nullptr;
