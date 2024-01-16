@@ -208,6 +208,9 @@ class Graph : public INode {
                 BuildPlanPolicy_t const policy     = BuildPlanPolicy_t::HEURISTICS_CHOICE,
                 bool const do_multithreaded_builds = false);
 
+    error_t
+    build_plan_index(cudnnHandle_t const &handle, std::vector<size_t> index);
+
     Graph &
     deselect_workspace_greater_than(int64_t const workspace) {
         for (auto &plan_list : plans) {
@@ -325,6 +328,14 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
         plans.emplace_back(std::move(plan_list));
     }
 
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+Graph::build_plan_index(cudnnHandle_t const &handle, std::vector<size_t> plan_indices) {
+    for (auto i = 0u; i < plans.size(); i++) {
+        CHECK_CUDNN_FRONTEND_ERROR(plans[i].build_plan_index(handle, plan_indices[i]));
+    }
     return {error_code_t::OK, ""};
 }
 

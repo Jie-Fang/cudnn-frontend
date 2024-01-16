@@ -370,6 +370,17 @@ class Execution_plan_list {
     }
 
     error_t
+    build_plan_index(cudnnHandle_t handle, size_t index) {
+        auto fe_status =
+            detail::create_cudnn_execution_plan(execution_plans[index], engine_configs[index], operation_tag, handle);
+
+        getLogger() << "[cudnn_frontend] INFO: Building plan at index " << index << " gave " << fe_status.get_code()
+                    << " with message: " << fe_status.get_message() << std::endl;
+
+        return fe_status;
+    }
+
+    error_t
     build_plans(cudnnHandle_t handle, BuildPlanPolicy_t const policy, bool const do_multithreaded_builds) {
         RETURN_CUDNN_FRONTEND_ERROR_IF(do_multithreaded_builds,
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
