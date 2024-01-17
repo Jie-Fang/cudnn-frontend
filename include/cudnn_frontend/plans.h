@@ -175,14 +175,16 @@ class Execution_plan_list {
 
     int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
-    // Stores position of best plan in above vector of execution plan
-    std::optional<size_t> candidate;
-
     EngineConfigList engine_configs;
+
+   public:
     std::vector<std::shared_ptr<ExecutionPlan>>
         execution_plans;  // a built plan corresponding to each engine config, irrespective of whether config is
                           // selected or deselected.
-   public:
+
+    // Stores position of best plan in above vector of execution plan
+    int64_t candidate = -1;
+
     void
     set_tag(std::string const& tag) {
         operation_tag = tag;
@@ -347,7 +349,7 @@ class Execution_plan_list {
                     continue;
                 }
 
-                candidate = i;
+                candidate = static_cast<int64_t>(i);
                 return {error_code_t::OK, ""};
             }
         }
@@ -370,7 +372,11 @@ class Execution_plan_list {
     }
 
     error_t
-    build_plan_index(cudnnHandle_t handle, size_t index) {
+    build_plan_index(cudnnHandle_t handle, int64_t index) {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(filtered_indices[index] == true,
+                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                       "Chosen plan index has been deselected.");
+
         auto fe_status =
             detail::create_cudnn_execution_plan(execution_plans[index], engine_configs[index], operation_tag, handle);
 
@@ -386,47 +392,35 @@ class Execution_plan_list {
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                        "Doing multithreaded builds is not yet supported.");
 
-        switch (policy) {
-            case BuildPlanPolicy_t::HEURISTICS_CHOICE:
-
-                // short circuit in case a plan was already created.
-                // This happens as check_support for v8 builds a plan.
-                if (candidate.has_value()) {
-                    return {error_code_t::OK, ""};
-                }
-
-                for (auto i = 0u; i < engine_configs.size(); i++) {
-                    auto fe_status = detail::create_cudnn_execution_plan(
-                        execution_plans[i], engine_configs[i], operation_tag, handle);
-                    getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave "
-                                << fe_status.get_code() << " with message: " << fe_status.get_message() << std::endl;
-
-                    if (fe_status.is_good() && execution_plans[i]->getWorkspaceSize() <= max_workspace_allowed) {
-                        candidate = i;
-                        // Return from this function has first successfully built plan is found.
-                        return {error_code_t::OK, ""};
-                        ;
-                    }
-                }
-                break;
-            case BuildPlanPolicy_t::ALL:
-
-                for (auto i = 0u; i < engine_configs.size(); i++) {
-                    auto fe_status = detail::create_cudnn_execution_plan(
-                        execution_plans[i], engine_configs[i], operation_tag, handle);
-                    getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave "
-                                << fe_status.get_code() << " with message: " << fe_status.get_message() << std::endl;
-
-                    if (!candidate) {
-                        candidate = i;
-                    }
-                }
-                break;
+        // short circuit in case a plan was already created.
+        // This happens as check_support for v8 builds a plan.
+        if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE && candidate != -1) {
+            return {error_code_t::OK, ""};
         }
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.empty(),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "No execution plans finalized successfully. Hence, not supported.");
+        for (auto i = 0u; i < engine_configs.size(); i++) {
+            if (filtered_indices[i]) {
+                getLogger() << "[cudnn_frontend] INFO: Skipping deselected engine plan at index " << i << std::endl;
+                continue;
+            }
+
+            auto fe_status =
+                detail::create_cudnn_execution_plan(execution_plans[i], engine_configs[i], operation_tag, handle);
+            getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
+                        << " with message: " << fe_status.get_message() << std::endl;
+
+            if (fe_status.is_good() && execution_plans[i]->getWorkspaceSize() <= max_workspace_allowed) {
+                // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
+                if (candidate == -1) {
+                    candidate = static_cast<int64_t>(i);
+                }
+
+                // Return from this function as first successfully built plan is found.
+                if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
+                    return {error_code_t::OK, ""};
+                }
+            }
+        }
 
         return {error_code_t::OK, ""};
     }
@@ -438,17 +432,6 @@ class Execution_plan_list {
             max_size = std::max(max_size, plan->getWorkspaceSize());
         }
         return max_size;
-    }
-
-    size_t
-    get_count() {
-        return execution_plans.size();
-    }
-
-    std::shared_ptr<ExecutionPlan>
-    get_best_candidate() const {
-        if (!candidate) return nullptr;
-        return execution_plans[candidate.value()];
     }
 
     static error_t

@@ -66,7 +66,13 @@ class INode : public ICudnn {
 
     int64_t
     get_cudnn_workspace_size() const {
-        int64_t cudnn_workspace_size = get_cudnn_workspace_size_node();
+        int64_t cudnn_workspace_size = 0;
+
+        auto status = get_cudnn_workspace_size_node(cudnn_workspace_size);
+        if (status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Querying workspace failed." << std::endl;
+        }
+
         for (auto const& sub_node : sub_nodes) {
             cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size());
         }
@@ -563,7 +569,8 @@ class INode : public ICudnn {
         j["cudnn_backend_data"];
         int index = 0;
         for (auto& plan_list : plans) {
-            auto execution_plan = plan_list.get_best_candidate();
+            auto const candidate = plan_list.candidate;
+            auto execution_plan  = plan_list.execution_plans[candidate];
             if (execution_plan != nullptr) {
                 auto serialized_plan = execution_plan->getJsonRepresentation();
                 j["cudnn_backend_data"].push_back(serialized_plan);

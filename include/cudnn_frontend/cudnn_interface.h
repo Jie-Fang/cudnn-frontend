@@ -117,14 +117,17 @@ class ICudnn {
     }
 
    public:
-    int64_t
-    get_cudnn_workspace_size_node() const {
-        int64_t current_workspace_size = 0;
+    error_t
+    get_cudnn_workspace_size_node(int64_t& cudnn_workspace_size) const {
         for (auto const& execution_plan_list : plans) {
-            current_workspace_size =
-                std::max(current_workspace_size, execution_plan_list.get_best_candidate()->getWorkspaceSize());
+            auto const candidate = execution_plan_list.candidate;
+            RETURN_CUDNN_FRONTEND_ERROR_IF(candidate == -1,
+                                           error_code_t::GRAPH_EXECUTION_FAILED,
+                                           "No candidate plan found for graph to query worksapce for.");
+            cudnn_workspace_size =
+                std::max(cudnn_workspace_size, execution_plan_list.execution_plans[candidate]->getWorkspaceSize());
         }
-        return current_workspace_size;
+        return {error_code_t::OK, ""};
     }
 
     int64_t
@@ -157,8 +160,13 @@ class ICudnn {
             }
 
             // Run the best plan in this plan list
+            auto const candidate = plans[i].candidate;
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(candidate == -1,
+                                           error_code_t::GRAPH_EXECUTION_FAILED,
+                                           "No candidate plan found for graph to execute with.");
             CHECK_CUDNN_FRONTEND_ERROR(
-                detail::execute(handle, plans[i].get_best_candidate().get(), device_ptrs, uids, workspace_ptr));
+                detail::execute(handle, plans[i].execution_plans[candidate].get(), device_ptrs, uids, workspace_ptr));
         }
 
         return {error_code_t::OK, ""};

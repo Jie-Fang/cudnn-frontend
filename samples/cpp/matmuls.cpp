@@ -471,7 +471,15 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
+    size_t plan_count = graph.get_execution_plan_count();
+
+    std::vector<size_t> successful_plans;
+    for (auto plan_index = 0u; plan_index < plan_count; plan_index++) {
+        bool did_build_successfully = graph.build_plan_index(handle, plan_index).is_good();
+        if (did_build_successfully) {
+            successful_plans.push_back(plan_index);
+        }
+    }
 
     // Run cudnn graph
     Surface<float> C_gpu(b * m * n, false);
