@@ -486,7 +486,8 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     Surface<int8_t> workspace(graph.get_workspace_size(), false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C, C_gpu.devPtr}, {Bias, Bias_gpu.devPtr}};
-    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr, 6).is_bad());
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr, 2).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
 
