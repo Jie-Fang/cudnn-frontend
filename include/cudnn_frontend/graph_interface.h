@@ -192,7 +192,7 @@ class Graph : public INode {
     error_t
     create_execution_plans(std::vector<HeurMode_t> const &mode);
 
-    std::vector<size_t>
+    size_t
     get_execution_plan_count();
 
     error_t
@@ -209,7 +209,7 @@ class Graph : public INode {
                 bool const do_multithreaded_builds = false);
 
     error_t
-    build_plan_index(cudnnHandle_t const &handle, std::vector<size_t> index);
+    build_plan_index(cudnnHandle_t const &handle, size_t index);
 
     Graph &
     deselect_workspace_greater_than(int64_t const workspace) {
@@ -300,11 +300,11 @@ class Graph : public INode {
     }
 };
 
-inline std::vector<size_t>
+inline size_t
 Graph::get_execution_plan_count() {
-    std::vector<size_t> plan_count;
+    size_t plan_count = 1;
     for (auto &plan_list : plans) {
-        plan_count.push_back(plan_list.get_count());
+        plan_count *= plan_list.get_count();
     }
     return plan_count;
 }
@@ -332,9 +332,9 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 }
 
 inline error_t
-Graph::build_plan_index(cudnnHandle_t const &handle, std::vector<size_t> plan_indices) {
+Graph::build_plan_index(cudnnHandle_t const &handle, size_t plan_index) {
     for (auto i = 0u; i < plans.size(); i++) {
-        CHECK_CUDNN_FRONTEND_ERROR(plans[i].build_plan_index(handle, plan_indices[i]));
+        CHECK_CUDNN_FRONTEND_ERROR(plans[i].build_plan_index(handle, plan_index));
     }
     return {error_code_t::OK, ""};
 }
