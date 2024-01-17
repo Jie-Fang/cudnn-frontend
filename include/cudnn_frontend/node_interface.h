@@ -65,16 +65,16 @@ class INode : public ICudnn {
     }
 
     int64_t
-    get_cudnn_workspace_size() const {
+    get_cudnn_workspace_size(int64_t plan_index) const {
         int64_t cudnn_workspace_size = 0;
 
-        auto status = get_cudnn_workspace_size_node(cudnn_workspace_size);
+        auto status = get_cudnn_workspace_size_node(cudnn_workspace_size, plan_index);
         if (status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Querying workspace failed." << std::endl;
         }
 
         for (auto const& sub_node : sub_nodes) {
-            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size());
+            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size(plan_index));
         }
         return cudnn_workspace_size;
     }
@@ -406,11 +406,11 @@ class INode : public ICudnn {
     }
 
     int64_t
-    get_workspace_size() const {
+    get_workspace_size(int64_t plan_index = -1) const {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
-        return get_fe_workspace_size() + get_cudnn_workspace_size();
+        return get_fe_workspace_size() + get_cudnn_workspace_size(plan_index);
     }
 
     int64_t
