@@ -86,6 +86,7 @@ class SDPANode : public INode {
 #undef CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE
 
         // validate backend limitations for the operation
+        int64_t s_q  = attributes.inputs.at(input_names::Q)->get_dim()[2];
         int64_t h_q  = attributes.inputs.at(input_names::Q)->get_dim()[1];
         int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
         int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
@@ -137,6 +138,13 @@ class SDPANode : public INode {
                 true,
                 error_code_t::GRAPH_NOT_SUPPORTED,
                 "s_kv not a multiple of 64 or d not a multiple of 64 is not supported with cudnn version below 8.9.6");
+        }
+
+        if ((s_q % 64 != 0) && (attributes.padding_mask) && (cudnnGetVersion() < 90000)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                true,
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "s_q not a multiple of 64 with padding mask is not supported with cudnn version below 9.0.0");
         }
 
         // validate options for padding mask
@@ -665,10 +673,23 @@ class SDPABackwardNode : public INode {
 
         // validate backend limitations for the operation
         int64_t h_q  = attributes.inputs.at(input_names::Q)->get_dim()[1];
+        int64_t s_q  = attributes.inputs.at(input_names::Q)->get_dim()[2];
         int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
         int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
         int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
-        int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
+        // int64_t s_kv = attributes.inputs.at(input_names::V)->get_dim()[2];
+        int64_t d_v = attributes.inputs.at(input_names::V)->get_dim()[3];
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (s_q < 64) && cudnnGetVersion() < 90000,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Sequence length must be greater than or equal to 64 for cudnn version prior to v9.0.0");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (s_q % 64 != 0) && (attributes.padding_mask) && (cudnnGetVersion() < 90000),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Sequence length must be a multiple of 64 with padding mask for cudnn version prior to v9.0.0");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For group-query attention, number of heads for key and query must be a factor "
