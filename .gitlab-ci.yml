@@ -17,7 +17,7 @@ stages:
 .fetch_cudnn:template:
     before_script:
         - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v8.9_cuda_12.2/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "8.9.7" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -2 | head -1`
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "8.9.7" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
@@ -27,7 +27,7 @@ stages:
 .fetch_cudnn_v9:template:
     before_script:
         - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.0_cuda_12.3/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.0.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -2 | head -1`
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.0.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
