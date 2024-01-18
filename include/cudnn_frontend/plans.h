@@ -345,6 +345,7 @@ class Execution_plan_list {
             if (fe_status.is_good()) {
                 // Filter out execution plans with workspace greater than whats available from user
                 if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
+                    filtered_indices[i] = true;
                     getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
                     continue;
                 }
@@ -385,7 +386,11 @@ class Execution_plan_list {
 
         // Sets candidate in case user does not call execute with plan_index later.
         if (fe_status.is_good()) {
-            candidate = index;
+            if (execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed) {
+                candidate = index;
+            } else {
+                filtered_indices[index] = true;
+            }
         }
 
         return fe_status;
@@ -414,7 +419,11 @@ class Execution_plan_list {
             getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
                         << " with message: " << fe_status.get_message() << std::endl;
 
-            if (fe_status.is_good() && execution_plans[i]->getWorkspaceSize() <= max_workspace_allowed) {
+            if (fe_status.is_good()) {
+                if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
+                    filtered_indices[i] = true;
+                    continue;
+                }
                 // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
                 if (candidate == -1) {
                     candidate = static_cast<int64_t>(i);
