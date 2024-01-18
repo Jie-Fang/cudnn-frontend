@@ -21,6 +21,9 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <random>
+
 #include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
@@ -471,13 +474,16 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-    size_t plan_count = graph.get_execution_plan_count();
+    int64_t plan_count = graph.get_execution_plan_count();
 
-    std::vector<size_t> successful_plans;
-    for (auto plan_index = 0u; plan_index < plan_count; plan_index++) {
+    std::vector<int64_t> successful_plans;
+    std::vector<int64_t> unsuccessful_plans;
+    for (int64_t plan_index = 0; plan_index < plan_count; plan_index++) {
         bool did_build_successfully = graph.build_plan_index(handle, plan_index).is_good();
         if (did_build_successfully) {
             successful_plans.push_back(plan_index);
+        } else {
+            unsuccessful_plans.push_back(plan_index);
         }
     }
 
@@ -485,10 +491,25 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     Surface<float> C_gpu(b * m * n, false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C, C_gpu.devPtr}, {Bias, Bias_gpu.devPtr}};
-    REQUIRE(graph.execute(handle, variant_pack, nullptr, 6).is_bad());
 
-    Surface<int8_t> workspace(graph.get_workspace_size(2), false);
-    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr, 2).is_good());
+    // Run a unsuccessful engine and except error
+    std::vector<int64_t> random_unsuccessful;
+    std::sample(unsuccessful_plans.begin(),
+                unsuccessful_plans.end(),
+                std::back_inserter(random_unsuccessful),
+                1,
+                std::mt19937{std::random_device{}()});
+    REQUIRE(graph.execute(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
+
+    // Run a successful engine and except success
+    std::vector<int64_t> random_successful;
+    std::sample(successful_plans.begin(),
+                successful_plans.end(),
+                std::back_inserter(random_successful),
+                1,
+                std::mt19937{std::random_device{}()});
+    Surface<int8_t> workspace(graph.get_workspace_size(random_successful.front()), false);
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr, random_successful.front()).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
 
