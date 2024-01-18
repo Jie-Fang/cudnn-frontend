@@ -499,7 +499,9 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                 std::back_inserter(random_unsuccessful),
                 1,
                 std::mt19937{std::random_device{}()});
-    REQUIRE(graph.execute(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
+    if (random_unsuccessful.size()) {
+        REQUIRE(graph.execute(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
+    }
 
     // Run a successful engine and except success
     std::vector<int64_t> random_successful;
