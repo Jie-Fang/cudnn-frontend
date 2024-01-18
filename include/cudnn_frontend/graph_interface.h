@@ -192,6 +192,9 @@ class Graph : public INode {
     error_t
     create_execution_plans(std::vector<HeurMode_t> const &mode);
 
+    int64_t
+    get_execution_plan_count() const;
+
     error_t
     check_support(cudnnHandle_t h) {
         for (auto &plan_list : plans) {
@@ -205,6 +208,9 @@ class Graph : public INode {
                 BuildPlanPolicy_t const policy     = BuildPlanPolicy_t::HEURISTICS_CHOICE,
                 bool const do_multithreaded_builds = false);
 
+    error_t
+    build_plan_index(cudnnHandle_t const &handle, int64_t index);
+
     Graph &
     deselect_workspace_greater_than(int64_t const workspace) {
         for (auto &plan_list : plans) {
@@ -215,16 +221,10 @@ class Graph : public INode {
 
     Graph &
     deselect_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
-        std::vector<cudnnBackendBehaviorNote_t> backend_notes;
-        for (auto &note : notes) {
-            cudnnBackendBehaviorNote_t backend_note;
-            detail::convert_to_cudnn_type(note, backend_note);
-            backend_notes.push_back(backend_note);
-        }
         for (auto &plan_list : plans) {
-            auto status = plan_list.filter_out_behavior_notes(backend_notes);
+            auto status = plan_list.deselect_behavior_notes(notes);
             if (status.is_bad()) {
-                getLogger() << "[cudnn_frontend] ERROR: Filtering by behavioural notes failed." << std::endl;
+                getLogger() << status.get_message() << std::endl;
             }
         }
         return *this;
@@ -232,16 +232,10 @@ class Graph : public INode {
 
     Graph &
     deselect_numeric_notes(std::vector<NumericalNote_t> const &notes) {
-        std::vector<cudnnBackendNumericalNote_t> backend_notes;
-        for (auto &note : notes) {
-            cudnnBackendNumericalNote_t backend_note;
-            detail::convert_to_cudnn_type(note, backend_note);
-            backend_notes.push_back(backend_note);
-        }
         for (auto &plan_list : plans) {
-            auto status = plan_list.filter_out_numeric_notes(backend_notes);
+            auto status = plan_list.deselect_numeric_notes(notes);
             if (status.is_bad()) {
-                getLogger() << "[cudnn_frontend] ERROR: Filtering by numerical notes failed." << std::endl;
+                getLogger() << status.get_message() << std::endl;
             }
         }
         return *this;
@@ -306,6 +300,15 @@ class Graph : public INode {
     }
 };
 
+inline int64_t
+Graph::get_execution_plan_count() const {
+    int64_t plan_count = 0;
+    for (auto &plan_list : plans) {
+        plan_count += plan_list.execution_plans.size();
+    }
+    return plan_count;
+}
+
 inline error_t
 Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     std::unordered_map<std::string, EngineConfigList> op_graph_to_configs;
@@ -325,6 +328,14 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
         plans.emplace_back(std::move(plan_list));
     }
 
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+Graph::build_plan_index(cudnnHandle_t const &handle, int64_t plan_index) {
+    for (auto i = 0u; i < plans.size(); i++) {
+        CHECK_CUDNN_FRONTEND_ERROR(plans[i].build_plan_index(handle, plan_index));
+    }
     return {error_code_t::OK, ""};
 }
 

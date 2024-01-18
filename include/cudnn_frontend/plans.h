@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -168,18 +169,21 @@ create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
 namespace graph {
 class Execution_plan_list {
     std::string operation_tag;
-    EngineConfigList engine_configs;
     std::vector<std::vector<cudnnBackendNumericalNote_t>> numeric_notes;
     std::vector<std::vector<cudnnBackendNumericalNote_t>> behavior_notes;
-
     std::vector<bool> filtered_indices;
+
     int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
-    std::shared_ptr<ExecutionPlan> candidate;
+    EngineConfigList engine_configs;
 
    public:
     std::vector<std::shared_ptr<ExecutionPlan>>
-        execution_plans;  // Filtered engine configs that have been made as plans
+        execution_plans;  // a built plan corresponding to each engine config, irrespective of whether config is
+                          // selected or deselected.
+
+    // Stores position of best plan in above vector of execution plan
+    int64_t candidate = -1;
 
     void
     set_tag(std::string const& tag) {
@@ -199,7 +203,10 @@ class Execution_plan_list {
     query_properties() {
         numeric_notes.reserve(engine_configs.size());
         behavior_notes.reserve(engine_configs.size());
-        filtered_indices.resize(engine_configs.size());
+
+        filtered_indices.resize(engine_configs.size(), 0);
+        execution_plans.resize(engine_configs.size());
+
         for (auto& engine_config : engine_configs) {
             int64_t elem_count = 0;
             std::vector<cudnnBackendNumericalNote_t> numerics;
@@ -264,10 +271,17 @@ class Execution_plan_list {
     }
 
     error_t
-    filter_out_numeric_notes(std::vector<cudnnBackendNumericalNote_t> const& notes) {
-        for (auto note : notes) {
+    deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
+        for (auto& note : notes) {
+            cudnnBackendNumericalNote_t backend_note;
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(detail::convert_to_cudnn_type(note, backend_note) != CUDNN_STATUS_SUCCESS,
+                                           error_code_t::CUDNN_BACKEND_API_FAILED,
+                                           "Unexpected behaviour note provided.");
+
             for (auto i = 0u; i < engine_configs.size(); i++) {
-                if (std::find(numeric_notes[i].begin(), numeric_notes[i].end(), note) != numeric_notes[i].end()) {
+                if (std::find(numeric_notes[i].begin(), numeric_notes[i].end(), backend_note) !=
+                    numeric_notes[i].end()) {
                     filtered_indices[i] = true;
                 }
             }
@@ -276,10 +290,17 @@ class Execution_plan_list {
     }
 
     error_t
-    filter_out_behavior_notes(std::vector<cudnnBackendBehaviorNote_t> const& notes) {
-        for (auto note : notes) {
+    deselect_behavior_notes(std::vector<BehaviorNote_t> const& notes) {
+        for (auto& note : notes) {
+            cudnnBackendBehaviorNote_t backend_note;
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(detail::convert_to_cudnn_type(note, backend_note) != CUDNN_STATUS_SUCCESS,
+                                           error_code_t::CUDNN_BACKEND_API_FAILED,
+                                           "Unexpected behaviour note provided.");
+
             for (auto i = 0u; i < engine_configs.size(); i++) {
-                if (std::find(behavior_notes[i].begin(), behavior_notes[i].end(), note) != behavior_notes[i].end()) {
+                if (std::find(behavior_notes[i].begin(), behavior_notes[i].end(), backend_note) !=
+                    behavior_notes[i].end()) {
                     filtered_indices[i] = true;
                 }
             }
@@ -309,41 +330,70 @@ class Execution_plan_list {
 
     error_t
     check_support(cudnnHandle_t handle) {
-        auto const& configs = get_filtered_engine_configs();
-        for (auto const& config : configs) {
-            std::shared_ptr<ExecutionPlan> plan;
-            auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
+        for (auto i = 0u; i < engine_configs.size(); i++) {
+            if (filtered_indices[i]) {
+                getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
+                continue;
+            }
 
-            if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.size(),
-                                               error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                                               "[cudnn_frontend] Check support or build called already.");
+            auto const& config = engine_configs[i];
+            auto fe_status     = detail::create_cudnn_execution_plan(execution_plans[i], config, operation_tag, handle);
+            getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
+                        << " with message: " << fe_status.get_message() << std::endl;
 
-                // No plans should be pushed here.
-                // But check_support in v8 incurs compilation cost.
-                // If not pushed, build_plans will incur compilation cost again.
-                // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
-                // if(cudnnGetVersion() < 9100)
-                { execution_plans.push_back(std::move(plan)); }
+            // If a plan is built successfully, set it as a candidate
+            if (fe_status.is_good()) {
+                // Filter out execution plans with workspace greater than whats available from user
+                if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
+                    filtered_indices[i] = true;
+                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
+                    continue;
+                }
+
+                candidate = static_cast<int64_t>(i);
                 return {error_code_t::OK, ""};
             }
         }
 
+        // No plans were able to be built. Return error.
         return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                 "[cudnn_frontend] Error: No execution plans built successfully."};
     }
 
     error_t
     build_plans(cudnnHandle_t handle, std::string const& json) {
-        std::shared_ptr<ExecutionPlan> plan;
-        auto const& fe_status = detail::create_cudnn_execution_plan(plan, json, handle);
+        execution_plans.resize(1);
+        auto const& fe_status = detail::create_cudnn_execution_plan(execution_plans[0], json, handle);
 
         if (fe_status.is_good()) {
-            execution_plans.push_back(std::move(plan));
-        } else {
-            return fe_status;
+            candidate = 0;
         }
-        return {error_code_t::OK, ""};
+
+        return fe_status;
+    }
+
+    error_t
+    build_plan_index(cudnnHandle_t handle, int64_t index) {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(filtered_indices[index] == true,
+                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                       "Chosen plan index has been deselected.");
+
+        auto fe_status =
+            detail::create_cudnn_execution_plan(execution_plans[index], engine_configs[index], operation_tag, handle);
+
+        getLogger() << "[cudnn_frontend] INFO: Building plan at index " << index << " gave " << fe_status.get_code()
+                    << " with message: " << fe_status.get_message() << std::endl;
+
+        // Sets candidate in case user does not call execute with plan_index later.
+        if (fe_status.is_good()) {
+            if (execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed) {
+                candidate = index;
+            } else {
+                filtered_indices[index] = true;
+            }
+        }
+
+        return fe_status;
     }
 
     error_t
@@ -352,46 +402,39 @@ class Execution_plan_list {
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                        "Doing multithreaded builds is not yet supported.");
 
-        auto const& configs = get_filtered_engine_configs();
-
-        switch (policy) {
-            case BuildPlanPolicy_t::HEURISTICS_CHOICE:
-                // short circuit in case a plan was already created.
-                // This happens as check_support for v8 builds a plan.
-                // Should not happen in v9.
-                // TODO: Uncomment after https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4299195&cmtNo=
-                // if(cudnnGetVersion() < 9100)
-                {
-                    if (execution_plans.size() > 0) {
-                        return {error_code_t::OK, ""};
-                    }
-                }
-
-                for (auto const& config : configs) {
-                    std::shared_ptr<ExecutionPlan> plan;
-                    auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
-
-                    if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                        execution_plans.push_back(std::move(plan));
-                        break;
-                    }
-                }
-                break;
-            case BuildPlanPolicy_t::ALL:
-                for (auto const& config : configs) {
-                    std::shared_ptr<ExecutionPlan> plan;
-                    auto const& fe_status = detail::create_cudnn_execution_plan(plan, config, operation_tag, handle);
-
-                    if (fe_status.is_good() && plan->getWorkspaceSize() <= max_workspace_allowed) {
-                        execution_plans.push_back(std::move(plan));
-                    }
-                }
-                break;
+        // short circuit in case a plan was already created.
+        // This happens as check_support for v8 builds a plan.
+        if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE && candidate != -1) {
+            return {error_code_t::OK, ""};
         }
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans.empty(),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "No execution plans finalized successfully. Hence, not supported.");
+        for (auto i = 0u; i < engine_configs.size(); i++) {
+            if (filtered_indices[i]) {
+                getLogger() << "[cudnn_frontend] INFO: Skipping deselected engine plan at index " << i << std::endl;
+                continue;
+            }
+
+            auto fe_status =
+                detail::create_cudnn_execution_plan(execution_plans[i], engine_configs[i], operation_tag, handle);
+            getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
+                        << " with message: " << fe_status.get_message() << std::endl;
+
+            if (fe_status.is_good()) {
+                if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
+                    filtered_indices[i] = true;
+                    continue;
+                }
+                // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
+                if (candidate == -1) {
+                    candidate = static_cast<int64_t>(i);
+                }
+
+                // Return from this function as first successfully built plan is found.
+                if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
+                    return {error_code_t::OK, ""};
+                }
+            }
+        }
 
         return {error_code_t::OK, ""};
     }
@@ -403,12 +446,6 @@ class Execution_plan_list {
             max_size = std::max(max_size, plan->getWorkspaceSize());
         }
         return max_size;
-    }
-
-    std::shared_ptr<ExecutionPlan>
-    get_best_candidate() const {
-        if (execution_plans.empty()) return nullptr;
-        return execution_plans.front();
     }
 
     static error_t

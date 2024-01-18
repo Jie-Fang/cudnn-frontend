@@ -65,10 +65,16 @@ class INode : public ICudnn {
     }
 
     int64_t
-    get_cudnn_workspace_size() const {
-        int64_t cudnn_workspace_size = get_cudnn_workspace_size_node();
+    get_cudnn_workspace_size(int64_t plan_index) const {
+        int64_t cudnn_workspace_size = 0;
+
+        auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
+        if (status.is_bad()) {
+            getLogger() << "[cudnn_frontend] ERROR: Querying workspace failed." << std::endl;
+        }
+
         for (auto const& sub_node : sub_nodes) {
-            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size());
+            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size(plan_index));
         }
         return cudnn_workspace_size;
     }
@@ -400,11 +406,11 @@ class INode : public ICudnn {
     }
 
     int64_t
-    get_workspace_size() const {
+    get_workspace_size(int64_t plan_index = -1) const {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
-        return get_fe_workspace_size() + get_cudnn_workspace_size();
+        return get_fe_workspace_size() + get_cudnn_workspace_size(plan_index);
     }
 
     int64_t
@@ -466,20 +472,22 @@ class INode : public ICudnn {
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
-            void* workspace) const {
+            void* workspace,
+            int64_t plan_index = -1) const {
         // First get all the uids from the map
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
             tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
         }
 
-        return execute(handle, tensor_uid_to_pointer_map, workspace);
+        return execute(handle, tensor_uid_to_pointer_map, workspace, plan_index);
     }
 
     error_t
     execute(cudnnHandle_t handle,
             std::unordered_map<int64_t, void*>& tensor_uid_to_pointer_map,
-            void* workspace) const {
+            void* workspace,
+            int64_t plan_index = -1) const {
         // Add pass_by_value data pointers to uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -501,7 +509,8 @@ class INode : public ICudnn {
         // this is where cudnn backend can start using workspace for its execution plans
         void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
 
-        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plans_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            execute_cudnn_plans_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
 
         return {error_code_t::OK, ""};
     }
@@ -563,7 +572,8 @@ class INode : public ICudnn {
         j["cudnn_backend_data"];
         int index = 0;
         for (auto& plan_list : plans) {
-            auto execution_plan = plan_list.get_best_candidate();
+            auto const candidate = plan_list.candidate;
+            auto execution_plan  = plan_list.execution_plans[candidate];
             if (execution_plan != nullptr) {
                 auto serialized_plan = execution_plan->getJsonRepresentation();
                 j["cudnn_backend_data"].push_back(serialized_plan);

@@ -117,14 +117,22 @@ class ICudnn {
     }
 
    public:
-    int64_t
-    get_cudnn_workspace_size_node() const {
-        int64_t current_workspace_size = 0;
+    error_t
+    get_cudnn_workspace_size_node(int64_t const plan_index, int64_t& cudnn_workspace_size) const {
         for (auto const& execution_plan_list : plans) {
-            current_workspace_size =
-                std::max(current_workspace_size, execution_plan_list.get_best_candidate()->getWorkspaceSize());
+            int64_t candidate = plan_index != -1 ? plan_index : execution_plan_list.candidate;
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                (candidate < 0) && (static_cast<int64_t>(execution_plan_list.execution_plans.size()) <= candidate),
+                error_code_t::GRAPH_EXECUTION_FAILED,
+                "Plan index is invalid.");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(!(execution_plan_list.execution_plans[candidate]),
+                                           error_code_t::GRAPH_EXECUTION_FAILED,
+                                           "No candidate plan found for graph to query worksapce for.");
+            cudnn_workspace_size =
+                std::max(cudnn_workspace_size, execution_plan_list.execution_plans[candidate]->getWorkspaceSize());
         }
-        return current_workspace_size;
+        return {error_code_t::OK, ""};
     }
 
     int64_t
@@ -139,7 +147,8 @@ class ICudnn {
     error_t
     execute_cudnn_plans_with_uid(cudnnHandle_t handle,
                                  std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map,
-                                 void* workspace_ptr) const {
+                                 void* workspace_ptr,
+                                 int64_t plan_index) const {
         getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " plans." << std::endl;
 
         // Go over each plan list
@@ -156,9 +165,18 @@ class ICudnn {
                 uids.push_back(uid);
             }
 
-            // Run the best plan in this plan list
+            int64_t candidate = plan_index != -1 ? plan_index : plans[i].candidate;
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                (candidate < 0) && (static_cast<int64_t>(plans[i].execution_plans.size()) <= candidate),
+                error_code_t::GRAPH_EXECUTION_FAILED,
+                "Plan index is invalid.");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(!(plans[i].execution_plans[candidate]),
+                                           error_code_t::GRAPH_EXECUTION_FAILED,
+                                           "Plan index does not correspond to a valid plan.");
+
             CHECK_CUDNN_FRONTEND_ERROR(
-                detail::execute(handle, plans[i].get_best_candidate().get(), device_ptrs, uids, workspace_ptr));
+                detail::execute(handle, plans[i].execution_plans[candidate].get(), device_ptrs, uids, workspace_ptr));
         }
 
         return {error_code_t::OK, ""};
