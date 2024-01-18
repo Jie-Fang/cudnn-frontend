@@ -68,7 +68,7 @@ class INode : public ICudnn {
     get_cudnn_workspace_size(int64_t plan_index) const {
         int64_t cudnn_workspace_size = 0;
 
-        auto status = get_cudnn_workspace_size_node(cudnn_workspace_size, plan_index);
+        auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
         if (status.is_bad()) {
             getLogger() << "[cudnn_frontend] ERROR: Querying workspace failed." << std::endl;
         }

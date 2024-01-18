@@ -118,7 +118,7 @@ class ICudnn {
 
    public:
     error_t
-    get_cudnn_workspace_size_node(int64_t& cudnn_workspace_size, int64_t const plan_index) const {
+    get_cudnn_workspace_size_node(int64_t const plan_index, int64_t& cudnn_workspace_size) const {
         for (auto const& execution_plan_list : plans) {
             int64_t candidate = plan_index != -1 ? plan_index : execution_plan_list.candidate;
             RETURN_CUDNN_FRONTEND_ERROR_IF(
