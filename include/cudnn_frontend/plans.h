@@ -383,6 +383,11 @@ class Execution_plan_list {
         getLogger() << "[cudnn_frontend] INFO: Building plan at index " << index << " gave " << fe_status.get_code()
                     << " with message: " << fe_status.get_message() << std::endl;
 
+        // Sets candidate in case user does not call execute with plan_index later.
+        if (fe_status.is_good()) {
+            candidate = index;
+        }
+
         return fe_status;
     }
 
