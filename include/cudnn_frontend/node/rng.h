@@ -114,46 +114,51 @@ class RngNode : public INode {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building RngNode operations " << attributes.name << "..." << std::endl;
 
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.get_distribution() != RngDistribution_t::BERNOULLI,
+                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                       "no other distribution except bernoulli supported.");
+
+        auto rng_descriptor = cudnn_frontend::RngDescBuilder()
+                                  .setRngDistribution(attributes.get_distribution())
+                                  .setBernoulliDistProbability(attributes.get_bernoulli_probability().value())
+                                  .build();
+
+        auto&& Rng_operation_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
+
+        CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Rng_attributes::output_names::Y);
+        Rng_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
+
+        Rng_operation_builder.setRngDesc(rng_descriptor);
+
+        if (attributes.seed.has_value()) {
+            Rng_operation_builder.setSeed(attributes.get_seed().value());
+        } else {
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Seed, Rng_attributes::input_names::Seed);
+            Rng_operation_builder.setSeedDesc(*(tensors.at(Seed->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Offset, Rng_attributes::input_names::Offset);
+            Rng_operation_builder.setOffsetDesc(*(tensors.at(Offset->second->get_uid())));
+        }
+
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+        // disable exception macro is defined. Calling build will not throw.
+        // Check status of desc and return error.
+        auto operation = Rng_operation_builder.build();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(operation.get_status() != CUDNN_STATUS_SUCCESS,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       operation.get_error());
+        operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
+#else
+        // build() can throw
+        // wrap in try catch
         try {
-#endif
-
-            RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.get_distribution() != RngDistribution_t::BERNOULLI,
-                                           error_code_t::ATTRIBUTE_NOT_SET,
-                                           "no other distribution except bernoulli supported.");
-
-            auto rng_descriptor = cudnn_frontend::RngDescBuilder()
-                                      .setRngDistribution(attributes.get_distribution())
-                                      .setBernoulliDistProbability(attributes.get_bernoulli_probability().value())
-                                      .build();
-
-            auto&& Rng_operation_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
-
-            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(Y, Rng_attributes::output_names::Y);
-            Rng_operation_builder.setyDesc(*(tensors.at(Y->second->get_uid())));
-
-            Rng_operation_builder.setRngDesc(rng_descriptor);
-
-            if (attributes.seed.has_value()) {
-                Rng_operation_builder.setSeed(attributes.get_seed().value());
-            } else {
-                CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Seed, Rng_attributes::input_names::Seed);
-                Rng_operation_builder.setSeedDesc(*(tensors.at(Seed->second->get_uid())));
-
-                CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Offset, Rng_attributes::input_names::Offset);
-                Rng_operation_builder.setOffsetDesc(*(tensors.at(Offset->second->get_uid())));
-            }
-
             auto operation = Rng_operation_builder.build();
-
             operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
         } catch (cudnn_frontend::cudnnException& e) {
-            throw cudnnException(e.what(), e.getCudnnStatus());
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
         }
 #endif
-
         auto const& non_virtual_uids = attributes.get_non_virtual_uids();
         uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
         return {error_code_t::OK, ""};
