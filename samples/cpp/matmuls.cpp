@@ -120,7 +120,7 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
     auto B_attributes = fe::graph::Tensor_attributes()
                             .set_name("B")
                             .set_dim({b, k, n})
-                            .set_stride({k * n, 1, n})
+                            .set_stride({k * n, 1, k})
                             .set_data_type(fe::DataType_t::FP8_E4M3);
     auto B = graph.tensor(B_attributes);
 

@@ -21,8 +21,8 @@ def test_conv_bias_relu():
     X_gpu = torch.randn(4, 16, 56, 56, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     W_gpu = torch.randn(16, 16, 3, 3, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     B_gpu = torch.randn(1, 16, 1, 1, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
-    padding = [0,1]
-    stride = [2,3]
+    padding = [1,1]
+    stride = [3,3]
     dilation = [1,1]
     model = CSBR().eval().to("cuda").to(torch.float16)
     Y_expected = model(X_gpu, W_gpu, b = B_gpu, padding = padding, stride = stride, dilation = dilation)

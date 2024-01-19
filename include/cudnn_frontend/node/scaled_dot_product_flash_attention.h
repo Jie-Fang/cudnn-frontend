@@ -140,13 +140,6 @@ class SDPANode : public INode {
                 "s_kv not a multiple of 64 or d not a multiple of 64 is not supported with cudnn version below 8.9.6");
         }
 
-        if ((s_q % 64 != 0) && (attributes.padding_mask) && (cudnnGetVersion() < 90000)) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                true,
-                error_code_t::GRAPH_NOT_SUPPORTED,
-                "s_q not a multiple of 64 with padding mask is not supported with cudnn version below 9.0.0");
-        }
-
         // validate options for padding mask
         auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
         bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
@@ -176,6 +169,14 @@ class SDPANode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
+
+        if (((s_q % 64 != 0) || (s_kv % 64 != 0)) && (attributes.padding_mask || has_dropout_mask) &&
+            (cudnnGetVersion() < 90000)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(true,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "s_q/s_kv not a multiple of 64 with padding/dropout mask is not supported "
+                                           "with cudnn version below 9.0.0");
+        }
 
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
@@ -677,18 +678,13 @@ class SDPABackwardNode : public INode {
         int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
         int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
         int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
-        // int64_t s_kv = attributes.inputs.at(input_names::V)->get_dim()[2];
-        int64_t d_v = attributes.inputs.at(input_names::V)->get_dim()[3];
+        int64_t s_kv = attributes.inputs.at(input_names::V)->get_dim()[2];
+        int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (s_q < 64) && cudnnGetVersion() < 90000,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Sequence length must be greater than or equal to 64 for cudnn version prior to v9.0.0");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (s_q % 64 != 0) && (attributes.padding_mask) && (cudnnGetVersion() < 90000),
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "Sequence length must be a multiple of 64 with padding mask for cudnn version prior to v9.0.0");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -707,8 +703,9 @@ class SDPABackwardNode : public INode {
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
         // validate options for bias mask
-        auto bias_mask = attributes.inputs.find(input_names::Bias);
-        if (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr) {
+        auto bias_mask      = attributes.inputs.find(input_names::Bias);
+        bool const has_bias = (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr);
+        if (has_bias) {
             auto bias_mask_dtype = bias_mask->second->get_data_type();
             RETURN_CUDNN_FRONTEND_ERROR_IF((bias_mask_dtype == DataType_t::BOOLEAN),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
@@ -744,6 +741,14 @@ class SDPABackwardNode : public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
+
+        if (((s_q % 64 != 0) || (s_kv % 64 != 0)) && (attributes.padding_mask || has_dropout_mask) &&
+            (cudnnGetVersion() < 90000)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(true,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "s_q/s_kv not a multiple of 64 with padding/dropout mask is not supported "
+                                           "with cudnn version below 9.0.0");
+        }
 
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
