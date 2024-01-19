@@ -882,7 +882,7 @@ class SDPABackwardNode : public INode {
 
         struct cudaDeviceProp prop;
         CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
-        if (cudnnGetVersion() >= 8905 && prop.major >= 9) {
+        if ((cudnnGetVersion() >= 8905 && prop.major >= 9) || (cudnnGetVersion() >= 9000)) {
             // default upper limit for workspace 256MB
             int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
 
