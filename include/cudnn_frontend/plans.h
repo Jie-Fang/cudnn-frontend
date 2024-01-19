@@ -6,6 +6,7 @@
 
 #include "../cudnn_frontend_EngineConfig.h"
 #include "../cudnn_frontend_Logging.h"
+#include "graph_helpers.h"
 
 namespace cudnn_frontend {
 
@@ -104,27 +105,33 @@ inline error_t
 create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
                             std::string const& serialized_data,
                             cudnnHandle_t handle) {
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    auto&& plan_builder = cudnn_frontend::ExecutionPlanBuilder();
+
+    plan_builder.setHandle(handle);
+
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+    // disable exception macro is defined. Calling build will not throw.
+    // Check status of desc and return error.
+    auto built_plan = plan_builder.loadFromJson(serialized_data);
+    RETURN_CUDNN_FRONTEND_ERROR_IF(built_plan.get_status() != CUDNN_STATUS_SUCCESS,
+                                   error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                   built_plan.get_error());
+    plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
+#else
+    // build() can throw
+    // wrap in try catch
     try {
-#endif
-        auto built_plan = cudnn_frontend::ExecutionPlanBuilder().setHandle(handle).loadFromJson(serialized_data);
-
-        if (built_plan.get_status() != CUDNN_STATUS_SUCCESS) {
-            getLogger() << "[cudnn_frontend] ERROR: "
-                        << "Config failed with " << built_plan.get_error() << std::endl;
-            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from serialized data."};
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: Deserialization succeeded! Plan has built!\n";
-        getLogger() << "[cudnn_frontend] INFO: " << built_plan.describe() << std::endl;
-
-        plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        auto built_plan = plan_builder.loadFromJson(serialized_data);
+        plan            = std::make_shared<ExecutionPlan>(std::move(built_plan));
     } catch (cudnn_frontend::cudnnException& e) {
-        getLogger() << "[cudnn_frontend] ERROR: "
-                    << "Config failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
-        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
+        // Silly MSVC error that thinks below condition is constexpr
+        // RETURN_CUDNN_FRONTEND_ERROR_IF(
+        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+        //     e.what());
+        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
+        getLogger() << error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED << " because plan building failed at "
+                    << __FILE__ << ":" << __LINE__ << "\n";
+        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, e.what()};
     }
 #endif
 
@@ -136,28 +143,33 @@ create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
                             ManagedOpaqueDescriptor const& config,
                             std::string const& operation_graph_tag,
                             cudnnHandle_t handle) {
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+    auto&& plan_builder = cudnn_frontend::ExecutionPlanBuilder();
+
+    plan_builder.setHandle(handle).setEngineConfig(config, operation_graph_tag);
+
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+    // disable exception macro is defined. Calling build will not throw.
+    // Check status of desc and return error.
+    auto built_plan = plan_builder.build();
+    RETURN_CUDNN_FRONTEND_ERROR_IF(built_plan.get_status() != CUDNN_STATUS_SUCCESS,
+                                   error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                   built_plan.get_error());
+    plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
+#else
+    // build() can throw
+    // wrap in try catch
     try {
-#endif
-        auto built_plan = cudnn_frontend::ExecutionPlanBuilder()
-                              .setHandle(handle)
-                              .setEngineConfig(config, operation_graph_tag)
-                              .build();
-        if (built_plan.get_status() != CUDNN_STATUS_SUCCESS) {
-            getLogger() << "[cudnn_frontend] ERROR: "
-                        << "Config failed with " << built_plan.get_error() << std::endl;
-            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
-        }
-
-        getLogger() << "[cudnn_frontend] INFO: Config succeeded! Plan has built!\n";
-        getLogger() << "[cudnn_frontend] INFO: " << built_plan.describe() << std::endl;
-        plan = std::make_shared<ExecutionPlan>(std::move(built_plan));
-
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
+        auto built_plan = plan_builder.build();
+        plan            = std::make_shared<ExecutionPlan>(std::move(built_plan));
     } catch (cudnn_frontend::cudnnException& e) {
-        getLogger() << "[cudnn_frontend] ERROR: "
-                    << "Config failed with " << e.getCudnnStatus() << " " << e.what() << std::endl;
-        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "Couldn't build plan from Config."};
+        // Silly MSVC error that thinks below condition is constexpr
+        // RETURN_CUDNN_FRONTEND_ERROR_IF(
+        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+        //     e.what());
+        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
+        getLogger() << error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED << " because plan building failed at "
+                    << __FILE__ << ":" << __LINE__ << "\n";
+        return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, e.what()};
     }
 #endif
 
