@@ -378,6 +378,10 @@ class Execution_plan_list {
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                        "Chosen plan index has been deselected.");
 
+        if (execution_plans[index] != nullptr && execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed) {
+            return {error_code_t::OK, ""};
+        };
+
         auto fe_status =
             detail::create_cudnn_execution_plan(execution_plans[index], engine_configs[index], operation_tag, handle);
 
@@ -390,6 +394,8 @@ class Execution_plan_list {
                 candidate = index;
             } else {
                 filtered_indices[index] = true;
+                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                        "[cudnn_frontend] Error: Workspace size is too large."};
             }
         }
 
