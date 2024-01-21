@@ -39,7 +39,7 @@ class INode : public ICudnn {
 
    private:
     std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
-    std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>> deserialized_workspace_modifications;
+    std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
     int64_t fe_workspace_size = 0;
 
     std::shared_ptr<Tensor_attributes>
@@ -109,18 +109,24 @@ class INode : public ICudnn {
     run_auxiliary_kernels(
         cudnnHandle_t handle,
         void* fe_workspace,
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& workspace_modifications) const {
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications) const {
         cudaStream_t stream;
         CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
+        char* workspace = static_cast<char*>(fe_workspace);
 
         for (auto [uid, data] : workspace_modifications) {
             (void)uid;
-            char* workspace = static_cast<char*>(fe_workspace);
-            CHECK_CUDA_ERROR(cudaMemcpyAsync(workspace + data.first,
-                                             data.second.data(),
-                                             data.second.size() * sizeof(float),
-                                             cudaMemcpyHostToDevice,
-                                             stream));
+            if (std::get<0>(data) == 0) {
+                auto& vec_data = std::get<2>(data);
+                CHECK_CUDA_ERROR(cudaMemcpyAsync(workspace + std::get<1>(data),
+                                                 vec_data.data(),
+                                                 vec_data.size() * sizeof(float),
+                                                 cudaMemcpyHostToDevice,
+                                                 stream));
+            } else if (std::get<0>(data) == 1) {
+                int64_t memset_size = (int64_t)std::get<2>(data)[0];
+                CHECK_CUDA_ERROR(cudaMemsetAsync(workspace + std::get<1>(data), 0, memset_size, stream));
+            }
         }
         return {error_code_t::OK, ""};
     }
@@ -136,7 +142,7 @@ class INode : public ICudnn {
 
     virtual error_t
     workspace_modifications_tensors_(
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& worskspace_modifications,
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& worskspace_modifications,
         int64_t&) const {
         for (auto [uid, value] : deserialized_workspace_modifications) {
             worskspace_modifications.emplace(uid, value);
@@ -146,7 +152,7 @@ class INode : public ICudnn {
 
     error_t
     gather_workspace_modifications(
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& worskspace_modifications,
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& worskspace_modifications,
         int64_t& offset) const {
         CHECK_CUDNN_FRONTEND_ERROR(workspace_modifications_tensors_(worskspace_modifications, offset));
         offset = get_fe_workspace_size_node();
@@ -161,9 +167,10 @@ class INode : public ICudnn {
     extend_tensor_map_with_workspace_tensors_(
         std::unordered_map<int64_t, void*>& tensor_to_pointer_map,
         void* workspace,
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>> const& worskspace_modifications) const {
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> const& worskspace_modifications)
+        const {
         for (auto const& [uid, data] : worskspace_modifications) {
-            tensor_to_pointer_map.emplace(uid, static_cast<char*>(workspace) + data.first);
+            tensor_to_pointer_map.emplace(uid, static_cast<char*>(workspace) + std::get<1>(data));
         }
         return {error_code_t::OK, ""};
     }
@@ -435,7 +442,7 @@ class INode : public ICudnn {
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
 
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>> workspace_modifications;
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;
         CHECK_CUDNN_FRONTEND_ERROR(gather_workspace_modifications(workspace_modifications, workspace_offset));
 
@@ -497,7 +504,7 @@ class INode : public ICudnn {
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
 
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>> workspace_modifications;
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;
         CHECK_CUDNN_FRONTEND_ERROR(gather_workspace_modifications(workspace_modifications, workspace_offset));
 
@@ -604,7 +611,7 @@ class INode : public ICudnn {
         j["pass_by_values"].push_back(half_pass_by_values);
         j["pass_by_values"].push_back(float_pass_by_values);
 
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>> workspace_modifications;
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;
         CHECK_CUDNN_FRONTEND_ERROR(gather_workspace_modifications(workspace_modifications, workspace_offset));
 
