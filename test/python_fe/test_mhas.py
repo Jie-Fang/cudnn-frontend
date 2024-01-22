@@ -226,36 +226,6 @@ def convert_ragged_to_uniform(ragged_tensor, ragged_offset):
     return uniform_tensor
 
 
-def convert_uniform_to_ragged(uniform_tensor, ragged_offset):
-    # limitations (TODO):
-    # 1. tensor is non-interleaved with bhsd dim order and bshd stride order
-    # 2. ragged tensor is packed and in-order, therefore
-    #    ragged offset is monatomically increasing
-    assert uniform_tensor.dim() == 4
-    b, h, s, d = uniform_tensor.size()
-    assert ragged_offset.dim() == 4 and b + 1 == ragged_offset.size(0)
-
-    # ragged offset is given in 4D, convert to 1D
-    ragged_offset = ragged_offset.flatten()
-
-    # convert bhsd to bshd and flatten
-    uniform_tensor_flat = torch.einsum("bhsd->bshd", uniform_tensor).flatten()
-    ragged_tensor_flat = torch.zeros_like(uniform_tensor_flat)
-
-    # copy
-    for i, num_elements in enumerate(ragged_offset[1:] - ragged_offset[:-1]):
-        ragg_a = ragged_offset[i]
-        ragg_b = ragg_a + num_elements
-        unif_a = i * s * h * d
-        unif_b = unif_a + num_elements
-        ragged_tensor_flat[ragg_a:ragg_b] = uniform_tensor_flat[unif_a:unif_b]
-      
-    # unflatten and convert bshd to bhsd
-    ragged_tensor = ragged_tensor_flat.view(b, s, h, d)
-    ragged_tensor = torch.einsum("bshd->bhsd", ragged_tensor)
-    return ragged_tensor
-
-
 input_type_options = [torch.float16, torch.bfloat16]
 layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
 head_group_options = ["multi_head", "group_query", "multi_query"]
@@ -394,6 +364,7 @@ def test_sdpa(input_type,
         is_causal,
         is_dropout,
         is_infer):
+
     is_ragged = True
 
     # see LLM_variable_seq_length_packed_d64_h3_b8_s32_256
