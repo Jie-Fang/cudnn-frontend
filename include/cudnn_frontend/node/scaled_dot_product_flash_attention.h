@@ -546,13 +546,13 @@ class SDPANode : public INode {
 
     virtual error_t
     workspace_modifications_tensors_(
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& workspace_modifications,
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications,
         int64_t& offset) const override final {
         if (attributes.alibi_mask) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
             int64_t const h_q     = Q->second->get_dim()[1];
             auto alibi_slopes_vec = detail::get_abili_slope(h_q);
-            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_pair(offset, alibi_slopes_vec));
+            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_tuple(0, offset, alibi_slopes_vec));
         }
         return {error_code_t::OK, ""};
     }
@@ -1308,27 +1308,27 @@ class SDPABackwardNode : public INode {
 
     virtual error_t
     workspace_modifications_tensors_(
-        std::unordered_map<uid_t, std::pair<int64_t, std::vector<float>>>& workspace_modifications,
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications,
         int64_t& offset) const override final {
         if (attributes.alibi_mask) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
             int64_t const h_q     = Q->second->get_dim()[1];
             auto alibi_slopes_vec = detail::get_abili_slope(h_q);
-            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_pair(offset, alibi_slopes_vec));
+            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_tuple(0, offset, alibi_slopes_vec));
             int64_t alibi_slopes_size_padded = (alibi_slopes_size + 15) & ~15;
             offset                           = offset + alibi_slopes_size_padded;
         }
 
         if (dQ_accum && !dQ_accum->get_is_virtual()) {
-            std::vector<float> dQ_accum_vec(dQ_accum_size / sizeof(float), 0.0f);
-            workspace_modifications.emplace(dQ_accum->get_uid(), std::make_pair(offset, dQ_accum_vec));
+            std::vector<float> f_vec = {(float)dQ_accum_size};
+            workspace_modifications.emplace(dQ_accum->get_uid(), std::make_tuple(1, offset, f_vec));
             offset = offset + dQ_accum_size;
         }
 
         if (softmax_sum && !softmax_sum->get_is_virtual()) {
             // There is no requirement for softmax_sum to be memset to 0
             std::vector<float> f_vec = {};
-            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_pair(offset, f_vec));
+            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_tuple(2, offset, f_vec));
         }
 
         return {error_code_t::OK, ""};
