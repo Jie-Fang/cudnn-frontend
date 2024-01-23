@@ -66,7 +66,7 @@ class ICudnn {
         tensor_builder.setDim(props->get_dim().size(), props->get_dim().data())
             .setStrides(props->get_stride().size(), props->get_stride().data())
             .setId(props->get_uid())
-            .setAlignment(16)
+            // .setAlignment(16)
             .setDataType(props->get_data_type())
             .setVirtual(props->get_is_virtual())
             .setByValue(props->get_is_pass_by_value())

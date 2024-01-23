@@ -676,6 +676,16 @@ thunder:cudnn_8.9.5.29:
     extends:
         - .thunder:template
 
+analysis:cudnn_v9_disable_exception:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    needs: []
+    stage: analysis
+    script:
+        - !reference [.fetch_cudnn_v9:template, before_script]
+        - mkdir build && cd build
+        - cmake -DCMAKE_CXX_FLAGS="-DNV_CUDNN_DISABLE_EXCEPTION" ../
+        - cmake --build . -j16 --verbose
+    
 build:cudnn_8.9_clang:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
     needs: []
