@@ -398,7 +398,7 @@ init_pygraph_submodule(py::module_& m) {
                     data_type (cudnn.data_type): The data type of the tensor. Default is cudnn.data_type.NOT_SET.
                     is_virtual (bool): Flag indicating if the tensor is virtual. Default is False.
                     is_pass_by_value (bool): Flag indicating if the tensor is passed by value. Default is False.
-                    ragged_offset (graph.tensor): Flag indicating if the tensor is passed by value. Default is nullptr.
+                    ragged_offset (cudnn_tensor): The ragged offset tensor. Default is nullptr.
                     name (Optional[str]): The name of the tensor.
 
                 Returns:
