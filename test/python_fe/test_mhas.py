@@ -356,7 +356,7 @@ def param_extract_forward(request):
 @pytest.mark.parametrize("is_padding", padding_mask_options)
 @pytest.mark.parametrize("is_causal", causal_mask_options)
 @pytest.mark.parametrize("is_dropout", dropout_options)
-@pytest.mark.parametrize("is_ragged", dropout_options)
+@pytest.mark.parametrize("is_ragged", ragged_options)
 @pytest.mark.parametrize("is_infer", is_infer_options)
 def test_sdpa(input_type,
         layout,
@@ -424,7 +424,7 @@ def test_sdpa(input_type,
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
-    if d_qk != d_v and is_ragged and cudnn.backend_version < 90100:
+    if d_qk != d_v and is_ragged and cudnn.backend_version() < 90100:
         pytest.skip("d_qk != d_v does not work with ragged offset")
 
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
