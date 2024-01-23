@@ -109,23 +109,6 @@ AllowAll(cudnnBackendDescriptor_t engine_config) {
     return false;
 }
 
-static inline void
-throw_if(std::function<bool()> expr, [[maybe_unused]] const char* message, [[maybe_unused]] cudnnStatus_t status) {
-    if (expr()) {
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-        throw cudnnException(message, status);
-#endif
-    }
-}
-static inline void
-throw_if(bool expr, [[maybe_unused]] const char* message, [[maybe_unused]] cudnnStatus_t status) {
-    if (expr) {
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
-        throw cudnnException(message, status);
-#endif
-    }
-}
-
 static inline std::string
 to_string(cudnnStatus_t const status) {
     return cudnnGetErrorString(status);
