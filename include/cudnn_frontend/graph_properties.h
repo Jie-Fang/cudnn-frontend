@@ -187,7 +187,7 @@ class Tensor_attributes {
     }
 
     auto
-    set_ragged_offset(std::shared_ptr<Tensor_attributes> value) -> Tensor_attributes& {
+    set_ragged_offset(std::shared_ptr<Tensor_attributes> const& value) -> Tensor_attributes& {
         ragged_offset = value;
         return *this;
     }
