@@ -84,7 +84,6 @@ namespace cudnn_frontend {
 /// Detailed feature_vector. Generally the Tensor and Operation properties
 using feature_vector_t = std::vector<int64_t>;
 
-#ifndef NV_CUDNN_DISABLE_EXCEPTION
 class cudnnException : public std::runtime_error {
    public:
     cudnnException(const char* message, cudnnStatus_t status) throw() : std::runtime_error(message) {
@@ -101,7 +100,6 @@ class cudnnException : public std::runtime_error {
 
     cudnnStatus_t error_status;
 };
-#endif
 
 static inline bool
 AllowAll(cudnnBackendDescriptor_t engine_config) {
