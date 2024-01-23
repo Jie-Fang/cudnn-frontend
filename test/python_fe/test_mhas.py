@@ -234,6 +234,7 @@ alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
 dropout_options = [False, True]
+ragged_options = [False, True]
 is_infer_options = [False, True]
 
 all_options_forward = [
@@ -248,6 +249,7 @@ all_options_forward = [
             padding_mask_options,
             causal_mask_options,
             dropout_options,
+            ragged_options,
             is_infer_options,
         ]
     )
@@ -354,6 +356,7 @@ def param_extract_forward(request):
 @pytest.mark.parametrize("is_padding", padding_mask_options)
 @pytest.mark.parametrize("is_causal", causal_mask_options)
 @pytest.mark.parametrize("is_dropout", dropout_options)
+@pytest.mark.parametrize("is_ragged", dropout_options)
 @pytest.mark.parametrize("is_infer", is_infer_options)
 def test_sdpa(input_type,
         layout,
@@ -363,19 +366,69 @@ def test_sdpa(input_type,
         is_padding,
         is_causal,
         is_dropout,
+        is_ragged,
         is_infer):
+    if head_group != "multi_head" and cudnn.backend_version() < 8907:
+        pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
-    is_ragged = True
+    if is_alibi and cudnn.backend_version() < 8904:
+        pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
 
-    # see LLM_variable_seq_length_packed_d64_h3_b8_s32_256
-    b = 8
-    h_q = 3
-    h_k = 3
-    h_v = 3
-    s_q = 256
-    s_kv = 128
-    d_qk = 64
-    d_v = 64
+    if is_padding and cudnn.backend_version() < 8903:
+        pytest.skip("Padding mask is only supported 8.9.3 onwards.")
+
+    if is_dropout and cudnn.backend_version() < 8906:
+        pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
+
+    if is_ragged:
+        if layout != "non_interleaved":
+            pytest.skip("Ragged tensor is only tested with non-interleaved bshd layout")
+
+        if not is_padding:
+            pytest.skip("Ragged tensor is currently only tested with packed variable length tensors")
+
+    # batch size
+    b = 2
+    # query sequence length
+    s_q = random.choice([8, 16, 24, 32, 256, 512, 1024, 2048])
+    # key+value sequence length
+    s_kv = random.choice([8, 16, 24, 32, 256, 512, 1024, 2048]) if layout == "non_interleaved" else s_q
+    # query+key embedding dimension per head
+    d_qk = random.choice([32, 56, 64, 128])
+    # value embedding dimension per head
+    d_v = random.choice([64, 96, 128]) if layout == "non_interleaved" else d_qk
+    # number of heads
+    h_q = 6
+    if head_group == "multi_head":
+        h_k = 6
+        h_v = 6
+    elif head_group == "group_query":
+        h_k = random.choice([6, 3, 2, 1])
+        h_v = random.choice([6, 3, 2, 1]) if layout == "non_interleaved" else h_k
+    elif head_group == "multi_query":
+        h_k = 1
+        h_v = 1
+    else:
+        assert False, "Head group must be either MHA, GQA, or MQA"
+
+    if d_qk != d_v and cudnn.backend_version() < 8906:
+        pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
+
+    if cudnn.backend_version() < 90000:
+        if ((s_q % 64 != 0) or (s_kv % 64 != 0)) and (is_padding or is_dropout):
+            pytest.skip("s_q not a multiple of 64 with padding/dropout is not supported with cudnn version 9.0.0")
+
+    if cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6")
+
+    if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
+
+    if d_qk != d_v and is_ragged and cudnn.backend_version < 90100:
+        pytest.skip("d_qk != d_v does not work with ragged offset")
+
+    if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
+        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
     print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
@@ -405,12 +458,13 @@ def test_sdpa(input_type,
 
     bias_gpu = torch.randn(1, h_q, s_q, s_kv, device="cuda", dtype=input_type) if is_bias else None
 
-    # see LLM_variable_seq_length_packed_d64_h3_b8_s32_256
-    q_ragged_offset_gpu = torch.tensor([0, 6144, 18432, 36864, 61440, 92160, 129024, 172032, 221184], dtype=torch.int32, device="cuda").view(9, 1, 1, 1)
-    kv_ragged_offset_gpu = torch.tensor([0, 3072, 9216, 18432, 30720, 46080, 64512, 86016, 110592], dtype=torch.int32, device="cuda").view(9, 1, 1, 1)
+    seq_len_q_gpu = torch.randint(1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
+    seq_len_kv_gpu = torch.randint(1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda") if is_padding else None
 
-    seq_len_q_gpu = torch.tensor([32,64,96,128,160,192,224,256], dtype=torch.int32, device="cuda").view(8, 1, 1, 1)
-    seq_len_kv_gpu = torch.tensor([16,32,48,64,80,96,112,128], dtype=torch.int32, device="cuda").view(8, 1, 1, 1)
+    q_ragged_offset_gpu = (torch.cat((torch.zeros((1, 1, 1, 1), dtype=torch.int32, device="cuda"), torch.cumsum(seq_len_q_gpu, dim=0))) * h_q * d_qk).to(dtype=torch.int32) if is_ragged else None
+    k_ragged_offset_gpu = (torch.cat((torch.zeros((1, 1, 1, 1), dtype=torch.int32, device="cuda"), torch.cumsum(seq_len_kv_gpu, dim=0))) * h_k * d_qk).to(dtype=torch.int32) if is_ragged else None
+    v_ragged_offset_gpu = (torch.cat((torch.zeros((1, 1, 1, 1), dtype=torch.int32, device="cuda"), torch.cumsum(seq_len_kv_gpu, dim=0))) * h_v * d_v).to(dtype=torch.int32) if is_ragged else None
+    o_ragged_offset_gpu = (torch.cat((torch.zeros((1, 1, 1, 1), dtype=torch.int32, device="cuda"), torch.cumsum(seq_len_q_gpu, dim=0))) * h_q * d_v).to(dtype=torch.int32) if is_ragged else None
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -419,7 +473,7 @@ def test_sdpa(input_type,
     rng_dump_gpu = torch.empty((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
 
     o_gpu = torch.empty(b * h_q * s_q * d_v, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
-    stats_gpu = torch.empty(b, h_q, s_q, 1, dtype=torch.float32, device="cuda")
+    stats_gpu = torch.empty(b, h_q, s_q, 1, dtype=torch.float32, device="cuda") if not is_infer else None
 
     # cuDNN graph
     graph = cudnn.pygraph(
@@ -432,13 +486,6 @@ def test_sdpa(input_type,
     k = graph.tensor_like(k_gpu)
     v = graph.tensor_like(v_gpu)
 
-    q_ragged_offset = graph.tensor_like(q_ragged_offset_gpu)
-    kv_ragged_offset = graph.tensor_like(kv_ragged_offset_gpu)
-
-    q.set_ragged_offset(q_ragged_offset)
-    k.set_ragged_offset(kv_ragged_offset)
-    v.set_ragged_offset(kv_ragged_offset)
-
     bias = graph.tensor_like(bias_gpu) if is_bias else None
 
     seq_len_q = graph.tensor_like(seq_len_q_gpu) if is_padding else None
@@ -450,6 +497,16 @@ def test_sdpa(input_type,
         dropout_tuple = (dropout_prob, seed, offset)
 
     rng_dump = graph.tensor_like(rng_dump_gpu) if is_dropout else None
+
+    q_ragged_offset = graph.tensor_like(q_ragged_offset_gpu) if is_ragged else None
+    k_ragged_offset = graph.tensor_like(k_ragged_offset_gpu) if is_ragged else None
+    v_ragged_offset = graph.tensor_like(v_ragged_offset_gpu) if is_ragged else None
+    o_ragged_offset = graph.tensor_like(o_ragged_offset_gpu) if is_ragged else None
+
+    if is_ragged:
+        q.set_ragged_offset(q_ragged_offset)
+        k.set_ragged_offset(k_ragged_offset)
+        v.set_ragged_offset(v_ragged_offset)
 
     o, stats = graph.sdpa(
         name="sdpa",
@@ -469,7 +526,8 @@ def test_sdpa(input_type,
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
-    o.set_ragged_offset(q_ragged_offset)
+    if is_ragged:
+        o.set_ragged_offset(o_ragged_offset)
 
     if is_infer == False:
         stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
@@ -486,7 +544,9 @@ def test_sdpa(input_type,
         v: v_gpu,
         bias: bias_gpu,
         q_ragged_offset: q_ragged_offset_gpu,
-        kv_ragged_offset: kv_ragged_offset_gpu,
+        k_ragged_offset: k_ragged_offset_gpu,
+        v_ragged_offset: v_ragged_offset_gpu,
+        o_ragged_offset: o_ragged_offset_gpu,
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
         o: o_gpu,
@@ -508,12 +568,9 @@ def test_sdpa(input_type,
     v_ref = v_gpu.detach().float()
 
     if is_ragged:
-        q_ragged_offset_ref = q_ragged_offset_gpu.detach()
-        kv_ragged_offset_ref = kv_ragged_offset_gpu.detach()
-
-        q_ref = convert_ragged_to_uniform(q_ref, q_ragged_offset_ref)
-        k_ref = convert_ragged_to_uniform(k_ref, kv_ragged_offset_ref)
-        v_ref = convert_ragged_to_uniform(v_ref, kv_ragged_offset_ref)
+        q_ref = convert_ragged_to_uniform(q_ref, q_ragged_offset_gpu.detach())
+        k_ref = convert_ragged_to_uniform(k_ref, k_ragged_offset_gpu.detach())
+        v_ref = convert_ragged_to_uniform(v_ref, v_ragged_offset_gpu.detach())
 
     if is_bias:
         bias_ref = bias_gpu.detach().float()
@@ -544,7 +601,7 @@ def test_sdpa(input_type,
         o_ref = ret
 
     if is_ragged:
-        o_gpu = convert_ragged_to_uniform(o_gpu, q_ragged_offset_ref)
+        o_gpu = convert_ragged_to_uniform(o_gpu, o_ragged_offset_gpu.detach())
 
     if is_padding:
         # zero out padded region of the output for comparison
@@ -597,7 +654,7 @@ def test_sdpa_backward(input_type,
 
     if is_dropout and cudnn.backend_version() < 8906:
         pytest.skip("RNG dump is only supported on 8.9.6 onwards.")
-    
+
     # test both dP workspace optimization by lowering dP workspace limit to 8MB
     os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = str(8 * 1024 * 1024)
 
@@ -631,10 +688,10 @@ def test_sdpa_backward(input_type,
     if (cudnn.backend_version() < 90000):
         if (s_q < 64):
             pytest.skip("s_q less than 64 is not supported before cudnn 9.0.0")
-        
+
         if ((s_q % 64 != 0) or (s_kv % 64 != 0)) and (is_padding or is_dropout):
             pytest.skip("s_q not a multiple of 64 with padding/dropout is not supported with cudnn version 9.0.0")
-                
+
     if ((s_q % 64 != 0) or (s_kv % 64 != 0)) and is_bias:
         pytest.skip("cudnn backend does not support bias with non-64-aligned seq_q or seq_kv.")
 
@@ -912,23 +969,24 @@ def test_sdpa_backward(input_type,
 
 if __name__ == "__main__":
     """
-    option_forward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout, is_infer)
+    option_forward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout, is_ragged, is_infer)
     option_backward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout)
-    test_sdpa_backward((torch.float16, "bs3hd", "multi_head", False, False, False, False, False))
+    test_sdpa(torch.float16, "bs3hd", "multi_head", False, False, False, False, False, False, False)
+    test_sdpa_backward(torch.float16, "bs3hd", "multi_head", False, False, False, False, False)
     """
-    test_sdpa(torch.float16, "non_interleaved", "multi_head", False, False, True, False, False, False)
 
-    # print("==========running forward tests==========")
-    # for option in all_options_forward:
-    #     try:
-    #         print(f"Running {option}")
-    #         test_sdpa(option)
-    #     except pytest.skip.Exception as e:
-    #         print(f"Skipped {option}: {e}")
+    print("==========running forward tests==========")
+    for option in all_options_forward:
+        try:
+            print(f"Running {option}")
+            test_sdpa(*option)
+        except pytest.skip.Exception as e:
+            print(f"Skipped {option}\n{e}")
 
-    # print("==========running backward tests==========")
-    # for option in all_options_backward:
-    #     try:
-    #         test_sdpa_backward(option)
-    #     except pytest.skip.Exception as e:
-    #         print(f"Skipped {option}: {e}")
+    print("==========running backward tests==========")
+    for option in all_options_backward:
+        try:
+            print(f"Running {option}")
+            test_sdpa_backward(*option)
+        except pytest.skip.Exception as e:
+            print(f"Skipped {option}\n{e}")
