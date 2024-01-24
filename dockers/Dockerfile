@@ -3,13 +3,14 @@ ARG CUDA_VERSION="12.2.0"
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 
-ARG CUDNN_VERSION="8.9.7.29-1+cuda12.2"
+ARG CUDNN_VERSION="8.9.7.29"
 ARG PYTHON_VERSION="3.10"
 ARG TORCH_VERSION="2.1.2"
 
 ENV \
     DEBIAN_FRONTEND="noninteractive" \
-    TZ="Etc/UTC"
+    TZ="Etc/UTC" \
+    CUDNN_VERSION=${CUDNN_VERSION}
 
 SHELL ["/bin/bash", "-c"]
 RUN apt-get update -qq --fix-missing && \
@@ -41,17 +42,23 @@ RUN apt-get update -qq --fix-missing && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/* 
 
-RUN apt update -qq --fix-missing && \
+RUN CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
+    apt update -qq --fix-missing && \
     apt upgrade -y --allow-change-held-packages \
-      libcudnn8=${CUDNN_VERSION} \
-      libcudnn8-dev=${CUDNN_VERSION} \
+      libcudnn8=${CUDNN_PACKAGE_NAME} \
+      libcudnn8-dev=${CUDNN_PACKAGE_NAME} \
     && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/*
 
-RUN CUDA_VERSION_MM=${CUDA_VERSION%.*} && \
-    pip install "torch==${TORCH_VERSION}" \
-        --index-url="https://download.pytorch.org/whl/cu121"
+RUN CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
+    if [ "${CUDA_VERSION_M}" == "11" ]; then \
+        pip install "torch==${TORCH_VERSION}" \
+            --index-url="https://download.pytorch.org/whl/cu118"; \
+    else \
+        pip install "torch==${TORCH_VERSION}" \
+            --index-url="https://download.pytorch.org/whl/cu121"; \
+    fi
 
 COPY requirements.txt /tmp/
 RUN pip install -U -r /tmp/requirements.txt

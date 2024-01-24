@@ -1,4 +1,5 @@
 torch
 numpy
+jupyter
 pytest
 pytest-xdist
