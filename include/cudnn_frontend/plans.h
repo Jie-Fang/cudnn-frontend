@@ -34,7 +34,7 @@ execute(cudnnHandle_t handle,
     auto variant_pack = variant_pack_builder.build();
     RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack.get_status() != CUDNN_STATUS_SUCCESS,
                                    error_code_t::INVALID_VARIANT_PACK,
-                                   cudnn_operation_graph.get_error());
+                                   variant_pack.get_error());
     raw_variant_pack = variant_pack.get_raw_desc();
 #else
     // build() can throw
