@@ -43,8 +43,13 @@ execute(cudnnHandle_t handle,
         auto variant_pack = variant_pack_builder.build();
         raw_variant_pack  = variant_pack.get_raw_desc();
     } catch (cudnn_frontend::cudnnException& e) {
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::INVALID_VARIANT_PACK, e.what());
+        // Silly MSVC error that thinks below condition is constexpr
+        // RETURN_CUDNN_FRONTEND_ERROR_IF(
+        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::INVALID_VARIANT_PACK, e.what());
+        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
+        getLogger() << error_code_t::INVALID_VARIANT_PACK << " because variant packing building failed at " << __FILE__
+                    << ":" << __LINE__ << "\n";
+        return {error_code_t::INVALID_VARIANT_PACK, e.what()};
     }
 #endif
 
@@ -77,8 +82,13 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
     try {
         statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
     } catch (cudnn_frontend::cudnnException& e) {
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::INVALID_VARIANT_PACK, e.what());
+        // Silly MSVC error that thinks below condition is constexpr
+        // RETURN_CUDNN_FRONTEND_ERROR_IF(
+        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::HEURISTIC_QUERY_FAILED, e.what());
+        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
+        getLogger() << error_code_t::HEURISTIC_QUERY_FAILED << " because querying heuristics failed at " << __FILE__
+                    << ":" << __LINE__ << "\n";
+        return {error_code_t::HEURISTIC_QUERY_FAILED, e.what()};
     }
 #endif
 
