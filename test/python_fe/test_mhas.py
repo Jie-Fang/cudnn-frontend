@@ -347,7 +347,6 @@ def param_extract_forward(request):
     return request.param
 
 
-@pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
 @pytest.mark.parametrize("input_type", input_type_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
@@ -368,6 +367,9 @@ def test_sdpa(input_type,
         is_dropout,
         is_ragged,
         is_infer):
+    if cudnn.backend_version() < 8903:
+        pytest.skip("SDPA fprop requires cudnn 8.9.3 or higher")
+
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
         pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
@@ -381,11 +383,14 @@ def test_sdpa(input_type,
         pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
 
     if is_ragged:
+        if torch.cuda.get_device_capability()[0] < 9:
+            pytest.skip("Ragged tensor is only supported hopper")
+
         if layout != "non_interleaved":
             pytest.skip("Ragged tensor is only tested with non-interleaved bshd layout")
 
         if not is_padding:
-            pytest.skip("Ragged tensor is currently only tested with packed variable length tensors")
+            pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
     # batch size
     b = 2
@@ -424,7 +429,7 @@ def test_sdpa(input_type,
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
-    if d_qk != d_v and is_ragged and cudnn.backend_version() < 90100:
+    if d_qk != d_v and is_ragged:
         pytest.skip("d_qk != d_v does not work with ragged offset")
 
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
@@ -617,7 +622,6 @@ def test_sdpa(input_type,
         assert compare_tensors(stats_ref, stats_gpu, "stats") == 0
 
 
-@pytest.mark.skipif(cudnn.backend_version() < 8903, reason="requires cudnn 8.9.3 or higher")
 @pytest.mark.parametrize("input_type", input_type_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
@@ -634,6 +638,9 @@ def test_sdpa_backward(input_type,
         is_padding,
         is_causal,
         is_dropout):
+    if cudnn.backend_version() < 8903:
+        pytest.skip("SDPA bprop requires cudnn 8.9.3 or higher")
+
     if head_group != "multi_head" and cudnn.backend_version() < 8907:
         pytest.skip("GQA and MQA is only supported 8.9.7 onwards.")
 
