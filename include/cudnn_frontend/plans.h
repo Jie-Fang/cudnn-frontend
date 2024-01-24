@@ -66,7 +66,21 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
     getLogger() << "[cudnn_frontend] INFO: "
                 << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
 
-    auto statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+    std::vector<cudnnStatus_t> statuses;
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+    // disable exception macro is defined. Calling build will not throw.
+    // Check status of desc and return error.
+    statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+#else
+    // build() can throw
+    // wrap in try catch
+    try {
+        statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+    } catch (cudnn_frontend::cudnnException& e) {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::INVALID_VARIANT_PACK, e.what());
+    }
+#endif
 
     getLogger() << "[cudnn_frontend] INFO: get_heuristics_list statuses: ";
     for (size_t i = 0; i < statuses.size(); i++) {
