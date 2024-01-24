@@ -22,19 +22,38 @@ execute(cudnnHandle_t handle,
     // RETURN_CUDNN_FRONTEND_ERROR_IF(!plan, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
     getLogger() << "[cudnn_frontend] INFO: Executing " << plan->getTag() << "..." << std::endl;
 
-    auto variant_pack = VariantPackBuilder()
-                            .setDataPointers(device_ptrs.size(), device_ptrs.data())
-                            .setUids(uids.size(), uids.data())
-                            .setWorkspacePointer(workspace_ptr)
-                            .build();
-    if (variant_pack.get_status() != CUDNN_STATUS_SUCCESS) {
-        std::string message =
-            "[cudnn_frontend] ERROR: Variant pack creation failed with " + std::string(variant_pack.get_error());
-        return {error_code_t::INVALID_VARIANT_PACK, message};
-    }
-    getLogger() << "[cudnn_frontend] INFO: Built variant pack for " << plan->getTag() << "..." << std::endl;
+    auto&& variant_pack_builder = VariantPackBuilder();
+    variant_pack_builder.setDataPointers(device_ptrs.size(), device_ptrs.data())
+        .setUids(uids.size(), uids.data())
+        .setWorkspacePointer(workspace_ptr);
 
-    auto status = cudnnBackendExecute(handle, plan->get_raw_desc(), variant_pack.get_raw_desc());
+    cudnnBackendDescriptor_t raw_variant_pack = nullptr;
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+    // disable exception macro is defined. Calling build will not throw.
+    // Check status of desc and return error.
+    auto variant_pack = variant_pack_builder.build();
+    RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack.get_status() != CUDNN_STATUS_SUCCESS,
+                                   error_code_t::INVALID_VARIANT_PACK,
+                                   cudnn_operation_graph.get_error());
+    raw_variant_pack = variant_pack.get_raw_desc();
+#else
+    // build() can throw
+    // wrap in try catch
+    try {
+        auto variant_pack = variant_pack_builder.build();
+        raw_variant_pack  = variant_pack.get_raw_desc();
+    } catch (cudnn_frontend::cudnnException& e) {
+        // Silly MSVC error that thinks below condition is constexpr
+        // RETURN_CUDNN_FRONTEND_ERROR_IF(
+        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::INVALID_VARIANT_PACK, e.what());
+        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
+        getLogger() << error_code_t::INVALID_VARIANT_PACK << " because variant packing building failed at " << __FILE__
+                    << ":" << __LINE__ << "\n";
+        return {error_code_t::INVALID_VARIANT_PACK, e.what()};
+    }
+#endif
+
+    auto status = cudnnBackendExecute(handle, plan->get_raw_desc(), raw_variant_pack);
     if (status != CUDNN_STATUS_SUCCESS) {
         std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
         return {error_code_t::GRAPH_EXECUTION_FAILED, message};
@@ -52,7 +71,26 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
     getLogger() << "[cudnn_frontend] INFO: "
                 << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
 
-    auto statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+    std::vector<cudnnStatus_t> statuses;
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+    // disable exception macro is defined. Calling build will not throw.
+    // Check status of desc and return error.
+    statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+#else
+    // build() can throw
+    // wrap in try catch
+    try {
+        statuses = cudnn_frontend::get_heuristics_list(modes, *operation_graph, allowAllConfig, configs, true);
+    } catch (cudnn_frontend::cudnnException& e) {
+        // Silly MSVC error that thinks below condition is constexpr
+        // RETURN_CUDNN_FRONTEND_ERROR_IF(
+        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::HEURISTIC_QUERY_FAILED, e.what());
+        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
+        getLogger() << error_code_t::HEURISTIC_QUERY_FAILED << " because querying heuristics failed at " << __FILE__
+                    << ":" << __LINE__ << "\n";
+        return {error_code_t::HEURISTIC_QUERY_FAILED, e.what()};
+    }
+#endif
 
     getLogger() << "[cudnn_frontend] INFO: get_heuristics_list statuses: ";
     for (size_t i = 0; i < statuses.size(); i++) {

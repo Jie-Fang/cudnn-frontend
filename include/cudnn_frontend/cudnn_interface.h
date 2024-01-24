@@ -105,15 +105,31 @@ class ICudnn {
         for (std::shared_ptr<cudnn_frontend::Operation> operation : operations) {
             cudnn_operations.push_back(operation.get());
         }
-        auto cudnn_operation_graph = cudnn_frontend::OperationGraphBuilder()
-                                         .setHandle(handle)
-                                         .setOperationGraph(cudnn_operations.size(), cudnn_operations.data())
-                                         .build();
 
+        auto&& cudnn_operation_graph_builder = cudnn_frontend::OperationGraphBuilder();
+        cudnn_operation_graph_builder.setHandle(handle).setOperationGraph(cudnn_operations.size(),
+                                                                          cudnn_operations.data());
+
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+        // disable exception macro is defined. Calling build will not throw.
+        // Check status of desc and return error.
+        auto cudnn_operation_graph = cudnn_operation_graph_builder.build();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_operation_graph.get_status() != CUDNN_STATUS_SUCCESS,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       cudnn_operation_graph.get_error());
         operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
-        getLogger() << "[cudnn_frontend] INFO: Successfully built Operation Graphs." << std::endl;
-
-        return {error_code_t::OK, ""};
+#else
+        // build() can throw
+        // wrap in try catch
+        try {
+            auto cudnn_operation_graph = cudnn_operation_graph_builder.build();
+            operation_graphs.push_back(std::make_shared<OperationGraph_v8>(std::move(cudnn_operation_graph)));
+        } catch (cudnn_frontend::cudnnException& e) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
+        }
+#endif
+        return {error_code_t::OK, "Successfully built Operation Graphs."};
     }
 
    public:
