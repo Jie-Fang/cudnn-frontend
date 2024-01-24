@@ -31,10 +31,6 @@ def param_extract(request):
 def test_layernorm(param_extract):
     torch.manual_seed(0)
 
-    # https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=4453656&cmtNo=
-    if cudnn.backend_version() == 90000:
-        pytest.xfail("layernorm randomly fails with mismatches for cudnn backend version v9")
-
     embedding_dim, input_type = param_extract
 
     if input_type == torch.bfloat16:
