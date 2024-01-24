@@ -383,6 +383,9 @@ def test_sdpa(input_type,
         pytest.skip("Dropout reference is only supported on 8.9.6 onwards.")
 
     if is_ragged:
+        if cudnn.backend_version() < 90000:
+            pytest.skip("Ragged tensor is only supported 9.0.0 onwards")
+
         if torch.cuda.get_device_capability()[0] < 9:
             pytest.skip("Ragged tensor is only supported hopper")
 
@@ -430,7 +433,7 @@ def test_sdpa(input_type,
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
     if d_qk != d_v and is_ragged:
-        pytest.skip("d_qk != d_v does not work with ragged offset")
+        pytest.skip("d_qk != d_v is not supported with ragged offset")
 
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
