@@ -8,7 +8,7 @@ function display_header() {
 }
 
 function run_python_tests() {
-    export PYTHONPATH=build/python_bindings
+    export PYTHONPATH=build/cudnn
     
     # Graph tests from json
     python3 test/pycudnnTest.py --testPath test/json_graph_defs/graphTests.json --testName ConvRelu1
