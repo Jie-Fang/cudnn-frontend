@@ -1187,7 +1187,7 @@ class SDPABackwardNode : public INode {
                              Matmul_attributes()
                                  .set_name("matmul_dO_VT")
                                  .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
-                                 .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]));
+                                 .set_n_override(attributes.inputs[input_names::SEQ_LEN_KV]));
         last_output->set_dim({b, h_q, s_q, s_kv}).set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
         // last_output = last_output(dP) * mask
@@ -1269,6 +1269,10 @@ class SDPABackwardNode : public INode {
         last_output = reshape(attributes.inputs[input_names::K], Reshape_attributes().set_name("reshape_k"));
         last_output->set_dim({kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]})
             .set_stride({kt_stride[0], kt_stride[1], kt_stride[3], kt_stride[2]});
+
+        if (attributes.inputs[input_names::K]->get_ragged_offset() != nullptr) {
+            last_output->set_ragged_offset(attributes.inputs[input_names::K]->get_ragged_offset());
+        }
 
         matmul(dS_output,
                last_output,
