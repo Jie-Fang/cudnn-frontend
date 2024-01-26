@@ -196,9 +196,10 @@ cudnn_frontend::graph::Graph::execute(
 
 Get workspace to execute the current selected execution plan.
 
-Optionally takes in a plan index to query workspace for. This may be used when autotuning, in conjuction with `build_plan_index(...)` API.
+Can also take in a plan index to query workspace for. This may be used when autotuning, in conjuction with `build_plan_index(...)` API.
 
-`int64_t get_workspace_size(int64_t plan_index = -1) const`
+`int64_t get_workspace_size() const`
+`int64_t get_workspace_size_plan_index(int64_t plan_index) const`
 
 Get workspace to run autotune on all plans.
 

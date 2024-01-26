@@ -517,7 +517,7 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                 std::back_inserter(random_successful),
                 1,
                 std::mt19937{std::random_device{}()});
-    Surface<int8_t> workspace(graph.get_workspace_size(random_successful.front()), false);
+    Surface<int8_t> workspace(graph.get_workspace_size_plan_index(random_successful.front()), false);
     REQUIRE(graph.execute_plan_index(handle, variant_pack, workspace.devPtr, random_successful.front()).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
