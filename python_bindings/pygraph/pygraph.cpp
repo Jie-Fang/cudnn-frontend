@@ -107,6 +107,7 @@ PyGraph::tensor(std::vector<int64_t> const& dim,
                 cudnn_frontend::DataType_t const& data_type,
                 bool const& is_virtual,
                 bool const& is_pass_by_value,
+                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& ragged_offset,
                 std::string const& name) {
     auto props = cudnn_frontend::graph::Tensor_attributes()
                      .set_data_type(data_type)
@@ -114,6 +115,7 @@ PyGraph::tensor(std::vector<int64_t> const& dim,
                      .set_is_pass_by_value(is_pass_by_value)
                      .set_dim(dim)
                      .set_stride(stride)
+                     .set_ragged_offset(ragged_offset)
                      .set_name(name);
 
     return graph.tensor(props);
@@ -385,6 +387,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v{"is_virtual", false},
              py::arg_v{"is_pass_by_value", false},
+             py::arg_v{"ragged_offset", nullptr},
              py::arg_v("name", ""),
              R"pbdoc(
                 Create a tensor.
@@ -395,6 +398,7 @@ init_pygraph_submodule(py::module_& m) {
                     data_type (cudnn.data_type): The data type of the tensor. Default is cudnn.data_type.NOT_SET.
                     is_virtual (bool): Flag indicating if the tensor is virtual. Default is False.
                     is_pass_by_value (bool): Flag indicating if the tensor is passed by value. Default is False.
+                    ragged_offset (cudnn_tensor): The ragged offset tensor. Default is nullptr.
                     name (Optional[str]): The name of the tensor.
 
                 Returns:

@@ -71,6 +71,7 @@ class PyGraph {
            cudnn_frontend::DataType_t const& data_type,
            bool const& is_virtual,
            bool const& is_pass_by_value,
+           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& ragged_offset,
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
