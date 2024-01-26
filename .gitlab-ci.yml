@@ -85,7 +85,6 @@ stages:
     artifacts:
         paths:
             - build/
-        expire_in: 1 week
 
 .test:template:
     stage: cpp_tests
@@ -232,14 +231,15 @@ thunder:cudnn_8.9.5.29:
     extends:
         - .thunder:template
 
-analysis:cudnn_v9_disable_exception:
+analysis:cudnn_clang_disable_exception:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []
     stage: analysis
     script:
+        - apt-get update && apt-get install -y clang
         - !reference [.fetch_cudnn_v9:template, before_script]
         - mkdir build && cd build
-        - cmake -DCMAKE_CXX_FLAGS="-DNV_CUDNN_DISABLE_EXCEPTION" ../
+        - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_CXX_FLAGS="-DNV_CUDNN_DISABLE_EXCEPTION" ../
         - cmake --build . -j16 --verbose
         
 analysis:cudnn_v9_no_half_conversion:
@@ -251,11 +251,16 @@ analysis:cudnn_v9_no_half_conversion:
         - cmake -DCMAKE_CXX_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__" ../
         - cmake --build . -j16 --verbose
     
-build:cudnn_8.9_clang:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang
+analysis:cudnn_clang:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []
-    stage: build
-    extends: .build:template
+    stage: analysis
+    script:
+        - apt-get update && apt-get install -y clang
+        - !reference [.fetch_cudnn_v9:template, before_script]
+        - mkdir build && cd build
+        - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake ../
+        - cmake --build . -j16 --verbose
     
 build:cudnn_8.9_windows:
     tags:
