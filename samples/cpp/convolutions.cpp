@@ -28,6 +28,10 @@
 TEST_CASE("Convolution fprop", "[conv][graph][caching]") {
     namespace fe = cudnn_frontend;
 
+    if (is_arch_supported_by_cudnn() == false) {
+        SKIP("Architecture is not supported by currend cudnn version");
+    }
+
     int64_t n = 16, c = 128, h = 56, w = 56, k = 256, r = 3, s = 3;
 
     auto build_new_graph = [=](cudnnHandle_t handle) {

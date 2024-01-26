@@ -29,6 +29,9 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Matmul", "[matmul][graph]") {
+    if (is_arch_supported_by_cudnn() == false) {
+        SKIP("Architecture is not supported by currend cudnn version");
+    }
     namespace fe = cudnn_frontend;
 
     // matmul problem size
@@ -71,6 +74,8 @@ TEST_CASE("Matmul", "[matmul][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
+
+    REQUIRE(graph.check_support(handle).is_good());
 
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
 
@@ -394,6 +399,8 @@ TEST_CASE("Abs + Matmul", "[matmul][graph]") {
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
+
+    REQUIRE(graph.check_support(handle).is_good());
 
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
 
