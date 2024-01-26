@@ -1153,7 +1153,7 @@ class SDPABackwardNode : public INode {
         // as reshape + matmul
         last_output = reshape(last_output, Reshape_attributes().set_name("reshape_p"));
         last_output->set_dim({b, h_q, s_kv, s_q}).set_stride({h_q * s_q * s_kv, s_q * s_kv, 1, s_kv});
-        last_output->set_data_type(context.get_io_data_type());
+        last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
 
         if (h_q == h_v) {
             // for MHA
@@ -1173,7 +1173,7 @@ class SDPABackwardNode : public INode {
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
             last_output->set_dim({b, h_q, s_kv, d_v}).set_stride({h_q * s_kv * d_v, s_kv * d_v, d_v, 1});
-            last_output->set_data_type(context.get_io_data_type());
+            last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
             reduction(last_output,
                       Reduction_attributes().set_name("red_dV_head").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dV]);
@@ -1233,7 +1233,7 @@ class SDPABackwardNode : public INode {
         // as reshape + matmul
         last_output = reshape(last_output, Reshape_attributes().set_name("reshape_dS"));
         last_output->set_dim({b, h_q, s_kv, s_q}).set_stride({h_q * s_q * s_kv, s_q * s_kv, 1, s_kv});
-        last_output->set_data_type(context.get_io_data_type());
+        last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
 
         if (h_q == h_k) {
             // for MHA
@@ -1253,7 +1253,7 @@ class SDPABackwardNode : public INode {
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
             last_output->set_dim({b, h_q, s_kv, d_qk}).set_stride({h_q * s_kv * d_qk, s_kv * d_qk, d_qk, 1});
-            last_output->set_data_type(context.get_io_data_type());
+            last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
             reduction(last_output,
                       Reduction_attributes().set_name("red_dK_head").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dK]);
