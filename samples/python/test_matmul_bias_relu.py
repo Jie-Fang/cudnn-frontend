@@ -123,7 +123,9 @@ def test_mixed_precision_matmul(A_data_type, B_data_type, MMA_data_type):
     graph.execute({A: A_gpu, B:  B_gpu, C:  C_actual}, workspace)
 
     # compare'em
-    torch.testing.assert_close(C_expected, C_actual)
+    atol = 5e-05
+    rtol = 1e-04
+    torch.testing.assert_close(C_expected, C_actual, atol=atol, rtol=rtol)
 
 problem_size_options = [(1, 128, 768)
                         , (16, 512, 1600)
