@@ -309,7 +309,7 @@ def generate_layout(layout, head_group, shape_q, shape_k, shape_v, shape_o):
     return stride_q, stride_k, stride_v, stride_o, offset_q, offset_k, offset_v
 
 
-def compute_inclusive_prefix_sum(tensor):
+def compute_exclusive_prefix_sum(tensor):
     # tensor has shape (B, 1, 1, 1)
     # output has shape (B+1, 1, 1, 1)
     # ex) tensor = [[[[2, 4, 1, 6]]]]
@@ -483,10 +483,10 @@ def test_sdpa(input_type,
 
     rng_dump_gpu = torch.empty((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
 
-    q_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_q_gpu) * h_q * d_qk).int() if is_ragged else None
-    k_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_kv_gpu) * h_k * d_qk).int() if is_ragged else None
-    v_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_kv_gpu) * h_v * d_v).int() if is_ragged else None
-    o_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_q_gpu) * h_q * d_v).int() if is_ragged else None
+    q_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_q_gpu) * h_q * d_qk).int() if is_ragged else None
+    k_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_kv_gpu) * h_k * d_qk).int() if is_ragged else None
+    v_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_kv_gpu) * h_v * d_v).int() if is_ragged else None
+    o_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_q_gpu) * h_q * d_v).int() if is_ragged else None
 
     o_gpu = torch.empty(b * h_q * s_q * d_v, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
     stats_gpu = torch.empty(b, h_q, s_q, 1, dtype=torch.float32, device="cuda") if not is_infer else None
@@ -785,10 +785,10 @@ def test_sdpa_backward(input_type,
 
     rng_dump_gpu = torch.empty((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
 
-    q_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_q_gpu) * h_q * d_qk).int() if is_ragged else None
-    k_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_kv_gpu) * h_k * d_qk).int() if is_ragged else None
-    v_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_kv_gpu) * h_v * d_v).int() if is_ragged else None
-    o_ragged_offset_gpu = (compute_inclusive_prefix_sum(seq_len_q_gpu) * h_q * d_v).int() if is_ragged else None
+    q_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_q_gpu) * h_q * d_qk).int() if is_ragged else None
+    k_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_kv_gpu) * h_k * d_qk).int() if is_ragged else None
+    v_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_kv_gpu) * h_v * d_v).int() if is_ragged else None
+    o_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_q_gpu) * h_q * d_v).int() if is_ragged else None
 
     o_gpu = torch.empty(b * h_q * s_q * d_v, dtype=input_type, device="cuda").as_strided(shape_o, stride_o)
     stats_gpu = torch.empty(b, h_q, s_q, 1, dtype=torch.float32, device="cuda")
