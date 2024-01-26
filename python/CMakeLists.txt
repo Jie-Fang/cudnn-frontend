@@ -10,34 +10,37 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(dlpack)
 
-FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11
-    GIT_TAG        v2.10.4
-)
-FetchContent_MakeAvailable(pybind11)
+find_package(Python 3.7 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
 
-pybind11_add_module(
-    cudnn
+# Add a library using FindPython's tooling (pybind11 also provides a helper like
+# this)
+python_add_library(
+    compiled_module
     
+    MODULE
     pycudnn.cpp
     properties.cpp
-    
+
     pygraph/pygraph.cpp
     pygraph/norm.cpp
     pygraph/sdpa.cpp
     pygraph/pointwise.cpp
+
+    WITH_SOABI
 )
+target_link_libraries(compiled_module PRIVATE pybind11::headers)
 
 target_link_libraries(
-    cudnn
+    compiled_module
     
     PRIVATE cudnn_frontend
     PRIVATE dlpack
 )
 
 set_target_properties(
-    cudnn
+    compiled_module
+
     PROPERTIES LINK_FLAGS "-Wl,--no-as-needed"
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib64
