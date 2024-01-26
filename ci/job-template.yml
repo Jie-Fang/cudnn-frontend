@@ -66,7 +66,7 @@ spec:
 #   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
 #   parallel:
 #     matrix:
-#       - ARCH: ["Ampere", "Hopper"]
+#       - ARCH: ["Hopper", "Ampere"]
 #   tags:
 #     - ${ARCH}
 #   extends: .L4_graph_runner:template

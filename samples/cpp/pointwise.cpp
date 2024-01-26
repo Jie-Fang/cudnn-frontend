@@ -28,6 +28,9 @@
 TEST_CASE("Reduction", "[reduction]") {
     namespace fe    = cudnn_frontend;
     constexpr int n = 64;
+    if (cudnnGetVersion() < 8600) {
+        SKIP("TEST REQUIRES minimum cudnn version 8.6.0");
+    }
     Surface<float> A_gpu(n * n * n * n, false);
     fe::graph::Graph graph{};
     auto A = graph.tensor(fe::graph::Tensor_attributes()

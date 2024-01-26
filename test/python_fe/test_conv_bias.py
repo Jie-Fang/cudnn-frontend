@@ -1,4 +1,5 @@
 import cudnn
+import pytest
 import torch
 
 def convert_to_cudnn_type(torch_type):
@@ -171,6 +172,7 @@ def test_leaky_relu_backward():
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-4, rtol=1e-4)
 
 
+@pytest.mark.skipif(cudnn.backend_version() < 8600, reason="requires cudnn 8.6.0 or higher")
 def test_conv_int8():
     N, C, H, W = 1, 64, 32, 32
     K, R, S = 4, 3, 3
@@ -215,8 +217,8 @@ def test_conv_int8():
         torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
     
 if __name__ == "__main__":
-    # test_conv_int8()
-    # test_conv_relu()
+    test_conv_int8()
+    test_conv_relu()
     test_conv_bias_relu()
-    # test_conv3d_bias_leaky_relu()
-    # test_leaky_relu_backward()
+    test_conv3d_bias_leaky_relu()
+    test_leaky_relu_backward()
