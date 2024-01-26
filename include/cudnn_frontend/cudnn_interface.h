@@ -164,7 +164,7 @@ class ICudnn {
     execute_cudnn_plans_with_uid(cudnnHandle_t handle,
                                  std::unordered_map<int64_t, void*> const& tensor_uid_to_pointer_map,
                                  void* workspace_ptr,
-                                 int64_t plan_index) const {
+                                 int64_t plan_index = -1) const {
         getLogger() << "[cudnn_frontend] INFO: Executing " << plans.size() << " plans." << std::endl;
 
         // Go over each plan list

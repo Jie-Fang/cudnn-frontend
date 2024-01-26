@@ -166,14 +166,29 @@ cudnn_frontend::graph::Graph::autotune(cudnnHandle_t handle,
 ### Execute
 Executing graph requires device pointers to all input output tensors and a user alloaction device workspace pointer.
 
-Optionally, execute takes a plan index to execute the graph with. This may be used when autotuning, in conjuction with `build_plan_index(...)` API.
+Two flavours of execute exists, corresponding to `build_plans(...)`` API.
+
+This API already has a candidate execution plan set. Candidate execution plan get internally set either:
+- if build_policy_t::HEURISTIC_CHOICE is used, or
+- as the last plan built that got built.
+
+```
+cudnn_frontend::error_t
+cudnn_frontend::graph::Graph::execute(
+    cudnnHandle_t handle,
+    std::unordered_map<std::shared_ptr<Tensor>, void *> var_pack,
+    void* workspace
+);
+```
+
+execute API also takes a plan index to target a specific plan. This may be used when autotuning, in conjuction with `build_plan_index(...)` API.
 ```
 cudnn_frontend::error_t
 cudnn_frontend::graph::Graph::execute(
     cudnnHandle_t handle,
     std::unordered_map<std::shared_ptr<Tensor>, void *> var_pack,
     void* workspace,
-    int64_t plan_index = -1
+    int64_t plan_index
 );
 ```
 
