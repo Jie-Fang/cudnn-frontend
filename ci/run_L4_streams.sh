@@ -12,7 +12,7 @@ function display_header() {
 }
 
 function run_python_streams() {
-    export PYTHONPATH=build/cudnn
+    export PYTHONPATH=build
 
     # TODO: replace this with the commented out code if we want to run a single process for all tests (this ensures all tests are run even if errors are encountered)
     for ((i = 1; i <= total_lines; i += stream_group_size)); do

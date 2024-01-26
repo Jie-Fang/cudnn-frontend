@@ -147,14 +147,15 @@ analysis:check-relative-includes:
         - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/ -L/usr/lib/x86_64-linux-gnu/ -lcudnn
 
 build:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
+    needs: []
     stage: build
     extends:
         - .fetch_cudnn_v9:template
         - .build:template
 
 test:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -166,7 +167,7 @@ test:cudnn_9.0.0_latest:
     needs: ["build:cudnn_9.0.0_latest"]
     
 pytest:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -179,7 +180,7 @@ pytest:cudnn_9.0.0_latest:
     resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -191,7 +192,7 @@ pycudnntest:cudnn_9.0.0_latest:
     needs: ["build:cudnn_9.0.0_latest"]
     
 L4_graph_runner:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -203,7 +204,7 @@ L4_graph_runner:cudnn_9.0.0_latest:
     needs: ["build:cudnn_9.0.0_latest"]
     
 L4_graph_runner_large:cudnn_9.0.0_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
             - ARCH: ["Ampere", "Hopper"]
@@ -232,7 +233,7 @@ thunder:cudnn_8.9.5.29:
         - .thunder:template
 
 analysis:cudnn_v9_disable_exception:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []
     stage: analysis
     script:

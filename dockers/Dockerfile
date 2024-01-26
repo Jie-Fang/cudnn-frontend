@@ -3,6 +3,7 @@ ARG CUDA_VERSION="12.2.0"
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 
+ARG SKIP_CUDNN=false
 ARG CUDNN_VERSION="8.9.7.29"
 ARG PYTHON_VERSION="3.10"
 ARG TORCH_VERSION="2.1.2"
@@ -42,14 +43,16 @@ RUN apt-get update -qq --fix-missing && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/* 
 
-RUN CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
+RUN if [ "${SKIP_CUDNN}" = false ]; then \
+    CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
     apt update -qq --fix-missing && \
     apt upgrade -y --allow-change-held-packages \
       libcudnn8=${CUDNN_PACKAGE_NAME} \
       libcudnn8-dev=${CUDNN_PACKAGE_NAME} \
     && \
     rm -rf /root/.cache && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*; \
+    fi
 
 RUN CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
     if [ "${CUDA_VERSION_M}" == "11" ]; then \
