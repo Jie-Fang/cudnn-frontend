@@ -507,7 +507,7 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                 1,
                 std::mt19937{std::random_device{}()});
     if (random_unsuccessful.size()) {
-        REQUIRE(graph.execute(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
+        REQUIRE(graph.execute_plan_index(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
     }
 
     // Run a successful engine and except success
@@ -517,8 +517,8 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                 std::back_inserter(random_successful),
                 1,
                 std::mt19937{std::random_device{}()});
-    Surface<int8_t> workspace(graph.get_workspace_size(random_successful.front()), false);
-    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr, random_successful.front()).is_good());
+    Surface<int8_t> workspace(graph.get_workspace_size_plan_index(random_successful.front()), false);
+    REQUIRE(graph.execute_plan_index(handle, variant_pack, workspace.devPtr, random_successful.front()).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
 
