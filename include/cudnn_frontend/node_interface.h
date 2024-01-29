@@ -610,7 +610,7 @@ class INode : public ICudnn {
             deserialized_pass_by_value.emplace(uid, value);
         }
         for (auto const& [uid, value] : half_pass_by_values) {
-            deserialized_pass_by_value.emplace(uid, static_cast<half>(value));
+            deserialized_pass_by_value.emplace(uid, __float2half(value));
         }
         for (auto const& [uid, value] : float_pass_by_values) {
             deserialized_pass_by_value.emplace(uid, value);
@@ -652,7 +652,7 @@ class INode : public ICudnn {
             if (pass_by_value.index() == 0) {
                 integer_pass_by_values.emplace(uid, std::get<0>(pass_by_value));
             } else if (pass_by_value.index() == 1) {
-                half_pass_by_values.emplace(uid, static_cast<float>(std::get<1>(pass_by_value)));
+                half_pass_by_values.emplace(uid, __half2float(std::get<1>(pass_by_value)));
             } else if (pass_by_value.index() == 2) {
                 float_pass_by_values.emplace(uid, std::get<2>(pass_by_value));
             }

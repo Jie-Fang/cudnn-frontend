@@ -561,7 +561,7 @@ class SDPANode : public INode {
     pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
         if (attributes.dropout_probability.has_value() && attributes.dropout_probability.value() != 0.0) {
 #if CUDNN_VERSION < 8903
-            half dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
+            half dropout_scale_value = __float2half(1.0f / (1.0f - attributes.dropout_probability.value()));
 #else
             float dropout_scale_value = (1.0f / (1.0f - attributes.dropout_probability.value()));
 #endif
