@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 Include(FetchContent)
 
 # Fetch and build dlpack
+set(BUILD_MOCK OFF)
 FetchContent_Declare(
   dlpack
   GIT_REPOSITORY https://github.com/dmlc/dlpack
