@@ -421,7 +421,7 @@ class INode : public ICudnn {
     }
 
     int64_t
-    get_workspace_size_plan_index(int64_t plan_index) const {
+    get_workspace_size_plan_at_index(int64_t plan_index) const {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
@@ -485,17 +485,17 @@ class INode : public ICudnn {
     }
 
     error_t
-    execute_plan_index(cudnnHandle_t handle,
-                       std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
-                       void* workspace,
-                       int64_t plan_index) const {
+    execute_plan_at_index(cudnnHandle_t handle,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void*>& tensor_to_pointer_map,
+                          void* workspace,
+                          int64_t plan_index) const {
         // First get all the uids from the map
         std::unordered_map<int64_t, void*> tensor_uid_to_pointer_map;
         for (auto const& [tensor, pointer] : tensor_to_pointer_map) {
             tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
         }
 
-        return execute_plan_index(handle, tensor_uid_to_pointer_map, workspace, plan_index);
+        return execute_plan_at_index(handle, tensor_uid_to_pointer_map, workspace, plan_index);
     }
 
     error_t
@@ -512,10 +512,10 @@ class INode : public ICudnn {
     }
 
     error_t
-    execute_plan_index(cudnnHandle_t handle,
-                       std::unordered_map<int64_t, void*>& tensor_uid_to_pointer_map,
-                       void* workspace,
-                       int64_t plan_index) const {
+    execute_plan_at_index(cudnnHandle_t handle,
+                          std::unordered_map<int64_t, void*>& tensor_uid_to_pointer_map,
+                          void* workspace,
+                          int64_t plan_index) const {
         // Add pass_by_value data pointers to uid_to_pointer map
         // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
         // execute.
@@ -610,7 +610,7 @@ class INode : public ICudnn {
             deserialized_pass_by_value.emplace(uid, value);
         }
         for (auto const& [uid, value] : half_pass_by_values) {
-            deserialized_pass_by_value.emplace(uid, static_cast<half>(value));
+            deserialized_pass_by_value.emplace(uid, __float2half(value));
         }
         for (auto const& [uid, value] : float_pass_by_values) {
             deserialized_pass_by_value.emplace(uid, value);
@@ -652,7 +652,7 @@ class INode : public ICudnn {
             if (pass_by_value.index() == 0) {
                 integer_pass_by_values.emplace(uid, std::get<0>(pass_by_value));
             } else if (pass_by_value.index() == 1) {
-                half_pass_by_values.emplace(uid, static_cast<float>(std::get<1>(pass_by_value)));
+                half_pass_by_values.emplace(uid, __half2float(std::get<1>(pass_by_value)));
             } else if (pass_by_value.index() == 2) {
                 float_pass_by_values.emplace(uid, std::get<2>(pass_by_value));
             }

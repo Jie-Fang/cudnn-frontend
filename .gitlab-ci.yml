@@ -240,6 +240,15 @@ analysis:cudnn_v9_disable_exception:
         - mkdir build && cd build
         - cmake -DCMAKE_CXX_FLAGS="-DNV_CUDNN_DISABLE_EXCEPTION" ../
         - cmake --build . -j16 --verbose
+        
+analysis:cudnn_v9_no_half_conversion:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.7.29_12.2.2
+    needs: []
+    stage: analysis
+    script:
+        - mkdir build && cd build
+        - cmake -DCMAKE_CXX_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__" ../
+        - cmake --build . -j16 --verbose
     
 build:cudnn_8.9_clang:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cuda_12.1.0_cudnn_8.9.0.132_clang

@@ -423,7 +423,7 @@ class Execution_plan_list {
     }
 
     error_t
-    build_plan_index(cudnnHandle_t handle, int64_t index) {
+    build_plan_at_index(cudnnHandle_t handle, int64_t index) {
         RETURN_CUDNN_FRONTEND_ERROR_IF(filtered_indices[index] == true,
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                        "Chosen plan index has been deselected.");
