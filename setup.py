@@ -86,7 +86,4 @@ class CMakeBuild(build_ext):
 setup(
     ext_modules=[CMakeExtension("cudnn/compiled_module")],
     cmdclass={"build_ext": CMakeBuild},
-    zip_safe=False,
-    packages=["cudnn"],
-    package_dir={"":"python"}
 )
