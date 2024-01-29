@@ -486,7 +486,7 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
     std::vector<int64_t> successful_plans;
     std::vector<int64_t> unsuccessful_plans;
     for (int64_t plan_index = 0; plan_index < plan_count; plan_index++) {
-        bool did_build_successfully = graph.build_plan_index(handle, plan_index).is_good();
+        bool did_build_successfully = graph.build_plan_at_index(handle, plan_index).is_good();
         if (did_build_successfully) {
             successful_plans.push_back(plan_index);
         } else {
@@ -507,7 +507,7 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                 1,
                 std::mt19937{std::random_device{}()});
     if (random_unsuccessful.size()) {
-        REQUIRE(graph.execute_plan_index(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
+        REQUIRE(graph.execute_plan_at_index(handle, variant_pack, nullptr, random_unsuccessful.front()).is_bad());
     }
 
     // Run a successful engine and except success
@@ -517,8 +517,8 @@ TEST_CASE("Bias + Matmul", "[matmul][graph]") {
                 std::back_inserter(random_successful),
                 1,
                 std::mt19937{std::random_device{}()});
-    Surface<int8_t> workspace(graph.get_workspace_size_plan_index(random_successful.front()), false);
-    REQUIRE(graph.execute_plan_index(handle, variant_pack, workspace.devPtr, random_successful.front()).is_good());
+    Surface<int8_t> workspace(graph.get_workspace_size_plan_at_index(random_successful.front()), false);
+    REQUIRE(graph.execute_plan_at_index(handle, variant_pack, workspace.devPtr, random_successful.front()).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
 

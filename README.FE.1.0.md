@@ -132,7 +132,7 @@ Use this method to build individual plan indicies. Main usecase is to parallely 
 Plan index to be used here can be queried with `get_execution_plan_count(...)` API.
 ```
 cudnn_frontend::error_t
-cudnn_frontend::Graph::build_plan_index(
+cudnn_frontend::Graph::build_plan_at_index(
     cudnnHandle_t const &handle,
     int64_t plan_index
 );
@@ -181,7 +181,7 @@ cudnn_frontend::graph::Graph::execute(
 );
 ```
 
-execute API also takes a plan index to target a specific plan. This may be used when autotuning, in conjuction with `build_plan_index(...)` API.
+execute API also takes a plan index to target a specific plan. This may be used when autotuning, in conjuction with `build_plan_at_index(...)` API.
 ```
 cudnn_frontend::error_t
 cudnn_frontend::graph::Graph::execute(
@@ -196,7 +196,7 @@ cudnn_frontend::graph::Graph::execute(
 
 Get workspace to execute the current selected execution plan.
 
-Can also take in a plan index to query workspace for. This may be used when autotuning, in conjuction with `build_plan_index(...)` API.
+Can also take in a plan index to query workspace for. This may be used when autotuning, in conjuction with `build_plan_at_index(...)` API.
 
 `int64_t get_workspace_size() const`
 `int64_t get_workspace_size_plan_index(int64_t plan_index) const`
