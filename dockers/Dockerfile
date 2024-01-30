@@ -54,7 +54,7 @@ RUN if [ "${SKIP_CUDNN}" = false ]; then \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
-RUN pip install --no-cache-dir -U pip setuptools
+RUN pip install -U --no-cache-dir pip setuptools
 
 RUN CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
     if [ "${CUDA_VERSION_M}" == "11" ]; then \
@@ -68,4 +68,4 @@ RUN CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
     fi
 
 COPY requirements.txt /tmp/
-RUN pip install -U -r --no-cache-dir /tmp/requirements.txt
+RUN pip install -U --no-cache-dir -r /tmp/requirements.txt
