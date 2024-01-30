@@ -1,5 +1,6 @@
-torch
-numpy
 jupyter
+numpy
+pybind11[global]
 pytest
 pytest-xdist
+torch

@@ -50,5 +50,5 @@ if (CUDNN_FRONTEND_BUILD_UNIT_TESTS)
 endif()
 
 if (CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS)
-    add_subdirectory(python_bindings)
+    add_subdirectory(python)
 endif()

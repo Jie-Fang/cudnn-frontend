@@ -8,7 +8,7 @@ function display_header() {
 }
 
 function run_python_tests() {
-    export PYTHONPATH=build/python_bindings
+    export PYTHONPATH=build
     
     pytest test/python_fe -n 4 -v
 }

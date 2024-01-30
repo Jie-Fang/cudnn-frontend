@@ -42,7 +42,7 @@ spec:
   tags:
     - ${ARCH}
   script:
-    - export PYTHONPATH=build/python_bindings
+    - export PYTHONPATH=build
     - pytest test/python_fe -n 4 -v --junit-xml=result-junit.xml
   artifacts:
     when: always
