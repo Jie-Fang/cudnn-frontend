@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-project(cudnn_frontend VERSION 1.0.0)
+project(cudnn_frontend VERSION 1.1.0)
 
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
 option(CUDNN_FRONTEND_BUILD_UNIT_TESTS "Defines if unittests are built or not." ON)
@@ -50,5 +50,5 @@ if (CUDNN_FRONTEND_BUILD_UNIT_TESTS)
 endif()
 
 if (CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS)
-    add_subdirectory(python_bindings)
+    add_subdirectory(python)
 endif()

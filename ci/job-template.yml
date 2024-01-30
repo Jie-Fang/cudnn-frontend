@@ -1,0 +1,72 @@
+spec:
+  inputs:
+    cudnn_version:
+    cuda_version:
+---    
+"build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
+  stage: build
+  needs: []
+  script:
+    - mkdir build
+    - cd build
+    - cmake ../
+    - cmake --build . -j16
+  artifacts:
+    paths:
+      - build/
+
+"cpp_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
+  stage: cpp_tests
+  needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
+  parallel:
+    matrix:
+      - ARCH: ["Hopper", "Ampere"]
+  tags:
+    - ${ARCH}
+  script:
+    - build/bin/samples --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
+  artifacts:
+    when: always
+    reports:
+      junit: result-junit.xml
+
+"python_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
+  stage: python_tests
+  needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
+  parallel:
+    matrix:
+      - ARCH: ["Hopper", "Ampere"]
+  tags:
+    - ${ARCH}
+  script:
+    - export PYTHONPATH=build
+    - pytest test/python_fe -n 4 -v --junit-xml=result-junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: result-junit.xml
+
+"pycudnntest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
+  stage: pycudnnTest
+  needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
+  parallel:
+    matrix:
+      - ARCH: ["Hopper", "Ampere"]
+  tags:
+    - ${ARCH}
+  extends: .pycudnntest:template
+
+# "L4_graph_runner:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+#   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
+#   stage: L4_graph_runner
+#   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
+#   parallel:
+#     matrix:
+#       - ARCH: ["Hopper", "Ampere"]
+#   tags:
+#     - ${ARCH}
+#   extends: .L4_graph_runner:template
