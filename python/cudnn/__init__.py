@@ -15,4 +15,33 @@ from .compiled_module import (
     , tensor
 )
 
+from .datatypes import torch_to_cudnn_data_type 
+
 __version__ = '1.1.0'
+
+def _tensor(
+    self,
+    dim,
+    stride,
+    data_type = data_type.NOT_SET,
+    is_virtual = False,
+    is_pass_by_value = False,
+    ragged_offset = None,
+    name = ""
+):
+    
+    # Convert data type to cudnn
+    if type(data_type) != compiled_module.data_type:
+        data_type = torch_to_cudnn_data_type(data_type)
+
+    return self.make_tensor(
+        dim = dim,
+        stride = stride,
+        data_type = data_type,
+        is_virtual = is_virtual,
+        is_pass_by_value = is_pass_by_value,
+        ragged_offset = ragged_offset,
+        name = name
+    )
+
+pygraph.tensor = _tensor
