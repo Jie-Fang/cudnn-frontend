@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 Include(FetchContent)
 
 # Fetch and build dlpack
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(BUILD_MOCK OFF)
 FetchContent_Declare(
   dlpack
@@ -49,12 +50,13 @@ set_target_properties(
 
 # using python bindings directly with cmake build system is not supported
 # Temparorily use below parameter
+option(CUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR "Whether pybinds should be kept inside build/cudnn directory." ON)
 if(CUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR)
-    set_target_properties(
-        compiled_module
+set_target_properties(
+    compiled_module
 
-        PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cudnn
-    )
-    file(COPY ${CMAKE_SOURCE_DIR}/python/cudnn DESTINATION ${CMAKE_BINARY_DIR})
+    PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cudnn
+)
+file(COPY ${CMAKE_SOURCE_DIR}/python/cudnn DESTINATION ${CMAKE_BINARY_DIR})
 endif()

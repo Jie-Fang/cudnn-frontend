@@ -34,6 +34,7 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
             f"-DCUDNN_FRONTEND_BUILD_SAMPLES=OFF",
             f"-DCUDNN_FRONTEND_BUILD_UNIT_TESTS=OFF",
+            f"-DCUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR=OFF"
         ]
 
         if "CUDA_PATH" in os.environ:
