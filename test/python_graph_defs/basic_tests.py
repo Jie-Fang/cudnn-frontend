@@ -16,6 +16,15 @@ def test_conv_relu(jparams, testgraph):
     
 #     conv_out = testgraph.conv_fprop(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
 
+def test_conv_bias_relu(jparams, testgraph):
+    X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
+    W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
+    bias = testgraph.tensor(dim=jparams["bias_dim"], layout = "NHWC")
+
+    conv_out = testgraph.conv_fprop(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    bias_out = testgraph.bias(name = "bias", input = conv_out, bias = bias)
+    relu_output = testgraph.relu(input=bias_out)
+
 def test_conv_relu_bias_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
     W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
@@ -67,6 +76,37 @@ def test_batchnorm(jparams, testgraph):
 
     (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = testgraph.batchnorm(name = "BN"
                         , input = X
+                        , scale = scale, bias = bias
+                        , in_running_mean = in_running_mean, in_running_var = in_running_var
+                        , epsilon = epsilon, momentum = momentum)
+    
+    # TODO: set_data_type. Also allow chaining by returning the tensor 
+    Y.set_data_type(cudnn.data_type.HALF)
+
+def test_conv_batchnorm(jparams, testgraph):
+
+    pytest.skip("BN conv fusion not yet supported")
+
+    testgraph.set_io_data_type(cudnn.data_type.FLOAT)
+    testgraph.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+
+    X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
+    W = testgraph.tensor(dim=jparams["filter_dim"], layout = "NHWC")
+    
+    conv_out = testgraph.conv_fprop(name = "conv", image = X, weight = W, padding = jparams["padding"], stride = jparams["stride"], dilation = jparams["dilation"])
+    
+    C = jparams["conv_out"][1]
+    #X = testgraph.tensor(dim=jparams["in_dim"], data_type=cudnn.data_type.HALF, layout = "NHWC") 
+    scale = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
+    bias = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
+    in_running_mean = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
+    in_running_var = testgraph.tensor(dim=[1, C, 1, 1], data_type=cudnn.data_type.FLOAT)
+
+    epsilon = testgraph.tensor_cpu_constant(1e-03, dim=[1,1,1,1], data_type=cudnn.data_type.FLOAT)
+    momentum = testgraph.tensor_cpu_constant(0.1, dim=[1,1,1,1], data_type=cudnn.data_type.FLOAT)
+
+    (Y, saved_mean, saved_inv_var, out_running_mean, out_running_var) = testgraph.batchnorm(name = "BN"
+                        , input = conv_out
                         , scale = scale, bias = bias
                         , in_running_mean = in_running_mean, in_running_var = in_running_var
                         , epsilon = epsilon, momentum = momentum)

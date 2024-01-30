@@ -9,25 +9,26 @@ from json_graph_test import run_test_from_legacy_args
 utils.reportCurrentTime("import_json_graph_test")
 
 if __name__ == "__main__":
-    pct_parser = argparse.ArgumentParser(prog='pycudnnTest')
-    # TODO(@mbreughe): generalize this to a directory of python files
-    # TODO(@mbreughe): legacy json tests specify through -jsonPath (see json_graph_test.py). Make this mutually exclusive to -RgraphRunner and -RgrStream
+    # We disable help here, as each specific mode has it's own set of options and associated help
+    pct_parser = argparse.ArgumentParser(prog='pycudnnTest', add_help=False, allow_abbrev=False)
+        
+    pct_parser.add_argument('--R', '-R', choices=['graphRunner', "grStream"])
+
+    # TODO(@mbreughe): move to grStream mode
+    pct_parser.add_argument('--stream_start_line', '--start_line', '--stream_start', action="store", dest='start_line', default=1, type=int, help="In stream mode, which line should be our first test?")
+    pct_parser.add_argument('--stream_group_size', action="store", dest='num_lines', type=int, default=None, help="In stream mode, how many tests do we want to batch?")
+    
+     # TODO(@mbreughe): move to all graphRunner modes
+    pct_parser.add_argument('--disable_cupti', action="store_true", default=False, help="Disable usage of cupti profiling (e.g., running through nsys is mutually exclusive)")
+
+    # TODO(@mbreughe): Make the following mutually exclusive to -RgraphRunner and -RgrStream
     pct_parser.add_argument('--testPath', default="json_graph_defs/graphTests.json", 
                         help="This can be a json file or python file with graph definitions. "
                         "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py")
-    # TODO(@mbreughe): again this has no meaning in the graph runner modes
     pct_parser.add_argument('--testName', default=[], action="append", help="Test Name (multiple names are allowed and recommended for performance). Note: in python graph mode, no name means all tests in file are executed. ")
-    pct_parser.add_argument('--verbose', '-v', action="store_true", default=False, help="Verbose output")
-    pct_parser.add_argument('--vverbose', '-vv', action="store_true", default=False, help="Very verbose output")
-    pct_parser.add_argument('--disable_cupti', action="store_true", default=False, help="Disable usage of cupti profiling (e.g., running through nsys is mutually exclusive)")
-    # TODO(@mbreughe): no meaning in the graph runner modes
-    pct_parser.add_argument('--threads', '-n', action="store", default=1, help="Number of threads to parallelize tests across.")
-    pct_parser.add_argument('--R', '-R', choices=['graphRunner', "grStream"])
-    # TODO(@mbreughe): option exclusive for grStream
-    pct_parser.add_argument('--stream_start_line', '--start_line', '--stream_start', action="store", dest='start_line', default=1, type=int, help="In stream mode, which line should be our first test?")
-    # TODO(@mbreughe): option exclusive for grStream
-    pct_parser.add_argument('--stream_group_size', action="store", dest='num_lines', type=int, default=None, help="In stream mode, how many tests do we want to batch?")
-
+    pct_parser.add_argument('--verbose', action="store_true", default=False, help="Verbose output")
+    pct_parser.add_argument('--vverbose', action="store_true", default=False, help="Very verbose output")
+    pct_parser.add_argument('--threads', action="store", default=1, help="Number of threads to parallelize tests across.")
 
     cmd = " ".join(sys.argv)
     print("Running: {}".format(cmd))

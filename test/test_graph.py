@@ -364,6 +364,21 @@ class test_tensor:
 
         if "stride" in dir(self):
             self.cudnn_tensor.set_stride(self.stride)
+
+    def __repr__(self):
+        rep = "[Tensor] {}".format(self.name)
+        if "dim" in dir(self):
+            rep += " - dim: {}".format(self.dim)
+
+        if "stride" in dir(self):
+            rep += " - stride: {}".format(self.stride)
+
+        if "data_type" in dir(self):
+            rep += " - dtype: {}".format(self.data_type)
+
+        return rep
+
+        
     
 
 def convert_to_cudnn_type(torch_type):
