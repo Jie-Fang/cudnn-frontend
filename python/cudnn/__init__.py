@@ -44,4 +44,15 @@ def _tensor(
         name = name
     )
 
+def _set_data_type(
+    self,
+    data_type = data_type.NOT_SET,
+):
+    # Convert data type to cudnn
+    if type(data_type) != compiled_module.data_type:
+        data_type = torch_to_cudnn_data_type(data_type)
+    
+    return self._set_data_type(data_type)
+
+compiled_module.tensor.set_data_type = _set_data_type
 pygraph.tensor = _tensor
