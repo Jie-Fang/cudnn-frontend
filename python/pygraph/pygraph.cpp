@@ -77,30 +77,6 @@ convert_to_cudnn_data_type(const DLDataType& dtype) {
     return cudnn_frontend::DataType_t::NOT_SET;
 }
 
-char*
-extract_data_pointer(py::object const& obj) {
-    throw_if(!py::hasattr(obj, "__dlpack__"),
-             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
-             "Object does not have the __dlpack__() method");
-
-    py::capsule capsule = obj.attr("__dlpack__")();
-    throw_if(capsule.is_none(),
-             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
-             "Failed to retrieve the DLPack capsule.");
-
-    DLManagedTensor* managed =
-        static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
-    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
-
-    DLDeviceType device_type = managed->dl_tensor.device.device_type;
-    throw_if(
-        device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged,
-        cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
-        "Invalid device type.");
-
-    return (char*)managed->dl_tensor.data + managed->dl_tensor.byte_offset;
-}
-
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::tensor(std::vector<int64_t> const& dim,
                 std::vector<int64_t> const& stride,
@@ -319,34 +295,13 @@ PyGraph::get_workspace_size() {
 }
 
 void
-PyGraph::execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object> var_pack,
-                 py::object workspace) {
-    std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void*> var_pack_;
-    for (auto const& [tensor, pyobject] : var_pack) {
-        // Its alright for the user to pass in None objects as key
-        // FE will just ignore them
-        if (tensor) {
-            var_pack_.emplace(tensor, extract_data_pointer(pyobject));
-        }
-    }
-
-    void* workspace_ptr = extract_data_pointer(workspace);
-
-    // TODO: Probably concatenate in a macro?
-    auto status = graph.execute(handle, var_pack_, workspace_ptr);
-    throw_if(status.is_bad(), status.get_code(), status.get_message());
-
-    return;
-}
-
-void
-PyGraph::execute(std::unordered_map<int64_t, py::object> var_pack, py::object workspace) {
+PyGraph::execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace) {
     std::unordered_map<int64_t, void*> var_pack_;
     for (auto const& [uid, pyobject] : var_pack) {
-        var_pack_.emplace(uid, extract_data_pointer(pyobject));
+        var_pack_.emplace(uid, (void*)pyobject);
     }
 
-    void* workspace_ptr = extract_data_pointer(workspace);
+    auto workspace_ptr = (void*)workspace;
 
     // TODO: Probably concatenate in a macro?
     auto status = graph.execute(handle, var_pack_, workspace_ptr);
@@ -593,13 +548,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("policy") = cudnn_frontend::BuildPlanPolicy_t::HEURISTICS_CHOICE)
         .def("build", &PyGraph::build)
         .def("get_workspace_size", &PyGraph::get_workspace_size)
-        .def(
-            "execute",
-            static_cast<void (PyGraph::*)(
-                std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object>, py::object)>(
-                &PyGraph::execute))
-        .def("execute",
-             static_cast<void (PyGraph::*)(std::unordered_map<int64_t, py::object>, py::object)>(&PyGraph::execute))
+        .def("_execute", &PyGraph::execute)
         .def("__repr__", [](PyGraph const& pygraph) {
             std::stringstream ss;
             json j = pygraph.graph;

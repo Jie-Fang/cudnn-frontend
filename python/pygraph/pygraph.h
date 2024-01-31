@@ -307,11 +307,7 @@ class PyGraph {
     get_workspace_size();
 
     void
-    execute(std::unordered_map<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, py::object> var_pack,
-            py::object workspace);
-
-    void
-    execute(std::unordered_map<int64_t, py::object> var_pack, py::object workspace);
+    execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace);
 
     void
     deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
