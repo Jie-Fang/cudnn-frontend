@@ -69,9 +69,7 @@ def test_bn_relu_with_mask():
     saved_mean_actual = torch.zeros_like(scale_gpu)
     saved_inv_var_actual = torch.zeros_like(scale_gpu)
     Y_actual = torch.zeros_like(Y_expected)
-    # pytorch does not allow bool tensors in dlpack
-    assert C%8 == 0
-    mask_actual_uint8 = torch.empty(N, C // 8, H, W, requires_grad=False, device="cuda", dtype=torch.uint8).to(memory_format=torch.channels_last)
+    mask_actual = torch.empty(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.bool).to(memory_format=torch.channels_last)
 
     zeros = torch.zeros_like(Y_expected)
 
@@ -91,7 +89,7 @@ def test_bn_relu_with_mask():
                     , saved_inv_var : saved_inv_var_actual
                     , Y : Y_actual
                     , comparison: zeros
-                    , mask : mask_actual_uint8
+                    , mask : mask_actual
                 }, workspace)
 
     # Compare
@@ -99,6 +97,7 @@ def test_bn_relu_with_mask():
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(mean_expected, saved_mean_actual, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(inv_var_expected, saved_inv_var_actual, atol=1e-3, rtol=1e-3)
+    # torch.testing.assert_close(mask_expected, mask_actual)
 
 @pytest.mark.skipif(cudnn.backend_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
 def test_drelu_dadd_dbn():
@@ -110,19 +109,18 @@ def test_drelu_dadd_dbn():
     mean_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     inv_variance_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
     dy_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
+    x_mask_gpu = torch.randint(0, 2, [N, C, H, W], requires_grad=False, device="cuda", dtype=torch.bool).to(memory_format=torch.channels_last)
 
     # Cudnn code
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    # Bool type is not supported by dlpack
-    x_mask_gpu = torch.randint(0, 255, [N, int(C / 8), H, W], requires_grad=False, device="cuda", dtype=torch.uint8).to(memory_format=torch.channels_last)
-    X_mask = graph.tensor(name = "X_mask", dim = [N, C, H, W], stride = x_gpu.stride(), data_type = cudnn.data_type.BOOLEAN)
 
     X = graph.tensor(name = "X", dim = x_gpu.size(), stride = x_gpu.stride(), data_type = x_gpu.dtype)
     DY = graph.tensor(name = "DY", dim = dy_gpu.size(), stride = dy_gpu.stride(), data_type = dy_gpu.dtype)
     scale = graph.tensor(name = "scale", dim = scale_gpu.size(), stride = scale_gpu.stride(), data_type = scale_gpu.dtype)
     mean = graph.tensor(name = "mean", dim = mean_gpu.size(), stride = mean_gpu.stride(), data_type = mean_gpu.dtype)
     inv_variance = graph.tensor(name = "inv_variance", dim = inv_variance_gpu.size(), stride = inv_variance_gpu.stride(), data_type = inv_variance_gpu.dtype)
+    X_mask = graph.tensor(name = "X_mask", dim = x_mask_gpu.size(), stride = x_mask_gpu.stride(), data_type = x_mask_gpu.dtype)
     
     DX_drelu = graph.scale(name = "drelu"
                          , input = DY
