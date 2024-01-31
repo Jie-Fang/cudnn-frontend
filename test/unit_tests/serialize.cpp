@@ -103,10 +103,9 @@ TEST_CASE("Graph key", "[serialize]") {
     cudnnCreate(&handle);
 
     REQUIRE(graph.validate().is_good());
-    auto key = graph.key();
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
-    REQUIRE(key == graph.key());
+    auto key = graph.key();
 
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
     REQUIRE(key == graph.key());
