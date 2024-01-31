@@ -49,7 +49,7 @@ def compare_tensors(expected, actual, name, rtol=2e-2, atol=2e-2, fudge=1e-9):
     n_nans = torch.isnan(actual).sum()
     n_zeros = n_elem - torch.count_nonzero(actual)
 
-    if n_errors != 0:
+    if n_errors + n_nans != 0:
         print(f"========== Comparison for {name} ==========")
         print(f"Absolute Tolerance = {atol}")
         print(f"Relative Tolerance = {rtol}")
@@ -66,7 +66,7 @@ def compare_tensors(expected, actual, name, rtol=2e-2, atol=2e-2, fudge=1e-9):
         print(f"Number of Zeros = {n_zeros} ({n_zeros * 100 / n_elem:.2f}%)")
         print("===================================\n")
 
-    return n_errors
+    return n_errors + n_nans
 
 
 def compute_ref(
@@ -665,6 +665,9 @@ def test_sdpa_backward(input_type,
 
     if is_bias and is_padding:
         pytest.skip("dBias is not supported with padding mask")
+
+    if is_alibi and not is_causal:
+        pytest.skip("ALiBi mask is only supported with causal mask")
 
     if is_alibi and cudnn.backend_version() < 8904:
         pytest.skip("ALiBi mask is only supported 8.9.4 onwards.")
