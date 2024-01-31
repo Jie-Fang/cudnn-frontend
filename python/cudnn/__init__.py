@@ -1,4 +1,4 @@
-from .compiled_module import (        
+from ._compiled_module import (        
     backend_version
     , destroy_handle
     , norm_forward_phase
@@ -15,7 +15,7 @@ from .compiled_module import (
     , tensor
 )
 
-from .datatypes import torch_to_cudnn_data_type 
+from .datatypes import _torch_to_cudnn_data_type 
 
 __version__ = '1.1.0'
 
@@ -31,10 +31,10 @@ def _tensor(
 ):
     
     # Convert data type to cudnn
-    if type(data_type) != compiled_module.data_type:
-        data_type = torch_to_cudnn_data_type(data_type)
+    if type(data_type) != _compiled_module.data_type:
+        data_type = _torch_to_cudnn_data_type(data_type)
 
-    return self.make_tensor(
+    return self._make_tensor(
         dim = dim,
         stride = stride,
         data_type = data_type,
@@ -49,10 +49,10 @@ def _set_data_type(
     data_type = data_type.NOT_SET,
 ):
     # Convert data type to cudnn
-    if type(data_type) != compiled_module.data_type:
-        data_type = torch_to_cudnn_data_type(data_type)
+    if type(data_type) != _compiled_module.data_type:
+        data_type = _torch_to_cudnn_data_type(data_type)
     
     return self._set_data_type(data_type)
 
-compiled_module.tensor.set_data_type = _set_data_type
+_compiled_module.tensor.set_data_type = _set_data_type
 pygraph.tensor = _tensor

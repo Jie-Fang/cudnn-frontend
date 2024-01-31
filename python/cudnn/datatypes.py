@@ -1,4 +1,4 @@
-from .compiled_module import data_type as cudnn_data_type
+from ._compiled_module import data_type as cudnn_data_type
 
 torch_available = None
 _torch_to_cudnn_data_type_dict = None
@@ -41,7 +41,7 @@ def is_torch_available():
     return torch_available
 
 # Returns None in case mapping is not available
-def torch_to_cudnn_data_type(torch_data_type) -> cudnn_data_type:
+def _torch_to_cudnn_data_type(torch_data_type) -> cudnn_data_type:
     if is_torch_available():
         return _torch_to_cudnn_data_type_dict.get(torch_data_type, None)
     else:

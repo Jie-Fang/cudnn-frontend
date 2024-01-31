@@ -380,7 +380,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("input"),
              py::arg_v("name", ""))
         .def("tensor_like", py::overload_cast<py::object const&>(&PyGraph::tensor_like))
-        .def("make_tensor",
+        .def("_make_tensor",
              &PyGraph::tensor,
              py::arg{"dim"},
              py::arg{"stride"},
