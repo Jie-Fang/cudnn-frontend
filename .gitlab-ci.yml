@@ -66,6 +66,7 @@ stages:
     - python_tests
     - pycudnnTest
     - L4_graph_runner
+    - notebooks
     - thunder
         
 .fetch_cudnn_v9:template:
@@ -277,3 +278,17 @@ build:cudnn_8.9_windows:
         - cd build
         - cmake ../
         - cmake --build . -j16 --verbose
+
+notebooks:cudnn_9.0.0_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
+    stage: notebooks
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    script:
+        - !reference [.fetch_cudnn_v9:template, before_script]
+        - pip install -v .
+        - jupyter execute samples/python/*
+    needs: []
