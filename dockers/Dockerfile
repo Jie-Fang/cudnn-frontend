@@ -54,14 +54,18 @@ RUN if [ "${SKIP_CUDNN}" = false ]; then \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
+RUN pip install -U --no-cache-dir pip setuptools
+
 RUN CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
     if [ "${CUDA_VERSION_M}" == "11" ]; then \
         pip install "torch==${TORCH_VERSION}" \
+            --no-cache-dir \
             --index-url="https://download.pytorch.org/whl/cu118"; \
     else \
         pip install "torch==${TORCH_VERSION}" \
+            --no-cache-dir \
             --index-url="https://download.pytorch.org/whl/cu121"; \
     fi
 
 COPY requirements.txt /tmp/
-RUN pip install -U -r /tmp/requirements.txt
+RUN pip install -U --no-cache-dir -r /tmp/requirements.txt
