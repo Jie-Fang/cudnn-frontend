@@ -29,12 +29,16 @@ class CMakeBuild(build_ext):
 
         # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
         cmake_args = [
-            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
+            f"-DCUDNN_FRONTEND_BUILD_PYTHON_BINDINGS=ON"
+            # There's no need to build cpp samples and tests with python
             f"-DCUDNN_FRONTEND_BUILD_SAMPLES=OFF",
             f"-DCUDNN_FRONTEND_BUILD_UNIT_TESTS=OFF",
-            f"-DCUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR=OFF"
+            # All these are handled by pip
+            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
+            f"-DCUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR=OFF",
+            f"-DCUDNN_FRONTEND_FETCH_PYBINDS_IN_CMAKE=OFF"
         ]
 
         if "CUDA_PATH" in os.environ:
