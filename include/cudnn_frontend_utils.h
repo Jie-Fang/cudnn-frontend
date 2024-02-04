@@ -604,6 +604,7 @@ get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
         case PointwiseMode_t::LOGICAL_OR:
         case PointwiseMode_t::MIN:
         case PointwiseMode_t::MAX:
+        case PointwiseMode_t::MOD:
         case PointwiseMode_t::RELU_BWD:
         case PointwiseMode_t::TANH_BWD:
         case PointwiseMode_t::SIGMOID_BWD:
@@ -626,7 +627,6 @@ get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
         case PointwiseMode_t::EXP:
         case PointwiseMode_t::LOG:
         case PointwiseMode_t::NEG:
-        case PointwiseMode_t::MOD:
         case PointwiseMode_t::ABS:
         case PointwiseMode_t::CEIL:
         case PointwiseMode_t::FLOOR:
