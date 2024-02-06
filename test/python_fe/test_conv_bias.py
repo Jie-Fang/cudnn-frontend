@@ -2,14 +2,6 @@ import cudnn
 import pytest
 import torch
 
-def convert_to_cudnn_type(torch_type):
-    if torch_type == torch.float16:
-        return cudnn.data_type.HALF
-    elif torch_type == torch.float32:
-        return cudnn.data_type.FLOAT
-    else:
-        raise ValueError("Unsupported tensor data type.")
-
 class CSBR(torch.nn.Module):
     def forward(self, x, w, b = None, padding = [1,1], stride = [1,1], dilation = [1,1]):
         if b is not None:
@@ -36,9 +28,9 @@ def test_conv_bias_relu():
 
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT, handle = handle)
 
-    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
-    W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
-    B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = convert_to_cudnn_type(B_gpu.dtype))
+    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = X_gpu.dtype)
+    W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = W_gpu.dtype)
+    B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = B_gpu.dtype)
 
     conv_output = graph.conv_fprop(image = X, weight = W, pre_padding = padding, post_padding = padding, stride = stride, dilation = dilation)
 
@@ -75,8 +67,8 @@ def test_conv_relu():
     # Cudnn code
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
-    W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
+    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = X_gpu.dtype)
+    W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = W_gpu.dtype)
     
     conv_output = graph.conv_fprop(image = X, weight = W, padding = padding, stride = stride, dilation = dilation)
 
@@ -115,9 +107,9 @@ def test_conv3d_bias_leaky_relu():
     
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
-    Weight = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
-    B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = convert_to_cudnn_type(B_gpu.dtype))
+    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = X_gpu.dtype)
+    Weight = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = W_gpu.dtype)
+    B = graph.tensor(name = "B", dim = B_gpu.size(), stride = B_gpu.stride(), data_type = B_gpu.dtype)
 
     conv_output = graph.conv_fprop(image = X, weight = Weight, padding = padding, stride = stride, dilation = dilation)
 
@@ -154,8 +146,8 @@ def test_leaky_relu_backward():
     
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.FLOAT, compute_data_type = cudnn.data_type.FLOAT)
 
-    loss = graph.tensor(name = "loss", dim = loss_gpu.size(), stride = loss_gpu.stride(), data_type = convert_to_cudnn_type(loss_gpu.dtype))
-    input = graph.tensor(name = "input", dim = input_gpu.size(), stride = input_gpu.stride(), data_type = convert_to_cudnn_type(input_gpu.dtype))
+    loss = graph.tensor(name = "loss", dim = loss_gpu.size(), stride = loss_gpu.stride(), data_type = loss_gpu.dtype)
+    input = graph.tensor(name = "input", dim = input_gpu.size(), stride = input_gpu.stride(), data_type = input_gpu.dtype)
 
     Y = graph.leaky_relu_backward(loss = loss, input = input, negative_slope = negative_slope)
     Y.set_output(True)

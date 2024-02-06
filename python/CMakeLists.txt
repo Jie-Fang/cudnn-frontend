@@ -28,7 +28,7 @@ endif()
 # Add a library using FindPython's tooling (pybind11 also provides a helper like
 # this)
 python_add_library(
-    compiled_module
+    _compiled_module
     
     MODULE
     pycudnn.cpp
@@ -41,17 +41,17 @@ python_add_library(
 
     WITH_SOABI
 )
-target_link_libraries(compiled_module PRIVATE pybind11::headers)
+target_link_libraries(_compiled_module PRIVATE pybind11::headers)
 
 target_link_libraries(
-    compiled_module
+    _compiled_module
     
     PRIVATE cudnn_frontend
     PRIVATE dlpack
 )
 
 set_target_properties(
-    compiled_module
+    _compiled_module
 
     PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed"
@@ -62,8 +62,8 @@ set_target_properties(
 # Temparorily use below parameter
 option(CUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR "Whether pybinds should be kept inside build/cudnn directory." ON)
 if(CUDNN_FRONTEND_KEEP_PYBINDS_IN_BINARY_DIR)
-    set_target_properties(
-        compiled_module
+set_target_properties(
+        _compiled_module
 
         PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cudnn

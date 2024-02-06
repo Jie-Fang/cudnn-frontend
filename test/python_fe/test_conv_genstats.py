@@ -2,14 +2,6 @@ import cudnn
 import pytest
 import torch
 
-def convert_to_cudnn_type(torch_type):
-    if torch_type == torch.float16:
-        return cudnn.data_type.HALF
-    elif torch_type == torch.float32:
-        return cudnn.data_type.FLOAT
-    else:
-        raise ValueError("Unsupported tensor data type.")
-
 class Conv_Genstats(torch.nn.Module):
     def forward(self, scale, bias, x, w, padding = [1,1], stride = [1,1], dilation = [1,1]):
         x_conv = torch.relu(x * scale + bias)
@@ -41,11 +33,11 @@ def test_conv_genstats():
     # Cudnn code
     graph = cudnn.pygraph(io_data_type = cudnn.data_type.HALF, intermediate_data_type = cudnn.data_type.HALF, compute_data_type = cudnn.data_type.FLOAT)
 
-    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = convert_to_cudnn_type(X_gpu.dtype))
-    W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = convert_to_cudnn_type(W_gpu.dtype))
+    X = graph.tensor(name = "X", dim = X_gpu.size(), stride = X_gpu.stride(), data_type = X_gpu.dtype)
+    W = graph.tensor(name = "W", dim = W_gpu.size(), stride = W_gpu.stride(), data_type = W_gpu.dtype)
 
-    S = graph.tensor(name = "S", dim = scale.size(), stride = scale.stride(), data_type = convert_to_cudnn_type(scale.dtype))
-    B  = graph.tensor(name = "B", dim = bias.size(),  stride = bias.stride(), data_type = convert_to_cudnn_type(bias.dtype))
+    S = graph.tensor(name = "S", dim = scale.size(), stride = scale.stride(), data_type = scale.dtype)
+    B  = graph.tensor(name = "B", dim = bias.size(),  stride = bias.stride(), data_type = bias.dtype)
 
     S_OUT = graph.scale(name = "scale", input = X, scale = S)
     B_OUT = graph.bias(name = "bias", input = S_OUT, bias = B)

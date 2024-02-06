@@ -71,7 +71,7 @@ init_properties(py::module_& m) {
         .def("get_name", &cudnn_frontend::graph::Tensor_attributes::get_name)
         .def("set_name", &cudnn_frontend::graph::Tensor_attributes::set_name)
         .def("get_data_type", &cudnn_frontend::graph::Tensor_attributes::get_data_type)
-        .def("set_data_type", &cudnn_frontend::graph::Tensor_attributes::set_data_type)
+        .def("_set_data_type", &cudnn_frontend::graph::Tensor_attributes::set_data_type)
         .def("get_dim", &cudnn_frontend::graph::Tensor_attributes::get_dim)
         .def("set_dim", &cudnn_frontend::graph::Tensor_attributes::set_dim)
         .def("get_stride", &cudnn_frontend::graph::Tensor_attributes::get_stride)
