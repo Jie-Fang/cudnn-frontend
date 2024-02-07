@@ -55,3 +55,39 @@ TEST_CASE("Reduction", "[reduction]") {
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }
+
+TEST_CASE("Fused scalar", "[scalar][graph]") {
+    namespace fe = cudnn_frontend;
+
+    constexpr int n = 4;
+
+    fe::graph::Graph graph{};
+    auto A = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_dim({n, n, n})
+                              .set_stride({n * n, n, 1})
+                              .set_data_type(fe::DataType_t::HALF));
+    auto C = graph.pointwise(A,
+                             graph.tensor(5.0f),
+                             fe::graph::Pointwise_attributes()
+                                 .set_mode(fe::PointwiseMode_t::ADD)
+                                 .set_compute_data_type(fe::DataType_t::FLOAT));
+    C->set_output(true).set_data_type(fe::DataType_t::HALF);
+
+    REQUIRE(graph.validate().is_good());
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
+    REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
+
+    Surface<half> C_gpu(n * n * n, false);
+    Surface<half> A_gpu(n * n * n, false);
+
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {{A, A_gpu.devPtr},
+                                                                                             {C, C_gpu.devPtr}};
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+
+    checkCudnnErr(cudnnDestroy(handle));
+}

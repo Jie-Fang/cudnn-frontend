@@ -97,11 +97,7 @@ class DLNNode : public INode {
         infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]);
 
         if (cudnnGetVersion() < 8906) {
-            epsilon = std::make_shared<Tensor_attributes>();
-            epsilon->set_is_pass_by_value(true)
-                .set_dim({1, 1, 1, 1})
-                .set_stride({1, 1, 1, 1})
-                .set_data_type(DataType_t::FLOAT);
+            epsilon = std::make_shared<Tensor_attributes>(0.0f);
         }
 
         return {error_code_t::OK, ""};
@@ -220,12 +216,11 @@ class DLNNode : public INode {
         j.update(R"( {"tag": "LAYER_NORM_BPROP"})"_json);
     }
 
-    error_t
-    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
-        if (epsilon) {
-            // can pass in any dummy value
-            tensor_to_pass_by_value.emplace(epsilon->get_uid(), 0.0f);
-        }
+    virtual error_t
+    pass_by_value_tensors_(
+        std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.fill_pass_by_value(tensor_to_pass_by_value));
+
         return {error_code_t::OK, ""};
     }
 };

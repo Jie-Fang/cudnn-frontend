@@ -181,6 +181,14 @@ class PointwiseNode : public INode {
         return {error_code_t::OK, ""};
     }
 
+    virtual error_t
+    pass_by_value_tensors_(
+        std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(attributes.fill_pass_by_value(tensor_to_pass_by_value));
+
+        return {error_code_t::OK, ""};
+    }
+
     virtual void
     serialize(json& j) const override final {
         j = attributes;

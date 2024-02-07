@@ -24,10 +24,50 @@
 #include <exception>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
+
+#include <cuda_fp16.h>
 
 #include "thirdparty/nlohmann/json.hpp"
 using json = nlohmann::json;
+
+template <>
+struct nlohmann::adl_serializer<half> {
+    static void
+    to_json(json& j, const half& opt) {
+        // No precision loss when converting to float
+        j = __half2float(opt);
+    }
+
+    static void
+    from_json(const json& j, half& opt) {
+        opt = __float2half(j.get<float>());
+    }
+};
+
+template <typename T, typename... Args>
+void
+convert_from_json_to_variant(const nlohmann::json& j, std::variant<Args...>& data) {
+    try {
+        data = j.get<T>();
+    } catch (...) {
+        // get will throw an error if incorrect type
+    }
+}
+
+template <typename... Args>
+struct nlohmann::adl_serializer<std::variant<Args...>> {
+    static void
+    to_json(nlohmann::json& j, const std::variant<Args...>& data) {
+        std::visit([&j](const auto& v) { j = v; }, data);
+    }
+
+    static void
+    from_json(const nlohmann::json& j, std::variant<Args...>& data) {
+        (convert_from_json_to_variant<Args>(j, data), ...);
+    }
+};
 
 // Specialization of nlohmann::adl_serializer for std::optional<T>
 template <typename T>
