@@ -17,17 +17,32 @@ namespace graph {
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
 class Tensor_attributes {
+   public:
+    using uid_t = int64_t;
+
+   private:
     template <typename>
     friend class Attributes;
 
     std::string name;
-    DataType_t data_type               = DataType_t::NOT_SET;
-    std::vector<int64_t> dim           = {};
-    std::vector<int64_t> stride        = {};
-    bool is_virtual                    = false;
-    bool is_pass_by_value              = false;
+    DataType_t data_type        = DataType_t::NOT_SET;
+    std::vector<int64_t> dim    = {};
+    std::vector<int64_t> stride = {};
+    bool is_virtual             = false;
+
+    // There are two usecases of pass by value tensors:
+    // 1. Fused scalar constants
+    // 2. Scalar passed during execution
+    // In approach 1, users provide a value to embed into the graph.
+    // In approach 2, users set is_pass_by_value boolean and then pass a pointer to scalar value with execute() API.
+    // A closed set of types that are allowed to be passed by value.
+    using pass_by_values_t = std::variant<int32_t, half, float>;
+
+    std::optional<pass_by_values_t> pass_by_value = std::nullopt;
+    bool is_pass_by_value                         = false;
+
     TensorReordering_t reordering_type = TensorReordering_t::NONE;
-    int64_t uid                        = 0;
+    uid_t uid                          = 0;
     bool uid_assigned                  = false;
 
     std::shared_ptr<Tensor_attributes> ragged_offset;
@@ -45,6 +60,11 @@ class Tensor_attributes {
             is_virtual && is_pass_by_value,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Tensor '" + name + "' can't be both virutal and pass_by_value at the same time.");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            pass_by_value.has_value() & (!is_pass_by_value),
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Tensor '" + name + "' can't be a fused scalar and not a pass_by_value tensor at the same time.");
 
         return {error_code_t::OK, ""};
     }
@@ -68,12 +88,34 @@ class Tensor_attributes {
                                    dim,
                                    stride,
                                    is_virtual,
+                                   pass_by_value,
                                    is_pass_by_value,
                                    reordering_type,
                                    uid,
                                    uid_assigned)
 
     Tensor_attributes() = default;
+
+    Tensor_attributes(float const& scalar) {
+        pass_by_value    = scalar;
+        is_pass_by_value = true;
+        dim = stride = {1};
+        data_type    = DataType_t::FLOAT;
+    }
+
+    Tensor_attributes(half const& scalar) {
+        pass_by_value    = scalar;
+        is_pass_by_value = true;
+        dim = stride = {1};
+        data_type    = DataType_t::HALF;
+    }
+
+    Tensor_attributes(int32_t const& scalar) {
+        pass_by_value    = scalar;
+        is_pass_by_value = true;
+        dim = stride = {1};
+        data_type    = DataType_t::INT32;
+    }
 
     std::string
     get_name() const {
@@ -140,6 +182,11 @@ class Tensor_attributes {
         return set_is_virtual(!value);
     }
 
+    std::optional<pass_by_values_t>
+    get_pass_by_value() const {
+        return pass_by_value;
+    }
+
     bool
     get_is_pass_by_value() const {
         return is_pass_by_value;
@@ -162,12 +209,12 @@ class Tensor_attributes {
         return *this;
     }
 
-    int64_t
+    uid_t
     get_uid() const {
         return uid;
     }
 
-    int64_t
+    uid_t
     has_uid() const {
         return uid_assigned;
     }
@@ -180,7 +227,7 @@ class Tensor_attributes {
     }
 
     auto
-    set_uid(int64_t value) -> Tensor_attributes& {
+    set_uid(uid_t value) -> Tensor_attributes& {
         uid          = value;
         uid_assigned = true;
         return *this;
@@ -247,6 +294,19 @@ class Attributes {
         return non_virtual_uids;
     }
 
+    error_t
+    fill_pass_by_value(std::unordered_map<Tensor_attributes::uid_t, Tensor_attributes::pass_by_values_t>&
+                           tensor_to_pass_by_value) const {
+        auto derived = static_cast<DerivedT const*>(this);
+        for (auto& [name, tensor] : derived->inputs) {
+            if (tensor && tensor->get_pass_by_value().has_value()) {
+                tensor_to_pass_by_value.emplace(tensor->get_uid(), tensor->get_pass_by_value().value());
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
     void
     fill_from_context(detail::Context const& context) {
         auto derived = static_cast<DerivedT const*>(this);
@@ -274,6 +334,23 @@ class Attributes {
 
         if (compute_data_type == DataType_t::NOT_SET) {
             set_compute_data_type(context.get_compute_data_type());
+        }
+
+        // Handle shape and stride inferencing for fused scalars.
+        // Pick number of dimensions from anyone of non-fused-scalar input tensors
+        // In case, all tensors are fused scalars, just keep them 1D.
+        int64_t number_of_dims = 1;
+        for (auto [name, tensor] : derived->inputs) {
+            if (tensor && (tensor->get_pass_by_value().has_value() == false)) {
+                number_of_dims = tensor->get_dim().size();
+                break;
+            }
+        }
+        for (auto [name, tensor] : derived->inputs) {
+            if (tensor && tensor->get_pass_by_value().has_value()) {
+                tensor->set_dim(std::vector<int64_t>(number_of_dims, 1));
+                tensor->set_stride(std::vector<int64_t>(number_of_dims, 1));
+            }
         }
     }
 

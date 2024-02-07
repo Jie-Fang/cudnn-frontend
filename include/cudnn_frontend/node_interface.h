@@ -33,7 +33,7 @@ class SoftmaxNode;
 class INode : public ICudnn {
    public:
     // A closed set of types that are allowed to be passed by value today
-    using pass_by_values_t = std::variant<int32_t, half, float, void*>;
+    using pass_by_values_t = std::variant<int32_t, half, float>;
 
     detail::Context context;
 
@@ -186,8 +186,6 @@ class INode : public ICudnn {
                 tensor_to_pointer_map.emplace(uid, int32_t_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {
                 tensor_to_pointer_map.emplace(uid, float_value_ptr);
-            } else if (void** void_value_ptr = std::get_if<void*>(&value)) {
-                tensor_to_pointer_map.emplace(uid, *void_value_ptr);
             } else {
                 RETURN_CUDNN_FRONTEND_ERROR_IF(
                     true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
@@ -591,30 +589,7 @@ class INode : public ICudnn {
             index++;
         }
 
-        std::unordered_map<uid_t, int32_t> integer_pass_by_values;
-        std::unordered_map<uid_t, float> half_pass_by_values;
-        std::unordered_map<uid_t, float> float_pass_by_values;
-
-        auto pass_by_value_tensors = j["pass_by_values"];
-        for (auto i = 0u; i < pass_by_value_tensors.size(); i++) {
-            if (i == 0) {
-                integer_pass_by_values = pass_by_value_tensors[i].get<std::unordered_map<uid_t, int32_t>>();
-            } else if (i == 1) {
-                half_pass_by_values = pass_by_value_tensors[i].get<std::unordered_map<uid_t, float>>();
-            } else if (i == 2) {
-                float_pass_by_values = pass_by_value_tensors[i].get<std::unordered_map<uid_t, float>>();
-            }
-        }
-
-        for (auto const& [uid, value] : integer_pass_by_values) {
-            deserialized_pass_by_value.emplace(uid, value);
-        }
-        for (auto const& [uid, value] : half_pass_by_values) {
-            deserialized_pass_by_value.emplace(uid, __float2half(value));
-        }
-        for (auto const& [uid, value] : float_pass_by_values) {
-            deserialized_pass_by_value.emplace(uid, value);
-        }
+        deserialized_pass_by_value = j["pass_by_values"];
 
         deserialized_workspace_modifications = j["workspace_modifications"];
 
@@ -642,30 +617,11 @@ class INode : public ICudnn {
 
         std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
         CHECK_CUDNN_FRONTEND_ERROR(gather_pass_by_value_tensors_(tensor_to_pass_by_value));
-
-        j["pass_by_values"];
-        std::unordered_map<uid_t, int32_t> integer_pass_by_values;
-        std::unordered_map<uid_t, float> half_pass_by_values;
-        std::unordered_map<uid_t, float> float_pass_by_values;
-        // std::unordered_map<uid_t, void *>  void_ptr_pass_by_values;
-        for (auto const& [uid, pass_by_value] : tensor_to_pass_by_value) {
-            if (pass_by_value.index() == 0) {
-                integer_pass_by_values.emplace(uid, std::get<0>(pass_by_value));
-            } else if (pass_by_value.index() == 1) {
-                half_pass_by_values.emplace(uid, __half2float(std::get<1>(pass_by_value)));
-            } else if (pass_by_value.index() == 2) {
-                float_pass_by_values.emplace(uid, std::get<2>(pass_by_value));
-            }
-        }
-        // json j = half_pass_by_values;
-        j["pass_by_values"].push_back(integer_pass_by_values);
-        j["pass_by_values"].push_back(half_pass_by_values);
-        j["pass_by_values"].push_back(float_pass_by_values);
+        j["pass_by_values"] = tensor_to_pass_by_value;
 
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;
         CHECK_CUDNN_FRONTEND_ERROR(gather_workspace_modifications(workspace_modifications, workspace_offset));
-
         j["workspace_modifications"] = workspace_modifications;
 
         j["fe_workspace_size"] = get_fe_workspace_size();
