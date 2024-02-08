@@ -43,15 +43,30 @@ RUN apt-get update -qq --fix-missing && \
     rm -rf /root/.cache && \
     rm -rf /var/lib/apt/lists/* 
 
-RUN if [ "${SKIP_CUDNN}" = false ]; then \
-    CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
-    apt update -qq --fix-missing && \
-    apt upgrade -y --allow-change-held-packages \
-      libcudnn8=${CUDNN_PACKAGE_NAME} \
-      libcudnn8-dev=${CUDNN_PACKAGE_NAME} \
-    && \
-    rm -rf /root/.cache && \
-    rm -rf /var/lib/apt/lists/*; \
+RUN CUDNN_VERSION_M=${CUDNN_VERSION%%.*} && \
+    CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
+    if [ "${CUDNN_VERSION_M}" == "9" ]; then \
+        if [ "${SKIP_CUDNN}" = false ]; then \
+            CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1" && \
+            apt update -qq --fix-missing && \
+            apt upgrade -y --allow-change-held-packages \
+            libcudnn9-cuda-${CUDA_VERSION_M}=${CUDNN_PACKAGE_NAME} \
+            libcudnn9-dev-cuda-${CUDA_VERSION_M}=${CUDNN_PACKAGE_NAME} \
+            && \
+            rm -rf /root/.cache && \
+            rm -rf /var/lib/apt/lists/*; \
+        fi \
+    else \
+        if [ "${SKIP_CUDNN}" = false ]; then \
+            CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
+            apt update -qq --fix-missing && \
+            apt upgrade -y --allow-change-held-packages \
+            libcudnn8=${CUDNN_PACKAGE_NAME} \
+            libcudnn8-dev=${CUDNN_PACKAGE_NAME} \
+            && \
+            rm -rf /root/.cache && \
+            rm -rf /var/lib/apt/lists/*; \
+        fi \    
     fi
 
 RUN pip install -U --no-cache-dir pip setuptools
