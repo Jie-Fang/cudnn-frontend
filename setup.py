@@ -31,7 +31,7 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
-            f"-DCUDNN_FRONTEND_BUILD_PYTHON_BINDINGS=ON"
+            f"-DCUDNN_FRONTEND_BUILD_PYTHON_BINDINGS=ON",
             # There's no need to build cpp samples and tests with python
             f"-DCUDNN_FRONTEND_BUILD_SAMPLES=OFF",
             f"-DCUDNN_FRONTEND_BUILD_UNIT_TESTS=OFF",
