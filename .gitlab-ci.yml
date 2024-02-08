@@ -297,5 +297,5 @@ notebooks:cudnn_9.1.0_latest:
     script:
         - !reference [.fetch_cudnn_v9:template, before_script]
         - pip install -v .
-        - jupyter execute samples/python/*
+        - ci/run_notebooks.sh
     needs: []
