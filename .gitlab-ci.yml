@@ -119,16 +119,6 @@ stages:
     stage: L4_graph_runner
     script:
         - ci/run_L4_graph_runner.sh
-        
-.thunder:template:
-    stage: thunder
-    script:
-        - git clone https://vedaanta-nvidia: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@github.com/Lightning-AI/lightning-thunder.git
-        - cd lightning-thunder
-        - git checkout ${THUNDER_BRANCH_NAME}
-        - python setup.py develop
-        - pytest thunder/tests/test_cudnn_executor.py -v
-    allow_failure: true
 
 .L4_graph_runner_large:template:
     stage: L4_graph_runner
@@ -224,20 +214,26 @@ L4_graph_runner_large:cudnn_9.1.0_latest:
     only:
         - schedules
 
-thunder:cudnn_8.9.5.29:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:lightning-py3.10-cuda12.1.1
+thunder:cudnn_9.0.0.312_12.3.1:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1
+    stage: thunder
     needs: []
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
-    before_script:
-        - apt update
-        - apt upgrade -y --allow-change-held-packages libcudnn8=8.9.5.29-1+cuda12.2 libcudnn8-dev=8.9.5.29-1+cuda12.2
-        - CMAKE_BUILD_PARALLEL_LEVEL=16 pip install . -v
-    extends:
-        - .thunder:template
+    script:
+        # Install cudnn_frontend
+        - pip install -v .
+        # Install thunder
+        - git clone https://vedaanta-nvidia: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@github.com/Lightning-AI/lightning-thunder.git
+        - cd lightning-thunder
+        - git checkout ${THUNDER_BRANCH_NAME}
+        - python setup.py develop
+        # Run cudnnex tests in thunder
+        - pip install fdm # Missing from thunder's requirements?
+        - pytest thunder/tests/test_cudnn_executor.py -v
 
 analysis:cudnn_clang_disable_exception:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
