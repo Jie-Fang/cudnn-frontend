@@ -63,11 +63,24 @@ class Graph : public INode {
         return {error_code_t::OK, ""};
     }
 
-    error_t
+    virtual error_t
     pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t> &pass_by_values) const override final {
         for (auto [uid, value] : deserialized_pass_by_value) {
             pass_by_values.emplace(uid, value);
         }
+        return {error_code_t::OK, ""};
+    }
+
+    virtual error_t
+    collect_pre_assigned_uids_([[maybe_unused]] std::unordered_set<int64_t> &pre_assigned_uids) const override final {
+        return {error_code_t::OK, ""};
+    }
+
+    virtual error_t
+    create_cudnn_tensors_(
+        [[maybe_unused]] int64_t &uid,
+        [[maybe_unused]] std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> &tensors,
+        [[maybe_unused]] std::unordered_set<int64_t> const &invalid_uids) const override final {
         return {error_code_t::OK, ""};
     }
 

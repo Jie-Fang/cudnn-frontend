@@ -23,11 +23,6 @@ class DBNNode : public NodeCRTP<DBNNode> {
     }
 
     error_t
-    collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
-        return attributes.get_prefilled_uids(pre_assigned_uids);
-    }
-
-    error_t
     pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating DBNNode " << attributes.name << "..." << std::endl;
@@ -92,9 +87,9 @@ class DBNNode : public NodeCRTP<DBNNode> {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
-                         std::unordered_set<int64_t> const& invalid_uids) const override final {
+    create_cudnn_tensors_(int64_t& uid,
+                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                          std::unordered_set<int64_t> const& invalid_uids) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building DBNNode tensors " << attributes.name << "..." << std::endl;
 
