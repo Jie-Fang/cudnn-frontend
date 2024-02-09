@@ -689,6 +689,8 @@ class NodeCRTP : public INode {
     create_cudnn_tensors_(int64_t& uid,
                           std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
                           std::unordered_set<int64_t> const& invalid_uids) const override {
+        getLogger() << "[cudnn_frontend] INFO: Creating cudnn tensors for node named '" << self().attributes.name
+                    << "':" << std::endl;
         for (auto const& [name, tensor] : self().attributes.inputs) {
             (void)name;
             if (tensor) {

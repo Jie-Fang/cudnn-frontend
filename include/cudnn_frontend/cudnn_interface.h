@@ -50,7 +50,8 @@ class ICudnn {
 
         auto tensor_uid = props->has_uid() ? props->get_uid() : uid;
         if (tensors.find(tensor_uid) != tensors.end()) {
-            getLogger() << "[cudnn_frontend] INFO: Shared Tensor" << uid << " already created." << std::endl;
+            getLogger() << "[cudnn_frontend] INFO: Backend Tensor named '" << props->get_name() << "' with UID "
+                        << tensor_uid << " already created." << std::endl;
             return {error_code_t::OK, ""};
         }
 
