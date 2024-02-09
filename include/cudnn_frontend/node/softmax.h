@@ -11,12 +11,12 @@
 
 namespace cudnn_frontend::graph {
 
-class SoftmaxNode : public INode {
+class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
    public:
     Softmax_attributes attributes;
 
     SoftmaxNode(Softmax_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

@@ -10,12 +10,12 @@ namespace cudnn_frontend {
 
 namespace graph {
 
-class BatchNormFinalizeNode : public INode {
+class BatchNormFinalizeNode : public NodeCRTP<BatchNormFinalizeNode> {
+   public:
     BN_finalize_attributes attributes;
 
-   public:
     BatchNormFinalizeNode(BN_finalize_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

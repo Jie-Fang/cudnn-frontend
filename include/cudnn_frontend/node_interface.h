@@ -38,8 +38,6 @@ class INode : public ICudnn {
     detail::Context context;
 
    private:
-    std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
-    std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
     int64_t fe_workspace_size = 0;
 
     std::shared_ptr<Tensor_attributes>
@@ -98,12 +96,7 @@ class INode : public ICudnn {
     }
 
     virtual error_t
-    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& pass_by_values) const {
-        for (auto [uid, value] : deserialized_pass_by_value) {
-            pass_by_values.emplace(uid, value);
-        }
-        return {error_code_t::OK, ""};
-    }
+    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& pass_by_values) const = 0;
 
     error_t
     run_auxiliary_kernels(
@@ -195,6 +188,9 @@ class INode : public ICudnn {
     }
 
    protected:
+    std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
+    std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
+
     // Type of each node. Nodes can either be a composite (value COMPOSITE) or
     // one of the other primitive types. Primitives types are nothing but
     // cudnn operations.
@@ -650,6 +646,29 @@ class INode : public ICudnn {
 to_json(json& j, const INode& p) {
     p.serialize(j);
 }
+
+template <typename DerivedT>
+class NodeCRTP : public INode {
+    DerivedT&
+    self() {
+        return *static_cast<DerivedT*>(this);
+    }
+    DerivedT const&
+    self() const {
+        return *static_cast<DerivedT const*>(this);
+    }
+
+    virtual error_t
+    pass_by_value_tensors_(
+        std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(self().attributes.fill_pass_by_value(tensor_to_pass_by_value));
+
+        return {error_code_t::OK, ""};
+    }
+
+   protected:
+    using INode::INode;
+};
 
 #define CUDNN_FE_VALIDATE_TENSOR_(port, map_)                                                      \
     {                                                                                              \

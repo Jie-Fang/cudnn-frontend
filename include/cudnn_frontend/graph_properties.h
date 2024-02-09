@@ -294,6 +294,7 @@ class Attributes {
         return non_virtual_uids;
     }
 
+   public:
     error_t
     fill_pass_by_value(std::unordered_map<Tensor_attributes::uid_t, Tensor_attributes::pass_by_values_t>&
                            tensor_to_pass_by_value) const {
@@ -354,7 +355,6 @@ class Attributes {
         }
     }
 
-   public:
     std::string name;
     DataType_t compute_data_type = DataType_t::NOT_SET;
 

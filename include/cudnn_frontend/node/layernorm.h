@@ -9,12 +9,12 @@
 namespace cudnn_frontend {
 
 namespace graph {
-class LayerNormNode : public INode {
+class LayerNormNode : public NodeCRTP<LayerNormNode> {
    public:
     Layernorm_attributes attributes;
 
     LayerNormNode(Layernorm_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

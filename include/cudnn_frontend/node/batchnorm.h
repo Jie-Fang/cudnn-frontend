@@ -9,12 +9,12 @@
 namespace cudnn_frontend {
 
 namespace graph {
-class BatchNormNode : public INode {
+class BatchNormNode : public NodeCRTP<BatchNormNode> {
    public:
     Batchnorm_attributes attributes;
 
     BatchNormNode(Batchnorm_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

@@ -9,12 +9,12 @@ namespace cudnn_frontend {
 
 namespace graph {
 
-class GenstatsNode : public INode {
+class GenstatsNode : public NodeCRTP<GenstatsNode> {
+   public:
     Genstats_attributes attributes;
 
-   public:
     GenstatsNode(Genstats_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

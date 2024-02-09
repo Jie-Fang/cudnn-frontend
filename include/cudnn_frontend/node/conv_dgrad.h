@@ -9,12 +9,12 @@
 
 namespace cudnn_frontend::graph {
 
-class DgradNode : public INode {
+class DgradNode : public NodeCRTP<DgradNode> {
+   public:
     Conv_dgrad_attributes attributes;
 
-   public:
     DgradNode(Conv_dgrad_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

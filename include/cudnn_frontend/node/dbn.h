@@ -10,12 +10,12 @@ namespace cudnn_frontend {
 
 namespace graph {
 
-class DBNNode : public INode {
+class DBNNode : public NodeCRTP<DBNNode> {
    public:
     Batchnorm_backward_attributes attributes;
 
     DBNNode(Batchnorm_backward_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
