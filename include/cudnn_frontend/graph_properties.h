@@ -795,7 +795,7 @@ class Layernorm_backward_attributes : public Attributes<Layernorm_backward_attri
     friend class Graph;
 
    public:
-    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
+    enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE, EPSILON };
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { DX, DSCALE, DBIAS };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;

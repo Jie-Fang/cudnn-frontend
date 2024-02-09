@@ -12,9 +12,6 @@ namespace graph {
 
 class DLNNode : public NodeCRTP<DLNNode> {
    public:
-    // Keep epsilon for pre-8906
-    std::shared_ptr<Tensor_attributes> epsilon;
-
     Layernorm_backward_attributes attributes;
 
     DLNNode(Layernorm_backward_attributes&& attributes_, detail::Context const& context)
@@ -39,6 +36,12 @@ class DLNNode : public NodeCRTP<DLNNode> {
     expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DLN node " << attributes.name << "..."
                     << std::endl;
+
+        // WAR as epsilon was required in previous versions
+        if (cudnnGetVersion() < 8906) {
+            attributes.inputs[Layernorm_backward_attributes::input_names::EPSILON] =
+                std::make_shared<Tensor_attributes>(0.0f);
+        }
 
         attributes.fill_from_context(context);
 
@@ -96,10 +99,6 @@ class DLNNode : public NodeCRTP<DLNNode> {
         infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DSCALE]);
         infer_scale_bias_tensors(attributes.outputs[Layernorm_backward_attributes::output_names::DBIAS]);
 
-        if (cudnnGetVersion() < 8906) {
-            epsilon = std::make_shared<Tensor_attributes>(0.0f);
-        }
-
         return {error_code_t::OK, ""};
     }
 
@@ -135,10 +134,6 @@ class DLNNode : public NodeCRTP<DLNNode> {
             if (tensor) {
                 CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
             }
-        }
-
-        if (epsilon) {
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(epsilon, uid, tensors, invalid_uids));
         }
 
         return {error_code_t::OK, ""};
@@ -180,9 +175,9 @@ class DLNNode : public NodeCRTP<DLNNode> {
         CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(DX, Layernorm_backward_attributes::output_names::DX);
         DLN_op_builder.setdxDesc(*(tensors.at(DX->second->get_uid())));
 
-        if (epsilon) {
-            DLN_op_builder.setEpsilonTensor(*(tensors.at(epsilon->get_uid())));
-            uids_involved_in_operations.insert(epsilon->get_uid());
+        if (cudnnGetVersion() < 8906) {
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(EPSILON, Layernorm_backward_attributes::input_names::EPSILON);
+            DLN_op_builder.setEpsilonTensor(*(tensors.at(EPSILON->second->get_uid())));
         }
 
 #ifdef NV_CUDNN_DISABLE_EXCEPTION
