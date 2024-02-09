@@ -98,6 +98,14 @@ class INode : public ICudnn {
     virtual error_t
     pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& pass_by_values) const = 0;
 
+    virtual error_t
+    collect_pre_assigned_uids_(std::unordered_set<int64_t>& pre_assigned_uids) const = 0;
+
+    virtual error_t
+    create_cudnn_tensors_(int64_t& uid,
+                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors,
+                          std::unordered_set<int64_t> const& invalid_uids) const = 0;
+
     error_t
     run_auxiliary_kernels(
         cudnnHandle_t handle,
@@ -297,10 +305,11 @@ class INode : public ICudnn {
     }
 
     // Creates cudnn tensors for each node (and its sub nodes)
-    virtual error_t
+    error_t
     create_cudnn_tensors(int64_t& uid,
                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors,
                          std::unordered_set<int64_t> const& invalid_uids) const {
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors_(uid, uid_to_backend_tensors, invalid_uids));
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors, invalid_uids));
         }
@@ -321,10 +330,12 @@ class INode : public ICudnn {
         return {error_code_t::OK, ""};
     }
 
-    virtual error_t
+    error_t
     collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const {
+        // Collect uids from current node
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pre_assigned_uids_(pre_assigned_uids));
         for (auto const& sub_node : sub_nodes) {
-            auto x = sub_node->collect_pre_assigned_uids(pre_assigned_uids);
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->collect_pre_assigned_uids(pre_assigned_uids));
         }
         return {error_code_t::OK, ""};
     }
@@ -662,6 +673,34 @@ class NodeCRTP : public INode {
     pass_by_value_tensors_(
         std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
         CHECK_CUDNN_FRONTEND_ERROR(self().attributes.fill_pass_by_value(tensor_to_pass_by_value));
+
+        return {error_code_t::OK, ""};
+    }
+
+    virtual error_t
+    collect_pre_assigned_uids_(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(self().attributes.get_prefilled_uids(pre_assigned_uids));
+
+        return {error_code_t::OK, ""};
+    }
+
+    // Not marked final as BN/DBN override it for peer_stats tensor vector
+    virtual error_t
+    create_cudnn_tensors_(int64_t& uid,
+                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                          std::unordered_set<int64_t> const& invalid_uids) const override {
+        for (auto const& [name, tensor] : self().attributes.inputs) {
+            (void)name;
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
+            }
+        }
+        for (auto const& [name, tensor] : self().attributes.outputs) {
+            (void)name;
+            if (tensor) {
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
+            }
+        }
 
         return {error_code_t::OK, ""};
     }

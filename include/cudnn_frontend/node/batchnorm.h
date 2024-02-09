@@ -22,11 +22,6 @@ class BatchNormNode : public NodeCRTP<BatchNormNode> {
     }
 
     error_t
-    collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
-        return attributes.get_prefilled_uids(pre_assigned_uids);
-    }
-
-    error_t
     expand_and_infer_properties() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm node " << attributes.name << "..."
                     << std::endl;
@@ -112,9 +107,9 @@ class BatchNormNode : public NodeCRTP<BatchNormNode> {
     }
 
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
-                         std::unordered_set<int64_t> const& invalid_uids) const override final {
+    create_cudnn_tensors_(int64_t& uid,
+                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                          std::unordered_set<int64_t> const& invalid_uids) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Building BatchNormNode tensors " << attributes.name << "..." << std::endl;
 

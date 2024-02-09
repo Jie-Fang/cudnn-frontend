@@ -82,33 +82,6 @@ class DgradNode : public NodeCRTP<DgradNode> {
     }
 
     error_t
-    collect_pre_assigned_uids(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
-        return attributes.get_prefilled_uids(pre_assigned_uids);
-    }
-
-    error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
-                         std::unordered_set<int64_t> const& invalid_uids) const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building DgradNode tensors " << attributes.name << "..." << std::endl;
-
-        for (auto const& [name, tensor] : attributes.inputs) {
-            (void)name;
-            if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
-            }
-        }
-        for (auto const& [name, tensor] : attributes.outputs) {
-            (void)name;
-            if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
-            }
-        }
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
