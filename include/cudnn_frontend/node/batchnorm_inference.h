@@ -9,12 +9,12 @@
 namespace cudnn_frontend {
 
 namespace graph {
-class BatchnormInferenceNode : public INode {
+class BatchnormInferenceNode : public NodeCRTP<BatchnormInferenceNode> {
    public:
     Batchnorm_inference_attributes attributes;
 
     BatchnormInferenceNode(Batchnorm_inference_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

@@ -10,12 +10,12 @@ namespace cudnn_frontend {
 
 namespace graph {
 
-class DBNWeightNode : public INode {
+class DBNWeightNode : public NodeCRTP<DBNWeightNode> {
+   public:
     DBN_weight_attributes attributes;
 
-   public:
     DBNWeightNode(DBN_weight_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

@@ -10,15 +10,15 @@ namespace cudnn_frontend {
 
 namespace graph {
 
-class DLNNode : public INode {
+class DLNNode : public NodeCRTP<DLNNode> {
+   public:
     // Keep epsilon for pre-8906
     std::shared_ptr<Tensor_attributes> epsilon;
 
-   public:
     Layernorm_backward_attributes attributes;
 
     DLNNode(Layernorm_backward_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -214,14 +214,6 @@ class DLNNode : public INode {
     serialize(json& j) const override final {
         j = attributes;
         j.update(R"( {"tag": "LAYER_NORM_BPROP"})"_json);
-    }
-
-    virtual error_t
-    pass_by_value_tensors_(
-        std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.fill_pass_by_value(tensor_to_pass_by_value));
-
-        return {error_code_t::OK, ""};
     }
 };
 

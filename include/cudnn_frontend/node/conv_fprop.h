@@ -9,12 +9,12 @@
 
 namespace cudnn_frontend::graph {
 
-class ConvolutionNode : public INode {
+class ConvolutionNode : public NodeCRTP<ConvolutionNode> {
    public:
     Conv_fprop_attributes attributes;
 
     ConvolutionNode(Conv_fprop_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

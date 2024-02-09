@@ -63,6 +63,14 @@ class Graph : public INode {
         return {error_code_t::OK, ""};
     }
 
+    error_t
+    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t> &pass_by_values) const override final {
+        for (auto [uid, value] : deserialized_pass_by_value) {
+            pass_by_values.emplace(uid, value);
+        }
+        return {error_code_t::OK, ""};
+    }
+
    public:
     Graph() : INode(detail::Context{}) {}
 

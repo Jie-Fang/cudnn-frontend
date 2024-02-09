@@ -13,7 +13,7 @@
 
 namespace cudnn_frontend::graph {
 
-class SDPANode : public INode {
+class SDPANode : public NodeCRTP<SDPANode> {
     using input_names  = SDPA_attributes::input_names;
     using output_names = SDPA_attributes::output_names;
 
@@ -24,7 +24,7 @@ class SDPANode : public INode {
     SDPA_attributes attributes;
 
     SDPANode(SDPA_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -530,7 +530,7 @@ class SDPANode : public INode {
     }
 };
 
-class SDPABackwardNode : public INode {
+class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
     using input_names  = SDPA_backward_attributes::input_names;
     using output_names = SDPA_backward_attributes::output_names;
 
@@ -547,7 +547,7 @@ class SDPABackwardNode : public INode {
     SDPA_backward_attributes attributes;
 
     SDPABackwardNode(SDPA_backward_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

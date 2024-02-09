@@ -9,12 +9,12 @@
 namespace cudnn_frontend {
 
 namespace graph {
-class RMSNormNode : public INode {
+class RMSNormNode : public NodeCRTP<RMSNormNode> {
    public:
     Rmsnorm_attributes attributes;
 
     RMSNormNode(Rmsnorm_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -180,12 +180,12 @@ class RMSNormNode : public INode {
     }
 };
 
-class DRMSNormNode : public INode {
+class DRMSNormNode : public NodeCRTP<DRMSNormNode> {
    public:
     Rmsnorm_backward_attributes attributes;
 
     DRMSNormNode(Rmsnorm_backward_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

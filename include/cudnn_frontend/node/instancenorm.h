@@ -9,12 +9,12 @@
 namespace cudnn_frontend {
 
 namespace graph {
-class InstanceNormNode : public INode {
+class InstanceNormNode : public NodeCRTP<InstanceNormNode> {
    public:
     Instancenorm_attributes attributes;
 
     InstanceNormNode(Instancenorm_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
@@ -195,12 +195,12 @@ class InstanceNormNode : public INode {
     }
 };
 
-class DINNode : public INode {
+class DINNode : public NodeCRTP<DINNode> {
    public:
     Instancenorm_backward_attributes attributes;
 
     DINNode(Instancenorm_backward_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

@@ -13,14 +13,14 @@
 
 namespace cudnn_frontend::graph {
 
-class ScaledDotProductAttentionNode : public INode {
+class ScaledDotProductAttentionNode : public NodeCRTP<ScaledDotProductAttentionNode> {
+   public:
     std::shared_ptr<Tensor_attributes> negative_inf;
 
-   public:
     Scaled_dot_product_attention_attributes options;
 
     ScaledDotProductAttentionNode(Scaled_dot_product_attention_attributes&& options_, detail::Context const& context)
-        : INode(context), options(std::move(options_)) {}
+        : NodeCRTP(context), options(std::move(options_)) {}
 
     Type
     getType() override final {

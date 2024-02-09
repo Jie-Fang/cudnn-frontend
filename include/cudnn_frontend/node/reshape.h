@@ -7,12 +7,12 @@
 
 namespace cudnn_frontend::graph {
 
-class ReshapeNode : public INode {
+class ReshapeNode : public NodeCRTP<ReshapeNode> {
+   public:
     Reshape_attributes attributes;
 
-   public:
     ReshapeNode(Reshape_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

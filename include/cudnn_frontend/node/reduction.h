@@ -8,12 +8,12 @@
 
 namespace cudnn_frontend::graph {
 
-class ReductionNode : public INode {
+class ReductionNode : public NodeCRTP<ReductionNode> {
+   public:
     Reduction_attributes attributes;
 
-   public:
     ReductionNode(Reduction_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {

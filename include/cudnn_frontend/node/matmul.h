@@ -9,12 +9,12 @@
 
 namespace cudnn_frontend::graph {
 
-class MatmulNode : public INode {
+class MatmulNode : public NodeCRTP<MatmulNode> {
+   public:
     Matmul_attributes attributes;
 
-   public:
     MatmulNode(Matmul_attributes&& attributes_, detail::Context const& context)
-        : INode(context), attributes(std::move(attributes_)) {}
+        : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
     getType() override final {
