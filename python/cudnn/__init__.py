@@ -72,5 +72,23 @@ def _execute(
         uid_to_tensor_pointer[cudnn_tensor_uid] = library_tensor.data_ptr()
     workspace_pointer = library_workspace.data_ptr()
     self._execute(uid_to_tensor_pointer, workspace_pointer)
+    
+def _execute_plan_at_index(
+    self,
+    cudnn_to_library_tensor,
+    library_workspace,
+    index
+):
+    uid_to_tensor_pointer = {}
+    for [cudnn_tensor, library_tensor] in cudnn_to_library_tensor.items():
+        # cudnn_tensor can be None
+        if cudnn_tensor is None:
+            continue
+        # cudnn_tensor can also be just a uid
+        cudnn_tensor_uid = cudnn_tensor if(type(cudnn_tensor) is int) else cudnn_tensor.get_uid()
+        uid_to_tensor_pointer[cudnn_tensor_uid] = library_tensor.data_ptr()
+    workspace_pointer = library_workspace.data_ptr()
+    self._execute_plan_at_index(uid_to_tensor_pointer, workspace_pointer, index)
 
 pygraph.execute = _execute
+pygraph.execute_plan_at_index = _execute_plan_at_index

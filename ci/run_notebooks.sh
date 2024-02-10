@@ -7,4 +7,5 @@ if [ "${GPU_CC}" == "9" ]; then
     jupyter execute samples/python/*
 else
     jupyter execute samples/python/00*
+    jupyter execute samples/python/02*
 fi

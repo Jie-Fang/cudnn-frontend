@@ -298,6 +298,9 @@ class PyGraph {
     build_plans(BuildPlanPolicy_t const);
 
     void
+    build_plan_at_index(int64_t const index);
+
+    void
     check_support();
 
     void
@@ -308,6 +311,9 @@ class PyGraph {
 
     void
     execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace);
+
+    void
+    execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index);
 
     void
     deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
@@ -326,6 +332,23 @@ class PyGraph {
         graph.deselect_workspace_greater_than(workspace);
         return;
     }
+
+    std::vector<uint8_t> 
+    serialize() const;
+
+    void
+    deserialize(std::vector<uint8_t> const& data);
+
+    int64_t 
+    get_execution_plan_count() const {
+        return graph.get_execution_plan_count();
+    }
+
+    int64_t
+    get_workspace_size_plan_at_index(int64_t index) const {
+        return graph.get_workspace_size_plan_at_index(index);
+    }
+
 };
 
 }  // namespace cudnn_frontend::python_bindings
