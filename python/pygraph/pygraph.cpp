@@ -275,6 +275,12 @@ PyGraph::build_plans(BuildPlanPolicy_t const policy) {
 }
 
 void
+PyGraph::build_plan_at_index(int64_t const index) {
+    auto status = graph.build_plan_at_index(handle, index);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+}
+
+void
 PyGraph::build(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
     validate();
     build_operation_graph();
@@ -294,6 +300,20 @@ PyGraph::get_workspace_size() {
     return graph.get_workspace_size();
 }
 
+std::vector<uint8_t> 
+PyGraph::serialize() const {
+    std::vector<uint8_t> data;
+    auto status = graph.serialize(data);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+    return data;
+}
+
+void
+PyGraph::deserialize(std::vector<uint8_t> const& data) {
+    auto status = graph.deserialize(handle, data);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+}
+
 void
 PyGraph::execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace) {
     std::unordered_map<int64_t, void*> var_pack_;
@@ -305,6 +325,23 @@ PyGraph::execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspac
 
     // TODO: Probably concatenate in a macro?
     auto status = graph.execute(handle, var_pack_, workspace_ptr);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+    return;
+}
+
+
+void
+PyGraph::execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index) {
+    std::unordered_map<int64_t, void*> var_pack_;
+    for (auto const& [uid, pyobject] : var_pack) {
+        var_pack_.emplace(uid, (void*)pyobject);
+    }
+
+    auto workspace_ptr = (void*)workspace;
+
+    // TODO: Probably concatenate in a macro?
+    auto status = graph.execute_plan_at_index(handle, var_pack_, workspace_ptr, index);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 
     return;
@@ -546,9 +583,29 @@ init_pygraph_submodule(py::module_& m) {
         .def("build_plans",
              &PyGraph::build_plans,
              py::arg("policy") = cudnn_frontend::BuildPlanPolicy_t::HEURISTICS_CHOICE)
+        .def("build_plan_at_index", &PyGraph::build_plan_at_index, py::arg("index"),
+            R"pbdoc(
+                Build a plan at the given index.
+                Args:
+                    index (int): The index of the plan to build.
+            )pbdoc")
         .def("build", &PyGraph::build)
+        .def("get_execution_plan_count", &PyGraph::get_execution_plan_count,
+            R"pbdoc(
+                Get the number of execution plan candidates.
+            )pbdoc")
         .def("get_workspace_size", &PyGraph::get_workspace_size)
+        .def("get_workspace_size_plan_at_index", &PyGraph::get_workspace_size_plan_at_index, py::arg("index"),
+            R"pbdoc(
+                Get workspace for a plan at the given index.
+                Args:
+                    index (int): The index of the plan to get workspace from.
+                    If the graph is not built at the index, this will return 0.
+            )pbdoc")
         .def("_execute", &PyGraph::execute)
+        .def("serialize", &PyGraph::serialize)
+        .def("deserialize", &PyGraph::deserialize)
+        .def("_execute_plan_at_index", &PyGraph::execute_plan_at_index)
         .def("__repr__", [](PyGraph const& pygraph) {
             std::stringstream ss;
             json j = pygraph.graph;
