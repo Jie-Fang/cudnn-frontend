@@ -17,7 +17,7 @@ from ._compiled_module import (
 
 from .datatypes import _torch_to_cudnn_data_type 
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 
 def _tensor(
     self,
