@@ -46,3 +46,23 @@ def _torch_to_cudnn_data_type(torch_data_type) -> cudnn_data_type:
         return _torch_to_cudnn_data_type_dict.get(torch_data_type, None)
     else:
         return None
+
+def _library_type(input_type):
+    if type(input_type) is cudnn_data_type:
+        return input_type
+
+    for cvt_fn in [
+        _torch_to_cudnn_data_type,
+        # Add more DL libraries to support here
+    ]:
+        out = cvt_fn(input_type)
+        if out is not None:
+            return out
+
+    raise Exception(f"No available conversion from type {input_type} to a library type.")
+
+def _is_torch_tensor(input_tensor) -> bool:
+    if is_torch_available():
+        import torch
+        return isinstance(input_tensor, torch.Tensor)
+    return False

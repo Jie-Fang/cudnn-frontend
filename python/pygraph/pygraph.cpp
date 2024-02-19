@@ -102,6 +102,32 @@ PyGraph::tensor_like(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> c
     return graph.tensor_like(tensor, name);
 }
 
+static std::intptr_t
+extract_data_pointer(py::object const& obj) {
+    throw_if(!py::hasattr(obj, "__dlpack__"),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Object does not have the __dlpack__() method");
+
+    py::capsule capsule = obj.attr("__dlpack__")();
+    throw_if(capsule.is_none(),
+             cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+             "Failed to retrieve the DLPack capsule.");
+
+    DLManagedTensor* managed =
+        static_cast<DLManagedTensor*>(PyCapsule_GetPointer(capsule.ptr(), CUDNN_FRONTEND_DLPACK_CAPSULE_NAME));
+    throw_if(managed == nullptr, cudnn_frontend::error_code_t::INVALID_VARIANT_PACK, "Invalid DLPack capsule.");
+
+    DLDeviceType device_type = managed->dl_tensor.device.device_type;
+    throw_if(
+        device_type != kDLCPU && device_type != kDLCUDAHost && device_type != kDLCUDA && device_type != kDLCUDAManaged,
+        cudnn_frontend::error_code_t::INVALID_VARIANT_PACK,
+        "Invalid device type.");
+
+    void* p     = (char*)managed->dl_tensor.data + managed->dl_tensor.byte_offset;
+    auto result = reinterpret_cast<std::intptr_t>(p);
+    return result;
+}
+
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::tensor_like(py::object const& pyobj) {
     throw_if(!py::hasattr(pyobj, "__dlpack__"),
@@ -300,7 +326,7 @@ PyGraph::get_workspace_size() {
     return graph.get_workspace_size();
 }
 
-std::vector<uint8_t> 
+std::vector<uint8_t>
 PyGraph::serialize() const {
     std::vector<uint8_t> data;
     auto status = graph.serialize(data);
@@ -315,7 +341,7 @@ PyGraph::deserialize(std::vector<uint8_t> const& data) {
 }
 
 void
-PyGraph::execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace) {
+PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack, std::intptr_t workspace) {
     std::unordered_map<int64_t, void*> var_pack_;
     for (auto const& [uid, pyobject] : var_pack) {
         var_pack_.emplace(uid, (void*)pyobject);
@@ -329,7 +355,6 @@ PyGraph::execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspac
 
     return;
 }
-
 
 void
 PyGraph::execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index) {
@@ -583,20 +608,25 @@ init_pygraph_submodule(py::module_& m) {
         .def("build_plans",
              &PyGraph::build_plans,
              py::arg("policy") = cudnn_frontend::BuildPlanPolicy_t::HEURISTICS_CHOICE)
-        .def("build_plan_at_index", &PyGraph::build_plan_at_index, py::arg("index"),
-            R"pbdoc(
+        .def("build_plan_at_index",
+             &PyGraph::build_plan_at_index,
+             py::arg("index"),
+             R"pbdoc(
                 Build a plan at the given index.
                 Args:
                     index (int): The index of the plan to build.
             )pbdoc")
         .def("build", &PyGraph::build)
-        .def("get_execution_plan_count", &PyGraph::get_execution_plan_count,
-            R"pbdoc(
+        .def("get_execution_plan_count",
+             &PyGraph::get_execution_plan_count,
+             R"pbdoc(
                 Get the number of execution plan candidates.
             )pbdoc")
         .def("get_workspace_size", &PyGraph::get_workspace_size)
-        .def("get_workspace_size_plan_at_index", &PyGraph::get_workspace_size_plan_at_index, py::arg("index"),
-            R"pbdoc(
+        .def("get_workspace_size_plan_at_index",
+             &PyGraph::get_workspace_size_plan_at_index,
+             py::arg("index"),
+             R"pbdoc(
                 Get workspace for a plan at the given index.
                 Args:
                     index (int): The index of the plan to get workspace from.
@@ -612,6 +642,8 @@ init_pygraph_submodule(py::module_& m) {
             ss << j.dump(4);
             return ss.str();
         });
+
+    m.def("_get_data_ptr", &extract_data_pointer);
 
     init_pygraph_norm_submodule(pygraph_);
     init_pygraph_sdpa_submodule(pygraph_);
