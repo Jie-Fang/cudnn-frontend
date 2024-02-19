@@ -29,7 +29,10 @@
 
 #include <cuda_fp16.h>
 
-#include "thirdparty/nlohmann/json.hpp"
+#ifndef CUDNN_FRONTEND_SKIP_NLOHMANN_JSON
+#include "cudnn_frontend/thirdparty/nlohmann/json.hpp"
+#endif
+
 using json = nlohmann::json;
 
 template <>
