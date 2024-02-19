@@ -142,7 +142,7 @@ def test_mixed_precision_matmul(A_data_type, B_data_type, MMA_data_type):
     B = graph.tensor_like(B_gpu)
     
     # Cast the input tensors to required mma precision
-    A_casted = graph.identity(input = A, compute_data_type=convert_to_cudnn_type(MMA_data_type))
+    A_casted = graph.identity(input = A, compute_data_type=cudnn.data_type.FLOAT)
     A_casted.set_data_type(convert_to_cudnn_type(MMA_data_type))
     
     # Casting input tensor B is only supported from cudnn v9
@@ -153,9 +153,12 @@ def test_mixed_precision_matmul(A_data_type, B_data_type, MMA_data_type):
         # Do not create a cast node
         B_casted = B
     else:
-        B_casted = graph.identity(input = B, compute_data_type=convert_to_cudnn_type(MMA_data_type))
+        # Cast the input tensors to required mma precision
+        B_casted = graph.identity(input = B, compute_data_type=cudnn.data_type.FLOAT)
         B_casted.set_data_type(convert_to_cudnn_type(MMA_data_type))
 
+    # CAUTION: Hardcodes to fp32 as tests today dont cover inputs that are casted to ints.
+    # In case your usecase does cast inputs to int8, use int32 as compute type here. 
     C = graph.matmul(name = "matmul", A = A_casted, B = B_casted, compute_data_type=cudnn.data_type.FLOAT)
     C.set_output(True).set_data_type(convert_to_cudnn_type(MMA_data_type))
     
