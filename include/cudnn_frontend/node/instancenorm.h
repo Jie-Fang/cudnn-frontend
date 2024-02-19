@@ -22,7 +22,7 @@ class InstanceNormNode : public NodeCRTP<InstanceNormNode> {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for instancenorm node " << attributes.name
                     << "..." << std::endl;
 
@@ -192,7 +192,7 @@ class DINNode : public NodeCRTP<DINNode> {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DIN node " << attributes.name << "..."
                     << std::endl;
 

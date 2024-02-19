@@ -54,7 +54,7 @@ class Graph : public INode {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         return {error_code_t::OK, ""};
     }
 
@@ -77,10 +77,14 @@ class Graph : public INode {
     }
 
     virtual error_t
-    create_cudnn_tensors_(
-        [[maybe_unused]] int64_t &uid,
-        [[maybe_unused]] std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> &tensors,
-        [[maybe_unused]] std::unordered_set<int64_t> const &invalid_uids) const override final {
+    create_cudnn_tensors_([[maybe_unused]] std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>
+                              &tensors) const override final {
+        return {error_code_t::OK, ""};
+    }
+
+    virtual error_t
+    set_uids_([[maybe_unused]] int64_t &potential_uid,
+              [[maybe_unused]] std::unordered_set<int64_t> const &pre_assigned_uids) const override final {
         return {error_code_t::OK, ""};
     }
 

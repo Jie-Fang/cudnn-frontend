@@ -54,7 +54,7 @@ class ScaledDotProductAttentionNode : public NodeCRTP<ScaledDotProductAttentionN
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_attention node "
                     << options.name << "..." << std::endl;
 

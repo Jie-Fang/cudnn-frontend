@@ -22,7 +22,7 @@ class BatchnormInferenceNode : public NodeCRTP<BatchnormInferenceNode> {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm inference node " << attributes.name
                     << "..." << std::endl;
 
