@@ -15,7 +15,7 @@ from ._compiled_module import (
     , tensor
 )
 
-from .datatypes import _torch_to_cudnn_data_type 
+from .datatypes import (_library_type, _is_torch_tensor)
 
 __version__ = '1.2.0'
 
@@ -29,15 +29,10 @@ def _tensor(
     ragged_offset = None,
     name = ""
 ):
-    
-    # Convert data type to cudnn
-    if type(data_type) != _compiled_module.data_type:
-        data_type = _torch_to_cudnn_data_type(data_type)
-
     return self._make_tensor(
         dim = dim,
         stride = stride,
-        data_type = data_type,
+        data_type = _library_type(data_type),
         is_virtual = is_virtual,
         is_pass_by_value = is_pass_by_value,
         ragged_offset = ragged_offset,
@@ -48,46 +43,47 @@ def _set_data_type(
     self,
     data_type = data_type.NOT_SET,
 ):
-    # Convert data type to cudnn
-    if type(data_type) != _compiled_module.data_type:
-        data_type = _torch_to_cudnn_data_type(data_type)
-    
-    return self._set_data_type(data_type)
+    return self._set_data_type(_library_type(data_type))
 
 _compiled_module.tensor.set_data_type = _set_data_type
 pygraph.tensor = _tensor
 
+def _library_device_pointer(input_tensor):
+    # either pass in pointers directly
+    if type(input_tensor) is int:
+        return input_tensor
+    # directly extract data pointer for torch tensors
+    elif _is_torch_tensor(input_tensor):
+        return input_tensor.data_ptr()
+    # fall back to dlpack support by library
+    else:
+        return _compiled_module._get_data_ptr(input_tensor)
+
 def _execute(
     self,
-    cudnn_to_library_tensor,
-    library_workspace
+    tensor_to_device_buffer,
+    workspace
 ):
-    uid_to_tensor_pointer = {}
-    for [cudnn_tensor, library_tensor] in cudnn_to_library_tensor.items():
-        # cudnn_tensor can be None
-        if cudnn_tensor is None:
-            continue
-        # cudnn_tensor can also be just a uid
-        cudnn_tensor_uid = cudnn_tensor if(type(cudnn_tensor) is int) else cudnn_tensor.get_uid()
-        uid_to_tensor_pointer[cudnn_tensor_uid] = library_tensor.data_ptr()
-    workspace_pointer = library_workspace.data_ptr()
+    uid_to_tensor_pointer = {
+        x if type(x) is int else x.get_uid() : _library_device_pointer(pointer)
+        for x, pointer in tensor_to_device_buffer.items() if x is not None
+    }
+
+    workspace_pointer = _library_device_pointer(workspace)
     self._execute(uid_to_tensor_pointer, workspace_pointer)
     
 def _execute_plan_at_index(
     self,
-    cudnn_to_library_tensor,
-    library_workspace,
+    tensor_to_device_buffer,
+    workspace,
     index
 ):
-    uid_to_tensor_pointer = {}
-    for [cudnn_tensor, library_tensor] in cudnn_to_library_tensor.items():
-        # cudnn_tensor can be None
-        if cudnn_tensor is None:
-            continue
-        # cudnn_tensor can also be just a uid
-        cudnn_tensor_uid = cudnn_tensor if(type(cudnn_tensor) is int) else cudnn_tensor.get_uid()
-        uid_to_tensor_pointer[cudnn_tensor_uid] = library_tensor.data_ptr()
-    workspace_pointer = library_workspace.data_ptr()
+    uid_to_tensor_pointer = {
+        x if type(x) is int else x.get_uid() : _library_device_pointer(pointer)
+        for x, pointer in tensor_to_device_buffer.items() if x is not None
+    }
+
+    workspace_pointer = _library_device_pointer(workspace)
     self._execute_plan_at_index(uid_to_tensor_pointer, workspace_pointer, index)
 
 pygraph.execute = _execute
