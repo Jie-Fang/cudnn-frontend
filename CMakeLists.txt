@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.17)
 
 project(cudnn_frontend VERSION 1.1.0)
 
+option(CUDNN_FRONTEND_SKIP_NLOHMANN_JSON "Defines whether FE should not include nlohmann/json.hpp." OFF)
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
 option(CUDNN_FRONTEND_BUILD_UNIT_TESTS "Defines if unittests are built or not." ON)
 
@@ -14,6 +15,11 @@ else()
 endif()
 
 add_library(cudnn_frontend INTERFACE)
+
+target_compile_definitions(
+    cudnn_frontend INTERFACE
+    $<$<BOOL:${CUDNN_FRONTEND_SKIP_NLOHMANN_JSON}>:CUDNN_FRONTEND_SKIP_NLOHMANN_JSON>
+)
 
 target_include_directories(
     cudnn_frontend INTERFACE
