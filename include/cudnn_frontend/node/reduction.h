@@ -34,7 +34,7 @@ class ReductionNode : public NodeCRTP<ReductionNode> {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reduction node " << attributes.name << "..."
                     << std::endl;
 

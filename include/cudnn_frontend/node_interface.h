@@ -22,6 +22,8 @@ namespace cudnn_frontend {
 
 namespace graph {
 
+class BatchNormNode;
+class DBNNode;
 class MatmulNode;
 class PointwiseNode;
 class ReductionNode;
@@ -51,7 +53,7 @@ class INode : public ICudnn {
     pre_validate_node() const = 0;
 
     virtual error_t
-    expand_and_infer_properties() = 0;
+    expand_and_infer_properties_node() = 0;
 
     virtual error_t
     post_validate_node() const = 0;
@@ -102,9 +104,11 @@ class INode : public ICudnn {
     collect_pre_assigned_uids_(std::unordered_set<int64_t>& pre_assigned_uids) const = 0;
 
     virtual error_t
-    create_cudnn_tensors_(int64_t& uid,
-                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors,
-                          std::unordered_set<int64_t> const& invalid_uids) const = 0;
+    set_uids_(int64_t& potential_uid, std::unordered_set<int64_t> const& pre_assigned_uids) const = 0;
+
+    virtual error_t
+    create_cudnn_tensors_(
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const = 0;
 
     error_t
     run_auxiliary_kernels(
@@ -304,14 +308,35 @@ class INode : public ICudnn {
         sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(attributes), context));
     }
 
+    error_t
+    pre_validate_and_expand_node() {
+        // pre validate to catch errors early
+        // Otherwise code reability decreases in expand_and_infer
+        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
+        CHECK_CUDNN_FRONTEND_ERROR(expand_and_infer_properties_node());
+        for (auto const& sub_node : sub_nodes) {
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->pre_validate_and_expand_node());
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    post_validate() const {
+        // Validate self
+        CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
+        for (auto const& sub_node : sub_nodes) {
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->post_validate());
+        }
+        return {error_code_t::OK, ""};
+    }
+
     // Creates cudnn tensors for each node (and its sub nodes)
     error_t
-    create_cudnn_tensors(int64_t& uid,
-                         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors,
-                         std::unordered_set<int64_t> const& invalid_uids) const {
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors_(uid, uid_to_backend_tensors, invalid_uids));
+    create_cudnn_tensors(
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors_(uid_to_backend_tensors));
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid, uid_to_backend_tensors, invalid_uids));
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_tensors(uid_to_backend_tensors));
         }
         return {error_code_t::OK, ""};
     }
@@ -336,6 +361,16 @@ class INode : public ICudnn {
         CHECK_CUDNN_FRONTEND_ERROR(collect_pre_assigned_uids_(pre_assigned_uids));
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->collect_pre_assigned_uids(pre_assigned_uids));
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    set_uids(int64_t& potential_uid, std::unordered_set<int64_t> const& pre_assigned_uids) const {
+        // Collect uids from current node
+        CHECK_CUDNN_FRONTEND_ERROR(set_uids_(potential_uid, pre_assigned_uids));
+        for (auto const& sub_node : sub_nodes) {
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->set_uids(potential_uid, pre_assigned_uids));
         }
         return {error_code_t::OK, ""};
     }
@@ -369,38 +404,28 @@ class INode : public ICudnn {
                                            Rng_attributes);
     error_t
     validate() {
-        // validate self
-        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
-
         // infer_properties self
-        CHECK_CUDNN_FRONTEND_ERROR(expand_and_infer_properties());
+        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_and_expand_node());
 
-        // validate sub nodes
-        for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->validate());
-        }
+        // assign uids as part of validation
+        // This helps catch whether user has assigned duplicated uids to tensors
+        // Each time a backend tensor is created, uid will be incremented by 1, ensuring uniqueness.
+        std::unordered_set<int64_t> pre_assigned_uids;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pre_assigned_uids(pre_assigned_uids));
 
-        // validate self
-        CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
+        Tensor_attributes::uid_t start_uid = 1;
+        CHECK_CUDNN_FRONTEND_ERROR(set_uids(start_uid, pre_assigned_uids));
+
+        // validate the full tree again
+        CHECK_CUDNN_FRONTEND_ERROR(post_validate());
 
         return {error_code_t::OK, ""};
     }
 
     error_t
     build_operation_graph(cudnnHandle_t handle) {
-        // Starting uid for operation graph.
-        // Each time a backend tensor is created, uid will be incremented by 1, ensuring uniqueness.
-        // TODO: Maybe just use uid_to_tensors size as uid each time?
-        int64_t uid = 1;
-
-        std::unordered_set<int64_t> pre_assigned_uids;
-        CHECK_CUDNN_FRONTEND_ERROR(collect_pre_assigned_uids(pre_assigned_uids));
-        while (pre_assigned_uids.find(uid) != pre_assigned_uids.end()) {
-            uid++;
-        }
-
         // Lower each sub node to cudnn backend.
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid, uid_to_tensors, pre_assigned_uids));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid_to_tensors));
 
         // INode needs to keep track of all uids that an operation graph uses.
         // This is because cudnn backend will not accept extra tensors in variant pack.
@@ -669,7 +694,7 @@ class NodeCRTP : public INode {
         return *static_cast<DerivedT const*>(this);
     }
 
-    virtual error_t
+    error_t
     pass_by_value_tensors_(
         std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const override final {
         CHECK_CUDNN_FRONTEND_ERROR(self().attributes.fill_pass_by_value(tensor_to_pass_by_value));
@@ -677,30 +702,45 @@ class NodeCRTP : public INode {
         return {error_code_t::OK, ""};
     }
 
-    virtual error_t
+    error_t
     collect_pre_assigned_uids_(std::unordered_set<int64_t>& pre_assigned_uids) const override final {
         CHECK_CUDNN_FRONTEND_ERROR(self().attributes.get_prefilled_uids(pre_assigned_uids));
 
         return {error_code_t::OK, ""};
     }
 
-    // Not marked final as BN/DBN override it for peer_stats tensor vector
-    virtual error_t
-    create_cudnn_tensors_(int64_t& uid,
-                          std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
-                          std::unordered_set<int64_t> const& invalid_uids) const override {
+    error_t
+    set_uids_(int64_t& potential_uid, std::unordered_set<int64_t> const& pre_assigned_uids) const override final {
+        CHECK_CUDNN_FRONTEND_ERROR(self().attributes.set_uids(potential_uid, pre_assigned_uids));
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_tensors_(
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: Creating cudnn tensors for node named '" << self().attributes.name
                     << "':" << std::endl;
         for (auto const& [name, tensor] : self().attributes.inputs) {
             (void)name;
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, tensors));
             }
         }
         for (auto const& [name, tensor] : self().attributes.outputs) {
             (void)name;
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, uid, tensors, invalid_uids));
+                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, tensors));
+            }
+        }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, DBNNode> || std::is_same_v<DerivedT, BatchNormNode>) {
+            // Special case in BN where peer stats is also an input but is not present in inputs map
+            for (auto const& tensor : self().attributes.peer_stats) {
+                if (tensor) {
+                    CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, tensors));
+                }
             }
         }
 

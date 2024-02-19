@@ -443,6 +443,49 @@ class Attributes {
 
         return {error_code_t::OK, ""};
     }
+
+    error_t
+    set_uids(int64_t& potential_uid, std::unordered_set<int64_t> const& pre_assigned_uids) const {
+        auto derived = static_cast<DerivedT const*>(this);
+
+        auto get_next_potential_uid = [&]() -> void {
+            do {
+                ++potential_uid;
+            } while (pre_assigned_uids.find(potential_uid) != pre_assigned_uids.end());
+        };
+
+        std::function<void(std::shared_ptr<Tensor_attributes>)> assign_uid_to_tensor =
+            [&](std::shared_ptr<Tensor_attributes> tensor) {
+                if (!tensor) return;
+                if (tensor->has_uid() == false) {
+                    get_next_potential_uid();
+                    tensor->set_uid(potential_uid);
+                }
+                if (auto ragged_offset = tensor->get_ragged_offset()) {
+                    assign_uid_to_tensor(ragged_offset);
+                }
+            };
+
+        for (auto [name, tensor] : derived->inputs) {
+            (void)name;
+            assign_uid_to_tensor(tensor);
+        }
+
+        for (auto [name, tensor] : derived->outputs) {
+            (void)name;
+            assign_uid_to_tensor(tensor);
+        }
+
+        // Handle special case of BN where peer_stats is also an input
+        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
+                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
+            for (auto& tensor : derived->peer_stats) {
+                assign_uid_to_tensor(tensor);
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
 };
 
 class BN_finalize_attributes : public Attributes<BN_finalize_attributes> {

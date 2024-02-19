@@ -172,7 +172,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  "
                     << attributes.name << "..." << std::endl;
 
@@ -685,7 +685,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
     }
 
     error_t
-    expand_and_infer_properties() override final {
+    expand_and_infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for SDPABackwardNode " << attributes.name
                     << "..." << std::endl;
 
