@@ -7,6 +7,7 @@
 #include <limits>
 
 #include <cuda_fp16.h>
+#include <cuda_bf16.h>
 
 #include "../cudnn_frontend_Tensor.h"
 #include "../cudnn_frontend_Operation.h"
@@ -35,7 +36,7 @@ class SoftmaxNode;
 class INode : public ICudnn {
    public:
     // A closed set of types that are allowed to be passed by value today
-    using pass_by_values_t = std::variant<int32_t, half, float>;
+    using pass_by_values_t = Tensor_attributes::pass_by_values_t;
 
     detail::Context context;
 
@@ -187,6 +188,8 @@ class INode : public ICudnn {
         for (auto& [uid, value] : tensor_to_pass_by_value) {
             if (half* half_value_ptr = std::get_if<half>(&value)) {
                 tensor_to_pointer_map.emplace(uid, half_value_ptr);
+            } else if (nv_bfloat16* nv_bfloat16_value_ptr = std::get_if<nv_bfloat16>(&value)) {
+                tensor_to_pointer_map.emplace(uid, nv_bfloat16_value_ptr);
             } else if (int32_t* int32_t_value_ptr = std::get_if<int32_t>(&value)) {
                 tensor_to_pointer_map.emplace(uid, int32_t_value_ptr);
             } else if (float* float_value_ptr = std::get_if<float>(&value)) {

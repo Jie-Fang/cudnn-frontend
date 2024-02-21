@@ -20,6 +20,14 @@ class Tensor_attributes {
    public:
     using uid_t = int64_t;
 
+    // There are two usecases of pass by value tensors:
+    // 1. Fused scalar constants
+    // 2. Scalar passed during execution
+    // In approach 1, users provide a value to embed into the graph.
+    // In approach 2, users set is_pass_by_value boolean and then pass a pointer to scalar value with execute() API.
+    // A closed set of types that are allowed to be passed by value.
+    using pass_by_values_t = std::variant<int32_t, half, float, nv_bfloat16>;
+
    private:
     template <typename>
     friend class Attributes;
@@ -29,14 +37,6 @@ class Tensor_attributes {
     std::vector<int64_t> dim    = {};
     std::vector<int64_t> stride = {};
     bool is_virtual             = false;
-
-    // There are two usecases of pass by value tensors:
-    // 1. Fused scalar constants
-    // 2. Scalar passed during execution
-    // In approach 1, users provide a value to embed into the graph.
-    // In approach 2, users set is_pass_by_value boolean and then pass a pointer to scalar value with execute() API.
-    // A closed set of types that are allowed to be passed by value.
-    using pass_by_values_t = std::variant<int32_t, half, float>;
 
     std::optional<pass_by_values_t> pass_by_value = std::nullopt;
     bool is_pass_by_value                         = false;
@@ -108,6 +108,13 @@ class Tensor_attributes {
         is_pass_by_value = true;
         dim = stride = {1};
         data_type    = DataType_t::HALF;
+    }
+
+    Tensor_attributes(nv_bfloat16 const& scalar) {
+        pass_by_value    = scalar;
+        is_pass_by_value = true;
+        dim = stride = {1};
+        data_type    = DataType_t::BFLOAT16;
     }
 
     Tensor_attributes(int32_t const& scalar) {
