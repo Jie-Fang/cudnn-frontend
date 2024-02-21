@@ -28,6 +28,7 @@
 #include <vector>
 
 #include <cuda_fp16.h>
+#include <cuda_bf16.h>
 
 #ifndef CUDNN_FRONTEND_SKIP_NLOHMANN_JSON
 #include "cudnn_frontend/thirdparty/nlohmann/json.hpp"
@@ -46,6 +47,20 @@ struct nlohmann::adl_serializer<half> {
     static void
     from_json(const json& j, half& opt) {
         opt = __float2half(j.get<float>());
+    }
+};
+
+template <>
+struct nlohmann::adl_serializer<nv_bfloat16> {
+    static void
+    to_json(json& j, const nv_bfloat16& opt) {
+        // No precision loss when converting to float
+        j = __bfloat162float(opt);
+    }
+
+    static void
+    from_json(const json& j, nv_bfloat16& opt) {
+        opt = __float2bfloat16(j.get<float>());
     }
 };
 
