@@ -3,10 +3,23 @@ import pytest
 import torch
 import math
 
-import itertools
 import random
 import os
 
+input_type_options = [torch.float16, torch.bfloat16]
+layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
+head_group_options = ["multi_head", "group_query", "multi_query"]
+bias_options = [False, True]
+alibi_mask_options = [False, True]
+padding_mask_options = [False, True]
+causal_mask_options = [False, True]
+dropout_options = [False, True]
+ragged_options = [False, True]
+is_infer_options = [False, True]
+
+@pytest.fixture(scope="session")
+def arg_params(request):
+    return request.config.option
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
@@ -192,52 +205,6 @@ def compute_ref(
     return o
 
 
-input_type_options = [torch.float16, torch.bfloat16]
-layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
-head_group_options = ["multi_head", "group_query", "multi_query"]
-bias_options = [False, True]
-alibi_mask_options = [False, True]
-padding_mask_options = [False, True]
-causal_mask_options = [False, True]
-dropout_options = [False, True]
-ragged_options = [False, True]
-is_infer_options = [False, True]
-
-all_options_forward = [
-    elem
-    for elem in itertools.product(
-        *[
-            input_type_options,
-            layout_options,
-            head_group_options,
-            bias_options,
-            alibi_mask_options,
-            padding_mask_options,
-            causal_mask_options,
-            dropout_options,
-            ragged_options,
-            is_infer_options,
-        ]
-    )
-]
-
-all_options_backward = [
-    elem
-    for elem in itertools.product(
-        *[
-            input_type_options,
-            layout_options,
-            head_group_options,
-            bias_options,
-            alibi_mask_options,
-            padding_mask_options,
-            causal_mask_options,
-            dropout_options,
-            ragged_options,
-        ]
-    )
-]
-
 
 def generate_layout(layout, head_group, shape_q, shape_k, shape_v, shape_o):
     b, h_q, s_q, d_qk = shape_q
@@ -350,21 +317,16 @@ def convert_ragged_to_uniform(ragged_tensor, ragged_offset):
     return uniform_tensor
 
 
-@pytest.fixture(params=all_options_forward)
-def param_extract_forward(request):
-    return request.param
-
-
-@pytest.mark.parametrize("input_type", input_type_options)
-@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
+@pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"bias{int(p)}")
+@pytest.mark.parametrize("is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}")
+@pytest.mark.parametrize("is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}")
+@pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
+@pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
+@pytest.mark.parametrize("is_bias", bias_options, ids=lambda p: f"bias{int(p)}")
 @pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_bias", bias_options)
-@pytest.mark.parametrize("is_alibi", alibi_mask_options)
-@pytest.mark.parametrize("is_padding", padding_mask_options)
-@pytest.mark.parametrize("is_causal", causal_mask_options)
-@pytest.mark.parametrize("is_dropout", dropout_options)
-@pytest.mark.parametrize("is_ragged", ragged_options)
-@pytest.mark.parametrize("is_infer", is_infer_options)
+@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
 def test_sdpa(input_type,
         layout,
         head_group,
@@ -374,7 +336,8 @@ def test_sdpa(input_type,
         is_causal,
         is_dropout,
         is_ragged,
-        is_infer):
+        is_infer,
+        arg_params):
     if cudnn.backend_version() < 8903:
         pytest.skip("SDPA fprop requires cudnn 8.9.3 or higher")
 
@@ -402,6 +365,7 @@ def test_sdpa(input_type,
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
+    # -------------------------- default randomized parameter testing ------------------------
     # batch size
     b = 2
     # query sequence length
@@ -426,6 +390,16 @@ def test_sdpa(input_type,
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
+    # -------------------------- override test parameters if args are provided ----------------
+    b = int(arg_params.mha_b) if arg_params.mha_b != None else b
+    s_q = int(arg_params.mha_s_q) if arg_params.mha_s_q != None else s_q
+    s_kv = int(arg_params.mha_s_kv) if arg_params.mha_s_kv != None else s_kv
+    d_qk = int(arg_params.mha_d_qk) if arg_params.mha_d_qk != None else d_qk
+    d_v = int(arg_params.mha_d_v) if arg_params.mha_d_v != None else d_v
+    h_q = int(arg_params.mha_h_q) if arg_params.mha_h_q != None else h_q
+    h_k = int(arg_params.mha_h_k) if arg_params.mha_h_k != None else h_k
+    h_v = int(arg_params.mha_h_v) if arg_params.mha_h_v != None else h_v
+
     if d_qk != d_v and cudnn.backend_version() < 8906:
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
@@ -442,11 +416,10 @@ def test_sdpa(input_type,
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
-    # TODO file bug
     if d_qk != d_v and is_ragged:
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
-    print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    print(f"{b=} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -633,15 +606,15 @@ def test_sdpa(input_type,
         assert compare_tensors(stats_ref, stats_gpu, "stats") == 0
 
 
-@pytest.mark.parametrize("input_type", input_type_options)
-@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"bias{int(p)}")
+@pytest.mark.parametrize("is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}")
+@pytest.mark.parametrize("is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}")
+@pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
+@pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
+@pytest.mark.parametrize("is_bias", bias_options, ids=lambda p: f"bias{int(p)}")
 @pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_bias", bias_options)
-@pytest.mark.parametrize("is_alibi", alibi_mask_options)
-@pytest.mark.parametrize("is_padding", padding_mask_options)
-@pytest.mark.parametrize("is_causal", causal_mask_options)
-@pytest.mark.parametrize("is_dropout", dropout_options)
-@pytest.mark.parametrize("is_ragged", ragged_options)
+@pytest.mark.parametrize("layout", layout_options)
+@pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
 def test_sdpa_backward(input_type,
         layout,
         head_group,
@@ -650,7 +623,8 @@ def test_sdpa_backward(input_type,
         is_padding,
         is_causal,
         is_dropout,
-        is_ragged):
+        is_ragged,
+        arg_params):
     if cudnn.backend_version() < 8903:
         pytest.skip("SDPA bprop requires cudnn 8.9.3 or higher")
 
@@ -696,6 +670,7 @@ def test_sdpa_backward(input_type,
     # test both dP workspace optimization by lowering dP workspace limit to 8MB
     os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = str(8 * 1024 * 1024)
 
+    # -------------------------- default randomized parameter testing ------------------------
     # batch size
     b = 2
     # query sequence length
@@ -739,11 +714,20 @@ def test_sdpa_backward(input_type,
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
-    # TODO file bug
     if d_qk != d_v and is_ragged:
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
-    print(f"{s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    # -------------------------- override test parameters if args are provided ----------------
+    b = int(arg_params.mha_b) if arg_params.mha_b != None else b
+    s_q = int(arg_params.mha_s_q) if arg_params.mha_s_q != None else s_q
+    s_kv = int(arg_params.mha_s_kv) if arg_params.mha_s_kv != None else s_kv
+    d_qk = int(arg_params.mha_d_qk) if arg_params.mha_d_qk != None else d_qk
+    d_v = int(arg_params.mha_d_v) if arg_params.mha_d_v != None else d_v
+    h_q = int(arg_params.mha_h_q) if arg_params.mha_h_q != None else h_q
+    h_k = int(arg_params.mha_h_k) if arg_params.mha_h_k != None else h_k
+    h_v = int(arg_params.mha_h_v) if arg_params.mha_h_v != None else h_v
+
+    print(f"{b=} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -1065,25 +1049,34 @@ def test_sdpa_backward(input_type,
 
 
 if __name__ == "__main__":
+    # example usage
+    # ================== forward ==================
     """
-    option_forward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout, is_ragged, is_infer)
-    option_backward = (input_type, layout, head_group, is_bias, is_alibi, is_padding, is_causal, is_dropout, is_ragged)
-    test_sdpa(torch.float16, "bs3hd", "multi_head", False, False, False, False, False, False, False)
-    test_sdpa_backward(torch.float16, "bs3hd", "multi_head", False, False, False, False, False, False)
+    pytest \
+      test/python_fe/test_mhas.py::test_sdpa[torch.float16-non_interleaved-group_query-bias0-alibi0-padding0-causal0-dropout0-bias0-infer0] \
+      -s \
+      --mha_b 3 \
+      --mha_s_q 256 \
+      --mha_s_kv 128 \
+      --mha_d_qk 48 \
+      --mha_d_v 32 \
+      --mha_h_q 12 \
+      --mha_h_k 3 \
+      --mha_h_v 4
+    """
+    # ================== backward ==================
+    """
+    pytest \
+      test/python_fe/test_mhas.py::test_sdpa_backward[torch.float16-non_interleaved-group_query-bias0-alibi0-padding0-causal0-dropout0-bias0] \
+      -s \
+      --mha_b 3 \
+      --mha_s_q 256 \
+      --mha_s_kv 128 \
+      --mha_d_qk 48 \
+      --mha_d_v 32 \
+      --mha_h_q 12 \
+      --mha_h_k 3 \
+      --mha_h_v 4
     """
 
-    print("==========running forward tests==========")
-    for option in all_options_forward:
-        try:
-            print(f"Running {option}")
-            test_sdpa(*option)
-        except pytest.skip.Exception as e:
-            print(f"Skipped {option}\n{e}")
-
-    print("==========running backward tests==========")
-    for option in all_options_backward:
-        try:
-            print(f"Running {option}")
-            test_sdpa_backward(*option)
-        except pytest.skip.Exception as e:
-            print(f"Skipped {option}\n{e}")
+    pytest.main([__file__])
