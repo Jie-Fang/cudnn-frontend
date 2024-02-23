@@ -18,28 +18,28 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
 
 class HandleManagement {
    public:
-    static void*
+    static std::intptr_t
     create_handle() {
         cudnnHandle_t handle;
         cudnnCreate(&handle);
-        return (void*)handle;
+        return reinterpret_cast<std::intptr_t>(handle);
     }
 
     static void
-    destroy_handle(void* handle) {
+    destroy_handle(std::intptr_t handle) {
         auto status = cudnnDestroy((cudnnHandle_t)handle);
         throw_if(
             status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnHandle Destroy failed");
     }
 
     static void
-    set_stream(void* handle, void* stream) {
+    set_stream(std::intptr_t handle, std::intptr_t stream) {
         auto status = cudnnSetStream((cudnnHandle_t)handle, (cudaStream_t)stream);
         throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnSetStream failed");
     }
 
     static void
-    get_stream(void* handle, void* streamId) {
+    get_stream(std::intptr_t handle, std::intptr_t streamId) {
         auto status = cudnnGetStream((cudnnHandle_t)handle, (cudaStream_t*)streamId);
         throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnGetStream failed");
     }
@@ -102,7 +102,7 @@ init_properties(py::module_& m) {
     m.def("get_stream", &HandleManagement::get_stream);
     m.def(
         "set_stream",
-        [](void* handle, int64_t stream) { return HandleManagement::set_stream(handle, (void*)stream); },
+        &HandleManagement::set_stream,
         py::arg("handle"),
         py::arg("stream"));
 
