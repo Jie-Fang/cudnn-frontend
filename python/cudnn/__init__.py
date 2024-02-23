@@ -62,7 +62,8 @@ def _library_device_pointer(input_tensor):
 def _execute(
     self,
     tensor_to_device_buffer,
-    workspace
+    workspace,
+    handle = None
 ):
     uid_to_tensor_pointer = {
         x if type(x) is int else x.get_uid() : _library_device_pointer(pointer)
@@ -70,13 +71,14 @@ def _execute(
     }
 
     workspace_pointer = _library_device_pointer(workspace)
-    self._execute(uid_to_tensor_pointer, workspace_pointer)
+    self._execute(uid_to_tensor_pointer, workspace_pointer, handle)
     
 def _execute_plan_at_index(
     self,
     tensor_to_device_buffer,
     workspace,
-    index
+    index,
+    handle = None
 ):
     uid_to_tensor_pointer = {
         x if type(x) is int else x.get_uid() : _library_device_pointer(pointer)
@@ -84,7 +86,7 @@ def _execute_plan_at_index(
     }
 
     workspace_pointer = _library_device_pointer(workspace)
-    self._execute_plan_at_index(uid_to_tensor_pointer, workspace_pointer, index)
+    self._execute_plan_at_index(uid_to_tensor_pointer, workspace_pointer, index, handle)
 
 pygraph.execute = _execute
 pygraph.execute_plan_at_index = _execute_plan_at_index

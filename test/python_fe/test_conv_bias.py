@@ -84,8 +84,8 @@ def test_conv_relu():
     workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
 
     Y_actual = torch.zeros_like(Y_expected)
-    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual}, workspace)
-
+    handle = cudnn.create_handle()
+    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual}, workspace, handle = handle)
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
 
@@ -211,8 +211,8 @@ def test_conv_int8():
         torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
     
 if __name__ == "__main__":
-    test_conv_int8()
+    # test_conv_int8()
     test_conv_relu()
-    test_conv_bias_relu()
-    test_conv3d_bias_leaky_relu()
-    test_leaky_relu_backward()
+    # test_conv_bias_relu()
+    # test_conv3d_bias_leaky_relu()
+    # test_leaky_relu_backward()

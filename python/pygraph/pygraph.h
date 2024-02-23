@@ -41,19 +41,21 @@ class PyGraph {
     // descriptors.
     cudnn_frontend::graph::Graph graph;
     cudnnHandle_t handle;
-    bool is_handle_owner;
+    bool is_handle_owner = false;
 
     PyGraph(std::string const&,
             cudnn_frontend::DataType_t io_data_type,
             cudnn_frontend::DataType_t intermediate_data_type,
             cudnn_frontend::DataType_t compute_data_type,
-            void* handle_ = nullptr)
-        : graph(), handle((cudnnHandle_t)handle_), is_handle_owner(false) {
+            std::optional<std::intptr_t> handle_) {
         graph.set_compute_data_type(compute_data_type)
             .set_intermediate_data_type(intermediate_data_type)
             .set_io_data_type(io_data_type);
 
-        if (handle_ == nullptr) {
+        if(handle_.has_value()) {
+            handle = static_cast<cudnnHandle_t>((void*)(handle_.value()));
+        }
+        else {
             cudnnCreate(&handle);
             is_handle_owner = true;
         }
@@ -310,10 +312,10 @@ class PyGraph {
     get_workspace_size();
 
     void
-    execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace);
+    execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, std::optional<std::intptr_t>);
 
     void
-    execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index);
+    execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index, std::optional<std::intptr_t>);
 
     void
     deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
@@ -333,13 +335,13 @@ class PyGraph {
         return;
     }
 
-    std::vector<uint8_t> 
+    std::vector<uint8_t>
     serialize() const;
 
     void
     deserialize(std::vector<uint8_t> const& data);
 
-    int64_t 
+    int64_t
     get_execution_plan_count() const {
         return graph.get_execution_plan_count();
     }
@@ -348,7 +350,6 @@ class PyGraph {
     get_workspace_size_plan_at_index(int64_t index) const {
         return graph.get_workspace_size_plan_at_index(index);
     }
-
 };
 
 }  // namespace cudnn_frontend::python_bindings

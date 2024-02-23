@@ -341,32 +341,38 @@ PyGraph::deserialize(std::vector<uint8_t> const& data) {
 }
 
 void
-PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack, std::intptr_t workspace) {
+PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack, std::intptr_t workspace,
+                               std::optional<std::intptr_t> exec_handle) {
     std::unordered_map<int64_t, void*> var_pack_;
-    for (auto const& [uid, pyobject] : var_pack) {
-        var_pack_.emplace(uid, (void*)pyobject);
+    for (auto const& [uid, device_pointer] : var_pack) {
+        var_pack_.emplace(uid, (void*)device_pointer);
     }
 
     auto workspace_ptr = (void*)workspace;
 
-    // TODO: Probably concatenate in a macro?
-    auto status = graph.execute(handle, var_pack_, workspace_ptr);
+    cudnnHandle_t handle_ = exec_handle.has_value() ? static_cast<cudnnHandle_t>((void*)(exec_handle.value())) : handle;
+
+    auto status           = graph.execute(handle_, var_pack_, workspace_ptr);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 
     return;
 }
 
 void
-PyGraph::execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index) {
+PyGraph::execute_plan_at_index(std::unordered_map<int64_t, std::intptr_t> var_pack,
+                               std::intptr_t workspace,
+                               int64_t index,
+                               std::optional<std::intptr_t> exec_handle) {
     std::unordered_map<int64_t, void*> var_pack_;
-    for (auto const& [uid, pyobject] : var_pack) {
-        var_pack_.emplace(uid, (void*)pyobject);
+    for (auto const& [uid, device_pointer] : var_pack) {
+        var_pack_.emplace(uid, (void*)device_pointer);
     }
 
     auto workspace_ptr = (void*)workspace;
 
-    // TODO: Probably concatenate in a macro?
-    auto status = graph.execute_plan_at_index(handle, var_pack_, workspace_ptr, index);
+    cudnnHandle_t handle_ = exec_handle.has_value() ? static_cast<cudnnHandle_t>((void*)(exec_handle.value())) : handle;
+
+    auto status           = graph.execute_plan_at_index(handle_, var_pack_, workspace_ptr, index);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 
     return;
@@ -385,12 +391,12 @@ init_pygraph_submodule(py::module_& m) {
                       cudnn_frontend::DataType_t,
                       cudnn_frontend::DataType_t,
                       cudnn_frontend::DataType_t,
-                      void*>(),
+                      std::optional<std::intptr_t>>(),
              py::arg_v("name", "test_graph"),
              py::arg_v("io_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v("handle", nullptr))
+             py::arg_v("handle", std::nullopt))
         .def("tensor_like",
              py::overload_cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const&, std::string const&>(
                  &PyGraph::tensor_like),
