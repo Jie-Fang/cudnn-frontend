@@ -58,3 +58,14 @@ endif()
 if (CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS)
     add_subdirectory(python)
 endif()
+
+# Introduce variables:
+# * CMAKE_INSTALL_LIBDIR
+# * CMAKE_INSTALL_BINDIR
+# * CMAKE_INSTALL_INCLUDEDIR
+include(GNUInstallDirs)
+
+install(
+    DIRECTORY ${PROJECT_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
