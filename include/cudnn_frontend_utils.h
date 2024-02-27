@@ -127,6 +127,7 @@ struct nlohmann::adl_serializer<std::shared_ptr<T>> {
     }
 };
 
+#include "cudnn_frontend_shim.h"
 #include "cudnn_backend_base.h"
 #include "cudnn_frontend_Logging.h"
 
@@ -167,7 +168,7 @@ AllowAll(cudnnBackendDescriptor_t engine_config) {
 
 static inline std::string
 to_string(cudnnStatus_t const status) {
-    return cudnnGetErrorString(status);
+    return cudnn_frontend::get_error_string(status);
 }
 
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
@@ -185,18 +186,15 @@ set_error_and_throw_exception(BackendDescriptor const* desc, cudnnStatus_t statu
 #endif
 }
 
-#if (CUDNN_VERSION >= 8200)
 static inline std::string
 to_string(cudnnBackendBehaviorNote_t note) {
     switch (note) {
         case CUDNN_BEHAVIOR_NOTE_RUNTIME_COMPILATION:
             return std::string("CUDNN_BEHAVIOR_NOTE_RUNTIME_COMPILATION");
-#if (CUDNN_VERSION >= 8300)
         case CUDNN_BEHAVIOR_NOTE_REQUIRES_FILTER_INT8x32_REORDER:
             return std::string("CUDNN_BEHAVIOR_NOTE_REQUIRES_FILTER_INT8x32_REORDER");
         case CUDNN_BEHAVIOR_NOTE_REQUIRES_BIAS_INT8x32_REORDER:
             return std::string("CUDNN_BEHAVIOR_NOTE_REQUIRES_BIAS_INT8x32_REORDER");
-#endif
         case CUDNN_BEHAVIOR_NOTE_TYPE_COUNT:
             return std::string("CUDNN_BEHAVIOR_NOTE_TYPE_COUNT");
 #ifndef NO_DEFAULT_IN_SWITCH
@@ -206,7 +204,6 @@ to_string(cudnnBackendBehaviorNote_t note) {
     }
     return std::string("INVALID_BEHAVIOR_NOTE");
 }
-#endif
 
 static inline std::string
 to_string(cudnnBackendNumericalNote_t note) {
@@ -223,14 +220,12 @@ to_string(cudnnBackendNumericalNote_t note) {
             return std::string("CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC");
         case CUDNN_NUMERICAL_NOTE_WINOGRAD:
             return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD");
-#if (CUDNN_VERSION >= 8300)
         case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_4x4:
             return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_4x4");
         case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_6x6:
             return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_6x6");
         case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13:
             return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13");
-#endif
         case CUDNN_NUMERICAL_NOTE_TYPE_COUNT:
             return std::string("CUDNN_NUMERICAL_NOTE_TYPE_COUNT");
 #ifndef NO_DEFAULT_IN_SWITCH
@@ -885,14 +880,11 @@ convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cu
             cudnn_mode = CUDNN_DATA_INT64;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
         case DataType_t::BOOLEAN:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_DATA_BOOLEAN;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case DataType_t::FP8_E4M3:
 #if (CUDNN_VERSION >= 8600)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8600, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_DATA_FP8_E4M3;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -900,6 +892,7 @@ convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cu
 #endif
         case DataType_t::FP8_E5M2:
 #if (CUDNN_VERSION >= 8600)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8600, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_DATA_FP8_E5M2;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -907,6 +900,7 @@ convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cu
 #endif
         case DataType_t::FAST_FLOAT_FOR_FP8:
 #if (CUDNN_VERSION >= 8700)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_DATA_FAST_FLOAT_FOR_FP8;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1020,222 +1014,99 @@ convert_to_cudnn_type(cudnn_frontend::PointwiseMode_t const mode, cudnnPointwise
         case PointwiseMode_t::SWISH_BWD:
             cudnn_mode = CUDNN_POINTWISE_SWISH_BWD;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-
         case PointwiseMode_t::DIV:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_DIV;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::ADD_SQUARE:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_ADD_SQUARE;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::EXP:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_EXP;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::SUB:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_SUB;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CMP_EQ:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CMP_EQ;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CMP_NEQ:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CMP_NEQ;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CMP_GT:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CMP_GT;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CMP_GE:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CMP_GE;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CMP_LT:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CMP_LT;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CMP_LE:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CMP_LE;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::LOGICAL_AND:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_LOGICAL_AND;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::LOGICAL_OR:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_LOGICAL_OR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::LOGICAL_NOT:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_LOGICAL_NOT;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::LOG:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_LOG;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::NEG:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_NEG;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::MOD:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_MOD;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::POW:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_POW;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::ABS:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_ABS;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::CEIL:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_CEIL;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::COS:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_COS;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::FLOOR:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_FLOOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::RSQRT:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_RSQRT;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::SIN:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_SIN;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::TAN:
-#if (CUDNN_VERSION >= 8300)
             cudnn_mode = CUDNN_POINTWISE_TAN;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case PointwiseMode_t::GEN_INDEX:
-#if (CUDNN_VERSION >= 8400)
             cudnn_mode = CUDNN_POINTWISE_GEN_INDEX;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::BINARY_SELECT:
-#if (CUDNN_VERSION >= 8400)
             cudnn_mode = CUDNN_POINTWISE_BINARY_SELECT;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case PointwiseMode_t::ERF:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_POINTWISE_ERF;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::IDENTITY:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_POINTWISE_IDENTITY;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::GELU_APPROX_TANH_BWD:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_POINTWISE_GELU_APPROX_TANH_BWD;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case PointwiseMode_t::GELU_APPROX_TANH_FWD:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_POINTWISE_GELU_APPROX_TANH_FWD;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case PointwiseMode_t::RECIPROCAL:
 #if (CUDNN_VERSION >= 8900)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_POINTWISE_RECIPROCAL;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1372,72 +1243,38 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
         case DescriptorType_t::OPERATION_REDUCTION_DESCRIPTOR:
             cudnn_mode = CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-
         case DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8400)
             cudnn_mode = CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
         case DescriptorType_t::RESAMPLE_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_BACKEND_RESAMPLE_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case DescriptorType_t::OPERATION_RESAMPLE_FWD_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR:
 #if (CUDNN_VERSION >= 8600)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8600, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
-
         case DescriptorType_t::OPERATION_CONCAT_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_BACKEND_OPERATION_CONCAT_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case DescriptorType_t::OPERATION_SIGNAL_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_BACKEND_OPERATION_SIGNAL_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_BACKEND_OPERATION_NORM_FORWARD_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR:
-#if (CUDNN_VERSION >= 8500)
             cudnn_mode = CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#else
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-
         case DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR:
 #if (CUDNN_VERSION >= 8700)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1446,6 +1283,7 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
 
         case DescriptorType_t::RNG_DESCRIPTOR:
 #if (CUDNN_VERSION >= 8700)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_RNG_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1454,6 +1292,7 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
 
         case DescriptorType_t::OPERATION_RNG_DESCRIPTOR:
 #if (CUDNN_VERSION >= 8700)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1468,7 +1307,6 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
     return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 }
 
-#if (CUDNN_VERSION >= 8500)
 static inline cudnnStatus_t
 convert_to_cudnn_type(cudnn_frontend::ResampleMode_t const mode, cudnnResampleMode_t& cudnn_mode) {
     switch (mode) {
@@ -1524,7 +1362,6 @@ convert_to_cudnn_type(cudnn_frontend::PaddingMode_t const mode, cudnnPaddingMode
 static inline cudnnStatus_t
 convert_to_cudnn_type(cudnn_frontend::NormMode_t const mode, cudnnBackendNormMode_t& cudnn_mode) {
     switch (mode) {
-#if (CUDNN_VERSION >= 8500)
         case NormMode_t::LAYER_NORM:
             cudnn_mode = CUDNN_LAYER_NORM;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
@@ -1537,10 +1374,10 @@ convert_to_cudnn_type(cudnn_frontend::NormMode_t const mode, cudnnBackendNormMod
         case NormMode_t::GROUP_NORM:
             cudnn_mode = CUDNN_GROUP_NORM;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#endif
 
 #if (CUDNN_VERSION >= 8906)
         case NormMode_t::RMS_NORM:
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8906, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_RMS_NORM;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #endif
@@ -1556,14 +1393,12 @@ convert_to_cudnn_type(cudnn_frontend::NormMode_t const mode, cudnnBackendNormMod
 static inline cudnnStatus_t
 convert_to_cudnn_type(cudnn_frontend::NormFwdPhase_t const mode, cudnnBackendNormFwdPhase_t& cudnn_mode) {
     switch (mode) {
-#if (CUDNN_VERSION >= 8500)
         case NormFwdPhase_t::INFERENCE:
             cudnn_mode = CUDNN_NORM_FWD_INFERENCE;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
         case NormFwdPhase_t::TRAINING:
             cudnn_mode = CUDNN_NORM_FWD_TRAINING;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-#endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
@@ -1632,7 +1467,6 @@ static inline void
 convert_from_cudnn_type(cudnnBackendNormMode_t const cudnn_mode, cudnn_frontend::NormMode_t& mode) {
     mode = NormMode_t::NOT_SET;
     switch (cudnn_mode) {
-#if (CUDNN_VERSION >= 8500)
         case CUDNN_LAYER_NORM:
             mode = NormMode_t::LAYER_NORM;
             break;
@@ -1645,7 +1479,6 @@ convert_from_cudnn_type(cudnnBackendNormMode_t const cudnn_mode, cudnn_frontend:
         case CUDNN_GROUP_NORM:
             mode = NormMode_t::GROUP_NORM;
             break;
-#endif
 
 #if (CUDNN_VERSION >= 8906)
         case CUDNN_RMS_NORM:
@@ -1665,14 +1498,12 @@ static inline void
 convert_from_cudnn_type(cudnnBackendNormFwdPhase_t const cudnn_mode, cudnn_frontend::NormFwdPhase_t& mode) {
     mode = NormFwdPhase_t::NOT_SET;
     switch (cudnn_mode) {
-#if (CUDNN_VERSION >= 8500)
         case CUDNN_NORM_FWD_INFERENCE:
             mode = NormFwdPhase_t::INFERENCE;
             break;
         case CUDNN_NORM_FWD_TRAINING:
             mode = NormFwdPhase_t::TRAINING;
             break;
-#endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
@@ -1681,9 +1512,6 @@ convert_from_cudnn_type(cudnnBackendNormFwdPhase_t const cudnn_mode, cudnn_front
     }
 }
 
-#endif
-
-#if (CUDNN_VERSION >= 8300)
 static inline cudnnStatus_t
 convert_to_cudnn_type(cudnn_frontend::TensorReordering_t const mode, cudnnBackendTensorReordering_t& cudnn_mode) {
     switch (mode) {
@@ -1695,6 +1523,17 @@ convert_to_cudnn_type(cudnn_frontend::TensorReordering_t const mode, cudnnBacken
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
         case cudnn_frontend::TensorReordering_t::F16x16:
 #if CUDNN_VERSION >= 8800
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+            if (get_backend_version() >= 8800) {
+                cudnn_mode = CUDNN_TENSOR_REORDERING_F16x16;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            } else if (get_backend_version() >= 8700) {
+                cudnn_mode = CUDNN_TENSOR_REORDERING_NONE;
+                return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+            } else {
+                return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+            }
+#endif
             cudnn_mode = CUDNN_TENSOR_REORDERING_F16x16;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #elif CUDNN_VERSION >= 8700
@@ -1730,8 +1569,6 @@ convert_from_cudnn_type(cudnnBackendTensorReordering_t const cudnn_mode, cudnn_f
 #endif
     }
 }
-
-#endif
 
 // To be deprecated. Only exists as OperationBuilder_v8(::cudnnBackendDescriptorType_t mode) requires it.
 static inline cudnn_frontend::DescriptorType_t
@@ -1783,13 +1620,8 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
             return DescriptorType_t::REDUCTION_DESCRIPTOR;
         case CUDNN_BACKEND_OPERATION_REDUCTION_DESCRIPTOR:
             return DescriptorType_t::OPERATION_REDUCTION_DESCRIPTOR;
-
-#if (CUDNN_VERSION >= 8400)
         case CUDNN_BACKEND_OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR:
             return DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR;
-#endif
-
-#if (CUDNN_VERSION >= 8500)
         case CUDNN_BACKEND_RESAMPLE_DESCRIPTOR:
             return DescriptorType_t::RESAMPLE_DESCRIPTOR;
         case CUDNN_BACKEND_OPERATION_RESAMPLE_FWD_DESCRIPTOR:
@@ -1802,13 +1634,10 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
             return DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR;
         case CUDNN_BACKEND_OPERATION_NORM_BACKWARD_DESCRIPTOR:
             return DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR;
-#endif
-
 #if (CUDNN_VERSION >= 8600)
         case CUDNN_BACKEND_OPERATION_RESAMPLE_BWD_DESCRIPTOR:
             return DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR;
 #endif
-
 #if (CUDNN_VERSION >= 8700)
         case CUDNN_BACKEND_OPERATION_RESHAPE_DESCRIPTOR:
             return DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR;
@@ -1869,8 +1698,6 @@ convert_from_cudnn_type(cudnnPointwiseMode_t const cudnn_mode) {
             return PointwiseMode_t::SOFTPLUS_BWD;
         case CUDNN_POINTWISE_SWISH_BWD:
             return PointwiseMode_t::SWISH_BWD;
-
-#if (CUDNN_VERSION >= 8300)
         case CUDNN_POINTWISE_DIV:
             return PointwiseMode_t::DIV;
         case CUDNN_POINTWISE_ADD_SQUARE:
@@ -1919,16 +1746,10 @@ convert_from_cudnn_type(cudnnPointwiseMode_t const cudnn_mode) {
             return PointwiseMode_t::SIN;
         case CUDNN_POINTWISE_TAN:
             return PointwiseMode_t::TAN;
-#endif
-
-#if (CUDNN_VERSION >= 8400)
         case CUDNN_POINTWISE_GEN_INDEX:
             return PointwiseMode_t::GEN_INDEX;
         case CUDNN_POINTWISE_BINARY_SELECT:
             return PointwiseMode_t::BINARY_SELECT;
-#endif
-
-#if (CUDNN_VERSION >= 8500)
         case CUDNN_POINTWISE_ERF:
             return PointwiseMode_t::ERF;
         case CUDNN_POINTWISE_IDENTITY:
@@ -1937,8 +1758,6 @@ convert_from_cudnn_type(cudnnPointwiseMode_t const cudnn_mode) {
             return PointwiseMode_t::GELU_APPROX_TANH_BWD;
         case CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
             return PointwiseMode_t::GELU_APPROX_TANH_FWD;
-#endif
-
 #if (CUDNN_VERSION >= 8900)
         case CUDNN_POINTWISE_RECIPROCAL:
             return PointwiseMode_t::RECIPROCAL;
@@ -1978,10 +1797,8 @@ convert_from_cudnn_type(cudnnDataType_t const cudnn_mode) {
             return DataType_t::BFLOAT16;
         case CUDNN_DATA_INT64:
             return DataType_t::INT64;
-#if (CUDNN_VERSION >= 8300)
         case CUDNN_DATA_BOOLEAN:
             return DataType_t::BOOLEAN;
-#endif
 #if (CUDNN_VERSION >= 8600)
         case CUDNN_DATA_FP8_E4M3:
             return DataType_t::FP8_E4M3;
@@ -2033,6 +1850,8 @@ convert_from_cudnn_type(cudnnReduceTensorOp_t const cudnn_mode) {
 #if (CUDNN_VERSION >= 8700)
 static inline cudnnStatus_t
 convert_to_cudnn_type(cudnn_frontend::RngDistribution_t const mode, cudnnRngDistribution_t& cudnn_mode) {
+    NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+
     switch (mode) {
         case RngDistribution_t::BERNOULLI:
             cudnn_mode = CUDNN_RNG_DISTRIBUTION_BERNOULLI;

@@ -9,6 +9,7 @@ function display_header() {
 
 function run_python_tests() {
     export PYTHONPATH=build
+    export LD_LIBRARY_PATH=/debug_cudnn/lib64/
     
     # Graph tests from json
     python3 test/pycudnnTest.py --testPath test/json_graph_defs/graphTests.json --testName ConvRelu1

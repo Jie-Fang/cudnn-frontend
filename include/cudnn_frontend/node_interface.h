@@ -117,7 +117,7 @@ class INode : public ICudnn {
         void* fe_workspace,
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications) const {
         cudaStream_t stream;
-        CHECK_CUDNN_ERROR(cudnnGetStream(handle, &stream));
+        CHECK_CUDNN_ERROR(cudnn_frontend::get_stream(handle, &stream));
         char* workspace = static_cast<char*>(fe_workspace);
 
         for (auto [uid, data] : workspace_modifications) {

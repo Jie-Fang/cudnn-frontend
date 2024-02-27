@@ -21,27 +21,29 @@ class HandleManagement {
     static std::intptr_t
     create_handle() {
         cudnnHandle_t handle;
-        cudnnCreate(&handle);
+        cudnn_frontend::create_handle(&handle);
         return reinterpret_cast<std::intptr_t>(handle);
     }
 
     static void
     destroy_handle(std::intptr_t handle) {
-        auto status = cudnnDestroy((cudnnHandle_t)handle);
+        auto status = cudnn_frontend::destroy_handle((cudnnHandle_t)handle);
         throw_if(
             status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnHandle Destroy failed");
     }
 
     static void
     set_stream(std::intptr_t handle, std::intptr_t stream) {
-        auto status = cudnnSetStream((cudnnHandle_t)handle, (cudaStream_t)stream);
+        auto status = cudnn_frontend::set_stream((cudnnHandle_t)handle, (cudaStream_t)stream);
         throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnSetStream failed");
     }
 
     static void
     get_stream(std::intptr_t handle, std::intptr_t streamId) {
-        auto status = cudnnGetStream((cudnnHandle_t)handle, (cudaStream_t*)streamId);
-        throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnGetStream failed");
+        auto status = cudnn_frontend::get_stream((cudnnHandle_t)handle, (cudaStream_t*)streamId);
+        throw_if(status != CUDNN_STATUS_SUCCESS,
+                 cudnn_frontend::error_code_t::HANDLE_ERROR,
+                 "cudnn_frontend::get_stream failed");
     }
 };
 

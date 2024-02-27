@@ -43,10 +43,20 @@ python_add_library(
 )
 target_link_libraries(_compiled_module PRIVATE pybind11::headers)
 
+target_compile_features(_compiled_module PRIVATE cxx_std_17)
+
+target_include_directories(
+    _compiled_module
+    PRIVATE $<TARGET_PROPERTY:cudnn_frontend,INTERFACE_INCLUDE_DIRECTORIES>
+)
+
+target_compile_definitions(_compiled_module PRIVATE NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING)
+
 target_link_libraries(
     _compiled_module
     
-    PRIVATE cudnn_frontend
+    PRIVATE CUDA::cudart
+    PRIVATE CUDA::nvrtc
     PRIVATE dlpack
 )
 

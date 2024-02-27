@@ -11,7 +11,7 @@ if(MSVC OR MSYS OR MINGW)
     add_compile_options(/W4 /WX)
 else()
     option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." OFF)
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-error=attributes -Wno-attributes -Wno-error=unused-function -Wno-unused-function)
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-error=attributes -Wno-attributes -Wno-error=unused-function -Wno-unused-function -Wno-gnu-zero-variadic-macro-arguments)
 endif()
 
 add_library(cudnn_frontend INTERFACE)
