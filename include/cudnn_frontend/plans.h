@@ -53,7 +53,7 @@ execute(cudnnHandle_t handle,
     }
 #endif
 
-    auto status = cudnnBackendExecute(handle, plan->get_raw_desc(), raw_variant_pack);
+    auto status = cudnn_frontend::execute(handle, plan->get_raw_desc(), raw_variant_pack);
     if (status != CUDNN_STATUS_SUCCESS) {
         std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
         return {error_code_t::GRAPH_EXECUTION_FAILED, message};
@@ -121,12 +121,12 @@ query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operatio
             int64_t elem_count                        = 0;
             ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
             cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
-            auto status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
-                                                   CUDNN_ATTR_ENGINECFG_ENGINE,
-                                                   CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                                   1,
-                                                   &elem_count,
-                                                   &extractedEngine_);
+            auto status = cudnn_frontend::get_attribute(engine_config->get_backend_descriptor(),
+                                                        CUDNN_ATTR_ENGINECFG_ENGINE,
+                                                        CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                        1,
+                                                        &elem_count,
+                                                        &extractedEngine_);
             if (status == CUDNN_STATUS_SUCCESS) {
                 good_configs.push_back(engine_config);
             }
@@ -264,53 +264,53 @@ class Execution_plan_list {
 
             ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
             cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
-            auto status = cudnnBackendGetAttribute(engine_config->get_backend_descriptor(),
-                                                   CUDNN_ATTR_ENGINECFG_ENGINE,
-                                                   CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                                   1,
-                                                   &elem_count,
-                                                   &extractedEngine_);
+            auto status = cudnn_frontend::get_attribute(engine_config->get_backend_descriptor(),
+                                                        CUDNN_ATTR_ENGINECFG_ENGINE,
+                                                        CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                        1,
+                                                        &elem_count,
+                                                        &extractedEngine_);
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Engine failed.");
 
-            status = cudnnBackendGetAttribute(extractedEngine_,
-                                              CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
-                                              CUDNN_TYPE_NUMERICAL_NOTE,
-                                              CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
-                                              &elem_count,
-                                              nullptr);
+            status = cudnn_frontend::get_attribute(extractedEngine_,
+                                                   CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                                   CUDNN_TYPE_NUMERICAL_NOTE,
+                                                   CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                                   &elem_count,
+                                                   nullptr);
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Numerical Note failed");
 
             numerics.resize(static_cast<size_t>(elem_count));
-            status = cudnnBackendGetAttribute(extractedEngine_,
-                                              CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
-                                              CUDNN_TYPE_NUMERICAL_NOTE,
-                                              CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
-                                              &elem_count,
-                                              numerics.data());
+            status = cudnn_frontend::get_attribute(extractedEngine_,
+                                                   CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                                   CUDNN_TYPE_NUMERICAL_NOTE,
+                                                   CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                                   &elem_count,
+                                                   numerics.data());
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Numerical Note failed");
-            status = cudnnBackendGetAttribute(extractedEngine_,
-                                              CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
-                                              CUDNN_TYPE_BEHAVIOR_NOTE,
-                                              CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
-                                              &elem_count,
-                                              nullptr);
+            status = cudnn_frontend::get_attribute(extractedEngine_,
+                                                   CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                                   CUDNN_TYPE_BEHAVIOR_NOTE,
+                                                   CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                                   &elem_count,
+                                                   nullptr);
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Behavior Note failed");
 
             behavior.resize(static_cast<size_t>(elem_count));
-            status = cudnnBackendGetAttribute(extractedEngine_,
-                                              CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
-                                              CUDNN_TYPE_BEHAVIOR_NOTE,
-                                              CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
-                                              &elem_count,
-                                              behavior.data());
+            status = cudnn_frontend::get_attribute(extractedEngine_,
+                                                   CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                                   CUDNN_TYPE_BEHAVIOR_NOTE,
+                                                   CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                                   &elem_count,
+                                                   behavior.data());
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Behavior Note failed");
@@ -535,7 +535,7 @@ class Execution_plan_list {
         cudaDeviceSynchronize();
 
         cudaStream_t stream = nullptr;
-        cudnnGetStream(handle, &stream);
+        cudnn_frontend::get_stream(handle, &stream);
 
         for (auto plan : execution_plans) {
             float time_ms       = 0.0f;

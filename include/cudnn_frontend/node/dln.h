@@ -38,7 +38,7 @@ class DLNNode : public NodeCRTP<DLNNode> {
                     << std::endl;
 
         // WAR as epsilon was required in previous versions
-        if (cudnnGetVersion() < 8906) {
+        if (cudnn_frontend::get_backend_version() < 8906) {
             attributes.inputs[Layernorm_backward_attributes::input_names::EPSILON] =
                 std::make_shared<Tensor_attributes>(0.0f);
         }
@@ -147,7 +147,7 @@ class DLNNode : public NodeCRTP<DLNNode> {
         CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(DX, Layernorm_backward_attributes::output_names::DX);
         DLN_op_builder.setdxDesc(*(tensors.at(DX->second->get_uid())));
 
-        if (cudnnGetVersion() < 8906) {
+        if (cudnn_frontend::get_backend_version() < 8906) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(EPSILON, Layernorm_backward_attributes::input_names::EPSILON);
             DLN_op_builder.setEpsilonTensor(*(tensors.at(EPSILON->second->get_uid())));
         }

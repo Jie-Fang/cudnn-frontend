@@ -1,0 +1,166 @@
+/*
+ * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
+#pragma once
+
+#include <ostream>
+#include <iostream>
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+#include <dlfcn.h>
+#include <mutex>
+#endif
+
+namespace cudnn_frontend {
+
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+inline void *
+get_symbol(const char *function_name) {
+    static std::mutex cudnn_fe_lib_mutex;
+    std::lock_guard<std::mutex> lock(cudnn_fe_lib_mutex);
+    char *c                = NULL;
+    c                      = dlerror();
+    static void *dl_handle = dlopen("libcudnn.so", RTLD_NOW);
+    c                      = dlerror();
+    (void)c;
+    if (dl_handle == nullptr) {
+        std::string error_msg = std::string("Unable to dlopen libcudnn.so") + std::string(c);
+        throw std::runtime_error(error_msg.c_str());
+    }
+
+    void *ret = dlsym(dl_handle, function_name);
+    return ret;
+}
+#endif
+
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+#define NV_CUDNN_FE_DYNAMIC_CHECK_BACKEND_DESCRIPTOR(MINIMUM_VERSION, DESCRIPTOR, MESSAGE) \
+    if (MINIMUM_VERSION > get_backend_version()) {                                         \
+        set_error_and_throw_exception(&DESCRIPTOR, CUDNN_STATUS_INVALID_VALUE, MESSAGE);   \
+        return std::move(DESCRIPTOR);                                                      \
+    }
+#else
+#define NV_CUDNN_FE_DYNAMIC_CHECK_BACKEND_DESCRIPTOR(MINIMUM_VERSION, DESCRIPTOR, MESSAGE)
+#endif
+
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+#define NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(MINIMUM_VERSION, STATUS) \
+    if (MINIMUM_VERSION > get_backend_version()) {                               \
+        return STATUS;                                                           \
+    }
+#else
+#define NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(MINIMUM_VERSION, STATUS)
+#endif
+
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+#define NV_FE_CALL_TO_BACKEND(function_name, backend_symbol, ...)           \
+    static void *fptr = get_symbol(#backend_symbol);                        \
+    if (fptr == nullptr) {                                                  \
+        throw std::runtime_error("Unable to find symbol " #backend_symbol); \
+    }                                                                       \
+    return reinterpret_cast<decltype(function_name) *>(fptr)(__VA_ARGS__);
+#else
+#define NV_FE_CALL_TO_BACKEND(function_name, backend_symbol, ...) return backend_symbol(__VA_ARGS__);
+#endif
+
+inline cudnnStatus_t
+create_handle(cudnnHandle_t *handle) {
+    NV_FE_CALL_TO_BACKEND(create_handle, cudnnCreate, handle);
+}
+
+inline cudnnStatus_t
+destroy_handle(cudnnHandle_t handle) {
+    NV_FE_CALL_TO_BACKEND(destroy_handle, cudnnDestroy, handle);
+}
+
+inline size_t
+get_backend_version(void) {
+    NV_FE_CALL_TO_BACKEND(get_backend_version, cudnnGetVersion);
+}
+
+inline cudnnStatus_t
+create_descriptor(cudnnBackendDescriptorType_t descriptorType, cudnnBackendDescriptor_t *descriptor) {
+    NV_FE_CALL_TO_BACKEND(create_descriptor, cudnnBackendCreateDescriptor, descriptorType, descriptor);
+}
+
+inline cudnnStatus_t
+destroy_descriptor(cudnnBackendDescriptor_t descriptor) {
+    NV_FE_CALL_TO_BACKEND(destroy_descriptor, cudnnBackendDestroyDescriptor, descriptor);
+}
+
+inline cudnnStatus_t
+set_attribute(cudnnBackendDescriptor_t descriptor,
+              cudnnBackendAttributeName_t attributeName,
+              cudnnBackendAttributeType_t attributeType,
+              int64_t elementCount,
+              const void *arrayOfElements) {
+    NV_FE_CALL_TO_BACKEND(set_attribute,
+                          cudnnBackendSetAttribute,
+                          descriptor,
+                          attributeName,
+                          attributeType,
+                          elementCount,
+                          arrayOfElements);
+}
+
+inline cudnnStatus_t
+get_attribute(cudnnBackendDescriptor_t const descriptor,
+              cudnnBackendAttributeName_t attributeName,
+              cudnnBackendAttributeType_t attributeType,
+              int64_t requestedElementCount,
+              int64_t *elementCount,
+              void *arrayOfElements) {
+    NV_FE_CALL_TO_BACKEND(get_attribute,
+                          cudnnBackendGetAttribute,
+                          descriptor,
+                          attributeName,
+                          attributeType,
+                          requestedElementCount,
+                          elementCount,
+                          arrayOfElements)
+}
+
+inline cudnnStatus_t
+finalize(cudnnBackendDescriptor_t descriptor) {
+    NV_FE_CALL_TO_BACKEND(finalize, cudnnBackendFinalize, descriptor);
+}
+
+inline cudnnStatus_t
+execute(cudnnHandle_t handle, cudnnBackendDescriptor_t executionPlan, cudnnBackendDescriptor_t variantPack) {
+    NV_FE_CALL_TO_BACKEND(execute, cudnnBackendExecute, handle, executionPlan, variantPack);
+}
+
+inline const char *
+get_error_string(cudnnStatus_t status) {
+    NV_FE_CALL_TO_BACKEND(get_error_string, cudnnGetErrorString, status);
+}
+
+inline cudnnStatus_t
+set_stream(cudnnHandle_t handle, cudaStream_t stream) {
+    NV_FE_CALL_TO_BACKEND(set_stream, cudnnSetStream, handle, stream);
+}
+
+inline cudnnStatus_t
+get_stream(cudnnHandle_t handle, cudaStream_t *stream) {
+    NV_FE_CALL_TO_BACKEND(get_stream, cudnnGetStream, handle, stream);
+}
+
+}  // namespace cudnn_frontend

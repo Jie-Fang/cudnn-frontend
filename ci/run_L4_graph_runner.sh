@@ -9,6 +9,7 @@ function display_header() {
 
 function run_python_tests() {
     export PYTHONPATH=build
+    export LD_LIBRARY_PATH=/debug_cudnn/lib64
     
     #Legacy graph test (TODO(@mbreughe): add to a list instead)
     python3 test/pycudnnTest.py -jsonPath test/json_graph_defs/fusionGraphTests.json -RgraphRunner -jsonTestName=DgradAdd_abstract -x -dimA=8,64,64,64 -filtA=64,64,3,3 -padA=1,1 -convStrideA=1,1 -dilationA=1,1 -Pin s -Pcomp s -Pout s -rtol 5e-3 -atol 5e-3 -minDevVer 800 -formatAll 1

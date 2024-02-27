@@ -29,6 +29,7 @@ if (MSVC)
         /wd4458 # local hides class member (currently a problem for all inline setters)
         /wd4505 # unreferenced function with internal linkage has been removed
         /wd4101 /wd4189 # unreferenced local
+        /bigobj
     )
 else()
     target_compile_options(
