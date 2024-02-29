@@ -2,6 +2,8 @@ import cudnn
 import pytest
 import torch
 
+from test_utils import torch_fork_set_rng
+
 class Conv_Genstats(torch.nn.Module):
     def forward(self, scale, bias, x, w, padding = [1,1], stride = [1,1], dilation = [1,1]):
         x_conv = torch.relu(x * scale + bias)
@@ -20,7 +22,9 @@ stride   = [1,1]
 dilation = [1,1]
 
 @pytest.mark.skipif(cudnn.backend_version() < 8800, reason="requires cudnn 8.8 or higher")
+@torch_fork_set_rng(seed=0)
 def test_conv_genstats():
+
     # Reference
     X_gpu = torch.randn(n, c, 32, 32, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     W_gpu = torch.randn(k, c, 3, 3, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)

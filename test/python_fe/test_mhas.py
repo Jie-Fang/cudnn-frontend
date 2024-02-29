@@ -6,6 +6,8 @@ import math
 import random
 import os
 
+from test_utils import torch_fork_set_rng
+
 input_type_options = [torch.float16, torch.bfloat16]
 layout_options = ["non_interleaved", "bs3hd", "sbh3d"]
 head_group_options = ["multi_head", "group_query", "multi_query"]
@@ -34,52 +36,6 @@ def convert_to_cudnn_type(torch_type):
         return cudnn.data_type.INT64
     else:
         raise ValueError("Unsupported tensor data type.")
-
-
-def compare_tensors(expected, actual, name, rtol=2e-2, atol=2e-2, fudge=1e-9):
-    assert expected.shape == actual.shape
-
-    expected = expected.float().cuda().flatten()
-    actual = actual.float().cuda().flatten()
-
-    n_elem = torch.numel(expected)
-
-    mae = (expected - actual).abs().mean().item()
-    perr = ((expected - actual).abs().sum() / expected.abs().sum()).item()
-    snr = (expected**2).mean().sqrt() / ((expected - actual) ** 2).mean().sqrt()
-    snr_db = (10 * torch.log10(snr)).item()
-
-    absolute_error = (expected - actual).abs()
-    relative_error = absolute_error / torch.where(expected.abs() < fudge, fudge, expected.abs())
-
-    abs_error_indices = absolute_error > atol
-    rel_error_indices = relative_error > rtol
-    n_abs_errors = torch.sum(abs_error_indices)
-    n_rel_errors = torch.sum(rel_error_indices)
-    error_indices = torch.logical_and(abs_error_indices, rel_error_indices)
-    n_errors = torch.sum(error_indices)
-
-    n_nans = torch.isnan(actual).sum()
-    n_zeros = n_elem - torch.count_nonzero(actual)
-
-    if n_errors + n_nans != 0:
-        print(f"========== Comparison for {name} ==========")
-        print(f"Absolute Tolerance = {atol}")
-        print(f"Relative Tolerance = {rtol}")
-        print(f"Number of elements = {n_elem}")
-        print(f"Number of absolute errors = {n_abs_errors} ({n_abs_errors * 100 / n_elem:.2f}%)")
-        print(f"Number of relative errors = {n_rel_errors} ({n_rel_errors * 100 / n_elem:.2f}%)")
-        print(f"Number of errors (absolute and relative) = {n_errors} ({(n_errors * 100)/n_elem:.2f}%)")
-        print(f"Maximum absolute error = {absolute_error.max():.4f}")
-        print(f"Maximum relative error = {relative_error.max():.4f}")
-        print(f"Mean average error = {mae:.4f}")
-        print(f"Perr error = {perr:.4f} = 1/{(1/perr) if perr != 0 else float('inf'):.2f}")
-        print(f"Signal to noise ratio = {snr.item():.2f} = {snr_db:.2f}dB")
-        print(f"Number of Nans = {n_nans} ({n_nans * 100 / n_elem:.2f}%)")
-        print(f"Number of Zeros = {n_zeros} ({n_zeros * 100 / n_elem:.2f}%)")
-        print("===================================\n")
-
-    return n_errors + n_nans
 
 
 def compute_ref(
@@ -318,7 +274,7 @@ def convert_ragged_to_uniform(ragged_tensor, ragged_offset):
 
 
 @pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
-@pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"bias{int(p)}")
+@pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
 @pytest.mark.parametrize("is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}")
 @pytest.mark.parametrize("is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}")
 @pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
@@ -327,6 +283,7 @@ def convert_ragged_to_uniform(ragged_tensor, ragged_offset):
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
+@torch_fork_set_rng(seed=0)
 def test_sdpa(input_type,
         layout,
         head_group,
@@ -338,6 +295,7 @@ def test_sdpa(input_type,
         is_ragged,
         is_infer,
         arg_params):
+
     if cudnn.backend_version() < 8903:
         pytest.skip("SDPA fprop requires cudnn 8.9.3 or higher")
 
@@ -454,7 +412,7 @@ def test_sdpa(input_type,
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
-    rng_dump_gpu = torch.empty((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
+    rng_dump_gpu = torch.zeros((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
 
     q_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_q_gpu) * h_q * d_qk).int() if is_ragged else None
     k_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_kv_gpu) * h_k * d_qk).int() if is_ragged else None
@@ -601,12 +559,12 @@ def test_sdpa(input_type,
                 stats_ref[i, :, m:, :] = 0
                 stats_gpu[i, :, m:, :] = 0
 
-    assert compare_tensors(o_ref, o_gpu, "O") == 0
+    torch.testing.assert_close(o_ref, o_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
     if is_infer == False:
-        assert compare_tensors(stats_ref, stats_gpu, "stats") == 0
+        torch.testing.assert_close(stats_ref, stats_gpu, atol=2e-2, rtol=2e-2)
 
 
-@pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"bias{int(p)}")
+@pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
 @pytest.mark.parametrize("is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}")
 @pytest.mark.parametrize("is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}")
 @pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
@@ -615,6 +573,7 @@ def test_sdpa(input_type,
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
+@torch_fork_set_rng(seed=0)
 def test_sdpa_backward(input_type,
         layout,
         head_group,
@@ -625,6 +584,7 @@ def test_sdpa_backward(input_type,
         is_dropout,
         is_ragged,
         arg_params):
+
     if cudnn.backend_version() < 8903:
         pytest.skip("SDPA bprop requires cudnn 8.9.3 or higher")
 
@@ -770,7 +730,7 @@ def test_sdpa_backward(input_type,
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
-    rng_dump_gpu = torch.empty((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
+    rng_dump_gpu = torch.zeros((b, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
 
     q_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_q_gpu) * h_q * d_qk).int() if is_ragged else None
     k_ragged_offset_gpu = (compute_exclusive_prefix_sum(seq_len_kv_gpu) * h_k * d_qk).int() if is_ragged else None
@@ -1041,11 +1001,11 @@ def test_sdpa_backward(input_type,
                 dBias_ref[i, :, m:, :] = 0
                 dBias_ref[i, :, :, n:] = 0
 
-    assert compare_tensors(dQ_ref, dQ_gpu, "dQ") == 0
-    assert compare_tensors(dK_ref, dK_gpu, "dK", atol=2e-2 if input_type != torch.bfloat16 else 4e-2) == 0
-    assert compare_tensors(dV_ref, dV_gpu, "dV") == 0
+    torch.testing.assert_close(dQ_ref, dQ_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
+    torch.testing.assert_close(dK_ref, dK_gpu, check_dtype=False, atol=2e-2 if input_type != torch.bfloat16 else 4e-2, rtol=2e-2)
+    torch.testing.assert_close(dV_ref, dV_gpu, check_dtype=False, atol=2e-2 if input_type != torch.bfloat16 else 4e-2, rtol=2e-2)
     if is_bias:
-        assert compare_tensors(dBias_ref, dBias_gpu, "dBias") == 0
+        torch.testing.assert_close(dBias_ref, dBias_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
 
 
 if __name__ == "__main__":
@@ -1053,7 +1013,7 @@ if __name__ == "__main__":
     # ================== forward ==================
     """
     pytest \
-      test/python_fe/test_mhas.py::test_sdpa[torch.float16-non_interleaved-group_query-bias0-alibi0-padding0-causal0-dropout0-bias0-infer0] \
+      test/python_fe/test_mhas.py::test_sdpa[torch.float16-non_interleaved-group_query-bias0-alibi0-padding0-causal0-dropout0-ragged0-infer0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \
@@ -1067,7 +1027,7 @@ if __name__ == "__main__":
     # ================== backward ==================
     """
     pytest \
-      test/python_fe/test_mhas.py::test_sdpa_backward[torch.float16-non_interleaved-group_query-bias0-alibi0-padding0-causal0-dropout0-bias0] \
+      test/python_fe/test_mhas.py::test_sdpa_backward[torch.float16-non_interleaved-group_query-bias0-alibi0-padding0-causal0-dropout0-ragged0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \

@@ -3,6 +3,8 @@ import pytest
 import torch
 import itertools
 
+from test_utils import torch_fork_set_rng
+
 embedding_dim_options = [768, 1024, 1280, 1600]
 input_type_options = [torch.bfloat16, torch.float16]
 
@@ -13,8 +15,8 @@ def param_extract(request):
   return request.param
 
 @pytest.mark.skipif(cudnn.backend_version() < 8905, reason="LN not supported below cudnn 8.9.5")
+@torch_fork_set_rng(seed=0)
 def test_layernorm(param_extract):
-    torch.manual_seed(0)
 
     embedding_dim, input_type = param_extract
 

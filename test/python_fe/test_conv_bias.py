@@ -2,6 +2,8 @@ import cudnn
 import pytest
 import torch
 
+from test_utils import torch_fork_set_rng
+
 class CSBR(torch.nn.Module):
     def forward(self, x, w, b = None, padding = [1,1], stride = [1,1], dilation = [1,1]):
         if b is not None:
@@ -9,8 +11,8 @@ class CSBR(torch.nn.Module):
         conv_output = torch.nn.functional.conv2d(x, w, bias = b, padding=padding, stride=stride, dilation=dilation)
         return torch.nn.functional.relu(conv_output)
 
+@torch_fork_set_rng(seed=0)
 def test_conv_bias_relu():
-    torch.manual_seed(0)
 
     # Reference code
     X_gpu = torch.randn(4, 16, 56, 56, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
@@ -53,8 +55,10 @@ def test_conv_bias_relu():
     torch.testing.assert_close(Y_expected, Y_actual, atol=0.05, rtol=1e-2)
     
     cudnn.destroy_handle(handle)
-    
+
+@torch_fork_set_rng(seed=0)
 def test_conv_relu():
+
     # Reference code
     X_gpu = torch.randn(20, 40, 30, 40, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     W_gpu = torch.randn(54, 40, 3, 4, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
@@ -89,7 +93,9 @@ def test_conv_relu():
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
 
+@torch_fork_set_rng(seed=0)
 def test_conv3d_bias_leaky_relu():
+
     N, C, D, H, W = 4, 16, 52, 54, 56
     K, R, S, T = 32, 3, 3, 3
     padding = [0,1,2]
@@ -131,7 +137,9 @@ def test_conv3d_bias_leaky_relu():
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
 
+@torch_fork_set_rng(seed=0)
 def test_leaky_relu_backward():
+
     N, C, H, W = 4, 16, 56, 56
     negative_slope = 0.01
     
@@ -167,7 +175,9 @@ def test_leaky_relu_backward():
 
 
 @pytest.mark.skipif(cudnn.backend_version() < 8600, reason="requires cudnn 8.6.0 or higher")
+@torch_fork_set_rng(seed=0)
 def test_conv_int8():
+
     N, C, H, W = 1, 64, 32, 32
     K, R, S = 4, 3, 3
     padding  = [1,1]

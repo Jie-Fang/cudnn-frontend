@@ -1,6 +1,8 @@
 import cudnn
 import torch
 
+from test_utils import torch_fork_set_rng
+
 def build_rope_cache(
     seq_len: int,
     n_elem: int,
@@ -40,7 +42,9 @@ def apply_rope_ref(q: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> tor
     q_roped = fn(q[..., : rope_n_elem], cos, sin)
     return torch.cat((q_roped, q[..., rope_n_elem :]), dim=-1)
 
-def apply_rope():
+@torch_fork_set_rng(seed=0)
+def test_apply_rope():
+
     B, nh, T, hs = 8, 32, 4096, 128
     rope_n_elem = int(0.25 * hs)
 
