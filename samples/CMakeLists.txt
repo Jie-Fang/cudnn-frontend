@@ -26,6 +26,7 @@ add_executable(
     cpp/rmsnorm.cpp
     cpp/wgrads.cpp
     cpp/serialization.cpp
+    cpp/autotuning.cpp
     cpp/pointwise.cpp
 
     legacy_samples/conv_sample.cpp 
