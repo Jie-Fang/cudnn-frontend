@@ -2,12 +2,16 @@ import cudnn
 import pytest
 import torch
 
+from test_utils import torch_fork_set_rng
+
 class SGBN(torch.nn.Module):
     def forward(self, input, running_mean, running_var, weight, bias, eps, momentum):
         return torch.nn.functional.batch_norm(input, running_mean, running_var, weight=weight, bias=bias, training=True, momentum=momentum, eps=eps)
 
 @pytest.mark.skipif(cudnn.backend_version() < 8800, reason="BN with mask output not supported below cudnn 8.8")
+@torch_fork_set_rng(seed=0)
 def test_bn_relu_with_mask():
+
     N, C, H, W = 4, 16, 56, 56
     x_gpu = torch.randn(N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16).to(memory_format=torch.channels_last)
     scale_gpu = torch.randn(1, C, 1, 1, requires_grad=False, device="cuda", dtype=torch.float32)
@@ -100,7 +104,9 @@ def test_bn_relu_with_mask():
     # torch.testing.assert_close(mask_expected, mask_actual)
 
 @pytest.mark.skipif(cudnn.backend_version() < 8900, reason="DBN fusions not supported below cudnn 8.9")
+@torch_fork_set_rng(seed=0)
 def test_drelu_dadd_dbn():
+
     # Tensors
     N, C, H, W = 4, 16, 56, 56
 
@@ -171,7 +177,9 @@ def test_drelu_dadd_dbn():
     graph.execute(device_buffers, workspace)
 
 @pytest.mark.skipif(cudnn.backend_version() < 8904, reason="BN_infer-Drelu-DBN not supported below cudnn 8.9.4")
+@torch_fork_set_rng(seed=0)
 def test_bn_infer_drelu_dbn():
+
     # Tensors
     N, C, H, W = 4, 16, 56, 56
 

@@ -2,7 +2,11 @@ import cudnn
 import pytest
 import torch
 
+from test_utils import torch_fork_set_rng
+
+@torch_fork_set_rng(seed=0)
 def test_reduction():
+
     # Define tensor dimensions
     N, K, C, H, W = 4, 32, 16, 64, 64
     R, S = 3, 3

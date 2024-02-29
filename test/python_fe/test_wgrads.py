@@ -2,6 +2,8 @@ import cudnn
 import pytest
 import torch
 
+from test_utils import torch_fork_set_rng
+
 def is_ampere_arch():
     (major, minor) = torch.cuda.get_device_capability()
     cc = major*10 + minor
@@ -20,6 +22,7 @@ stride   = [1,1]
 dilation = [1,1]
 
 @pytest.mark.skipif(cudnn.backend_version() < 8800, reason="requires cudnn 8.8 or higher")
+@torch_fork_set_rng(seed=0)
 def test_scale_bias_relu_wgrad():
 
     if not is_ampere_arch() and not is_hopper_arch():

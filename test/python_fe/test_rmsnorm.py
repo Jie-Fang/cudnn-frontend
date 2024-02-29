@@ -5,6 +5,8 @@ import itertools
 
 import torch.nn as nn
 
+from test_utils import torch_fork_set_rng
+
 class RMSNorm(torch.nn.Module):
     """Root Mean Square Layer Normalization.
 
@@ -38,10 +40,9 @@ def param_extract(request):
   return request.param
 
 @pytest.mark.skipif(cudnn.backend_version() < 8906, reason="RmsNorm not supported below cudnn 8.9.6")
+@torch_fork_set_rng(seed=0)
 def test_rmsnorm(param_extract):
-    # TODO(@barretw): ensure output is deterministic and reproducible
-    torch.manual_seed(0)
-    
+
     embedding_dim, input_type, has_bias = param_extract
     
     batch_size, seq_size = 16, 128

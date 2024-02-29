@@ -3,6 +3,8 @@ import pytest
 import torch
 import itertools
 
+from test_utils import torch_fork_set_rng
+
 input_type_options = [torch.bfloat16, torch.float16]
 
 all_options = [elem for elem in itertools.product(*[input_type_options,])]
@@ -12,8 +14,8 @@ def param_extract(request):
   return request.param
 
 @pytest.mark.skipif(cudnn.backend_version() < 8905, reason="IN not supported below cudnn 8.9.5")
+@torch_fork_set_rng(seed=0)
 def test_in(param_extract):
-    torch.manual_seed(0)
 
     input_type, = param_extract
     print(input_type)
