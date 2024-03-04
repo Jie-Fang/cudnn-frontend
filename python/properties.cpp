@@ -38,12 +38,13 @@ class HandleManagement {
         throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnSetStream failed");
     }
 
-    static void
-    get_stream(std::intptr_t handle, std::intptr_t streamId) {
-        auto status = cudnn_frontend::get_stream((cudnnHandle_t)handle, (cudaStream_t*)streamId);
-        throw_if(status != CUDNN_STATUS_SUCCESS,
-                 cudnn_frontend::error_code_t::HANDLE_ERROR,
-                 "cudnn_frontend::get_stream failed");
+    static std::intptr_t
+    get_stream(std::intptr_t handle) {
+        cudaStream_t streamId = nullptr;
+        auto status           = cudnn_frontend::get_stream((cudnnHandle_t)handle, &streamId);
+        throw_if(status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnGetStream failed");
+
+        return reinterpret_cast<std::intptr_t>(streamId);
     }
 };
 
@@ -102,11 +103,7 @@ init_properties(py::module_& m) {
     m.def("create_handle", &HandleManagement::create_handle);
     m.def("destroy_handle", &HandleManagement::destroy_handle);
     m.def("get_stream", &HandleManagement::get_stream);
-    m.def(
-        "set_stream",
-        &HandleManagement::set_stream,
-        py::arg("handle"),
-        py::arg("stream"));
+    m.def("set_stream", &HandleManagement::set_stream, py::arg("handle"), py::arg("stream"));
 
     py::enum_<cudnn_frontend::NormFwdPhase_t>(m, "norm_forward_phase")
         .value("INFERENCE", cudnn_frontend::NormFwdPhase_t::INFERENCE)
