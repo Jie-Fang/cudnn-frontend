@@ -124,6 +124,20 @@ stages:
     script:
         - ci/run_L4_streams.sh
 
+build:pip_wheel_generation:
+    tags:
+        - Hopper
+    needs: []
+    stage: build
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.3
+    script:
+        - ci/build_pip_wheels.sh
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+    artifacts:
+        paths:
+            - many_linux_wheels/*.whl
+
 analysis:clang-format:
     image: ubuntu:jammy
     stage: analysis
@@ -206,6 +220,8 @@ L4_graph_runner_large:cudnn_9.1.0_latest:
             - ARCH: ["Ampere", "Hopper"]
     tags:
         - ${ARCH}
+    before_script:
+        - export LD_LIBRARY_PATH="/debug_cudnn/lib64:${LD_LIBRARY_PATH}"
     extends:
         - .fetch_cudnn_v9:template
         - .L4_graph_runner_large:template
