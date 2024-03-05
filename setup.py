@@ -29,7 +29,6 @@ class CMakeBuild(build_ext):
 
         # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
         cmake_args = [
-            f"VERBOSE=1",
             f"-DPython_EXECUTABLE={sys.executable}",
             f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
             f"-DCUDNN_FRONTEND_BUILD_PYTHON_BINDINGS=ON",
