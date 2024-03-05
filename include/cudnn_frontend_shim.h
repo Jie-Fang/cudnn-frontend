@@ -163,4 +163,43 @@ get_stream(cudnnHandle_t handle, cudaStream_t *stream) {
     NV_FE_CALL_TO_BACKEND(get_stream, cudnnGetStream, handle, stream);
 }
 
+inline cudnnStatus_t
+create_filter_desc_v7(cudnnFilterDescriptor_t *filter) {
+    NV_FE_CALL_TO_BACKEND(create_filter_desc_v7, cudnnCreateFilterDescriptor, filter);
+}
+
+inline cudnnStatus_t
+set_ndfilter_desc_v7(cudnnFilterDescriptor_t filter,
+                     cudnnDataType_t type,
+                     cudnnTensorFormat_t format,
+                     int x,
+                     const int filterDimA[]) {
+    NV_FE_CALL_TO_BACKEND(set_ndfilter_desc_v7, cudnnSetFilterNdDescriptor, filter, type, format, x, filterDimA);
+}
+
+inline cudnnStatus_t
+reorder_filter_bias(cudnnHandle_t handle,
+                    const cudnnFilterDescriptor_t filterDesc,
+                    cudnnReorderType_t reorderType,
+                    const void *filterData,
+                    void *reorderedFilterData,
+                    int reorderBias,
+                    const void *biasData,
+                    void *reorderedBiasData) {
+    NV_FE_CALL_TO_BACKEND(reorder_filter_bias,
+                          cudnnReorderFilterAndBias,
+                          handle,
+                          filterDesc,
+                          reorderType,
+                          filterData,
+                          reorderedFilterData,
+                          reorderBias,
+                          biasData,
+                          reorderedBiasData);
+}
+
+inline cudnnStatus_t
+destroy_filter(cudnnFilterDescriptor_t filter) {
+    NV_FE_CALL_TO_BACKEND(destroy_filter, cudnnDestroyFilterDescriptor, filter);
+}
 }  // namespace cudnn_frontend
