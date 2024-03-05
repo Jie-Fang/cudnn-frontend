@@ -86,6 +86,7 @@ TEST_CASE("Matmul autotuning", "[matmul][graph][autotuning]") {
 
     auto graph = create_graph();
 
+    graph.deselect_workspace_greater_than(0);
     auto plan_count = graph.get_execution_plan_count();
     std::cout << "Graph has " << plan_count << " plan candidates." << std::endl;
 
