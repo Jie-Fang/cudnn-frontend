@@ -396,11 +396,14 @@ class Execution_plan_list {
                 // Filter out execution plans with workspace greater than whats available from user
                 if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
                     filtered_indices[i] = true;
+                    execution_plans[i] = nullptr;
                     getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
                     continue;
                 }
 
                 candidate = static_cast<int64_t>(i);
+                getLogger() << "[cudnn_frontend] INFO: Candidate set as " <<  i << std::endl;
+
                 return {error_code_t::OK, ""};
             }
         }
@@ -429,6 +432,7 @@ class Execution_plan_list {
                                        "Chosen plan index has been deselected.");
 
         if (execution_plans[index] != nullptr && execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed) {
+            candidate = index;
             return {error_code_t::OK, ""};
         };
 
@@ -477,12 +481,15 @@ class Execution_plan_list {
 
             if (fe_status.is_good()) {
                 if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
+                    getLogger() << "[cudnn_frontend] INFO: skipping plan since workspace violation. Requires " <<  execution_plans[i]->getWorkspaceSize() << std::endl;
                     filtered_indices[i] = true;
+                    execution_plans[i] = nullptr;
                     continue;
                 }
                 // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
                 if (candidate == -1) {
                     candidate = static_cast<int64_t>(i);
+                    getLogger() << "[cudnn_frontend] INFO: Candidate set as " <<  i << std::endl;
                 }
 
                 // Return from this function as first successfully built plan is found.
