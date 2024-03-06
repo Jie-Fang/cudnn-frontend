@@ -29,6 +29,21 @@ def _tensor(
     ragged_offset = None,
     name = ""
 ):
+    """
+    Create a tensor.
+
+    Args:
+        dim (List[int]): The dimensions of the tensor.
+        stride (List[int]): The strides of the tensor.
+        data_type (cudnn.data_type): The data type of the tensor.
+        is_virtual (bool): Flag indicating if the tensor is virtual.
+        is_pass_by_value (bool): Flag indicating if the tensor is passed by value.
+        ragged_offset (cudnn_tensor): The ragged offset tensor.
+        name (str): The name of the tensor.
+
+    Returns:
+        cudnn_tensor: The created tensor.
+    """
     return self._make_tensor(
         dim = dim,
         stride = stride,
@@ -65,6 +80,16 @@ def _execute(
     workspace,
     handle = None
 ):
+    """
+    Execute a cudnn graph.
+
+    Args:
+        tensor_to_device_buffer (dict(cudnn_tensor, Union[torch.Tensor, int, __dlpack__])): The dimensions of the tensor.
+        workspace (Union[torch.Tensor, int, __dlpack__]): The name of the tensor.
+        handle: cudnn_handle created with cudnn.create_handle()
+    Returns:
+        None
+    """
     uid_to_tensor_pointer = {
         x if type(x) is int else x.get_uid() : _library_device_pointer(pointer)
         for x, pointer in tensor_to_device_buffer.items() if x is not None
@@ -80,6 +105,17 @@ def _execute_plan_at_index(
     index,
     handle = None
 ):
+    """
+    Execute a cudnn graph.
+
+    Args:
+        tensor_to_device_buffer (dict(cudnn_tensor, Union[torch.Tensor, int, __dlpack__])): The dimensions of the tensor.
+        workspace (Union[torch.Tensor, int, __dlpack__]): The name of the tensor.
+        index(int): Location of execution plan to use.
+        handle: cudnn_handle created with cudnn.create_handle()
+    Returns:
+        None
+    """
     uid_to_tensor_pointer = {
         x if type(x) is int else x.get_uid() : _library_device_pointer(pointer)
         for x, pointer in tensor_to_device_buffer.items() if x is not None
