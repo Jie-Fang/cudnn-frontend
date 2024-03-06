@@ -341,8 +341,9 @@ PyGraph::deserialize(std::vector<uint8_t> const& data) {
 }
 
 void
-PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack, std::intptr_t workspace,
-                               std::optional<std::intptr_t> exec_handle) {
+PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack,
+                 std::intptr_t workspace,
+                 std::optional<std::intptr_t> exec_handle) {
     std::unordered_map<int64_t, void*> var_pack_;
     for (auto const& [uid, device_pointer] : var_pack) {
         var_pack_.emplace(uid, (void*)device_pointer);
@@ -352,7 +353,7 @@ PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack, std::intpt
 
     cudnnHandle_t handle_ = exec_handle.has_value() ? static_cast<cudnnHandle_t>((void*)(exec_handle.value())) : handle;
 
-    auto status           = graph.execute(handle_, var_pack_, workspace_ptr);
+    auto status = graph.execute(handle_, var_pack_, workspace_ptr);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 
     return;
@@ -372,7 +373,7 @@ PyGraph::execute_plan_at_index(std::unordered_map<int64_t, std::intptr_t> var_pa
 
     cudnnHandle_t handle_ = exec_handle.has_value() ? static_cast<cudnnHandle_t>((void*)(exec_handle.value())) : handle;
 
-    auto status           = graph.execute_plan_at_index(handle_, var_pack_, workspace_ptr, index);
+    auto status = graph.execute_plan_at_index(handle_, var_pack_, workspace_ptr, index);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 
     return;
@@ -411,22 +412,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v{"is_virtual", false},
              py::arg_v{"is_pass_by_value", false},
              py::arg_v{"ragged_offset", nullptr},
-             py::arg_v("name", ""),
-             R"pbdoc(
-                Create a tensor.
-
-                Args:
-                    dim (List[int]): The dimensions of the tensor.
-                    stride (List[int]): The strides of the tensor.
-                    data_type (cudnn.data_type): The data type of the tensor. Default is cudnn.data_type.NOT_SET.
-                    is_virtual (bool): Flag indicating if the tensor is virtual. Default is False.
-                    is_pass_by_value (bool): Flag indicating if the tensor is passed by value. Default is False.
-                    ragged_offset (cudnn_tensor): The ragged offset tensor. Default is nullptr.
-                    name (Optional[str]): The name of the tensor.
-
-                Returns:
-                    cudnn_tensor: The created tensor.
-            )pbdoc")
+             py::arg_v("name", ""))
         .def("genstats",
              &PyGraph::genstats,
              py::arg("input"),
