@@ -42,8 +42,15 @@ get_symbol(const char *function_name) {
     c                      = dlerror();
     (void)c;
     if (dl_handle == nullptr) {
-        std::string error_msg = std::string("Unable to dlopen libcudnn.so") + std::string(c);
-        throw std::runtime_error(error_msg.c_str());
+        // Fall back major version name
+        dl_handle = dlopen("libcudnn.so.9", RTLD_NOW);
+        if (dl_handle == nullptr) {
+            dl_handle = dlopen("libcudnn.so.8", RTLD_NOW);
+            if (dl_handle == nullptr) {
+                std::string error_msg = std::string("Unable to dlopen libcudnn.so.[8/9]") + std::string(c);
+                throw std::runtime_error(error_msg.c_str());
+            }
+        }
     }
 
     void *ret = dlsym(dl_handle, function_name);
