@@ -110,7 +110,7 @@ typedef struct [[nodiscard]] error_object {
     do {                                                                                                          \
         if (auto cuda_retval = x; cuda_retval != cudaSuccess) {                                                   \
             std::stringstream error_msg;                                                                          \
-            error_msg << #x << " failed with " << cudaGetErrorString(cuda_retval);                                \
+            error_msg << #x << " failed with " << cuda_get_error_string(cuda_retval);                             \
             getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
                         << std::endl;                                                                             \
             return {error_code_t::CUDA_API_FAILED, error_msg.str()};                                              \

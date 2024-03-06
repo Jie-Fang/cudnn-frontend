@@ -49,6 +49,24 @@ get_symbol(const char *function_name) {
     void *ret = dlsym(dl_handle, function_name);
     return ret;
 }
+
+inline void *
+get_cuda_symbol(const char *function_name) {
+    static std::mutex cuda_fe_lib_mutex;
+    std::lock_guard<std::mutex> lock(cuda_fe_lib_mutex);
+    char *c                = NULL;
+    c                      = dlerror();
+    static void *dl_handle = dlopen("libcudart.so", RTLD_NOW);
+    c                      = dlerror();
+    (void)c;
+    if (dl_handle == nullptr) {
+        std::string error_msg = std::string("Unable to dlopen libcudart.so") + std::string(c);
+        throw std::runtime_error(error_msg.c_str());
+    }
+
+    void *ret = dlsym(dl_handle, function_name);
+    return ret;
+}
 #endif
 
 #if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
@@ -80,6 +98,67 @@ get_symbol(const char *function_name) {
 #else
 #define NV_FE_CALL_TO_BACKEND(function_name, backend_symbol, ...) return backend_symbol(__VA_ARGS__);
 #endif
+
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+#define NV_FE_CALL_TO_CUDA(function_name, cuda_symbol, ...)              \
+    static void *fptr = get_cuda_symbol(#cuda_symbol);                   \
+    if (fptr == nullptr) {                                               \
+        throw std::runtime_error("Unable to find symbol " #cuda_symbol); \
+    }                                                                    \
+    return reinterpret_cast<decltype(function_name) *>(fptr)(__VA_ARGS__);
+#else
+#define NV_FE_CALL_TO_CUDA(function_name, cuda_symbol, ...) return cuda_symbol(__VA_ARGS__);
+#endif
+
+inline cudaError_t
+cuda_event_create(cudaEvent_t *event) {
+    NV_FE_CALL_TO_CUDA(cuda_event_create, cudaEventCreate, event);
+}
+
+inline cudaError_t
+cuda_event_destroy(cudaEvent_t event) {
+    NV_FE_CALL_TO_CUDA(cuda_event_destroy, cudaEventDestroy, event);
+}
+
+inline cudaError_t
+cuda_event_record(cudaEvent_t event, cudaStream_t stream) {
+    NV_FE_CALL_TO_CUDA(cuda_event_record, cudaEventRecord, event, stream);
+}
+
+inline cudaError_t
+cuda_event_synchronize(cudaEvent_t event) {
+    NV_FE_CALL_TO_CUDA(cuda_event_synchronize, cudaEventSynchronize, event);
+}
+
+inline cudaError_t
+cuda_event_elapsed_time(float *ms, cudaEvent_t start, cudaEvent_t end) {
+    NV_FE_CALL_TO_CUDA(cuda_event_elapsed_time, cudaEventElapsedTime, ms, start, end);
+}
+
+inline cudaError_t
+cuda_mem_cpy_async(void *dst, const void *src, size_t count, cudaMemcpyKind kind, cudaStream_t stream) {
+    NV_FE_CALL_TO_CUDA(cuda_mem_cpy_async, cudaMemcpyAsync, dst, src, count, kind, stream);
+}
+
+inline cudaError_t
+cuda_mem_set_async(void *devPtr, int value, size_t count, cudaStream_t stream) {
+    NV_FE_CALL_TO_CUDA(cuda_mem_set_async, cudaMemsetAsync, devPtr, value, count, stream);
+}
+
+inline cudaError_t
+cuda_get_device_properties(cudaDeviceProp *prop, int device) {
+    NV_FE_CALL_TO_CUDA(cuda_get_device_properties, cudaGetDeviceProperties, prop, device);
+}
+
+inline const char *
+cuda_get_error_string(cudaError_t error) {
+    NV_FE_CALL_TO_CUDA(cuda_get_error_string, cudaGetErrorString, error);
+}
+
+inline cudaError_t
+cuda_device_synchronize() {
+    NV_FE_CALL_TO_CUDA(cuda_device_synchronize, cudaDeviceSynchronize);
+}
 
 inline cudnnStatus_t
 create_handle(cudnnHandle_t *handle) {
