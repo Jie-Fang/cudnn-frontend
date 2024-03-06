@@ -63,6 +63,8 @@ set_target_properties(
 
     PROPERTIES
     LINK_FLAGS "-Wl,--no-as-needed"
+    LINK_FLAGS "-Wl,--enable-new-dtags"
+    LINK_FLAGS "-Wl,-rpath,'$ORIGIN',-rpath,'$ORIGIN/../lib'"
     LINK_WHAT_YOU_USE TRUE
 )
 
