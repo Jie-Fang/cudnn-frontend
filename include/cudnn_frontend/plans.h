@@ -538,9 +538,9 @@ class Execution_plan_list {
         const float threshhold         = 0.95f;
         uint64_t successful_plan_count = 0;
         cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-        cudaDeviceSynchronize();
+        cuda_event_create(&start);
+        cuda_event_create(&stop);
+        cuda_device_synchronize();
 
         cudaStream_t stream = nullptr;
         cudnn_frontend::get_stream(handle, &stream);
@@ -553,16 +553,16 @@ class Execution_plan_list {
             // Warm-up run
             CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle, plan.get(), ptrs, uids, workspace_ptr));
             successful_plan_count++;
-            cudaDeviceSynchronize();
+            cuda_device_synchronize();
 
             for (int i = 0; i < maxIterCount; i++) {
-                cudaEventRecord(start, stream);
+                cuda_event_record(start, stream);
 
                 auto status = detail::execute(handle, plan.get(), ptrs, uids, workspace_ptr);
 
-                cudaEventRecord(stop, stream);
-                cudaEventSynchronize(stop);
-                cudaEventElapsedTime(&time_ms, start, stop);
+                cuda_event_record(stop, stream);
+                cuda_event_synchronize(stop);
+                cuda_event_elapsed_time(&time_ms, start, stop);
 
                 final_time_ms = std::min(min_time_ms, time_ms);
                 if (time_ms / min_time_ms < threshhold) {
@@ -583,8 +583,8 @@ class Execution_plan_list {
             execution_plans.push_back(sorted_plan);
         }
 
-        cudaEventDestroy(start);
-        cudaEventDestroy(stop);
+        cuda_event_destroy(start);
+        cuda_event_destroy(stop);
 
         getLogger() << "Autotuned " << successful_plan_count << " plans." << std::endl;
         return {error_code_t::OK, ""};

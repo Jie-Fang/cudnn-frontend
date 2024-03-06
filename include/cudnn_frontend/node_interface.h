@@ -124,14 +124,14 @@ class INode : public ICudnn {
             (void)uid;
             if (std::get<0>(data) == 0) {
                 auto& vec_data = std::get<2>(data);
-                CHECK_CUDA_ERROR(cudaMemcpyAsync(workspace + std::get<1>(data),
-                                                 vec_data.data(),
-                                                 vec_data.size() * sizeof(float),
-                                                 cudaMemcpyHostToDevice,
-                                                 stream));
+                CHECK_CUDA_ERROR(cuda_mem_cpy_async(workspace + std::get<1>(data),
+                                                    vec_data.data(),
+                                                    vec_data.size() * sizeof(float),
+                                                    cudaMemcpyHostToDevice,
+                                                    stream));
             } else if (std::get<0>(data) == 1) {
                 int64_t memset_size = (int64_t)std::get<2>(data)[0];
-                CHECK_CUDA_ERROR(cudaMemsetAsync(workspace + std::get<1>(data), 0, memset_size, stream));
+                CHECK_CUDA_ERROR(cuda_mem_set_async(workspace + std::get<1>(data), 0, memset_size, stream));
             }
         }
         return {error_code_t::OK, ""};

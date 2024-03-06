@@ -55,8 +55,6 @@ target_compile_definitions(_compiled_module PRIVATE NV_CUDNN_FRONTEND_USE_DYNAMI
 target_link_libraries(
     _compiled_module
     
-    PRIVATE CUDA::cudart
-    PRIVATE CUDA::nvrtc
     PRIVATE dlpack
 )
 

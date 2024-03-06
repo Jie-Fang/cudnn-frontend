@@ -782,7 +782,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         bool use_workspace_opt = false;
 
         struct cudaDeviceProp prop;
-        CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
+        CHECK_CUDA_ERROR(cuda_get_device_properties(&prop, 0));
         if ((cudnn_frontend::get_backend_version() >= 8905 && prop.major >= 9) ||
             (cudnn_frontend::get_backend_version() >= 9000)) {
             // default upper limit for workspace 256MB

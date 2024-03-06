@@ -53,9 +53,9 @@ time_sorted_plan(cudnnHandle_t handle,
     const float threshhold         = 0.95f;
     uint64_t successful_plan_count = 0;
     cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaDeviceSynchronize();
+    cuda_event_create(&start);
+    cuda_event_create(&stop);
+    cuda_device_synchronize();
 
     cudaStream_t stream = nullptr;
     cudnn_frontend::get_stream(handle, &stream);
@@ -73,17 +73,17 @@ time_sorted_plan(cudnnHandle_t handle,
             continue;
         }
         successful_plan_count++;
-        cudaDeviceSynchronize();
+        cuda_device_synchronize();
 
         float time_run_ms[3] = {0.0f, 0.0f, 0.0f};
         for (int i = 0; i < maxIterCount; i++) {
-            cudaEventRecord(start, stream);
+            cuda_event_record(start, stream);
 
             cudnn_frontend::execute(handle, plan.get_raw_desc(), variantPack.get_raw_desc());
 
-            cudaEventRecord(stop, stream);
-            cudaEventSynchronize(stop);
-            cudaEventElapsedTime(&time_ms, start, stop);
+            cuda_event_record(stop, stream);
+            cuda_event_synchronize(stop);
+            cuda_event_elapsed_time(&time_ms, start, stop);
 
             if constexpr (samplingTechnique == CudnnFindSamplingTechnique::CUDNN_FIND_SAMPLE_TILL_STABLE) {
                 final_time_ms = std::min(min_time_ms, time_ms);
@@ -117,8 +117,8 @@ time_sorted_plan(cudnnHandle_t handle,
         time_sorted_plans.emplace_back(std::move(plan));
     }
 
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+    cuda_event_destroy(start);
+    cuda_event_destroy(stop);
 
     getLogger() << "[cudnn_frontend] Auto-tuning returns " << time_sorted_plans.size() << " plans." << std::endl;
 
