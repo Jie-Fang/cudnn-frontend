@@ -115,6 +115,12 @@ stages:
     script:
         - ci/run_pycudnntest.sh
 
+.notebooks:template:
+    stage: notebooks
+    script:
+        - pip install -v .
+        - ci/run_notebooks.sh
+
 .L4_graph_runner:template:
     stage: L4_graph_runner
     script:
@@ -349,3 +355,23 @@ notebooks:cudnn_9.1.0_latest:
         - pip install -v .
         - ci/run_notebooks.sh
     needs: []
+
+"notebooks:cudnn_8.9.5.29_12.2.2":
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.5.29_12.2.2"
+  parallel:
+    matrix:
+      - ARCH: ["Hopper", "Ampere"]
+  tags:
+    - ${ARCH}
+  extends: .notebooks:template
+  needs: []
+
+"notebooks:cudnn_9.0.0.312_12.3.1":
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
+  parallel:
+    matrix:
+      - ARCH: ["Hopper", "Ampere"]
+  tags:
+    - ${ARCH}
+  extends: .notebooks:template
+  needs: []
