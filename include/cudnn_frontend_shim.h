@@ -164,7 +164,15 @@ cuda_get_error_string(cudaError_t error) {
 
 inline cudaError_t
 cuda_device_synchronize() {
-    NV_FE_CALL_TO_CUDA(cuda_device_synchronize, cudaDeviceSynchronize);
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+    static void *fptr = get_cuda_symbol("cudaDeviceSynchronize");
+    if (fptr == nullptr) {
+        throw std::runtime_error("Unable to find symbol cudaDeviceSynchronize");
+    }
+    return reinterpret_cast<decltype(cuda_device_synchronize) *>(fptr)();
+#else
+    return cudaDeviceSynchronize();
+#endif
 }
 
 inline cudnnStatus_t
@@ -179,7 +187,15 @@ destroy_handle(cudnnHandle_t handle) {
 
 inline size_t
 get_backend_version(void) {
-    NV_FE_CALL_TO_BACKEND(get_backend_version, cudnnGetVersion);
+#if defined NV_CUDNN_FRONTEND_USE_DYNAMIC_LOADING
+    static void *fptr = get_symbol("cudnnGetVersion");
+    if (fptr == nullptr) {
+        throw std::runtime_error("Unable to find symbol cudnnGetVersion");
+    }
+    return reinterpret_cast<decltype(get_backend_version) *>(fptr)();
+#else
+    return cudnnGetVersion();
+#endif
 }
 
 inline cudnnStatus_t
