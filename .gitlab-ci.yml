@@ -1,9 +1,6 @@
 default:
     interruptible: true
 
-variables:
-  JFROG_API_KEY: $JFROG_API_KEY
-
 before_script:
     - nvidia-smi
     - echo "CUDA_VERSION=$CUDA_VERSION"
