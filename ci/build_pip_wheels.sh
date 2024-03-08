@@ -13,7 +13,6 @@ do
     if [[ $CI_COMMIT_BRANCH == "main" ]]; then
         echo "main branch" 
         curl -u agopal:$JFROG_API_KEY -T  ${wheel} https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/main/${DATE_FOLDER}/${wheel_name}
-    else 
     elif [[ $CI_COMMIT_BRANCH == "develop" ]]; then 
         echo "develop branch"
         curl -u agopal:${JFROG_API_KEY} -T  ${wheel} https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/develop/latest/${wheel_name}
