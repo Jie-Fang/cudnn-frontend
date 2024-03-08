@@ -6,6 +6,7 @@ import inspect
 def pytest_addoption(parser):
     parser.addoption("--testName", action="append", default=[])
     parser.addoption("--testPath", action="store", default=None)
+    parser.addoption("--testInput", action="store", default=None)
 
 def get_python_graph_defs(path, module_name):
     
@@ -71,14 +72,13 @@ def pytest_generate_tests(metafunc):
     TEST_NAME_PARAM="test_name"
 
     # Dynamically create tests for python_graph_test by identifying all test defs in a test directory
-    if metafunc.function.__name__ == "test_python_graph": 
+    if metafunc.function.__name__ == "test_python_graph" or metafunc.function.__name__ == "test_negative_graph": 
         # Find all the functions that define testgraphs in location testPath
         base_path = os.path.dirname(os.path.abspath(metafunc.config.getoption("testPath")))
         filename = os.path.basename(metafunc.config.getoption("testPath")).split(".")[-2]
         test_funcs, test_names = get_python_graph_defs(base_path, filename)
 
-        # TODO(@mbreughe): make this path a command line option
-        params_path = os.path.join(base_path, "graph_input")
+        params_path = metafunc.config.getoption("testInput") 
 
         param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path, metafunc.config.getoption("testName"))
 

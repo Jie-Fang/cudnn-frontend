@@ -26,6 +26,8 @@ if __name__ == "__main__":
                         help="This can be a json file or python file with graph definitions. "
                         "e.g. json_graph_defs/graphTests.json, python_graph_defs/basic_tests.py")
     pct_parser.add_argument('--testName', default=[], action="append", help="Test Name (multiple names are allowed and recommended for performance). Note: in python graph mode, no name means all tests in file are executed. ")
+    pct_parser.add_argument("--testInput", default=None, action="store", help="Dir that contains parameters in Json format")
+    pct_parser.add_argument('--negative', action="store_true", default=False, help="run negative tests")
     pct_parser.add_argument('--verbose', action="store_true", default=False, help="Verbose output")
     pct_parser.add_argument('--vverbose', action="store_true", default=False, help="Very verbose output")
     pct_parser.add_argument('--threads', action="store", default=1, help="Number of threads to parallelize tests across.")
@@ -41,6 +43,7 @@ if __name__ == "__main__":
     base_path = os.path.dirname(os.path.abspath(__file__))
     json_graph_test = os.path.join(base_path, "json_graph_pytest_wrapper.py")
     python_graph_test = os.path.join(base_path, "python_graph_test.py")
+    negative_graph_test = os.path.join(base_path, "negative_graph_test.py")
 
     # Legacy style of calling cudnnTest (from e.g., cudnn_run.py)
     if args.R == 'graphRunner':
@@ -86,14 +89,23 @@ if __name__ == "__main__":
         pytest_cmd = [json_graph_test]
     # Graphs defined in python file
     elif args.testPath.endswith(".py"):
-        pytest_cmd = [python_graph_test]
+        #TODO(@mbreughe): split this up into two -R options: -Rpython_def, -Rnegative. This will also remove the --negative option.
+        pytest_cmd = [negative_graph_test] if args.negative else [python_graph_test]
     else:
         print("Unrecognized test file {}".format(args.testPath))
 
     for test_name in args.testName:
         pytest_cmd.extend(["--testName", test_name])
-
+        
+    if args.testInput is None: 
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        if args.negative:
+            args.testInput = os.path.join(base_path, "python_graph_defs", "negative_test_input")
+        else:
+            args.testInput = os.path.join(base_path, "python_graph_defs", "graph_input")
+    
     pytest_cmd.extend(["--testPath", args.testPath])
+    pytest_cmd.extend(["--testInput", args.testInput])
 
     if args.vverbose:
         pytest_cmd.append("-v")
