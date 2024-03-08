@@ -307,6 +307,7 @@ class Attributes {
                            tensor_to_pass_by_value) const {
         auto derived = static_cast<DerivedT const*>(this);
         for (auto& [name, tensor] : derived->inputs) {
+            (void)name;
             if (tensor && tensor->get_pass_by_value().has_value()) {
                 tensor_to_pass_by_value.emplace(tensor->get_uid(), tensor->get_pass_by_value().value());
             }
@@ -349,12 +350,14 @@ class Attributes {
         // In case, all tensors are fused scalars, just keep them 1D.
         int64_t number_of_dims = 1;
         for (auto [name, tensor] : derived->inputs) {
+            (void)name;
             if (tensor && (tensor->get_pass_by_value().has_value() == false)) {
                 number_of_dims = tensor->get_dim().size();
                 break;
             }
         }
         for (auto [name, tensor] : derived->inputs) {
+            (void)name;
             if (tensor && tensor->get_pass_by_value().has_value()) {
                 tensor->set_dim(std::vector<int64_t>(number_of_dims, 1));
                 tensor->set_stride(std::vector<int64_t>(number_of_dims, 1));
