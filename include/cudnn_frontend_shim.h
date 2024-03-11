@@ -157,6 +157,11 @@ cuda_get_device_properties(cudaDeviceProp *prop, int device) {
     NV_FE_CALL_TO_CUDA(cuda_get_device_properties, cudaGetDeviceProperties, prop, device);
 }
 
+inline cudaError_t
+cuda_get_device(int *device) {
+    NV_FE_CALL_TO_CUDA(cuda_get_device, cudaGetDevice, device);
+}
+
 inline const char *
 cuda_get_error_string(cudaError_t error) {
     NV_FE_CALL_TO_CUDA(cuda_get_error_string, cudaGetErrorString, error);
