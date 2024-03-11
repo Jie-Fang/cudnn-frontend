@@ -36,6 +36,34 @@
 
 using json = nlohmann::json;
 
+#include <iomanip>
+#include <sstream>
+
+template <>
+struct nlohmann::adl_serializer<float> {
+    static void
+    to_json(nlohmann::json& j, const float& f) {
+        // Convert float to hexadecimal string
+        unsigned int intValue;
+        std::memcpy(&intValue, &f, sizeof(float));
+
+        std::stringstream stream;
+        stream << std::hex << std::uppercase << std::setw(8) << std::setfill('0') << intValue;
+        j = stream.str();
+    }
+
+    static void
+    from_json(const nlohmann::json& j, float& f) {
+        // Read hexadecimal string and convert back to float
+        std::string hexValueStr = j.get<std::string>();
+        unsigned int hexValue;
+        std::stringstream stream(hexValueStr);
+        stream >> std::hex >> hexValue;
+
+        std::memcpy(&f, &hexValue, sizeof(float));
+    }
+};
+
 template <>
 struct nlohmann::adl_serializer<half> {
     static void

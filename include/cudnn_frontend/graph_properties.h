@@ -82,17 +82,11 @@ class Tensor_attributes {
     }
 
    public:
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Tensor_attributes,
-                                   name,
-                                   data_type,
-                                   dim,
-                                   stride,
-                                   is_virtual,
-                                   pass_by_value,
-                                   is_pass_by_value,
-                                   reordering_type,
-                                   uid,
-                                   uid_assigned)
+    // Serialization functions
+    friend void
+    to_json(nlohmann::json& j, const Tensor_attributes& ta);
+    friend void
+    from_json(const nlohmann::json& j, Tensor_attributes& ta);
 
     Tensor_attributes() = default;
 
