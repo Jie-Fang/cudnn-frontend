@@ -38,6 +38,8 @@ To run the python samples, additionally, you will need the following python pack
 
 
 ### Python API
+
+#### Source installation:
 Install FE python API by running:
 ```
 pip install git+https://github.com/NVIDIA/cudnn-frontend.git
@@ -48,7 +50,15 @@ Above command picks cuda and cudnn from default system paths.
 To provide a custom CUDA installation path, use environment variable: `CUDAToolkit_ROOT`.  
 To provide a custom CUDNN installation path, use environment variable: `CUDNN_PATH`.
 
+#### pip wheel installation
 
+Download the pip wheel corresponding to your python installation.
+
+```
+pip install nvidia_cudnn_frontend-1.2.0-*.whl
+```
+
+#### Checking the installation
 To test whether installation is successful, run:
 ```
 pytest tests/python_fe

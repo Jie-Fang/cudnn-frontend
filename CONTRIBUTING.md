@@ -52,4 +52,4 @@ which conforms to the following conventions:
     - Please use dashes or underscores between words as opposed to spaces.
 
 ## Attribution
-Portions adopted from [https://github.com/pytorch/pytorch/blob/master/CONTRIBUTING.md](https://github.com/rapidsai/cuml/blob/branch-24.04/CONTRIBUTING.md)
+Portions of contribution guide adopted from [https://github.com/rapidsai/cuml/blob/branch-24.04/CONTRIBUTING.md](https://github.com/rapidsai/cuml/blob/branch-24.04/CONTRIBUTING.md)
