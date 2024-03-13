@@ -28,6 +28,7 @@ add_executable(
     cpp/serialization.cpp
     cpp/autotuning.cpp
     cpp/pointwise.cpp
+    cpp/resample.cpp
 
     legacy_samples/conv_sample.cpp 
     legacy_samples/resnet_test_list.cpp

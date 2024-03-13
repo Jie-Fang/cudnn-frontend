@@ -155,6 +155,20 @@ struct nlohmann::adl_serializer<std::shared_ptr<T>> {
     }
 };
 
+// Specialization of nlohmann::adl_serializer for cudnnFraction_t
+template <>
+struct nlohmann::adl_serializer<cudnnFraction_t> {
+    static void
+    to_json(json& j, const cudnnFraction_t& fraction) {
+        j = fraction.numerator;
+    }
+
+    static void
+    from_json(const json& j, cudnnFraction_t& fraction) {
+        fraction.numerator = j;
+    }
+};
+
 #include "cudnn_frontend_shim.h"
 #include "cudnn_backend_base.h"
 #include "cudnn_frontend_Logging.h"

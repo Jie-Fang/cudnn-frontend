@@ -1090,6 +1090,120 @@ class Rng_attributes : public Attributes<Rng_attributes> {
     }
 };
 
+class Resample_attributes : public Attributes<Resample_attributes> {
+    friend class Attributes<Resample_attributes>;
+    friend class ResampleNode;
+    friend class INode;
+
+    std::optional<bool> is_inference;
+    ResampleMode_t resample_mode;
+    PaddingMode_t padding_mode;
+    std::vector<cudnnFraction_t> pre_padding;
+    std::vector<cudnnFraction_t> post_padding;
+    std::vector<cudnnFraction_t> stride;
+    std::vector<cudnnFraction_t> window;
+
+   public:
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+
+    enum class output_names { Y, Index };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Resample_attributes,
+                                   name,
+                                   inputs,
+                                   outputs,
+                                   resample_mode,
+                                   padding_mode,
+                                   pre_padding,
+                                   post_padding,
+                                   stride,
+                                   window)
+
+    auto
+    set_resampling_mode(ResampleMode_t const& value) -> Resample_attributes& {
+        resample_mode = value;
+        return *this;
+    }
+
+    auto
+    set_padding_mode(PaddingMode_t const& value) -> Resample_attributes& {
+        padding_mode = value;
+        return *this;
+    }
+
+    auto
+    set_window(std::vector<int64_t> const& value) -> Resample_attributes& {
+        window.resize(value.size());
+        for (auto i = 0u; i < value.size(); i++) {
+            window[i].numerator   = value[i];
+            window[i].denominator = 1;
+        }
+        return *this;
+    }
+
+    auto
+    set_window(std::vector<cudnnFraction_t> const& value) -> Resample_attributes& {
+        window = value;
+        return *this;
+    }
+
+    auto
+    set_stride(std::vector<int64_t> const& value) -> Resample_attributes& {
+        stride.resize(value.size());
+        for (auto i = 0u; i < value.size(); i++) {
+            stride[i].numerator   = value[i];
+            stride[i].denominator = 1;
+        }
+        return *this;
+    }
+
+    auto
+    set_stride(std::vector<cudnnFraction_t> const& value) -> Resample_attributes& {
+        stride = value;
+        return *this;
+    }
+
+    auto
+    set_pre_padding(std::vector<int64_t> const& value) -> Resample_attributes& {
+        pre_padding.resize(value.size());
+        for (auto i = 0u; i < value.size(); i++) {
+            pre_padding[i].numerator   = value[i];
+            pre_padding[i].denominator = 1;
+        }
+        return *this;
+    }
+
+    auto
+    set_pre_padding(std::vector<cudnnFraction_t> const& value) -> Resample_attributes& {
+        pre_padding = value;
+        return *this;
+    }
+
+    auto
+    set_post_padding(std::vector<int64_t> const& value) -> Resample_attributes& {
+        post_padding.resize(value.size());
+        for (auto i = 0u; i < value.size(); i++) {
+            post_padding[i].numerator   = value[i];
+            post_padding[i].denominator = 1;
+        }
+        return *this;
+    }
+
+    auto
+    set_post_padding(std::vector<cudnnFraction_t> const& value) -> Resample_attributes& {
+        post_padding = value;
+        return *this;
+    }
+
+    auto
+    set_is_inference(bool const value) -> Resample_attributes& {
+        is_inference = value;
+        return *this;
+    }
+};
+
 class Reshape_attributes : public Attributes<Reshape_attributes> {
     friend class Attributes<Reshape_attributes>;
     friend class ReshapeNode;
