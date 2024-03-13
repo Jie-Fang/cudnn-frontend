@@ -60,6 +60,7 @@ TEST_CASE("Resample Max Pooling NHWC Inference", "[resample][pooling][max]") {
     checkCudnnErr(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
+    REQUIRE(graph.check_support(handle).is_good());
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
@@ -111,6 +112,7 @@ TEST_CASE("Resample Max Pooling NHWC Training", "[resample][pooling][max]") {
     checkCudnnErr(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
+    REQUIRE(graph.check_support(handle).is_good());
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
@@ -162,6 +164,7 @@ TEST_CASE("Resample Avg Pooling", "[resample][pooling][average]") {
     checkCudnnErr(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
+    REQUIRE(graph.check_support(handle).is_good());
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
