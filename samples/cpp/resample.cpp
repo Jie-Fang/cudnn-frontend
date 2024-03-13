@@ -106,7 +106,7 @@ TEST_CASE("Resample Max Pooling NHWC Training", "[resample][pooling][max]") {
                                          .set_post_padding({4, 5}));
 
     Y->set_output(true);
-    Index->set_output(true).set_data_type(fe::DataType_t::UINT8);
+    Index->set_output(true).set_data_type(fe::DataType_t::INT8);
 
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
