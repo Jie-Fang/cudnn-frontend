@@ -29,6 +29,7 @@ class MatmulNode;
 class MatmulFP8Node;
 class PointwiseNode;
 class ReductionNode;
+class ResampleNode;
 class ReshapeNode;
 class RngNode;
 class SoftmaxNode;
@@ -420,6 +421,7 @@ class INode : public ICudnn {
                                                  Pointwise_attributes);
 
     std::shared_ptr<Tensor_attributes> reduction(std::shared_ptr<Tensor_attributes>, Reduction_attributes);
+    std::array<std::shared_ptr<Tensor_attributes>, 2> resample(std::shared_ptr<Tensor_attributes>, Resample_attributes);
     std::shared_ptr<Tensor_attributes> reshape(std::shared_ptr<Tensor_attributes>, Reshape_attributes);
 
     std::shared_ptr<Tensor_attributes> rng(std::shared_ptr<Tensor_attributes>,
@@ -857,6 +859,21 @@ INode::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes 
 
     sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
     return Y;
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 2>
+INode::resample(std::shared_ptr<Tensor_attributes> input, Resample_attributes attributes) {
+    attributes.inputs[Resample_attributes::input_names::X] = input;
+    auto Y = attributes.outputs[Resample_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    std::shared_ptr<Tensor_attributes> Index                          = nullptr;
+    if (attributes.is_inference.has_value() && attributes.is_inference.value() == false &&
+        attributes.resample_mode == ResampleMode_t::MAXPOOL) {
+        Index = attributes.outputs[Resample_attributes::output_names::Index] =
+            output_tensor(attributes.name + "::Index");
+    }
+
+    sub_nodes.emplace_back(std::make_unique<ResampleNode>(std::move(attributes), context));
+    return {Y, Index};
 }
 
 inline std::shared_ptr<Tensor_attributes>

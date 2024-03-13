@@ -15,6 +15,7 @@
 #include "node/layernorm.h"
 #include "node/instancenorm.h"
 #include "node/rmsnorm.h"
+#include "node/resample.h"
 #include "node/reshape.h"
 // #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
