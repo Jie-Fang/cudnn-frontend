@@ -1,47 +1,22 @@
-ARG UBUNTU_VERSION="22.04"
-ARG CUDA_VERSION="12.2.0"
+ARG DLFW_MONTH
 
-FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+FROM nvcr.io/nvidia/pytorch:${DLFW_MONTH}-py3
 
+ARG CUDNN_VERSION
+ARG CUDA_VERSION
 ARG SKIP_CUDNN=false
-ARG CUDNN_VERSION="8.9.7.29"
-ARG PYTHON_VERSION="3.10"
-ARG TORCH_VERSION="2.1.2"
 
 ENV \
     DEBIAN_FRONTEND="noninteractive" \
     TZ="Etc/UTC" \
-    CUDNN_VERSION=${CUDNN_VERSION}
+    CUDNN_VERSION=${CUDNN_VERSION} \
+    CUDA_VERSION=${CUDA_VERSION}
 
 SHELL ["/bin/bash", "-c"]
-RUN apt-get update -qq --fix-missing && \
-    apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
-        build-essential \
-        ca-certificates \
-        software-properties-common \
-        pkg-config \
-        cmake \
-        ninja-build \
-        git \
-        wget \
-        curl \
-        unzip \
-    && \
-    # Install python
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get install -y \
-        python${PYTHON_VERSION} \
-        python${PYTHON_VERSION}-distutils \
-        python${PYTHON_VERSION}-dev \
-    && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 && \
-    curl https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} && \
-    # Cleaning
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /root/.cache && \
-    rm -rf /var/lib/apt/lists/* 
+
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
+    dpkg -i cuda-keyring_1.1-1_all.deb && \
+    apt-get update -qq --fix-missing
 
 RUN CUDNN_VERSION_M=${CUDNN_VERSION%%.*} && \
     CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
@@ -55,31 +30,18 @@ RUN CUDNN_VERSION_M=${CUDNN_VERSION%%.*} && \
             && \
             rm -rf /root/.cache && \
             rm -rf /var/lib/apt/lists/*; \
+        else \
+            apt-get purge -y libcudnn9-cuda-12; \
         fi \
     else \
-        if [ "${SKIP_CUDNN}" = false ]; then \
-            CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
-            apt update -qq --fix-missing && \
-            apt upgrade -y --allow-change-held-packages \
-            libcudnn8=${CUDNN_PACKAGE_NAME} \
-            libcudnn8-dev=${CUDNN_PACKAGE_NAME} \
-            && \
-            rm -rf /root/.cache && \
-            rm -rf /var/lib/apt/lists/*; \
-        fi \    
-    fi
-
-RUN pip install -U --no-cache-dir pip setuptools
-
-RUN CUDA_VERSION_M=${CUDA_VERSION%%.*} && \
-    if [ "${CUDA_VERSION_M}" == "11" ]; then \
-        pip install "torch==${TORCH_VERSION}" \
-            --no-cache-dir \
-            --index-url="https://download.pytorch.org/whl/cu118"; \
-    else \
-        pip install "torch==${TORCH_VERSION}" \
-            --no-cache-dir \
-            --index-url="https://download.pytorch.org/whl/cu121"; \
+        CUDNN_PACKAGE_NAME="${CUDNN_VERSION}-1+cuda${CUDA_VERSION%.*}" && \
+        apt update -qq --fix-missing && \
+        apt upgrade -y --allow-downgrades --allow-change-held-packages \
+        libcudnn8=${CUDNN_PACKAGE_NAME} \
+        libcudnn8-dev=${CUDNN_PACKAGE_NAME} \
+        && \
+        rm -rf /root/.cache && \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 COPY requirements.txt /tmp/
