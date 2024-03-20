@@ -280,6 +280,13 @@ class Graph : public INode {
     }
 
     Graph &
+    deselect_engines(std::vector<std::string> const &engine_names) {
+        for (auto &plan_list : plans) {
+            plan_list.set_filtered_names(engine_names);
+        }
+        return *this;
+    }
+    Graph &
     deselect_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
         for (auto &plan_list : plans) {
             auto status = plan_list.deselect_behavior_notes(notes);
