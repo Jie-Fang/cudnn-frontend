@@ -225,6 +225,7 @@ class Execution_plan_list {
 
     int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
 
+    std::vector<std::string> filtered_engine_names = {};
     EngineConfigList engine_configs;
 
    public:
@@ -363,6 +364,11 @@ class Execution_plan_list {
         max_workspace_allowed = workspace_allowed;
     }
 
+    void
+    set_filtered_names(std::vector<std::string> const& engine_names) {
+        filtered_engine_names = engine_names;
+    }
+
     EngineConfigList
     get_filtered_engine_configs() {
         EngineConfigList filtered_engine_configs;
@@ -401,8 +407,27 @@ class Execution_plan_list {
                     continue;
                 }
 
+                auto is_blocked = [](std::string const& full_name,
+                                     std::vector<std::string> const& blocked_names) -> bool {
+                    for (auto const& blocked_name : blocked_names) {
+                        if (full_name.find(blocked_name) != std::string::npos) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (is_blocked(execution_plans[i]->getTag(), filtered_engine_names)) {
+                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan " << execution_plans[i]->getTag()
+                                << std::endl;
+                    filtered_indices[i] = true;
+                    execution_plans[i]  = nullptr;
+                    continue;
+                }
+
                 candidate = static_cast<int64_t>(i);
-                getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << std::endl;
+                getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << " " << execution_plans[i]->getTag()
+                            << std::endl;
 
                 return {error_code_t::OK, ""};
             }
@@ -487,11 +512,32 @@ class Execution_plan_list {
                     execution_plans[i]  = nullptr;
                     continue;
                 }
+
+                auto is_blocked = [](std::string const& full_name,
+                                     std::vector<std::string> const& blocked_names) -> bool {
+                    for (auto const& blocked_name : blocked_names) {
+                        if (full_name.find(blocked_name) != std::string::npos) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (is_blocked(execution_plans[i]->getTag(), filtered_engine_names)) {
+                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan " << execution_plans[i]->getTag()
+                                << std::endl;
+                    filtered_indices[i] = true;
+                    execution_plans[i]  = nullptr;
+                    continue;
+                }
                 // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
                 if (candidate == -1) {
                     candidate = static_cast<int64_t>(i);
                     getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << std::endl;
                 }
+
+                getLogger() << "[cudnn_frontend] INFO: Built plan at " << i << " " << execution_plans[i]->getTag()
+                            << std::endl;
 
                 // Return from this function as first successfully built plan is found.
                 if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
