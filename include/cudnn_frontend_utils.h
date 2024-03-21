@@ -270,6 +270,12 @@ to_string(cudnnBackendNumericalNote_t note) {
             return std::string("CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13");
         case CUDNN_NUMERICAL_NOTE_TYPE_COUNT:
             return std::string("CUDNN_NUMERICAL_NOTE_TYPE_COUNT");
+
+            // If none of the above cases hit, its definitely strict nan prop and should raise an error.
+#if (CUDNN_VERSION >= 90100)
+        case CUDNN_NUMERICAL_NOTE_STRICT_NAN_PROP:
+            return std::string("CUDNN_NUMERICAL_NOTE_STRICT_NAN_PROP");
+#endif
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
             return std::string("UNKNOWN_NUMERICAL_NOTE");
@@ -579,6 +585,7 @@ enum class NumericalNote_t {
     WINOGRAD_TILE_4x4,
     WINOGRAD_TILE_6x6,
     WINOGRAD_TILE_13x13,
+    STRICT_NAN_PROP,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(NumericalNote_t,
@@ -592,6 +599,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(NumericalNote_t,
                                  {NumericalNote_t::WINOGRAD_TILE_4x4, "WINOGRAD_TILE_4x4"},
                                  {NumericalNote_t::WINOGRAD_TILE_6x6, "WINOGRAD_TILE_6x6"},
                                  {NumericalNote_t::WINOGRAD_TILE_13x13, "WINOGRAD_TILE_13x13"},
+                                 {NumericalNote_t::STRICT_NAN_PROP, "STRICT_NAN_PROP"},
                              })
 
 enum class DataType_t {
@@ -1193,6 +1201,14 @@ convert_to_cudnn_type(cudnn_frontend::NumericalNote_t const mode, cudnnBackendNu
         case NumericalNote_t::WINOGRAD_TILE_13x13:
             cudnn_mode = CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        case NumericalNote_t::STRICT_NAN_PROP:
+#if (CUDNN_VERSION >= 90100)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90100, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_NUMERICAL_NOTE_STRICT_NAN_PROP;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
     }
     return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 }
