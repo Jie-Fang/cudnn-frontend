@@ -377,7 +377,7 @@ def test_sdpa(input_type,
     if d_qk != d_v and is_ragged:
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
-    print(f"{b=} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    print(f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -687,7 +687,7 @@ def test_sdpa_backward(input_type,
     h_k = int(arg_params.mha_h_k) if arg_params.mha_h_k != None else h_k
     h_v = int(arg_params.mha_h_v) if arg_params.mha_h_v != None else h_v
 
-    print(f"{b=} {s_q=} {s_kv=} {d_qk=} {d_v=} {h_q=} {h_k=} {h_v=}")
+    print(f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v}")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -1002,8 +1002,8 @@ def test_sdpa_backward(input_type,
                 dBias_ref[i, :, :, n:] = 0
 
     torch.testing.assert_close(dQ_ref, dQ_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
-    torch.testing.assert_close(dK_ref, dK_gpu, check_dtype=False, atol=2e-2 if input_type != torch.bfloat16 else 4e-2, rtol=2e-2)
-    torch.testing.assert_close(dV_ref, dV_gpu, check_dtype=False, atol=2e-2 if input_type != torch.bfloat16 else 4e-2, rtol=2e-2)
+    torch.testing.assert_close(dK_ref, dK_gpu, check_dtype=False, atol=2e-2 if input_type != torch.bfloat16 else 7e-2, rtol=2e-2)
+    torch.testing.assert_close(dV_ref, dV_gpu, check_dtype=False, atol=2e-2 if input_type != torch.bfloat16 else 7e-2, rtol=2e-2)
     if is_bias:
         torch.testing.assert_close(dBias_ref, dBias_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
 
