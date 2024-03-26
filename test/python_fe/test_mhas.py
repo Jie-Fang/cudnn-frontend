@@ -374,7 +374,7 @@ def test_sdpa(input_type,
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
-    if d_qk != d_v and is_ragged:
+    if d_qk != d_v and is_ragged and cudnn.backend_version() < 90100:
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
     print(f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v}")
@@ -674,7 +674,7 @@ def test_sdpa_backward(input_type,
     if (d_qk % 64 != 0) and cudnn.backend_version() < 8906:
         pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
-    if d_qk != d_v and is_ragged:
+    if d_qk != d_v and is_ragged and cudnn.backend_version() < 90100:
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
     # -------------------------- override test parameters if args are provided ----------------
