@@ -47,6 +47,10 @@ class MatmulFP8Node : public NodeCRTP<MatmulFP8Node> {
 
         attributes.fill_from_context(context);
 
+        auto const& a_dim = attributes.inputs.at(Matmul_fp8_attributes::input_names::A)->get_dim();
+        auto const& b_dim = attributes.inputs.at(Matmul_fp8_attributes::input_names::B)->get_dim();
+        auto const& c_dim = attributes.outputs.at(Matmul_fp8_attributes::output_names::C)->get_dim();
+
         std::shared_ptr<Tensor_attributes> last_output;
 
         // Matmul
@@ -54,6 +58,14 @@ class MatmulFP8Node : public NodeCRTP<MatmulFP8Node> {
         last_output            = matmul(attributes.inputs.at(Matmul_fp8_attributes::input_names::A),
                              attributes.inputs.at(Matmul_fp8_attributes::input_names::B),
                              matmul_attributes);
+
+        // Reduction if GQA for head dimension
+        if (a_dim.size() == 4 && b_dim.size() == 4 && c_dim.size() == 4 && a_dim[1] == b_dim[1] &&
+            a_dim[1] != c_dim[1] && (a_dim[1] % c_dim[1] == 0)) {
+            auto gqa_attributes = Reduction_attributes().set_name("gqa_c").set_mode(ReductionMode_t::ADD);
+            last_output         = reduction(last_output, gqa_attributes);
+            last_output->set_dim(c_dim);
+        }
 
         //// Scale Descales
         auto mul_attributes = Pointwise_attributes().set_mode(PointwiseMode_t::MUL);
