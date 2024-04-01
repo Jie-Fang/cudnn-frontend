@@ -282,14 +282,37 @@ class Graph : public INode {
     Graph &
     deselect_engines(std::vector<std::string> const &engine_names) {
         for (auto &plan_list : plans) {
-            plan_list.set_filtered_names(engine_names);
+            plan_list.set_barred_names(engine_names);
         }
         return *this;
     }
+
+    Graph &
+    select_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
+        for (auto &plan_list : plans) {
+            auto status = plan_list.filter_behavior_notes(notes, true);
+            if (status.is_bad()) {
+                getLogger() << status.get_message() << std::endl;
+            }
+        }
+        return *this;
+    }
+
+    Graph &
+    select_numeric_notes(std::vector<NumericalNote_t> const &notes) {
+        for (auto &plan_list : plans) {
+            auto status = plan_list.filter_numeric_notes(notes, true);
+            if (status.is_bad()) {
+                getLogger() << status.get_message() << std::endl;
+            }
+        }
+        return *this;
+    }
+
     Graph &
     deselect_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
         for (auto &plan_list : plans) {
-            auto status = plan_list.deselect_behavior_notes(notes);
+            auto status = plan_list.filter_behavior_notes(notes, false);
             if (status.is_bad()) {
                 getLogger() << status.get_message() << std::endl;
             }
@@ -300,7 +323,7 @@ class Graph : public INode {
     Graph &
     deselect_numeric_notes(std::vector<NumericalNote_t> const &notes) {
         for (auto &plan_list : plans) {
-            auto status = plan_list.deselect_numeric_notes(notes);
+            auto status = plan_list.filter_numeric_notes(notes, false);
             if (status.is_bad()) {
                 getLogger() << status.get_message() << std::endl;
             }
