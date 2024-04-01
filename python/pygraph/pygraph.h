@@ -52,10 +52,9 @@ class PyGraph {
             .set_intermediate_data_type(intermediate_data_type)
             .set_io_data_type(io_data_type);
 
-        if(handle_.has_value()) {
+        if (handle_.has_value()) {
             handle = static_cast<cudnnHandle_t>((void*)(handle_.value()));
-        }
-        else {
+        } else {
             cudnn_frontend::create_handle(&handle);
             is_handle_owner = true;
         }
@@ -315,7 +314,22 @@ class PyGraph {
     execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, std::optional<std::intptr_t>);
 
     void
-    execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, int64_t index, std::optional<std::intptr_t>);
+    execute_plan_at_index(std::unordered_map<int64_t, int64_t> var_pack,
+                          int64_t workspace,
+                          int64_t index,
+                          std::optional<std::intptr_t>);
+
+    void
+    select_numeric_notes(std::vector<NumericalNote_t> const& notes) {
+        graph.select_numeric_notes(notes);
+        return;
+    }
+
+    void
+    select_behavior_notes(std::vector<BehaviorNote_t> const& notes) {
+        graph.select_behavior_notes(notes);
+        return;
+    }
 
     void
     deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {

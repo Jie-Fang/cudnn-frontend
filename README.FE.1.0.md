@@ -141,9 +141,12 @@ cudnn_frontend::Graph::build_plan_at_index(
 
 
 ### Filter plans (optional)
-Users can filter out plans against numerical, behavioral notes, or plans that do not provide desired functional correctness.
+Users can filter plans on numerical, behavioral notes, or plans that do not provide desired functional correctness.
 
 ```
+cudnn_frontend::graph::Graph& cudnn_frontend::graph::Plans::select_numeric_notes(std::vector<cudnn_frontend::NumericalNote_t> const&);
+cudnn_frontend::graph::Graph& cudnn_frontend::graph::Plans::select_behavior_notes(std::vector<cudnn_frontend::BehaviorNote_t> const&);
+
 cudnn_frontend::graph::Graph& cudnn_frontend::graph::Plans::deselect_numeric_notes(std::vector<cudnn_frontend::NumericalNote_t> const&);
 cudnn_frontend::graph::Graph& cudnn_frontend::graph::Plans::deselect_behavior_notes(std::vector<cudnn_frontend::BehaviorNote_t> const&);
 cudnn_frontend::graph::Graph& cudnn_frontend::graph::Plans::deselect_workspace_greater_than(int64_t const workspace);
