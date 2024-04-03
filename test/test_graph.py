@@ -24,18 +24,27 @@ class PytorchReference:
     @staticmethod
     def conv_fprop(kwargs, test_tensor_out_list):
         # determine whether we need 2d or 3d convolution
+
+        # Need WAR for int8 conv2d kernels. PyT does not supported them.
+        # https://github.com/pytorch/pytorch/issues/63518
+        
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        
         if len(kwargs["image"].shape) == 4:
-            return [torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+            output = torch.nn.functional.conv2d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
         elif len(kwargs["image"].shape) == 5:
-            return [torch.nn.functional.conv3d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])]
+            output = torch.nn.functional.conv3d(kwargs['image'], kwargs['weight'], bias = None, padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
         else:
             assert False
+
+        return [output.to(dtype=dtype)]
 
     @staticmethod
     def conv_dgrad(kwargs, test_tensor_out_list):
         input_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
         dX = torch.nn.grad.conv2d_input(input_size, kwargs["filter"], kwargs["loss"], padding=kwargs["padding"], stride=kwargs["stride"], dilation=kwargs["dilation"])
-        return [dX]
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [dX.to(dtype=dtype)]
     
     @staticmethod
     def conv_wgrad(kwargs, test_tensor_out_list):
@@ -43,12 +52,37 @@ class PytorchReference:
         dW = torch.nn.grad.conv2d_weight(kwargs["image"], filter_dim_size, kwargs["loss"], kwargs["stride"], kwargs["padding"], kwargs["dilation"])
         return [dW]
 
+    def identity(kwargs, test_tensor_out_list):
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [kwargs["input"].to(dtype=dtype)]
+
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
     def relu(kwargs, test_tensor_out_list):
-        return [torch.nn.functional.relu(kwargs["input"])]
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [torch.nn.functional.relu(kwargs["input"]).to(dtype=dtype)]
     
+    @staticmethod
+    def elu(kwargs, test_tensor_out_list):
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [torch.nn.functional.elu(kwargs["input"]).to(dtype=dtype)]
+    
+    @staticmethod
+    def gelu(kwargs, test_tensor_out_list):
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [torch.nn.functional.gelu(kwargs["input"]).to(dtype=dtype)]
+    
+    @staticmethod
+    def gelu_approx_tanh(kwargs, test_tensor_out_list):
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [torch.nn.functional.gelu(kwargs["input"]).to(dtype=dtype)]
+    
+    @staticmethod
+    def sigmoid(kwargs, test_tensor_out_list):
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        return [torch.nn.functional.sigmoid(kwargs["input"]).to(dtype=dtype)]
+
     @staticmethod
     def batchnorm(kwargs, test_tensor_out_list):
         is_training = True
@@ -75,7 +109,8 @@ class PytorchReference:
 
     @staticmethod
     def matmul(kwargs, test_tensor_out_list):
-        output = torch.bmm(kwargs['A'], kwargs['B'])
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        output = torch.bmm(kwargs['A'], kwargs['B']).to(dtype=dtype)
         return [output]
     
     @staticmethod
@@ -89,10 +124,140 @@ class PytorchReference:
         return [output]
 
     @staticmethod
-    def mul(kwargs, test_tensor_out_list):
-        output = torch.mul(kwargs["a"], kwargs["b"])
+    def sub(kwargs, test_tensor_out_list):
+        output = torch.sub(kwargs["a"], kwargs["b"])
         return [output]
 
+    @staticmethod
+    def mul(kwargs, test_tensor_out_list):
+        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        output = torch.mul(kwargs["a"], kwargs["b"]).to(dtype=dtype)
+        return [output]
+
+    @staticmethod
+    def max(kwargs, test_tensor_out_list):
+        output = torch.max(kwargs["input0"], kwargs["input1"])
+        return [output]
+
+    @staticmethod
+    def min(kwargs, test_tensor_out_list):
+        output = torch.min(kwargs["input0"], kwargs["input1"])
+        return [output]
+
+    @staticmethod
+    def pow(kwargs, test_tensor_out_list):
+        output = torch.pow(kwargs["input0"], kwargs["input1"])
+        return [output]
+
+    @staticmethod
+    def mod(kwargs, test_tensor_out_list):
+        output = torch.fmod(kwargs["input0"], kwargs["input1"])
+        return [output]
+    
+    @staticmethod
+    def div(kwargs, test_tensor_out_list):
+        output = torch.div(kwargs["a"], kwargs["b"])
+        return [output]
+        
+    @staticmethod
+    def add_square(kwargs, test_tensor_out_list):
+        output = torch.add(kwargs["a"], torch.square(kwargs["b"]))
+        return [output]
+
+    @staticmethod
+    def tanh(kwargs, test_tensor_out_list):
+        output = torch.tanh(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def abs(kwargs, test_tensor_out_list):
+        output = torch.abs(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def ceil(kwargs, test_tensor_out_list):
+        output = torch.ceil(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def floor(kwargs, test_tensor_out_list):
+        output = torch.floor(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def cos(kwargs, test_tensor_out_list):
+        output = torch.cos(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def sin(kwargs, test_tensor_out_list):
+        output = torch.sin(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def tan(kwargs, test_tensor_out_list):
+        output = torch.tan(kwargs["input"])
+        return [output]
+    
+    @staticmethod
+    def exp(kwargs, test_tensor_out_list):
+        output = torch.exp(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def log(kwargs, test_tensor_out_list):
+        output = torch.log(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def neg(kwargs, test_tensor_out_list):
+        output = torch.neg(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def sqrt(kwargs, test_tensor_out_list):
+        output = torch.sqrt(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def rsqrt(kwargs, test_tensor_out_list):
+        output = torch.rsqrt(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def erf(kwargs, test_tensor_out_list):
+        output = torch.erf(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def cmp_lt(kwargs, test_tensor_out_list):
+        output = torch.lt(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def cmp_gt(kwargs, test_tensor_out_list):
+        output = torch.gt(kwargs["input"], kwargs["comparison"])
+        return [output]
+        
+    @staticmethod
+    def cmp_ge(kwargs, test_tensor_out_list):
+        output = torch.ge(kwargs["input"], kwargs["comparison"])
+        return [output]
+        
+    @staticmethod
+    def logical_not(kwargs, test_tensor_out_list):
+        output = torch.logical_not(kwargs["input"])
+        return [output]
+        
+    @staticmethod
+    def logical_and(kwargs, test_tensor_out_list):
+        output = torch.logical_and(kwargs["a"], kwargs["b"])
+        return [output]
+        
+    @staticmethod
+    def logical_or(kwargs, test_tensor_out_list):
+        output = torch.logical_or(kwargs["a"], kwargs["b"])
+        return [output]
     
 
     @staticmethod
@@ -108,7 +273,16 @@ class PytorchReference:
             if dim_val == 1:
                 axis.append(dim_idx)
 
-        output = kwargs["input"].sum(dim=tuple(axis), dtype=dtype)
+        if kwargs["mode"] == cudnn.reduction_mode.MAX:
+            output = kwargs["input"].amax(dim=tuple(axis), keepdim=True).to(dtype=dtype)
+        elif kwargs["mode"] == cudnn.reduction_mode.MIN:
+            output = kwargs["input"].amin(dim=tuple(axis), keepdim=True).to(dtype=dtype)        
+        elif kwargs["mode"] == cudnn.reduction_mode.AMAX:
+            output = kwargs["input"].amax(dim=tuple(axis)).to(dtype=dtype)
+        elif kwargs["mode"] == cudnn.reduction_mode.ADD:
+            output = kwargs["input"].sum(dim=tuple(axis)).to(dtype=dtype)
+        else:
+            raise ValueError(f"Unhanlded reduction mode")
         #output = kwargs["input"].sum(dim=axis)
         #output = output.type(dtype)
         
@@ -220,6 +394,8 @@ class operation(test_node):
             if isinstance(self.kwargs[x], test_tensor):
                 new_kwargs[x] = self.kwargs[x].cudnn_tensor
 
+        if new_kwargs.get('compute_data_type', None) == cudnn.data_type.INT8:
+            new_kwargs['compute_data_type'] = cudnn.data_type.INT32
         cudnn_res = self.cudnn_op(cudnn_graph, **new_kwargs)
 
         # in case we have multiple outputs
@@ -258,7 +434,16 @@ class random_tensor_generator(test_node):
         if self.output[0].ref_data is None:
             # The default random generator results in numerical issues
             #self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
-            self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
+
+            torch_dtype = convert_to_torch_type(self.output[0].data_type)
+            if torch_dtype == torch.bool:
+                self.output[0].ref_data = torch.randint(0, 2, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=torch_dtype)
+            elif torch_dtype == torch.int8:
+                self.output[0].ref_data = torch.randint(-2, 3, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=torch_dtype)
+            elif torch_dtype == torch.int32:
+                self.output[0].ref_data = torch.randint(-2, 3, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=torch_dtype)
+            else:
+                self.output[0].ref_data = torch.normal(0.5, 0.5, self.kwargs["dim"], requires_grad=False, device="cuda", dtype=torch_dtype)
             
             if self.get_layout() == "NHWC":
                 size = self.output[0].ref_data.size()
@@ -331,15 +516,32 @@ class test_tensor:
         self.cudnn_tensor = None
         # The reference data for this tensor
         self.ref_data = None
+        # Initialize no data type is specified
+        self._data_type = None
 
         self.parent_op = parent_op
 
-    def set_data_type(self, data_type):
-        self.data_type = data_type
+    @property
+    def data_type(self):
+        if self._data_type is not None:
+            return self._data_type
+        elif self.cudnn_tensor is not None:
+            return self.cudnn_tensor.get_data_type()
+        else:
+            return None
+    
+    @data_type.setter
+    def data_type(self, dtype):
+        self._data_type = dtype
 
         # Apply it immediately if a cudnn tensor was already created
         if self.cudnn_tensor is not None:
-            self.cudnn_tensor.set_data_type(data_type)
+            self.cudnn_tensor.set_data_type(dtype)
+
+    # Convenience wrapper-function to mimic cudnn.tensor.set_data_type
+    def set_data_type(self, dtype):
+        # Invoke data_type.setter
+        self.data_type = dtype
 
     def set_dim(self, dim):
         self.dim = dim
@@ -356,7 +558,7 @@ class test_tensor:
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
-        if "data_type" in dir(self):
+        if self.data_type is not None:
             self.cudnn_tensor.set_data_type(self.data_type)
 
         if "dim" in dir(self):
@@ -378,21 +580,6 @@ class test_tensor:
 
         return rep
 
-        
-    
-
-def convert_to_cudnn_type(torch_type):
-    if torch_type == torch.float16:
-        return cudnn.data_type.HALF
-    elif torch_type == torch.bfloat16:
-        return cudnn.data_type.BFLOAT16
-    elif torch_type == torch.float32:
-        return cudnn.data_type.FLOAT
-    else:
-        raise ValueError("Unsupported tensor data type.", torch_type)
-
-    return
-
 def convert_to_torch_type(cudnn_type):
     if cudnn_type == cudnn.data_type.HALF:
         return torch.float16
@@ -400,6 +587,12 @@ def convert_to_torch_type(cudnn_type):
         return torch.bfloat16
     elif cudnn_type == cudnn.data_type.FLOAT:
         return torch.float32
+    elif cudnn_type == cudnn.data_type.BOOLEAN:
+        return torch.bool
+    elif cudnn_type == cudnn.data_type.INT8:
+        return torch.int8
+    elif cudnn_type == cudnn.data_type.INT32:
+        return torch.int32
     else:
         raise ValueError("Unsupported tensor data type.", cudnn_type)
 
