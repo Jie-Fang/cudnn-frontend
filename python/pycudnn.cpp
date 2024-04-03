@@ -33,7 +33,7 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
         case cudnn_frontend::error_code_t::INVALID_VARIANT_PACK:
             throw std::invalid_argument(error_msg);
         case cudnn_frontend::error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED:
-            throw std::runtime_error(error_msg);
+            throw cudnn_frontend::cudnnGraphNotSupportedException(error_msg.c_str());
         case cudnn_frontend::error_code_t::GRAPH_EXECUTION_FAILED:
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_code_t::HEURISTIC_QUERY_FAILED:
@@ -45,9 +45,9 @@ throw_if(bool const cond, cudnn_frontend::error_code_t const error_code, std::st
         case cudnn_frontend::error_code_t::INVALID_CUDA_DEVICE:
             throw std::runtime_error(error_msg);
         case cudnn_frontend::error_code_t::UNSUPPORTED_GRAPH_FORMAT:
-            throw std::runtime_error(error_msg);
+            throw cudnn_frontend::cudnnGraphNotSupportedException(error_msg.c_str());
         case cudnn_frontend::error_code_t::GRAPH_NOT_SUPPORTED:
-            throw std::runtime_error(error_msg);
+            throw cudnn_frontend::cudnnGraphNotSupportedException(error_msg.c_str());
         case cudnn_frontend::error_code_t::HANDLE_ERROR:
             throw std::runtime_error(error_msg);
     }
@@ -73,6 +73,8 @@ PYBIND11_MODULE(_compiled_module, m) {
     init_pygraph_submodule(m);
 
     m.def("_set_dlhandle_cudnn", &set_dlhandle_cudnn);
+
+    py::register_exception<cudnnGraphNotSupportedException>(m, "cudnnGraphNotSupportedError");
 }
 
 }  // namespace python_bindings
