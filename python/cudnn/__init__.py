@@ -13,6 +13,7 @@ from ._compiled_module import (
     , heur_mode
     , pygraph
     , tensor
+    , cudnnGraphNotSupportedError
 )
 
 from .datatypes import (_library_type, _is_torch_tensor)
