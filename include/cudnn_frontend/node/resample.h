@@ -173,4 +173,19 @@ class ResampleNode : public NodeCRTP<ResampleNode> {
     }
 };
 
+inline std::array<std::shared_ptr<Tensor_attributes>, 2>
+INode::resample(std::shared_ptr<Tensor_attributes> input, Resample_attributes attributes) {
+    attributes.inputs[Resample_attributes::input_names::X] = input;
+    auto Y = attributes.outputs[Resample_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+    std::shared_ptr<Tensor_attributes> Index                          = nullptr;
+    if (attributes.is_inference.has_value() && attributes.is_inference.value() == false &&
+        attributes.resample_mode == ResampleMode_t::MAXPOOL) {
+        Index = attributes.outputs[Resample_attributes::output_names::Index] =
+            output_tensor(attributes.name + "::Index");
+    }
+
+    sub_nodes.emplace_back(std::make_unique<ResampleNode>(std::move(attributes), context));
+    return {Y, Index};
+}
+
 }  // namespace cudnn_frontend::graph

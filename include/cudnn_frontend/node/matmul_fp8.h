@@ -110,5 +110,22 @@ class MatmulFP8Node : public NodeCRTP<MatmulFP8Node> {
         j.update(R"( {"tag": "MATMUL_FP8"})"_json);
     }
 };
-
+inline void
+INode::matmul_fp8(std::shared_ptr<Tensor_attributes> a,
+                  std::shared_ptr<Tensor_attributes> b,
+                  std::shared_ptr<Tensor_attributes> descale_a,
+                  std::shared_ptr<Tensor_attributes> descale_b,
+                  std::shared_ptr<Tensor_attributes> scale_c,
+                  Matmul_fp8_attributes attributes,
+                  std::shared_ptr<Tensor_attributes> c,
+                  std::shared_ptr<Tensor_attributes> amax_c) {
+    attributes.inputs[Matmul_fp8_attributes::input_names::A]         = a;
+    attributes.inputs[Matmul_fp8_attributes::input_names::B]         = b;
+    attributes.inputs[Matmul_fp8_attributes::input_names::Descale_A] = descale_a;
+    attributes.inputs[Matmul_fp8_attributes::input_names::Descale_B] = descale_b;
+    attributes.inputs[Matmul_fp8_attributes::input_names::Scale_C]   = scale_c;
+    attributes.outputs[Matmul_fp8_attributes::output_names::C]       = c;
+    attributes.outputs[Matmul_fp8_attributes::output_names::Amax_C]  = amax_c;
+    sub_nodes.emplace_back(std::make_unique<MatmulFP8Node>(std::move(attributes), context));
+}
 }  // namespace cudnn_frontend::graph

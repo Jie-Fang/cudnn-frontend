@@ -238,16 +238,11 @@ class INode : public ICudnn {
     };
     Type tag;
 
-    void
+    inline void
     matmul(std::shared_ptr<Tensor_attributes> a,
            std::shared_ptr<Tensor_attributes> b,
            Matmul_attributes attributes,
-           std::shared_ptr<Tensor_attributes> c) {
-        attributes.inputs[Matmul_attributes::input_names::A]   = a;
-        attributes.inputs[Matmul_attributes::input_names::B]   = b;
-        attributes.outputs[Matmul_attributes::output_names::C] = c;
-        sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(attributes), context));
-    }
+           std::shared_ptr<Tensor_attributes> c);
 
     void
     matmul_fp8(std::shared_ptr<Tensor_attributes> a,
@@ -257,80 +252,42 @@ class INode : public ICudnn {
                std::shared_ptr<Tensor_attributes> scale_c,
                Matmul_fp8_attributes attributes,
                std::shared_ptr<Tensor_attributes> c,
-               std::shared_ptr<Tensor_attributes> amax_c) {
-        attributes.inputs[Matmul_fp8_attributes::input_names::A]         = a;
-        attributes.inputs[Matmul_fp8_attributes::input_names::B]         = b;
-        attributes.inputs[Matmul_fp8_attributes::input_names::Descale_A] = descale_a;
-        attributes.inputs[Matmul_fp8_attributes::input_names::Descale_B] = descale_b;
-        attributes.inputs[Matmul_fp8_attributes::input_names::Scale_C]   = scale_c;
-        attributes.outputs[Matmul_fp8_attributes::output_names::C]       = c;
-        attributes.outputs[Matmul_fp8_attributes::output_names::Amax_C]  = amax_c;
-        sub_nodes.emplace_back(std::make_unique<MatmulFP8Node>(std::move(attributes), context));
-    }
+               std::shared_ptr<Tensor_attributes> amax_c);
 
     void
     softmax(std::shared_ptr<Tensor_attributes> p,
             Softmax_attributes attributes,
             std::shared_ptr<Tensor_attributes> s,
-            std::shared_ptr<Tensor_attributes> stats) {
-        attributes.inputs[Softmax_attributes::input_names::P]       = p;
-        attributes.outputs[Softmax_attributes::output_names::S]     = s;
-        attributes.outputs[Softmax_attributes::output_names::Stats] = stats;
-        sub_nodes.emplace_back(std::make_unique<SoftmaxNode>(std::move(attributes), context));
-    }
+            std::shared_ptr<Tensor_attributes> stats);
 
     void
     softmax(std::shared_ptr<Tensor_attributes> p,
             Softmax_attributes attributes,
             std::shared_ptr<Tensor_attributes> s,
             std::shared_ptr<Tensor_attributes> m,
-            std::shared_ptr<Tensor_attributes> zinv) {
-        attributes.inputs[Softmax_attributes::input_names::P]      = p;
-        attributes.outputs[Softmax_attributes::output_names::S]    = s;
-        attributes.outputs[Softmax_attributes::output_names::M]    = m;
-        attributes.outputs[Softmax_attributes::output_names::Zinv] = zinv;
-        sub_nodes.emplace_back(std::make_unique<SoftmaxNode>(std::move(attributes), context));
-    }
+            std::shared_ptr<Tensor_attributes> zinv);
 
     void
     pointwise(std::shared_ptr<Tensor_attributes> a,
               Pointwise_attributes attributes,
-              std::shared_ptr<Tensor_attributes> c) {
-        attributes.inputs[Pointwise_attributes::input_names::IN_0]    = a;
-        attributes.outputs[Pointwise_attributes::output_names::OUT_0] = c;
-        sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-    }
+              std::shared_ptr<Tensor_attributes> c);
 
     void
     pointwise(std::shared_ptr<Tensor_attributes> a,
               std::shared_ptr<Tensor_attributes> b,
               Pointwise_attributes attributes,
-              std::shared_ptr<Tensor_attributes> c) {
-        attributes.inputs[Pointwise_attributes::input_names::IN_0]    = a;
-        attributes.inputs[Pointwise_attributes::input_names::IN_1]    = b;
-        attributes.outputs[Pointwise_attributes::output_names::OUT_0] = c;
-        sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-    }
+              std::shared_ptr<Tensor_attributes> c);
 
     void
     reduction(std::shared_ptr<Tensor_attributes> a,
               Reduction_attributes attributes,
-              std::shared_ptr<Tensor_attributes> c) {
-        attributes.inputs[Reduction_attributes::input_names::X]   = a;
-        attributes.outputs[Reduction_attributes::output_names::Y] = c;
-        sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
-    }
+              std::shared_ptr<Tensor_attributes> c);
 
     void
     rng(std::shared_ptr<Tensor_attributes> seed,
         std::shared_ptr<Tensor_attributes> offset,
         Rng_attributes attributes,
-        std::shared_ptr<Tensor_attributes> y) {
-        attributes.inputs[Rng_attributes::input_names::Seed]   = seed;
-        attributes.inputs[Rng_attributes::input_names::Offset] = offset;
-        attributes.outputs[Rng_attributes::output_names::Y]    = y;
-        sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(attributes), context));
-    }
+        std::shared_ptr<Tensor_attributes> y);
 
     error_t
     pre_validate_and_expand_node() {
@@ -801,101 +758,6 @@ class NodeCRTP : public INode {
 
 #define CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(tensor, port) \
     CUDNN_FE_VALIDATE_AND_ASSIGN_TENSOR_(tensor, port, attributes.outputs)
-
-inline std::shared_ptr<Tensor_attributes>
-INode::matmul(std::shared_ptr<Tensor_attributes> a,
-              std::shared_ptr<Tensor_attributes> b,
-              Matmul_attributes attributes) {
-    attributes.inputs[Matmul_attributes::input_names::A] = a;
-    attributes.inputs[Matmul_attributes::input_names::B] = b;
-    auto C = attributes.outputs[Matmul_attributes::output_names::C] = output_tensor(attributes.name + "::C");
-
-    sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(attributes), context));
-    return C;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-INode::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes attributes) {
-    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
-    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-        output_tensor(attributes.name + "::OUT_0");
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-    return OUT_0;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-INode::pointwise(std::shared_ptr<Tensor_attributes> a,
-                 std::shared_ptr<Tensor_attributes> b,
-                 Pointwise_attributes attributes) {
-    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
-    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
-    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-        output_tensor(attributes.name + "::OUT_0");
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-    return OUT_0;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-INode::pointwise(std::shared_ptr<Tensor_attributes> a,
-                 std::shared_ptr<Tensor_attributes> b,
-                 std::shared_ptr<Tensor_attributes> c,
-                 Pointwise_attributes attributes) {
-    attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
-    attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
-    attributes.inputs[Pointwise_attributes::input_names::IN_2] = c;
-    auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
-        output_tensor(attributes.name + "::OUT_0");
-
-    sub_nodes.emplace_back(std::make_unique<PointwiseNode>(std::move(attributes), context));
-    return OUT_0;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-INode::reduction(std::shared_ptr<Tensor_attributes> input, Reduction_attributes attributes) {
-    attributes.inputs[Reduction_attributes::input_names::X] = input;
-    auto Y = attributes.outputs[Reduction_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
-
-    sub_nodes.emplace_back(std::make_unique<ReductionNode>(std::move(attributes), context));
-    return Y;
-}
-
-inline std::array<std::shared_ptr<Tensor_attributes>, 2>
-INode::resample(std::shared_ptr<Tensor_attributes> input, Resample_attributes attributes) {
-    attributes.inputs[Resample_attributes::input_names::X] = input;
-    auto Y = attributes.outputs[Resample_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
-    std::shared_ptr<Tensor_attributes> Index                          = nullptr;
-    if (attributes.is_inference.has_value() && attributes.is_inference.value() == false &&
-        attributes.resample_mode == ResampleMode_t::MAXPOOL) {
-        Index = attributes.outputs[Resample_attributes::output_names::Index] =
-            output_tensor(attributes.name + "::Index");
-    }
-
-    sub_nodes.emplace_back(std::make_unique<ResampleNode>(std::move(attributes), context));
-    return {Y, Index};
-}
-
-inline std::shared_ptr<Tensor_attributes>
-INode::reshape(std::shared_ptr<Tensor_attributes> input, Reshape_attributes attributes) {
-    attributes.inputs[Reshape_attributes::input_names::X] = input;
-    auto Y = attributes.outputs[Reshape_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
-
-    sub_nodes.emplace_back(std::make_unique<ReshapeNode>(std::move(attributes), context));
-    return Y;
-}
-
-inline std::shared_ptr<Tensor_attributes>
-INode::rng(std::shared_ptr<Tensor_attributes> seed,
-           std::shared_ptr<Tensor_attributes> offset,
-           Rng_attributes attributes) {
-    attributes.inputs[Rng_attributes::input_names::Seed]   = seed;
-    attributes.inputs[Rng_attributes::input_names::Offset] = offset;
-    auto Y = attributes.outputs[Rng_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
-
-    sub_nodes.emplace_back(std::make_unique<RngNode>(std::move(attributes), context));
-    return Y;
-}
 
 }  // namespace graph
 
