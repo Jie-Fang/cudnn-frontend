@@ -20,17 +20,17 @@ def read_json_test_dict(fname):
 # @raises ImplementationError
 # TODO: keep track of which parameters were actually used (i.e., was as cli parameter specified that was never used? E.g., filtC)
 def replace_single_param(json_test_def, abstract_params):
-    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w", "r", "s"]
+    SKIPABLE = ["dimOut", "k", "n", "c", "h", "w", "r", "s", "d"]
     FORMAT_ALL = "formatAll"
     IO_DATA_TYPE = "P"
-    INT_LISTS = ["dimOut", "dimA", "filtA", "convStrideA", "dilationA", "padA"]
+    INT_LISTS = ["dimOut", "dimA", "filtA", "convStrideA", "dilationA", "padA", "dimB", "Reduce_dimY", "Scale_dim", "CmpB_dim"]
     catch_all = {"formatIn": FORMAT_ALL, "filtFormat": FORMAT_ALL, "formatOut": FORMAT_ALL, "Pin": IO_DATA_TYPE, "Pout": IO_DATA_TYPE}
     layout_params = ["formatIn", "filtFormat", "formatOut", FORMAT_ALL]
 
     if isinstance(json_test_def, str) and "<" in json_test_def and ">" in json_test_def:
         abstract_param = json_test_def.strip("<>")
         concrete_param = None
-                
+
         # Most common case: replace a parameter with what we found on the command line
         if abstract_param in abstract_params:
             concrete_param = abstract_params[abstract_param]
@@ -42,10 +42,11 @@ def replace_single_param(json_test_def, abstract_params):
             return json_test_def
         else:
             raise ImplementationError("CLI parameter {} not provided".format(abstract_param))
-        
+            
         # Now that we have found the concrete parameter, we may need to do some post processing
         if isinstance(concrete_param, str) and abstract_param in INT_LISTS:
-            return list(eval(concrete_param))
+            # Some of the kv args in test command put [] around int lists
+            return list(eval(concrete_param.strip("[]")))
 
         else:
             return concrete_param
@@ -74,17 +75,19 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     print("Running json graph")
 
     kTEST_NAME = "jsonTestName"
-    kDATA_TYPES = ['s', 'h', 'float', 'half', "g", "b"]
+    kDATA_TYPES = ['s', 'h', 'float', 'half', "g", "b", "int8", "int32", "bool", "bf16", "i"]
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    # A quick sanitizing of the remaining arguments to be further parsed by run_test_from_legacy_args
+    # Step 0: A quick sanitizing of the remaining arguments to be further parsed by run_test_from_legacy_args
     sanitized_graphRunner_args = []
     for item in unparsed_graphRunner_args:
         if not "=" in item:
             sanitized_graphRunner_args.append(item)
         else:
             stripped = item.strip('=')
-            if "=" in stripped:
+            if "==" in stripped:
+                sanitized_graphRunner_args.extend(item.split("=="))
+            elif "=" in stripped:
                 sanitized_graphRunner_args.extend(item.split("="))
             else:
                 sanitized_graphRunner_args.append(stripped)
@@ -137,6 +140,9 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-Tin", choices=kDATA_TYPES)
     l_parser.add_argument("-Tout", choices=kDATA_TYPES)
     l_parser.add_argument("-Tcomp", choices=kDATA_TYPES)
+    l_parser.add_argument("-Tstore", choices=kDATA_TYPES)
+    l_parser.add_argument("-outType", choices=kDATA_TYPES)
+    l_parser.add_argument("-reduceY_Type", choices=kDATA_TYPES)
     # Format related
     format_options = l_parser.add_argument_group("format_options")
     format_options.add_argument("-formatIn", type=int, choices=[0,1])
@@ -165,7 +171,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
 
     ignored_keys = [argument.dest for argument in ignored_args._group_actions]
 
-    # First parsing pass
+    # Step 1: First parsing and cleanup pass
     legacy_args = l_parser.parse_args(sanitized_graphRunner_args)
     
     abstract_params = vars(legacy_args)
@@ -180,7 +186,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     # Remove the unparsed key_values
     del abstract_params['key_values']
 
-    # Second parsing pass: Some params' default value is dependent on other specifications
+    # Step 2: Second parsing pass -- Some params' default value is dependent on other specifications
     spatial_dims = abstract_params["dim"]
     if abstract_params['padA'] is None:
         padA = [0] * spatial_dims
@@ -214,7 +220,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         if abstract_params[param_name] is None:
             abstract_params[param_name] = [1] * spatial_dims
 
-    # Deprecated:
+    # Deprecated: specifying batch dim through -n
     if abstract_params["n"] is not None:
         if abstract_params["dimA"] is not None:
             disassembled = abstract_params["dimA"].split(",")
@@ -224,6 +230,41 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
             disassembled = abstract_params["dimOut"].split(",")
             disassembled[0] = abstract_params["n"]
             abstract_params["dimOut"] = ",".join(disassembled)
+
+    # Deprecated: default filter dims.
+    default_filt_dims = [96] + [3] * (spatial_dims+1)
+    if abstract_params["filtA"] is None:
+        abstract_params["filtA"] = default_filt_dims
+
+    # Deprecated: -r, -s, -t could override filtA in cudnnTest. We removed this from the CLI in pycudnnTest.
+
+    # Deprecated: infer convolution's dimOut parameter
+    # TODO(@mbreughe): cudnnTest has been treating convolution tests specially. This means that there are tests
+    # that use convolution-style dimension inference, even though the test does not have a convolution operator.
+    # To avoid confusions with this, we should redefine these tests (e.g., ScaleBiasReductionCol2D_abstract, ScaleBiasReductionCol3D_abstract)
+    # In addition, the code below should only be present in replace_implicit_params, when we know that a convolution operator is used.
+    if abstract_params.get("dimA") and abstract_params.get("filtA") and (not abstract_params.get("dimOut")):
+        dimA = list(eval(abstract_params["dimA"]))
+
+        def get_integer_list(param):
+            if isinstance(param, str):
+                param = list(eval(param))
+            return param
+        
+        filtA = get_integer_list(abstract_params["filtA"])
+        padA = get_integer_list(abstract_params["padA"])
+        convStrideA = get_integer_list(abstract_params["convStrideA"])
+        dilationA = get_integer_list(abstract_params["dilationA"])
+        inferred_params = get_conv_dim_placeholders(dimA, filtA, padA, convStrideA, dilationA)
+        abstract_params["dimOut"] = inferred_params ["dimOut"]
+        abstract_params["n"] = inferred_params["n"]
+        abstract_params["c"] = inferred_params["c"]
+        abstract_params["h"] = inferred_params["h"]
+        abstract_params["w"] = inferred_params["w"]
+        abstract_params["k"] = inferred_params["k"]
+        abstract_params["r"] = inferred_params["r"]
+        abstract_params["s"] = inferred_params["s"]
+        abstract_params["d"] = inferred_params["d"]
 
     # Ignored arguments:
     for key in ignored_keys:
@@ -236,7 +277,7 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         if abstract_params[key] is None:
             del abstract_params[key]
 
-    # Third parsing: attempt to convert anything that is numeric for future convenience
+    # Step 3: Third parsing -- attempt to convert anything that is numeric for future convenience
     for key in abstract_params:
         val = abstract_params[key]
         if isinstance(val, str) and val.isnumeric():
@@ -262,14 +303,14 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         if "Dforce_jit_dbg" in abstract_params:
             os.environ["CUDNN_FORCE_JIT_DBG"] = str(legacy_args.Dforce_jit_dbg)
 
+        # Step 4: Replace implicit parameters and create the test graph
+        testGraph = setup_test_graph_from_json(concrete_test_dict, legacy_args.backendEngine)
+
         if legacy_args.timing_loop == 0:
-            run_test_from_json_definition(concrete_test_dict, legacy_args.backendEngine)
+            run_test_from_json_definition(testGraph, concrete_test_dict)
         else:
-            testGraph = setup_test_graph_from_json(concrete_test_dict, legacy_args.backendEngine)
             testGraph.build_cudnn_graph()
             testGraph.cudnn_execute(int(legacy_args.timing_loop))
-
-            
 
         # Now recover the environment variable
         if force_jit_env_before is not None:
@@ -375,7 +416,7 @@ class Legacy_operation:
 # @note: we could opt to store the mapping in a file like we do for operation
 # however, the mapping is much fewer, so we decide to avoid the overhead for now
 class Legacy_tensor:
-    mapping = {"dataType": "data_type", "dim": "dim", "name": "name"}
+    mapping = {"dataType": "data_type", "dim": "dim", "name": "name", "stride": "stride"}
     # TODO(@mbreughe): implement the following fill related properties
     mapping.update({"fill": "fill", "min": "min", "max": "max", "value": "value", "mean": "mean", "std_dev": "std_dev"})
 
@@ -390,6 +431,11 @@ class Legacy_tensor:
     
     def get_stride(self):
         dim = self.jtensor["dim"]
+
+        # Just return test provided strides if already present
+        if self.jtensor.get("stride", None):
+            return self.jtensor["stride"]
+
         layout = self.jtensor["layout"]
         nbDims = len(dim)
 
@@ -438,8 +484,10 @@ class Legacy_tensor:
 # This is to be used as static class only
 class Legacy_value:
     mapping = {"dataType": {"s": cudnn.data_type.FLOAT, "h": cudnn.data_type.HALF, 
-                        "g": cudnn.data_type.BFLOAT16, "b": cudnn.data_type.BOOLEAN,
-                        "float": cudnn.data_type.FLOAT, "half": cudnn.data_type.HALF}}
+                        "g": cudnn.data_type.BFLOAT16, "b": cudnn.data_type.INT8,
+                        "float": cudnn.data_type.FLOAT, "half": cudnn.data_type.HALF
+                        , "bool": cudnn.data_type.BOOLEAN, "int8": cudnn.data_type.INT8, "int32": cudnn.data_type.INT32
+                        , "bf16": cudnn.data_type.BFLOAT16, "i": cudnn.data_type.INT32}}
     indirection = {"mathPrec": "dataType"}
 
     @staticmethod
@@ -451,21 +499,7 @@ class Legacy_value:
         
         return legacy_value
     
-def get_conv_dim_placeholders(legacy_op, jtensor_dict):
-    filter_tensor_name = legacy_op.get_io_tensor_name("W")
-    if filter_tensor_name is None:
-        filter_tensor_name = legacy_op.get_io_tensor_name("dW")
-
-    X_tensor_name = legacy_op.get_io_tensor_name("X")
-    if X_tensor_name is None:
-        X_tensor_name = legacy_op.get_io_tensor_name("dX")
-    
-    for jtensor in jtensor_dict:
-        if jtensor["name"] == X_tensor_name:
-            X_tensor_dim = jtensor["dim"]
-        elif jtensor["name"] == filter_tensor_name:
-            filter_tensor_dim = jtensor["dim"]
-
+def get_conv_dim_placeholders(X_tensor_dim, filter_tensor_dim, padA, stdA, dilA):
     spatial_dims = len(X_tensor_dim) - 2
 
     dimOut = [None] * (2+spatial_dims)
@@ -473,9 +507,6 @@ def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     dimOut[0] = X_tensor_dim[0]
     dimOut[1] = filter_tensor_dim[0]
     
-    padA = legacy_op.jnode["pad"]
-    stdA = legacy_op.jnode["stride"]
-    dilA = legacy_op.jnode["dilation"]
     for d in range(0,spatial_dims):
         dimOut[d+2] = getFwdConvOutputDim(X_tensor_dim[d+2], padA[d], filter_tensor_dim[d+2],
                                     stdA[d], dilA[d])
@@ -483,15 +514,18 @@ def get_conv_dim_placeholders(legacy_op, jtensor_dict):
     input_nbDims = len(X_tensor_dim)
     filter_nbDims = len(filter_tensor_dim)
 
-    N = X_tensor_dim[0]
-    C = X_tensor_dim[1]
-    H = X_tensor_dim[input_nbDims - 2]
-    W = X_tensor_dim[input_nbDims - 1]
-    K = filter_tensor_dim[0]
-    R = filter_tensor_dim[filter_nbDims - 2]
-    S = filter_tensor_dim[filter_nbDims - 1]
-
-    return [dimOut, N, C, H, W, K, R, S]
+    inferred_params = dict()
+    inferred_params["dimOut"] = dimOut
+    inferred_params["n"] = X_tensor_dim[0]
+    inferred_params["c"] = X_tensor_dim[1]
+    inferred_params["h"] = X_tensor_dim[input_nbDims - 2]
+    inferred_params["w"] = X_tensor_dim[input_nbDims - 1]
+    inferred_params["k"] = filter_tensor_dim[0]
+    inferred_params["r"] = filter_tensor_dim[filter_nbDims - 2]
+    inferred_params["s"] = filter_tensor_dim[filter_nbDims - 1]
+    # Assign NCDHW 5d tensor D abstract param if present
+    inferred_params["d"] = dimOut[2] if len(dimOut) == 5 else None
+    return inferred_params
 
 # @brief: Replace derived parameters
 # @details: Some parameters in the test definition are not explicitly specified and depend on several other specifications of the test
@@ -507,22 +541,54 @@ def replace_implicit_params(legacy_ops, jtensor_dict):
     conv_ops = ["dgrad", "wgrad", "conv"]
 
     legacy_operations = [op.get_legacy_operation_type() for op in legacy_ops]
-    
+
     # Is any of the operations a convolution operation?
     if set(legacy_operations).intersection(set(conv_ops)):
         for legacy_op in legacy_ops:
             if legacy_op.get_legacy_operation_type() in conv_ops:
                 break
-        dimOut, N, C, H, W, K, R, S = get_conv_dim_placeholders(legacy_op, jtensor_dict)
+        
+        filter_tensor_name = legacy_op.get_io_tensor_name("W")
+        if filter_tensor_name is None:
+            filter_tensor_name = legacy_op.get_io_tensor_name("dW")
 
-        implicit_params["dimOut"] = dimOut
-        implicit_params["n"] = N
-        implicit_params["c"] = C
-        implicit_params["h"] = H
-        implicit_params["w"] = W
-        implicit_params["k"] = K
-        implicit_params["r"] = R
-        implicit_params["s"] = S
+        X_tensor_name = legacy_op.get_io_tensor_name("X")
+        if X_tensor_name is None:
+            X_tensor_name = legacy_op.get_io_tensor_name("dX")
+        
+        for jtensor in jtensor_dict:
+            if jtensor["name"] == X_tensor_name:
+                X_tensor_dim = jtensor["dim"]
+            elif jtensor["name"] == filter_tensor_name:
+                filter_tensor_dim = jtensor["dim"]
+
+        padA = legacy_op.jnode["pad"]
+        stdA = legacy_op.jnode["stride"]
+        dilA = legacy_op.jnode["dilation"]
+        
+        inferred_params = get_conv_dim_placeholders(X_tensor_dim, filter_tensor_dim, padA, stdA, dilA)
+        implicit_params.update(inferred_params)
+
+    # Skip any property inferencing for matmuls
+    elif set(legacy_operations).intersection(set(['matmul'])):
+        pass
+    # Pointwise operations
+    elif set(legacy_operations).intersection(set(["pointwise", "reduction"])):
+        X_tensor_name = legacy_ops[0].get_io_tensor_name("X")
+        if X_tensor_name is None:
+            X_tensor_name = legacy_ops[0].get_io_tensor_name("dX")
+        
+        for jtensor in jtensor_dict:
+            if jtensor["name"] == X_tensor_name:
+                X_tensor_dim = jtensor["dim"]
+
+        dim = X_tensor_dim
+        implicit_params["n"] = dim[0]
+        implicit_params["c"] = dim[1]
+        implicit_params["h"] = dim[-2]
+        implicit_params["w"] = dim[-1]
+        # Assign NCDHW 5d tensor D abstract param if present
+        implicit_params["d"] = dim[-3] if len(dim) == 5 else None
         
     jtensor_dict = replace_abstract_test_params(jtensor_dict, implicit_params)
     return jtensor_dict
@@ -591,9 +657,7 @@ def setup_test_graph_from_json(json_dict, backendEngine=-1):
 
 # @brief: main function to run json graphs with reference check
 # @TODO(mbreughe): rename this function
-def run_test_from_json_definition(json_dict, backendEngine=-1):
-    testGraph = setup_test_graph_from_json(json_dict, backendEngine)
-
+def run_test_from_json_definition(testGraph, json_dict):
     # TODO(@mbreughe)
     # we can do a front-end test by using the json dimensions of the virtual tensors
 

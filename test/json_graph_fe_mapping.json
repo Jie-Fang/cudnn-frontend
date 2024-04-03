@@ -1,6 +1,13 @@
 {
     "pointwise": 
         {
+            "CUDNN_POINTWISE_IDENTITY":
+                {
+                    "operation": "identity",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {}
+                },
             "CUDNN_POINTWISE_RELU_FWD":
                 {
                     "operation": "relu",
@@ -8,12 +15,40 @@
                     "output": ["Y"],
                     "properties": {}
                 },
-                "CUDNN_POINTWISE_RELU_BWD":
+            "CUDNN_POINTWISE_RELU_BWD":
                 {
                     "operation": "relu_backward",
                     "input": {"X": "input", "dY": "loss"},
                     "output": ["dX"],
                     "properties": {}
+                },
+            "CUDNN_POINTWISE_SIGMOID_FWD":
+                {
+                    "operation": "sigmoid",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {}
+                },
+            "CUDNN_POINTWISE_ELU_FWD":
+            {
+                "operation": "elu",
+                "input": {"X": "input"},
+                "output": ["Y"],
+                "properties": {"mathPrec": "compute_data_type"}
+            },
+            "CUDNN_POINTWISE_GELU_FWD":
+                {
+                    "operation": "gelu",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_GELU_APPROX_TANH_FWD":
+                {
+                    "operation": "gelu_approx_tanh",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
                 },
             "CUDNN_POINTWISE_ADD":
                 {
@@ -22,10 +57,192 @@
                     "output": ["Y"],
                     "properties": {"mathPrec": "compute_data_type"}
                 },
+            "CUDNN_POINTWISE_SUB":
+                {
+                    "operation": "sub",
+                    "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
             "CUDNN_POINTWISE_MUL":
                 {
                     "operation": "mul",
                     "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_MAX":
+                {
+                    "operation": "max",
+                    "input": {"X": "input0", "B": "input1"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_MIN":
+                {
+                    "operation": "min",
+                    "input": {"X": "input0", "B": "input1"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_POW":
+                {
+                    "operation": "pow",
+                    "input": {"X": "input0", "B": "input1"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_MOD":
+                {
+                    "operation": "mod",
+                    "input": {"X": "input0", "B": "input1"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_DIV":
+                {
+                    "operation": "div",
+                    "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_ADD_SQUARE":
+                {
+                    "operation": "add_square",
+                    "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_TANH_FWD":
+                {
+                    "operation": "tanh",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_ABS":
+                {
+                    "operation": "abs",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_CEIL":
+                {
+                    "operation": "ceil",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_FLOOR":
+                {
+                    "operation": "floor",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_COS":
+                {
+                    "operation": "cos",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_SIN":
+                {
+                    "operation": "sin",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_TAN":
+                {
+                    "operation": "tan",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_EXP":
+                {
+                    "operation": "exp",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_LOG":
+                {
+                    "operation": "log",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_NEG":
+                {
+                    "operation": "neg",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_RSQRT":
+                {
+                    "operation": "rsqrt",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_SQRT":
+                {
+                    "operation": "sqrt",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_ERF":
+                {
+                    "operation": "erf",
+                    "input": {"X": "input"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_CMP_LT":
+                {
+                    "operation": "cmp_lt",
+                    "input": {"X": "input", "B": "comparison"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_CMP_GT":
+                {
+                    "operation": "cmp_gt",
+                    "input": {"X": "input", "B": "comparison"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_CMP_GE":
+                {
+                    "operation": "cmp_ge",
+                    "input": {"X": "input", "B": "comparison"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_LOGICAL_AND":
+                {
+                    "operation": "logical_and",
+                    "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_LOGICAL_OR":
+                {
+                    "operation": "logical_or",
+                    "input": {"X": "a", "B": "b"},
+                    "output": ["Y"],
+                    "properties": {"mathPrec": "compute_data_type"}
+                },
+            "CUDNN_POINTWISE_LOGICAL_NOT":
+                {
+                    "operation": "logical_not",
+                    "input": {"X": "input"},
                     "output": ["Y"],
                     "properties": {"mathPrec": "compute_data_type"}
                 }
@@ -39,7 +256,10 @@
             "value_mapping": {
                 "reductionOp": 
                     {
-                        "CUDNN_REDUCE_TENSOR_ADD": "cudnn.reduction_mode.ADD"
+                        "CUDNN_REDUCE_TENSOR_ADD": "cudnn.reduction_mode.ADD",
+                        "CUDNN_REDUCE_TENSOR_AMAX": "cudnn.reduction_mode.AMAX",
+                        "CUDNN_REDUCE_TENSOR_MAX": "cudnn.reduction_mode.MAX",
+                        "CUDNN_REDUCE_TENSOR_MIN": "cudnn.reduction_mode.MIN"
                     }
             }
         },
