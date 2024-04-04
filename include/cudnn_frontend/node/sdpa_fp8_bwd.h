@@ -33,7 +33,7 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SDPAFP8BackwardNode " << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnnGetVersion() < 90100,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_frontend::get_backend_version() < 90100,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "sdpa fp8 backward operation is only supported starting cudnn 9.1.0. Please "
                                        "consider upgrading your current version.");
