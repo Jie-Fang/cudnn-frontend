@@ -39,6 +39,10 @@ target_link_libraries(
 
 target_compile_features(cudnn_frontend INTERFACE cxx_std_17)
 
+# Make PCH for targets to link against
+add_library(_cudnn_frontend_pch INTERFACE)
+target_precompile_headers(_cudnn_frontend_pch INTERFACE ${PROJECT_SOURCE_DIR}/include/cudnn_frontend.h)
+
 if (CUDNN_FRONTEND_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
