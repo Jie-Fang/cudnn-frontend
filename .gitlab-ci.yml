@@ -164,7 +164,8 @@ deploy:test_bdist_wheels_8.9.5_3.11:
         - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
         - update-alternatives --install /usr/bin/python python /usr/bin/python3.11 2
         - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
-        - pip install pytest pytest-xdist numpy torch
+        - pip install -r /tmp/requirements.txt
+        - pip install torch
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8905
         - pytest test/python_fe -n 4 -v
 
@@ -190,8 +191,9 @@ deploy:test_bdist_wheels_8.9.7_3.9:
         - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 2
         - update-alternatives --install /usr/bin/python python /usr/bin/python3.9 2
         - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
-        - pip install pytest pytest-xdist numpy torch # Only removing it because the test is meant for 8907
-        - pip uninstall -y nvidia-cudnn-cu12
+        - pip install -r /tmp/requirements.txt
+        - pip install torch
+        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
         - pytest test/python_fe -n 4 -v
 
 analysis:clang-format:
