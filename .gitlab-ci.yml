@@ -69,6 +69,7 @@ stages:
     - python_tests
     - pycudnnTest
     - L4_graph_runner
+    - unit_tests
     - notebooks
     - thunder
     - deploy
@@ -302,6 +303,8 @@ thunder:pjnl_latest:
         # Run cudnnex tests in thunder
         - cd /opt/pytorch/lightning-thunder
         - pytest thunder/tests/test_cudnn_executor.py -v
+    only:
+        - schedules
 
 analysis:cudnn_clang_disable_exception:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
