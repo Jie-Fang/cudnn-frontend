@@ -188,6 +188,28 @@ get_backend_version(void) {
 #endif
 }
 
+namespace detail {
+
+inline std::string
+convert_version_to_str(size_t const version) {
+    // The multiplier for major version pre-v9 and post-v9 are different.
+    size_t major = version / 10000;
+    size_t minor = (version / 100) % 100;
+    if (major == 0) {
+        major = version / 1000;
+        minor = (version / 100) % 10;
+    }
+    auto patch = version % 100;
+
+    return std::to_string(major) + "." + std::to_string(minor) + "." + std::to_string(patch);
+}
+}  // namespace detail
+
+inline std::string
+get_backend_version_string() {
+    return detail::convert_version_to_str(get_backend_version());
+}
+
 inline cudnnStatus_t
 create_descriptor(cudnnBackendDescriptorType_t descriptorType, cudnnBackendDescriptor_t *descriptor) {
     NV_FE_CALL_TO_BACKEND(create_descriptor, cudnnBackendCreateDescriptor, descriptorType, descriptor);
