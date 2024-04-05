@@ -326,7 +326,7 @@ class Execution_plan_list {
         for (auto& note : notes) {
             cudnnBackendNumericalNote_t backend_note;
 
-            auto valid_note = detail::convert_to_cudnn_type(note, backend_note) != CUDNN_STATUS_SUCCESS;
+            auto valid_note = (detail::convert_to_cudnn_type(note, backend_note) == CUDNN_STATUS_SUCCESS);
             for (auto i = 0u; i < engine_configs.size(); i++) {
                 bool has_barred_note =
                     std::find(numeric_notes[i].begin(), numeric_notes[i].end(), backend_note) != numeric_notes[i].end();
@@ -342,7 +342,7 @@ class Execution_plan_list {
         for (auto& note : notes) {
             cudnnBackendBehaviorNote_t backend_note;
 
-            auto valid_note = detail::convert_to_cudnn_type(note, backend_note) != CUDNN_STATUS_SUCCESS;
+            auto valid_note = (detail::convert_to_cudnn_type(note, backend_note) == CUDNN_STATUS_SUCCESS);
 
             for (auto i = 0u; i < engine_configs.size(); i++) {
                 bool has_barred_note = std::find(behavior_notes[i].begin(), behavior_notes[i].end(), backend_note) !=
