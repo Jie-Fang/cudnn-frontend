@@ -179,6 +179,108 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     return {dQ, dK, dV};
 }
 
+std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 4>
+PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_q,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_k,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_v,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_s,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_s,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_o,
+                  bool const is_inference,
+                  py::object const& attn_scale,
+                  bool const use_causal_mask,
+                  cudnn_frontend::DataType_t const& compute_data_type,
+                  std::string const& name) {
+    auto attributes = cudnn_frontend::graph::SDPA_fp8_attributes()
+                          .set_is_inference(is_inference)
+                          .set_causal_mask(use_causal_mask)
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name);
+
+    if (!attn_scale.is_none()) {
+        if (py::isinstance<py::float_>(attn_scale)) {
+            auto const attn_scale_value = attn_scale.cast<float>();
+            attributes.set_attn_scale(attn_scale_value);
+        } else {
+            auto const attn_scale_tensor = attn_scale.cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!attn_scale_tensor) {
+                throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
+            }
+            attributes.set_attn_scale(attn_scale_tensor);
+        }
+    }
+
+    auto [o, stats, amax_s, amax_o] =
+        graph.sdpa_fp8(q, k, v, descale_q, descale_k, descale_v, descale_s, scale_s, scale_o, attributes);
+    return {o, stats, amax_s, amax_o};
+}
+
+std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 7>
+PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& o,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_q,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_k,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_v,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_o,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_dO,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_s,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_dP,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_s,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dQ,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dK,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dV,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dP,
+                           py::object const& attn_scale,
+                           bool const use_causal_mask,
+                           cudnn_frontend::DataType_t const& compute_data_type,
+                           std::string const& name) {
+    auto attributes = cudnn_frontend::graph::SDPA_fp8_backward_attributes()
+                          .set_causal_mask(use_causal_mask)
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name);
+
+    if (!attn_scale.is_none()) {
+        if (py::isinstance<py::float_>(attn_scale)) {
+            auto const attn_scale_value = attn_scale.cast<float>();
+            attributes.set_attn_scale(attn_scale_value);
+        } else {
+            auto const attn_scale_tensor = attn_scale.cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!attn_scale_tensor) {
+                throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
+            }
+            attributes.set_attn_scale(attn_scale_tensor);
+        }
+    }
+
+    auto [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP] = graph.sdpa_fp8_backward(q,
+                                                                                    k,
+                                                                                    v,
+                                                                                    o,
+                                                                                    dO,
+                                                                                    stats,
+                                                                                    descale_q,
+                                                                                    descale_k,
+                                                                                    descale_v,
+                                                                                    descale_o,
+                                                                                    descale_dO,
+                                                                                    descale_s,
+                                                                                    descale_dP,
+                                                                                    scale_s,
+                                                                                    scale_dQ,
+                                                                                    scale_dK,
+                                                                                    scale_dV,
+                                                                                    scale_dP,
+                                                                                    attributes);
+    return {dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP};
+}
+
 void
 init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
     m.def("sdpa",
@@ -220,28 +322,28 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                 Returns:
                     o (cudnn_tensor): The result of scaled dot-product flash attention.
                     stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
-            )pbdoc")
-        .def("sdpa_backward",
-             &PyGraph::sdpa_backward,
-             py::arg("q"),
-             py::arg("k"),
-             py::arg("v"),
-             py::arg("o"),
-             py::arg("dO"),
-             py::arg("stats"),
-             py::arg_v("attn_scale", py::none()),
-             py::arg_v("bias", nullptr),
-             py::arg_v("dBias", nullptr),
-             py::arg_v("use_alibi_mask", false),
-             py::arg_v("use_padding_mask", false),
-             py::arg_v("seq_len_q", nullptr),
-             py::arg_v("seq_len_kv", nullptr),
-             py::arg_v("use_causal_mask", false),
-             py::arg_v("dropout", py::none()),
-             py::arg_v("rng_dump", nullptr),
-             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
-             py::arg_v("name", ""),
-             R"pbdoc(
+            )pbdoc");
+    m.def("sdpa_backward",
+          &PyGraph::sdpa_backward,
+          py::arg("q"),
+          py::arg("k"),
+          py::arg("v"),
+          py::arg("o"),
+          py::arg("dO"),
+          py::arg("stats"),
+          py::arg_v("attn_scale", py::none()),
+          py::arg_v("bias", nullptr),
+          py::arg_v("dBias", nullptr),
+          py::arg_v("use_alibi_mask", false),
+          py::arg_v("use_padding_mask", false),
+          py::arg_v("seq_len_q", nullptr),
+          py::arg_v("seq_len_kv", nullptr),
+          py::arg_v("use_causal_mask", false),
+          py::arg_v("dropout", py::none()),
+          py::arg_v("rng_dump", nullptr),
+          py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+          py::arg_v("name", ""),
+          R"pbdoc(
                 Compute the key, query, value gradients of scaled dot product attention.
 
                 Args:
@@ -267,6 +369,64 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     dQ (cudnn_tensor): The query gradient tensor of scaled dot-product flash attention.
                     dK (cudnn_tensor): The key gradient tensor of scaled dot-product flash attention.
                     dV (cudnn_tensor): The value gradient tensor of scaled dot-product flash attention.
+            )pbdoc");
+    m.def("sdpa_fp8",
+          &PyGraph::sdpa_fp8,
+          py::arg("q"),
+          py::arg("k"),
+          py::arg("v"),
+          py::arg("descale_q"),
+          py::arg("descale_k"),
+          py::arg("descale_v"),
+          py::arg("descale_s"),
+          py::arg("scale_s"),
+          py::arg("scale_o"),
+          py::arg("is_inference"),
+          py::arg_v("attn_scale", py::none()),
+          py::arg_v("use_causal_mask", false),
+          py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+          py::arg_v("name", ""),
+          R"pbdoc(
+                Perform scaled dot product attention with fp8 precision.
+
+                Args:
+                    TODO
+
+                Returns:
+                    TODO
+            )pbdoc");
+    m.def("sdpa_fp8_backward",
+          &PyGraph::sdpa_fp8_backward,
+          py::arg("q"),
+          py::arg("k"),
+          py::arg("v"),
+          py::arg("o"),
+          py::arg("dO"),
+          py::arg("stats"),
+          py::arg("descale_q"),
+          py::arg("descale_k"),
+          py::arg("descale_v"),
+          py::arg("descale_o"),
+          py::arg("descale_dO"),
+          py::arg("descale_s"),
+          py::arg("descale_dP"),
+          py::arg("scale_s"),
+          py::arg("scale_dQ"),
+          py::arg("scale_dK"),
+          py::arg("scale_dV"),
+          py::arg("scale_dP"),
+          py::arg_v("attn_scale", py::none()),
+          py::arg_v("use_causal_mask", false),
+          py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+          py::arg_v("name", ""),
+          R"pbdoc(
+                Compute the key, query, value gradients of scaled dot product attention with fp8 precision.
+
+                Args:
+                    TODO
+
+                Returns:
+                    TODO
             )pbdoc");
     m.attr("scaled_dot_product_flash_attention")          = m.attr("sdpa");
     m.attr("scaled_dot_product_flash_attention_backward") = m.attr("sdpa_backward");

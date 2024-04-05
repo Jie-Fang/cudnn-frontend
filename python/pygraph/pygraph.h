@@ -246,6 +246,7 @@ class PyGraph {
                           cudnn_frontend::DataType_t const& compute_data_type,
                           std::string const& name);
 
+    // return [o, stats]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
     sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
@@ -263,6 +264,7 @@ class PyGraph {
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name);
 
+    // return [dQ, dK, dV]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
     sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
@@ -282,6 +284,48 @@ class PyGraph {
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                   cudnn_frontend::DataType_t const& compute_data_type,
                   std::string const& name);
+
+    // return [o, stats, amax_s, amax_o]
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 4>
+    sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_q,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_k,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_v,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_s,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_s,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_o,
+             bool const is_inference,
+             py::object const& attn_scale,
+             bool const use_causal_mask,
+             cudnn_frontend::DataType_t const& compute_data_type,
+             std::string const& name);
+
+    // return [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP]
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 7>
+    sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& o,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& dO,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& stats,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_q,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_k,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_v,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_o,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_dO,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_s,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_dP,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_s,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dQ,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dK,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dV,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dP,
+                      py::object const& attn_scale,
+                      bool const use_causal_mask,
+                      cudnn_frontend::DataType_t const& compute_data_type,
+                      std::string const& name);
 
     void
     validate();
