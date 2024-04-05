@@ -1,5 +1,6 @@
 import cudnn
 import pytest
+from looseversion import LooseVersion
 
 def test_conv_relu(jparams, testgraph):
     X = testgraph.tensor(dim=jparams["in_dim"], layout = "NHWC")
@@ -58,7 +59,7 @@ def test_dgrad(jparams, testgraph):
 
 def test_batchnorm(jparams, testgraph):
 
-    if (not "backend_version" in dir(cudnn)) or cudnn.backend_version() < 8700:
+    if (not "backend_version" in dir(cudnn)) or LooseVersion(cudnn.backend_version_string()) < "8.7":
         pytest.skip("BN not supported below cudnn 8.7")
 
     testgraph.set_io_data_type(cudnn.data_type.FLOAT)

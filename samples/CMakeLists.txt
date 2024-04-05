@@ -76,6 +76,7 @@ target_link_libraries(
     samples
 
     cudnn_frontend
+    _cudnn_frontend_pch
     Catch2::Catch2WithMain
 
     CUDNN::cudnn_all

@@ -1,5 +1,5 @@
 import pytest
-from json_graph_test import read_json_test_dict, run_test_from_json_definition
+from json_graph_test import read_json_test_dict, run_test_from_json_definition, setup_test_graph_from_json
 
 # A helper function to read json dictionaries
 # @note: scope tells us that the dictionary is being loaded only once
@@ -13,4 +13,5 @@ def json_dict(request):
 # @param test_name: the specific test to be ran
 def test_json_graph(json_dict, test_name):
     assert test_name in json_dict
-    run_test_from_json_definition(json_dict[test_name])
+    testGraph = setup_test_graph_from_json(json_dict[test_name], -1)
+    run_test_from_json_definition(testGraph, json_dict[test_name])

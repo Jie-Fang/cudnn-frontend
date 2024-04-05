@@ -774,8 +774,8 @@ TEST_CASE("sdpa_fp8_bprop", "[graph][mha][fp8][backward]") {
                                                                                         K,
                                                                                         V,
                                                                                         O,
-                                                                                        Stats,
                                                                                         dO,
+                                                                                        Stats,
                                                                                         descale_q,
                                                                                         descale_k,
                                                                                         descale_v,
@@ -949,7 +949,7 @@ TEST_CASE("sdpa_fp8_gqa_bprop", "[graph][mha][fp8][backward]") {
 
     // clang-format off
     auto [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP] = mha_graph.sdpa_fp8_backward(
-        q, k, v, o, stats, dO,
+        q, k, v, o, dO, stats,
         descale_q, descale_k, descale_v, descale_o, descale_dO, descale_s, descale_dP,
         scale_s, scale_dQ, scale_dK, scale_dV, scale_dP,
         fe::graph::SDPA_fp8_backward_attributes().set_name("sdpa_fp8_backward")

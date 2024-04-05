@@ -33,7 +33,7 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
         getLogger() << "[cudnn_frontend] INFO: "
                     << "Validating SDPAFP8Node " << attributes.name << "..." << std::endl;
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnnGetVersion() < 90100,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_frontend::get_backend_version() < 90100,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "sdpa fp8 forward operation is only supported starting cudnn 9.1.0. Please "
                                        "consider upgrading your current version.");
