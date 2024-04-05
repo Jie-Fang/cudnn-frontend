@@ -22,6 +22,7 @@ add_executable(
 
     serialize.cpp
     validate.cpp
+    version.cpp
 )
 
 if (MSVC)
@@ -47,6 +48,7 @@ endif()
 target_link_libraries(
     unit_tests
     cudnn_frontend
+    _cudnn_frontend_pch
     Catch2::Catch2WithMain
 
     CUDNN::cudnn_all

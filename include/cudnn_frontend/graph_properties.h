@@ -1722,7 +1722,6 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     friend class SDPAFP8BackwardNode;
     friend class Graph;
 
-    std::optional<bool> is_inference;
     bool causal_mask = false;
     std::optional<float> attn_scale_value;
 
@@ -1753,19 +1752,7 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     enum class output_names { dQ, dK, dV, Amax_dQ, Amax_dK, Amax_dV, Amax_dP };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_fp8_backward_attributes,
-                                   name,
-                                   inputs,
-                                   outputs,
-                                   is_inference,
-                                   causal_mask,
-                                   attn_scale_value)
-
-    SDPA_fp8_backward_attributes&
-    set_is_inference(bool const value) {
-        is_inference = value;
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_fp8_backward_attributes, name, inputs, outputs, causal_mask, attn_scale_value)
 
     SDPA_fp8_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {

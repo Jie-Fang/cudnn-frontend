@@ -1,8 +1,7 @@
 {"Abs_abstract" : {
     "tensors": [
         {"name":"xTensor", "dataType":"<Pin>", "dim":"<dimA>", "layout":"NHWC"},
-        {"name":"afterAbs", "dataType":"<Pout>", "dim":"<dimA>", "layout":"NHWC"},
-        {"name":"afterAbs", "dataType":"<Pout>", "dim":"<dimB>", "layout":"NHWC"}
+        {"name":"afterAbs", "dataType":"<Pout>", "dim":"<dimA>", "layout":"NHWC"}
     ],
     "nodes":[
         {"name":"abs0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ABS", "X":"xTensor", "Y":"afterAbs", "mathPrec":"<Pcomp>"}
@@ -48,7 +47,7 @@
         {"name":"afterExp", "dataType":"<Pout>", "dim":"<dimA>", "layout":"NHWC"}
     ],
     "nodes":[
-        {"name":"exp0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_exp", "X":"xTensor", "Y":"afterExp", "mathPrec":"float"}
+        {"name":"exp0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_EXP", "X":"xTensor", "Y":"afterExp", "mathPrec":"float"}
     ],
     "tolerances":{"rel":"<rtol>", "abs":"<atol>"}
   },
