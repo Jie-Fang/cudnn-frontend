@@ -340,7 +340,7 @@ class Attributes {
         }
 
         // Handle shape and stride inferencing for fused scalars.
-        // Pick number of dimensions from anyone of non-fused-scalar input tensors
+        // Pick number of dimensions from anyone of non-fused-scalar input/output tensors
         // In case, all tensors are fused scalars, just keep them 1D.
         int64_t number_of_dims = 1;
         for (auto [name, tensor] : derived->inputs) {
@@ -350,6 +350,18 @@ class Attributes {
                 break;
             }
         }
+
+        // If number of dims is still 1, try to see if user set output dims.
+        if (number_of_dims == 1) {
+            for (auto [name, tensor] : derived->outputs) {
+                (void)name;
+                if (tensor && (tensor->get_pass_by_value().has_value() == false)) {
+                    number_of_dims = tensor->get_dim().size();
+                    break;
+                }
+            }
+        }
+
         for (auto [name, tensor] : derived->inputs) {
             (void)name;
             if (tensor && tensor->get_pass_by_value().has_value()) {
