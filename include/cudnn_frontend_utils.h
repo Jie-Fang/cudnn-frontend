@@ -92,26 +92,31 @@ struct nlohmann::adl_serializer<nv_bfloat16> {
     }
 };
 
-template <typename T, typename... Args>
-void
-convert_from_json_to_variant(const nlohmann::json& j, std::variant<Args...>& data) {
-    try {
-        data = j.get<T>();
-    } catch (...) {
-        // get will throw an error if incorrect type
-    }
-}
-
-template <typename... Args>
-struct nlohmann::adl_serializer<std::variant<Args...>> {
+template <>
+struct nlohmann::adl_serializer<std::variant<int32_t, half, float, nv_bfloat16>> {
     static void
-    to_json(nlohmann::json& j, const std::variant<Args...>& data) {
-        std::visit([&j](const auto& v) { j = v; }, data);
+    to_json(nlohmann::json& j, const std::variant<int32_t, half, float, nv_bfloat16>& data) {
+        std::visit([&](const auto& v) { j = {{"index", data.index()}, {"value", v}}; }, data);
     }
 
     static void
-    from_json(const nlohmann::json& j, std::variant<Args...>& data) {
-        (convert_from_json_to_variant<Args>(j, data), ...);
+    from_json(const nlohmann::json& j, std::variant<int32_t, half, float, nv_bfloat16>& data) {
+        if (!j.is_object() || !j.contains("index") || !j.contains("value")) {
+            throw std::invalid_argument("Invalid JSON format for std::variant");
+        }
+
+        size_t type_index = j.at("index").get<size_t>();
+        if (type_index == 0) {
+            data = j.at("value").get<int32_t>();
+        } else if (type_index == 1) {
+            data = j.at("value").get<half>();
+        } else if (type_index == 2) {
+            data = j.at("value").get<float>();
+        } else if (type_index == 3) {
+            data = j.at("value").get<nv_bfloat16>();
+        } else {
+            throw std::out_of_range("Variant index out of range");
+        }
     }
 };
 
