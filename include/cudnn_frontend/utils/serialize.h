@@ -389,22 +389,7 @@ from_json(const nlohmann::json& j, Tensor_attributes& ta) {
     ta.uid_assigned     = j.at("uid_assigned").get<bool>();
 
     if (ta.is_pass_by_value && !j["pass_by_value"].is_null()) {
-        switch (ta.data_type) {
-            case DataType_t::HALF:
-                ta.pass_by_value = j.at("pass_by_value").get<half>();
-                break;
-            case DataType_t::FLOAT:
-                ta.pass_by_value = j.at("pass_by_value").get<float>();
-                break;
-            case DataType_t::BFLOAT16:
-                ta.pass_by_value = j.at("pass_by_value").get<nv_bfloat16>();
-                break;
-            case DataType_t::INT32:
-                ta.pass_by_value = j.at("pass_by_value").get<int32_t>();
-                break;
-            default:
-                throw std::runtime_error("Unsupported data type for pass_by_value");
-        }
+        ta.pass_by_value = j.at("pass_by_value");
     }
 }
 
