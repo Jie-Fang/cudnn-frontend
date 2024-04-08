@@ -36,6 +36,13 @@ class ResampleNode : public NodeCRTP<ResampleNode> {
             CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Resample_attributes::output_names::Index);
         }
 
+        // Make sure that the mode can be lowered to BE
+        cudnnResampleMode_t dummy;
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            detail::convert_to_cudnn_type(attributes.resample_mode, dummy) != CUDNN_STATUS_SUCCESS,
+            error_code_t::ATTRIBUTE_NOT_SET,
+            "Invalid resample mode.");
+
         CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         return {error_code_t::OK, ""};
