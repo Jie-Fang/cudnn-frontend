@@ -42,6 +42,7 @@ FE v1.0 API follows a functional style of building a graph. Operations take in i
 | Generate stats of output| genstats <br>Genstats_attributes                          | genstats     |
 | BN Finalize of stats    | bn_finalize <br>BN_finalize_attributes                    | bn_finalize  |
 | Dbn weight              | dbn_weight <br>DBN_weight_attributes                      | dbn_weight   |
+| [Resampling](docs/operations/Resampling.md)              | resample <br>Resample_attributes                      | resample   |
 | [Scale dot product attention](docs/operations/Attention.md) | sdpa<br> SDPA_attributes | sdpa |
 | [Scale dot product attention backward](docs/operations/Attention.md) | sdpa_backward<br> SDPA_backward_attributes | sdpa_backward |
 
