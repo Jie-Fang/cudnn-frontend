@@ -150,7 +150,7 @@ TEST_CASE("Resample Avg Pooling", "[resample][pooling][average]") {
     auto [Y, Index] = graph.resample(X,
                                      fe::graph::Resample_attributes()
                                          .set_is_inference(false)
-                                         .set_resampling_mode(fe::ResampleMode_t::AVGPOOL_EXCLUDE_PADDING)
+                                         .set_resampling_mode(fe::ResampleMode_t::AVGPOOL_INCLUDE_PADDING)
                                          .set_padding_mode(fe::PaddingMode_t::ZERO_PAD)
                                          .set_window({2, 3})
                                          .set_stride({4, 5})
