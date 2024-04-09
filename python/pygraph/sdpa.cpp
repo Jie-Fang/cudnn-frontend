@@ -320,7 +320,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     name (Optional[str]): The name of the operation.
 
                 Returns:
-                    o (cudnn_tensor): The result of scaled dot-product flash attention.
+                    o (cudnn_tensor): The output data.
                     stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
             )pbdoc");
     m.def("sdpa_backward",
@@ -366,9 +366,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     name (Optional[str]): The name of the operation.
 
                 Returns:
-                    dQ (cudnn_tensor): The query gradient tensor of scaled dot-product flash attention.
-                    dK (cudnn_tensor): The key gradient tensor of scaled dot-product flash attention.
-                    dV (cudnn_tensor): The value gradient tensor of scaled dot-product flash attention.
+                    dQ (cudnn_tensor): The query gradient data.
+                    dK (cudnn_tensor): The key gradient data.
+                    dV (cudnn_tensor): The value gradient data.
             )pbdoc");
     m.def("sdpa_fp8",
           &PyGraph::sdpa_fp8,
@@ -387,13 +387,29 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
-                Perform scaled dot product attention with fp8 precision.
+                Perform scaled dot product attention with fp8 datatype inputs and outputs.
 
                 Args:
-                    TODO
+                    q (cudnn_tensor): The query data.
+                    k (cudnn_tensor): The key data.
+                    v (cudnn_tensor): The value data.
+                    descale_q (cudnn_tensor): Descale factor for query.
+                    descale_k (cudnn_tensor): Descale factor for key.
+                    descale_v (cudnn_tensor): Descale factor for value.
+                    descale_s (cudnn_tensor): Descale factor for S tensor.
+                    scale_s (cudnn_tensor): Scale factor for S tensor.
+                    scale_o (cudnn_tensor): Scale factor for output.
+                    is_inference (bool): Whether it is an inference step or training step.
+                    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
+                    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): The name of the operation.
 
                 Returns:
-                    TODO
+                    o (cudnn_tensor): The output data.
+                    stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
+                    amax_s (cudnn_tensor): The absolute maximum of S tensor.
+                    amax_o (cudnn_tensor): The absolute maximum of output tensor.
             )pbdoc");
     m.def("sdpa_fp8_backward",
           &PyGraph::sdpa_fp8_backward,
@@ -420,13 +436,40 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
-                Compute the key, query, value gradients of scaled dot product attention with fp8 precision.
+                Compute the key, query, value gradients of scaled dot product attention with fp8 datatype inputs and outputs.
 
                 Args:
-                    TODO
+                    q (cudnn_tensor): The query data.
+                    k (cudnn_tensor): The key data.
+                    v (cudnn_tensor): The value data.
+                    o (cudnn_tensor): The output data.
+                    dO (cudnn_tensor): The output gradient data.
+                    stats (cudnn_tensor): The softmax statistics in case the operation is in a training step.
+                    descale_q (cudnn_tensor): Descale factor for query.
+                    descale_k (cudnn_tensor): Descale factor for key.
+                    descale_v (cudnn_tensor): Descale factor for value.
+                    descale_o (cudnn_tensor): Descale factor for output.
+                    descale_dO (cudnn_tensor): Descale factor for output gradient.
+                    descale_s (cudnn_tensor): Descale factor for S tensor.
+                    descale_dP (cudnn_tensor): Descale factor for P gradient tensor.
+                    scale_s (cudnn_tensor): Scale factor for S tensor.
+                    scale_dQ (cudnn_tensor): Scale factor for query gradient.
+                    scale_dK (cudnn_tensor): Scale factor for key gradient.
+                    scale_dV (cudnn_tensor): Scale factor for value gradient.
+                    scale_dP (cudnn_tensor): Scale factor for dP gradient.
+                    attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
+                    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
+                    name (Optional[str]): The name of the operation.
 
                 Returns:
-                    TODO
+                    dQ (cudnn_tensor): The query gradient data.
+                    dK (cudnn_tensor): The key gradient data.
+                    dV (cudnn_tensor): The value gradient data.
+                    amax_dQ (cudnn_tensor): The absolute maximum of query gradient tensor.
+                    amax_dK (cudnn_tensor): The absolute maximum of key gradient tensor.
+                    amax_dV (cudnn_tensor): The absolute maximum of value gradient tensor.
+                    amax_dP (cudnn_tensor): The absolute maximum of dP tensor.
             )pbdoc");
     m.attr("scaled_dot_product_flash_attention")          = m.attr("sdpa");
     m.attr("scaled_dot_product_flash_attention_backward") = m.attr("sdpa_backward");
