@@ -387,6 +387,23 @@ class Execution_plan_list {
                 continue;
             }
 
+            auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
+                for (auto const& blocked_name : blocked_names) {
+                    if (full_name.find(blocked_name) != std::string::npos) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            auto cfg_tag = cudnn_frontend::detail::get_engine_tag(engine_configs[i]);
+            if (is_blocked(cfg_tag, barred_engine_names)) {
+                getLogger() << "[cudnn_frontend] INFO: Deselecting engine_configs " << cfg_tag << std::endl;
+                barred_indices[i]  = true;
+                execution_plans[i] = nullptr;
+                continue;
+            }
+
             auto const& config = engine_configs[i];
             auto fe_status     = detail::create_cudnn_execution_plan(execution_plans[i], config, operation_tag, handle);
             getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
@@ -399,24 +416,6 @@ class Execution_plan_list {
                     barred_indices[i]  = true;
                     execution_plans[i] = nullptr;
                     getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
-                    continue;
-                }
-
-                auto is_blocked = [](std::string const& full_name,
-                                     std::vector<std::string> const& blocked_names) -> bool {
-                    for (auto const& blocked_name : blocked_names) {
-                        if (full_name.find(blocked_name) != std::string::npos) {
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-
-                if (is_blocked(execution_plans[i]->getTag(), barred_engine_names)) {
-                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan " << execution_plans[i]->getTag()
-                                << std::endl;
-                    barred_indices[i]  = true;
-                    execution_plans[i] = nullptr;
                     continue;
                 }
 
