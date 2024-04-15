@@ -42,12 +42,12 @@ include:
     rules:
       - if: $CI_PIPELINE_SOURCE == "schedule"
 
-  - local: ci/job-template.yml
-    inputs:
-        cuda_version: "12.2.2"
-        cudnn_version: "8.9.5.29"
-    rules:
-      - if: $CI_PIPELINE_SOURCE == "schedule"
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.2.2"
+#         cudnn_version: "8.9.5.29"
+#     rules:
+#       - if: $CI_PIPELINE_SOURCE == "schedule"
 
   - local: ci/job-template.yml
     inputs:
@@ -60,7 +60,13 @@ include:
     inputs:
         cuda_version: "12.3.1"
         cudnn_version: "9.0.0.312"
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "schedule"
 
+  - local: ci/job-template.yml
+    inputs:
+        cuda_version: "12.4.0"
+        cudnn_version: "9.1.0.70"
 
 stages:
     - analysis
