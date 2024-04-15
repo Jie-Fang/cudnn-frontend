@@ -8,6 +8,8 @@
 #include "../cudnn_frontend_Logging.h"
 #include "graph_helpers.h"
 
+#include "backend/execution_helpers.h"
+
 namespace cudnn_frontend {
 
 namespace detail {
@@ -22,42 +24,10 @@ execute(cudnnHandle_t handle,
     // RETURN_CUDNN_FRONTEND_ERROR_IF(!plan, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
     getLogger() << "[cudnn_frontend] INFO: Executing " << plan->getTag() << "..." << std::endl;
 
-    auto&& variant_pack_builder = VariantPackBuilder();
-    variant_pack_builder.setDataPointers(device_ptrs.size(), device_ptrs.data())
-        .setUids(uids.size(), uids.data())
-        .setWorkspacePointer(workspace_ptr);
+    backend_descriptor variant_pack;
+    CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack, device_ptrs, uids, workspace_ptr));
+    CHECK_CUDNN_ERROR(cudnn_frontend::execute(handle, plan->get_raw_desc(), variant_pack.get_descriptor()));
 
-    cudnnBackendDescriptor_t raw_variant_pack = nullptr;
-#ifdef NV_CUDNN_DISABLE_EXCEPTION
-    // disable exception macro is defined. Calling build will not throw.
-    // Check status of desc and return error.
-    auto variant_pack = variant_pack_builder.build();
-    RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack.get_status() != CUDNN_STATUS_SUCCESS,
-                                   error_code_t::INVALID_VARIANT_PACK,
-                                   variant_pack.get_error());
-    raw_variant_pack = variant_pack.get_raw_desc();
-#else
-    // build() can throw
-    // wrap in try catch
-    try {
-        auto variant_pack = variant_pack_builder.build();
-        raw_variant_pack  = variant_pack.get_raw_desc();
-    } catch (cudnn_frontend::cudnnException& e) {
-        // Silly MSVC error that thinks below condition is constexpr
-        // RETURN_CUDNN_FRONTEND_ERROR_IF(
-        //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::INVALID_VARIANT_PACK, e.what());
-        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
-        getLogger() << error_code_t::INVALID_VARIANT_PACK << " because variant packing building failed at " << __FILE__
-                    << ":" << __LINE__ << "\n";
-        return {error_code_t::INVALID_VARIANT_PACK, e.what()};
-    }
-#endif
-
-    auto status = cudnn_frontend::execute(handle, plan->get_raw_desc(), raw_variant_pack);
-    if (status != CUDNN_STATUS_SUCCESS) {
-        std::string message = "[cudnn_frontend] ERROR: Graph execution failed.";
-        return {error_code_t::GRAPH_EXECUTION_FAILED, message};
-    }
     getLogger() << "[cudnn_frontend] INFO: Executed " << plan->getTag() << "." << std::endl;
 
     return {error_code_t::OK, ""};
