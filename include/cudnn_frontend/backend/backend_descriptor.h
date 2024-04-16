@@ -19,15 +19,6 @@ namespace cudnn_frontend::detail {
 class backend_descriptor {
    public:
     /**
-     * @brief Constructs a default `backend_descriptor` object.
-     *
-     * The default constructor creates a `backend_descriptor` object with a `nullptr` descriptor
-     * and `CUDNN_STATUS_SUCCESS` status. This can be useful for cases where you want to
-     * initialize the object without creating a descriptor immediately.
-     */
-    backend_descriptor() = default;
-
-    /**
      * @brief Constructs a `backend_descriptor` object.
      *
      * @param type The type of the backend descriptor to create.
@@ -89,7 +80,7 @@ class backend_descriptor {
      * @return A const reference to `cudnnBackendDescriptor_t`, the raw pointer to the backend descriptor.
      */
     cudnnBackendDescriptor_t const&
-    get_descriptor() const {
+    get_ptr() const {
         return desc;
     }
 
@@ -107,21 +98,5 @@ class backend_descriptor {
     cudnnBackendDescriptor_t desc = nullptr;               //!< Raw pointer to the backend descriptor.
     cudnnStatus_t status          = CUDNN_STATUS_SUCCESS;  //!< Status of the descriptor creation operation.
 };
-
-/**
- * @brief Helper function to create a `backend_descriptor` object and return its status.
- *
- * This function creates a `backend_descriptor` object and returns the status of the descriptor
- * creation operation. The caller can then handle the error as needed.
- *
- * @param type The type of the backend descriptor to create.
- * @param[out] desc The created `backend_descriptor` object.
- * @return `cudnnStatus_t` The status of the descriptor creation operation.
- */
-inline cudnnStatus_t
-create_backend_descriptor(cudnnBackendDescriptorType_t type, backend_descriptor& desc) {
-    desc = backend_descriptor(type);
-    return desc.get_status();
-}
 
 }  // namespace cudnn_frontend::detail
