@@ -82,34 +82,30 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
 }
 
 inline error_t
-query_heuristics(std::vector<std::shared_ptr<OperationGraph_v8>> const& operation_graphs,
-                 std::unordered_map<std::string, EngineConfigList>& op_graph_to_configs,
+query_heuristics(std::shared_ptr<OperationGraph_v8> const& operation_graph,
+                 EngineConfigList& op_graph_to_configs,
                  std::vector<HeurMode_t> const& modes) {
-    for (auto const& operation_graph : operation_graphs) {
-        cudnn_frontend::EngineConfigList configs;
-        CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, modes));
+    cudnn_frontend::EngineConfigList configs;
+    CHECK_CUDNN_FRONTEND_ERROR(detail::query_cudnn_heuristics_impl(operation_graph, configs, modes));
 
-        cudnn_frontend::EngineConfigList good_configs;
-
-        for (auto& engine_config : configs) {
-            int64_t elem_count                        = 0;
-            ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
-            cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
-            auto status = cudnn_frontend::get_attribute(engine_config->get_backend_descriptor(),
-                                                        CUDNN_ATTR_ENGINECFG_ENGINE,
-                                                        CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                                        1,
-                                                        &elem_count,
-                                                        &extractedEngine_);
-            if (status == CUDNN_STATUS_SUCCESS) {
-                good_configs.push_back(engine_config);
-            }
+    for (auto& engine_config : configs) {
+        int64_t elem_count                        = 0;
+        ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+        cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
+        auto status = cudnn_frontend::get_attribute(engine_config->get_backend_descriptor(),
+                                                    CUDNN_ATTR_ENGINECFG_ENGINE,
+                                                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                    1,
+                                                    &elem_count,
+                                                    &extractedEngine_);
+        if (status == CUDNN_STATUS_SUCCESS) {
+            op_graph_to_configs.push_back(engine_config);
         }
-
-        getLogger() << "[cudnn_frontend] INFO: config list has " << good_configs.size() << " good configurations."
-                    << std::endl;
-        op_graph_to_configs.emplace(operation_graph->getTag(), good_configs);
     }
+
+    getLogger() << "[cudnn_frontend] INFO: config list has " << op_graph_to_configs.size() << " good configurations."
+                << std::endl;
+
     return {error_code_t::OK, ""};
 }
 
