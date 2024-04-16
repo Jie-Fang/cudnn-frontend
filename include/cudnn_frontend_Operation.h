@@ -80,8 +80,7 @@ class Operation_v8 : public BackendDescriptor {
     std::string
     describe() const override {
         std::stringstream ss;
-        ss << "CUDNN_BACKEND_OPERATION :"
-           << " OpMode: " << op_mode;
+        ss << "CUDNN_BACKEND_OPERATION :" << " OpMode: " << op_mode;
         ss << std::hex << " X " << xdesc;
         ss << std::hex << " Y " << ydesc;
         ss << std::hex << " W " << wdesc;

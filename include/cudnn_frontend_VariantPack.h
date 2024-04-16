@@ -52,8 +52,7 @@ class VariantPack_v8 : public BackendDescriptor {
     std::string
     describe() const override {
         std::stringstream ss;
-        ss << "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR :"
-           << " has " << num_ptrs << " data pointers";
+        ss << "CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR :" << " has " << num_ptrs << " data pointers";
         return ss.str();
     }
 

@@ -55,8 +55,8 @@ class ConvDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         char sep = ' ';
-        ss << "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR :"
-           << " Datatype: " << json{compute_type} << " Mode: " << std::to_string(mode) << " Num Dimensions: " << nDims;
+        ss << "CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR :" << " Datatype: " << json{compute_type}
+           << " Mode: " << std::to_string(mode) << " Num Dimensions: " << nDims;
         ss << " PadLower [";
         for (auto i = 0; i < nDims; i++) {
             ss << sep << padLower[i];

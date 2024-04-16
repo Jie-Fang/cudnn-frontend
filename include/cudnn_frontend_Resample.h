@@ -48,10 +48,9 @@ class ResampleDesc_v8 : public BackendDescriptor {
     describe() const override {
         std::stringstream ss;
         char sep = ',';
-        ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: "
-           << "Compute Type: " << json{computeType} << ", Resample Mode: " << json{resample_mode}
-           << ", Spatial Dimensions: " << spatialDim << ", Nan Propagation: " << std::to_string(nanOpt)
-           << ", Padding Mode: " << json{padding_mode};
+        ss << "CUDNN_BACKEND_RESAMPLE_DESCRIPTOR: " << "Compute Type: " << json{computeType}
+           << ", Resample Mode: " << json{resample_mode} << ", Spatial Dimensions: " << spatialDim
+           << ", Nan Propagation: " << std::to_string(nanOpt) << ", Padding Mode: " << json{padding_mode};
         ss << ", WindowDim: [";
         for (auto i = 0; i < spatialDim; i++) {
             ss << '(' << windowDim[i].numerator << sep << windowDim[i].denominator << ')' << sep;

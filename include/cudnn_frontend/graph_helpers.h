@@ -10,20 +10,22 @@
 
 namespace cudnn_frontend {
 
-enum class [[nodiscard]] error_code_t{OK,
-                                      ATTRIBUTE_NOT_SET,
-                                      SHAPE_DEDUCTION_FAILED,
-                                      INVALID_TENSOR_NAME,
-                                      INVALID_VARIANT_PACK,
-                                      GRAPH_NOT_SUPPORTED,
-                                      GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                                      GRAPH_EXECUTION_FAILED,
-                                      HEURISTIC_QUERY_FAILED,
-                                      UNSUPPORTED_GRAPH_FORMAT,
-                                      CUDA_API_FAILED,
-                                      CUDNN_BACKEND_API_FAILED,
-                                      INVALID_CUDA_DEVICE,
-                                      HANDLE_ERROR};
+enum class [[nodiscard]] error_code_t {
+    OK,
+    ATTRIBUTE_NOT_SET,
+    SHAPE_DEDUCTION_FAILED,
+    INVALID_TENSOR_NAME,
+    INVALID_VARIANT_PACK,
+    GRAPH_NOT_SUPPORTED,
+    GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+    GRAPH_EXECUTION_FAILED,
+    HEURISTIC_QUERY_FAILED,
+    UNSUPPORTED_GRAPH_FORMAT,
+    CUDA_API_FAILED,
+    CUDNN_BACKEND_API_FAILED,
+    INVALID_CUDA_DEVICE,
+    HANDLE_ERROR
+};
 
 typedef struct [[nodiscard]] error_object {
     error_code_t code;

@@ -42,8 +42,8 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
                             cudnn_frontend::EngineConfigList& configs,
                             std::vector<HeurMode_t> const& modes) {
     auto const& operation_graph_tag = operation_graph->getTag();
-    getLogger() << "[cudnn_frontend] INFO: "
-                << " Getting plan from heuristics for " << operation_graph_tag << " ..." << std::endl;
+    getLogger() << "[cudnn_frontend] INFO: " << " Getting plan from heuristics for " << operation_graph_tag << " ..."
+                << std::endl;
 
     std::vector<cudnnStatus_t> statuses;
 #ifdef NV_CUDNN_DISABLE_EXCEPTION
@@ -337,15 +337,15 @@ class Execution_plan_list {
     EngineConfigList
     get_barred_engine_configs() {
         EngineConfigList barred_engine_configs;
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << " Filtering engine_configs ..." << engine_configs.size() << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << " Filtering engine_configs ..." << engine_configs.size()
+                    << std::endl;
         for (auto i = 0u; i < engine_configs.size(); i++) {
             if (barred_indices[i] == false) {
                 barred_engine_configs.push_back(engine_configs[i]);
             }
         }
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << " barred engine_configs ..." << barred_engine_configs.size() << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << " barred engine_configs ..." << barred_engine_configs.size()
+                    << std::endl;
         return barred_engine_configs;
     }
 
