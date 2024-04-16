@@ -76,9 +76,6 @@ class INode : public ICudnn {
             getLogger() << "[cudnn_frontend] ERROR: Querying workspace failed." << std::endl;
         }
 
-        for (auto const& sub_node : sub_nodes) {
-            cudnn_workspace_size = std::max(cudnn_workspace_size, sub_node->get_cudnn_workspace_size(plan_index));
-        }
         return cudnn_workspace_size;
     }
 
@@ -409,17 +406,13 @@ class INode : public ICudnn {
         // Lower each sub node to cudnn backend.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid_to_tensors));
 
-        // INode needs to keep track of all uids that an operation graph uses.
-        // This is because cudnn backend will not accept extra tensors in variant pack.
-        // But FE users provide 1 large list of tensors.
-        // So internally FE assigns subset of the usre-provided tensor list to each operation graph.
+        // INode keeps track of all uids that an operation graph uses.
+        // This helps to return errors to user during execution, without relying on backend to do so.
         // Also, as uid in a variant pack have to be unique, keep a set of them.
-        std::unordered_set<uid_t> uids_involved_in_operation;
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operations(uids_involved_in_operation, operations, uid_to_tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operations(variant_pack_uids, operations, uid_to_tensors));
 
         // The method here fuses all operations. There will be 1 operation graph in total.
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graphs(handle));
-        variant_pack_uids.push_back(std::move(uids_involved_in_operation));
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
 
         return {error_code_t::OK, ""};
     }
@@ -475,10 +468,7 @@ class INode : public ICudnn {
         // this is where cudnn backend can start using workspace for its execution plans
         void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
 
-        for (auto& plan_list : plans) {
-            CHECK_CUDNN_FRONTEND_ERROR(
-                plan_list.autotune(handle, tensor_uid_to_pointer_map, cudnn_workspace, user_impl));
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(plans.autotune(handle, tensor_uid_to_pointer_map, cudnn_workspace, user_impl));
         return {error_code_t::OK, ""};
     }
 
@@ -550,7 +540,7 @@ class INode : public ICudnn {
         void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
 
         CHECK_CUDNN_FRONTEND_ERROR(
-            execute_cudnn_plans_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
+            execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
 
         return {error_code_t::OK, ""};
     }
@@ -580,28 +570,19 @@ class INode : public ICudnn {
         // this is where cudnn backend can start using workspace for its execution plans
         void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
 
-        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plans_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace));
 
         return {error_code_t::OK, ""};
     }
 
     error_t
     deserialize(cudnnHandle_t handle, std::vector<uint8_t> const& data) {
-        json j                = json::from_ubjson(data);
-        auto serialized_plans = j["cudnn_backend_data"];
-        if (serialized_plans.size() == 0) {
-            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, "No plans in the serialized json"};
-        }
+        json j = json::from_ubjson(data);
 
-        auto index = 0;
-        for (auto const& serialized_plan : serialized_plans) {
-            Execution_plan_list plan_list;
-            CHECK_CUDNN_FRONTEND_ERROR(plan_list.build_plans(handle, serialized_plan));
-            plans.emplace_back(std::move(plan_list));
-            std::unordered_set<uid_t>&& opgraph_variant_packs = j["variant_pack_uids"][index];
-            variant_pack_uids.emplace_back(opgraph_variant_packs);
-            index++;
-        }
+        auto serialized_plan = j["cudnn_backend_data"];
+        CHECK_CUDNN_FRONTEND_ERROR(plans.build_plans(handle, serialized_plan));
+
+        variant_pack_uids = j["variant_pack_uids"].get<std::unordered_set<graph::Tensor_attributes::uid_t>>();
 
         deserialized_pass_by_value = j["pass_by_values"];
 
@@ -616,17 +597,13 @@ class INode : public ICudnn {
     serialize(std::vector<uint8_t>& data) const {
         json j;
         serialize(j);
-        j["cudnn_backend_data"];
-        int index = 0;
-        for (auto& plan_list : plans) {
-            auto const candidate = plan_list.candidate;
-            auto execution_plan  = plan_list.execution_plans[candidate];
-            if (execution_plan != nullptr) {
-                auto serialized_plan = execution_plan->getJsonRepresentation();
-                j["cudnn_backend_data"].push_back(serialized_plan);
-                j["variant_pack_uids"].push_back(variant_pack_uids[index]);
-                index++;
-            }
+
+        auto const candidate = plans.candidate;
+        auto execution_plan  = plans.execution_plans[candidate];
+        if (execution_plan != nullptr) {
+            auto serialized_plan    = execution_plan->getJsonRepresentation();
+            j["cudnn_backend_data"] = serialized_plan;
+            j["variant_pack_uids"]  = variant_pack_uids;
         }
 
         std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
