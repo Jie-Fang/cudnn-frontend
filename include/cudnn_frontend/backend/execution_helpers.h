@@ -24,21 +24,19 @@ create_variant_pack(backend_descriptor& variant_pack,
                     std::vector<void*>& device_ptrs,
                     std::vector<int64_t> const& uids,
                     void* workspace_ptr) {
-    CHECK_CUDNN_ERROR(create_backend_descriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR, variant_pack));
-
     CHECK_CUDNN_ERROR(cudnn_frontend::set_attribute(
-        variant_pack.get_descriptor(), CUDNN_ATTR_VARIANT_PACK_WORKSPACE, CUDNN_TYPE_VOID_PTR, 1, &workspace_ptr));
+        variant_pack.get_ptr(), CUDNN_ATTR_VARIANT_PACK_WORKSPACE, CUDNN_TYPE_VOID_PTR, 1, &workspace_ptr));
 
-    CHECK_CUDNN_ERROR(cudnn_frontend::set_attribute(variant_pack.get_descriptor(),
+    CHECK_CUDNN_ERROR(cudnn_frontend::set_attribute(variant_pack.get_ptr(),
                                                     CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS,
                                                     CUDNN_TYPE_VOID_PTR,
                                                     device_ptrs.size(),
                                                     device_ptrs.data()));
 
     CHECK_CUDNN_ERROR(cudnn_frontend::set_attribute(
-        variant_pack.get_descriptor(), CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS, CUDNN_TYPE_INT64, uids.size(), uids.data()));
+        variant_pack.get_ptr(), CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS, CUDNN_TYPE_INT64, uids.size(), uids.data()));
 
-    CHECK_CUDNN_ERROR(cudnn_frontend::finalize(variant_pack.get_descriptor()));
+    CHECK_CUDNN_ERROR(cudnn_frontend::finalize(variant_pack.get_ptr()));
 
     return {error_code_t::OK, ""};
 }
