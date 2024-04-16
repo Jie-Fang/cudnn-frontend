@@ -215,11 +215,8 @@ deploy:test_bdist_wheels_8.9.7_3.9:
         - pytest test/python_fe -n 4 -v
 
 analysis:clang-format:
-    image: ubuntu:jammy
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     stage: analysis
-    before_script:
-        - apt-get update
-        - apt-get install -y git clang-format
     allow_failure: true
     script:
         - ci/run_style_check_diff.sh

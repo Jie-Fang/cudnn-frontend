@@ -30,8 +30,8 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
 
     error_t
     pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating SDPAFP8BackwardNode " << attributes.name << "..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating SDPAFP8BackwardNode " << attributes.name << "..."
+                    << std::endl;
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(cudnn_frontend::get_backend_version() < 90100,
                                        error_code_t::GRAPH_NOT_SUPPORTED,

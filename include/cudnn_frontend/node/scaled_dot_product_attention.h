@@ -29,8 +29,8 @@ class ScaledDotProductAttentionNode : public NodeCRTP<ScaledDotProductAttentionN
 
     error_t
     pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating ScaledDotProductAttentionNode " << options.name << "..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating ScaledDotProductAttentionNode " << options.name << "..."
+                    << std::endl;
 
         if (options.is_inference.has_value() == false) {
             auto status         = error_code_t::ATTRIBUTE_NOT_SET;

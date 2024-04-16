@@ -71,13 +71,11 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         std::stringstream ss;
         ss << "CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR : ";
         ss << getTag() << ", ";
-        ss << "numeric_notes:"
-           << "[";
+        ss << "numeric_notes:" << "[";
         for (auto note : numeric_notes_vec) {
             ss << cudnn_frontend::to_string(note) << ",";
         }
-        ss << "] behavior_notes:"
-           << "[";
+        ss << "] behavior_notes:" << "[";
         for (auto note : behavior_notes_vec) {
             ss << cudnn_frontend::to_string(note) << ",";
         }
@@ -358,8 +356,8 @@ class ExecutionPlanBuilder_v8 {
     }
 
     auto
-    setEngineConfig(ManagedOpaqueDescriptor const &desc, std::string const &opGraphTag_ = "")
-        -> ExecutionPlanBuilder_v8 & {
+    setEngineConfig(ManagedOpaqueDescriptor const &desc,
+                    std::string const &opGraphTag_ = "") -> ExecutionPlanBuilder_v8 & {
         m_execution_plan.engine_config = desc;
         m_execution_plan.planTag       = opGraphTag_;
         return *this;

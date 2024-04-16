@@ -252,8 +252,7 @@ check_rule(const json &json_handle,
 template <typename T>
 static bool
 check_errata(const json &json_handle, const std::string &executionPlanTag, cudnnHandle_t handle, T fn) {
-    cudnn_frontend::getLogger() << "[cudnn_frontend] "
-                                << "Verifying " << executionPlanTag;
+    cudnn_frontend::getLogger() << "[cudnn_frontend] " << "Verifying " << executionPlanTag;
     for (auto const &rule : json_handle["rules"]) {
         if (check_rule<T>(rule, executionPlanTag, handle, fn)) {
             cudnn_frontend::getLogger() << ". Blocking." << std::endl;
@@ -274,8 +273,7 @@ check_errata(const json &json_handle,
              cudnnHandle_t handle,
              const OperationGraph &opGraph,
              T fn) {
-    cudnn_frontend::getLogger() << "[cudnn_frontend] "
-                                << "Verifying " << executionPlanTag;
+    cudnn_frontend::getLogger() << "[cudnn_frontend] " << "Verifying " << executionPlanTag;
     for (auto const &rule : json_handle["rules"]) {
         if (check_rule<T>(rule, executionPlanTag, handle, fn, opGraph)) {
             cudnn_frontend::getLogger() << ". Blocking." << std::endl;

@@ -34,8 +34,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
     error_t
     pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating SDPANode " << attributes.name << "..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating SDPANode " << attributes.name << "..." << std::endl;
 
         // check that Q, K, V, O tensors has been assigned
         // check that dim and strides has been assigned and last stride is 1
@@ -560,8 +559,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
     error_t
     pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating SDPABackwardNode" << attributes.name << "..." << std::endl;
+        getLogger() << "[cudnn_frontend] INFO: " << "Validating SDPABackwardNode" << attributes.name << "..."
+                    << std::endl;
 
         // check that Q, K, V, O, stats, dO, dQ, dK, dV tensors has been assigned
         // check that dim and strides has been assigned and last stride is 1
