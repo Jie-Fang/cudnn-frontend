@@ -1,1 +1,5 @@
-[]
+[{
+    "problem_size": { "in_dim": [-4, 16, 56, 56] },
+    "verification": { "is_negative": 1 },
+    "thread": 2
+}]

@@ -1,3 +1,5 @@
+import os, sys
+
 # Module scope variables -- can be set from pycudnnTest.py
 LOG_RUNTIME = False
 DISABLE_CUPTI = True
@@ -162,3 +164,39 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         print("[MB_TIME]", kernel, min_avg_max_ratio(kernel_times[kernel]))
     return (cupti_runtime_stats[0], cupti_runtime_stats[1], cupti_runtime_stats[2])
         
+class OutputGrabber(object):
+    escape_char = "\b"
+    def __init__(self, stream=sys.stdout):
+        self.origstream = stream
+        self.capturedtext = ""
+        self.origstreamfd = self.origstream.fileno()        
+        self.pipe_out, self.pipe_in = os.pipe()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.stop()
+
+    def start(self):
+        self.capturedtext = ""
+        self.streamfd = os.dup(self.origstreamfd)
+        os.dup2(self.pipe_in, self.origstreamfd)
+
+    def stop(self):
+        self.origstream.write(self.escape_char)
+        self.origstream.flush()
+        self.readOutput()
+        os.close(self.pipe_in)
+        os.close(self.pipe_out)
+        os.dup2(self.streamfd, self.origstreamfd)
+        os.close(self.streamfd)
+
+    def readOutput(self):
+        while True:
+            char = os.read(self.pipe_out,1).decode(self.origstream.encoding)            
+            if len(char) == 0 or char == "" or not char or self.escape_char in char:               
+                break
+            self.capturedtext += char
+            
