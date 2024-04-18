@@ -62,7 +62,7 @@ Users create input tensors to provide to operations within a graph. To add tenso
 `std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> cudnn_frontend::graph::tensor(cudnn_frontend::graph::Tensor_attributes)`.  
 As the API returns a shared pointer, both the user and FE graph are owners of the tensor.  
 
-Tensor attributes is a lighweight structure with setters for each attribute.  
+Tensor attributes is a lightweight structure with setters for each attribute.
 - `cudnn_frontend::graph::Tensor_attributes& set_data_type(cudnn_frontend::DataType_t)`
 - `cudnn_frontend::graph::Tensor_attributes& set_dim(std::vector<int64_t>&)`
 - `cudnn_frontend::graph::Tensor_attributes& set_stride(std::vector<int64_t>&)`
@@ -117,7 +117,7 @@ cudnn_frontend::error_t cudnn_frontend::graph::Graph::check_support(cudnnHandle_
 
 ### Build plans
 
-This function builds execution plans queired with `create_execution_plan(...)`` API.
+This function builds execution plans queried with `create_execution_plan(...)`` API.
 
 There are two flavours of this API:
 
