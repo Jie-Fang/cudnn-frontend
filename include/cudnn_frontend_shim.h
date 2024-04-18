@@ -267,6 +267,17 @@ get_error_string(cudnnStatus_t status) {
     NV_FE_CALL_TO_BACKEND(get_error_string, cudnnGetErrorString, status);
 }
 
+inline void
+get_last_error_string(char *message, size_t size) {
+#if CUDNN_VERSION >= 90000
+    NV_FE_CALL_TO_BACKEND(get_last_error_string, cudnnGetLastErrorString, message, size);
+#else
+    std::string default_message = "Can't retrieve backend error messages for CUDNN version < 9.0";
+    strncpy(message, default_message.c_str(), size - 1);
+    message[size - 1] = '\0';  // Ensure null terminator at the end of the string
+#endif
+}
+
 inline cudnnStatus_t
 set_stream(cudnnHandle_t handle, cudaStream_t stream) {
     NV_FE_CALL_TO_BACKEND(set_stream, cudnnSetStream, handle, stream);
