@@ -25,8 +25,8 @@ With the release of v1.0, we are bumping up the minimum supported cudnn version 
 cuda can be downloaded from the [nvidia dev-zone](https://developer.nvidia.com/cuda-downloads)
 
 cudnn can be installed from 
-    - [nvidia dev-zone] (https://developer.nvidia.com/cudnn)
-    - [pypi wheels] (https://pypi.org/project/nvidia-cudnn-cu12/)
+    - [nvidia dev-zone](https://developer.nvidia.com/cudnn)
+    - [pypi wheels](https://pypi.org/project/nvidia-cudnn-cu12/)
 
 Minimum python version needed 3.6
 The python binding compilation requires development package which can be installed by running `apt-get install python-dev`.
