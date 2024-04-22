@@ -14,6 +14,7 @@
 #include "../cudnn_frontend_OperationGraph.h"
 #include "../cudnn_frontend_ExecutionPlan.h"
 #include "../cudnn_frontend_VariantPack.h"
+#include "../cudnn_frontend_shim.h"
 
 #include "cudnn_interface.h"
 
@@ -116,21 +117,21 @@ class INode : public ICudnn {
         void* fe_workspace,
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications) const {
         cudaStream_t stream;
-        CHECK_CUDNN_ERROR(cudnn_frontend::get_stream(handle, &stream));
+        CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
         char* workspace = static_cast<char*>(fe_workspace);
 
         for (auto [uid, data] : workspace_modifications) {
             (void)uid;
             if (std::get<0>(data) == 0) {
                 auto& vec_data = std::get<2>(data);
-                CHECK_CUDA_ERROR(cuda_mem_cpy_async(workspace + std::get<1>(data),
-                                                    vec_data.data(),
-                                                    vec_data.size() * sizeof(float),
-                                                    cudaMemcpyHostToDevice,
-                                                    stream));
+                CHECK_CUDA_ERROR(detail::cuda_mem_cpy_async(workspace + std::get<1>(data),
+                                                            vec_data.data(),
+                                                            vec_data.size() * sizeof(float),
+                                                            cudaMemcpyHostToDevice,
+                                                            stream));
             } else if (std::get<0>(data) == 1) {
                 int64_t memset_size = (int64_t)std::get<2>(data)[0];
-                CHECK_CUDA_ERROR(cuda_mem_set_async(workspace + std::get<1>(data), 0, memset_size, stream));
+                CHECK_CUDA_ERROR(detail::cuda_mem_set_async(workspace + std::get<1>(data), 0, memset_size, stream));
             }
         }
         return {error_code_t::OK, ""};

@@ -23,7 +23,7 @@ class backend_descriptor {
      *
      * @param type The type of the backend descriptor to create.
      */
-    backend_descriptor(cudnnBackendDescriptorType_t type) { status = cudnn_frontend::create_descriptor(type, &desc); }
+    backend_descriptor(cudnnBackendDescriptorType_t type) { status = detail::create_descriptor(type, &desc); }
 
     /**
      * @brief Move constructor.
@@ -62,7 +62,7 @@ class backend_descriptor {
      *
      * Destroys the `cudnnBackendDescriptor_t` object and frees the associated resources.
      */
-    ~backend_descriptor() { cudnn_frontend::destroy_descriptor(desc); }
+    ~backend_descriptor() { detail::destroy_descriptor(desc); }
 
     /**
      * @brief Deleted copy constructor and assignment operator.

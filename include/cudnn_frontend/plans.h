@@ -30,7 +30,7 @@ execute(cudnnHandle_t handle,
                                    "Failed to create variant pack's backend descriptor.");
 
     CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack_descriptor, device_ptrs, uids, workspace_ptr));
-    CHECK_CUDNN_ERROR(cudnn_frontend::execute(handle, plan->get_raw_desc(), variant_pack_descriptor.get_ptr()));
+    CHECK_CUDNN_ERROR(execute(handle, plan->get_raw_desc(), variant_pack_descriptor.get_ptr()));
 
     getLogger() << "[cudnn_frontend] INFO: Executed " << plan->getTag() << "." << std::endl;
 
@@ -92,12 +92,12 @@ query_heuristics(std::shared_ptr<OperationGraph_v8> const& operation_graph,
         int64_t elem_count                        = 0;
         ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
         cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
-        auto status = cudnn_frontend::get_attribute(engine_config->get_backend_descriptor(),
-                                                    CUDNN_ATTR_ENGINECFG_ENGINE,
-                                                    CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                                    1,
-                                                    &elem_count,
-                                                    &extractedEngine_);
+        auto status                               = detail::get_attribute(engine_config->get_backend_descriptor(),
+                                            CUDNN_ATTR_ENGINECFG_ENGINE,
+                                            CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                            1,
+                                            &elem_count,
+                                            &extractedEngine_);
         if (status == CUDNN_STATUS_SUCCESS) {
             op_graph_to_configs.push_back(engine_config);
         }
@@ -235,53 +235,53 @@ class Execution_plan_list {
 
             ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
             cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
-            auto status = cudnn_frontend::get_attribute(engine_config->get_backend_descriptor(),
-                                                        CUDNN_ATTR_ENGINECFG_ENGINE,
-                                                        CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                                        1,
-                                                        &elem_count,
-                                                        &extractedEngine_);
+            auto status                               = detail::get_attribute(engine_config->get_backend_descriptor(),
+                                                CUDNN_ATTR_ENGINECFG_ENGINE,
+                                                CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                1,
+                                                &elem_count,
+                                                &extractedEngine_);
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Engine failed.");
 
-            status = cudnn_frontend::get_attribute(extractedEngine_,
-                                                   CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
-                                                   CUDNN_TYPE_NUMERICAL_NOTE,
-                                                   CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
-                                                   &elem_count,
-                                                   nullptr);
+            status = detail::get_attribute(extractedEngine_,
+                                           CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                           CUDNN_TYPE_NUMERICAL_NOTE,
+                                           CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                           &elem_count,
+                                           nullptr);
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Numerical Note failed");
 
             numerics.resize(static_cast<size_t>(elem_count));
-            status = cudnn_frontend::get_attribute(extractedEngine_,
-                                                   CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
-                                                   CUDNN_TYPE_NUMERICAL_NOTE,
-                                                   CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
-                                                   &elem_count,
-                                                   numerics.data());
+            status = detail::get_attribute(extractedEngine_,
+                                           CUDNN_ATTR_ENGINE_NUMERICAL_NOTE,
+                                           CUDNN_TYPE_NUMERICAL_NOTE,
+                                           CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+                                           &elem_count,
+                                           numerics.data());
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Numerical Note failed");
-            status = cudnn_frontend::get_attribute(extractedEngine_,
-                                                   CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
-                                                   CUDNN_TYPE_BEHAVIOR_NOTE,
-                                                   CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
-                                                   &elem_count,
-                                                   nullptr);
+            status = detail::get_attribute(extractedEngine_,
+                                           CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                           CUDNN_TYPE_BEHAVIOR_NOTE,
+                                           CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                           &elem_count,
+                                           nullptr);
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Behavior Note failed");
 
             behavior.resize(static_cast<size_t>(elem_count));
-            status = cudnn_frontend::get_attribute(extractedEngine_,
-                                                   CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
-                                                   CUDNN_TYPE_BEHAVIOR_NOTE,
-                                                   CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
-                                                   &elem_count,
-                                                   behavior.data());
+            status = detail::get_attribute(extractedEngine_,
+                                           CUDNN_ATTR_ENGINE_BEHAVIOR_NOTE,
+                                           CUDNN_TYPE_BEHAVIOR_NOTE,
+                                           CUDNN_BEHAVIOR_NOTE_TYPE_COUNT,
+                                           &elem_count,
+                                           behavior.data());
             RETURN_CUDNN_FRONTEND_ERROR_IF((status != CUDNN_STATUS_SUCCESS),
                                            error_code_t::HEURISTIC_QUERY_FAILED,
                                            "Heuristic query Behavior Note failed");
@@ -366,7 +366,7 @@ class Execution_plan_list {
                 return false;
             };
 
-            auto cfg_tag = cudnn_frontend::detail::get_engine_tag(engine_configs[i]);
+            auto cfg_tag = detail::get_engine_tag(engine_configs[i]);
             if (is_blocked(cfg_tag, barred_engine_names)) {
                 getLogger() << "[cudnn_frontend] INFO: Deselecting engine_configs " << cfg_tag << std::endl;
                 barred_indices[i]  = true;
@@ -548,12 +548,12 @@ class Execution_plan_list {
         const float threshhold         = 0.95f;
         uint64_t successful_plan_count = 0;
         cudaEvent_t start, stop;
-        cuda_event_create(&start);
-        cuda_event_create(&stop);
-        cuda_device_synchronize();
+        detail::cuda_event_create(&start);
+        detail::cuda_event_create(&stop);
+        detail::cuda_device_synchronize();
 
         cudaStream_t stream = nullptr;
-        cudnn_frontend::get_stream(handle, &stream);
+        detail::get_stream(handle, &stream);
 
         for (auto plan : execution_plans) {
             float time_ms       = 0.0f;
@@ -563,16 +563,16 @@ class Execution_plan_list {
             // Warm-up run
             CHECK_CUDNN_FRONTEND_ERROR(detail::execute(handle, plan.get(), ptrs, uids, workspace_ptr));
             successful_plan_count++;
-            cuda_device_synchronize();
+            detail::cuda_device_synchronize();
 
             for (int i = 0; i < maxIterCount; i++) {
-                cuda_event_record(start, stream);
+                detail::cuda_event_record(start, stream);
 
                 auto status = detail::execute(handle, plan.get(), ptrs, uids, workspace_ptr);
 
-                cuda_event_record(stop, stream);
-                cuda_event_synchronize(stop);
-                cuda_event_elapsed_time(&time_ms, start, stop);
+                detail::cuda_event_record(stop, stream);
+                detail::cuda_event_synchronize(stop);
+                detail::cuda_event_elapsed_time(&time_ms, start, stop);
 
                 final_time_ms = std::min(min_time_ms, time_ms);
                 if (time_ms / min_time_ms < threshhold) {
@@ -593,8 +593,8 @@ class Execution_plan_list {
             execution_plans.push_back(sorted_plan);
         }
 
-        cuda_event_destroy(start);
-        cuda_event_destroy(stop);
+        detail::cuda_event_destroy(start);
+        detail::cuda_event_destroy(stop);
 
         getLogger() << "Autotuned " << successful_plan_count << " plans." << std::endl;
         return {error_code_t::OK, ""};
