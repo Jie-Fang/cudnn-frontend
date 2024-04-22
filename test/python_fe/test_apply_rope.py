@@ -76,9 +76,14 @@ def test_apply_rope():
     sin1_gpu = sin_gpu[..., : rope_n_elem // 2]
     sin2_gpu = sin_gpu[..., rope_n_elem // 2 :]
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     graph = cudnn.pygraph(
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
     x1 = graph.tensor_like(x1_gpu)
     x2 = graph.tensor_like(x2_gpu)
@@ -121,6 +126,7 @@ def test_apply_rope():
             Y2: x2_gpu,
         },
         workspace,
+        handle=handle,
     )
 
     # Compare

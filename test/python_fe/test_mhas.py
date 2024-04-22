@@ -497,11 +497,16 @@ def test_sdpa(
         else None
     )
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # cuDNN graph
     graph = cudnn.pygraph(
         io_data_type=convert_to_cudnn_type(input_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     q = graph.tensor_like(q_gpu)
@@ -583,7 +588,7 @@ def test_sdpa(
     workspace = torch.empty(
         graph.get_workspace_size(), device="cuda", dtype=torch.uint8
     )
-    graph.execute(variant_pack, workspace)
+    graph.execute(variant_pack, workspace, handle=handle)
     torch.cuda.synchronize()
 
     # compare with torch autograd reference
@@ -883,11 +888,16 @@ def test_sdpa_backward(
     ).as_strided(shape_o, stride_o)
     stats_gpu = torch.empty(b, h_q, s_q, 1, dtype=torch.float32, device="cuda")
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # forward cuDNN graph
     graph = cudnn.pygraph(
         io_data_type=convert_to_cudnn_type(input_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     q = graph.tensor_like(q_gpu)
@@ -968,7 +978,7 @@ def test_sdpa_backward(
     workspace = torch.empty(
         graph.get_workspace_size(), device="cuda", dtype=torch.uint8
     )
-    graph.execute(variant_pack, workspace)
+    graph.execute(variant_pack, workspace, handle=handle)
     torch.cuda.synchronize()
 
     if cudnn_version < "8.9.6" and is_padding:
@@ -977,11 +987,16 @@ def test_sdpa_backward(
             o_gpu[i, :, m:, :] = 0
             stats_gpu[i, :, m:, :] = 0
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # backward cuDNN graph
     graph = cudnn.pygraph(
         io_data_type=convert_to_cudnn_type(input_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     q = graph.tensor_like(q_gpu)
@@ -1078,7 +1093,7 @@ def test_sdpa_backward(
     workspace = torch.empty(
         graph.get_workspace_size(), device="cuda", dtype=torch.uint8
     )
-    graph.execute(variant_pack, workspace)
+    graph.execute(variant_pack, workspace, handle=handle)
     torch.cuda.synchronize()
 
     # compare with torch autograd reference

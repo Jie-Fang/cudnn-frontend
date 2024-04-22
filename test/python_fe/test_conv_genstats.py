@@ -61,11 +61,16 @@ def test_conv_genstats():
         scale, bias, X_gpu, W_gpu, padding=padding, stride=stride, dilation=dilation
     )
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # Cudnn code
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.HALF,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor(
@@ -119,6 +124,7 @@ def test_conv_genstats():
             B: bias,
         },
         workspace.data_ptr(),
+        handle=handle,
     )
 
     # Compare

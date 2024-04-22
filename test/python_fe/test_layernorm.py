@@ -79,9 +79,14 @@ def test_layernorm(param_extract):
         torch.var(x_gpu.to(torch.float32), dim=(1, 2, 3), keepdim=True) + epsilon_value
     )
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     graph = cudnn.pygraph(
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor(
@@ -145,6 +150,7 @@ def test_layernorm(param_extract):
             inv_var: inv_var_actual,
         },
         workspace,
+        handle=handle,
     )
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
@@ -214,6 +220,7 @@ def test_layernorm(param_extract):
             Dbias: Dbias_actual,
         },
         workspace,
+        handle=handle,
     )
 
     torch.testing.assert_close(x_gpu.grad, DX_actual, atol=2e-4, rtol=2e-4)

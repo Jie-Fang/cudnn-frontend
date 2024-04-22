@@ -903,12 +903,18 @@ class test_graph:
     # @return the cudnn graph
     # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
     def build_cudnn_graph(self):
+
+        handle = cudnn.create_handle()
+        stream = torch.cuda.Stream().cuda_stream
+        cudnn.set_stream(handle=handle, stream=stream)
+
         # Setting up graph
         graph = cudnn.pygraph(
             self.graph_name,
             io_data_type=self.io_data_type,
             intermediate_data_type=self.intermediate_data_type,
             compute_data_type=self.compute_data_type,
+            handle=handle,
         )
         utils.reportCurrentTime("cudnn.pygraph")
 

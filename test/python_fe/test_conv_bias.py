@@ -83,7 +83,7 @@ def test_conv_bias_relu():
     )
 
     Y_actual = torch.zeros_like(Y_expected)
-    graph.execute({X: X_gpu, W: W_gpu, B: B_gpu, Y: Y_actual}, workspace)
+    graph.execute({X: X_gpu, W: W_gpu, B: B_gpu, Y: Y_actual}, workspace, handle=handle)
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=0.05, rtol=1e-2)
 
@@ -106,11 +106,16 @@ def test_conv_relu():
     model = CSBR().eval().to("cuda").to(torch.float16)
     Y_expected = model(X_gpu, W_gpu, padding=padding, stride=stride, dilation=dilation)
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # Cudnn code
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor(
@@ -181,10 +186,15 @@ def test_conv3d_bias_leaky_relu():
         conv_out_expected, negative_slope=negative_slope
     )
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor(
@@ -217,7 +227,11 @@ def test_conv3d_bias_leaky_relu():
     )
 
     Y_actual = torch.zeros_like(Y_expected)
-    graph.execute({X: X_gpu, Weight: W_gpu, B: B_gpu, Y: Y_actual}, workspace)
+    graph.execute(
+        {X: X_gpu, Weight: W_gpu, B: B_gpu, Y: Y_actual}, workspace, handle=handle
+    )
+
+    torch.cuda.synchronize()
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
 
@@ -241,10 +255,15 @@ def test_leaky_relu_backward():
 
     Y_expected = dleaky_relu(loss_gpu, input_gpu, negative_slope)
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     loss = graph.tensor(
@@ -274,7 +293,9 @@ def test_leaky_relu_backward():
     )
 
     Y_actual = torch.zeros_like(Y_expected)
-    graph.execute({loss: loss_gpu, input: input_gpu, Y: Y_actual}, workspace)
+    graph.execute(
+        {loss: loss_gpu, input: input_gpu, Y: Y_actual}, workspace, handle=handle
+    )
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-4, rtol=1e-4)
 
@@ -316,10 +337,15 @@ def test_conv_int8():
         )
         compare_output = False
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.INT8,
         intermediate_data_type=cudnn.data_type.INT32,
         compute_data_type=cudnn.data_type.INT32,
+        handle=handle,
     )
 
     X = graph.tensor_like(X_gpu)
@@ -345,7 +371,9 @@ def test_conv_int8():
     Y_actual = torch.randint(
         0, 127, tuple(Y.get_dim()), device="cuda", dtype=torch.int32
     ).to(memory_format=torch.channels_last)
-    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual}, workspace)
+    graph.execute({X: X_gpu, W: W_gpu, Y: Y_actual}, workspace, handle=handle)
+
+    torch.cuda.synchronize()
 
     if compare_output:
         torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
