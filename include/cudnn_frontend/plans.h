@@ -294,7 +294,8 @@ class Execution_plan_list {
     error_t
     filter_numeric_notes(std::vector<NumericalNote_t> const& notes, bool const keep) {
         for (auto& note : notes) {
-            cudnnBackendNumericalNote_t backend_note;
+            // Uses a dummy initializaiton to satisfy the compiler.
+            cudnnBackendNumericalNote_t backend_note = CUDNN_NUMERICAL_NOTE_TENSOR_CORE;
 
             auto valid_note = (detail::convert_to_cudnn_type(note, backend_note) == CUDNN_STATUS_SUCCESS);
             for (auto i = 0u; i < engine_configs.size(); i++) {
@@ -310,7 +311,8 @@ class Execution_plan_list {
     error_t
     filter_behavior_notes(std::vector<BehaviorNote_t> const& notes, bool const keep) {
         for (auto& note : notes) {
-            cudnnBackendBehaviorNote_t backend_note;
+            // Uses a dummy initializaiton to satisfy the compiler.
+            cudnnBackendBehaviorNote_t backend_note = CUDNN_BEHAVIOR_NOTE_RUNTIME_COMPILATION;
 
             auto valid_note = (detail::convert_to_cudnn_type(note, backend_note) == CUDNN_STATUS_SUCCESS);
 
