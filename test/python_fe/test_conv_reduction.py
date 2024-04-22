@@ -27,11 +27,16 @@ def test_reduction():
         )
         Y_expected = conv_output.sum(dim=1)
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # Cudnn code
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
     X = graph.tensor(
         name="X", dim=X_gpu.size(), stride=X_gpu.stride(), data_type=X_gpu.dtype
@@ -59,7 +64,7 @@ def test_reduction():
         graph.get_workspace_size(), device="cuda", dtype=torch.uint8
     )
 
-    graph.execute({X: X_gpu, Weight: W_gpu, Y: Y_actual}, workspace)
+    graph.execute({X: X_gpu, Weight: W_gpu, Y: Y_actual}, workspace, handle=handle)
 
     # Compare
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)

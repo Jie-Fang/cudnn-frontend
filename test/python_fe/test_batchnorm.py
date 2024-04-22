@@ -56,11 +56,16 @@ def test_bn_relu_with_mask():
         (1, 1, 1, 1), 0.1, requires_grad=False, device="cpu", dtype=torch.float32
     )
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # Cudnn code
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.FLOAT,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor(
@@ -172,6 +177,7 @@ def test_bn_relu_with_mask():
             mask: mask_actual,
         },
         workspace,
+        handle=handle,
     )
 
     # Compare
@@ -213,11 +219,16 @@ def test_drelu_dadd_dbn():
         0, 2, [N, C, H, W], requires_grad=False, device="cuda", dtype=torch.bool
     ).to(memory_format=torch.channels_last)
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # Cudnn code
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor(
@@ -298,7 +309,7 @@ def test_drelu_dadd_dbn():
     if should_dump_dx_drelu is True:
         DX_drelu_actual = torch.zeros_like(dy_gpu)
         device_buffers[DX_drelu] = DX_drelu_actual
-    graph.execute(device_buffers, workspace)
+    graph.execute(device_buffers, workspace, handle=handle)
 
 
 @pytest.mark.skipif(
@@ -330,11 +341,16 @@ def test_bn_infer_drelu_dbn():
         N, C, H, W, requires_grad=False, device="cuda", dtype=torch.float16
     ).to(memory_format=torch.channels_last)
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     # Cudnn code
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     # Bool type is not supported by dlpack
@@ -418,7 +434,7 @@ def test_bn_infer_drelu_dbn():
         DScale: DScale_actual,
         DBias: DBias_actual,
     }
-    graph.execute(device_buffers, workspace)
+    graph.execute(device_buffers, workspace, handle=handle)
 
 
 if __name__ == "__main__":

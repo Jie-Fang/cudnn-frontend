@@ -60,10 +60,15 @@ def test_scale_bias_relu_wgrad():
             k, c, 3, 3, requires_grad=False, device="cuda", dtype=torch.float16
         ).to(memory_format=torch.channels_last)
 
+        handle = cudnn.create_handle()
+        stream = torch.cuda.Stream().cuda_stream
+        cudnn.set_stream(handle=handle, stream=stream)
+
         graph = cudnn.pygraph(
             io_data_type=cudnn.data_type.HALF,
             intermediate_data_type=cudnn.data_type.FLOAT,
             compute_data_type=cudnn.data_type.FLOAT,
+            handle=handle,
         )
 
         # X  = graph.tensor(name = "X",  dim = X_gpu.size(), stride = X_gpu.stride(), data_type = cudnn._compiled_module.data_type.DOUBLE)
@@ -111,6 +116,7 @@ def test_scale_bias_relu_wgrad():
         graph.execute(
             {X: X_gpu, DY: DY_gpu, B: bias, S: scale, wgrad_output: DW_actual},
             workspace,
+            handle=handle,
         )
 
     except cudnn.cudnnGraphNotSupportedError as ex:

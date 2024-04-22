@@ -70,9 +70,14 @@ def test_in(param_extract):
     )
     print("Building cudnn graph")
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     graph = cudnn.pygraph(
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     X = graph.tensor_like(x_gpu.detach())
@@ -119,6 +124,7 @@ def test_in(param_extract):
             inv_var: inv_var_actual,
         },
         workspace,
+        handle=handle,
     )
 
     print("Comparing with reference")
@@ -138,9 +144,14 @@ def test_in(param_extract):
 
     loss.backward()
 
+    handle = cudnn.create_handle()
+    stream = torch.cuda.Stream().cuda_stream
+    cudnn.set_stream(handle=handle, stream=stream)
+
     bwd_graph = cudnn.pygraph(
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
+        handle=handle,
     )
 
     # https://github.com/pytorch/pytorch/issues/72341
@@ -195,6 +206,7 @@ def test_in(param_extract):
             Dbias: Dbias_actual,
         },
         workspace,
+        handle=handle,
     )
 
     torch.cuda.synchronize()

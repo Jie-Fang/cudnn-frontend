@@ -147,7 +147,7 @@ def _dlopen_cudnn():
         assert (
             len(lib_path) == 1
         ), f"Found {len(lib_path)} libcudnn.so.x in nvidia-cudnn-cuXX."
-        lib = ctypes.CDLL(lib_path)
+        lib = ctypes.CDLL(lib_path[0])
     else:  # Fallback
         lib = ctypes.CDLL("libcudnn.so")
 
