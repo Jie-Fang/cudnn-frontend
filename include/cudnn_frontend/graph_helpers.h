@@ -101,8 +101,8 @@ typedef struct [[nodiscard]] error_object {
         if (auto cudnn_retval = x; cudnn_retval != CUDNN_STATUS_SUCCESS) {                                        \
             std::stringstream error_msg;                                                                          \
             char last_error[1024];                                                                                \
-            get_last_error_string(last_error, sizeof(last_error));                                                \
-            error_msg << #x << " failed with code: " << cudnn_frontend::get_error_string(cudnn_retval)            \
+            detail::get_last_error_string(last_error, sizeof(last_error));                                        \
+            error_msg << #x << " failed with code: " << detail::get_error_string(cudnn_retval)                    \
                       << ", and message: " << last_error;                                                         \
             getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
                         << std::endl;                                                                             \
@@ -115,7 +115,7 @@ typedef struct [[nodiscard]] error_object {
     do {                                                                                                          \
         if (auto cuda_retval = x; cuda_retval != cudaSuccess) {                                                   \
             std::stringstream error_msg;                                                                          \
-            error_msg << #x << " failed with " << cuda_get_error_string(cuda_retval);                             \
+            error_msg << #x << " failed with " << detail::cuda_get_error_string(cuda_retval);                     \
             getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
                         << std::endl;                                                                             \
             return {error_code_t::CUDA_API_FAILED, error_msg.str()};                                              \

@@ -108,8 +108,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         auto const& v_dim = attributes.inputs.at(input_names::V)->get_dim();
         auto s_kv         = v_dim[2];
-        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnn_frontend::get_backend_version() < 90000)) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF((cudnn_frontend::get_backend_version() <= 8905),
+        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (detail::get_backend_version() < 90000)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() <= 8905),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "s_kv not a multiple of 64 required cudnn version atleast 8.9.5");
             auto const& dropout_mask = attributes.inputs.find(input_names::Dropout_mask);
@@ -122,7 +122,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                 "s_kv not a multiple of 64 with dropout enabled is not supported with cudnn version below 9.0.0");
         }
 
-        if (((s_kv % 64 != 0) || (d_qk % 64 != 0)) && (cudnn_frontend::get_backend_version() <= 8905)) {
+        if (((s_kv % 64 != 0) || (d_qk % 64 != 0)) && (detail::get_backend_version() <= 8905)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 true,
                 error_code_t::GRAPH_NOT_SUPPORTED,
@@ -160,7 +160,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
 
         if (((s_q % 64 != 0) || (s_kv % 64 != 0)) && (attributes.padding_mask || has_dropout_mask) &&
-            (cudnn_frontend::get_backend_version() < 90000)) {
+            (detail::get_backend_version() < 90000)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(true,
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "s_q/s_kv not a multiple of 64 with padding/dropout mask is not supported "
@@ -341,7 +341,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         }
 
         // 2. (bug in cudnn backend) no padding with max_seq_len%64!=0
-        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (cudnn_frontend::get_backend_version() < 90000)) {
+        if ((s_kv % 64 != 0) && (!(attributes.padding_mask)) && (detail::get_backend_version() < 90000)) {
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
             auto col_index_output = pointwise(last_output, col_index_attributes);
@@ -412,7 +412,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.dropout_probability.has_value()) {
             dropout_present = true;
             // Special case: Skip dropout when 0.0 probability. Only do for 8.9.3 and up as rng isn't optional earlier.
-            if (cudnn_frontend::get_backend_version() > 8902 && attributes.dropout_probability.value() == 0.0) {
+            if (detail::get_backend_version() > 8902 && attributes.dropout_probability.value() == 0.0) {
                 dropout_present = false;
             }
         } else if (attributes.inputs[input_names::Dropout_mask]) {
@@ -448,7 +448,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> dropout_scale = nullptr;
 
-            if (get_backend_version() < 8903) {
+            if (detail::get_backend_version() < 8903) {
                 half dropout_scale_value = __float2half(1.0f / (1.0f - attributes.dropout_probability.value()));
                 dropout_scale            = std::make_shared<Tensor_attributes>(dropout_scale_value);
             } else {
@@ -611,7 +611,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (s_q < 64) && cudnn_frontend::get_backend_version() < 90000,
+            (s_q < 64) && detail::get_backend_version() < 90000,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Sequence length must be greater than or equal to 64 for cudnn version prior to v9.0.0");
 
@@ -672,7 +672,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
 
         if (((s_q % 64 != 0) || (s_kv % 64 != 0)) && (attributes.padding_mask || has_dropout_mask) &&
-            (cudnn_frontend::get_backend_version() < 90000)) {
+            (detail::get_backend_version() < 90000)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(true,
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "s_q/s_kv not a multiple of 64 with padding/dropout mask is not supported "
@@ -787,9 +787,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         bool use_workspace_opt = false;
 
         struct cudaDeviceProp prop;
-        CHECK_CUDA_ERROR(cuda_get_device_properties(&prop, 0));
-        if ((cudnn_frontend::get_backend_version() >= 8905 && prop.major >= 9) ||
-            (cudnn_frontend::get_backend_version() >= 9000)) {
+        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, 0));
+        if ((detail::get_backend_version() >= 8905 && prop.major >= 9) || (detail::get_backend_version() >= 9000)) {
             // default upper limit for workspace 256MB
             int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
 
@@ -1033,7 +1032,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                 Pointwise_attributes().set_name("sub_s_m").set_mode(PointwiseMode_t::SUB));
 
         // WAR for bug 4475073 by explicitly putting the padding value again after the stats have been loaded
-        if (attributes.padding_mask && cudnn_frontend::get_backend_version() >= 90000) {
+        if (attributes.padding_mask && detail::get_backend_version() >= 90000) {
             auto row_idx_output = pointwise(last_output,
                                             Pointwise_attributes()
                                                 .set_name("gen_row_idx_2nd_padding")
@@ -1246,7 +1245,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         // non-virtual softmax_sum is required for below cuDNN 8.9.5
         // non-virtual softmax_sum is passed by the node
-        if (cudnn_frontend::get_backend_version() < 8905) {
+        if (detail::get_backend_version() < 8905) {
             softmax_sum->set_is_virtual(false);
             softmax_sum->set_dim({b, h_q, s_q, 1});
             softmax_sum->set_data_type(DataType_t::FLOAT);
