@@ -3,6 +3,7 @@
 ## Contents
 - Dockerfile to create a docker container for the dependencies.
 - benchmark_flash_attention.py which runs cudnn, pytorch upto 64k sequence length.
+- Pytorch native sdpa operation vs cudnn sdpa operation.
 
 ## Steps to run
 Lock the clocks.
@@ -43,3 +44,7 @@ Please refer to the [benchmark_results.csv](benchmark_results.csv) for sample ou
 
 #### Fwd + Bprop
 ![Comparison of pytorch and cudnn](images/fwd_bprop.png)
+
+## Pytorch adoption
+
+cuDNN v9 can achieve over 2x the performance of the comparable PyTorch eager implementation, as detailed in [(Beta) Implementing High-Performance Transformers with Scaled Dot Product Attention (SDPA)](https://pytorch.org/tutorials/intermediate/scaled_dot_product_attention_tutorial.html) PyTorch eager mode SDPA doesn't use cuDNN today, but adding a cuDNN-based implementation is in progress (see the PyTorch PRs for [Fprop](https://github.com/pytorch/pytorch/pull/115663), and [Bprop](https://github.com/pytorch/pytorch/pull/122510)).
