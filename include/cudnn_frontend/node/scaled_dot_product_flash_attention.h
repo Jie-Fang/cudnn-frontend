@@ -86,9 +86,17 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        "For group-query attention, number of heads for key and query must be a factor "
                                        "of number of heads for query");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        if (detail::get_backend_version() >= 90000) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                (d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "Num hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8");
+        } else {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                (d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        }
 
         // validate options for attn_scale
         auto const& attn_scale    = attributes.inputs.find(input_names::Attn_scale);
