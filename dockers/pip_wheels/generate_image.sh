@@ -1,2 +1,2 @@
-docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.3 -f dockers/pip_wheels/Dockerfile --build-arg CUDA_VERSION=12-3 .
-docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.3
+docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.4 -f dockers/pip_wheels/Dockerfile --build-arg CUDA_VERSION=12-4 .
+docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.4

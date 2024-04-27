@@ -152,7 +152,7 @@ deploy:build_bdist_wheels:
         - Hopper
     needs: []
     stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.4
     script:
         - ci/build_pip_wheels.sh
     rules:
@@ -160,33 +160,6 @@ deploy:build_bdist_wheels:
     artifacts:
         paths:
             - many_linux_wheels/*.whl
-
-deploy:test_bdist_wheels_8.9.5_3.11:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
-    needs: ["deploy:build_wheels"]
-    stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.5.29_12.2.2
-    needs: ["deploy:build_bdist_wheels"]
-    rules:
-        - if: $CI_PIPELINE_SOURCE == "schedule"
-    script:
-        - apt-get update
-        - apt-get install -y software-properties-common
-        - add-apt-repository ppa:deadsnakes/ppa
-        - apt-get update
-        - apt-get -y install python3.11 python3-pip python3.11-distutils
-        - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
-        - update-alternatives --install /usr/bin/python python /usr/bin/python3.11 2
-        - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
-        - pip install -r /tmp/requirements.txt
-        - pip install torch
-        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8905
-        - pytest test/python_fe -n 4 -v
-
 
 deploy:test_bdist_wheels_8.9.7_3.9:
     parallel:
@@ -197,6 +170,32 @@ deploy:test_bdist_wheels_8.9.7_3.9:
     needs: ["deploy:build_wheels"]
     stage: deploy
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.7.29_12.2.2
+    needs: ["deploy:build_bdist_wheels"]
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+    script:
+        - apt-get update
+        - apt-get install -y software-properties-common
+        - add-apt-repository ppa:deadsnakes/ppa
+        - apt-get update
+        - apt-get -y install python3.9 python3-pip python3.9-distutils
+        - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 2
+        - update-alternatives --install /usr/bin/python python /usr/bin/python3.9 2
+        - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
+        - pip install -r /tmp/requirements.txt
+        - pip install torch
+        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
+        - pytest test/python_fe -n 4 -v
+
+deploy:test_bdist_wheels_9.1.0_3.9:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    needs: ["deploy:build_wheels"]
+    stage: deploy
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.1.0.70_12.4.0
     needs: ["deploy:build_bdist_wheels"]
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"

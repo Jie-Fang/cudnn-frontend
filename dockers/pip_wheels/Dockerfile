@@ -1,7 +1,7 @@
 # See https://github.com/pypa/manylinux
 FROM quay.io/pypa/manylinux_2_28_x86_64
 
-ARG CUDA_VERSION="12-3"
+ARG CUDA_VERSION="12-4"
 
 # Install cudnn and cuda toolkit
 RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
