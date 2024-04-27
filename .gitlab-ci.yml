@@ -208,7 +208,6 @@ deploy:test_bdist_wheels_9.1.0_3.9:
         - update-alternatives --install /usr/bin/python python /usr/bin/python3.9 2
         - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
-        - pip install torch
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
         - pytest test/python_fe -n 4 -v
 
