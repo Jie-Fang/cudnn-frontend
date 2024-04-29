@@ -8,12 +8,15 @@ def pytest_addoption(parser):
     parser.addoption("--testPath", action="store", default=None)
     parser.addoption("--testInput", action="store", default=None)
 
+
 def get_python_graph_defs(path, module_name):
-    
+
     filename = os.path.join(path, "{}.py".format(module_name))
     if os.path.exists(filename):
-        spec = importlib.util.spec_from_file_location(name=module_name, location=filename)
-        my_module =  importlib.util.module_from_spec(spec)
+        spec = importlib.util.spec_from_file_location(
+            name=module_name, location=filename
+        )
+        my_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(my_module)
     else:
         raise FileNotFoundError(filename)
@@ -26,6 +29,7 @@ def get_python_graph_defs(path, module_name):
             test_names.append(name)
 
     return (test_funcs, test_names)
+
 
 # @param test_funcs: list of function pointers to python graph test definitions
 # @param test_names: list of names associated with each item in test_funcs
@@ -40,7 +44,7 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
         # If wanted_tests are specified, only look at tests we requested
         if len(wanted_tests) > 0 and not test_name in wanted_tests:
             continue
-        
+
         filename = os.path.join(params_path, "{}.json".format(test_name))
         if os.path.exists(filename):
             params = []
@@ -54,12 +58,16 @@ def createTestParamNameTuples(test_funcs, test_names, params_path, wanted_tests)
             cur_ids = ["{}[json({})]".format(test_name, i) for i in range(len(params))]
 
             for par in params:
-                tuples.append((func,par))
+                tuples.append((func, par))
 
             test_ids.extend(cur_ids)
         else:
             error = FileNotFoundError(filename)
-            error.add_note("Please make sure your test ({}) has an associated file with input params".format(test_name))
+            error.add_note(
+                "Please make sure your test ({}) has an associated file with input params".format(
+                    test_name
+                )
+            )
             raise error
 
     return tuples, test_ids
@@ -69,27 +77,40 @@ def pytest_generate_tests(metafunc):
     JSON_TEST_LIST_PARAM = "jparams"
     JSON_DICT_PATH = "json_dict"
     GRAPH_PYTHON_FPTR = "graph_builder_fptr"
-    TEST_NAME_PARAM="test_name"
+    TEST_NAME_PARAM = "test_name"
 
     # Dynamically create tests for python_graph_test by identifying all test defs in a test directory
-    if metafunc.function.__name__ == "test_python_graph" or metafunc.function.__name__ == "test_negative_graph": 
+    if (
+        metafunc.function.__name__ == "test_python_graph"
+        or metafunc.function.__name__ == "test_negative_graph"
+    ):
         # Find all the functions that define testgraphs in location testPath
-        base_path = os.path.dirname(os.path.abspath(metafunc.config.getoption("testPath")))
-        filename = os.path.basename(metafunc.config.getoption("testPath")).split(".")[-2]
+        base_path = os.path.dirname(
+            os.path.abspath(metafunc.config.getoption("testPath"))
+        )
+        filename = os.path.basename(metafunc.config.getoption("testPath")).split(".")[
+            -2
+        ]
         test_funcs, test_names = get_python_graph_defs(base_path, filename)
 
-        params_path = metafunc.config.getoption("testInput") 
+        params_path = metafunc.config.getoption("testInput")
 
-        param_tuples, test_ids = createTestParamNameTuples(test_funcs, test_names, params_path, metafunc.config.getoption("testName"))
+        param_tuples, test_ids = createTestParamNameTuples(
+            test_funcs, test_names, params_path, metafunc.config.getoption("testName")
+        )
 
-        metafunc.parametrize(GRAPH_PYTHON_FPTR+","+JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids)
+        metafunc.parametrize(
+            GRAPH_PYTHON_FPTR + "," + JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids
+        )
 
     # Run a test from a json dictionary
     elif metafunc.function.__name__ == "test_json_graph":
-        id=os.path.basename(metafunc.config.getoption("testPath"))
+        id = os.path.basename(metafunc.config.getoption("testPath"))
         # Using keyword indirect allows us to call the associated fixture
-        metafunc.parametrize(JSON_DICT_PATH, [metafunc.config.getoption("testPath")], indirect=True, ids=[id])
+        metafunc.parametrize(
+            JSON_DICT_PATH,
+            [metafunc.config.getoption("testPath")],
+            indirect=True,
+            ids=[id],
+        )
         metafunc.parametrize(TEST_NAME_PARAM, metafunc.config.getoption("testName"))
-        
-        
-

@@ -1,1 +1,22 @@
-[]
+[{
+        "problem_size": { "dx_dim": [8, 64, 64, 64], "filter_dim": [64, 64, 3, 3], "padding": [1, 1], "stride": [1, 1], "dilation": [-1, 1], "conv_out_dim": [8, 64, 64, 64] },
+        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM", "expected_err_msg": ".*finalize_internal.*" },
+        "thread": 10
+    },
+    {
+        "problem_size": { "dx_dim": [-8, 64, 64, 64], "filter_dim": [64, 64, 3, 3], "padding": [1, 1], "stride": [1, 1], "dilation": [1, 1], "conv_out_dim": [8, 64, 64, 64] },
+        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM" }
+    },
+    {
+        "problem_size": { "dx_dim": [8, 64, 64, 64], "filter_dim": [64, 64, 3, 3], "padding": [1, 1], "stride": [-1, 1], "dilation": [1, 1], "conv_out_dim": [8, 64, 64, 64] },
+        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM" }
+    },
+    {
+        "problem_size": { "dx_dim": [8, 64, 64, 64], "filter_dim": [64, 64, 3, 3], "padding": [-1, 1], "stride": [1, 1], "dilation": [1, 1], "conv_out_dim": [8, 64, 64, 64] },
+        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM" }
+    },
+    {
+        "problem_size": { "dx_dim": [99, 999, 9999, 9999], "filter_dim": [64, 999, 3, 3], "padding": [1, 1], "stride": [1, 1], "dilation": [1, 1], "conv_out_dim": [99, 999, 9999, 9999] },
+        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM" }
+    }
+]

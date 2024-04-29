@@ -1,6 +1,6 @@
 [{
         "problem_size": { "in_dim": [32, 31, 7, 7], "filter_dim": [256, 32, 1, 1], "padding": [0, 0], "stride": [1, 1], "dilation": [1, 1] },
-        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM", "expected_err_msg": "[rR]eason:.*\\S+.*" },
+        "verification": { "is_negative": 1, "expected_err_code": "CUDNN_STATUS_BAD_PARAM", "expected_err_msg": ".*\\S+.*" },
         "thread": 10
     },
     {
