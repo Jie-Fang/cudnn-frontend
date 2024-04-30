@@ -55,7 +55,7 @@ class Tensor_attributes {
             stride.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Tensor '" + name + "' strides not set.");
         RETURN_CUDNN_FRONTEND_ERROR_IF(dim.size() != stride.size(),
                                        error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Tensor '" + name + "' does not equal dimensinoality in dim and stride.");
+                                       "Tensor '" + name + "' does not equal dimensionality in dim and stride.");
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             is_virtual && is_pass_by_value,
             error_code_t::ATTRIBUTE_NOT_SET,
