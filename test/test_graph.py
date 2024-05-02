@@ -750,6 +750,7 @@ class test_graph:
         self.intermediate_data_type = intermediate_data_type
         self.compute_data_type = compute_data_type
         self.set_backend_engine(-1)
+        self.handle = cudnn.create_handle()
 
     def set_backend_engine(self, backendEngine):
         self.heuristics = []
@@ -904,17 +905,13 @@ class test_graph:
     # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
     def build_cudnn_graph(self):
 
-        handle = cudnn.create_handle()
-        stream = torch.cuda.Stream().cuda_stream
-        cudnn.set_stream(handle=handle, stream=stream)
-
         # Setting up graph
         graph = cudnn.pygraph(
             self.graph_name,
             io_data_type=self.io_data_type,
             intermediate_data_type=self.intermediate_data_type,
             compute_data_type=self.compute_data_type,
-            handle=handle,
+            handle=self.handle,
         )
         utils.reportCurrentTime("cudnn.pygraph")
 
@@ -1049,6 +1046,10 @@ class test_graph:
             )
 
         utils.reportCurrentTime("graph.execute")
+
+        torch.cuda.synchronize()
+
+        cudnn.destroy_handle(self.handle)
 
     # @brief: Run the cudnn implementation and the reference, and compare
     # @note: This assumes build_cudnn_graph has already been run
