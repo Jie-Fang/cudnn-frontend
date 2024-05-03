@@ -88,12 +88,27 @@ class PointwiseNode : public NodeCRTP<PointwiseNode> {
         getLogger() << "[cudnn_frontend] INFO: " << "Building PointwiseNode operations " << attributes.name << "..."
                     << std::endl;
 
-        auto pointwise_descriptor = cudnn_frontend::PointwiseDescBuilder()
-                                        .setAxis(attributes.get_axis().value_or(-1))
-                                        .setReluLowerClipSlope(attributes.relu_lower_clip_slope.value_or(0.0))
-                                        .setComputeType(attributes.compute_data_type)
-                                        .setMode(attributes.mode)
-                                        .build();
+        auto&& pointwise_descriptor_builder = cudnn_frontend::PointwiseDescBuilder();
+
+        if (attributes.get_axis().has_value()) {
+            pointwise_descriptor_builder.setAxis(attributes.get_axis().value());
+        }
+
+        if (attributes.relu_lower_clip_slope.has_value()) {
+            pointwise_descriptor_builder.setReluLowerClipSlope(attributes.relu_lower_clip_slope.value());
+        }
+
+        if (attributes.relu_lower_clip.has_value()) {
+            pointwise_descriptor_builder.setReluLowerClip(attributes.relu_lower_clip.value());
+        }
+
+        if (attributes.relu_upper_clip.has_value()) {
+            pointwise_descriptor_builder.setReluUpperClip(attributes.relu_upper_clip.value());
+        }
+
+        pointwise_descriptor_builder.setComputeType(attributes.compute_data_type);
+        pointwise_descriptor_builder.setMode(attributes.mode);
+        auto pointwise_descriptor = pointwise_descriptor_builder.build();
 
         auto const port_count = get_pointwise_mode_port_count(attributes.mode);
 
