@@ -62,11 +62,11 @@ TEST_CASE("Matmul", "[matmul][graph]") {
                             .set_data_type(fe::DataType_t::BFLOAT16);
     auto B = graph.tensor(B_attributes);
 
-    auto matmul_attributes =
-        fe::graph::Matmul_attributes().set_name("GEMM").set_compute_data_type(fe::DataType_t::FLOAT);
-    auto C = graph.matmul(A, B, matmul_attributes);
+    auto matmul_attributes = fe::graph::Matmul_attributes().set_compute_data_type(fe::DataType_t::FLOAT);
+    auto C                 = graph.matmul(A, B, matmul_attributes);
     C->set_output(true).set_data_type(fe::DataType_t::FLOAT);
 
+    std::cout << graph << std::endl;
     REQUIRE(graph.validate().is_good());
 
     cudnnHandle_t handle;
@@ -142,13 +142,14 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
     auto B_descale = graph.tensor(B_descale_attributes);
 
     auto matmul_attributes =
+        // fe::graph::Matmul_attributes().set_name("GEMM").set_compute_data_type(fe::DataType_t::FLOAT);
         fe::graph::Matmul_attributes().set_name("GEMM").set_compute_data_type(fe::DataType_t::FLOAT);
     auto C = graph.matmul(A, B, matmul_attributes);
     C->set_data_type(fe::DataType_t::FLOAT);
 
     // Add scale_A operation
     auto pw_0_attributes = fe::graph::Pointwise_attributes()
-                               .set_name("pw0_Mul")
+                               //    .set_name("pw0_Mul")
                                .set_mode(fe::PointwiseMode_t::MUL)
                                .set_compute_data_type(fe::DataType_t::FLOAT);
     auto C_after_pw_0 = graph.pointwise(C, A_descale, pw_0_attributes);
@@ -156,12 +157,13 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
 
     // Add descale_B operation
     auto pw_1_attributes = fe::graph::Pointwise_attributes()
-                               .set_name("pw1_Mul")
+                               //    .set_name("pw1_Mul")
                                .set_mode(fe::PointwiseMode_t::MUL)
                                .set_compute_data_type(fe::DataType_t::FLOAT);
     auto C_after_pw_1 = graph.pointwise(C_after_pw_0, B_descale, pw_1_attributes);
     C_after_pw_1->set_output(true).set_data_type(fe::DataType_t::BFLOAT16);
 
+    std::cout << graph << std::endl;
     REQUIRE(graph.validate().is_good());
 
     cudnnHandle_t handle;
@@ -183,7 +185,6 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
         {A_descale, A_descale_gpu.devPtr},
         {B_descale, B_descale_gpu.devPtr}};
 
-    std::cout << graph.print() << std::endl;
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
     checkCudnnErr(cudnnDestroy(handle));
 }

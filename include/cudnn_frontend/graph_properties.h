@@ -524,7 +524,7 @@ class BN_finalize_attributes : public Attributes<BN_finalize_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { EQ_SCALE, EQ_BIAS, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR };
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BN_finalize_attributes, name, compute_data_type, inputs, outputs)
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     BN_finalize_attributes&
@@ -549,7 +549,7 @@ class Genstats_attributes : public Attributes<Genstats_attributes> {
 
     enum class output_names { SUM, SQ_SUM };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Genstats_attributes, name, compute_data_type, inputs, outputs)
 };
 
 class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
@@ -569,6 +569,7 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_fprop_attributes,
                                    name,
+                                   compute_data_type,
                                    inputs,
                                    outputs,
                                    pre_padding,
@@ -639,7 +640,7 @@ class Batchnorm_backward_attributes : public Attributes<Batchnorm_backward_attri
     // Only special case where one of the inputs is a vector.
     std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     enum class output_names { DX, DSCALE, DBIAS };
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, inputs, peer_stats, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_backward_attributes, name, compute_data_type, inputs, peer_stats, outputs)
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
     Batchnorm_backward_attributes&
@@ -666,7 +667,7 @@ class DBN_weight_attributes : public Attributes<DBN_weight_attributes> {
     enum class input_names { DY, X, SCALE, MEAN, INV_VARIANCE };
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { DSCALE, DBIAS, EQ_BIAS, EQ_SCALE_DY, EQ_SCALE_X };
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DBN_weight_attributes, name, compute_data_type, inputs, outputs)
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 };
 
@@ -687,6 +688,7 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_dgrad_attributes,
                                    name,
+                                   compute_data_type,
                                    inputs,
                                    outputs,
                                    pre_padding,
@@ -758,7 +760,7 @@ class Matmul_attributes : public Attributes<Matmul_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { C };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, compute_data_type, inputs, outputs, padding_value)
 
     Matmul_attributes&
     set_m_override(std::shared_ptr<Tensor_attributes> const& value) {
@@ -797,7 +799,7 @@ class Matmul_fp8_attributes : public Attributes<Matmul_fp8_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { C, Amax_C };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_fp8_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_fp8_attributes, name, compute_data_type, inputs, outputs)
 
     Matmul_fp8_attributes&
     set_padding(double const padding_val) {
@@ -822,7 +824,7 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { OUT_0 };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, inputs, outputs, mode, axis)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, compute_data_type, inputs, outputs, mode, axis)
 
     Pointwise_attributes&
     set_mode(PointwiseMode_t const value) {
@@ -858,7 +860,7 @@ class Instancenorm_backward_attributes : public Attributes<Instancenorm_backward
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { DX, DSCALE, DBIAS };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_backward_attributes, name, compute_data_type, inputs, outputs)
 
     Instancenorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
@@ -879,7 +881,7 @@ class Layernorm_backward_attributes : public Attributes<Layernorm_backward_attri
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { DX, DSCALE, DBIAS };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_backward_attributes, name, compute_data_type, inputs, outputs)
 
     Layernorm_backward_attributes&
     set_saved_mean_and_inv_variance(std::shared_ptr<Tensor_attributes> mean,
@@ -902,7 +904,7 @@ class Layernorm_attributes : public Attributes<Layernorm_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y, MEAN, INV_VARIANCE };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, inputs, outputs, forward_phase)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Layernorm_attributes, name, compute_data_type, inputs, outputs, forward_phase)
 
     Layernorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -929,7 +931,7 @@ class Instancenorm_attributes : public Attributes<Instancenorm_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y, MEAN, INV_VARIANCE };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, inputs, outputs, forward_phase)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Instancenorm_attributes, name, compute_data_type, inputs, outputs, forward_phase)
 
     Instancenorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -956,7 +958,7 @@ class Batchnorm_attributes : public Attributes<Batchnorm_attributes> {
     std::vector<std::shared_ptr<Tensor_attributes>> peer_stats;
     enum class output_names { Y, MEAN, INV_VARIANCE, NEXT_RUNNING_MEAN, NEXT_RUNNING_VAR };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, inputs, peer_stats, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_attributes, name, compute_data_type, inputs, peer_stats, outputs)
 
     Batchnorm_attributes&
     set_previous_running_stats(std::shared_ptr<Tensor_attributes>& mean,
@@ -991,7 +993,7 @@ class Batchnorm_inference_attributes : public Attributes<Batchnorm_inference_att
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Batchnorm_inference_attributes, name, compute_data_type, inputs, outputs)
 };
 
 class Reduction_attributes : public Attributes<Reduction_attributes> {
@@ -1006,7 +1008,7 @@ class Reduction_attributes : public Attributes<Reduction_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, inputs, outputs, mode)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, compute_data_type, inputs, outputs, mode)
 
     std::optional<ReductionMode_t>
     get_mode() const {
@@ -1229,7 +1231,7 @@ class Reshape_attributes : public Attributes<Reshape_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, inputs, outputs, dim, stride)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reshape_attributes, name, compute_data_type, inputs, outputs, dim, stride)
 
     std::vector<int64_t>
     get_dim() const {
@@ -1266,7 +1268,7 @@ class Rmsnorm_attributes : public Attributes<Rmsnorm_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y, INV_VARIANCE };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, inputs, outputs, forward_phase)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_attributes, name, compute_data_type, inputs, outputs, forward_phase)
 
     Rmsnorm_attributes&
     set_forward_phase(NormFwdPhase_t const value) {
@@ -1299,7 +1301,7 @@ class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attribute
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { DX, DSCALE, DBIAS };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, inputs, outputs)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Rmsnorm_backward_attributes, name, compute_data_type, inputs, outputs)
 
     Rmsnorm_backward_attributes&
     has_dbias(bool value) {
@@ -1764,7 +1766,13 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     enum class output_names { dQ, dK, dV, Amax_dQ, Amax_dK, Amax_dV, Amax_dP };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_fp8_backward_attributes, name, inputs, outputs, causal_mask, attn_scale_value)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_fp8_backward_attributes,
+                                   name,
+                                   compute_data_type,
+                                   inputs,
+                                   outputs,
+                                   causal_mask,
+                                   attn_scale_value)
 
     SDPA_fp8_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
@@ -1801,7 +1809,7 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { S, Stats, M, Zinv };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Softmax_attributes, name, inputs, outputs, use_stats, use_M_Zinv)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Softmax_attributes, name, compute_data_type, inputs, outputs, use_stats, use_M_Zinv)
 
     Softmax_attributes&
     has_stats(bool const value) {
@@ -1834,6 +1842,7 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Conv_wgrad_attributes,
                                    name,
+                                   compute_data_type,
                                    inputs,
                                    outputs,
                                    pre_padding,
