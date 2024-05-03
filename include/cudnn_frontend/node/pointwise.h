@@ -182,7 +182,13 @@ INode::pointwise(std::shared_ptr<Tensor_attributes> a,
 
 inline std::shared_ptr<Tensor_attributes>
 INode::pointwise(std::shared_ptr<Tensor_attributes> a, Pointwise_attributes attributes) {
+    if (attributes.name.empty()) {
+        attributes.name += std::to_string(sub_nodes.size());
+    }
     attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
+    if (a->get_name().empty()) {
+        a->set_name(attributes.name + "::IN_0");
+    };
     auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
         output_tensor(attributes.name + "::OUT_0");
 
@@ -194,8 +200,17 @@ inline std::shared_ptr<Tensor_attributes>
 INode::pointwise(std::shared_ptr<Tensor_attributes> a,
                  std::shared_ptr<Tensor_attributes> b,
                  Pointwise_attributes attributes) {
+    if (attributes.name.empty()) {
+        attributes.name += std::to_string(sub_nodes.size());
+    }
     attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
     attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
+    if (a->get_name().empty()) {
+        a->set_name(attributes.name + "::IN_0");
+    };
+    if (b->get_name().empty()) {
+        b->set_name(attributes.name + "::IN_1");
+    };
     auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
         output_tensor(attributes.name + "::OUT_0");
 
@@ -208,9 +223,21 @@ INode::pointwise(std::shared_ptr<Tensor_attributes> a,
                  std::shared_ptr<Tensor_attributes> b,
                  std::shared_ptr<Tensor_attributes> c,
                  Pointwise_attributes attributes) {
+    if (attributes.name.empty()) {
+        attributes.name += std::to_string(sub_nodes.size());
+    }
     attributes.inputs[Pointwise_attributes::input_names::IN_0] = a;
     attributes.inputs[Pointwise_attributes::input_names::IN_1] = b;
     attributes.inputs[Pointwise_attributes::input_names::IN_2] = c;
+    if (a->get_name().empty()) {
+        a->set_name(attributes.name + "::IN_0");
+    };
+    if (b->get_name().empty()) {
+        b->set_name(attributes.name + "::IN_1");
+    };
+    if (c->get_name().empty()) {
+        c->set_name(attributes.name + "::IN_2");
+    };
     auto OUT_0 = attributes.outputs[Pointwise_attributes::output_names::OUT_0] =
         output_tensor(attributes.name + "::OUT_0");
 

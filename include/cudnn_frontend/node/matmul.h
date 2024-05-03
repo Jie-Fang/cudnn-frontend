@@ -173,8 +173,42 @@ inline std::shared_ptr<Tensor_attributes>
 INode::matmul(std::shared_ptr<Tensor_attributes> a,
               std::shared_ptr<Tensor_attributes> b,
               Matmul_attributes attributes) {
+    if (attributes.name.empty()) {
+        attributes.name += std::to_string(sub_nodes.size());
+    }
     attributes.inputs[Matmul_attributes::input_names::A] = a;
     attributes.inputs[Matmul_attributes::input_names::B] = b;
+
+    if (a->get_name().empty()) {
+        a->set_name(attributes.name + "::A");
+    };
+    if (b->get_name().empty()) {
+        b->set_name(attributes.name + "::B");
+    };
+
+    auto m_override = attributes.inputs.find(Matmul_attributes::input_names::M_override);
+    auto n_override = attributes.inputs.find(Matmul_attributes::input_names::N_override);
+    auto k_override = attributes.inputs.find(Matmul_attributes::input_names::K_override);
+
+    if (m_override != attributes.inputs.end()) {
+        auto tensor = m_override->second;
+        if (tensor && tensor->get_name().empty()) {
+            tensor->set_name(attributes.name + "::M_override");
+        }
+    }
+    if (n_override != attributes.inputs.end()) {
+        auto tensor = n_override->second;
+        if (tensor && tensor->get_name().empty()) {
+            tensor->set_name(attributes.name + "::N_override");
+        }
+    }
+    if (k_override != attributes.inputs.end()) {
+        auto tensor = k_override->second;
+        if (tensor && tensor->get_name().empty()) {
+            tensor->set_name(attributes.name + "::K_override");
+        }
+    }
+
     auto C = attributes.outputs[Matmul_attributes::output_names::C] = output_tensor(attributes.name + "::C");
 
     sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(attributes), context));
