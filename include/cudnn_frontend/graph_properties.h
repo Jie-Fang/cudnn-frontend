@@ -815,8 +815,11 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     friend class INode;
 
     PointwiseMode_t mode = PointwiseMode_t::NOT_SET;
+
     std::optional<int64_t> axis;
 
+    std::optional<float> relu_lower_clip;
+    std::optional<float> relu_upper_clip;
     std::optional<float> relu_lower_clip_slope;
 
    public:
@@ -824,7 +827,16 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     std::map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { OUT_0 };
     std::map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes, name, compute_data_type, inputs, outputs, mode, axis)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Pointwise_attributes,
+                                   name,
+                                   compute_data_type,
+                                   inputs,
+                                   outputs,
+                                   mode,
+                                   axis,
+                                   relu_lower_clip,
+                                   relu_upper_clip,
+                                   relu_lower_clip_slope)
 
     Pointwise_attributes&
     set_mode(PointwiseMode_t const value) {
@@ -846,6 +858,18 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     Pointwise_attributes&
     set_relu_lower_clip_slope(float const negative_slope) {
         this->relu_lower_clip_slope = negative_slope;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_relu_lower_clip(float const value) {
+        this->relu_lower_clip = value;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_relu_upper_clip(float const value) {
+        this->relu_upper_clip = value;
         return *this;
     }
 };

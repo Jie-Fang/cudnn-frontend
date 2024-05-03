@@ -169,7 +169,9 @@ class PyGraph {
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     relu(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
-         float const negative_slope,
+         std::optional<float> const& negative_slope,
+         std::optional<float> const& lower_clip,
+         std::optional<float> const& upper_clip,
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name);
 
@@ -182,7 +184,10 @@ class PyGraph {
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     relu_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& loss,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
-                  float const negative_slope,
+
+                  std::optional<float> const& negative_slope,
+                  std::optional<float> const& lower_clip,
+                  std::optional<float> const& upper_clip,
                   cudnn_frontend::DataType_t const& compute_data_type,
                   std::string const& name);
 
