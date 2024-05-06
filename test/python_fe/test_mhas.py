@@ -498,7 +498,7 @@ def test_sdpa(
     )
 
     handle = cudnn.create_handle()
-    stream = torch.cuda.Stream().cuda_stream
+    stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=handle, stream=stream)
 
     # cuDNN graph
@@ -644,6 +644,8 @@ def test_sdpa(
     torch.testing.assert_close(o_ref, o_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
     if is_infer == False:
         torch.testing.assert_close(stats_ref, stats_gpu, atol=2e-2, rtol=2e-2)
+
+    cudnn.destroy_handle(handle)
 
 
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
@@ -889,7 +891,7 @@ def test_sdpa_backward(
     stats_gpu = torch.empty(b, h_q, s_q, 1, dtype=torch.float32, device="cuda")
 
     handle = cudnn.create_handle()
-    stream = torch.cuda.Stream().cuda_stream
+    stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=handle, stream=stream)
 
     # forward cuDNN graph
@@ -988,7 +990,7 @@ def test_sdpa_backward(
             stats_gpu[i, :, m:, :] = 0
 
     handle = cudnn.create_handle()
-    stream = torch.cuda.Stream().cuda_stream
+    stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=handle, stream=stream)
 
     # backward cuDNN graph
@@ -1167,6 +1169,7 @@ def test_sdpa_backward(
                 dBias_ref[i, :, m:, :] = 0
                 dBias_ref[i, :, :, n:] = 0
 
+    torch.cuda.synchronize()
     torch.testing.assert_close(dQ_ref, dQ_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
     torch.testing.assert_close(
         dK_ref,
@@ -1186,6 +1189,7 @@ def test_sdpa_backward(
         torch.testing.assert_close(
             dBias_ref, dBias_gpu, check_dtype=False, atol=2e-2, rtol=2e-2
         )
+    cudnn.destroy_handle(handle)
 
 
 if __name__ == "__main__":
