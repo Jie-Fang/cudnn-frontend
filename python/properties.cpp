@@ -21,7 +21,9 @@ class HandleManagement {
     static std::intptr_t
     create_handle() {
         cudnnHandle_t handle;
-        detail::create_handle(&handle);
+        auto status = detail::create_handle(&handle);
+        throw_if(
+            status != CUDNN_STATUS_SUCCESS, cudnn_frontend::error_code_t::HANDLE_ERROR, "cudnnHandle Create failed");
         return reinterpret_cast<std::intptr_t>(handle);
     }
 
