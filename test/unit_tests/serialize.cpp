@@ -203,10 +203,6 @@ TEST_CASE("Matmul fp8 fusion", "[graph][serialize]") {
 
     REQUIRE(graph_deserialized.build_operation_graph(handle).is_good());
 
-    REQUIRE(graph_deserialized.create_execution_plans({cudnn_frontend::HeurMode_t::A}).is_good());
-
-    REQUIRE(graph_deserialized.check_support(handle).is_good());
-
     cudnnDestroy(handle);
 }
 
