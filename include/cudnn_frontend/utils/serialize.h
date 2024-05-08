@@ -248,6 +248,15 @@ NLOHMANN_JSON_SERIALIZE_ENUM(Reduction_attributes::input_names,
 
 NLOHMANN_JSON_SERIALIZE_ENUM(Reduction_attributes::output_names, {{Reduction_attributes::output_names::Y, "Y"}})
 
+NLOHMANN_JSON_SERIALIZE_ENUM(Resample_attributes::input_names,
+                             {
+                                 {Resample_attributes::input_names::X, "X"},
+                             })
+
+NLOHMANN_JSON_SERIALIZE_ENUM(Resample_attributes::output_names,
+                             {{Resample_attributes::output_names::Y, "Y"},
+                              {Resample_attributes::output_names::Index, "Index"}})
+
 NLOHMANN_JSON_SERIALIZE_ENUM(Reshape_attributes::input_names,
                              {
                                  {Reshape_attributes::input_names::X, "X"},
