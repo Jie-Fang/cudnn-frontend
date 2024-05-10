@@ -26,7 +26,7 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 #### Configurable Options:
 
 - Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default.
-- Bias mask: Applies an additive bias mask to attention scores. Users must pass a bias tensor as specified in the tensors section below.
+- Bias mask: Applies an additive bias mask to attention scores. Users must pass a bias tensor as specified in the tensors section below. The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
 - Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 - Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. Users must pass a per-batch sequence length as specified in the tensors section below.
 - Causal mask: Fills the upper triangular matrix of attention scores with negative infinity.
@@ -37,24 +37,32 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
     - An RNG offset, passed as a cudnn tensor.
     - A float representing the dropout probability, which is the probability that any given weight is set to zero.
   - To use an user-provided dropout mask, users must provide:
-    - `dropout mask` that matches the attention weights' dimensions, indicating which weights to drop.
+    - `dropout mask` that matches the attention weights' dimensions, indicating which weights to drop. The dimensions that are passed as 1 will apply a broadcasted dropout mask.
     - `dropout scale` used to adjust the scale of the remaining weights accordingly, such as $1 / (1 - \text{dropout probability})$.
-- Ragged tensor: allows the query, key, value, and output tensor to be [ragged tensors](https://www.tensorflow.org/guide/ragged_tensor), which are tensors with nested variable length lists as inner dimensions. Users must pass another tensor called ragged offset tensor using the `Tensor_attributes.set_ragged_offset()` method as specified in the tensors section below.
+- Packed layout: With packed layout, the query, key, value, and output tensor should be [ragged tensors](https://www.tensorflow.org/guide/ragged_tensor), which are tensors with nested variable length lists as inner dimensions. Users must pass another tensor called ragged offset tensor using the `Tensor_attributes.set_ragged_offset()` method. the ragged offset tensor must be a tensor of size $(B + 1, 1, 1, 1)$ that contains the nested tensor's offset in terms of number of elements (not bytes). The last value of the offset tensor specifies the offset of the past-the-end element of the ragged tensor. See Appendix A for more information on the supported layouts.
 
-#### Tensors:
+##### Input Tensors:
 
-- Query tensor should have dimensions $(B, H_{q}, S_{q}, D_{qk})$ with input/output datatype.
-- Key tensor should have dimensions $(B, H_{k}, S_{kv}, D_{qk})$ with input/output datatype.
-- Value tensor should have dimensions $(B, H_{v}, S_{kv}, D_{v})$ with input/output datatype.
-- Output tensor should have dimensions $(B, H_{q}, S_{q}, D_{v})$ with input/output datatype.
-- (Optional) When `is_inference` is false, the stats tensor should have dimensions $(B, H_{q}, S_{q}, 1)$ with float32 datatype.
-- (Optional) When bias mask is enabled, the bias tensor has dimensions $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$ with input/output datatype.  
-The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
-- (Optional) When padding mask is enabled, the sequence length q, and sequence length kv tensors should have shape $(B, 1, 1, 1)$ with int32 datatype.
-- (Optional) When philox RNG dropout mask is enabled, the RNG seed and offset tensors should have size $(1, 1, 1, 1)$ with int32 or int64 datatype as either a CPU or GPU tensor.
-- (Optional) When a user provided dropout mask is enabled, a dropout mask tensor should have shape $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$ with input/output datatype.  
-The dimensions that are passed as 1 will apply a broadcasted mask over attention weights.
-- (Optional) When query, key, value, and output tensors are ragged tensors, the ragged offset tensor must be a tensor of size $(B + 1, 1, 1, 1)$ that contains the nested tensor's offset in terms of number of elements (not bytes). The last value of the offset tensor specifies the offset of the past-the-end element of the ragged tensor.
+| Tensor Name                         | Device     | Data Type      | Dimensions                                                                                                     |
+|-------------------------------------|------------|----------------|----------------------------------------------------------------------------------------------------------------|
+| Q                                   | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{qk})$                                                                                    |
+| K                                   | GPU        | FP16 or BF16   | $(B, H_{k}, S_{kv}, D_{qk})$                                                                                   |
+| V                                   | GPU        | FP16 or BF16   | $(B, H_{v}, S_{kv}, D_{v})$                                                                                    |
+| (Bias mask) Bias Mask               | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Padding mask) Sequence Length Q    | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Padding mask) Sequence Length KV   | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Philoc RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philoc RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Custom Dropout Mask) Mask          | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Custom Dropout Mask) Scale         | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
+| (Packed Layout) Ragged Offset       | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
+
+##### Output Tensors
+
+| Tensor Name           | Device     | Data Type    | Dimensions                   |
+|-----------------------|------------|--------------|------------------------------|
+| O                     | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{v})$   |
+| Stats (training only) | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
 
 Where,
 
@@ -175,6 +183,20 @@ All the options mentioned in the forward operation, including ragged tensors and
 #### Tensors:
 
 All the tensor requirements described in the forward operation are applicable in the backward operation as well. The gradient tensors for query, key, value, output, and bias should have the same properties as their non-gradient counterparts.
+
+##### Input Tensors:
+
+| Tensor Name           | Device     | Data Type      | Dimensions                 |
+|-----------------------|------------|----------------|----------------------------|
+| dO                    | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{v})$ |
+
+##### Output Tensors
+
+| Tensor Name           | Device     | Data Type    | Dimensions                   |
+|-----------------------|------------|--------------|------------------------------|
+| dQ                    | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{qk})$  |
+| dK                    | GPU        | FP16 or BF16 | $(B, H_{k}, S_{kv}, D_{qk})$ |
+| dV                    | GPU        | FP16 or BF16 | $(B, H_{v}, S_{kv}, D_{v})$  |
 
 #### Limitations:
 
@@ -432,6 +454,7 @@ $dK = QdP$
 | V                     | GPU        | E4M3 or E5M2 | $(B, H_{v}, S_{kv}, D_{v})$  |
 | O                     | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
 | dO                    | GPU        | E4M3 or E5M2 | $(B, H_{q}, S_{q}, D_{v})$   |
+| Stats                 | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
 | Descale Q             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Descale K             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Descale V             | GPU        | FP32         | $(1, 1, 1, 1)$               |
