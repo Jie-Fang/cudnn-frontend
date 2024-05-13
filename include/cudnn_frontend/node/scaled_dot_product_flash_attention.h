@@ -796,7 +796,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         struct cudaDeviceProp prop;
         CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, 0));
-        if ((detail::get_backend_version() >= 8905 && prop.major >= 9) || (detail::get_backend_version() >= 9000)) {
+        if ((detail::get_backend_version() >= 8905 && prop.major >= 9) || (detail::get_backend_version() >= 90000)) {
             // default upper limit for workspace 256MB
             int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
 
@@ -827,9 +827,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             }
         }
 
-        // WAR force dP workspace implementation if dBias is enabled
-        // since dBias only works with workspace implementation
-        if (attributes.outputs[output_names::dBias]) {
+        // Force dP workspace implementation if:
+        //  - dBias is enabled (dBias is only supported on workspace implementation)
+        //  - the user force requests deterministic algorithm
+        if (attributes.outputs[output_names::dBias] || attributes.is_force_deterministic_algorithm) {
             use_workspace_opt = true;
         }
 

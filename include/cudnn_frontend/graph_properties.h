@@ -1642,6 +1642,8 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
+    bool is_force_deterministic_algorithm = false;
+
    public:
     enum class input_names {
         Q,
@@ -1751,6 +1753,12 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     SDPA_backward_attributes&
     set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
         outputs[SDPA_backward_attributes::output_names::RNG_DUMP] = value;
+        return *this;
+    }
+
+    SDPA_backward_attributes&
+    set_force_deterministic_algorithm(bool const value) {
+        is_force_deterministic_algorithm = value;
         return *this;
     }
 };

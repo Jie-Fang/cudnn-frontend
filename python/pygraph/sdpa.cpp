@@ -111,6 +111,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        bool const use_causal_mask,
                        py::object const& dropout,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
+                       bool const use_force_deterministic_algorithm,
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name) {
     auto attributes = cudnn_frontend::graph::SDPA_backward_attributes()
@@ -121,6 +122,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
+                          .set_force_deterministic_algorithm(use_force_deterministic_algorithm)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -341,6 +343,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("use_causal_mask", false),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
+          py::arg_v("use_force_deterministic_algorithm", false),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(

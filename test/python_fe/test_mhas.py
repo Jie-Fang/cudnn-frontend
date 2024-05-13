@@ -795,7 +795,7 @@ def test_sdpa_backward(
     if is_bias and cudnn_version < "8.9.6":
         pytest.skip("dBias is only supported 8.9.6 onwards.")
 
-    if is_bias and torch.cuda.get_device_capability()[0] < 9:
+    if is_bias and cudnn_version < "9" and torch.cuda.get_device_capability()[0] < 9:
         pytest.skip("dBias is only supported on hopper onwards.")
 
     if is_bias and is_padding:
@@ -827,9 +827,6 @@ def test_sdpa_backward(
 
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
-
-    # test both dP workspace optimization by lowering dP workspace limit to 8MB
-    os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = str(8 * 1024 * 1024)
 
     # -------------------------- default randomized parameter testing ------------------------
     # batch size
@@ -864,6 +861,10 @@ def test_sdpa_backward(
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
+    # test both dP workspace optimization on and off
+    os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = "0"
+    is_deterministic = random.choice([True, False])
+
     # -------------------------- override test parameters if args are provided ----------------
     b = int(arg_params.mha_b) if arg_params.mha_b != None else b
     s_q = int(arg_params.mha_s_q) if arg_params.mha_s_q != None else s_q
@@ -873,6 +874,11 @@ def test_sdpa_backward(
     h_q = int(arg_params.mha_h_q) if arg_params.mha_h_q != None else h_q
     h_k = int(arg_params.mha_h_k) if arg_params.mha_h_k != None else h_k
     h_v = int(arg_params.mha_h_v) if arg_params.mha_h_v != None else h_v
+    is_deterministic = (
+        bool(int(arg_params.mha_deterministic))
+        if arg_params.mha_deterministic != None
+        else is_deterministic
+    )
 
     if d_qk != d_v and cudnn_version < "8.9.6":
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
@@ -901,7 +907,7 @@ def test_sdpa_backward(
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
     print(
-        f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v}"
+        f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v} --mha_deterministic={is_deterministic}"
     )
 
     attn_scale = 0.125
@@ -1159,6 +1165,7 @@ def test_sdpa_backward(
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
         dropout=dropout_tuple if is_dropout else None,
+        use_force_deterministic_algorithm=is_deterministic,
     )
 
     dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
