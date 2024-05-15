@@ -783,47 +783,53 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         // ---------------------input tensor workarounds---------------------------
 
-        // workspace optimization is only supported on
-        // cudnn verision >= 8.9.5
-        // device version >= hopper
-        // sizeof(dp tensor) <= max_dp_workspace
-
-        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=unset  - enable workspace opt. until the default 256MB limit.
-        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=-1     - always enable workspace opt.
-        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=0      - always disable workspace opt.
-        // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=n      - enable workspace opt. until the n byte limit
         bool use_workspace_opt = false;
 
-        struct cudaDeviceProp prop;
-        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, 0));
-        if ((detail::get_backend_version() >= 8905 && prop.major >= 9) || (detail::get_backend_version() >= 90000)) {
-            // default upper limit for workspace 256MB
-            int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
+        if (detail::get_backend_version() >= 8905 && detail::get_backend_version() < 90000) {
+            // workspace optimization is enabled by default when:
+            //   8.9.5 <= cudnn version < 9.0.0
+            //   device >= hopper
+            //   batch * num_heads * seq_len_q * seq_len_kv * 2 <= dP workspace limit
+            //
+            // This following environment variable allows you to control the dP workspace limit.
+            // From cuDNN version 9.0.0, this option is obsolete will be ignored.
+            // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=unset  - enable workspace opt. until the default 256MB limit.
+            // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=-1     - always enable workspace opt.
+            // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=0      - always disable workspace opt.
+            // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=n      - enable workspace opt. until the n byte limit
+            struct cudaDeviceProp prop;
+            CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, 0));
 
-            // allow setting the upper limit with envvars
-            char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
-            if (env_dp_workspace_limit_char) {
-                try {
-                    std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
-                    max_dp_workspace_bytes = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
-                } catch (...) {
-                    RETURN_CUDNN_FRONTEND_ERROR_IF(true,
-                                                   error_code_t::ATTRIBUTE_NOT_SET,
-                                                   "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
-                                                   "(int64_t; in bytes)");
+            // hopper or above
+            if (prop.major >= 9) {
+                // default upper limit for workspace 256MB
+                int64_t max_dp_workspace_bytes = 256 * 1024 * 1024;
+
+                // allow setting the upper limit with envvars
+                char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
+                if (env_dp_workspace_limit_char) {
+                    try {
+                        std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
+                        max_dp_workspace_bytes = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
+                    } catch (...) {
+                        RETURN_CUDNN_FRONTEND_ERROR_IF(true,
+                                                       error_code_t::ATTRIBUTE_NOT_SET,
+                                                       "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
+                                                       "(int64_t; in bytes)");
+                    }
                 }
-            }
 
-            int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
-            int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
-            int64_t required_dp_workspace_bytes = b * h_q * workspace_s_q * workspace_s_kv * 2;
+                int64_t workspace_s_q               = ((s_q + 64 - 1) / 64) * 64;
+                int64_t workspace_s_kv              = ((s_kv + 64 - 1) / 64) * 64;
+                int64_t required_dp_workspace_bytes = b * h_q * workspace_s_q * workspace_s_kv * 2;
 
-            if (max_dp_workspace_bytes == -1) {
-                use_workspace_opt = true;
-            } else if (max_dp_workspace_bytes == 0) {
-                use_workspace_opt = false;
-            } else {
-                use_workspace_opt = (required_dp_workspace_bytes <= max_dp_workspace_bytes);
+                if (max_dp_workspace_bytes == -1) {
+                    use_workspace_opt = true;
+                } else if (max_dp_workspace_bytes == 0) {
+                    use_workspace_opt = false;
+                } else {
+                    use_workspace_opt = (required_dp_workspace_bytes <= max_dp_workspace_bytes);
+                }
             }
         }
 

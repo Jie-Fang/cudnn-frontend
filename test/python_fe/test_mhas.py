@@ -861,8 +861,9 @@ def test_sdpa_backward(
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
-    # test both dP workspace optimization on and off
-    os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = "0"
+    # test both deterministic and nondeterministic implementation
+    if cudnn_version < "9":
+        os.environ["CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT"] = "0"
     is_deterministic = random.choice([True, False])
 
     # -------------------------- override test parameters if args are provided ----------------
