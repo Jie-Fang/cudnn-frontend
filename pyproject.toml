@@ -14,8 +14,8 @@ classifiers = [
 ]
 
 [tool.setuptools]
-packages = ["cudnn", "cudnn_frontend"] 
-package-dir = {"" = "python", "cudnn_frontend" = "."}
+packages = ["cudnn", "include"]
+package-dir = {"" = "python", "include" = "include"}
 include-package-data = true
 
 [project.urls]
@@ -26,4 +26,4 @@ include-package-data = true
 version = {attr = "cudnn.__version__"}
 
 [tool.setuptools.package-data]
-cudnn_frontend = ["include/**/*"]
+include = ["**/*"]
