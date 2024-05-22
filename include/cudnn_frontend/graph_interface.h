@@ -268,6 +268,12 @@ class Graph : public INode {
     }
 
     error_t
+    build(cudnnHandle_t const &handle,
+          std::vector<HeurMode_t> const &mode,
+          BuildPlanPolicy_t const policy     = BuildPlanPolicy_t::HEURISTICS_CHOICE,
+          bool const do_multithreaded_builds = false);
+
+    error_t
     build_plans(cudnnHandle_t const &handle,
                 BuildPlanPolicy_t const policy     = BuildPlanPolicy_t::HEURISTICS_CHOICE,
                 bool const do_multithreaded_builds = false);
@@ -548,6 +554,19 @@ Graph::build_plan_at_index(cudnnHandle_t const &handle, int64_t plan_index) {
 inline error_t
 Graph::build_plans(cudnnHandle_t const &handle, BuildPlanPolicy_t const policy, bool const do_multithreaded_builds) {
     CHECK_CUDNN_FRONTEND_ERROR(plans.build_plans(handle, policy, do_multithreaded_builds));
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+Graph::build(cudnnHandle_t const &handle,
+             std::vector<HeurMode_t> const &modes,
+             BuildPlanPolicy_t const policy,
+             bool const do_multithreaded_builds) {
+    CHECK_CUDNN_FRONTEND_ERROR(this->validate());
+    CHECK_CUDNN_FRONTEND_ERROR(this->build_operation_graph(handle));
+    CHECK_CUDNN_FRONTEND_ERROR(this->create_execution_plans(modes));
+    CHECK_CUDNN_FRONTEND_ERROR(this->check_support(handle));
+    CHECK_CUDNN_FRONTEND_ERROR(this->build_plans(handle, policy, do_multithreaded_builds));
     return {error_code_t::OK, ""};
 }
 
