@@ -20,18 +20,31 @@ include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
 add_executable(
     samples
     
-    cpp/mha.cpp
-    cpp/convolutions.cpp
-    cpp/dgrads.cpp
-    cpp/matmuls.cpp
-    cpp/batchnorm.cpp
-    cpp/layernorm.cpp
-    cpp/rmsnorm.cpp
-    cpp/wgrads.cpp
-    cpp/serialization.cpp
-    cpp/autotuning.cpp
-    cpp/pointwise.cpp
-    cpp/resample.cpp
+    cpp/sdpa/fp16_fwd.cpp
+    cpp/sdpa/fp16_bwd.cpp
+    cpp/sdpa/fp16_cached.cpp
+    cpp/sdpa/fp8_fwd.cpp
+    cpp/sdpa/fp8_bwd.cpp
+
+    cpp/convolution/fprop.cpp
+    cpp/convolution/fp8_fprop.cpp
+    cpp/convolution/int8_fprop.cpp
+    cpp/convolution/dgrads.cpp
+    cpp/convolution/wgrads.cpp
+    
+    cpp/matmul/matmuls.cpp
+    cpp/matmul/fp8_matmul.cpp
+    cpp/matmul/int8_matmul.cpp
+    cpp/matmul/mixed_matmul.cpp
+
+    cpp/norm/batchnorm.cpp
+    cpp/norm/layernorm.cpp
+    cpp/norm/rmsnorm.cpp
+
+    cpp/misc/serialization.cpp
+    cpp/misc/autotuning.cpp
+    cpp/misc/pointwise.cpp
+    cpp/misc/resample.cpp
 
     legacy_samples/conv_sample.cpp 
     legacy_samples/resnet_test_list.cpp
