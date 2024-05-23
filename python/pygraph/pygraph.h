@@ -215,6 +215,9 @@ class PyGraph {
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name);
 
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    reshape(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input, std::string const& name);
+
     std::vector<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>
     rmsnorm(cudnn_frontend::NormFwdPhase_t const forward_phase,
             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& x,
@@ -264,6 +267,7 @@ class PyGraph {
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
          bool const use_causal_mask,
+         py::object const& sliding_window_length,
          py::object const& dropout,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
          cudnn_frontend::DataType_t const& compute_data_type,
@@ -285,6 +289,7 @@ class PyGraph {
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                   bool const use_causal_mask,
+                  py::object const& sliding_window_length,
                   py::object const& dropout,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
                   bool const use_force_deterministic_algorithm,

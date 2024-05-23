@@ -86,6 +86,16 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        "For group-query attention, number of heads for key and query must be a factor "
                                        "of number of heads for query");
 
+        bool is_ragged = false;
+        if (attributes.inputs.at(input_names::Q)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::K)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::V)->get_ragged_offset()) {
+            is_ragged = true;
+        }
+
+        bool is_dropout = false;
+        bool has_bias   = false;
+
         if (detail::get_backend_version() >= 90000) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 (d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
@@ -108,6 +118,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // validate options for bias mask
         auto bias_mask = attributes.inputs.find(input_names::Bias);
         if (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr) {
+            has_bias             = true;
             auto bias_mask_dtype = bias_mask->second->get_data_type();
             RETURN_CUDNN_FRONTEND_ERROR_IF((bias_mask_dtype == DataType_t::BOOLEAN),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
@@ -161,6 +172,22 @@ class SDPANode : public NodeCRTP<SDPANode> {
             attributes.dropout_probability.has_value() && attributes.dropout_probability.value() == 1.0,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
+
+        is_dropout = has_dropout_mask || attributes.dropout_probability.has_value();
+
+        // validate options for sliding window length
+        // if sliding window length has value then it should be greater than or equals to zero.
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.sliding_window_length.has_value() && attributes.sliding_window_length.value() < 0,
+            error_code_t::INVALID_VALUE,
+            "Sliding window length should be greater than or equals to zero when set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.sliding_window_length.has_value() &&
+                ((detail::get_backend_version() < 90200) || attributes.padding_mask || !attributes.causal_mask ||
+                 is_dropout || has_bias || is_ragged),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Sliding window attention only works with is_bias=False, is_ragged=False, is_padding=False, "
+            "is_causal=True, is_dropout=False and is only supported 9.2.0 onwards.");
 
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
@@ -398,6 +425,49 @@ class SDPANode : public NodeCRTP<SDPANode> {
             last_output = causal_mask_output;
         }
 
+        if (attributes.sliding_window_length.has_value()) {
+            auto row_index_attributes =
+                Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
+            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+
+            auto col_index_attributes =
+                Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
+            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+
+            // sliding window length parameter should be of float type
+            auto const& sliding_window_length =
+                std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+
+            auto add_col_attributes = Pointwise_attributes()
+                                          .set_name("add_window_len")
+                                          .set_mode(PointwiseMode_t::ADD)
+                                          .set_compute_data_type(DataType_t::FLOAT)
+                                          .set_axis(3);
+
+            auto const& col_index_lower_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+
+            auto greater_than_attributes = Pointwise_attributes()
+                                               .set_name("greaterthan_row<col+ws")
+                                               .set_mode(PointwiseMode_t::CMP_GT)
+                                               .set_compute_data_type(DataType_t::BOOLEAN);
+
+            auto const& row_lesser_than_col_ws_output =
+                pointwise(col_index_lower_output, row_index_output, greater_than_attributes);
+
+            row_lesser_than_col_ws_output->set_data_type(DataType_t::BOOLEAN);
+
+            // Lower attributes to binary select attributes
+            auto negative_inf_swa = std::make_shared<Tensor_attributes>(-1024.0f * 1024.0f * 1024.0f);
+
+            auto binary_select_attributes =
+                Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
+
+            auto const& swa_mask_output =
+                pointwise(last_output, negative_inf_swa, row_lesser_than_col_ws_output, binary_select_attributes);
+
+            last_output = swa_mask_output;
+        }
+
         // Lower attributes to softmax attributes
         auto softmax_output = std::make_shared<Tensor_attributes>();
         softmax_output->set_is_virtual(true);
@@ -618,6 +688,15 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         int64_t s_kv = attributes.inputs.at(input_names::V)->get_dim()[2];
         int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
 
+        bool is_ragged = false;
+        if (attributes.inputs.at(input_names::Q)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::K)->get_ragged_offset() ||
+            attributes.inputs.at(input_names::V)->get_ragged_offset()) {
+            is_ragged = true;
+        }
+
+        bool is_dropout = false;
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (s_q < 64) && detail::get_backend_version() < 90000,
             error_code_t::GRAPH_NOT_SUPPORTED,
@@ -673,6 +752,22 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             attributes.dropout_probability.has_value() && attributes.dropout_probability.value() == 1.0,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
+
+        is_dropout = has_dropout_mask || attributes.dropout_probability.has_value();
+
+        // validate options for sliding window length
+        // if sliding window length has value then it should be greater than or equals to zero.
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.sliding_window_length.has_value() && attributes.sliding_window_length.value() < 0,
+            error_code_t::INVALID_VALUE,
+            "Sliding window length should be greater than or equals to zero when set.");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            attributes.sliding_window_length.has_value() &&
+                ((detail::get_backend_version() < 90200) || has_bias || is_ragged || is_dropout ||
+                 attributes.padding_mask || !attributes.causal_mask),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Sliding window attention only works with is_bias=False, is_ragged=False, is_padding=False, "
+            "is_causal=True, is_dropout=False and is only supported 9.2.0 onwards.");
 
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
@@ -1096,8 +1191,52 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 Pointwise_attributes().set_name("select_2nd_padding").set_mode(PointwiseMode_t::BINARY_SELECT));
         }
 
+        if (attributes.sliding_window_length.has_value()) {
+            auto row_index_attributes =
+                Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
+            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+
+            auto col_index_attributes =
+                Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
+            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+
+            // sliding window length parameter should be of float type
+            auto const& sliding_window_length =
+                std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+
+            auto add_col_attributes = Pointwise_attributes()
+                                          .set_name("add_window_len")
+                                          .set_mode(PointwiseMode_t::ADD)
+                                          .set_compute_data_type(DataType_t::FLOAT)
+                                          .set_axis(3);
+
+            auto const& col_index_lower_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+
+            auto greater_than_attributes = Pointwise_attributes()
+                                               .set_name("greaterthan_row<col+ws")
+                                               .set_mode(PointwiseMode_t::CMP_GT)
+                                               .set_compute_data_type(DataType_t::BOOLEAN);
+
+            auto const& row_lesser_than_col_ws_output =
+                pointwise(col_index_lower_output, row_index_output, greater_than_attributes);
+
+            row_lesser_than_col_ws_output->set_data_type(DataType_t::BOOLEAN);
+
+            // Lower attributes to binary select attributes
+            auto negative_inf_swa = std::make_shared<Tensor_attributes>(std::numeric_limits<float>::lowest());
+
+            auto binary_select_attributes =
+                Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
+
+            auto const& swa_mask_output =
+                pointwise(last_output, negative_inf_swa, row_lesser_than_col_ws_output, binary_select_attributes);
+
+            last_output = swa_mask_output;
+        }
+
         // last_output = exp(last_output)
-        last_output  = pointwise(last_output, Pointwise_attributes().set_name("exp_s").set_mode(PointwiseMode_t::EXP));
+        last_output = pointwise(last_output, Pointwise_attributes().set_name("exp_s").set_mode(PointwiseMode_t::EXP));
+
         exp_s_output = last_output;
 
         // (optional) last_output = last_output * dropout rng_output

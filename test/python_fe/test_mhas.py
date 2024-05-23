@@ -16,6 +16,7 @@ bias_options = [False, True]
 alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
+sliding_window_mask_options = [False, True]
 dropout_options = [False, True]
 ragged_options = [False, True]
 is_infer_options = [False, True]
@@ -50,6 +51,7 @@ def compute_ref(
     is_alibi=False,
     padding=None,
     is_causal=False,
+    sliding_window_length=None,
     dropout_prob=0.0,
     dropout_mask=None,
     compute_stats=False,
@@ -79,6 +81,10 @@ def compute_ref(
         v = v.expand(-1, -1, h_q // h_v, -1, -1)
         v = v.reshape(v.size(0), -1, v.size(3), v.size(4))
 
+    if sliding_window_length is not None:
+        swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
+        swa_mask_zero[:, :, s_kv + sliding_window_length - 1 :, :] = False
+        q = q * swa_mask_zero
     # generate masks to compute reference values for padding mask
     # (also called variable sequence length)
     if padding is not None:
@@ -94,8 +100,6 @@ def compute_ref(
             v_mask[i, :, n:, :] = False
             s_mask[i, :, :, n:] = True
             p_mask[i, :, m:, :] = False
-
-    if padding is not None:
         q = q * q_mask
         k = k * k_mask
         v = v * v_mask
@@ -142,8 +146,15 @@ def compute_ref(
             diagonal=1
         )
         s = s.masked_fill(causal_mask, float("-inf"))
-
+    if sliding_window_length is not None:
+        swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device).tril_(
+            diagonal=-1 * sliding_window_length
+        )
+        swa_mask = torch.logical_and(swa_mask, swa_mask_zero)
+        s = s.masked_fill(swa_mask, float("-inf"))
     p = torch.softmax(s, dim=-1)
+    if sliding_window_length is not None:
+        p = p * swa_mask_zero
     if padding is not None:
         p = p * p_mask
 
@@ -400,6 +411,11 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
     "is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}"
 )
 @pytest.mark.parametrize(
+    "is_sliding_window",
+    sliding_window_mask_options,
+    ids=lambda p: f"sliding_window{int(p)}",
+)
+@pytest.mark.parametrize(
     "is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}"
 )
 @pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
@@ -416,6 +432,7 @@ def test_sdpa(
     is_alibi,
     is_padding,
     is_causal,
+    is_sliding_window,
     is_dropout,
     is_ragged,
     is_infer,
@@ -488,6 +505,8 @@ def test_sdpa(
     b = int(arg_params.mha_b) if arg_params.mha_b != None else b
     s_q = int(arg_params.mha_s_q) if arg_params.mha_s_q != None else s_q
     s_kv = int(arg_params.mha_s_kv) if arg_params.mha_s_kv != None else s_kv
+    if is_sliding_window:
+        s_kv = s_q
     d_qk = int(arg_params.mha_d_qk) if arg_params.mha_d_qk != None else d_qk
     d_v = int(arg_params.mha_d_v) if arg_params.mha_d_v != None else d_v
     h_q = int(arg_params.mha_h_q) if arg_params.mha_h_q != None else h_q
@@ -642,6 +661,10 @@ def test_sdpa(
         k.set_ragged_offset(k_ragged_offset)
         v.set_ragged_offset(v_ragged_offset)
 
+    sliding_window_length = None
+    if is_sliding_window:
+        sliding_window_length = s_kv // 4
+
     o, stats = graph.sdpa(
         name="sdpa",
         q=q,
@@ -655,6 +678,7 @@ def test_sdpa(
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
+        sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
     )
@@ -666,7 +690,15 @@ def test_sdpa(
     if is_infer == False:
         stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
-    graph.validate()
+    try:
+        graph.validate()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        if (
+            repr(e)
+            == "cudnnGraphNotSupportedError('Sliding window attention only works with is_bias=False, is_ragged=False, is_padding=False, is_causal=True, is_dropout=False and is only supported 9.2.0 onwards.')"
+        ):
+            pytest.xfail(repr(e))
+
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     graph.check_support()
@@ -727,6 +759,7 @@ def test_sdpa(
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
+        sliding_window_length=sliding_window_length,
         compute_stats=(is_infer == False),
         dropout_prob=dropout_prob,
         dropout_mask=rng_dump_ref if is_dropout else None,
@@ -763,6 +796,11 @@ def test_sdpa(
     "is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}"
 )
 @pytest.mark.parametrize(
+    "is_sliding_window",
+    sliding_window_mask_options,
+    ids=lambda p: f"sliding_window{int(p)}",
+)
+@pytest.mark.parametrize(
     "is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}"
 )
 @pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
@@ -779,6 +817,7 @@ def test_sdpa_backward(
     is_alibi,
     is_padding,
     is_causal,
+    is_sliding_window,
     is_dropout,
     is_ragged,
     arg_params,
@@ -1042,6 +1081,10 @@ def test_sdpa_backward(
         k.set_ragged_offset(k_ragged_offset)
         v.set_ragged_offset(v_ragged_offset)
 
+    sliding_window_length = None
+    if is_sliding_window:
+        sliding_window_length = s_kv // 4
+
     o, stats = graph.sdpa(
         name="sdpa",
         q=q,
@@ -1055,6 +1098,7 @@ def test_sdpa_backward(
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
+        sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
     )
@@ -1065,7 +1109,16 @@ def test_sdpa_backward(
 
     stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
-    graph.validate()
+    try:
+        graph.validate()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        if (
+            repr(e)
+            == "cudnnGraphNotSupportedError('Sliding window attention only works with is_bias=False, is_ragged=False, is_padding=False, is_causal=True, is_dropout=False and is only supported 9.2.0 onwards.')"
+        ):
+            pytest.xfail(repr(e))
+        pytest.skip(repr(e))
+
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     graph.check_support()
@@ -1165,6 +1218,7 @@ def test_sdpa_backward(
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
+        sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         use_force_deterministic_algorithm=is_deterministic,
     )
@@ -1244,6 +1298,7 @@ def test_sdpa_backward(
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
+        sliding_window_length=sliding_window_length,
         dropout_prob=dropout_prob,
         dropout_mask=rng_dump_ref if is_dropout else None,
         compute_stats=False,
@@ -1281,6 +1336,7 @@ def test_sdpa_backward(
                 dBias_ref[i, :, :, n:] = 0
 
     torch.cuda.synchronize()
+
     torch.testing.assert_close(dQ_ref, dQ_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
     torch.testing.assert_close(
         dK_ref,
