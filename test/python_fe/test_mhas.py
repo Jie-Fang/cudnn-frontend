@@ -459,11 +459,14 @@ def test_sdpa(
     if is_ragged and cudnn_version < "9":
         pytest.skip("Ragged tensor is only supported 9.0.0 onwards")
 
+    if is_ragged and layout == "bs3hd" and cudnn_version < "9.1.0":
+        pytest.skip("t3hd is only supported on 9.1.0 onwards")
+
     if is_ragged and torch.cuda.get_device_capability()[0] < 9:
         pytest.skip("Ragged tensor is only supported hopper")
 
     if is_ragged and not (layout == "bshd_bshd_bshd" or layout == "bs3hd"):
-        pytest.skip("Ragged tensor is only tested with non-interleaved bshd layout")
+        pytest.skip("Ragged tensor is only tested with thd_thd_thd and t3hd")
 
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
@@ -859,10 +862,13 @@ def test_sdpa_backward(
         pytest.skip("Ragged tensor is only supported hopper")
 
     if is_ragged and not (layout == "bshd_bshd_bshd" or layout == "bs3hd"):
-        pytest.skip("Ragged tensor is only tested with non-interleaved bshd layout")
+        pytest.skip("Ragged tensor is only tested with thd_thd_thd and t3hd")
 
     if is_ragged and head_group != "multi_head":
         pytest.skip("Ragged offset is only supported with multi_head")
+
+    if is_ragged and layout == "bs3hd" and cudnn_version < "9.1.0":
+        pytest.skip("t3hd is only supported on 9.1.0 onwards")
 
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
@@ -946,8 +952,15 @@ def test_sdpa_backward(
     if d_qk != d_v and is_ragged and cudnn_version < "9.1":
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
+    if (
+        is_deterministic
+        and cudnn_version < "9"
+        and torch.cuda.get_device_capability()[0] < 9
+    ):
+        pytest.skip("Ampere deterministic implementation is not supported below 9.0.0")
+
     print(
-        f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v} --mha_deterministic={is_deterministic}"
+        f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v} --mha_deterministic={int(is_deterministic)}"
     )
 
     attn_scale = 0.125
