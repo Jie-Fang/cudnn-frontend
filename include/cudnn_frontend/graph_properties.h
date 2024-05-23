@@ -1460,6 +1460,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     bool alibi_mask   = false;
     bool padding_mask = false;
     bool causal_mask  = false;
+    std::optional<int> sliding_window_length;
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
@@ -1475,7 +1476,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Seed,
         Offset,
         Dropout_mask,
-        Dropout_scale
+        Dropout_scale,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { O, Stats, RNG_DUMP };
@@ -1489,7 +1490,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                                    padding_mask,
                                    causal_mask,
                                    dropout_probability,
-                                   attn_scale_value)
+                                   attn_scale_value,
+                                   sliding_window_length)
 
     SDPA_attributes&
     set_is_inference(bool const value) {
@@ -1542,6 +1544,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     SDPA_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_sliding_window_length(int const value) {
+        sliding_window_length = value;
         return *this;
     }
 
@@ -1638,6 +1646,7 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     bool alibi_mask   = false;
     bool padding_mask = false;
     bool causal_mask  = false;
+    std::optional<int> sliding_window_length;
 
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
@@ -1660,7 +1669,7 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
         Offset,
         Dropout_mask,
         Dropout_scale,
-        Dropout_scale_inv
+        Dropout_scale_inv,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { dQ, dK, dV, dBias, RNG_DUMP };
@@ -1673,7 +1682,8 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
                                    padding_mask,
                                    causal_mask,
                                    dropout_probability,
-                                   attn_scale_value)
+                                   attn_scale_value,
+                                   sliding_window_length)
 
     SDPA_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
@@ -1726,6 +1736,12 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     SDPA_backward_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_backward_attributes&
+    set_sliding_window_length(int const value) {
+        sliding_window_length = value;
         return *this;
     }
 

@@ -24,7 +24,8 @@ enum class [[nodiscard]] error_code_t {
     CUDA_API_FAILED,
     CUDNN_BACKEND_API_FAILED,
     INVALID_CUDA_DEVICE,
-    HANDLE_ERROR
+    HANDLE_ERROR,
+    INVALID_VALUE
 };
 
 typedef struct [[nodiscard]] error_object {
@@ -140,6 +141,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(error_code_t,
                                  {error_code_t::INVALID_CUDA_DEVICE, "INVALID_CUDA_DEVICE"},
                                  {error_code_t::UNSUPPORTED_GRAPH_FORMAT, "UNSUPPORTED_GRAPH_FORMAT"},
                                  {error_code_t::HANDLE_ERROR, "HANDLE_ERROR"},
+                                 {error_code_t::INVALID_VALUE, "INVALID_VALUE"},
                              })
 
 static inline std::ostream&

@@ -29,6 +29,7 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 - Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 - Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. Users must pass a per-batch sequence length as specified in the tensors section below.
 - Causal mask: Fills the upper triangular matrix of attention scores with negative infinity.
+- Sliding window mask: Allows computation of attention scores from \(pos-sliding_window_length, pos\] for every position `pos`. Fills rest of the entries in the matrix with negative infinity.
 - Dropout: Randomly zeros some of the attention weights after the softmax as a form of regularization.
   Users can configure dropout in two ways:
   - To use the more performant Philox RNG dropout implementation, users must provide:
@@ -128,7 +129,10 @@ set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 SDPA_attributes&
 set_causal_mask(bool const value);
 
-SDPA_attributes&
+SDPA_attributes &
+set_sliding_window_length(int const value);
+
+SDPA_attributes &
 set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> seed,
             std::shared_ptr<Tensor_attributes> offset);
@@ -244,6 +248,9 @@ set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 SDPA_backward_attributes&
 set_causal_mask(bool const value);
 
+SDPA_backward_attributes &
+set_sliding_window_length(int const value);
+
 SDPA_backward_attributes&
 set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> seed,
@@ -276,7 +283,10 @@ Args:
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+    sliding_window_length (Optional[int]): The length of sliding window. Default is None.
+    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)],
+                            Tuple[mask: cudnn_tensor, scale: cudnn_tensor, scale_inv: cudnn_tensor]]]):
+        Whether to do dropout. Default is None.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
 
