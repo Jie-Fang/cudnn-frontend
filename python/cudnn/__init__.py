@@ -6,6 +6,7 @@ import sysconfig
 from ._compiled_module import (
     backend_version,
     backend_version_string,
+    get_last_error_string,
     destroy_handle,
     norm_forward_phase,
     reduction_mode,

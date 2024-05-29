@@ -410,6 +410,9 @@ class PyGraph {
     void
     deserialize(std::vector<uint8_t> const& data);
 
+    void
+    create_graph(const std::string& s);
+
     int64_t
     get_execution_plan_count() const {
         return graph.get_execution_plan_count();
