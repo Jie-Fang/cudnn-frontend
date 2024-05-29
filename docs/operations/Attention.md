@@ -160,6 +160,7 @@ Args:
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
@@ -283,6 +284,7 @@ Args:
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)],
                             Tuple[mask: cudnn_tensor, scale: cudnn_tensor, scale_inv: cudnn_tensor]]]):

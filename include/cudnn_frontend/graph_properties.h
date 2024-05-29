@@ -1457,9 +1457,10 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     friend class Graph;
 
     std::optional<bool> is_inference;
-    bool alibi_mask   = false;
-    bool padding_mask = false;
-    bool causal_mask  = false;
+    bool alibi_mask               = false;
+    bool padding_mask             = false;
+    bool causal_mask              = false;
+    bool causal_mask_bottom_right = false;
     std::optional<int> sliding_window_length;
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
@@ -1544,6 +1545,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     SDPA_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_causal_mask_bottom_right(bool const value) {
+        causal_mask_bottom_right = value;
         return *this;
     }
 
@@ -1643,9 +1650,10 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     friend class SDPABackwardNode;
     friend class Graph;
 
-    bool alibi_mask   = false;
-    bool padding_mask = false;
-    bool causal_mask  = false;
+    bool alibi_mask               = false;
+    bool padding_mask             = false;
+    bool causal_mask              = false;
+    bool causal_mask_bottom_right = false;
     std::optional<int> sliding_window_length;
 
     std::optional<float> dropout_probability;
@@ -1736,6 +1744,12 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     SDPA_backward_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_backward_attributes&
+    set_causal_mask_bottom_right(bool const value) {
+        causal_mask_bottom_right = value;
         return *this;
     }
 

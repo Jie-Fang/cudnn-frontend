@@ -16,6 +16,7 @@ bias_options = [False, True]
 alibi_mask_options = [False, True]
 padding_mask_options = [False, True]
 causal_mask_options = [False, True]
+causal_mask_bottom_right_options = [False, True]
 sliding_window_mask_options = [False, True]
 dropout_options = [False, True]
 ragged_options = [False, True]
@@ -51,6 +52,7 @@ def compute_ref(
     is_alibi=False,
     padding=None,
     is_causal=False,
+    is_causal_bottom_right=False,
     sliding_window_length=None,
     dropout_prob=0.0,
     dropout_mask=None,
@@ -81,6 +83,12 @@ def compute_ref(
         v = v.expand(-1, -1, h_q // h_v, -1, -1)
         v = v.reshape(v.size(0), -1, v.size(3), v.size(4))
 
+    if is_causal_bottom_right:
+        causal_mask_bottom_right_zero = torch.ones(
+            1, 1, s_q, 1, dtype=torch.bool, device=device
+        )
+        causal_mask_bottom_right_zero[:, :, : s_q - s_kv, :] = False
+        q = q * causal_mask_bottom_right_zero
     if sliding_window_length is not None:
         swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
         swa_mask_zero[:, :, s_kv + sliding_window_length - 1 :, :] = False
@@ -142,17 +150,26 @@ def compute_ref(
     if padding is not None:
         s = s.masked_fill(s_mask, float("-inf"))
     if is_causal:
-        causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device).triu_(
-            diagonal=1
-        )
+        causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+        causal_mask.triu_(diagonal=1)
         s = s.masked_fill(causal_mask, float("-inf"))
-    if sliding_window_length is not None:
-        swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device).tril_(
-            diagonal=-1 * sliding_window_length
+    if is_causal_bottom_right:
+        causal_mask_bottom_right = torch.ones(
+            s_q, s_kv, dtype=torch.bool, device=device
         )
-        swa_mask = torch.logical_and(swa_mask, swa_mask_zero)
+        causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
+        causal_mask_bottom_right &= causal_mask_bottom_right_zero.view(s_q, 1)
+        s = s.masked_fill(causal_mask_bottom_right, float("-inf"))
+    if sliding_window_length is not None:
+        assert is_causal == True
+        swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+        swa_mask.tril_(diagonal=-1 * sliding_window_length)
+        swa_mask &= swa_mask_zero.view(s_q, 1)
         s = s.masked_fill(swa_mask, float("-inf"))
+
     p = torch.softmax(s, dim=-1)
+    if is_causal_bottom_right:
+        p = p * causal_mask_bottom_right_zero
     if sliding_window_length is not None:
         p = p * swa_mask_zero
     if padding is not None:
@@ -402,27 +419,20 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
     return uniform_tensor
 
 
+# fmt: off
 @pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
-@pytest.mark.parametrize(
-    "is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}"
-)
-@pytest.mark.parametrize(
-    "is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}"
-)
-@pytest.mark.parametrize(
-    "is_sliding_window",
-    sliding_window_mask_options,
-    ids=lambda p: f"sliding_window{int(p)}",
-)
-@pytest.mark.parametrize(
-    "is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}"
-)
+@pytest.mark.parametrize("is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}")
+@pytest.mark.parametrize("is_sliding_window", sliding_window_mask_options, ids=lambda p: f"sliding_window{int(p)}")
+@pytest.mark.parametrize("is_causal_bottom_right", causal_mask_bottom_right_options, ids=lambda p: f"causal_bottom_right{int(p)}")
+@pytest.mark.parametrize("is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}")
+@pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
 @pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
 @pytest.mark.parametrize("is_bias", bias_options, ids=lambda p: f"bias{int(p)}")
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
+# fmt: on
 @torch_fork_set_rng(seed=0)
 def test_sdpa(
     input_type,
@@ -432,10 +442,12 @@ def test_sdpa(
     is_alibi,
     is_padding,
     is_causal,
+    is_causal_bottom_right,
     is_sliding_window,
     is_dropout,
     is_ragged,
     is_infer,
+    request,
     arg_params,
 ):
 
@@ -519,29 +531,14 @@ def test_sdpa(
     if d_qk != d_v and cudnn_version < "8.9.6":
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
-    if cudnn_version < "9":
-        if ((s_q % 64 != 0) or (s_kv % 64 != 0)) and (is_padding or is_dropout):
-            pytest.skip(
-                "s_q not a multiple of 64 with padding/dropout is not supported with cudnn version 9.0.0"
-            )
-
-    if cudnn_version < "8.9.6":
-        pytest.skip(
-            "d not a multiple of 64, not-multiple-of-64 seq_kv is not supported below 8.9.6"
-        )
-
-    if (d_qk % 64 != 0) and cudnn_version < "8.9.6":
-        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
-
-    if (d_qk % 64 != 0) and cudnn_version < "8.9.6":
-        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
-
     if d_qk != d_v and is_ragged and cudnn_version < "9.1":
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
+    print("\n=============== TEST CMD TO REPRODUCE ===============")
     print(
-        f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v}"
+        f"pytest {request.node.nodeid} --mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v}"
     )
+    print("=====================================================")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -681,6 +678,7 @@ def test_sdpa(
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
+        use_causal_mask_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
@@ -696,11 +694,11 @@ def test_sdpa(
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
-        if (
-            repr(e)
-            == "cudnnGraphNotSupportedError('Sliding window attention only works with is_bias=False, is_ragged=False, is_padding=False, is_causal=True, is_dropout=False and is only supported 9.2.0 onwards.')"
-        ):
-            pytest.xfail(repr(e))
+        cudnn.destroy_handle(handle)
+        pytest.xfail(repr(e))
+    except Exception as e:
+        cudnn.destroy_handle(handle)
+        pytest.fail(repr(e))
 
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -762,6 +760,7 @@ def test_sdpa(
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
+        is_causal_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
         compute_stats=(is_infer == False),
         dropout_prob=dropout_prob,
@@ -791,26 +790,19 @@ def test_sdpa(
     cudnn.destroy_handle(handle)
 
 
+# fmt: off
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
-@pytest.mark.parametrize(
-    "is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}"
-)
-@pytest.mark.parametrize(
-    "is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}"
-)
-@pytest.mark.parametrize(
-    "is_sliding_window",
-    sliding_window_mask_options,
-    ids=lambda p: f"sliding_window{int(p)}",
-)
-@pytest.mark.parametrize(
-    "is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}"
-)
+@pytest.mark.parametrize("is_dropout", dropout_options, ids=lambda p: f"dropout{int(p)}")
+@pytest.mark.parametrize("is_sliding_window", sliding_window_mask_options, ids=lambda p: f"sliding_window{int(p)}")
+@pytest.mark.parametrize("is_causal_bottom_right", causal_mask_bottom_right_options, ids=lambda p: f"causal_bottom_right{int(p)}")
+@pytest.mark.parametrize("is_causal", causal_mask_options, ids=lambda p: f"causal{int(p)}")
+@pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
 @pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
 @pytest.mark.parametrize("is_bias", bias_options, ids=lambda p: f"bias{int(p)}")
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
+# fmt: on
 @torch_fork_set_rng(seed=0)
 def test_sdpa_backward(
     input_type,
@@ -820,9 +812,11 @@ def test_sdpa_backward(
     is_alibi,
     is_padding,
     is_causal,
+    is_causal_bottom_right,
     is_sliding_window,
     is_dropout,
     is_ragged,
+    request,
     arg_params,
 ):
 
@@ -929,25 +923,10 @@ def test_sdpa_backward(
     if d_qk != d_v and cudnn_version < "8.9.6":
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
 
-    if cudnn_version < "9":
-        if s_q < 64:
-            pytest.skip("s_q less than 64 is not supported before cudnn 9.0.0")
-
-        if ((s_q % 64 != 0) or (s_kv % 64 != 0)) and (is_padding or is_dropout):
-            pytest.skip(
-                "s_q not a multiple of 64 with padding/dropout is not supported with cudnn version 9.0.0"
-            )
-
     if ((s_q % 64 != 0) or (s_kv % 64 != 0)) and is_bias:
         pytest.skip(
             "cudnn backend does not support bias with non-64-aligned seq_q or seq_kv."
         )
-
-    if (s_kv % 64 != 0) and cudnn_version < "8.9.6":
-        pytest.skip("not-multiple-of-64 seq_kv is not supported below 8.9.6")
-
-    if (d_qk % 64 != 0) and cudnn_version < "8.9.6":
-        pytest.skip("d not a multiple of 64 is not supported below 8.9.6")
 
     if d_qk != d_v and is_ragged and cudnn_version < "9.1":
         pytest.skip("d_qk != d_v is not supported with ragged offset")
@@ -959,9 +938,11 @@ def test_sdpa_backward(
     ):
         pytest.skip("Ampere deterministic implementation is not supported below 9.0.0")
 
+    print("\n=============== TEST CMD TO REPRODUCE ===============")
     print(
-        f"--mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v} --mha_deterministic={int(is_deterministic)}"
+        f"pytest {request.node.nodeid} --mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v} --mha_deterministic={int(is_deterministic)}"
     )
+    print("=====================================================")
 
     attn_scale = 0.125
     dropout_prob = 0.1 if is_dropout else 0.0
@@ -1111,6 +1092,7 @@ def test_sdpa_backward(
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
+        use_causal_mask_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
@@ -1125,12 +1107,11 @@ def test_sdpa_backward(
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
-        if (
-            repr(e)
-            == "cudnnGraphNotSupportedError('Sliding window attention only works with is_bias=False, is_ragged=False, is_padding=False, is_causal=True, is_dropout=False and is only supported 9.2.0 onwards.')"
-        ):
-            pytest.xfail(repr(e))
-        pytest.skip(repr(e))
+        cudnn.destroy_handle(handle)
+        pytest.xfail(repr(e))
+    except Exception as e:
+        cudnn.destroy_handle(handle)
+        pytest.fail(repr(e))
 
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -1231,6 +1212,7 @@ def test_sdpa_backward(
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
         use_causal_mask=is_causal,
+        use_causal_mask_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         use_force_deterministic_algorithm=is_deterministic,
@@ -1244,7 +1226,15 @@ def test_sdpa_backward(
         dK.set_ragged_offset(k_ragged_offset)
         dV.set_ragged_offset(v_ragged_offset)
 
-    graph.validate()
+    try:
+        graph.validate()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        cudnn.destroy_handle(handle)
+        pytest.xfail(repr(e))
+    except Exception as e:
+        cudnn.destroy_handle(handle)
+        pytest.fail(repr(e))
+
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     graph.check_support()
@@ -1311,6 +1301,7 @@ def test_sdpa_backward(
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
         is_causal=is_causal,
+        is_causal_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
         dropout_prob=dropout_prob,
         dropout_mask=rng_dump_ref if is_dropout else None,
@@ -1377,7 +1368,7 @@ if __name__ == "__main__":
     # ================== forward ==================
     """
     pytest \
-      test/python_fe/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-dropout0-ragged0-infer0] \
+      test/python_fe/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0-infer0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \
@@ -1386,12 +1377,13 @@ if __name__ == "__main__":
       --mha_d_v 32 \
       --mha_h_q 12 \
       --mha_h_k 3 \
-      --mha_h_v 4
+      --mha_h_v 4 \
+      --mha_deterministic 0
     """
     # ================== backward ==================
     """
     pytest \
-      test/python_fe/test_mhas.py::test_sdpa_backward[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-dropout0-ragged0] \
+      test/python_fe/test_mhas.py::test_sdpa_backward[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \
@@ -1400,7 +1392,8 @@ if __name__ == "__main__":
       --mha_d_v 32 \
       --mha_h_q 12 \
       --mha_h_k 3 \
-      --mha_h_v 4
+      --mha_h_v 4 \
+      --mha_deterministic 0
     """
 
     pytest.main([__file__])

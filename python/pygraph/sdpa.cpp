@@ -24,6 +24,7 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
               bool const use_causal_mask,
+              bool const use_causal_mask_bottom_right,
               py::object const& sliding_window_length,
               py::object const& dropout,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
@@ -37,6 +38,7 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
+                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -115,6 +117,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                        bool const use_causal_mask,
+                       bool const use_causal_mask_bottom_right,
                        py::object const& sliding_window_length,
                        py::object const& dropout,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
@@ -129,6 +132,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
+                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
                           .set_force_deterministic_algorithm(use_force_deterministic_algorithm)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
@@ -310,6 +314,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("seq_len_q", nullptr),
           py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
+          py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
@@ -330,6 +335,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
                     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    use_causal_mask_bottom right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
@@ -355,6 +361,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("seq_len_q", nullptr),
           py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
+          py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
@@ -379,6 +386,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
                     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    use_causal_mask_bottom right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
