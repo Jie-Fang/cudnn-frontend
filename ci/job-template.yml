@@ -43,7 +43,7 @@ spec:
     - ${ARCH}
   script:
     - export PYTHONPATH=build
-    - pytest test/python_fe -n 4 -v --junit-xml=result-junit.xml
+    - pytest test/python_fe -n 4 --tb=short --junit-xml=result-junit.xml
   artifacts:
     when: always
     reports:
