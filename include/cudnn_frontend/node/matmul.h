@@ -63,6 +63,16 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
                 c_tensor_dim[1] = a_tensor_dim[1];  // M
                 c_tensor_dim[2] = b_tensor_dim[2];  // N
             }
+
+            int64_t gemm_start_dim           = a_tensor_dim.size() - 2;
+            c_tensor_dim[gemm_start_dim]     = a_tensor_dim[gemm_start_dim];      // M
+            c_tensor_dim[gemm_start_dim + 1] = b_tensor_dim[gemm_start_dim + 1];  // N
+
+            // Broadcast the batches
+            for (int64_t i = 0; i < gemm_start_dim; ++i) {
+                c_tensor_dim[i] = std::max(a_tensor_dim[i], b_tensor_dim[i]);
+            }
+
             c_tensor->set_dim(c_tensor_dim);
         }
         if (c_tensor->get_stride().empty()) {
