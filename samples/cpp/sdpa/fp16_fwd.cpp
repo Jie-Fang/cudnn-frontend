@@ -145,6 +145,11 @@ TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
     bool alibi_mask    = (cudnnGetVersion() >= 8904);
     bool has_attn_bias = (cudnnGetVersion() >= 8903);
 
+    if (cudnnGetVersion() < 8903) {
+        SKIP("Test requires cudnn 8.9.3 or above");
+        return;
+    }
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 

@@ -109,6 +109,11 @@ TEST_CASE("Cached sdpa", "[graph][sdpa][flash]") {
     int64_t d_qk = 128;   // hidden dim
     int64_t d_v  = 128;   // hidden dim
 
+    if (cudnnGetVersion() < 8903) {
+        SKIP("Test requires cudnn 8.9.3 or above");
+        return;
+    }
+
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
