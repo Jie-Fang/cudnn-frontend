@@ -193,7 +193,8 @@ class Execution_plan_list {
     std::vector<std::vector<cudnnBackendNumericalNote_t>> behavior_notes;
     std::vector<bool> barred_indices;
 
-    int64_t max_workspace_allowed = std::numeric_limits<int64_t>::max();
+    int64_t max_workspace_allowed  = std::numeric_limits<int64_t>::max();
+    int64_t max_shared_mem_allowed = 1024 * 1024 * 1024;  // Crazy high number (2GB) which will never be hit
 
     std::vector<std::string> barred_engine_names = {};
     EngineConfigList engine_configs;
@@ -332,6 +333,11 @@ class Execution_plan_list {
     }
 
     void
+    set_max_shared_mem_allowed(int64_t const smem_allowed) {
+        max_shared_mem_allowed = smem_allowed;
+    }
+
+    void
     set_barred_names(std::vector<std::string> const& engine_names) {
         barred_engine_names = engine_names;
     }
@@ -375,6 +381,12 @@ class Execution_plan_list {
                 execution_plans[i] = nullptr;
                 continue;
             }
+            if (detail::check_shared_mem_limit_violation(
+                    engine_configs[i]->get_backend_descriptor(), i, max_shared_mem_allowed)) {
+                barred_indices[i]  = true;
+                execution_plans[i] = nullptr;
+                continue;
+            }
 
             auto const& config = engine_configs[i];
             auto fe_status     = detail::create_cudnn_execution_plan(execution_plans[i], config, operation_tag, handle);
@@ -387,7 +399,8 @@ class Execution_plan_list {
                 if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
                     barred_indices[i]  = true;
                     execution_plans[i] = nullptr;
-                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
+                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position due to workspace. "
+                                << i << std::endl;
                     continue;
                 }
 
@@ -422,7 +435,8 @@ class Execution_plan_list {
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                                        "Chosen plan index has been deselected.");
 
-        if (execution_plans[index] != nullptr && execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed) {
+        if (execution_plans[index] != nullptr && execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed &&
+            execution_plans[index]->getSharedMemSize() <= max_shared_mem_allowed) {
             candidate = index;
             return {error_code_t::OK, ""};
         };
@@ -435,7 +449,8 @@ class Execution_plan_list {
 
         // Sets candidate in case user does not call execute with plan_index later.
         if (fe_status.is_good()) {
-            if (execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed) {
+            if (execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed &&
+                execution_plans[index]->getSharedMemSize() <= max_shared_mem_allowed) {
                 candidate = index;
             } else {
                 barred_indices[index] = true;
@@ -474,6 +489,14 @@ class Execution_plan_list {
                 if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
                     getLogger() << "[cudnn_frontend] INFO: skipping plan since workspace violation. Requires "
                                 << execution_plans[i]->getWorkspaceSize() << std::endl;
+                    barred_indices[i]  = true;
+                    execution_plans[i] = nullptr;
+                    continue;
+                }
+
+                if (execution_plans[i]->getSharedMemSize() > max_shared_mem_allowed) {
+                    getLogger() << "[cudnn_frontend] INFO: skipping plan since shared mem violation. Requires  "
+                                << execution_plans[i]->getSharedMemSize() << std::endl;
                     barred_indices[i]  = true;
                     execution_plans[i] = nullptr;
                     continue;

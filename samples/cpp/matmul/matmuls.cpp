@@ -76,7 +76,6 @@ TEST_CASE("Matmul", "[matmul][graph]") {
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
     graph.deselect_engines({"eng4_"});
-
     REQUIRE(graph.check_support(handle).is_good());
 
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::ALL).is_good());
@@ -374,4 +373,65 @@ TEST_CASE("Matmul SBR Graph", "[matmul][graph]") {
                                                                                              {O, y_tensor.devPtr}};
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
+}
+
+TEST_CASE("Matmul with restricted shared memory", "[matmul][graph]") {
+    if (is_arch_supported_by_cudnn() == false) {
+        SKIP("Architecture is not supported by currend cudnn version");
+    }
+    namespace fe = cudnn_frontend;
+
+    // matmul problem size
+    int64_t const b = 1;
+    int64_t const m = 32;
+    int64_t const n = 64;
+    int64_t const k = 32;
+
+    // Initialize input tensors
+    Surface<half> A_gpu(b * m * k, false);
+    Surface<half> B_gpu(b * k * n, false);
+
+    // Make cudnn graph
+    fe::graph::Graph graph{};
+
+    // Create the two non-virtual input tensors A and B.
+    // There are read from global memory.
+    auto A_attributes = fe::graph::Tensor_attributes()
+                            .set_name("A")
+                            .set_dim({b, m, k})
+                            .set_stride({m * k, k, 1})
+                            .set_data_type(fe::DataType_t::BFLOAT16);
+    auto A            = graph.tensor(A_attributes);
+    auto B_attributes = fe::graph::Tensor_attributes()
+                            .set_name("B")
+                            .set_dim({b, k, n})
+                            .set_stride({k * n, n, 1})
+                            .set_data_type(fe::DataType_t::BFLOAT16);
+    auto B = graph.tensor(B_attributes);
+
+    auto matmul_attributes = fe::graph::Matmul_attributes().set_compute_data_type(fe::DataType_t::FLOAT);
+    auto C                 = graph.matmul(A, B, matmul_attributes);
+    C->set_output(true).set_data_type(fe::DataType_t::FLOAT);
+
+    std::cout << graph << std::endl;
+    REQUIRE(graph.validate().is_good());
+
+    cudnnHandle_t handle;
+    checkCudnnErr(cudnnCreate(&handle));
+
+    REQUIRE(graph.build_operation_graph(handle).is_good());
+    REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
+
+    graph.deselect_shared_mem_greater_than(256 * 1024);
+    REQUIRE(graph.check_support(handle).is_good());
+
+    REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
+
+    // Run cudnn graph
+    Surface<float> C_gpu(b * m * n, false);
+    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
+        {A, A_gpu.devPtr}, {B, B_gpu.devPtr}, {C, C_gpu.devPtr}};
+    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+    checkCudnnErr(cudnnDestroy(handle));
 }
