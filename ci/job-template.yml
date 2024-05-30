@@ -32,7 +32,7 @@ spec:
     reports:
       junit: result-junit.xml
 
-"python_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+"pytest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
   stage: python_tests
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
