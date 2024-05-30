@@ -143,7 +143,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || attributes.alibi_mask || is_ragged || attributes.padding_mask || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask only works with is_bias=False, is_alibi=False, is_ragged=False, padding_mask=False, is_dropout=False");
+                                       "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_ragged=False, padding_mask=False, is_dropout=False");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
 
         // validate options for sliding window length
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && attributes.sliding_window_length.value() < 0,
@@ -153,7 +157,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (attributes.padding_mask || !attributes.causal_mask || is_dropout || is_bias || is_ragged),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Sliding window attention only works with padding_mask=False, causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False");
+                                       "Sliding window attention is only supported with padding_mask=False, causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False");
 
         // validate options for dropout mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && has_dropout_mask,
@@ -782,7 +786,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || attributes.alibi_mask || is_ragged || attributes.padding_mask || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask only works with is_bias=False, is_alibi=False, is_ragged=False, padding_mask=False, is_dropout=False");
+                                       "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_ragged=False, padding_mask=False, is_dropout=False");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
 
         // validate options for sliding window length
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && attributes.sliding_window_length.value() < 0,
@@ -792,7 +800,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (attributes.padding_mask || !attributes.causal_mask || is_dropout || is_bias || is_ragged),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Sliding window attention only works with padding_mask=False, causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False");
+                                       "Sliding window attention is only supported with padding_mask=False, causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False");
 
         // validate options for dropout mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && has_dropout_mask,
