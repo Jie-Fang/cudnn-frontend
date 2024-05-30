@@ -1,9 +1,15 @@
 import cudnn
+from looseversion import LooseVersion
+import pytest
 
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
 
 
+@pytest.mark.skipif(
+    LooseVersion(cudnn.backend_version_string()) < "9.3",
+    reason="Reduction mul is not supported below cudnn 9.3",
+)
 def test_gemm_silu_and_mul():
 
     # setup
