@@ -288,6 +288,12 @@ class Graph : public INode {
     }
 
     Graph &
+    deselect_shared_mem_greater_than(int64_t const workspace) {
+        plans.set_max_shared_mem_allowed(workspace);
+        return *this;
+    }
+
+    Graph &
     deselect_engines(std::vector<std::string> const &engine_names) {
         plans.set_barred_names(engine_names);
         return *this;

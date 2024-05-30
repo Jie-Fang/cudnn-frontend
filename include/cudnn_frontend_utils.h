@@ -1953,6 +1953,29 @@ convert_from_cudnn_type(cudnnRngDistribution_t const cudnn_mode) {
 }
 #endif
 
+bool static check_shared_mem_limit_violation(cudnnBackendDescriptor_t engcfg, int idx, int64_t limit) {
+#if (CUDNN_VERSION >= 90200)
+    if (detail::get_backend_version() >= 90200) {
+        int32_t shared_memory_size = 0;
+        auto status                = detail::get_attribute(
+            engcfg, CUDNN_ATTR_ENGINECFG_SHARED_MEMORY_USED, CUDNN_TYPE_INT32, 1, nullptr, &shared_memory_size);
+        if (status != CUDNN_STATUS_SUCCESS) {
+            getLogger() << "[cudnn_frontend] WARN: Unkown Shared Mem size not deselecting." << std::endl;
+        }
+        if ((status == CUDNN_STATUS_SUCCESS) && (shared_memory_size > limit)) {
+            getLogger() << "[cudnn_frontend] INFO: Deselecting ecfg at " << idx << " due to shared mem limit "
+                        << shared_memory_size << " status: " << status << std::endl;
+            return true;
+        }
+    }
+#else
+    CUDNN_FRONTEND_UNUSED(engcfg);
+    CUDNN_FRONTEND_UNUSED(idx);
+    CUDNN_FRONTEND_UNUSED(limit);
+#endif
+    return false;
+}
+
 std::string static get_engine_tag(ManagedOpaqueDescriptor const config) {
     std::stringstream tag{""};
     ManagedOpaqueDescriptor extractedEngine = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
