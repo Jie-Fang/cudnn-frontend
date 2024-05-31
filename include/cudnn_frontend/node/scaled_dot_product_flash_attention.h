@@ -641,11 +641,13 @@ class SDPANode : public NodeCRTP<SDPANode> {
         return {error_code_t::OK, ""};
     }
 
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
         j = attributes;
         j.update(R"({"tag": "SDPA_FWD"})"_json);
     }
+#endif
 };
 
 class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
@@ -1540,11 +1542,13 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         return {error_code_t::OK, ""};
     }
 
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
         j = attributes;
         j.update(R"({"tag": "SDPA_BWD"})"_json);
     }
+#endif
 };
 
 }  // namespace cudnn_frontend::graph

@@ -578,6 +578,7 @@ class INode : public ICudnn {
 
     error_t
     deserialize(cudnnHandle_t handle, std::vector<uint8_t> const& data) {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j = json::from_ubjson(data);
 
         auto serialized_plan = j["cudnn_backend_data"];
@@ -592,10 +593,16 @@ class INode : public ICudnn {
         fe_workspace_size = j["fe_workspace_size"];
 
         return {error_code_t::OK, ""};
+#else
+        CUDNN_FRONTEND_UNUSED(handle);
+        CUDNN_FRONTEND_UNUSED(data);
+        return {error_code_t::GRAPH_NOT_SUPPORTED, "unavailable when compiled with CUDNN_FRONTEND_SKIP_JSON_LIB"};
+#endif
     }
 
     error_t
     serialize(std::vector<uint8_t>& data) const {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j;
         serialize(j);
 
@@ -620,28 +627,40 @@ class INode : public ICudnn {
 
         data = json::to_ubjson(j);
         return {error_code_t::OK, ""};
+#else
+        CUDNN_FRONTEND_UNUSED(data);
+        return {error_code_t::GRAPH_NOT_SUPPORTED, "unavailable when compiled with CUDNN_FRONTEND_SKIP_JSON_LIB"};
+#endif
     }
 
     INode(detail::Context const& context) : context(context) {}
 
     // Make sure each node implements a public serialize function
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const = 0;
+#endif
 
     size_t
     key() {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j;
         serialize(j);
         return std::hash<json>{}(j);
+#else
+        return 1;
+#endif
     }
 
     virtual ~INode() = default;
 };
 
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
 [[maybe_unused]] static void
 to_json(json& j, const INode& p) {
     p.serialize(j);
 }
+#endif
 
 template <typename DerivedT>
 class NodeCRTP : public INode {

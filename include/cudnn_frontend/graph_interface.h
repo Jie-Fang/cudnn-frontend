@@ -338,6 +338,7 @@ class Graph : public INode {
     using INode::deserialize;
     using INode::serialize;
 
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json &j) const override final {
         // Different from serialization of other INodes.
@@ -415,8 +416,10 @@ class Graph : public INode {
             j["nodes"].push_back(short_node);
         }
     };
+#endif
 
     // TODO: temparorily placed in graphs class. This function needs to be a free standing function.
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     error_t
     deserialize(const json &j) {
         if (j.contains("context")) {
@@ -520,13 +523,18 @@ class Graph : public INode {
 
         return {error_code_t::OK, ""};
     }
+#endif
 
     std::string
     print(void) const {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         std::stringstream ss;
         json j = *this;
         ss << j;
         return ss.str();
+#else
+        return "print is unavailable when compiled with CUDNN_FRONTEND_SKIP_JSON_LIB";
+#endif
     }
 };
 

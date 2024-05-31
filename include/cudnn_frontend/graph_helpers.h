@@ -144,7 +144,11 @@ NLOHMANN_JSON_SERIALIZE_ENUM(error_code_t,
 
 static inline std::ostream&
 operator<<(std::ostream& os, const error_code_t& mode) {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     os << json{mode};
+#else
+    os << int(mode);
+#endif
     return os;
 }
 
