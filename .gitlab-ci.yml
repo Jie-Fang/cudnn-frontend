@@ -226,6 +226,12 @@ analysis:check-relative-includes:
         - echo 'int main() { return 0; }' >> test_build.cpp
         - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/ -L/usr/lib/x86_64-linux-gnu/ -lcudnn
 
+analysis:check-CUDNN_FRONTEND_SKIP_JSON_LIB:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.1.0.70_12.4.0
+    stage: analysis
+    script:
+        - ci/build_wo_json.sh
+
 build:cudnn_dev_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []

@@ -161,11 +161,13 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
         return {error_code_t::OK, ""};
     }
 
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json& j) const override final {
         j = attributes;
         j.update(R"( {"tag": "MATMUL"})"_json);
     }
+#endif
 };
 
 inline void

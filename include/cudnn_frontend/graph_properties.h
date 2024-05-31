@@ -83,10 +83,12 @@ class Tensor_attributes {
 
    public:
     // Serialization functions
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     friend void
     to_json(nlohmann::json& j, const Tensor_attributes& ta);
     friend void
     from_json(const nlohmann::json& j, Tensor_attributes& ta);
+#endif
 
     Tensor_attributes() = default;
 
