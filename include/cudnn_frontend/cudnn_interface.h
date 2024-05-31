@@ -133,7 +133,7 @@ class ICudnn {
         int64_t candidate = plan_index != -1 ? plan_index : plans.candidate;
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (candidate < 0) && (static_cast<int64_t>(plans.execution_plans.size()) <= candidate),
+            (candidate < 0) || (static_cast<int64_t>(plans.execution_plans.size()) <= candidate),
             error_code_t::GRAPH_EXECUTION_FAILED,
             "Plan index is invalid.");
 
@@ -169,7 +169,7 @@ class ICudnn {
 
         int64_t candidate = plan_index != -1 ? plan_index : plans.candidate;
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            (candidate < 0) && (static_cast<int64_t>(plans.execution_plans.size()) <= candidate),
+            (candidate < 0) || (static_cast<int64_t>(plans.execution_plans.size()) <= candidate),
             error_code_t::GRAPH_EXECUTION_FAILED,
             "Plan index is invalid.");
 
