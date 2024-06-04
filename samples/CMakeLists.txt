@@ -43,6 +43,7 @@ add_executable(
 
     cpp/misc/serialization.cpp
     cpp/misc/autotuning.cpp
+    cpp/misc/parallel_compilation.cpp
     cpp/misc/pointwise.cpp
     cpp/misc/resample.cpp
 

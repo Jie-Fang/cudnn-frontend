@@ -137,6 +137,9 @@ class ICudnn {
             error_code_t::GRAPH_EXECUTION_FAILED,
             "Plan index is invalid.");
 
+        if (!(plans.execution_plans[candidate])) {
+            getLogger() << "No plan build for plan at index " << candidate << std::endl;
+        }
         RETURN_CUDNN_FRONTEND_ERROR_IF(!(plans.execution_plans[candidate]),
                                        error_code_t::GRAPH_EXECUTION_FAILED,
                                        "No candidate plan found for graph to query worksapce for.");

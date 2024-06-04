@@ -304,7 +304,7 @@ class Execution_plan_list {
                 bool has_barred_note =
                     std::find(numeric_notes[i].begin(), numeric_notes[i].end(), backend_note) != numeric_notes[i].end();
 
-                barred_indices[i] = has_barred_note && valid_note ? !keep : keep;
+                barred_indices[i] = barred_indices[i] || (has_barred_note && valid_note ? !keep : keep);
             }
         }
         return {error_code_t::OK, ""};
@@ -320,9 +320,9 @@ class Execution_plan_list {
 
             for (auto i = 0u; i < engine_configs.size(); i++) {
                 bool has_barred_note = std::find(behavior_notes[i].begin(), behavior_notes[i].end(), backend_note) !=
-                                       numeric_notes[i].end();
+                                       behavior_notes[i].end();
 
-                barred_indices[i] = has_barred_note && valid_note ? !keep : keep;
+                barred_indices[i] = barred_indices[i] || (has_barred_note && valid_note ? !keep : keep);
             }
         }
         return {error_code_t::OK, ""};
@@ -398,9 +398,14 @@ class Execution_plan_list {
     check_support_at_index(cudnnHandle_t handle, int64_t index) {
         // Ignore if the engine config was deselected.
         // This usually happens when user deselects by numerical and behavioural notes.
+
+        if (barred_indices[index] == true) {
+            getLogger() << "Deselecting execution plan at position " << index << std::endl;
+        }
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(barred_indices[index] == true,
                                        error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                                       "Deselecting execution plan at position " + index);
+                                       "Deselecting execution plan");
 
         // Ignore if engine name was specified to be ignored by the user.
         auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
@@ -448,6 +453,7 @@ class Execution_plan_list {
             CHECK_CUDNN_FRONTEND_ERROR(_build_plan_at_index_impl(handle, index));
         }
 
+        getLogger() << "Check support for index " << index << " passed with cfg " << cfg_tag << std::endl;
         // All checks passed for this config, so return success.
         return {error_code_t::OK, ""};
     }

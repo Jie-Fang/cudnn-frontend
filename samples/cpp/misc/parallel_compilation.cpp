@@ -21,11 +21,23 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <catch2/generators/catch_generators_range.hpp>
+
 #include "../../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
-TEST_CASE("Matmul autotuning", "[matmul][graph][autotuning]") {
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <thread>
+
+TEST_CASE("Parallel build", "[matmul][graph][parallel]") {
+    SKIP(
+        "Very long test turned off by default. Run /bin/samples --benchmark-samples 1  \"Parallel build\" after "
+        "uncommenting this line.");
     if (is_arch_supported_by_cudnn() == false) {
         SKIP("Architecture is not supported by currend cudnn version");
     }
@@ -77,84 +89,64 @@ TEST_CASE("Matmul autotuning", "[matmul][graph][autotuning]") {
 
         REQUIRE(graph.build_operation_graph(handle).is_good());
 
-        graph.deselect_workspace_greater_than(0);
-
         REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
 
-        graph.deselect_workspace_greater_than(1024 * 1024);
+        graph.select_behavior_notes({fe::BehaviorNote_t::RUNTIME_COMPILATION});
 
         REQUIRE(graph.check_support(handle).is_good());
 
         return graph;
     };
 
-    auto graph = create_graph();
-
-    auto plan_count = graph.get_execution_plan_count();
-    std::cout << "Graph has " << plan_count << " plan candidates." << std::endl;
-
-    REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::ALL).is_good());
-
-    std::unordered_map<int64_t, void *> variant_pack = {
-        {a_uid, A_gpu.devPtr}, {b_uid, B_gpu.devPtr}, {c_uid, C_gpu.devPtr}};
-
-    auto autotune = [&]() -> int64_t {
-        const int iter_count = 10;
-        cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-        cudaDeviceSynchronize();
-
-        cudaStream_t stream = nullptr;
-        cudnnGetStream(handle, &stream);
-
-        std::vector<float> execution_times;
-        execution_times.resize(plan_count, 10.0f);  // Some arbitrary high time
-
-        int64_t workspace_size = 0;
-        for (auto i = 0; i < plan_count; i++) {
-            workspace_size = std::max(workspace_size, graph.get_workspace_size_plan_at_index(i));
-        }
-
-        Surface<int8_t> workspace(workspace_size, false);
-
-        for (auto i = 0; i < plan_count; i++) {
-            float time_ms = 0.0f;
-
-            auto warmup_status = graph.execute_plan_at_index(handle, variant_pack, workspace.devPtr, i);
-
-            if (warmup_status.is_bad()) {
-                std::cout << "Plan at index " << i << " failed execution " << warmup_status.get_message() << std::endl;
-                continue;
-            }
-            cudaDeviceSynchronize();
-
-            cudaEventRecord(start, stream);
-            for (int iter = 0; iter < iter_count; iter++) {
-                auto status = graph.execute_plan_at_index(handle, variant_pack, workspace.devPtr, i);
-                (void)status;
-            }
-            cudaEventRecord(stop, stream);
-            cudaEventSynchronize(stop);
-            cudaEventElapsedTime(&time_ms, start, stop);
-
-            std::cout << "Plan at index " << i << " took " << time_ms / iter_count << " ms." << std::endl;
-            execution_times[i] = time_ms / iter_count;
-        }
-
-        return std::distance(std::begin(execution_times),
-                             std::min_element(std::begin(execution_times), std::end(execution_times)));
+    auto build = [](fe::graph::Graph &graph, cudnnHandle_t handle, int index) {
+        auto status = graph.build_plan_at_index(handle, index);
     };
-    // Run cudnn graph
 
-    auto candidate_index = autotune();
+    BENCHMARK("BuildPlanPolicy_t::HEURISTICS_CHOICE") {
+        fe::graph::Graph graph = create_graph();
+        return graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good();
+    };
 
-    std::cout << "Successful candidate is at index " << candidate_index << std::endl;
+    BENCHMARK("BuildPlanPolicy_t::ALL") {
+        fe::graph::Graph graph = create_graph();
+        return graph.build_plans(handle, fe::BuildPlanPolicy_t::ALL).is_good();
+    };
 
-    REQUIRE(graph.build_plan_at_index(handle, candidate_index).is_good());
+    BENCHMARK("build_plan_at_index::ALL::serial") {
+        fe::graph::Graph graph = create_graph();
+        auto plan_count        = graph.get_execution_plan_count();
+        for (auto i = 0; i < plan_count; i++) {
+            build(graph, handle, i);
+        }
+    };
 
-    Surface<int8_t> workspace(graph.get_workspace_size_plan_at_index(candidate_index), false);
+    BENCHMARK("build_plan_at_index::ALL::parallel") {
+        fe::graph::Graph graph = create_graph();
+        auto plan_count        = graph.get_execution_plan_count();
+        std::vector<std::thread> builders;
+        for (auto i = 0; i < plan_count; i++) {
+            builders.emplace_back(std::thread{build, std::reference_wrapper<fe::graph::Graph>(graph), handle, i});
+        }
+        for (auto &builder : builders) {
+            builder.join();
+        }
+    };
 
-    REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
+    {
+        auto input = GENERATE(range(2, 11));
+
+        BENCHMARK("build_plan_at_index::ALL::parallel_" + std::to_string(input)) {
+            fe::graph::Graph graph = create_graph();
+            auto plan_count = input < graph.get_execution_plan_count() ? input : graph.get_execution_plan_count();
+            std::vector<std::thread> builders;
+            for (auto i = 0; i < plan_count; i++) {
+                builders.emplace_back(std::thread{build, std::reference_wrapper<fe::graph::Graph>(graph), handle, i});
+            }
+            for (auto &builder : builders) {
+                builder.join();
+            }
+        };
+    }
+
     checkCudnnErr(cudnnDestroy(handle));
 }
