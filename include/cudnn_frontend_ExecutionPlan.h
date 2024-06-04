@@ -66,12 +66,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
         return workSpaceSize;
     }
 
-    //! Query the workspace requirement for the given plan
-    auto
-    getSharedMemSize(void) const -> int64_t {
-        return sharedMemSize;
-    }
-
     std::string
     describe() const override {
         std::stringstream ss;
@@ -86,7 +80,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
             ss << cudnn_frontend::to_string(note) << ",";
         }
         ss << "] workSpaceSize: " << workSpaceSize;
-        ss << " sharedMemSize: " << std::hex << sharedMemSize << std::dec;
         return ss.str();
     }
 
@@ -298,25 +291,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     }
 
     void
-    computeSharedMemSize(cudnnBackendDescriptor_t engcfg) {
-#if (CUDNN_VERSION >= 90200)
-        if (detail::get_backend_version() < 90200) {
-            return;
-        } else {
-            int32_t shared_memory_size = 0;
-            auto status_               = detail::get_attribute(
-                engcfg, CUDNN_ATTR_ENGINECFG_SHARED_MEMORY_USED, CUDNN_TYPE_INT32, 1, nullptr, &shared_memory_size);
-            if (status_ != CUDNN_STATUS_SUCCESS) {
-                return;
-            }
-            sharedMemSize = shared_memory_size;
-        }
-#else
-        CUDNN_FRONTEND_UNUSED(engcfg);
-#endif
-    }
-
-    void
     computeWorkSpaceSize() {
         auto status = detail::get_attribute(pointer->get_backend_descriptor(),
                                             CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE,
@@ -342,7 +316,6 @@ class ExecutionPlan_v8 : public BackendDescriptor {
     std::string planTag;
 
     std::int64_t workSpaceSize = 0;
-    std::int64_t sharedMemSize = 1024 * 1024 * 1024 - 1;
     std::array<cudnnBackendNumericalNote_t, CUDNN_NUMERICAL_NOTE_TYPE_COUNT> numeric_notes;
     std::vector<cudnnBackendNumericalNote_t> numeric_notes_vec;
     std::array<cudnnBackendBehaviorNote_t, CUDNN_BEHAVIOR_NOTE_TYPE_COUNT> behavior_notes;
@@ -478,7 +451,6 @@ class ExecutionPlanBuilder_v8 {
         m_execution_plan.buildTag(extractedEngine);
         m_execution_plan.fetchNotes(extractedEngine);
         m_execution_plan.computeWorkSpaceSize();
-        m_execution_plan.computeSharedMemSize(m_execution_plan.engine_config->get_backend_descriptor());
 
         getLogger() << "[cudnn_frontend] " << m_execution_plan << std::endl;
         return std::move(m_execution_plan);
@@ -596,7 +568,6 @@ class ExecutionPlanBuilder_v8 {
         m_execution_plan.buildTag(extractedEngine);
         m_execution_plan.fetchNotes(extractedEngine);
         m_execution_plan.computeWorkSpaceSize();
-        m_execution_plan.computeSharedMemSize(engCfgDesc);
 
         getLogger() << "[cudnn_frontend] " << m_execution_plan << std::endl;
         return std::move(m_execution_plan);
