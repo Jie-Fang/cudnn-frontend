@@ -44,7 +44,7 @@ def test_gemm_silu_and_mul():
     X_DQ_cpu = torch.full((1, 1, 1), scale, dtype=torch.float32, device="cpu")
     W_DQ_cpu = torch.full((1, 1, 1), scale, dtype=torch.float32, device="cpu")
     C_Q_cpu = torch.full((1, 1, 1), scale, dtype=torch.float32, device="cpu")
-    B_cpu = torch.full((1, 1, 1), 1, dtype=torch.int32, device="cpu")
+    B_mask_gpu = torch.tensor([[[1]], [[0]]], dtype=torch.int32, device="cuda")
 
     X = graph.tensor(
         name="X",
@@ -80,16 +80,13 @@ def test_gemm_silu_and_mul():
 
     C3 = graph.mul(graph.sigmoid(C2), C2)
 
-    B_index = graph.gen_index(C3, 0)
-    B_value = graph.tensor(
-        name="B_cpu",
-        dim=B_cpu.size(),
-        stride=B_cpu.stride(),
+    B_mask = graph.tensor(
+        name="B_mask",
+        dim=B_mask_gpu.size(),
+        stride=B_mask_gpu.stride(),
         data_type=cudnn.data_type.INT32,
-        is_pass_by_value=True,
     )
-    Mask_upper = graph.cmp_lt(B_index, B_value)
-    C_combined = graph.binary_select(C2, C3, Mask_upper)
+    C_combined = graph.binary_select(C2, C3, B_mask)
 
     C = graph.reduction(C_combined, mode=cudnn.reduction_mode.MUL)
     C.set_dim([1, M, N]).set_stride([M * N, N, 1]).set_output(True).set_data_type(
@@ -120,7 +117,7 @@ def test_gemm_silu_and_mul():
                 W: W_gpu,
                 X_DQ: X_DQ_cpu,
                 W_DQ: W_DQ_cpu,
-                B_value: B_cpu,
+                B_mask: B_mask_gpu,
                 C: C_gpu,
             },
             workspace,
