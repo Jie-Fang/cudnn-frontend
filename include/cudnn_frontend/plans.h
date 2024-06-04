@@ -200,6 +200,42 @@ class Execution_plan_list {
     std::vector<std::string> barred_engine_names = {};
     EngineConfigList engine_configs;
 
+    error_t
+    _build_plan_at_index_impl(cudnnHandle_t handle, int64_t index) {
+        if (execution_plans[index] == nullptr) {
+            CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_execution_plan(
+                execution_plans[index], engine_configs[index], operation_tag, handle));
+        }
+
+        auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
+            for (auto const& blocked_name : blocked_names) {
+                if (full_name.find(blocked_name) != std::string::npos) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (is_blocked(execution_plans[index]->getTag(), barred_engine_names)) {
+            barred_indices[index] = true;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                    "[cudnn_frontend] Error: Workspace size is too large."};
+        }
+
+        // workspace check for 9.2+ is already done at engine config level
+        if (detail::get_backend_version() < 90200) {
+            if (execution_plans[index]->getWorkspaceSize() > max_workspace_allowed) {
+                barred_indices[index] = true;
+                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                        "[cudnn_frontend] Error: Workspace size is too large."};
+            }
+        }
+
+        // Sets candidate in case user does not call execute with plan_index later.
+        candidate = index;
+
+        return {error_code_t::OK, ""};
+    }
+
    public:
     std::vector<std::shared_ptr<ExecutionPlan>>
         execution_plans;  // a built plan corresponding to each engine config, irrespective of whether config is
@@ -356,42 +392,6 @@ class Execution_plan_list {
         getLogger() << "[cudnn_frontend] INFO: " << " barred engine_configs ..." << barred_engine_configs.size()
                     << std::endl;
         return barred_engine_configs;
-    }
-
-    error_t
-    _build_plan_at_index_impl(cudnnHandle_t handle, int64_t index) {
-        if (execution_plans[index] == nullptr) {
-            CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_execution_plan(
-                execution_plans[index], engine_configs[index], operation_tag, handle));
-        }
-
-        auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
-            for (auto const& blocked_name : blocked_names) {
-                if (full_name.find(blocked_name) != std::string::npos) {
-                    return true;
-                }
-            }
-            return false;
-        };
-        if (is_blocked(execution_plans[index]->getTag(), barred_engine_names)) {
-            barred_indices[index] = true;
-            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                    "[cudnn_frontend] Error: Workspace size is too large."};
-        }
-
-        // workspace check for 9.2+ is already done at engine config level
-        if (detail::get_backend_version() < 90200) {
-            if (execution_plans[index]->getWorkspaceSize() > max_workspace_allowed) {
-                barred_indices[index] = true;
-                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                        "[cudnn_frontend] Error: Workspace size is too large."};
-            }
-        }
-
-        // Sets candidate in case user does not call execute with plan_index later.
-        candidate = index;
-
-        return {error_code_t::OK, ""};
     }
 
     error_t
@@ -560,7 +560,7 @@ class Execution_plan_list {
             return a->getExecutionTime() < b->getExecutionTime();
         };
 
-        std::set<std::shared_ptr<ExecutionPlan>, decltype(plan_cmp)> timed_execution_plans(plan_cmp);
+        std::multiset<std::shared_ptr<ExecutionPlan>, decltype(plan_cmp)> timed_execution_plans(plan_cmp);
 
         const int maxIterCount         = 100;
         const float threshhold         = 0.95f;
@@ -632,6 +632,19 @@ class Execution_plan_list {
              void* user_impl = nullptr) {
         auto error = autotune_impl(execution_plans, handle, tensor_to_pointer_map, workspace, user_impl);
         return error;
+    }
+
+    error_t
+    is_plan_index_executable(int64_t const index) const {
+        RETURN_CUDNN_FRONTEND_ERROR_IF((index < 0) || (static_cast<int64_t>(execution_plans.size()) <= index),
+                                       error_code_t::GRAPH_EXECUTION_FAILED,
+                                       "Plan index " + std::to_string(index) + " is invalid.");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(execution_plans[index] == nullptr,
+                                       error_code_t::GRAPH_EXECUTION_FAILED,
+                                       "Plan index " + std::to_string(index) + " did not build.");
+
+        return {error_code_t::OK, ""};
     }
 };
 
