@@ -9,6 +9,7 @@
 #include "graph_helpers.h"
 
 #include "backend/execution_helpers.h"
+#include "backend/plan_helpers.h"
 
 namespace cudnn_frontend {
 
@@ -358,63 +359,111 @@ class Execution_plan_list {
     }
 
     error_t
+    _build_plan_at_index_impl(cudnnHandle_t handle, int64_t index) {
+        if (execution_plans[index] == nullptr) {
+            CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_execution_plan(
+                execution_plans[index], engine_configs[index], operation_tag, handle));
+        }
+
+        auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
+            for (auto const& blocked_name : blocked_names) {
+                if (full_name.find(blocked_name) != std::string::npos) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (is_blocked(execution_plans[index]->getTag(), barred_engine_names)) {
+            barred_indices[index] = true;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                    "[cudnn_frontend] Error: Workspace size is too large."};
+        }
+
+        // workspace check for 9.2+ is already done at engine config level
+        if (detail::get_backend_version() < 90200) {
+            if (execution_plans[index]->getWorkspaceSize() > max_workspace_allowed) {
+                barred_indices[index] = true;
+                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                        "[cudnn_frontend] Error: Workspace size is too large."};
+            }
+        }
+
+        // Sets candidate in case user does not call execute with plan_index later.
+        candidate = index;
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    check_support_at_index(cudnnHandle_t handle, int64_t index) {
+        // Ignore if the engine config was deselected.
+        // This usually happens when user deselects by numerical and behavioural notes.
+        RETURN_CUDNN_FRONTEND_ERROR_IF(barred_indices[index] == true,
+                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                       "Deselecting execution plan at position " + index);
+
+        // Ignore if engine name was specified to be ignored by the user.
+        auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
+            for (auto const& blocked_name : blocked_names) {
+                if (full_name.find(blocked_name) != std::string::npos) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        auto cfg_tag = detail::get_engine_tag(engine_configs[index]);
+        if (is_blocked(cfg_tag, barred_engine_names)) {
+            barred_indices[index] = true;
+            return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                    "[cudnn_frontend] Error: Deselecting execution plan with name " + cfg_tag + " at position " +
+                        std::to_string(index)};
+        }
+
+        if (detail::get_backend_version() >= 90200) {
+            // Ignore kernels that require larger than tolerable shared memory.
+            int32_t shared_memory_size = INT32_MAX;
+            auto status                = detail::get_shared_memory_size(engine_configs[index], shared_memory_size);
+            if (status.is_bad()) {
+                getLogger() << "[cudnn_frontend] WARN: Unknown Shared memory size, so not deselecting plan at position "
+                            << index << std::endl;
+            } else if (shared_memory_size > max_shared_mem_allowed) {
+                barred_indices[index] = true;
+                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                        "[cudnn_frontend] Error: Skipping plan since shared memory violation. Requires " +
+                            std::to_string(shared_memory_size)};
+            }
+
+            // Filter by workspace can happen at this engine config stage itself.
+            int64_t workspace_size = INT64_MAX;
+            CHECK_CUDNN_FRONTEND_ERROR(detail::get_workspace_size(engine_configs[index], workspace_size));
+            if (workspace_size > max_workspace_allowed) {
+                barred_indices[index] = true;
+                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                        "[cudnn_frontend] Error: Skipping plan since workspace violation. Requires " +
+                            std::to_string(workspace_size)};
+            }
+        }
+        // Else we need to build the config. A successful execution plan build means that check_support succeeded.
+        else {
+            CHECK_CUDNN_FRONTEND_ERROR(_build_plan_at_index_impl(handle, index));
+        }
+
+        // All checks passed for this config, so return success.
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     check_support(cudnnHandle_t handle) {
+        // Go over each engine config and return true when you find the first one that is supported.
         for (auto i = 0u; i < engine_configs.size(); i++) {
-            if (barred_indices[i]) {
-                getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position " << i << std::endl;
-                continue;
-            }
-
-            auto is_blocked = [](std::string const& full_name, std::vector<std::string> const& blocked_names) -> bool {
-                for (auto const& blocked_name : blocked_names) {
-                    if (full_name.find(blocked_name) != std::string::npos) {
-                        return true;
-                    }
-                }
-                return false;
-            };
-
-            auto cfg_tag = detail::get_engine_tag(engine_configs[i]);
-            if (is_blocked(cfg_tag, barred_engine_names)) {
-                getLogger() << "[cudnn_frontend] INFO: Deselecting engine_configs " << cfg_tag << std::endl;
-                barred_indices[i]  = true;
-                execution_plans[i] = nullptr;
-                continue;
-            }
-            if (detail::check_shared_mem_limit_violation(
-                    engine_configs[i]->get_backend_descriptor(), i, max_shared_mem_allowed)) {
-                barred_indices[i]  = true;
-                execution_plans[i] = nullptr;
-                continue;
-            }
-
-            auto const& config = engine_configs[i];
-            auto fe_status     = detail::create_cudnn_execution_plan(execution_plans[i], config, operation_tag, handle);
-            getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
-                        << " with message: " << fe_status.get_message() << std::endl;
-
-            // If a plan is built successfully, set it as a candidate
-            if (fe_status.is_good()) {
-                // Filter out execution plans with workspace greater than whats available from user
-                if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
-                    barred_indices[i]  = true;
-                    execution_plans[i] = nullptr;
-                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan at position due to workspace. "
-                                << i << std::endl;
-                    continue;
-                }
-
-                candidate = static_cast<int64_t>(i);
-                getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << " " << execution_plans[i]->getTag()
-                            << std::endl;
-
+            auto status = check_support_at_index(handle, i);
+            if (status.is_good()) {
                 return {error_code_t::OK, ""};
             }
         }
 
-        // No plans were able to be built. Return error.
         return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                "[cudnn_frontend] Error: No execution plans built successfully."};
+                "[cudnn_frontend] Error: No execution plans support the graph."};
     }
 
     error_t
@@ -431,35 +480,10 @@ class Execution_plan_list {
 
     error_t
     build_plan_at_index(cudnnHandle_t handle, int64_t index) {
-        RETURN_CUDNN_FRONTEND_ERROR_IF(barred_indices[index] == true,
-                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                                       "Chosen plan index has been deselected.");
+        CHECK_CUDNN_FRONTEND_ERROR(check_support_at_index(handle, index));
+        CHECK_CUDNN_FRONTEND_ERROR(_build_plan_at_index_impl(handle, index));
 
-        if (execution_plans[index] != nullptr && execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed &&
-            execution_plans[index]->getSharedMemSize() <= max_shared_mem_allowed) {
-            candidate = index;
-            return {error_code_t::OK, ""};
-        };
-
-        auto fe_status =
-            detail::create_cudnn_execution_plan(execution_plans[index], engine_configs[index], operation_tag, handle);
-
-        getLogger() << "[cudnn_frontend] INFO: Building plan at index " << index << " gave " << fe_status.get_code()
-                    << " with message: " << fe_status.get_message() << std::endl;
-
-        // Sets candidate in case user does not call execute with plan_index later.
-        if (fe_status.is_good()) {
-            if (execution_plans[index]->getWorkspaceSize() <= max_workspace_allowed &&
-                execution_plans[index]->getSharedMemSize() <= max_shared_mem_allowed) {
-                candidate = index;
-            } else {
-                barred_indices[index] = true;
-                return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                        "[cudnn_frontend] Error: Workspace size is too large."};
-            }
-        }
-
-        return fe_status;
+        return {error_code_t::OK, ""};
     }
 
     error_t
@@ -475,65 +499,28 @@ class Execution_plan_list {
         }
 
         for (auto i = 0u; i < engine_configs.size(); i++) {
-            if (barred_indices[i]) {
-                getLogger() << "[cudnn_frontend] INFO: Skipping deselected engine plan at index " << i << std::endl;
+            auto status = build_plan_at_index(handle, i);
+            if (status.is_bad()) {
+                getLogger() << "[cudnn_frontend] WARN: Failed to build plan at " << i << std::endl;
                 continue;
             }
 
-            auto fe_status =
-                detail::create_cudnn_execution_plan(execution_plans[i], engine_configs[i], operation_tag, handle);
-            getLogger() << "[cudnn_frontend] INFO: Building plan at index " << i << " gave " << fe_status.get_code()
-                        << " with message: " << fe_status.get_message() << std::endl;
+            // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
+            if (candidate == -1) {
+                candidate = static_cast<int64_t>(i);
+                getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << std::endl;
+            }
 
-            if (fe_status.is_good()) {
-                if (execution_plans[i]->getWorkspaceSize() > max_workspace_allowed) {
-                    getLogger() << "[cudnn_frontend] INFO: skipping plan since workspace violation. Requires "
-                                << execution_plans[i]->getWorkspaceSize() << std::endl;
-                    barred_indices[i]  = true;
-                    execution_plans[i] = nullptr;
-                    continue;
-                }
-
-                if (execution_plans[i]->getSharedMemSize() > max_shared_mem_allowed) {
-                    getLogger() << "[cudnn_frontend] INFO: skipping plan since shared mem violation. Requires  "
-                                << execution_plans[i]->getSharedMemSize() << std::endl;
-                    barred_indices[i]  = true;
-                    execution_plans[i] = nullptr;
-                    continue;
-                }
-
-                auto is_blocked = [](std::string const& full_name,
-                                     std::vector<std::string> const& blocked_names) -> bool {
-                    for (auto const& blocked_name : blocked_names) {
-                        if (full_name.find(blocked_name) != std::string::npos) {
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-
-                if (is_blocked(execution_plans[i]->getTag(), barred_engine_names)) {
-                    getLogger() << "[cudnn_frontend] INFO: Deselecting execution plan " << execution_plans[i]->getTag()
-                                << std::endl;
-                    barred_indices[i]  = true;
-                    execution_plans[i] = nullptr;
-                    continue;
-                }
-                // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
-                if (candidate == -1) {
-                    candidate = static_cast<int64_t>(i);
-                    getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << std::endl;
-                }
-
-                getLogger() << "[cudnn_frontend] INFO: Built plan at " << i << " " << execution_plans[i]->getTag()
-                            << std::endl;
-
-                // Return from this function as first successfully built plan is found.
-                if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
-                    return {error_code_t::OK, ""};
-                }
+            // Return from this function as first successfully built plan is found.
+            if (policy == BuildPlanPolicy_t::HEURISTICS_CHOICE) {
+                return {error_code_t::OK, ""};
             }
         }
+
+        // Return an error if no execution plans could be built
+        RETURN_CUDNN_FRONTEND_ERROR_IF(candidate == -1,
+                                       error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
+                                       "[cudnn_frontend] Error: No valid execution plans built.");
 
         return {error_code_t::OK, ""};
     }
