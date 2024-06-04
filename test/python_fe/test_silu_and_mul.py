@@ -10,6 +10,10 @@ from torch.profiler import profile, record_function, ProfilerActivity
     LooseVersion(cudnn.backend_version_string()) < "9.3",
     reason="Reduction mul is not supported below cudnn 9.3",
 )
+@pytest.mark.skipif(
+    hasattr(torch, "float8_e4m3fn") is False,
+    reason="torch does not have fp8 data types",
+)
 def test_gemm_silu_and_mul():
 
     # setup
@@ -130,6 +134,10 @@ def test_gemm_silu_and_mul():
     cudnn.destroy_handle(handle)
 
 
+@pytest.mark.skipif(
+    hasattr(torch, "float8_e4m3fn") is False,
+    reason="torch does not have fp8 data types",
+)
 def test_silu_and_mul_and_quantization():
 
     # setup

@@ -69,7 +69,7 @@ class INode : public ICudnn {
     }
 
     int64_t
-    get_cudnn_workspace_size(int64_t plan_index = -1) const {
+    get_cudnn_workspace_size(int64_t plan_index) const {
         int64_t cudnn_workspace_size = 0;
 
         auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
@@ -423,7 +423,7 @@ class INode : public ICudnn {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
-        return get_fe_workspace_size() + get_cudnn_workspace_size();
+        return get_fe_workspace_size() + get_cudnn_workspace_size(plans.candidate);
     }
 
     int64_t
@@ -571,7 +571,8 @@ class INode : public ICudnn {
         // this is where cudnn backend can start using workspace for its execution plans
         void* cudnn_workspace = static_cast<char*>(workspace) + get_fe_workspace_size();
 
-        CHECK_CUDNN_FRONTEND_ERROR(execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate));
 
         return {error_code_t::OK, ""};
     }
