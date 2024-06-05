@@ -343,18 +343,20 @@ PyGraph::serialize() const {
 }
 
 void
-PyGraph::deserialize(std::vector<uint8_t> const& data) {
-    auto status = graph.deserialize(handle, data);
-    throw_if(status.is_bad(), status.get_code(), status.get_message());
-}
+PyGraph::deserialize(py::object const& pyobj) {
+    if (py::isinstance<py::str>(pyobj)) {
+        json j = json::parse(pyobj.cast<std::string>());
 
-void
-PyGraph::create_graph(std::string const& s) {
-    json j = json::parse(s);
+        auto status = graph.deserialize(j);
 
-    auto status = graph.deserialize(j);
+        throw_if(status.is_bad(), status.get_code(), status.get_message());
 
-    throw_if(status.is_bad(), status.get_code(), status.get_message());
+    } else {
+        std::vector<uint8_t> data = pyobj.cast<std::vector<uint8_t>>();
+        auto status               = graph.deserialize(handle, data);
+
+        throw_if(status.is_bad(), status.get_code(), status.get_message());
+    }
 }
 
 void
@@ -661,7 +663,6 @@ init_pygraph_submodule(py::module_& m) {
         .def("_execute", &PyGraph::execute)
         .def("serialize", &PyGraph::serialize)
         .def("deserialize", &PyGraph::deserialize)
-        .def("create_graph_from_json", &PyGraph::create_graph)
         .def("_execute_plan_at_index", &PyGraph::execute_plan_at_index)
         .def("__repr__", [](PyGraph const& pygraph) {
             std::stringstream ss;

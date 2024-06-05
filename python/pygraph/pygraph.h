@@ -410,10 +410,7 @@ class PyGraph {
     serialize() const;
 
     void
-    deserialize(std::vector<uint8_t> const& data);
-
-    void
-    create_graph(const std::string& s);
+    deserialize(py::object const& pyobj);
 
     int64_t
     get_execution_plan_count() const {
