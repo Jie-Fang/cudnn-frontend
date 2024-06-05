@@ -155,7 +155,7 @@ class ICudnn {
             RETURN_CUDNN_FRONTEND_ERROR_IF(search == tensor_uid_to_pointer_map.end(),
                                            error_code_t::INVALID_VARIANT_PACK,
                                            "Uid " + std::to_string(uid) + " does not exist in variant pack.");
-            device_ptrs.push_back(tensor_uid_to_pointer_map.at(uid));
+            device_ptrs.push_back(search->second);
             uids.push_back(uid);
         }
 
