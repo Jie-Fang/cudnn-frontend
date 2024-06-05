@@ -29,7 +29,7 @@ try:
 
     graph = cudnn.pygraph(handle=handle)
 
-    graph.create_graph_from_json(data)
+    graph.deserialize(data)
 
     graph.build([cudnn.heur_mode.A])
 
