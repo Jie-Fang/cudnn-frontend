@@ -215,10 +215,13 @@ class Execution_plan_list {
             }
             return false;
         };
-        if (is_blocked(execution_plans[index]->getTag(), barred_engine_names)) {
+        auto const& plan_tag = execution_plans[index]->getTag();
+        if (is_blocked(plan_tag, barred_engine_names)) {
             barred_indices[index] = true;
+
             return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                    "[cudnn_frontend] Error: Workspace size is too large."};
+                    "[cudnn_frontend] Error: Deselecting execution plan with name " + plan_tag + " at position " +
+                        std::to_string(index)};
         }
 
         // workspace check for 9.2+ is already done at engine config level

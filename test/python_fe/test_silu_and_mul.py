@@ -105,7 +105,15 @@ def test_gemm_silu_and_mul():
     # C_fp8 = graph.mul(C, C_Q)
     # C_fp8.set_output(True)
 
-    graph.build([cudnn.heur_mode.A])
+    try:
+        graph.build([cudnn.heur_mode.A])
+    except cudnn.cudnnGraphNotSupportedError as e:
+        cudnn.destroy_handle(handle)
+        pytest.xfail(repr(e))
+    except Exception as e:
+        cudnn.destroy_handle(handle)
+        pytest.fail(repr(e))
+
     workspace = torch.empty(
         graph.get_workspace_size(), device="cuda", dtype=torch.uint8
     )
