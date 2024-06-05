@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.18)
 
 find_package(Catch2 QUIET)
 
+find_package(Threads)
+
 if(NOT Catch2_FOUND)
     Include(FetchContent)
 
@@ -89,9 +91,12 @@ endif()
 target_link_libraries(
     samples
 
+    PRIVATE Threads::Threads
+
     cudnn_frontend
     _cudnn_frontend_pch
     Catch2::Catch2WithMain
+
 
     CUDNN::cudnn_all
 )
