@@ -50,6 +50,11 @@ class HandleManagement {
     }
 };
 
+static std::string
+get_last_error_string() {
+    return detail::get_last_error_string_();
+}
+
 void
 init_properties(py::module_& m) {
     py::enum_<cudnn_frontend::DataType_t>(m, "data_type")
@@ -101,6 +106,8 @@ init_properties(py::module_& m) {
             out << json{props};
             return out.str();
         });
+
+    m.def("get_last_error_string", &get_last_error_string);
 
     m.def("create_handle", &HandleManagement::create_handle);
     m.def("destroy_handle", &HandleManagement::destroy_handle);

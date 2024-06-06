@@ -82,8 +82,8 @@ stages:
         
 .fetch_cudnn_dev:template:
     before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.2_cuda_12.5/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.2.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.3_cuda_12.5/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.3.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
@@ -93,8 +93,8 @@ stages:
   
 .fetch_cudnn_v9:template:
     before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.1_cuda_12.4/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.1.1" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.2_cuda_12.5/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.2.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
@@ -226,6 +226,12 @@ analysis:check-relative-includes:
         - echo 'int main() { return 0; }' >> test_build.cpp
         - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/ -L/usr/lib/x86_64-linux-gnu/ -lcudnn
 
+analysis:check-CUDNN_FRONTEND_SKIP_JSON_LIB:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.1.0.70_12.4.0
+    stage: analysis
+    script:
+        - ci/build_wo_json.sh
+
 build:cudnn_dev_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []
@@ -297,7 +303,7 @@ L4_graph_runner_large:cudnn_dev_latest:
     only:
         - schedules
 
-build:cudnn_9.1.1_latest:
+build:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []
     stage: build
@@ -305,7 +311,7 @@ build:cudnn_9.1.1_latest:
         - .fetch_cudnn_v9:template
         - .build:template
 
-test:cudnn_9.1.1_latest:
+test:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -315,9 +321,9 @@ test:cudnn_9.1.1_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .test:template
-    needs: ["build:cudnn_9.1.1_latest"]
+    needs: ["build:cudnn_9.2.0_latest"]
     
-pytest:cudnn_9.1.1_latest:
+pytest:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -327,10 +333,10 @@ pytest:cudnn_9.1.1_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .pytest:template
-    needs: ["build:cudnn_9.1.1_latest"]
+    needs: ["build:cudnn_9.2.0_latest"]
     resource_group: memory_heavy_${ARCH}
     
-pycudnntest:cudnn_9.1.1_latest:
+pycudnntest:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -340,9 +346,9 @@ pycudnntest:cudnn_9.1.1_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .pycudnntest:template
-    needs: ["build:cudnn_9.1.1_latest"]
+    needs: ["build:cudnn_9.2.0_latest"]
     
-L4_graph_runner:cudnn_9.1.1_latest:
+L4_graph_runner:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -352,9 +358,9 @@ L4_graph_runner:cudnn_9.1.1_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .L4_graph_runner:template
-    needs: ["build:cudnn_9.1.1_latest"]
+    needs: ["build:cudnn_9.2.0_latest"]
     
-L4_graph_runner_large:cudnn_9.1.1_latest:
+L4_graph_runner_large:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -364,7 +370,7 @@ L4_graph_runner_large:cudnn_9.1.1_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .L4_graph_runner_large:template
-    needs: ["build:cudnn_9.1.1_latest"]
+    needs: ["build:cudnn_9.2.0_latest"]
     only:
         - schedules
 
@@ -435,7 +441,7 @@ build:cudnn_8.9_windows:
         - cmake ../
         - cmake --build . -j16 --verbose
 
-notebooks:cudnn_9.1.1_latest:
+notebooks:cudnn_9.2.0_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     stage: notebooks
     parallel:
