@@ -35,12 +35,12 @@ include:
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
         
-  - local: ci/job-template.yml
-    inputs:
-        cuda_version: "12.1.0"
-        cudnn_version: "8.9.2.26"
-    rules:
-      - if: $CI_PIPELINE_SOURCE == "schedule"
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.1.0"
+#         cudnn_version: "8.9.2.26"
+#     rules:
+#       - if: $CI_PIPELINE_SOURCE == "schedule"
 
 #   - local: ci/job-template.yml
 #     inputs:
@@ -67,6 +67,13 @@ include:
     inputs:
         cuda_version: "12.4.0"
         cudnn_version: "9.1.0.70"
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "schedule"
+
+  - local: ci/job-template.yml
+    inputs:
+        cuda_version: "12.4.0"
+        cudnn_version: "9.2.0.82"
 
 stages:
     - analysis
@@ -303,7 +310,7 @@ L4_graph_runner_large:cudnn_dev_latest:
     only:
         - schedules
 
-build:cudnn_9.2.0_latest:
+build:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     needs: []
     stage: build
@@ -311,7 +318,7 @@ build:cudnn_9.2.0_latest:
         - .fetch_cudnn_v9:template
         - .build:template
 
-test:cudnn_9.2.0_latest:
+test:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -321,9 +328,9 @@ test:cudnn_9.2.0_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .test:template
-    needs: ["build:cudnn_9.2.0_latest"]
+    needs: ["build:cudnn_9.2.1_latest"]
     
-pytest:cudnn_9.2.0_latest:
+pytest:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -333,10 +340,10 @@ pytest:cudnn_9.2.0_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .pytest:template
-    needs: ["build:cudnn_9.2.0_latest"]
+    needs: ["build:cudnn_9.2.1_latest"]
     resource_group: memory_heavy_${ARCH}
     
-pycudnntest:cudnn_9.2.0_latest:
+pycudnntest:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -346,9 +353,9 @@ pycudnntest:cudnn_9.2.0_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .pycudnntest:template
-    needs: ["build:cudnn_9.2.0_latest"]
+    needs: ["build:cudnn_9.2.1_latest"]
     
-L4_graph_runner:cudnn_9.2.0_latest:
+L4_graph_runner:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -358,9 +365,9 @@ L4_graph_runner:cudnn_9.2.0_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .L4_graph_runner:template
-    needs: ["build:cudnn_9.2.0_latest"]
+    needs: ["build:cudnn_9.2.1_latest"]
     
-L4_graph_runner_large:cudnn_9.2.0_latest:
+L4_graph_runner_large:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     parallel:
         matrix:
@@ -370,7 +377,7 @@ L4_graph_runner_large:cudnn_9.2.0_latest:
     extends:
         - .fetch_cudnn_v9:template
         - .L4_graph_runner_large:template
-    needs: ["build:cudnn_9.2.0_latest"]
+    needs: ["build:cudnn_9.2.1_latest"]
     only:
         - schedules
 
@@ -441,7 +448,7 @@ build:cudnn_8.9_windows:
         - cmake ../
         - cmake --build . -j16 --verbose
 
-notebooks:cudnn_9.2.0_latest:
+notebooks:cudnn_9.2.1_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
     stage: notebooks
     parallel:
