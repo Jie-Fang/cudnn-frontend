@@ -1662,7 +1662,7 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
-    bool is_force_deterministic_algorithm = false;
+    bool is_deterministic_algorithm = false;
 
    public:
     enum class input_names {
@@ -1696,7 +1696,7 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
                                    dropout_probability,
                                    attn_scale_value,
                                    sliding_window_length,
-                                   is_force_deterministic_algorithm)
+                                   is_deterministic_algorithm)
 
     SDPA_backward_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
@@ -1792,8 +1792,8 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     }
 
     SDPA_backward_attributes&
-    set_force_deterministic_algorithm(bool const value) {
-        is_force_deterministic_algorithm = value;
+    set_deterministic_algorithm(bool const value) {
+        is_deterministic_algorithm = value;
         return *this;
     }
 };
