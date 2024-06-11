@@ -271,6 +271,9 @@ set_dropout(std::shared_ptr<Tensor_attributes> mask,
             std::shared_ptr<Tensor_attributes> scale_inv);
 
 SDPA_backward_attributes&
+set_deterministic_algorithm(bool const value);
+
+SDPA_backward_attributes&
 set_compute_data_type(DataType_t const value);
 ```
 

@@ -1215,7 +1215,7 @@ def test_sdpa_backward(
         use_causal_mask_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
-        use_force_deterministic_algorithm=is_deterministic,
+        use_deterministic_algorithm=is_deterministic,
     )
 
     dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())

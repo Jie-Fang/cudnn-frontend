@@ -989,7 +989,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         // Force dP workspace implementation if:
         //  - dBias is enabled (dBias is only supported on workspace implementation)
         //  - the user force requests deterministic algorithm
-        if (attributes.outputs[output_names::dBias] || attributes.is_force_deterministic_algorithm) {
+        if (attributes.outputs[output_names::dBias] || attributes.is_deterministic_algorithm) {
             use_workspace_opt = true;
         }
 
