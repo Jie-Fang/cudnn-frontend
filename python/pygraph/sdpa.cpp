@@ -121,7 +121,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        py::object const& sliding_window_length,
                        py::object const& dropout,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
-                       bool const use_force_deterministic_algorithm,
+                       bool const use_deterministic_algorithm,
                        cudnn_frontend::DataType_t const& compute_data_type,
                        std::string const& name) {
     auto attributes = cudnn_frontend::graph::SDPA_backward_attributes()
@@ -133,7 +133,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                           .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
                           .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
-                          .set_force_deterministic_algorithm(use_force_deterministic_algorithm)
+                          .set_deterministic_algorithm(use_deterministic_algorithm)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -335,9 +335,10 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
                     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-                    use_causal_mask_bottom right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
+                    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+                    rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
@@ -365,7 +366,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
-          py::arg_v("use_force_deterministic_algorithm", false),
+          py::arg_v("use_deterministic_algorithm", false),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
@@ -386,9 +387,11 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
                     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-                    use_causal_mask_bottom right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
+                    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+                    rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
+                    use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
