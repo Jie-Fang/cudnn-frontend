@@ -53,17 +53,6 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
         // Only infer dims and strides if user did not set them
         if (c_tensor_dim.empty()) {
             c_tensor_dim.resize(a_tensor_dim.size());
-            if (a_tensor_dim.size() == 4) {
-                c_tensor_dim[0] = a_tensor_dim[0];  // B
-                c_tensor_dim[1] = a_tensor_dim[1];  // H
-                c_tensor_dim[2] = a_tensor_dim[2];  // M
-                c_tensor_dim[3] = b_tensor_dim[3];  // N
-            } else {
-                c_tensor_dim[0] = a_tensor_dim[0];  // B
-                c_tensor_dim[1] = a_tensor_dim[1];  // M
-                c_tensor_dim[2] = b_tensor_dim[2];  // N
-            }
-
             int64_t gemm_start_dim           = a_tensor_dim.size() - 2;
             c_tensor_dim[gemm_start_dim]     = a_tensor_dim[gemm_start_dim];      // M
             c_tensor_dim[gemm_start_dim + 1] = b_tensor_dim[gemm_start_dim + 1];  // N
