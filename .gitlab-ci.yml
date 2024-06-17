@@ -188,12 +188,13 @@ deploy:test_bdist_wheels_8.9.7_3.10:
         - apt-get -y install python3.10 python3-pip python3.10-distutils
         - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
         - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
-        - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
+        - pip uninstall -y nvidia_cudnn_frontend
+        - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python_fe -n 4 -v
+        - pytest test/python_fe -n 4 --tb=short
 
-deploy:test_bdist_wheels_9.1.0_3.10:
+deploy:test_bdist_wheels_9.2.0_3.10:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -201,7 +202,7 @@ deploy:test_bdist_wheels_9.1.0_3.10:
         - ${ARCH}
     needs: ["deploy:build_wheels"]
     stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.1.0.70_12.4.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.2.0.82_12.4.0
     needs: ["deploy:build_bdist_wheels"]
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -213,10 +214,11 @@ deploy:test_bdist_wheels_9.1.0_3.10:
         - apt-get -y install python3.10 python3-pip python3.10-distutils
         - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
         - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
-        - pip install --find-links many_linux_wheels/ nvidia_cudnn_frontend
+        - pip uninstall -y nvidia_cudnn_frontend
+        - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python_fe -n 4 -v
+        - pytest test/python_fe -n 4 --tb=short
 
 analysis:clang-format:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
