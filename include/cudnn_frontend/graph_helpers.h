@@ -231,14 +231,114 @@ generate_row_major_stride_order(int64_t const num_dims) {
 }
 
 // Generate column major stride_order for matrices
-// dim = (M, N)
-// strides should be (1, M)
+// dim = (*, M, N)
+// strides should be (*, 1, M)
 inline std::vector<int64_t>
 generate_column_major_stride_order(int64_t const num_dims) {
-    std::vector<int64_t> stride_order(num_dims);
+    std::vector<int64_t> stride_order = generate_row_major_stride_order(num_dims);
+    if (num_dims > 2) {
+        std::swap(stride_order[num_dims - 1], stride_order[num_dims - 2]);
+    }
+    return stride_order;
+}
 
-    int64_t order = 1;
-    std::generate(stride_order.begin(), stride_order.end(), [&order] { return order++; });
+/**
+ * @brief Computes the common shape with the fewest dimensions that all input shapes can be broadcast to.
+ *
+ * This function takes a vector of shapes and calculates a common shape that all input shapes
+ * can be broadcast to. It follows broadcasting rules similar to those used in NumPy.
+ *
+ * @param _shapes A vector of vectors, where each inner vector represents a shape.
+ *                Each shape is a sequence of dimension sizes.
+ * @param[out] common_shape The computed broadcast shape is stored in this vector.
+ *                          It will be cleared and resized as necessary.
+ *
+ * @return error_t An error code indicating the result of the operation
+ *
+ * @note
+ * - Shapes are processed from right to left (last dimension to first).
+ * - A dimension of size 1 can be broadcast to any size.
+ * - Non-1 dimensions must match exactly for broadcasting.
+ * - The resulting shape will have the maximum number of dimensions among all input shapes.
+ *
+ * @example
+ *   std::vector<std::vector<int64_t>> shapes = {{3, 1, 4}, {1, 2, 4}, {2, 4}};
+ *   std::vector<int64_t> result;
+ *   error_t err = compute_broadcast_shape(shapes, result);
+ *   // If err == error_code_t::OK, result will be {3, 2, 4}
+ */
+inline error_t
+compute_broadcast_shape(const std::vector<std::vector<int64_t>>& _shapes, std::vector<int64_t>& common_shape) {
+    // Filter out empty shapes
+    std::vector<std::vector<int64_t>> shapes;
+    std::copy_if(_shapes.begin(), _shapes.end(), std::back_inserter(shapes), [](const std::vector<int64_t>& shape) {
+        return !shape.empty();
+    });
+
+    // Short-circuits if there are no input shapes
+    RETURN_CUDNN_FRONTEND_ERROR_IF(
+        shapes.empty(), error_code_t::SHAPE_DEDUCTION_FAILED, "All input shapes provided are empty.");
+
+    // Find the maximum dimension
+    int64_t max_dim = std::max_element(shapes.begin(),
+                                       shapes.end(),
+                                       [](const std::vector<int64_t>& a, const std::vector<int64_t>& b) {
+                                           return a.size() < b.size();
+                                       })
+                          ->size();
+
+    // Initialize common_shape with 1s
+    common_shape.assign(max_dim, 1);
+
+    for (const auto& shape : shapes) {
+        for (int idx = -1; idx >= -static_cast<int>(shape.size()); --idx) {
+            int64_t common_idx = common_shape.size() + idx;
+            int64_t shape_idx  = shape.size() + idx;
+
+            if (common_shape[common_idx] == 1) {
+                common_shape[common_idx] = shape[shape_idx];
+            }
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF((shape[shape_idx] != 1) && (common_shape[common_idx] != shape[shape_idx]),
+                                           error_code_t::SHAPE_DEDUCTION_FAILED,
+                                           "dimensions mismatch as broadcasting 2 non-one dimension sizes.");
+        }
+    }
+
+    return {error_code_t::OK, ""};
+}
+/**
+ * @brief Generates a stride order preserving the format of the input tensor.
+ *
+ * This function derives the exact stride order from the input tensor's strides.
+ * It returns the indices of the strides in ascending order of stride values.
+ *
+ * @param input_stride The stride of the input tensor
+ * @param output_dim_size The number of dimensions in the output tensor
+ * @return std::vector<int64_t> The generated stride order
+ */
+inline std::vector<int64_t>
+generate_stride_order_preserving_format(const std::vector<int64_t>& input_stride, size_t output_dim_size) {
+    std::vector<int64_t> indices(input_stride.size());
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // Sort indices based on stride values in descending order
+    std::sort(indices.begin(), indices.end(), [&input_stride](int64_t i, int64_t j) {
+        return input_stride[i] < input_stride[j];
+    });
+
+    // Create the stride order
+    std::vector<int64_t> stride_order(input_stride.size());
+    for (size_t i = 0; i < indices.size(); ++i) {
+        stride_order[indices[i]] = i;
+    }
+
+    // If output_dim_size is larger, pad with remaining dimensions
+    if (output_dim_size > input_stride.size()) {
+        size_t start = stride_order.size();
+        stride_order.resize(output_dim_size);
+        std::iota(stride_order.begin() + start, stride_order.end(), start);
+    }
 
     return stride_order;
 }

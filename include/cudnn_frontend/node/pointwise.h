@@ -54,18 +54,28 @@ class PointwiseNode : public NodeCRTP<PointwiseNode> {
 
         attributes.fill_from_context(context);
 
-        // Only inferrencing from IN_0 to OUT_0 works today.
-        auto in_0_tensor  = attributes.inputs[Pointwise_attributes::input_names::IN_0];
         auto out_0_tensor = attributes.outputs[Pointwise_attributes::output_names::OUT_0];
 
-        auto out_0_tensor_dim = out_0_tensor->get_dim();
+        auto output_dim = out_0_tensor->get_dim();
         // Only infer dims and strides if user did not set them
-        if (out_0_tensor_dim.empty()) {
-            out_0_tensor->set_dim(in_0_tensor->get_dim());
+        if (output_dim.empty()) {
+            std::vector<std::vector<int64_t>> input_shapes;
+            for (const auto& [input_name, input_tensor] : attributes.inputs) {
+                if (!input_tensor) {
+                    continue;
+                }
+                input_shapes.push_back(input_tensor->get_dim());
+            }
+
+            CHECK_CUDNN_FRONTEND_ERROR(detail::compute_broadcast_shape(input_shapes, output_dim));
+            out_0_tensor->set_dim(output_dim);
         }
-        // Special case here where input strides are being copied over
+
         if (out_0_tensor->get_stride().empty()) {
-            out_0_tensor->set_stride(in_0_tensor->get_stride());
+            auto input_stride = attributes.inputs.at(Pointwise_attributes::input_names::IN_0)->get_stride();
+            std::vector<int64_t> stride_order =
+                detail::generate_stride_order_preserving_format(input_stride, output_dim.size());
+            out_0_tensor->set_stride(detail::generate_stride(output_dim, stride_order));
         }
 
         return {error_code_t::OK, ""};

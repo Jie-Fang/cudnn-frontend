@@ -240,8 +240,8 @@ TEST_CASE("conv graph serialization", "[graph][serialize]") {
 
     auto b = graph.tensor(fe::graph::Tensor_attributes());
     b->set_name("bias")
-        .set_dim({1, 32, 1, 1})
-        .set_stride({32, 1, 32, 32})
+        .set_dim({1, 64, 1, 1})
+        .set_stride({64, 1, 64, 64})
         .set_is_virtual(false)
         .set_is_pass_by_value(false)
         .set_reordering_type(fe::TensorReordering_t::NONE)
