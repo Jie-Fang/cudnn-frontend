@@ -50,8 +50,6 @@ add_executable(
     cpp/misc/resample.cpp
 
     legacy_samples/conv_sample.cpp 
-    legacy_samples/resnet_test_list.cpp
-    legacy_samples/resnet_sample.cpp
     legacy_samples/test_list.cpp 
     legacy_samples/fp16_emu.cpp 
     legacy_samples/helpers.cpp 
@@ -108,10 +106,4 @@ set_target_properties(
     PROPERTIES
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-set_source_files_properties(
-    legacy_samples/resnet_test_list.cpp legacy_samples/resnet_sample.cpp
-    PROPERTIES 
-    INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/samples/legacy_samples/resnet_block/include"
 )
