@@ -48,6 +48,7 @@ add_executable(
     cpp/misc/parallel_compilation.cpp
     cpp/misc/pointwise.cpp
     cpp/misc/resample.cpp
+    cpp/misc/sm_carveout.cpp
 
     legacy_samples/conv_sample.cpp 
     legacy_samples/test_list.cpp 
