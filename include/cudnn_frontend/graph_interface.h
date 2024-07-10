@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 
+#include "../cudnn_frontend_version.h"
 #include "node/batchnorm.h"
 #include "node/batchnorm_inference.h"
 #include "node/bn_finalize.h"
@@ -105,6 +106,8 @@ class Graph : public INode {
     set_io_data_type(DataType_t type);
     Graph &
     set_compute_data_type(DataType_t type);
+    Graph &
+    set_sm_count(int32_t type);
 
     Graph &
     set_name(std::string const &name) {
@@ -344,10 +347,12 @@ class Graph : public INode {
         // Different from serialization of other INodes.
         // Go over each subnode and serialize them.
         json full_json;
+
         full_json["context"]["name"]                   = context.get_name();
         full_json["context"]["compute_data_type"]      = context.get_compute_data_type();
         full_json["context"]["intermediate_data_type"] = context.get_intermediate_data_type();
         full_json["context"]["io_data_type"]           = context.get_io_data_type();
+        full_json["context"]["sm_count"]               = context.get_target_sm_count();
 
         full_json.update(R"( {"tag": "GRAPH"})"_json);
         full_json["nodes"];
@@ -358,6 +363,10 @@ class Graph : public INode {
         }
 
         j["context"] = full_json["context"];
+
+        j["json_version"]           = "1.0";
+        j["cudnn_backend_version"]  = detail::get_backend_version_string();
+        j["cudnn_frontend_version"] = CUDNN_FRONTEND_VERSION;
         j["nodes"];
         j["tensors"];
         std::unordered_set<std::string> tensors;
@@ -435,6 +444,9 @@ class Graph : public INode {
             }
             if (j_context["name"].is_null() == false) {
                 context.set_name(j_context["name"].get<std::string>());
+            }
+            if (j_context["sm_count"].is_null() == false) {
+                context.set_target_sm_count(j_context["sm_count"].get<int32_t>());
             }
         }
 
@@ -546,7 +558,8 @@ Graph::get_execution_plan_count() const {
 inline error_t
 Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     EngineConfigList op_graph_to_configs;
-    CHECK_CUDNN_FRONTEND_ERROR(detail::query_heuristics(operation_graph, op_graph_to_configs, mode));
+    CHECK_CUDNN_FRONTEND_ERROR(
+        detail::query_cudnn_heuristics_impl(operation_graph, op_graph_to_configs, mode, context.get_target_sm_count()));
 
     getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
 
@@ -599,6 +612,12 @@ Graph::set_io_data_type(DataType_t const type) {
 inline Graph &
 Graph::set_compute_data_type(DataType_t const type) {
     context.set_compute_data_type(type);
+    return *this;
+}
+
+inline Graph &
+Graph::set_sm_count(int32_t count) {
+    context.set_target_sm_count(count);
     return *this;
 }
 
