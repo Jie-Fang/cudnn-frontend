@@ -43,6 +43,11 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
                             cudnn_frontend::EngineConfigList& configs,
                             std::vector<HeurMode_t> const& modes,
                             int32_t sm_count) {
+    RETURN_CUDNN_FRONTEND_ERROR_IF(
+        operation_graph == nullptr,
+        error_code_t::HEURISTIC_QUERY_FAILED,
+        "Empty operation graph provided. Did you forget to call graph.build_operation_graph()?");
+
     auto const& operation_graph_tag = operation_graph->getTag();
     getLogger() << "[cudnn_frontend] INFO: " << " Getting plan from heuristics for " << operation_graph_tag << " ..."
                 << std::endl;
