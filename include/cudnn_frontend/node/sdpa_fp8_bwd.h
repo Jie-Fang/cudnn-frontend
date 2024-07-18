@@ -99,7 +99,11 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
+        return {error_code_t::OK, ""};
+    }
+    error_t
+    expand_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  "
                     << attributes.name << "..." << std::endl;
 

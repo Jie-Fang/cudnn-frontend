@@ -35,7 +35,7 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node " << attributes.name << "..."
                     << std::endl;
 
@@ -52,6 +52,8 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
 
         // Only infer dims and strides if user did not set them
         if (c_tensor_dim.empty()) {
+            // CHECK_CUDNN_FRONTEND_ERROR(detail::generate_matmul_output_dim(a_tensor_dim, b_tensor_dim, c_tensor_dim));
+
             c_tensor_dim.resize(a_tensor_dim.size());
             int64_t gemm_start_dim           = a_tensor_dim.size() - 2;
             c_tensor_dim[gemm_start_dim]     = a_tensor_dim[gemm_start_dim];      // M

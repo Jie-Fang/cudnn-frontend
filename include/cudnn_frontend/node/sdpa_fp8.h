@@ -105,7 +105,22 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
+        auto stats     = attributes.outputs.at(output_names::Stats);
+        auto stats_dim = stats->get_dim();
+
+        if (stats_dim.empty()) {
+            // Fill properties of virtual tensors
+            auto const& p_dim = attributes.inputs[input_names::Q]->get_dim();
+            auto b            = p_dim[0];
+            auto h            = p_dim[1];
+            auto s_q          = p_dim[2];
+            stats->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
+        }
+        return {error_code_t::OK, ""};
+    }
+    error_t
+    expand_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  "
                     << attributes.name << "..." << std::endl;
 

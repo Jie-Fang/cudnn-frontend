@@ -22,7 +22,7 @@ class RMSNormNode : public NodeCRTP<RMSNormNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for rmsnorm node " << attributes.name << "..."
                     << std::endl;
 
@@ -181,7 +181,7 @@ class DRMSNormNode : public NodeCRTP<DRMSNormNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DRMSNorm node " << attributes.name << "..."
                     << std::endl;
 
