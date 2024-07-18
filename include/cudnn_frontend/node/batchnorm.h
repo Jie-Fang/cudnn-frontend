@@ -70,43 +70,6 @@ class BatchNormNode : public NodeCRTP<BatchNormNode> {
     }
 
     error_t
-    pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating BatchNormNode " << attributes.name << "..."
-                    << std::endl;
-
-        // Ensure all needed input output tensors are valid
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::X);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::SCALE);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::BIAS);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::PREV_RUNNING_MEAN);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::PREV_RUNNING_VAR);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::EPSILON);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Batchnorm_attributes::input_names::MOMENTUM);
-
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::Y);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::MEAN);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::INV_VARIANCE);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_MEAN);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Batchnorm_attributes::output_names::NEXT_RUNNING_VAR);
-
-        // Validate inputs
-        // The iteration over graph happens in topological order, so previous nodes should have set input tensor
-        // properties, if the user did not set them initially.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,

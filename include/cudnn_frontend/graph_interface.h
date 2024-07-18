@@ -30,27 +30,16 @@ namespace cudnn_frontend::graph {
 
 class Graph : public INode {
    private:
-    std::unordered_set<std::shared_ptr<Tensor_attributes>> tensors;
-
-    void
-    add_to_tensor_map(std::shared_ptr<Tensor_attributes> tensor) {
-        tensors.emplace(tensor);
-    }
+    std::unordered_set<std::shared_ptr<Tensor_attributes>> outputs;
+    std::unordered_set<std::shared_ptr<Tensor_attributes>> inputs;
 
     std::shared_ptr<Tensor_attributes>
     output_tensor(std::string const &name) {
         auto tensor = std::make_shared<Tensor_attributes>();
         tensor->set_name(name).set_is_virtual(true);
-        add_to_tensor_map(tensor);
+        outputs.emplace(tensor);
         return tensor;
     }
-
-    // This API is still work in progress and unverified.
-    // std::array<std::shared_ptr<Tensor_attributes>, 2> scaled_dot_product_attention(
-    //     std::shared_ptr<Tensor_attributes>,
-    //     std::shared_ptr<Tensor_attributes>,
-    //     std::shared_ptr<Tensor_attributes>,
-    //     Scaled_dot_product_attention_attributes);
 
     error_t
     pre_validate_node() const override final {
@@ -94,6 +83,24 @@ class Graph : public INode {
 
    public:
     Graph() : INode(detail::Context{}) {}
+
+    error_t
+    validate() {
+        // First validate all inputs that the user set.
+        for (auto const &input : inputs) {
+            CHECK_CUDNN_FRONTEND_ERROR(input->validate());
+        }
+
+        // Validate the nodes, which in turn also infers missing tensor attributes.
+        CHECK_CUDNN_FRONTEND_ERROR(validate_subtree());
+
+        // Validate all outputs, which should now have everything set to be lowered to backend.
+        for (auto const &output : outputs) {
+            CHECK_CUDNN_FRONTEND_ERROR(output->validate());
+        }
+
+        return {error_code_t::OK, ""};
+    }
 
     Type
     getType() override {
@@ -624,7 +631,7 @@ Graph::set_sm_count(int32_t count) {
 inline std::shared_ptr<Tensor_attributes>
 Graph::tensor(Tensor_attributes const &tensor) {
     auto tensor_ptr = std::make_shared<Tensor_attributes>(tensor);
-    add_to_tensor_map(tensor_ptr);
+    inputs.emplace(tensor_ptr);
     return tensor_ptr;
 }
 
@@ -643,6 +650,7 @@ Graph::tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string
 
     // reset the name too. Defaults to empty string.
     tensor_ptr->set_name(name);
+    inputs.emplace(tensor_ptr);
 
     return tensor_ptr;
 }

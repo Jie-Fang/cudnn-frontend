@@ -26,11 +26,6 @@ class WgradNode : public NodeCRTP<WgradNode> {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating Node Type::WGRAD " << attributes.name << "..."
                     << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_wgrad_attributes::input_names::X);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Conv_wgrad_attributes::input_names::DY);
-
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Conv_wgrad_attributes::output_names::DW);
-
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.get_pre_padding().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Pre padding not set.");
         RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -40,7 +35,6 @@ class WgradNode : public NodeCRTP<WgradNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.get_dilation().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Conv dilation not set.");
 
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
@@ -68,15 +62,6 @@ class WgradNode : public NodeCRTP<WgradNode> {
             auto const& stride_order = detail::generate_NHWC_stride_order(DW_dim.size());
             DW->set_stride(detail::generate_stride(DW_dim, stride_order));
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

@@ -24,9 +24,6 @@ class ResampleNode : public NodeCRTP<ResampleNode> {
     pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: " << "Validating ResampleNode " << attributes.name << "..." << std::endl;
 
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Resample_attributes::input_names::X);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Resample_attributes::output_names::Y);
-
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.is_inference.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "is_inference attribute not set");
@@ -41,8 +38,6 @@ class ResampleNode : public NodeCRTP<ResampleNode> {
             detail::convert_to_cudnn_type(attributes.resample_mode, dummy) != CUDNN_STATUS_SUCCESS,
             error_code_t::ATTRIBUTE_NOT_SET,
             "Invalid resample mode.");
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         return {error_code_t::OK, ""};
     }
@@ -96,15 +91,6 @@ class ResampleNode : public NodeCRTP<ResampleNode> {
                 index_tensor->set_stride(detail::generate_stride(index_dim, stride_order));
             }
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

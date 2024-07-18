@@ -22,19 +22,6 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
     }
 
     error_t
-    pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating matmul node " << attributes.name << "..." << std::endl;
-
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_attributes::input_names::A);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_attributes::input_names::B);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Matmul_attributes::output_names::C);
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node " << attributes.name << "..."
                     << std::endl;
@@ -72,15 +59,6 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
             auto const& stride_order = detail::generate_row_major_stride_order(c_dim.size());
             c_tensor->set_stride(detail::generate_stride(c_dim, stride_order));
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }
