@@ -343,6 +343,49 @@ generate_stride_order_preserving_format(const std::vector<int64_t>& input_stride
     return stride_order;
 }
 
+/**
+ * @brief Infers the output dimensions for a matrix multiplication operation.
+ *
+ * This function calculates the output dimensions of a matrix multiplication
+ * based on the input dimensions of tensors A and B. It uses compute_broadcast_shape
+ * for batch dimensions and ensures the last two dimensions are correct for matrix multiplication.
+ *
+ * @param a_dim Dimensions of the first input tensor (A).
+ * @param b_dim Dimensions of the second input tensor (B).
+ * @param output_dim Reference to the vector where the output dimensions will be stored.
+ * @return error_t An error code indicating the result of the operation.
+ */
+inline error_t
+generate_matmul_output_dim(const std::vector<int64_t>& a_dim,
+                           const std::vector<int64_t>& b_dim,
+                           std::vector<int64_t>& output_dim) {
+    // Ensure a_dim and b_dim have at least 2 dimensions
+    if (a_dim.size() < 2 || b_dim.size() < 2) {
+        return {error_code_t::SHAPE_DEDUCTION_FAILED, "Input tensors must have at least 2 dimensions for matmul."};
+    }
+
+    // Check if inner dimensions are compatible
+    if (a_dim[a_dim.size() - 1] != b_dim[b_dim.size() - 2]) {
+        return {error_code_t::SHAPE_DEDUCTION_FAILED,
+                "Inner dimensions of input tensors are not compatible for matmul."};
+    }
+
+    // Prepare shapes for broadcasting
+    std::vector<int64_t> a_batch_dim(a_dim.begin(), a_dim.end() - 2);
+    std::vector<int64_t> b_batch_dim(b_dim.begin(), b_dim.end() - 2);
+
+    // Compute broadcast shape for batch dimensions
+    std::vector<int64_t> broadcasted_batch;
+    CHECK_CUDNN_FRONTEND_ERROR(detail::compute_broadcast_shape({a_batch_dim, b_batch_dim}, broadcasted_batch));
+
+    // Construct final output shape
+    output_dim = broadcasted_batch;
+    output_dim.push_back(a_dim[a_dim.size() - 2]);  // M from A
+    output_dim.push_back(b_dim[b_dim.size() - 1]);  // N from B
+
+    return {error_code_t::OK, ""};
+}
+
 }  // namespace detail
 
 class cudnnGraphNotSupportedException : public std::runtime_error {

@@ -40,17 +40,22 @@ class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for Softmax node " << attributes.name << "."
                     << std::endl;
 
         attributes.fill_from_context(context);
 
         // Fill properties of virtual tensors
-        auto const& p_dim = attributes.inputs[Softmax_attributes::input_names::P]->get_dim();
-        auto b            = p_dim[0];
-        auto h            = p_dim[1];
-        auto s_q          = p_dim[2];
+        auto const p_dim = attributes.inputs[Softmax_attributes::input_names::P]->get_dim();
+        auto b           = p_dim[0];
+        auto h           = p_dim[1];
+        auto s_q         = p_dim[2];
 
         auto max_output = attributes.outputs[Softmax_attributes::output_names::M];
         if (!attributes.use_M_Zinv.value()) {
@@ -60,7 +65,6 @@ class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
         //////////////// TODO //////////////////////////
         // Check Stride (Before setting dimension?)
         max_output->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
-        ;
 
         auto max_attributes = Reduction_attributes().set_name("M").set_mode(ReductionMode_t::MAX);
         // Special non-functional-style call. Needed because output already created and provided to user.

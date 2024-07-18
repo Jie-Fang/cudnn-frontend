@@ -58,7 +58,7 @@ class Graph : public INode {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         return {error_code_t::OK, ""};
     }
 

@@ -48,13 +48,13 @@ class PointwiseNode : public NodeCRTP<PointwiseNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for pointwise node " << attributes.name << "..."
                     << std::endl;
 
         attributes.fill_from_context(context);
 
-        auto out_0_tensor = attributes.outputs[Pointwise_attributes::output_names::OUT_0];
+        auto out_0_tensor = attributes.outputs.at(Pointwise_attributes::output_names::OUT_0);
 
         auto output_dim = out_0_tensor->get_dim();
         // Only infer dims and strides if user did not set them

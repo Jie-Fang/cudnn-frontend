@@ -57,7 +57,12 @@ class INode : public ICudnn {
     pre_validate_node() const = 0;
 
     virtual error_t
-    expand_and_infer_properties_node() = 0;
+    infer_properties_node() = 0;
+
+    virtual error_t
+    expand_node() {
+        return {error_code_t::OK, ""};
+    };
 
     virtual error_t
     post_validate_node() const = 0;
@@ -288,24 +293,37 @@ class INode : public ICudnn {
         std::shared_ptr<Tensor_attributes> y);
 
     error_t
-    pre_validate_and_expand_node() {
+    pre_validate_and_infer_properties_subtree() {
         // pre validate to catch errors early
         // Otherwise code reability decreases in expand_and_infer
         CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
-        CHECK_CUDNN_FRONTEND_ERROR(expand_and_infer_properties_node());
+        CHECK_CUDNN_FRONTEND_ERROR(infer_properties_node());
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->pre_validate_and_expand_node());
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->pre_validate_and_infer_properties_subtree());
         }
         return {error_code_t::OK, ""};
     }
 
     error_t
-    post_validate() const {
+    post_validate_subtree() const {
         // Validate self
         CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->post_validate());
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->post_validate_subtree());
         }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    expand_subtree() {
+        // Validate self
+        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
+        CHECK_CUDNN_FRONTEND_ERROR(infer_properties_node());
+        CHECK_CUDNN_FRONTEND_ERROR(expand_node());
+        for (auto const& sub_node : sub_nodes) {
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->expand_subtree());
+        }
+        CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
         return {error_code_t::OK, ""};
     }
 
@@ -385,7 +403,18 @@ class INode : public ICudnn {
     error_t
     validate() {
         // infer_properties self
-        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_and_expand_node());
+        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_and_infer_properties_subtree());
+
+        // validate the full tree again
+        CHECK_CUDNN_FRONTEND_ERROR(post_validate_subtree());
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    build_operation_graph(cudnnHandle_t handle) {
+        // expand composite nodes
+        CHECK_CUDNN_FRONTEND_ERROR(expand_subtree());
 
         // assign uids as part of validation
         // This helps catch whether user has assigned duplicated uids to tensors
@@ -396,14 +425,6 @@ class INode : public ICudnn {
         Tensor_attributes::uid_t start_uid = 1;
         CHECK_CUDNN_FRONTEND_ERROR(set_uids(start_uid, pre_assigned_uids));
 
-        // validate the full tree again
-        CHECK_CUDNN_FRONTEND_ERROR(post_validate());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    build_operation_graph(cudnnHandle_t handle) {
         // Lower each sub node to cudnn backend.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors(uid_to_tensors));
 

@@ -29,7 +29,7 @@ class GenstatsNode : public NodeCRTP<GenstatsNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         attributes.fill_from_context(context);
 
         // Only inferrencing from X works today.

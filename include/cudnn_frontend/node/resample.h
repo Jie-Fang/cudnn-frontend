@@ -48,7 +48,7 @@ class ResampleNode : public NodeCRTP<ResampleNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for resample node " << attributes.name << "..."
                     << std::endl;
 

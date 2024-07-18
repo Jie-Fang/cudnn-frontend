@@ -31,7 +31,7 @@ class DBNNode : public NodeCRTP<DBNNode> {
     }
 
     error_t
-    expand_and_infer_properties_node() override final {
+    infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for DBN node " << attributes.name << "..."
                     << std::endl;
 
