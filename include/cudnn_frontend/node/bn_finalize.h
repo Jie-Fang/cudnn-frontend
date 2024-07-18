@@ -23,13 +23,6 @@ class BatchNormFinalizeNode : public NodeCRTP<BatchNormFinalizeNode> {
     }
 
     error_t
-    pre_validate_node() const override final {
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm finalize node  " << attributes.name
                     << "..." << std::endl;
@@ -60,15 +53,6 @@ class BatchNormFinalizeNode : public NodeCRTP<BatchNormFinalizeNode> {
         infer_per_channel_tensors(attributes.outputs[BN_finalize_attributes::output_names::INV_VARIANCE]);
         infer_per_channel_tensors(attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_MEAN]);
         infer_per_channel_tensors(attributes.outputs[BN_finalize_attributes::output_names::NEXT_RUNNING_VAR]);
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

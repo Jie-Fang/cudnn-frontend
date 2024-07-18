@@ -28,25 +28,6 @@ class Tensor_attributes {
     // A closed set of types that are allowed to be passed by value.
     using pass_by_values_t = std::variant<int32_t, half, float, nv_bfloat16>;
 
-   private:
-    template <typename>
-    friend class Attributes;
-
-    std::string name;
-    DataType_t data_type        = DataType_t::NOT_SET;
-    std::vector<int64_t> dim    = {};
-    std::vector<int64_t> stride = {};
-    bool is_virtual             = false;
-
-    std::optional<pass_by_values_t> pass_by_value = std::nullopt;
-    bool is_pass_by_value                         = false;
-
-    TensorReordering_t reordering_type = TensorReordering_t::NONE;
-    uid_t uid                          = 0;
-    bool uid_assigned                  = false;
-
-    std::shared_ptr<Tensor_attributes> ragged_offset;
-
     error_t
     validate() const {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
@@ -68,6 +49,25 @@ class Tensor_attributes {
 
         return {error_code_t::OK, ""};
     }
+
+   private:
+    template <typename>
+    friend class Attributes;
+
+    std::string name;
+    DataType_t data_type        = DataType_t::NOT_SET;
+    std::vector<int64_t> dim    = {};
+    std::vector<int64_t> stride = {};
+    bool is_virtual             = false;
+
+    std::optional<pass_by_values_t> pass_by_value = std::nullopt;
+    bool is_pass_by_value                         = false;
+
+    TensorReordering_t reordering_type = TensorReordering_t::NONE;
+    uid_t uid                          = 0;
+    bool uid_assigned                  = false;
+
+    std::shared_ptr<Tensor_attributes> ragged_offset;
 
     auto
     fill_from_context(detail::Context const& context) -> Tensor_attributes& {
@@ -386,41 +386,6 @@ class Attributes {
     set_compute_data_type(DataType_t value) {
         compute_data_type = value;
         return self();
-    }
-
-    error_t
-    validate_inputs() const {
-        auto derived = static_cast<DerivedT const*>(this);
-        for (auto const& [enum_name, tensor] : derived->inputs) {
-            (void)enum_name;
-            if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
-            }
-        }
-
-        // Handle special case of BN where peer_stats is also an input
-        if constexpr (std::is_same_v<DerivedT, Batchnorm_attributes> ||
-                      std::is_same_v<DerivedT, Batchnorm_backward_attributes>) {
-            for (auto const& tensor : derived->peer_stats) {
-                if (tensor) {
-                    CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
-                }
-            }
-        }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    validate_outputs() const {
-        auto derived = static_cast<DerivedT const*>(this);
-        for (auto const& [enum_name, tensor] : derived->outputs) {
-            (void)enum_name;
-            if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(tensor->validate());
-            }
-        }
-        return {error_code_t::OK, ""};
     }
 
     error_t

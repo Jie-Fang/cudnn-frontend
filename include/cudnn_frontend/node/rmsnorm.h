@@ -72,17 +72,6 @@ class RMSNormNode : public NodeCRTP<RMSNormNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Forward phase not set of rmsnorm node.");
 
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
-
         return {error_code_t::OK, ""};
     }
 
@@ -175,8 +164,6 @@ class DRMSNormNode : public NodeCRTP<DRMSNormNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "DRMSNormNode node needs has_bias(bool) to be called.");
 
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
         return {error_code_t::OK, ""};
     }
 
@@ -242,15 +229,6 @@ class DRMSNormNode : public NodeCRTP<DRMSNormNode> {
         if (attributes.use_dbias.value()) {
             infer_scale_bias_tensors(attributes.outputs[Rmsnorm_backward_attributes::output_names::DBIAS]);
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

@@ -34,8 +34,6 @@ class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "use_M_Zinv attribute not set.");
 
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
         return {error_code_t::OK, ""};
     }
 
@@ -113,15 +111,6 @@ class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
                       mul_attributes,
                       attributes.outputs[Softmax_attributes::output_names::S]);
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

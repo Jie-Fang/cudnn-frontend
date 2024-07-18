@@ -54,7 +54,9 @@ class INode : public ICudnn {
     }
 
     virtual error_t
-    pre_validate_node() const = 0;
+    pre_validate_node() const {
+        return {error_code_t::OK, ""};
+    };
 
     virtual error_t
     infer_properties_node() = 0;
@@ -65,7 +67,9 @@ class INode : public ICudnn {
     };
 
     virtual error_t
-    post_validate_node() const = 0;
+    post_validate_node() const {
+        return {error_code_t::OK, ""};
+    };
 
     virtual int64_t
     get_fe_workspace_size_node() const {
@@ -293,24 +297,15 @@ class INode : public ICudnn {
         std::shared_ptr<Tensor_attributes> y);
 
     error_t
-    pre_validate_and_infer_properties_subtree() {
+    validate_subtree() {
         // pre validate to catch errors early
         // Otherwise code reability decreases in expand_and_infer
         CHECK_CUDNN_FRONTEND_ERROR(pre_validate_node());
         CHECK_CUDNN_FRONTEND_ERROR(infer_properties_node());
         for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->pre_validate_and_infer_properties_subtree());
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->validate_subtree());
         }
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_subtree() const {
-        // Validate self
         CHECK_CUDNN_FRONTEND_ERROR(post_validate_node());
-        for (auto const& sub_node : sub_nodes) {
-            CHECK_CUDNN_FRONTEND_ERROR(sub_node->post_validate_subtree());
-        }
         return {error_code_t::OK, ""};
     }
 
@@ -400,16 +395,6 @@ class INode : public ICudnn {
     std::shared_ptr<Tensor_attributes> rng(std::shared_ptr<Tensor_attributes>,
                                            std::shared_ptr<Tensor_attributes>,
                                            Rng_attributes);
-    error_t
-    validate() {
-        // infer_properties self
-        CHECK_CUDNN_FRONTEND_ERROR(pre_validate_and_infer_properties_subtree());
-
-        // validate the full tree again
-        CHECK_CUDNN_FRONTEND_ERROR(post_validate_subtree());
-
-        return {error_code_t::OK, ""};
-    }
 
     error_t
     build_operation_graph(cudnnHandle_t handle) {

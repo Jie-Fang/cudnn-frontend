@@ -59,13 +59,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                 std::string(#port));                                                                             \
     }
 
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Q, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::K, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::V);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::O);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::O, attributes.outputs);
 
         // validate options for is_inference and stats tensor
@@ -200,8 +196,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
         // clang-format on
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
         return {error_code_t::OK, ""};
     }
 
@@ -632,10 +626,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
 #undef CUDNN_FE_VALIDATE_STRIDE
 
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
-
         return {error_code_t::OK, ""};
     }
 
@@ -725,23 +715,14 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 std::string(#port));                                                                             \
     }
 
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Q, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::K, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::V);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::O);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::O, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Stats);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Stats, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::dO);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::dO, attributes.inputs);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::dQ);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::dQ, attributes.outputs);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::dK);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::dK, attributes.outputs);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::dV);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::dV, attributes.outputs);
 
 #undef CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE
@@ -867,16 +848,6 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
         // clang-format on
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

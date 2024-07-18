@@ -132,17 +132,6 @@ class LayerNormNode : public NodeCRTP<LayerNormNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Forward phase not set of layernorm node.");
 
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
-
         return {error_code_t::OK, ""};
     }
 

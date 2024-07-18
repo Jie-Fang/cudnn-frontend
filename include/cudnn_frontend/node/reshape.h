@@ -20,23 +20,6 @@ class ReshapeNode : public NodeCRTP<ReshapeNode> {
     }
 
     error_t
-    pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating ReshapeNode " << attributes.name << "..." << std::endl;
-
-        auto const& x    = attributes.inputs.find(Reshape_attributes::input_names::X);
-        bool const has_x = (x != attributes.inputs.end()) && (x->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_x, error_code_t::ATTRIBUTE_NOT_SET, "reshape input not set.");
-
-        auto const& y    = attributes.outputs.find(Reshape_attributes::output_names::Y);
-        bool const has_y = (y != attributes.outputs.end()) && (y->second != nullptr);
-        RETURN_CUDNN_FRONTEND_ERROR_IF(!has_y, error_code_t::ATTRIBUTE_NOT_SET, "reshape output not set.");
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reshape node " << attributes.name << "..."
                     << std::endl;
@@ -67,15 +50,6 @@ class ReshapeNode : public NodeCRTP<ReshapeNode> {
         if (y_tensor->get_dim().empty() || y_tensor->get_stride().empty()) {
             return {error_code_t::SHAPE_DEDUCTION_FAILED, "Reshape node output shape deduction failed"};
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

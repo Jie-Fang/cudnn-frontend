@@ -22,25 +22,6 @@ class MatmulFP8Node : public NodeCRTP<MatmulFP8Node> {
     }
 
     error_t
-    pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating matmul fp8 node " << attributes.name << "..."
-                    << std::endl;
-
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_fp8_attributes::input_names::A);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_fp8_attributes::input_names::B);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_fp8_attributes::input_names::Descale_A);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_fp8_attributes::input_names::Descale_B);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(Matmul_fp8_attributes::input_names::Scale_C);
-
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Matmul_fp8_attributes::output_names::C);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(Matmul_fp8_attributes::output_names::Amax_C);
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul fp8 node " << attributes.name << "..."
                     << std::endl;
@@ -91,15 +72,6 @@ class MatmulFP8Node : public NodeCRTP<MatmulFP8Node> {
         auto amax_attributes = Reduction_attributes().set_name("amax_c").set_mode(ReductionMode_t::AMAX);
         // Special non-functional-style call. Needed because output already created and provided to user.
         reduction(last_output, amax_attributes, attributes.outputs.at(Matmul_fp8_attributes::output_names::Amax_C));
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

@@ -21,20 +21,6 @@ class RngNode : public NodeCRTP<RngNode> {
     }
 
     error_t
-    pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating RngNode " << attributes.name << "..." << std::endl;
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(
-            attributes.outputs.find(Rng_attributes::output_names::Y) == attributes.outputs.end(),
-            error_code_t::ATTRIBUTE_NOT_SET,
-            "rng output not set.");
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for rng node " << attributes.name << "..."
                     << std::endl;
@@ -65,15 +51,6 @@ class RngNode : public NodeCRTP<RngNode> {
         if (y_tensor->get_dim().empty() || y_tensor->get_stride().empty()) {
             return {error_code_t::SHAPE_DEDUCTION_FAILED, "RNG node output shape deduction failed"};
         }
-
-        return {error_code_t::OK, ""};
-    }
-
-    error_t
-    post_validate_node() const override final {
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }

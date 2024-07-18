@@ -65,13 +65,9 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
                 std::string(#port));                                                                            \
     }
 
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::Q);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::Q, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::K);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::K, attributes.inputs);
-        CUDNN_FE_VALIDATE_INPUT_TENSOR(input_names::V);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
-        CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::O);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::O, attributes.outputs);
 
         // validate options for is_inference and stats tensor
@@ -79,13 +75,7 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "is_inference attribute not set");
 
-        if (attributes.is_inference.value() == false) {
-            CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::Stats);
-        }
-
 #undef CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE
-
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_inputs());
 
         int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
         int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
@@ -274,10 +264,6 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
         CUDNN_FE_VALIDATE_STRIDE(output_names::O, attributes.outputs);
 
 #undef CUDNN_FE_VALIDATE_STRIDE
-
-        // Validate outputs
-        // All properties of output tensors should have been set now.
-        CHECK_CUDNN_FRONTEND_ERROR(attributes.validate_outputs());
 
         return {error_code_t::OK, ""};
     }
