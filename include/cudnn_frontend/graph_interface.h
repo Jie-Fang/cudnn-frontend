@@ -30,16 +30,8 @@ namespace cudnn_frontend::graph {
 
 class Graph : public INode {
    private:
-    std::unordered_set<std::shared_ptr<Tensor_attributes>> outputs;
     std::unordered_set<std::shared_ptr<Tensor_attributes>> inputs;
-
-    std::shared_ptr<Tensor_attributes>
-    output_tensor(std::string const &name) {
-        auto tensor = std::make_shared<Tensor_attributes>();
-        tensor->set_name(name).set_is_virtual(true);
-        outputs.emplace(tensor);
-        return tensor;
-    }
+    std::unordered_set<Tensor_attributes::uid_t> used_uids;
 
     error_t
     pre_validate_node() const override final {
@@ -65,19 +57,9 @@ class Graph : public INode {
     }
 
     virtual error_t
-    collect_pre_assigned_uids_([[maybe_unused]] std::unordered_set<int64_t> &pre_assigned_uids) const override final {
-        return {error_code_t::OK, ""};
-    }
-
-    virtual error_t
-    create_cudnn_tensors_([[maybe_unused]] std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>
-                              &tensors) const override final {
-        return {error_code_t::OK, ""};
-    }
-
-    virtual error_t
-    set_uids_([[maybe_unused]] int64_t &potential_uid,
-              [[maybe_unused]] std::unordered_set<int64_t> const &pre_assigned_uids) const override final {
+    create_cudnn_tensors_node(std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> &,
+                              int64_t &,
+                              std::unordered_set<int64_t> const &) const override final {
         return {error_code_t::OK, ""};
     }
 
@@ -98,6 +80,50 @@ class Graph : public INode {
         for (auto const &output : outputs) {
             CHECK_CUDNN_FRONTEND_ERROR(output->validate());
         }
+
+        // Get all the pre assigned uids
+        for (auto const &input : inputs) {
+            if (input->has_uid()) {
+                auto uid  = input->get_uid();
+                auto iter = used_uids.find(uid);
+                RETURN_CUDNN_FRONTEND_ERROR_IF(iter != used_uids.end(),
+                                               error_code_t::INVALID_VALUE,
+                                               "uid " + std::to_string(uid) + " for tensor named " + input->get_name() +
+                                                   " has been already assigned to another tensor.");
+                used_uids.insert(uid);
+            }
+        }
+        for (auto const &output : outputs) {
+            if (output->has_uid()) {
+                auto uid  = output->get_uid();
+                auto iter = used_uids.find(uid);
+                RETURN_CUDNN_FRONTEND_ERROR_IF(iter != used_uids.end(),
+                                               error_code_t::INVALID_VALUE,
+                                               "uid " + std::to_string(uid) + " for tensor named " +
+                                                   output->get_name() +
+                                                   " has been already assigned to another tensor.");
+                used_uids.insert(uid);
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    build_operation_graph(cudnnHandle_t handle) {
+        // expand composite nodes
+        CHECK_CUDNN_FRONTEND_ERROR(expand_subtree());
+
+        Tensor_attributes::uid_t start_uid = 1;
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors_subtree(uid_to_tensors, start_uid, used_uids));
+
+        // INode keeps track of all uids that an operation graph uses.
+        // This helps to return errors to user during execution, without relying on backend to do so.
+        // Also, as uid in a variant pack have to be unique, keep a set of them.
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operations(variant_pack_uids, operations, uid_to_tensors));
+
+        // The method here fuses all operations. There will be 1 operation graph in total.
+        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
 
         return {error_code_t::OK, ""};
     }
