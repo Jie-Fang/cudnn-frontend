@@ -42,13 +42,21 @@ class ICudnn {
     // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
     create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
-                        std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const {
-        // TODO: uid check has to be moved to validate stage.
-        RETURN_CUDNN_FRONTEND_ERROR_IF(props->has_uid() == false,
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Tensor named '" + props->get_name() + "' has no uid assigned.");
+                        std::unordered_map<uid_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
+                        int64_t& potential_uid,
+                        std::unordered_set<int64_t> const& used_uids) const {
+        // Assign tensor a uid
+        if (props->has_uid() == false) {
+            // get_next_potential_uid
+            while (used_uids.find(potential_uid) != used_uids.end()) {
+                ++potential_uid;
+            }
 
-        // Check whether tensor already created
+            props->set_uid(potential_uid);
+            ++potential_uid;  // increment, as used its used now
+        }
+
+        // Check whether backend tensor already created
         auto tensor_uid = props->get_uid();
         if (tensors.find(tensor_uid) != tensors.end()) {
             getLogger() << "[cudnn_frontend] INFO: Backend Tensor named '" << props->get_name() << "' with UID "
@@ -68,7 +76,7 @@ class ICudnn {
             .setReorderType(props->get_reordering_type());
 
         if (auto ragged_offset_props = props->get_ragged_offset()) {
-            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, tensors));
+            CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(ragged_offset_props, tensors, potential_uid, used_uids));
             tensor_builder.setRaggedOffset(tensors.at(ragged_offset_props->get_uid()));
         }
 
