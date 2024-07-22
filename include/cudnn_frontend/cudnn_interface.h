@@ -59,8 +59,8 @@ class ICudnn {
         // Check whether backend tensor already created
         auto tensor_uid = props->get_uid();
         if (tensors.find(tensor_uid) != tensors.end()) {
-            getLogger() << "[cudnn_frontend] INFO: Backend Tensor named '" << props->get_name() << "' with UID "
-                        << tensor_uid << " already created." << std::endl;
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Backend Tensor named '" << props->get_name() << "' with UID " << tensor_uid
+                                                                   << " already created.");
             return {error_code_t::OK, ""};
         }
 
@@ -169,7 +169,7 @@ class ICudnn {
 
         CHECK_CUDNN_FRONTEND_ERROR(plans.is_plan_index_executable(plan_index));
 
-        getLogger() << "[cudnn_frontend] INFO: Executing plan at index " << plan_index << "." << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Executing plan at index " << plan_index << ".");
 
         CHECK_CUDNN_FRONTEND_ERROR(
             detail::execute(handle, plans.execution_plans[plan_index].get(), device_ptrs, uids, workspace_ptr));

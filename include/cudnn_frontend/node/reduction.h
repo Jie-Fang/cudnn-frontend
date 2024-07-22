@@ -22,8 +22,7 @@ class ReductionNode : public NodeCRTP<ReductionNode> {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reduction node " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for reduction node " << attributes.name << "...");
 
         attributes.fill_from_context(context);
 
@@ -52,8 +51,7 @@ class ReductionNode : public NodeCRTP<ReductionNode> {
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building ReductionNode operations " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << "Building ReductionNode operations " << attributes.name << "...");
 
         auto reduction_descriptor = cudnn_frontend::ReductionDescBuilder()
                                         .setComputeType(attributes.compute_data_type)

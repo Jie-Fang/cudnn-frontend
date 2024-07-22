@@ -98,7 +98,7 @@ target_link_libraries(
     Catch2::Catch2WithMain
 
 
-    CUDNN::cudnn_all
+    CUDNN::cudnn
 )
 
 # cuDNN dlopen's its libraries

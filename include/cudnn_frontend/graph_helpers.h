@@ -73,53 +73,51 @@ typedef struct [[nodiscard]] error_object {
 #define CUDNN_FRONTEND_WHILE_FALSE while (0)
 #endif
 
-#define CHECK_CUDNN_FRONTEND_ERROR(x)                                                                              \
+#define CHECK_CUDNN_FRONTEND_ERROR(x)                                                          \
+    do {                                                                                       \
+        if (auto retval = x; retval.is_bad()) {                                                \
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: " << #x << " at " << __FILE__ << ":" << __LINE__); \
+            return retval;                                                                     \
+        }                                                                                      \
+    }                                                                                          \
+    CUDNN_FRONTEND_WHILE_FALSE
+
+#define RETURN_CUDNN_FRONTEND_ERROR_IF(cond, retval, message)                                                      \
     do {                                                                                                           \
-        if (auto retval = x; retval.is_bad()) {                                                                    \
-            getLogger() << "[cudnn_frontend] ERROR: " << #x << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
-            return retval;                                                                                         \
+        if (cond) {                                                                                                \
+            if (retval == error_code_t::OK) {                                                                      \
+                CUDNN_FE_LOG_LABEL("INFO: ");                                                                      \
+            } else {                                                                                               \
+                CUDNN_FE_LOG_LABEL("ERROR: ");                                                                     \
+            }                                                                                                      \
+            CUDNN_FE_LOG(message << ". " << retval << " because (" << #cond ") at " << __FILE__ << ":" << __LINE__ \
+                                 << "\n");                                                                         \
+            return {retval, message};                                                                              \
         }                                                                                                          \
     }                                                                                                              \
     CUDNN_FRONTEND_WHILE_FALSE
 
-#define RETURN_CUDNN_FRONTEND_ERROR_IF(cond, retval, message)                                                        \
-    do {                                                                                                             \
-        if (cond) {                                                                                                  \
-            if (retval == error_code_t::OK) {                                                                        \
-                getLogger() << "[cudnn_frontend] INFO: ";                                                            \
-            } else {                                                                                                 \
-                getLogger() << "[cudnn_frontend] ERROR: ";                                                           \
-            }                                                                                                        \
-            getLogger() << message << ". " << retval << " because (" << #cond ") at " << __FILE__ << ":" << __LINE__ \
-                        << "\n";                                                                                     \
-            return {retval, message};                                                                                \
-        }                                                                                                            \
-    }                                                                                                                \
+#define CHECK_CUDNN_ERROR(x)                                                                                \
+    do {                                                                                                    \
+        if (auto cudnn_retval = x; cudnn_retval != CUDNN_STATUS_SUCCESS) {                                  \
+            std::stringstream error_msg;                                                                    \
+            error_msg << #x << " failed with code: " << detail::get_last_error_string_()                    \
+                      << ", and message: " << detail::get_error_string(cudnn_retval);                       \
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__); \
+            return {error_code_t::CUDNN_BACKEND_API_FAILED, error_msg.str()};                               \
+        }                                                                                                   \
+    }                                                                                                       \
     CUDNN_FRONTEND_WHILE_FALSE
 
-#define CHECK_CUDNN_ERROR(x)                                                                                      \
-    do {                                                                                                          \
-        if (auto cudnn_retval = x; cudnn_retval != CUDNN_STATUS_SUCCESS) {                                        \
-            std::stringstream error_msg;                                                                          \
-            error_msg << #x << " failed with code: " << detail::get_last_error_string_()                          \
-                      << ", and message: " << detail::get_error_string(cudnn_retval);                             \
-            getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
-                        << std::endl;                                                                             \
-            return {error_code_t::CUDNN_BACKEND_API_FAILED, error_msg.str()};                                     \
-        }                                                                                                         \
-    }                                                                                                             \
-    CUDNN_FRONTEND_WHILE_FALSE
-
-#define CHECK_CUDA_ERROR(x)                                                                                       \
-    do {                                                                                                          \
-        if (auto cuda_retval = x; cuda_retval != cudaSuccess) {                                                   \
-            std::stringstream error_msg;                                                                          \
-            error_msg << #x << " failed with " << detail::cuda_get_error_string(cuda_retval);                     \
-            getLogger() << "[cudnn_frontend] ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__ \
-                        << std::endl;                                                                             \
-            return {error_code_t::CUDA_API_FAILED, error_msg.str()};                                              \
-        }                                                                                                         \
-    }                                                                                                             \
+#define CHECK_CUDA_ERROR(x)                                                                                 \
+    do {                                                                                                    \
+        if (auto cuda_retval = x; cuda_retval != cudaSuccess) {                                             \
+            std::stringstream error_msg;                                                                    \
+            error_msg << #x << " failed with " << detail::cuda_get_error_string(cuda_retval);               \
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__); \
+            return {error_code_t::CUDA_API_FAILED, error_msg.str()};                                        \
+        }                                                                                                   \
+    }                                                                                                       \
     CUDNN_FRONTEND_WHILE_FALSE
 
 NLOHMANN_JSON_SERIALIZE_ENUM(error_code_t,

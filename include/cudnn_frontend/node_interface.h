@@ -87,7 +87,7 @@ class INode : public ICudnn {
 
         auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
         if (status.is_bad()) {
-            getLogger() << "[cudnn_frontend] ERROR: Querying workspace failed." << std::endl;
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
         }
 
         return cudnn_workspace_size;
@@ -647,8 +647,7 @@ class NodeCRTP : public INode {
     create_cudnn_tensors_node(std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors,
                               int64_t& potential_uid,
                               std::unordered_set<int64_t> const& used_uids) const {
-        getLogger() << "[cudnn_frontend] INFO: Creating cudnn tensors for node named '" << self().attributes.name
-                    << "':" << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Creating cudnn tensors for node named '" << self().attributes.name << "':");
         for (auto const& [name, tensor] : self().attributes.inputs) {
             (void)name;
             if (tensor) {

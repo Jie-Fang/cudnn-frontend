@@ -68,6 +68,9 @@ class Graph : public INode {
 
     error_t
     validate() {
+        CUDNN_FE_LOG_LABEL_ENDL("");
+        CUDNN_FE_LOG(*this << std::endl;);
+
         // First validate all inputs that the user set.
         for (auto const &input : inputs) {
             CHECK_CUDNN_FRONTEND_ERROR(input->validate());
@@ -339,7 +342,7 @@ class Graph : public INode {
     select_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
         auto status = plans.filter_behavior_notes(notes, true);
         if (status.is_bad()) {
-            getLogger() << status.get_message() << std::endl;
+            CUDNN_FE_LOG(status.get_message() << std::endl);
         }
         return *this;
     }
@@ -348,7 +351,7 @@ class Graph : public INode {
     select_numeric_notes(std::vector<NumericalNote_t> const &notes) {
         auto status = plans.filter_numeric_notes(notes, true);
         if (status.is_bad()) {
-            getLogger() << status.get_message() << std::endl;
+            CUDNN_FE_LOG(status.get_message() << std::endl);
         }
         return *this;
     }
@@ -357,7 +360,7 @@ class Graph : public INode {
     deselect_behavior_notes(std::vector<BehaviorNote_t> const &notes) {
         auto status = plans.filter_behavior_notes(notes, false);
         if (status.is_bad()) {
-            getLogger() << status.get_message() << std::endl;
+            CUDNN_FE_LOG(status.get_message() << std::endl);
         }
         return *this;
     }
@@ -366,7 +369,7 @@ class Graph : public INode {
     deselect_numeric_notes(std::vector<NumericalNote_t> const &notes) {
         auto status = plans.filter_numeric_notes(notes, false);
         if (status.is_bad()) {
-            getLogger() << status.get_message() << std::endl;
+            CUDNN_FE_LOG(status.get_message() << std::endl);
         }
         return *this;
     }
@@ -594,12 +597,12 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     CHECK_CUDNN_FRONTEND_ERROR(
         detail::query_cudnn_heuristics_impl(operation_graph, op_graph_to_configs, mode, context.get_target_sm_count()));
 
-    getLogger() << "[cudnn_frontend] INFO: Extracting engine configs." << std::endl;
+    CUDNN_FE_LOG_LABEL_ENDL("INFO: Extracting engine configs.");
 
     plans.set_tag(operation_graph->getTag());
     plans.set_engine_configs(op_graph_to_configs);
 
-    getLogger() << "[cudnn_frontend] INFO: Querying engine config properties\n";
+    CUDNN_FE_LOG_LABEL_ENDL("INFO: Querying engine config properties.");
     CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
 
     return {error_code_t::OK, ""};

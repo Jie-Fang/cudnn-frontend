@@ -23,8 +23,7 @@ class MatmulFP8Node : public NodeCRTP<MatmulFP8Node> {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul fp8 node " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for matmul fp8 node " << attributes.name << "...");
 
         attributes.fill_from_context(context);
 
