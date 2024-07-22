@@ -377,7 +377,7 @@ class ConvDescBuilder_v8 {
             return std::move(m_convDesc);
         }
 
-        getLogger() << "[cudnn_frontend] " << m_convDesc << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL(m_convDesc)
         return std::move(m_convDesc);
     }
 

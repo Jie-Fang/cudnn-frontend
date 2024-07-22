@@ -23,8 +23,8 @@ class BatchnormInferenceNode : public NodeCRTP<BatchnormInferenceNode> {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferencing properties for batchnorm inference node " << attributes.name
-                    << "..." << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferencing properties for batchnorm inference node " << attributes.name
+                                                                                             << "...");
 
         attributes.fill_from_context(context);
 
@@ -53,8 +53,7 @@ class BatchnormInferenceNode : public NodeCRTP<BatchnormInferenceNode> {
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building BatchnormInferenceNode operations " << attributes.name
-                    << "..." << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Building BatchnormInferenceNode operations " << attributes.name << "...");
 
         auto&& batchnorm_operation_builder =
             cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);

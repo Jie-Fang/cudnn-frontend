@@ -23,8 +23,7 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for matmul node " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for matmul node " << attributes.name << "...");
 
         attributes.fill_from_context(context);
 
@@ -68,8 +67,7 @@ class MatmulNode : public NodeCRTP<MatmulNode> {
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building MatmulNode operations " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << "Building MatmulNode operations " << attributes.name << "...");
 
         // matmul descriptor
         auto matmul_descriptor = cudnn_frontend::MatMulDescBuilder()

@@ -261,7 +261,7 @@ class EngineHeuristicsBuilder_v8 {
             return std::move(m_heuristics);
         };
 
-        getLogger() << "[cudnn_frontend] " << m_heuristics << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL(m_heuristics);
         return std::move(m_heuristics);
     }
 
@@ -289,8 +289,8 @@ get_heuristics_list(std::array<cudnnBackendHeurMode_t, SIZE> modes,
             continue;
         }
         auto heuristics = EngineHeuristicsBuilder_v8().setOperationGraph(opGraph).setHeurMode(mode).build();
-        getLogger() << "Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount() << " configurations."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("Heuristic Mode " << mode << " has " << heuristics.getEngineConfigCount()
+                                                  << " configurations.");
         auto &engine_config = heuristics.getEngineConfig(heuristics.getEngineConfigCount());
         cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);
     }
@@ -340,7 +340,7 @@ get_heuristics_list_impl(cudnnBackendHeurMode_t heur_mode,
     NV_CUDNN_RETURN_IF_ERROR(heuristics);
     auto num_config = heuristics.getEngineConfigCount();
     NV_CUDNN_RETURN_IF_ERROR(heuristics);
-    getLogger() << "Heuristic query for mode " << heur_mode << " has " << num_config << " configurations." << std::endl;
+    CUDNN_FE_LOG_LABEL_ENDL("Heuristic query for mode " << heur_mode << " has " << num_config << " configurations.");
     auto &engine_config = heuristics.getEngineConfig(num_config);
     NV_CUDNN_RETURN_IF_ERROR(heuristics);
     cudnn_frontend::filter(engine_config, filtered_configs, filter_fn);

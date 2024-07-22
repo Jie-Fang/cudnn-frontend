@@ -21,8 +21,7 @@ class ReshapeNode : public NodeCRTP<ReshapeNode> {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for reshape node " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for reshape node " << attributes.name << "...");
 
         auto y_tensor = attributes.outputs[Reshape_attributes::output_names::Y];
 
@@ -59,8 +58,7 @@ class ReshapeNode : public NodeCRTP<ReshapeNode> {
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building ReshapeNode operations " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << "Building ReshapeNode operations " << attributes.name << "...");
 
         auto&& reshape_op_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR);
 

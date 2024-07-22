@@ -23,8 +23,7 @@ class DgradNode : public NodeCRTP<DgradNode> {
 
     error_t
     pre_validate_node() const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Validating Node Type::DGRAD " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating Node Type::DGRAD " << attributes.name << "...");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.get_pre_padding().empty(), error_code_t::ATTRIBUTE_NOT_SET, "Pre padding not set.");
@@ -40,8 +39,7 @@ class DgradNode : public NodeCRTP<DgradNode> {
 
     error_t
     infer_properties_node() override final {
-        getLogger() << "[cudnn_frontend] INFO: Inferrencing properties for dgrad node " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for dgrad node " << attributes.name << "...");
 
         attributes.fill_from_context(context);
 
@@ -71,8 +69,7 @@ class DgradNode : public NodeCRTP<DgradNode> {
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-        getLogger() << "[cudnn_frontend] INFO: " << "Building DgradNode operations " << attributes.name << "..."
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Building DgradNode operations " << attributes.name << "...");
 
         // dgrad descriptor
         int64_t const spatial_dim_count = attributes.get_pre_padding().size();

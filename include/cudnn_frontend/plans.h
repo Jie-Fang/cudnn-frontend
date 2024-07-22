@@ -23,7 +23,7 @@ execute(cudnnHandle_t handle,
         void* workspace_ptr) {
     // TODO: below line fails with MSVC. warning C4127: conditional expression is constant
     // RETURN_CUDNN_FRONTEND_ERROR_IF(!plan, error_code_t::GRAPH_EXECUTION_FAILED, "No plan found to execute!!");
-    getLogger() << "[cudnn_frontend] INFO: Executing " << plan->getTag() << "..." << std::endl;
+    CUDNN_FE_LOG_LABEL_ENDL("INFO: Executing " << plan->getTag() << "...");
 
     backend_descriptor variant_pack_descriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR);
     RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack_descriptor.get_status() != CUDNN_STATUS_SUCCESS,
@@ -33,7 +33,7 @@ execute(cudnnHandle_t handle,
     CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack_descriptor, device_ptrs, uids, workspace_ptr));
     CHECK_CUDNN_ERROR(execute(handle, plan->get_raw_desc(), variant_pack_descriptor.get_ptr()));
 
-    getLogger() << "[cudnn_frontend] INFO: Executed " << plan->getTag() << "." << std::endl;
+    CUDNN_FE_LOG_LABEL_ENDL("INFO: Executed " << plan->getTag() << ".");
 
     return {error_code_t::OK, ""};
 }
@@ -49,8 +49,7 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
         "Empty operation graph provided. Did you forget to call graph.build_operation_graph()?");
 
     auto const& operation_graph_tag = operation_graph->getTag();
-    getLogger() << "[cudnn_frontend] INFO: " << " Getting plan from heuristics for " << operation_graph_tag << " ..."
-                << std::endl;
+    CUDNN_FE_LOG_LABEL_ENDL("INFO: " << " Getting plan from heuristics for " << operation_graph_tag << " ...");
 
     std::vector<cudnnStatus_t> statuses;
 #ifdef NV_CUDNN_DISABLE_EXCEPTION
@@ -67,23 +66,23 @@ query_cudnn_heuristics_impl(std::shared_ptr<OperationGraph_v8> const& operation_
         // Silly MSVC error that thinks below condition is constexpr
         // RETURN_CUDNN_FRONTEND_ERROR_IF(
         //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::HEURISTIC_QUERY_FAILED, e.what());
-        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
-        getLogger() << error_code_t::HEURISTIC_QUERY_FAILED << " because querying heuristics failed at " << __FILE__
-                    << ":" << __LINE__ << "\n";
+        CUDNN_FE_LOG_LABEL("ERROR: " << e.what() << ". ");
+        CUDNN_FE_LOG(error_code_t::HEURISTIC_QUERY_FAILED << " because querying heuristics failed at " << __FILE__
+                                                          << ":" << __LINE__ << "\n");
         return {error_code_t::HEURISTIC_QUERY_FAILED, e.what()};
     }
 #endif
 
-    getLogger() << "[cudnn_frontend] INFO: get_heuristics_list statuses: ";
+    CUDNN_FE_LOG_LABEL("INFO: get_heuristics_list statuses: ");
     for (size_t i = 0; i < statuses.size(); i++) {
-        getLogger() << cudnn_frontend::to_string(statuses[i]) << " ";
+        CUDNN_FE_LOG(cudnn_frontend::to_string(statuses[i]) << " ");
     }
-    getLogger() << std::endl;
+    CUDNN_FE_LOG(std::endl);
 
-    getLogger() << "[cudnn_frontend] INFO: config list has " << configs.size() << " configurations." << std::endl;
+    CUDNN_FE_LOG_LABEL_ENDL("INFO: config list has " << configs.size() << " configurations.");
 
     if (configs.empty()) {
-        getLogger() << "[cudnn_frontend] ERROR: No valid engine configs returned from heuristics.";
+        CUDNN_FE_LOG_LABEL_ENDL("ERROR: No valid engine configs returned from heuristics.");
         return {error_code_t::HEURISTIC_QUERY_FAILED, "No valid engine configs for " + operation_graph_tag};
     }
     return {error_code_t::OK, ""};
@@ -116,9 +115,9 @@ create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
         // RETURN_CUDNN_FRONTEND_ERROR_IF(
         //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
         //     e.what());
-        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
-        getLogger() << error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED << " because plan building failed at "
-                    << __FILE__ << ":" << __LINE__ << "\n";
+        CUDNN_FE_LOG_LABEL(" ERROR: " << e.what() << ". ");
+        CUDNN_FE_LOG(error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED << " because plan building failed at "
+                                                                        << __FILE__ << ":" << __LINE__ << "\n");
         return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, e.what()};
     }
 #endif
@@ -154,9 +153,9 @@ create_cudnn_execution_plan(std::shared_ptr<ExecutionPlan>& plan,
         // RETURN_CUDNN_FRONTEND_ERROR_IF(
         //     e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
         //     e.what());
-        getLogger() << "[cudnn_frontend] ERROR: " << e.what() << ". ";
-        getLogger() << error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED << " because plan building failed at "
-                    << __FILE__ << ":" << __LINE__ << "\n";
+        CUDNN_FE_LOG_LABEL("ERROR: " << e.what() << ". ");
+        CUDNN_FE_LOG(error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED << " because plan building failed at "
+                                                                        << __FILE__ << ":" << __LINE__ << "\n");
         return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED, e.what()};
     }
 #endif
@@ -364,15 +363,13 @@ class Execution_plan_list {
     EngineConfigList
     get_barred_engine_configs() {
         EngineConfigList barred_engine_configs;
-        getLogger() << "[cudnn_frontend] INFO: " << " Filtering engine_configs ..." << engine_configs.size()
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << " Filtering engine_configs ..." << engine_configs.size());
         for (auto i = 0u; i < engine_configs.size(); i++) {
             if (barred_indices[i] == false) {
                 barred_engine_configs.push_back(engine_configs[i]);
             }
         }
-        getLogger() << "[cudnn_frontend] INFO: " << " barred engine_configs ..." << barred_engine_configs.size()
-                    << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << " barred engine_configs ..." << barred_engine_configs.size());
         return barred_engine_configs;
     }
 
@@ -382,7 +379,7 @@ class Execution_plan_list {
         // This usually happens when user deselects by numerical and behavioural notes.
 
         if (barred_indices[index] == true) {
-            getLogger() << "Deselecting execution plan at position " << index << std::endl;
+            CUDNN_FE_LOG_LABEL_ENDL("Deselecting execution plan at position " << index);
         }
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(barred_indices[index] == true,
@@ -411,8 +408,8 @@ class Execution_plan_list {
             int32_t shared_memory_size = INT32_MAX;
             auto status                = detail::get_shared_memory_size(engine_configs[index], shared_memory_size);
             if (status.is_bad()) {
-                getLogger() << "[cudnn_frontend] WARN: Unknown Shared memory size, so not deselecting plan at position "
-                            << index << std::endl;
+                CUDNN_FE_LOG_LABEL_ENDL("WARN: Unknown Shared memory size, so not deselecting plan at position "
+                                        << index);
             } else if (shared_memory_size > max_shared_mem_allowed) {
                 barred_indices[index] = true;
                 return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
@@ -435,7 +432,7 @@ class Execution_plan_list {
             CHECK_CUDNN_FRONTEND_ERROR(_build_plan_at_index_impl(handle, index));
         }
 
-        getLogger() << "Check support for index " << index << " passed with cfg " << cfg_tag << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("Check support for index " << index << " passed with cfg " << cfg_tag);
         // All checks passed for this config, so return success.
         return {error_code_t::OK, ""};
     }
@@ -489,14 +486,14 @@ class Execution_plan_list {
         for (auto i = 0u; i < engine_configs.size(); i++) {
             auto status = build_plan_at_index(handle, i);
             if (status.is_bad()) {
-                getLogger() << "[cudnn_frontend] WARN: Failed to build plan at " << i << std::endl;
+                CUDNN_FE_LOG_LABEL_ENDL("WARN: Failed to build plan at " << i);
                 continue;
             }
 
             // Only set the candidate the first time, as the order of iteration is from highest to lowest priority
             if (candidate == -1) {
                 candidate = static_cast<int64_t>(i);
-                getLogger() << "[cudnn_frontend] INFO: Candidate set as " << i << std::endl;
+                CUDNN_FE_LOG_LABEL_ENDL("INFO: Candidate set as " << i);
             }
 
             // Return from this function as first successfully built plan is found.
@@ -582,8 +579,7 @@ class Execution_plan_list {
                 }
             }
 
-            getLogger() << "[cudnn_frontend] Plan " << plan->getTag() << " took " << std::setw(10) << final_time_ms
-                        << std::endl;
+            CUDNN_FE_LOG_LABEL_ENDL("Plan " << plan->getTag() << " took " << std::setw(10) << final_time_ms);
             plan->setExecutionTime(final_time_ms);
             timed_execution_plans.insert(plan);
         }
@@ -596,7 +592,7 @@ class Execution_plan_list {
         detail::cuda_event_destroy(start);
         detail::cuda_event_destroy(stop);
 
-        getLogger() << "Autotuned " << successful_plan_count << " plans." << std::endl;
+        CUDNN_FE_LOG_LABEL_ENDL("Autotuned " << successful_plan_count << " plans.");
         return {error_code_t::OK, ""};
     }
 
