@@ -18,6 +18,7 @@
 #include "node/rmsnorm.h"
 #include "node/resample.h"
 #include "node/reshape.h"
+#include "node/slice.h"
 // #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
 #include "node/sdpa_fp8.h"
@@ -124,6 +125,10 @@ class Graph : public INode {
         // This helps to return errors to user during execution, without relying on backend to do so.
         // Also, as uid in a variant pack have to be unique, keep a set of them.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operations(variant_pack_uids, operations, uid_to_tensors));
+
+        // Collect variant pack modifiers when lowering to backend.
+        // The collected map is used everytime when execute is called.
+        CHECK_CUDNN_FRONTEND_ERROR(collect_variant_pack_replacements_subtree(variant_pack_replacements));
 
         // The method here fuses all operations. There will be 1 operation graph in total.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
@@ -275,6 +280,8 @@ class Graph : public INode {
                                                                     std::shared_ptr<Tensor_attributes>,
                                                                     std::shared_ptr<Tensor_attributes>,
                                                                     SDPA_backward_attributes);
+
+    std::shared_ptr<Tensor_attributes> slice(std::shared_ptr<Tensor_attributes>, Slice_attributes);
 
     [[deprecated]] std::array<std::shared_ptr<Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
@@ -1213,6 +1220,15 @@ Graph::sdpa_backward(std::shared_ptr<Tensor_attributes> q,
     sub_nodes.emplace_back(std::make_unique<SDPABackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV};
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::slice(std::shared_ptr<Tensor_attributes> input, Slice_attributes attributes) {
+    attributes.inputs[Slice_attributes::input_names::X] = input;
+    auto Y = attributes.outputs[Slice_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+
+    sub_nodes.emplace_back(std::make_unique<SliceNode>(std::move(attributes), context));
+    return Y;
 }
 
 static inline std::ostream &

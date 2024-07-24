@@ -54,6 +54,21 @@ class INode : public ICudnn {
         return tensor;
     }
 
+    // Key: uid to replace in variant pack
+    // Value: uid to replace with, start offset to add to pointer
+    std::unordered_map<Tensor_attributes::uid_t, std::pair<Tensor_attributes::uid_t, int64_t>>
+        variant_pack_replacements;
+    error_t
+    collect_variant_pack_replacements_subtree(
+        std::unordered_map<Tensor_attributes::uid_t, std::pair<Tensor_attributes::uid_t, int64_t>>& replacements)
+        const {
+        CHECK_CUDNN_FRONTEND_ERROR(collect_variant_pack_replacements_node(replacements));
+        for (auto const& sub_node : sub_nodes) {
+            CHECK_CUDNN_FRONTEND_ERROR(sub_node->collect_variant_pack_replacements_subtree(replacements));
+        }
+        return {error_code_t::OK, ""};
+    }
+
    private:
     int64_t fe_workspace_size = 0;
 
@@ -113,6 +128,12 @@ class INode : public ICudnn {
 
     virtual error_t
     pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t>& pass_by_values) const = 0;
+
+    virtual error_t
+    collect_variant_pack_replacements_node(
+        std::unordered_map<Tensor_attributes::uid_t, std::pair<Tensor_attributes::uid_t, int64_t>>&) const {
+        return {error_code_t::OK, ""};
+    };
 
     virtual error_t
     create_cudnn_tensors_node(
@@ -211,6 +232,25 @@ class INode : public ICudnn {
         return {error_code_t::OK, ""};
     }
 
+    error_t
+    make_variant_pack_replacements(
+        std::unordered_map<int64_t, void*>& tensor_to_pointer_map,
+        std::unordered_map<Tensor_attributes::uid_t, std::pair<Tensor_attributes::uid_t, int64_t>> replacements) const {
+        for (auto& [from_uid, value] : replacements) {
+            const auto& [to_uid, start_offset] = value;
+
+            // Check if from_uid exists in the map
+            auto it = tensor_to_pointer_map.find(from_uid);
+            RETURN_CUDNN_FRONTEND_ERROR_IF(it == tensor_to_pointer_map.end(),
+                                           error_code_t::INVALID_VARIANT_PACK,
+                                           "Variant pack expected uid " + std::to_string(from_uid) + " but not found.");
+
+            // Perform pointer arithmetic
+            tensor_to_pointer_map[to_uid] = static_cast<void*>(static_cast<char*>(it->second) + start_offset);
+        }
+        return {error_code_t::OK, ""};
+    }
+
    protected:
     std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
     std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
@@ -241,6 +281,7 @@ class INode : public ICudnn {
         RMSNORM,
         RNG,
         SCALED_DOT_PRODUCT_ATTENTION,
+        SLICE,
         WGRAD
     };
     Type tag;
@@ -417,6 +458,9 @@ class INode : public ICudnn {
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
 
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
+
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;
         CHECK_CUDNN_FRONTEND_ERROR(gather_workspace_modifications(workspace_modifications, workspace_offset));
@@ -489,6 +533,9 @@ class INode : public ICudnn {
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
 
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
+
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;
         CHECK_CUDNN_FRONTEND_ERROR(gather_workspace_modifications(workspace_modifications, workspace_offset));
@@ -519,6 +566,8 @@ class INode : public ICudnn {
 
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
 
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
         int64_t workspace_offset = 0;

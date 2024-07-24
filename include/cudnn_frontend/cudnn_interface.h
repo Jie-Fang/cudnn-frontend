@@ -39,6 +39,19 @@ class ICudnn {
 
     graph::Execution_plan_list plans;
 
+    void
+    assign_uid(graph::Tensor_attributes* const tensor,
+               int64_t& potential_uid,
+               std::unordered_set<int64_t> const& used_uids) const {
+        // get_next_potential_uid
+        while (used_uids.find(potential_uid) != used_uids.end()) {
+            ++potential_uid;
+        }
+
+        tensor->set_uid(potential_uid);
+        ++potential_uid;  // increment, as used its used now
+    }
+
     // TODO: Always returns OK. Can the status and error message be accessed from tensor descriptor?
     error_t
     create_cudnn_tensor(std::shared_ptr<graph::Tensor_attributes> const& props,
@@ -47,13 +60,7 @@ class ICudnn {
                         std::unordered_set<int64_t> const& used_uids) const {
         // Assign tensor a uid
         if (props->has_uid() == false) {
-            // get_next_potential_uid
-            while (used_uids.find(potential_uid) != used_uids.end()) {
-                ++potential_uid;
-            }
-
-            props->set_uid(potential_uid);
-            ++potential_uid;  // increment, as used its used now
+            assign_uid(props.get(), potential_uid, used_uids);
         }
 
         // Check whether backend tensor already created
