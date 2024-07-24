@@ -230,13 +230,15 @@ to_string(cudnnStatus_t const status) {
 #endif
 static inline void
 set_error_and_throw_exception(BackendDescriptor const* desc, cudnnStatus_t status, const char* message) {
+
+    const char* padded_message = (detail::get_last_error_string_() + std::string(message)).c_str();
     if (desc != nullptr) {
         desc->set_status(status);
-        desc->set_error(message);
+        desc->set_error(padded_message);
     }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
-    throw cudnnException(std::string(std::string(message) + std::string(" cudnn_status: ") + to_string(status)).c_str(),
-                         status);
+    throw cudnnException(
+        std::string(std::string(padded_message) + std::string(" cudnn_status: ") + to_string(status)).c_str(), status);
 #endif
 }
 

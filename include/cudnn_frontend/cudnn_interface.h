@@ -33,6 +33,7 @@ class ICudnn {
     // Hence using uid, as that uniquely identifies both types of tensors.
     std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> uid_to_tensors;
     std::vector<std::shared_ptr<cudnn_frontend::Operation>> operations;
+    graph::managed_backend_descriptor_t raw_operations;
 
     std::shared_ptr<OperationGraph_v8> operation_graph;
     std::unordered_set<graph::Tensor_attributes::uid_t> variant_pack_uids;
@@ -119,6 +120,9 @@ class ICudnn {
         auto&& cudnn_operation_graph_builder = cudnn_frontend::OperationGraphBuilder();
         cudnn_operation_graph_builder.setHandle(handle).setOperationGraph(cudnn_operations.size(),
                                                                           cudnn_operations.data());
+        for (auto& op : raw_operations) {
+            cudnn_operation_graph_builder.addOperation(op);
+        }
 
 #ifdef NV_CUDNN_DISABLE_EXCEPTION
         // disable exception macro is defined. Calling build will not throw.

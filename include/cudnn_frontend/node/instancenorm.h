@@ -93,7 +93,9 @@ class InstanceNormNode : public NodeCRTP<InstanceNormNode> {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
+        managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
+        CUDNN_FRONTEND_UNUSED(raw_operations);
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Building InstanceNormNode operations " << attributes.name << "...");
 
         auto&& op_builder = cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
@@ -242,7 +244,9 @@ class DINNode : public NodeCRTP<DINNode> {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
+        managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
+        CUDNN_FRONTEND_UNUSED(raw_operations);
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Building DINode operations " << attributes.name << "...");
 
         // Create the DIN operation.

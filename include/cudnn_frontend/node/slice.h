@@ -67,7 +67,9 @@ class SliceNode : public NodeCRTP<SliceNode> {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>&,
+        managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>&) const override final {
+        CUDNN_FRONTEND_UNUSED(raw_operations);
         // No corresponding backend operation
 
         auto const virutal_output = attributes.outputs.at(Slice_attributes::output_names::Y);
