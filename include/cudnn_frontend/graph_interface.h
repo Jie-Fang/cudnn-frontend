@@ -33,6 +33,10 @@ class Graph : public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> inputs;
     std::unordered_set<Tensor_attributes::uid_t> used_uids;
+    int64_t fe_workspace_size = 0;
+
+    std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
+    std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
 
     error_t
     pre_validate_node() const override final {
@@ -50,9 +54,20 @@ class Graph : public INode {
     }
 
     virtual error_t
-    pass_by_value_tensors_(std::unordered_map<uid_t, pass_by_values_t> &pass_by_values) const override final {
+    collect_pass_by_value_tensors_node(
+        std::unordered_map<uid_t, pass_by_values_t> &pass_by_values) const override final {
         for (auto [uid, value] : deserialized_pass_by_value) {
             pass_by_values.emplace(uid, value);
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    virtual error_t
+    collect_tensors_in_workspace_node(
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> &worskspace_modifications,
+        int64_t &) const {
+        for (auto [uid, value] : deserialized_workspace_modifications) {
+            worskspace_modifications.emplace(uid, value);
         }
         return {error_code_t::OK, ""};
     }
@@ -61,6 +76,106 @@ class Graph : public INode {
     create_cudnn_tensors_node(std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>> &,
                               int64_t &,
                               std::unordered_set<int64_t> const &) const override final {
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    extend_tensor_map_with_workspace_tensors_(
+        std::unordered_map<int64_t, void *> &tensor_to_pointer_map,
+        void *workspace,
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> const &worskspace_modifications)
+        const {
+        for (auto const &[uid, data] : worskspace_modifications) {
+            tensor_to_pointer_map.emplace(uid, static_cast<char *>(workspace) + std::get<1>(data));
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    extend_tensor_map_with_pass_by_value_tensors_(
+        std::unordered_map<int64_t, void *> &tensor_to_pointer_map,
+        std::unordered_map<uid_t, pass_by_values_t> &tensor_to_pass_by_value) const {
+        for (auto &[uid, value] : tensor_to_pass_by_value) {
+            if (half *half_value_ptr = std::get_if<half>(&value)) {
+                tensor_to_pointer_map.emplace(uid, half_value_ptr);
+            } else if (nv_bfloat16 *nv_bfloat16_value_ptr = std::get_if<nv_bfloat16>(&value)) {
+                tensor_to_pointer_map.emplace(uid, nv_bfloat16_value_ptr);
+            } else if (int32_t *int32_t_value_ptr = std::get_if<int32_t>(&value)) {
+                tensor_to_pointer_map.emplace(uid, int32_t_value_ptr);
+            } else if (float *float_value_ptr = std::get_if<float>(&value)) {
+                tensor_to_pointer_map.emplace(uid, float_value_ptr);
+            } else {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(
+                    true, error_code_t::INVALID_VARIANT_PACK, "Unexpected type for pass by value tensor.");
+            }
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    make_variant_pack_replacements(
+        std::unordered_map<int64_t, void *> &tensor_to_pointer_map,
+        std::unordered_map<Tensor_attributes::uid_t, std::pair<Tensor_attributes::uid_t, int64_t>> replacements) const {
+        for (auto &[from_uid, value] : replacements) {
+            const auto &[to_uid, start_offset] = value;
+
+            // Check if from_uid exists in the map
+            auto it = tensor_to_pointer_map.find(from_uid);
+            RETURN_CUDNN_FRONTEND_ERROR_IF(it == tensor_to_pointer_map.end(),
+                                           error_code_t::INVALID_VARIANT_PACK,
+                                           "Variant pack expected uid " + std::to_string(from_uid) + " but not found.");
+
+            // Perform pointer arithmetic
+            tensor_to_pointer_map[to_uid] = static_cast<void *>(static_cast<char *>(it->second) + start_offset);
+        }
+        return {error_code_t::OK, ""};
+    }
+
+    int64_t
+    get_cudnn_workspace_size(int64_t plan_index) const {
+        int64_t cudnn_workspace_size = 0;
+
+        auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
+        if (status.is_bad()) {
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
+        }
+
+        return cudnn_workspace_size;
+    }
+
+    int64_t
+    get_max_cudnn_workspace_size() const {
+        return get_max_cudnn_workspace_size_node();
+    }
+
+    // Key: uid to replace in variant pack
+    // Value: uid to replace with, start offset to add to pointer
+    std::unordered_map<Tensor_attributes::uid_t, std::pair<Tensor_attributes::uid_t, int64_t>>
+        variant_pack_replacements;
+
+    error_t
+    run_auxiliary_kernels(
+        cudnnHandle_t handle,
+        void *fe_workspace,
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> &workspace_modifications) const {
+        cudaStream_t stream;
+        CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+        char *workspace = static_cast<char *>(fe_workspace);
+
+        for (auto [uid, data] : workspace_modifications) {
+            (void)uid;
+            if (std::get<0>(data) == 0) {
+                auto &vec_data = std::get<2>(data);
+                CHECK_CUDA_ERROR(detail::cuda_mem_cpy_async(workspace + std::get<1>(data),
+                                                            vec_data.data(),
+                                                            vec_data.size() * sizeof(float),
+                                                            cudaMemcpyHostToDevice,
+                                                            stream));
+            } else if (std::get<0>(data) == 1) {
+                int64_t memset_size = (int64_t)std::get<2>(data)[0];
+                CHECK_CUDA_ERROR(detail::cuda_mem_set_async(workspace + std::get<1>(data), 0, memset_size, stream));
+            }
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -131,10 +246,236 @@ class Graph : public INode {
         // The collected map is used everytime when execute is called.
         CHECK_CUDNN_FRONTEND_ERROR(collect_variant_pack_replacements_subtree(variant_pack_replacements));
 
+        fe_workspace_size = get_fe_workspace_size_subtree();
+
         // The method here fuses all operations. There will be 1 operation graph in total.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
 
         return {error_code_t::OK, ""};
+    }
+
+    int64_t
+    get_workspace_size() const {
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        return fe_workspace_size + get_cudnn_workspace_size(plans.candidate);
+    }
+
+    int64_t
+    get_workspace_size_plan_at_index(int64_t plan_index) const {
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        return fe_workspace_size + get_cudnn_workspace_size(plan_index);
+    }
+
+    int64_t
+    get_autotune_workspace_size() const {
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        return fe_workspace_size + get_max_cudnn_workspace_size();
+    }
+
+    error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
+             void *workspace,
+             void *user_impl = nullptr) {
+        // Add pass_by_value data pointers to tensor_uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
+        // execute.
+        std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
+
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
+        int64_t workspace_offset = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
+
+        CHECK_CUDNN_FRONTEND_ERROR(run_auxiliary_kernels(handle, workspace, workspace_modifications));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_workspace_tensors_(tensor_uid_to_pointer_map, workspace, workspace_modifications));
+
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+
+        CHECK_CUDNN_FRONTEND_ERROR(plans.autotune(handle, tensor_uid_to_pointer_map, cudnn_workspace, user_impl));
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    autotune(cudnnHandle_t handle,
+             std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> &tensor_to_pointer_map,
+             void *workspace,
+             void *user_impl = nullptr) {
+        // First get all the uids from the map
+        std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
+        for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
+            tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
+        }
+
+        return autotune(handle, tensor_uid_to_pointer_map, workspace, user_impl);
+    }
+
+    error_t
+    execute_plan_at_index(cudnnHandle_t handle,
+                          std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> &tensor_to_pointer_map,
+                          void *workspace,
+                          int64_t plan_index) const {
+        // First get all the uids from the map
+        std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
+        for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
+            tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
+        }
+
+        return execute_plan_at_index(handle, tensor_uid_to_pointer_map, workspace, plan_index);
+    }
+
+    error_t
+    execute(cudnnHandle_t handle,
+            std::unordered_map<std::shared_ptr<Tensor_attributes>, void *> &tensor_to_pointer_map,
+            void *workspace) const {
+        // First get all the uids from the map
+        std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
+        for (auto const &[tensor, pointer] : tensor_to_pointer_map) {
+            tensor_uid_to_pointer_map.emplace(tensor->get_uid(), pointer);
+        }
+
+        return execute(handle, tensor_uid_to_pointer_map, workspace);
+    }
+
+    error_t
+    execute_plan_at_index(cudnnHandle_t handle,
+                          std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
+                          void *workspace,
+                          int64_t plan_index) const {
+        // Add pass_by_value data pointers to uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
+        // execute.
+        std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
+
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
+        int64_t workspace_offset = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
+
+        CHECK_CUDNN_FRONTEND_ERROR(run_auxiliary_kernels(handle, workspace, workspace_modifications));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_workspace_tensors_(tensor_uid_to_pointer_map, workspace, workspace_modifications));
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void *cudnn_workspace = static_cast<char *>(workspace) + get_fe_workspace_size_subtree();
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    execute(cudnnHandle_t handle,
+            std::unordered_map<int64_t, void *> &tensor_uid_to_pointer_map,
+            void *workspace) const {
+        // Add pass_by_value data pointers to uid_to_pointer map
+        // object lifetime is controlled by tensor_to_pass_by_value which means the pointer should stay valid during
+        // execute.
+        std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, tensor_to_pass_by_value));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            make_variant_pack_replacements(tensor_uid_to_pointer_map, variant_pack_replacements));
+
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
+        int64_t workspace_offset = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
+
+        CHECK_CUDNN_FRONTEND_ERROR(run_auxiliary_kernels(handle, workspace, workspace_modifications));
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_workspace_tensors_(tensor_uid_to_pointer_map, workspace, workspace_modifications));
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void *cudnn_workspace = static_cast<char *>(workspace) + get_fe_workspace_size_subtree();
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate));
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    serialize(std::vector<uint8_t> &data) const {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+        json j;
+        serialize(j);
+
+        auto const candidate = plans.candidate;
+        auto execution_plan  = plans.execution_plans[candidate];
+        if (execution_plan != nullptr) {
+            auto serialized_plan    = execution_plan->getJsonRepresentation();
+            j["cudnn_backend_data"] = serialized_plan;
+            j["variant_pack_uids"]  = variant_pack_uids;
+        }
+
+        std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
+        j["pass_by_values"] = tensor_to_pass_by_value;
+
+        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> workspace_modifications;
+        int64_t workspace_offset = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
+        j["workspace_modifications"] = workspace_modifications;
+
+        j["fe_workspace_size"] = fe_workspace_size;
+
+        data = json::to_ubjson(j);
+        return {error_code_t::OK, ""};
+#else
+        CUDNN_FRONTEND_UNUSED(data);
+        return {error_code_t::GRAPH_NOT_SUPPORTED, "unavailable when compiled with CUDNN_FRONTEND_SKIP_JSON_LIB"};
+#endif
+    }
+
+    error_t
+    deserialize(cudnnHandle_t handle, std::vector<uint8_t> const &data) {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+        json j = json::from_ubjson(data);
+
+        auto serialized_plan = j["cudnn_backend_data"];
+        CHECK_CUDNN_FRONTEND_ERROR(plans.build_plans(handle, serialized_plan));
+
+        variant_pack_uids = j["variant_pack_uids"].get<std::unordered_set<graph::Tensor_attributes::uid_t>>();
+
+        deserialized_pass_by_value = j["pass_by_values"];
+
+        deserialized_workspace_modifications = j["workspace_modifications"];
+
+        fe_workspace_size = j["fe_workspace_size"];
+
+        return {error_code_t::OK, ""};
+#else
+        CUDNN_FRONTEND_UNUSED(handle);
+        CUDNN_FRONTEND_UNUSED(data);
+        return {error_code_t::GRAPH_NOT_SUPPORTED, "unavailable when compiled with CUDNN_FRONTEND_SKIP_JSON_LIB"};
+#endif
     }
 
     Type
@@ -381,9 +722,6 @@ class Graph : public INode {
         }
         return *this;
     }
-
-    using INode::deserialize;
-    using INode::serialize;
 
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void

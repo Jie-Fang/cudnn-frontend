@@ -640,7 +640,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
     }
 
     virtual error_t
-    workspace_modifications_tensors_(
+    collect_tensors_in_workspace_node(
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications,
         int64_t& offset) const override final {
         if (attributes.alibi_mask) {
@@ -1517,7 +1517,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
     }
 
     virtual error_t
-    workspace_modifications_tensors_(
+    collect_tensors_in_workspace_node(
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications,
         int64_t& offset) const override final {
         if (attributes.alibi_mask) {
