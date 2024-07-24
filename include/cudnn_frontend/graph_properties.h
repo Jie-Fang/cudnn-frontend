@@ -1852,6 +1852,38 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     }
 };
 
+class Slice_attributes : public Attributes<Slice_attributes> {
+    friend class Attributes<Slice_attributes>;
+    friend class SliceNode;
+    friend class INode;
+
+    std::vector<std::pair<int64_t, int64_t>> slices;
+
+   public:
+    enum class input_names { X };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Slice_attributes, name, compute_data_type, inputs, outputs, slices)
+
+    Slice_attributes&
+    set_slices(std::vector<std::pair<int64_t, int64_t>> const value) {
+        slices = value;
+        return *this;
+    }
+
+    int64_t
+    get_offset() const {
+        auto const input_stride = inputs.at(input_names::X)->get_stride();
+
+        int64_t offset = 0;
+        for (size_t i = 0; i < slices.size(); ++i) {
+            offset += slices[i].first * input_stride[i];
+        }
+        return offset;
+    }
+};
+
 }  // namespace graph
 
 }  // namespace cudnn_frontend

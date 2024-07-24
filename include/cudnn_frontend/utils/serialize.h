@@ -371,6 +371,15 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SDPA_backward_attributes::output_names,
                                  {SDPA_backward_attributes::output_names::RNG_DUMP, "RNG_DUMP"},
                              })
 
+NLOHMANN_JSON_SERIALIZE_ENUM(Slice_attributes::output_names,
+                             {
+                                 {Slice_attributes::output_names::Y, "Y"},
+                             })
+NLOHMANN_JSON_SERIALIZE_ENUM(Slice_attributes::input_names,
+                             {
+                                 {Slice_attributes::input_names::X, "X"},
+                             })
+
 NLOHMANN_JSON_SERIALIZE_ENUM(SDPA_fp8_backward_attributes::input_names,
                              {
                                  {SDPA_fp8_backward_attributes::input_names::Q, "Q"},
