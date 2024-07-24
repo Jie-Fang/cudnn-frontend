@@ -101,8 +101,8 @@ typedef struct [[nodiscard]] error_object {
     do {                                                                                                    \
         if (auto cudnn_retval = x; cudnn_retval != CUDNN_STATUS_SUCCESS) {                                  \
             std::stringstream error_msg;                                                                    \
-            error_msg << #x << " failed with code: " << detail::get_last_error_string_()                    \
-                      << ", and message: " << detail::get_error_string(cudnn_retval);                       \
+            error_msg << #x << " failed with message: " << detail::get_last_error_string_()                 \
+                      << ", and code: " << detail::get_error_string(cudnn_retval);                          \
             CUDNN_FE_LOG_LABEL_ENDL("ERROR: " << error_msg.str() << " at " << __FILE__ << ":" << __LINE__); \
             return {error_code_t::CUDNN_BACKEND_API_FAILED, error_msg.str()};                               \
         }                                                                                                   \

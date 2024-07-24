@@ -58,7 +58,9 @@ class RngNode : public NodeCRTP<RngNode> {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
+        managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
+        CUDNN_FRONTEND_UNUSED(raw_operations);
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Building RngNode operations " << attributes.name << "...");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.get_distribution() != RngDistribution_t::BERNOULLI,

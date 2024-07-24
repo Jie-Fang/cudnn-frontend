@@ -383,10 +383,11 @@ class INode : public ICudnn {
     create_cudnn_operations(
         std::unordered_set<uid_t>& uids_involved_in_operation,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& backend_operations,
+        managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->create_cudnn_operations(
-                uids_involved_in_operation, backend_operations, uid_to_backend_tensors));
+                uids_involved_in_operation, backend_operations, raw_operations, uid_to_backend_tensors));
         }
         return {error_code_t::OK, ""};
     }

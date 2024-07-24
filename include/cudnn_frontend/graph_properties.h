@@ -14,6 +14,9 @@
 namespace cudnn_frontend {
 
 namespace graph {
+
+using managed_backend_descriptor_t = std::vector<ManagedOpaqueDescriptor>;
+
 // simple structure to hold all properties of a tensor.
 // Each property has a getter setter.
 class Tensor_attributes {

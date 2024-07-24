@@ -124,7 +124,8 @@ class Graph : public INode {
         // INode keeps track of all uids that an operation graph uses.
         // This helps to return errors to user during execution, without relying on backend to do so.
         // Also, as uid in a variant pack have to be unique, keep a set of them.
-        CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operations(variant_pack_uids, operations, uid_to_tensors));
+        CHECK_CUDNN_FRONTEND_ERROR(
+            create_cudnn_operations(variant_pack_uids, operations, raw_operations, uid_to_tensors));
 
         // Collect variant pack modifiers when lowering to backend.
         // The collected map is used everytime when execute is called.
