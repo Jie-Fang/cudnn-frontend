@@ -828,19 +828,19 @@ class Graph : public INode {
     deserialize(const json &j) {
         if (j.contains("context")) {
             const auto &j_context = j["context"];
-            if (j_context["compute_data_type"].is_null() == false) {
+            if (j_context.contains("compute_data_type") && !j_context["compute_data_type"].is_null()) {
                 context.set_compute_data_type(j_context["compute_data_type"].get<DataType_t>());
             }
-            if (j_context["intermediate_data_type"].is_null() == false) {
+            if (j_context.contains("intermediate_data_type") && !j_context["intermediate_data_type"].is_null()) {
                 context.set_intermediate_data_type(j_context["intermediate_data_type"].get<DataType_t>());
             }
-            if (j_context["io_data_type"].is_null() == false) {
+            if (j_context.contains("io_data_type") && !j_context["io_data_type"].is_null()) {
                 context.set_io_data_type(j_context["io_data_type"].get<DataType_t>());
             }
-            if (j_context["name"].is_null() == false) {
+            if (j_context.contains("name") && !j_context["name"].is_null()) {
                 context.set_name(j_context["name"].get<std::string>());
             }
-            if (j_context["sm_count"].is_null() == false) {
+            if (j_context.contains("sm_count") && !j_context["sm_count"].is_null()) {
                 context.set_target_sm_count(j_context["sm_count"].get<int32_t>());
             }
         }
@@ -853,18 +853,26 @@ class Graph : public INode {
                 json inputs;
 
                 // Iterate through each input of the sub-node
-                for (auto &[port_name, tensor_name] : j_sub_node["inputs"].items()) {
-                    // Add the input to the inputs JSON object
-                    inputs.push_back({port_name, j["tensors"][tensor_name]});
+                if (j_sub_node.contains("inputs") && j_sub_node["inputs"].is_object()) {
+                    for (auto &[port_name, tensor_name] : j_sub_node["inputs"].items()) {
+                        if (j.contains("tensors") && j["tensors"].contains(tensor_name)) {
+                            // Add the input to the inputs JSON object
+                            inputs.push_back({port_name, j["tensors"][tensor_name]});
+                        }
+                    }
                 }
 
                 // Create a JSON object for outputs
                 json outputs;
 
                 // Iterate through each output of the sub-node
-                for (auto &[port_name, tensor_name] : j_sub_node["outputs"].items()) {
-                    // Add the output to the outputs JSON object
-                    outputs.push_back({port_name, j["tensors"][tensor_name]});
+                if (j_sub_node.contains("outputs") && j_sub_node["outputs"].is_object()) {
+                    for (auto &[port_name, tensor_name] : j_sub_node["outputs"].items()) {
+                        if (j.contains("tensors") && j["tensors"].contains(tensor_name)) {
+                            // Add the output to the outputs JSON object
+                            outputs.push_back({port_name, j["tensors"][tensor_name]});
+                        }
+                    }
                 }
 
                 // Replace the original inputs and outputs of the sub-node with the new JSON objects
