@@ -95,3 +95,30 @@ TEST_CASE("Same uid assignment Error", "[graph][validate]") {
     // Check that error message contains name of tensor
     REQUIRE(status.get_message().find(Y->get_name()) != std::string::npos);
 }
+
+TEST_CASE("Multiple validation", "[graph][validate]") {
+    namespace fe = cudnn_frontend;
+    fe::graph::Graph graph;
+
+    graph.set_io_data_type(fe::DataType_t::HALF)
+        .set_intermediate_data_type(fe::DataType_t::FLOAT)
+        .set_compute_data_type(fe::DataType_t::FLOAT);
+
+    auto X = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("image")
+                              .set_dim({8, 32, 16, 16})
+                              .set_stride({32 * 16 * 16, 1, 32 * 16, 32})
+                              .set_uid(1));
+    auto W = graph.tensor(fe::graph::Tensor_attributes()
+                              .set_name("filter")
+                              .set_dim({64, 32, 3, 3})
+                              .set_stride({32 * 3 * 3, 1, 32 * 3, 32})
+                              .set_uid(2));
+
+    auto conv_options = fe::graph::Conv_fprop_attributes().set_padding({1, 1}).set_stride({1, 1}).set_dilation({1, 1});
+    auto Y            = graph.conv_fprop(X, W, conv_options);
+    Y->set_output(true).set_uid(3).set_name("response");
+
+    REQUIRE(graph.validate().is_good());
+    REQUIRE(graph.validate().is_good());
+}

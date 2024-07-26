@@ -39,6 +39,35 @@ class Graph : public INode {
     std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
 
     error_t
+    get_pre_assigned_uids(std::unordered_set<Tensor_attributes::uid_t> &used_uids) {
+        for (auto const &input : inputs) {
+            if (input->has_uid()) {
+                auto uid  = input->get_uid();
+                auto iter = used_uids.find(uid);
+                RETURN_CUDNN_FRONTEND_ERROR_IF(iter != used_uids.end(),
+                                               error_code_t::INVALID_VALUE,
+                                               "uid " + std::to_string(uid) + " for tensor named " + input->get_name() +
+                                                   " has been already assigned to another tensor.");
+                used_uids.insert(uid);
+            }
+        }
+        for (auto const &output : outputs) {
+            if (output->has_uid()) {
+                auto uid  = output->get_uid();
+                auto iter = used_uids.find(uid);
+                RETURN_CUDNN_FRONTEND_ERROR_IF(iter != used_uids.end(),
+                                               error_code_t::INVALID_VALUE,
+                                               "uid " + std::to_string(uid) + " for tensor named " +
+                                                   output->get_name() +
+                                                   " has been already assigned to another tensor.");
+                used_uids.insert(uid);
+            }
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     pre_validate_node() const override final {
         return {error_code_t::OK, ""};
     }
@@ -201,29 +230,10 @@ class Graph : public INode {
         }
 
         // Get all the pre assigned uids
-        for (auto const &input : inputs) {
-            if (input->has_uid()) {
-                auto uid  = input->get_uid();
-                auto iter = used_uids.find(uid);
-                RETURN_CUDNN_FRONTEND_ERROR_IF(iter != used_uids.end(),
-                                               error_code_t::INVALID_VALUE,
-                                               "uid " + std::to_string(uid) + " for tensor named " + input->get_name() +
-                                                   " has been already assigned to another tensor.");
-                used_uids.insert(uid);
-            }
-        }
-        for (auto const &output : outputs) {
-            if (output->has_uid()) {
-                auto uid  = output->get_uid();
-                auto iter = used_uids.find(uid);
-                RETURN_CUDNN_FRONTEND_ERROR_IF(iter != used_uids.end(),
-                                               error_code_t::INVALID_VALUE,
-                                               "uid " + std::to_string(uid) + " for tensor named " +
-                                                   output->get_name() +
-                                                   " has been already assigned to another tensor.");
-                used_uids.insert(uid);
-            }
-        }
+        CHECK_CUDNN_FRONTEND_ERROR(get_pre_assigned_uids(used_uids));
+
+        // Clear state
+        used_uids.clear();
 
         return {error_code_t::OK, ""};
     }
@@ -232,6 +242,9 @@ class Graph : public INode {
     build_operation_graph(cudnnHandle_t handle) {
         // expand composite nodes
         CHECK_CUDNN_FRONTEND_ERROR(expand_subtree());
+
+        // Get all the pre assigned uids
+        CHECK_CUDNN_FRONTEND_ERROR(get_pre_assigned_uids(used_uids));
 
         Tensor_attributes::uid_t start_uid = 1;
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensors_subtree(uid_to_tensors, start_uid, used_uids));
