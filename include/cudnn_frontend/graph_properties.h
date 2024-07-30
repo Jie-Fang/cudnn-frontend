@@ -1877,12 +1877,18 @@ class Slice_attributes : public Attributes<Slice_attributes> {
 
     int64_t
     get_offset() const {
-        auto const input_stride = inputs.at(input_names::X)->get_stride();
+        auto& input             = inputs.at(input_names::X);
+        auto const input_stride = input->get_stride();
 
         int64_t offset = 0;
+
+        // Get number of elements to skip
         for (size_t i = 0; i < slices.size(); ++i) {
             offset += slices[i].first * input_stride[i];
         }
+
+        // multiply by element size to get offset in bytes
+        offset *= detail::get_data_type_size(input->get_data_type());
         return offset;
     }
 };

@@ -169,6 +169,32 @@ PyGraph::tensor_like(py::object const& pyobj) {
 
     return graph.tensor(props);
 }
+
+std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+PyGraph::slice(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+               std::vector<py::slice> const& slices,
+               cudnn_frontend::DataType_t const& compute_data_type,
+               std::string const& name) {
+    auto input_dim = input->get_dim();
+
+    std::vector<std::pair<int64_t, int64_t>> start_end_indices;
+    for (size_t i = 0; i < slices.size(); ++i) {
+        int64_t start, stop, step, length;
+        if (!slices[i].compute(input_dim[i], &start, &stop, &step, &length)) {
+            throw std::runtime_error("Invalid slice");
+        }
+        start_end_indices.push_back({start, stop});
+    }
+
+    auto attributes = cudnn_frontend::graph::Slice_attributes()
+                          .set_slices(start_end_indices)
+                          .set_compute_data_type(compute_data_type)
+                          .set_name(name);
+
+    auto output = graph.slice(input, attributes);
+    return output;
+}
+
 std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
                     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
@@ -439,6 +465,29 @@ init_pygraph_submodule(py::module_& m) {
              py::arg("input"),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""))
+        .def("slice",
+             &PyGraph::slice,
+             py::arg("input"),
+             py::arg_v{"slices", default_vector()},
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
+             py::arg_v("name", ""),
+             R"pbdoc(
+                Perform slice operation on the given input tensor.
+
+                Args:
+                    input (cudnn_tensor): The input tensor to be sliced.
+                    slices (List[slice]): A list of Python slice objects, one for each dimension.
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. 
+                        Default is NOT_SET.
+                    name (Optional[str]): A name for the slice operation.
+
+                Returns:
+                    cudnn_tensor: The resulting sliced tensor.
+
+                Example:
+                    >>> input_tensor = graph.tensor([4, 8, 16])
+                    >>> sliced_tensor = graph.slice(input_tensor, [slice(0, 2), slice(1, 5), slice(0, 16)])
+            )pbdoc")
         .def(
             "conv_fprop",
             [](PyGraph& self,

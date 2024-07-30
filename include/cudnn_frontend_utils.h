@@ -879,6 +879,39 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
 
 namespace detail {
 
+inline size_t
+get_data_type_size(DataType_t const data_type) {
+    switch (data_type) {
+        case DataType_t::FLOAT:
+            return sizeof(float);
+        case DataType_t::DOUBLE:
+            return sizeof(double);
+        case DataType_t::HALF:
+            return 2;  // 16-bit float
+        case DataType_t::INT8:
+        case DataType_t::UINT8:
+            return 1;
+        case DataType_t::INT32:
+            return sizeof(int32_t);
+        case DataType_t::INT8x4:
+        case DataType_t::UINT8x4:
+            return 4;
+        case DataType_t::INT8x32:
+            return 32;
+        case DataType_t::BFLOAT16:
+            return 2;
+        case DataType_t::INT64:
+            return sizeof(int64_t);
+        case DataType_t::FP8_E4M3:
+        case DataType_t::FP8_E5M2:
+            return 1;  // 8-bit float
+        case DataType_t::NOT_SET:
+        case DataType_t::BOOLEAN:
+        default:
+            return 0;
+    }
+}
+
 inline std::vector<float>
 get_abili_slope(int64_t const n_heads) {
     std::vector<float> slope;

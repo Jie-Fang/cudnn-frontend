@@ -136,6 +136,12 @@ class PyGraph {
                        std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    slice(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+          std::vector<py::slice> const& slices,
+          cudnn_frontend::DataType_t const& compute_data_type,
+          std::string const& name);
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& image,
                std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
                std::vector<int64_t> const& pre_padding,
