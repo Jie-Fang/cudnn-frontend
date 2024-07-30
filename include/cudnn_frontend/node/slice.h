@@ -31,15 +31,23 @@ class SliceNode : public NodeCRTP<SliceNode> {
             output->set_dim(output_dim);
         }
 
-        auto const input = attributes.inputs.at(Slice_attributes::input_names::X);
-        // TODO: Verify that input and output data type match
+        auto const input            = attributes.inputs.at(Slice_attributes::input_names::X);
+        auto const input_data_type  = input->get_data_type();
+        auto const output_data_type = output->get_data_type();
+        if (output_data_type == DataType_t::NOT_SET) {
+            output->set_data_type(input_data_type);
+        } else {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(output_data_type != input_data_type,
+                                           error_code_t::INVALID_VALUE,
+                                           "output and input tensor data types should match for slice operation.");
+        }
 
         auto const input_stride = input->get_stride();
         if (output->get_stride().empty()) {
             // For simple slicing without changing the step, the stride remains the same
-            std::vector<int64_t> stride_order =
-                detail::generate_stride_order_preserving_format(input_stride, output_dim.size());
-            output->set_stride(detail::generate_stride(output_dim, stride_order));
+            // std::vector<int64_t> stride_order =
+            //     detail::generate_stride_order_preserving_format(input_stride, output_dim.size());
+            output->set_stride(input_stride);
         }
 
         return {error_code_t::OK, ""};
