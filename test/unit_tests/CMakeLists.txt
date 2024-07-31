@@ -15,7 +15,7 @@ if(NOT Catch2_FOUND)
 endif()
 
 # Find cudnn
-include(${CMAKE_SOURCE_DIR}/cmake/cuDNN.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/cuDNN.cmake)
 
 add_executable(
     unit_tests
@@ -60,5 +60,5 @@ set_target_properties(
     unit_tests
     PROPERTIES
     LINK_WHAT_YOU_USE TRUE
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )
