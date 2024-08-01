@@ -45,12 +45,12 @@ class INode : public ICudnn {
 
    protected:
     // Will eventually be moved to Graph class
-    std::unordered_set<std::shared_ptr<Tensor_attributes>> outputs;
+    std::unordered_set<std::shared_ptr<Tensor_attributes>> full_graph_outputs;
     std::shared_ptr<Tensor_attributes>
     output_tensor(std::string const& name) {
         auto tensor = std::make_shared<Tensor_attributes>();
         tensor->set_name(name).set_is_virtual(true);
-        outputs.insert(tensor);
+        full_graph_outputs.insert(tensor);
         return tensor;
     }
 

@@ -31,7 +31,7 @@ namespace cudnn_frontend::graph {
 
 class Graph : public INode {
    private:
-    std::unordered_set<std::shared_ptr<Tensor_attributes>> inputs;
+    std::unordered_set<std::shared_ptr<Tensor_attributes>> full_graph_inputs;
     std::unordered_set<Tensor_attributes::uid_t> used_uids;
     int64_t fe_workspace_size = 0;
 
@@ -40,7 +40,7 @@ class Graph : public INode {
 
     error_t
     get_pre_assigned_uids(std::unordered_set<Tensor_attributes::uid_t> &used_uids) {
-        for (auto const &input : inputs) {
+        for (auto const &input : full_graph_inputs) {
             if (input->has_uid()) {
                 auto uid  = input->get_uid();
                 auto iter = used_uids.find(uid);
@@ -51,7 +51,7 @@ class Graph : public INode {
                 used_uids.insert(uid);
             }
         }
-        for (auto const &output : outputs) {
+        for (auto const &output : full_graph_outputs) {
             if (output->has_uid()) {
                 auto uid  = output->get_uid();
                 auto iter = used_uids.find(uid);
@@ -217,7 +217,7 @@ class Graph : public INode {
         CUDNN_FE_LOG(*this << std::endl;);
 
         // First validate all inputs that the user set.
-        for (auto const &input : inputs) {
+        for (auto const &input : full_graph_inputs) {
             CHECK_CUDNN_FRONTEND_ERROR(input->validate());
         }
 
@@ -225,7 +225,7 @@ class Graph : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(validate_subtree());
 
         // Validate all outputs, which should now have everything set to be lowered to backend.
-        for (auto const &output : outputs) {
+        for (auto const &output : full_graph_outputs) {
             CHECK_CUDNN_FRONTEND_ERROR(output->validate());
         }
 
@@ -900,35 +900,53 @@ class Graph : public INode {
         attributes.outputs[key] = check_if_pre_created_tensor(tensor); \
     }
 
+#define FILL_GLOBAL_IO_TENSOR_MAP(attributes)                              \
+    for (auto input_name_to_attr_pair : attributes.inputs) {               \
+        if (input_name_to_attr_pair.second != nullptr &&                   \
+            (input_name_to_attr_pair.second->get_is_virtual() == false)) { \
+            full_graph_inputs.emplace(input_name_to_attr_pair.second);     \
+        }                                                                  \
+    }                                                                      \
+    for (auto output_name_to_attr_pair : attributes.outputs) {             \
+        if (output_name_to_attr_pair.second != nullptr) {                  \
+            full_graph_outputs.emplace(output_name_to_attr_pair.second);   \
+        }                                                                  \
+    }
                 if (j_sub_node.contains("tag") && j_sub_node["tag"].is_string()) {
                     auto tag = j_sub_node["tag"].get<std::string>();
                     if (tag == "CONV_FPROP") {
                         auto conv_fprop_attributes = j_sub_node.get<Conv_fprop_attributes>();
                         CHECK_TENSORS(conv_fprop_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(conv_fprop_attributes);
                         sub_nodes.emplace_back(
                             std::make_unique<ConvolutionNode>(std::move(conv_fprop_attributes), context));
                     } else if (tag == "POINTWISE") {
                         auto pointwise_attributes = j_sub_node.get<Pointwise_attributes>();
                         CHECK_TENSORS(pointwise_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(pointwise_attributes);
                         sub_nodes.emplace_back(
                             std::make_unique<PointwiseNode>(std::move(pointwise_attributes), context));
                     } else if (tag == "REDUCTION") {
                         auto reduction_attributes = j_sub_node.get<Reduction_attributes>();
                         CHECK_TENSORS(reduction_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(reduction_attributes);
                         sub_nodes.emplace_back(
                             std::make_unique<ReductionNode>(std::move(reduction_attributes), context));
                     } else if (tag == "SDPA_FWD") {
                         auto sdpa_attributes = j_sub_node.get<SDPA_attributes>();
                         CHECK_TENSORS(sdpa_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(sdpa_attributes);
                         sub_nodes.emplace_back(std::make_unique<SDPANode>(std::move(sdpa_attributes), context));
                     } else if (tag == "SDPA_BWD") {
                         auto sdpa_bwd_attributes = j_sub_node.get<SDPA_backward_attributes>();
                         CHECK_TENSORS(sdpa_bwd_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(sdpa_bwd_attributes);
                         sub_nodes.emplace_back(
                             std::make_unique<SDPABackwardNode>(std::move(sdpa_bwd_attributes), context));
                     } else if (tag == "MATMUL") {
                         auto matmul_attributes = j_sub_node.get<Matmul_attributes>();
                         CHECK_TENSORS(matmul_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(matmul_attributes);
                         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_attributes), context));
                     }
                 }
@@ -1027,7 +1045,7 @@ Graph::set_sm_count(int32_t count) {
 inline std::shared_ptr<Tensor_attributes>
 Graph::tensor(Tensor_attributes const &tensor) {
     auto tensor_ptr = std::make_shared<Tensor_attributes>(tensor);
-    inputs.emplace(tensor_ptr);
+    full_graph_inputs.emplace(tensor_ptr);
     return tensor_ptr;
 }
 
@@ -1046,7 +1064,7 @@ Graph::tensor_like(std::shared_ptr<Tensor_attributes> const &tensor, std::string
 
     // reset the name too. Defaults to empty string.
     tensor_ptr->set_name(name);
-    inputs.emplace(tensor_ptr);
+    full_graph_inputs.emplace(tensor_ptr);
 
     return tensor_ptr;
 }
