@@ -948,6 +948,11 @@ class Graph : public INode {
                         CHECK_TENSORS(matmul_attributes);
                         FILL_GLOBAL_IO_TENSOR_MAP(matmul_attributes);
                         sub_nodes.emplace_back(std::make_unique<MatmulNode>(std::move(matmul_attributes), context));
+                    } else if (tag == "SLICE") {
+                        auto slice_attributes = j_sub_node.get<Slice_attributes>();
+                        CHECK_TENSORS(slice_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(slice_attributes);
+                        sub_nodes.emplace_back(std::make_unique<SliceNode>(std::move(slice_attributes), context));
                     }
                 }
 #undef CHECK_TENSORS
