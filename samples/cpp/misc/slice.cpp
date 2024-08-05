@@ -25,7 +25,7 @@
 
 #include <cudnn_frontend.h>
 
-TEST_CASE("Slice mainloop gemm", "[slice][gemm][graph][fusion]") {
+TEST_CASE("Slice gemm", "[slice][gemm][graph][fusion]") {
     namespace fe = cudnn_frontend;
 
     constexpr int B_start  = 1;
