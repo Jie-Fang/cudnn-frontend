@@ -63,17 +63,22 @@ include:
     rules:
       - if: $CI_PIPELINE_SOURCE == "schedule"
 
-  - local: ci/job-template.yml
-    inputs:
-        cuda_version: "12.4.0"
-        cudnn_version: "9.1.0.70"
-    rules:
-      - if: $CI_PIPELINE_SOURCE == "schedule"
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.4.0"
+#         cudnn_version: "9.1.0.70"
+#     rules:
+#       - if: $CI_PIPELINE_SOURCE == "schedule"
 
   - local: ci/job-template.yml
     inputs:
         cuda_version: "12.5.0"
         cudnn_version: "9.2.1.18"
+
+  - local: ci/job-template.yml
+    inputs:
+        cuda_version: "12.5.1"
+        cudnn_version: "9.3.0.75"
 
 stages:
     - analysis
@@ -159,7 +164,7 @@ deploy:build_bdist_wheels:
         - Hopper
     needs: []
     stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.4
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.5
     script:
         - ci/build_pip_wheels.sh
     rules:
@@ -450,7 +455,7 @@ build:cudnn_8.9_windows:
         - cmake ../
         - cmake --build . -j16 --verbose
 
-notebooks:cudnn_9.2.1_latest:
+notebooks:cudnn_dev_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     stage: notebooks
     parallel:
