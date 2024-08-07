@@ -457,6 +457,8 @@ class Graph : public INode {
         CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
         j["workspace_modifications"] = workspace_modifications;
 
+        j["variant_pack_replacements"] = variant_pack_replacements;
+
         j["fe_workspace_size"] = fe_workspace_size;
 
         data = json::to_ubjson(j);
@@ -480,6 +482,8 @@ class Graph : public INode {
         deserialized_pass_by_value = j["pass_by_values"];
 
         deserialized_workspace_modifications = j["workspace_modifications"];
+
+        variant_pack_replacements = j["variant_pack_replacements"];
 
         fe_workspace_size = j["fe_workspace_size"];
 
