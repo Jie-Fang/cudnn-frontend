@@ -94,7 +94,7 @@ class ConvolutionNode : public NodeCRTP<ConvolutionNode> {
         int64_t const spatial_dim_count = attributes.get_pre_padding().size();
         auto convolution_descriptor     = cudnn_frontend::ConvDescBuilder()
                                           .setComputeType(attributes.compute_data_type)
-                                          .setMathMode(CUDNN_CROSS_CORRELATION)
+                                          .setMathMode(attributes.math_mode)
                                           .setSpatialDimCount(spatial_dim_count)
                                           .setSpatialStride(spatial_dim_count, attributes.get_stride().data())
                                           .setPrePadding(spatial_dim_count, attributes.get_pre_padding().data())
