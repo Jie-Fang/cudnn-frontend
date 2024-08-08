@@ -202,6 +202,7 @@ PyGraph::conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& i
                     std::vector<int64_t> const& post_padding,
                     std::vector<int64_t> const& stride,
                     std::vector<int64_t> const& dilation,
+                    cudnn_frontend::ConvolutionMode_t const& conv_mode,
                     cudnn_frontend::DataType_t const& compute_data_type,
                     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Conv_fprop_attributes()
@@ -209,6 +210,7 @@ PyGraph::conv_fprop(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& i
                           .set_post_padding(post_padding)
                           .set_stride(stride)
                           .set_dilation(dilation)
+                          .set_convolution_mode(conv_mode)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -223,6 +225,7 @@ PyGraph::conv_dgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& l
                     std::vector<int64_t> const& post_padding,
                     std::vector<int64_t> const& stride,
                     std::vector<int64_t> const& dilation,
+                    cudnn_frontend::ConvolutionMode_t const& conv_mode,
                     cudnn_frontend::DataType_t const& compute_data_type,
                     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Conv_dgrad_attributes()
@@ -230,6 +233,7 @@ PyGraph::conv_dgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& l
                           .set_post_padding(post_padding)
                           .set_stride(stride)
                           .set_dilation(dilation)
+                          .set_convolution_mode(conv_mode)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
     auto DX = graph.conv_dgrad(loss, filter, attributes);
@@ -243,6 +247,7 @@ PyGraph::conv_wgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& i
                     std::vector<int64_t> const& post_padding,
                     std::vector<int64_t> const& stride,
                     std::vector<int64_t> const& dilation,
+                    cudnn_frontend::ConvolutionMode_t const& conv_mode,
                     cudnn_frontend::DataType_t const& compute_data_type,
                     std::string const& name) {
     auto attributes = cudnn_frontend::graph::Conv_wgrad_attributes()
@@ -250,6 +255,7 @@ PyGraph::conv_wgrad(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& i
                           .set_post_padding(post_padding)
                           .set_stride(stride)
                           .set_dilation(dilation)
+                          .set_convolution_mode(conv_mode)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
     auto DW = graph.conv_wgrad(loss, image, attributes);
@@ -496,15 +502,18 @@ init_pygraph_submodule(py::module_& m) {
                std::vector<int64_t> const& padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
+               cudnn_frontend::ConvolutionMode_t const convolution_mode,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name) {
-                return self.conv_fprop(image, weight, padding, padding, stride, dilation, compute_data_type, name);
+                return self.conv_fprop(
+                    image, weight, padding, padding, stride, dilation, convolution_mode, compute_data_type, name);
             },
             py::arg("image"),
             py::arg("weight"),
             py::arg_v{"padding", default_vector()},
             py::arg_v{"stride", default_vector()},
             py::arg_v{"dilation", default_vector()},
+            py::arg_v{"convolution_mode", cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION},
             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
             py::arg_v("name", ""))
         .def("conv_fprop",
@@ -515,6 +524,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v{"post_padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()},
+             py::arg_v{"convolution_mode", cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION},
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""),
              R"pbdoc(
@@ -541,15 +551,18 @@ init_pygraph_submodule(py::module_& m) {
                std::vector<int64_t> const& padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
+               cudnn_frontend::ConvolutionMode_t const convolution_mode,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name) {
-                return self.conv_wgrad(image, loss, padding, padding, stride, dilation, compute_data_type, name);
+                return self.conv_wgrad(
+                    image, loss, padding, padding, stride, dilation, convolution_mode, compute_data_type, name);
             },
             py::arg("image"),
             py::arg("loss"),
             py::arg_v{"padding", default_vector()},
             py::arg_v{"stride", default_vector()},
             py::arg_v{"dilation", default_vector()},
+            py::arg_v{"convolution_mode", cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION},
             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
             py::arg_v("name", ""))
         .def("conv_wgrad",
@@ -560,6 +573,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v{"post_padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()},
+             py::arg_v{"convolution_mode", cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION},
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""),
              R"pbdoc(
@@ -585,15 +599,18 @@ init_pygraph_submodule(py::module_& m) {
                std::vector<int64_t> const& padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
+               cudnn_frontend::ConvolutionMode_t const convolution_mode,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name) {
-                return self.conv_dgrad(loss, filter, padding, padding, stride, dilation, compute_data_type, name);
+                return self.conv_dgrad(
+                    loss, filter, padding, padding, stride, dilation, convolution_mode, compute_data_type, name);
             },
             py::arg("loss"),
             py::arg("filter"),
             py::arg_v{"padding", default_vector()},
             py::arg_v{"stride", default_vector()},
             py::arg_v{"dilation", default_vector()},
+            py::arg_v{"convolution_mode", cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION},
             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
             py::arg_v("name", ""))
         .def("conv_dgrad",
@@ -604,6 +621,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v{"post_padding", default_vector()},
              py::arg_v{"stride", default_vector()},
              py::arg_v{"dilation", default_vector()},
+             py::arg_v{"convolution_mode", cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION},
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("name", ""),
              R"pbdoc(
