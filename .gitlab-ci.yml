@@ -161,7 +161,7 @@ stages:
 
 deploy:build_bdist_wheels:
     tags:
-        - Hopper
+        - wheel_builder
     needs: []
     stage: deploy
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.4_cudnn_9.3.0
