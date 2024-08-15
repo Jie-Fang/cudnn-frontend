@@ -1064,6 +1064,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                     ? attributes.inputs[input_names::Dropout_scale_inv]
                                     : one_tensor,
                                 Pointwise_attributes().set_name("scale_dropout_inv").set_mode(PointwiseMode_t::MUL));
+        last_output->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
 
         softmax_sum = last_output;
 
