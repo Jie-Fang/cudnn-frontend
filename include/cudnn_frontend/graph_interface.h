@@ -957,6 +957,11 @@ class Graph : public INode {
                         CHECK_TENSORS(slice_attributes);
                         FILL_GLOBAL_IO_TENSOR_MAP(slice_attributes);
                         sub_nodes.emplace_back(std::make_unique<SliceNode>(std::move(slice_attributes), context));
+                    } else if (tag == "SDPA_FP8_FWD") {
+                        auto sdpa_fp8_attributes = j_sub_node.get<SDPA_fp8_attributes>();
+                        CHECK_TENSORS(sdpa_fp8_attributes);
+                        FILL_GLOBAL_IO_TENSOR_MAP(sdpa_fp8_attributes);
+                        sub_nodes.emplace_back(std::make_unique<SDPAFP8Node>(std::move(sdpa_fp8_attributes), context));
                     }
                 }
 #undef CHECK_TENSORS
