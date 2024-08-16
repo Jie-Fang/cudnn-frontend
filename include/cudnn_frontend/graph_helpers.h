@@ -327,10 +327,12 @@ generate_stride_order_preserving_format(const std::vector<int64_t>& input_stride
         return input_stride[i] < input_stride[j];
     });
 
-    std::set<int64_t> stride_set(input_stride.begin(), input_stride.end());
-    RETURN_CUDNN_FRONTEND_ERROR_IF((stride_set.size() != input_stride.size()),
-                                   error_code_t::SHAPE_DEDUCTION_FAILED,
-                                   "Have multiple stride with same value. Cant determine stride order");
+    // Enable this after further debug
+    // std::set<int64_t> stride_set(input_stride.begin(), input_stride.end());
+    // RETURN_CUDNN_FRONTEND_ERROR_IF((stride_set.size() != input_stride.size()),
+    //                                error_code_t::SHAPE_DEDUCTION_FAILED,
+    //                                "Have multiple stride with same value. Cant determine stride order");
+
     // Create the stride order
     stride_order.resize(input_stride.size());
     for (size_t i = 0; i < indices.size(); ++i) {
