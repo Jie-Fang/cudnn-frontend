@@ -272,7 +272,7 @@ class Graph : public INode {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
-        return fe_workspace_size + get_cudnn_workspace_size(plans.candidate);
+        return get_workspace_size_plan_at_index(plans.candidate);
     }
 
     int64_t
@@ -280,6 +280,8 @@ class Graph : public INode {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is "
+                                << fe_workspace_size + get_cudnn_workspace_size(plan_index));
         return fe_workspace_size + get_cudnn_workspace_size(plan_index);
     }
 
@@ -393,7 +395,7 @@ class Graph : public INode {
             extend_tensor_map_with_workspace_tensors_(tensor_uid_to_pointer_map, workspace, workspace_modifications));
         // offset workspace by the already used fe graph workspace
         // this is where cudnn backend can start using workspace for its execution plans
-        void *cudnn_workspace = static_cast<char *>(workspace) + get_fe_workspace_size_subtree();
+        void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
         CHECK_CUDNN_FRONTEND_ERROR(
             execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plan_index));
@@ -426,7 +428,7 @@ class Graph : public INode {
             extend_tensor_map_with_workspace_tensors_(tensor_uid_to_pointer_map, workspace, workspace_modifications));
         // offset workspace by the already used fe graph workspace
         // this is where cudnn backend can start using workspace for its execution plans
-        void *cudnn_workspace = static_cast<char *>(workspace) + get_fe_workspace_size_subtree();
+        void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
 
         CHECK_CUDNN_FRONTEND_ERROR(
             execute_cudnn_plan_with_uid(handle, tensor_uid_to_pointer_map, cudnn_workspace, plans.candidate));
