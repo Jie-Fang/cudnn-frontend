@@ -450,6 +450,8 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
+    ConvolutionMode_t math_mode = ConvolutionMode_t::CROSS_CORRELATION;
+
    public:
     enum class input_names { X, W };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -463,7 +465,13 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
                                    pre_padding,
                                    post_padding,
                                    stride,
-                                   dilation)
+                                   dilation,
+                                   math_mode)
+
+    ConvolutionMode_t
+    get_convolution_mode() const {
+        return math_mode;
+    }
 
     std::vector<int64_t>
     get_pre_padding() const {
@@ -491,6 +499,12 @@ class Conv_fprop_attributes : public Attributes<Conv_fprop_attributes> {
     Conv_fprop_attributes&
     set_post_padding(std::vector<int64_t> value) {
         post_padding = value;
+        return *this;
+    }
+
+    Conv_fprop_attributes&
+    set_convolution_mode(ConvolutionMode_t mode_) {
+        math_mode = mode_;
         return *this;
     }
 
@@ -569,6 +583,8 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
 
+    ConvolutionMode_t math_mode = ConvolutionMode_t::CROSS_CORRELATION;
+
    public:
     enum class input_names { DY, W };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -582,7 +598,13 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
                                    pre_padding,
                                    post_padding,
                                    stride,
-                                   dilation)
+                                   dilation,
+                                   math_mode)
+
+    ConvolutionMode_t
+    get_convolution_mode() const {
+        return math_mode;
+    }
 
     std::vector<int64_t>
     get_pre_padding() const {
@@ -616,6 +638,13 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     std::vector<int64_t>
     get_stride() const {
         return stride;
+    }
+
+    Conv_dgrad_attributes&
+    set_convolution_mode(ConvolutionMode_t mode_) {
+        math_mode = mode_;
+        ;
+        return *this;
     }
 
     Conv_dgrad_attributes&
@@ -1786,6 +1815,7 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     std::vector<int64_t> post_padding;
     std::vector<int64_t> stride;
     std::vector<int64_t> dilation;
+    ConvolutionMode_t math_mode = ConvolutionMode_t::CROSS_CORRELATION;
 
    public:
     enum class input_names { DY, X };
@@ -1801,7 +1831,13 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
                                    pre_padding,
                                    post_padding,
                                    stride,
-                                   dilation)
+                                   dilation,
+                                   math_mode)
+
+    ConvolutionMode_t
+    get_convolution_mode() const {
+        return math_mode;
+    }
 
     std::vector<int64_t>
     get_pre_padding() const {
@@ -1811,6 +1847,13 @@ class Conv_wgrad_attributes : public Attributes<Conv_wgrad_attributes> {
     std::vector<int64_t>
     get_post_padding() const {
         return post_padding;
+    }
+
+    Conv_wgrad_attributes&
+    set_convolution_mode(ConvolutionMode_t mode_) {
+        math_mode = mode_;
+        ;
+        return *this;
     }
 
     Conv_wgrad_attributes&

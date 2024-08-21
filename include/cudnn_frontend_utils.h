@@ -231,10 +231,10 @@ to_string(cudnnStatus_t const status) {
 static inline void
 set_error_and_throw_exception(BackendDescriptor const* desc, cudnnStatus_t status, const char* message) {
 
-    const char* padded_message = (detail::get_last_error_string_() + std::string(message)).c_str();
+    std::string padded_message = detail::get_last_error_string_() + std::string(message);
     if (desc != nullptr) {
         desc->set_status(status);
-        desc->set_error(padded_message);
+        desc->set_error(padded_message.c_str());
     }
 #ifndef NV_CUDNN_DISABLE_EXCEPTION
     throw cudnnException(
@@ -371,6 +371,19 @@ enum class PaddingMode_t {
     NEG_INF_PAD,
     ZERO_PAD
 };
+
+enum class ConvolutionMode_t {
+    NOT_SET,
+
+    CONVOLUTION,
+    CROSS_CORRELATION,
+};
+
+NLOHMANN_JSON_SERIALIZE_ENUM(ConvolutionMode_t,
+                             {
+                                 {ConvolutionMode_t::CONVOLUTION, "CONVOLUTION"},
+                                 {ConvolutionMode_t::CROSS_CORRELATION, "CROSS_CORRELATION"},
+                             })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PaddingMode_t,
                              {
@@ -1534,6 +1547,33 @@ convert_from_cudnn_type(cudnnPaddingMode_t const cudnn_mode, cudnn_frontend::Pad
     }
 }
 
+static inline cudnn_frontend::ConvolutionMode_t
+convert_from_cudnn_type(cudnnConvolutionMode_t const cudnn_mode) {
+    switch (cudnn_mode) {
+        case CUDNN_CONVOLUTION:
+            return cudnn_frontend::ConvolutionMode_t::CONVOLUTION;
+        case CUDNN_CROSS_CORRELATION:
+            return cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION;
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return cudnn_frontend::ConvolutionMode_t::NOT_SET;
+#endif
+    }
+    return cudnn_frontend::ConvolutionMode_t::NOT_SET;
+}
+
+static inline cudnnConvolutionMode_t
+convert_to_cudnn_type(cudnn_frontend::ConvolutionMode_t const cudnn_mode) {
+    switch (cudnn_mode) {
+        case cudnn_frontend::ConvolutionMode_t::CONVOLUTION:
+            return CUDNN_CONVOLUTION;
+        case cudnn_frontend::ConvolutionMode_t::CROSS_CORRELATION:
+            return CUDNN_CROSS_CORRELATION;
+        case cudnn_frontend::ConvolutionMode_t::NOT_SET:
+            return CUDNN_CROSS_CORRELATION;
+    }
+    return CUDNN_CROSS_CORRELATION;
+}
 // To be deprecated. Only exists as setResampleMode(cudnnResampleMode_t) requires it.
 static inline void
 convert_from_cudnn_type(cudnnResampleMode_t const cudnn_mode, cudnn_frontend::ResampleMode_t& mode) {
