@@ -161,18 +161,6 @@ class Graph : public INode {
     }
 
     int64_t
-    get_cudnn_workspace_size(int64_t plan_index) const {
-        int64_t cudnn_workspace_size = 0;
-
-        auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
-        if (status.is_bad()) {
-            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
-        }
-
-        return cudnn_workspace_size;
-    }
-
-    int64_t
     get_max_cudnn_workspace_size() const {
         return get_max_cudnn_workspace_size_node();
     }
@@ -267,22 +255,48 @@ class Graph : public INode {
         return {error_code_t::OK, ""};
     }
 
-    int64_t
-    get_workspace_size() const {
+    error_t
+    get_plan_name(std::string &name) const {
+        return get_plan_name_at_index(plans.candidate, name);
+    }
+
+    error_t
+    get_plan_name_at_index(int64_t plan_index, std::string &name) const {
+        auto ret_val = plans.get_name_at_index(plan_index, name);
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_plan_name_at_index(" << plan_index << ") is " + name);
+        return ret_val;
+    }
+
+    error_t
+    get_workspace_size(int64_t &cudnn_workspace_size) const {
+        return get_workspace_size_plan_at_index(plans.candidate, cudnn_workspace_size);
+    }
+
+    error_t
+    get_workspace_size_plan_at_index(int64_t plan_index, int64_t &cudnn_workspace_size) const {
         // There are two workspaces:
         // - cudnn execution plan workspace
         // - FE node workspace (example: alibiSlope for fmha)
+        int64_t cudnn_ws = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(get_cudnn_workspace_size_node(plan_index, cudnn_ws));
+        cudnn_workspace_size = cudnn_ws + fe_workspace_size;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size);
+        return {error_code_t::OK, ""};
+    }
+
+    int64_t
+    get_workspace_size() const {
         return get_workspace_size_plan_at_index(plans.candidate);
     }
 
     int64_t
     get_workspace_size_plan_at_index(int64_t plan_index) const {
-        // There are two workspaces:
-        // - cudnn execution plan workspace
-        // - FE node workspace (example: alibiSlope for fmha)
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is "
-                                << fe_workspace_size + get_cudnn_workspace_size(plan_index));
-        return fe_workspace_size + get_cudnn_workspace_size(plan_index);
+        int64_t cudnn_workspace = 0;
+        auto status             = get_workspace_size_plan_at_index(plan_index, cudnn_workspace);
+        if (status.is_bad()) {
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
+        }
+        return cudnn_workspace;
     }
 
     int64_t

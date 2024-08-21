@@ -432,9 +432,7 @@ class PyGraph {
     }
 
     int64_t
-    get_workspace_size_plan_at_index(int64_t index) const {
-        return graph.get_workspace_size_plan_at_index(index);
-    }
+    get_workspace_size_plan_at_index(int64_t index);
 };
 
 }  // namespace cudnn_frontend::python_bindings
