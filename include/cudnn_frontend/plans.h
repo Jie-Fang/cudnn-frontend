@@ -374,6 +374,12 @@ class Execution_plan_list {
     }
 
     error_t
+    get_name_at_index(int64_t index, std::string& name) const {
+        name = detail::get_engine_tag(engine_configs[index]);
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     check_support_at_index(cudnnHandle_t handle, int64_t index) {
         // Ignore if the engine config was deselected.
         // This usually happens when user deselects by numerical and behavioural notes.

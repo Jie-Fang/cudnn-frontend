@@ -174,7 +174,9 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
     Surface<half> b_device_memory(k, false);
     Surface<half> y_device_memory(n * k * h * w, false);  // Should be p, q.
 
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
 
     std::unordered_map<int64_t, void*> variant_pack = {{x_tensor, x_device_memory.devPtr},
                                                        {w_tensor, w_device_memory.devPtr},
@@ -395,9 +397,11 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
     Surface<int32_t> dropoutSeed(scaleSize, false, seed_value);
     Surface<int32_t> dropoutOffset(scaleSize, false, (int32_t)1);
 
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
 
-    std::cout << "Graph requires workspace " << graph->get_workspace_size() << std::endl;
+    std::cout << "Graph requires workspace " << workspace_size << std::endl;
 
     std::unordered_map<int64_t, void*> variant_pack = {{uid_Q, devPtrQ},
                                                        {uid_K, devPtrK},
