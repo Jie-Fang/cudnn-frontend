@@ -148,6 +148,7 @@ class PyGraph {
                std::vector<int64_t> const& post_padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
+               cudnn_frontend::ConvolutionMode_t const& conv_mode,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name);
 
@@ -158,6 +159,7 @@ class PyGraph {
                std::vector<int64_t> const& post_padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
+               cudnn_frontend::ConvolutionMode_t const& conv_mode,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name);
 
@@ -168,6 +170,7 @@ class PyGraph {
                std::vector<int64_t> const& post_padding,
                std::vector<int64_t> const& stride,
                std::vector<int64_t> const& dilation,
+               cudnn_frontend::ConvolutionMode_t const& conv_mode,
                cudnn_frontend::DataType_t const& compute_data_type,
                std::string const& name);
 
