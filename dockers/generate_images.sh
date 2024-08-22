@@ -16,6 +16,8 @@ docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_front
 
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0 -f dockers/Dockerfile --build-arg CUDA_VERSION=12.5.0 --build-arg SKIP_CUDNN=true --build-arg DLFW_MONTH=24.06 .
 
+docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0 -f dockers/Dockerfile.Blackwell .
+
 #############################################
 ############# RUN WITH CAUTION ##############
 #############################################
@@ -33,3 +35,5 @@ docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.2.1.18_12
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.3.0.75_12.5.1
 
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+
+docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
