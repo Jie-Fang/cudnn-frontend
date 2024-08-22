@@ -217,6 +217,7 @@ class OperationBuilder_v8 {
     bool is_bn_bwd_weight    = false;
     bool is_rng_op           = false;
     bool is_reshape_op       = false;
+    bool is_paged_cache_load_op = false;
 
     using Message_t = const char *;
 
@@ -1642,6 +1643,12 @@ class OperationBuilder_v8 {
     }
 
     Operation_v8 &&
+    build_paged_cache_load_op() {
+        std::cout << "TODO(@mbreughe): Build paged_cache_load_op operation" << std::endl;
+        return std::move(m_operation);
+    }
+
+    Operation_v8 &&
     build_reshape_operation() {
 #if (CUDNN_VERSION >= 8700)
         NV_CUDNN_FE_DYNAMIC_CHECK_BACKEND_DESCRIPTOR(
@@ -2865,6 +2872,8 @@ class OperationBuilder_v8 {
             status_ = validate_norm_op(msg);
         } else if (is_reshape_op) {
             status_ = validate_reshape_op(msg);
+        } else if(is_paged_cache_load_op){
+            status_ = CUDNN_STATUS_SUCCESS;
         } else {
             status_ = CUDNN_STATUS_BAD_PARAM;
             msg =
@@ -2920,6 +2929,8 @@ class OperationBuilder_v8 {
             return build_resample_bwd_operation();
         } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR) {
             return build_rng_operation();
+        }else if (m_operation.op_mode == DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR){
+            return build_paged_cache_load_op();
         } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR) {
             return build_reshape_operation();
         } else {

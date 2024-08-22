@@ -1395,6 +1395,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Offset,
         Dropout_mask,
         Dropout_scale,
+        Page_table_K,
+        Page_table_V
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { O, Stats, RNG_DUMP };

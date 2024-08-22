@@ -234,6 +234,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto b            = q_dim[0];
         auto h            = q_dim[1];
         auto s_q          = q_dim[2];
+        auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
         auto s_kv         = k_dim[2];
 
@@ -258,8 +259,17 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         std::shared_ptr<Tensor_attributes> last_output;
 
-                // Add paged attention nodes
-
+        // TODO(@mbreughe) Add paged attention nodes
+        auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
+        // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
+        // K-cache has BHDS layout
+        // TODO(@mbreughe): set this to physical K in case of unpaged attention (i.e., attributes.inputs[input_names::K])
+        auto k_cache = std::make_shared<Tensor_attributes>();
+        k_cache->set_dim({b, h, d_qk, s_kv})
+            .set_stride({d_qk * s_kv * h, d_qk * s_kv, 1, d_qk})
+            .set_data_type(attributes.inputs[input_names::K]->get_data_type());
+        k_cache->set_is_virtual(true); 
+        paged_cache_load(attributes.inputs[input_names::K], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_K], paged_cache_load_attributes_k, k_cache);
 
         auto bmm1_attributes = Matmul_attributes()
                                    .set_name("bmm1")
@@ -271,7 +281,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         }
 
         auto const& bmm1_output =
-            matmul(attributes.inputs[input_names::Q], attributes.inputs[input_names::K], bmm1_attributes);
+            matmul(attributes.inputs[input_names::Q], k_cache, bmm1_attributes);
         // Setting dim and strides as pointwise op wont have knowledge of how to do it for mha.
         bmm1_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
         last_output = bmm1_output;

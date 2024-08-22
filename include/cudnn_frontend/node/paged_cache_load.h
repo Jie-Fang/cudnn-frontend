@@ -29,11 +29,38 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-            (void) uids_involved_in_operations;
-            (void) operations;
-            (void) raw_operations;
+            CUDNN_FRONTEND_UNUSED(raw_operations);
             (void) tensors;
             std::cout << "TODO(@mbreughe) create_cudnn_operations" << std::endl;
+
+            auto&& paged_cache_load_operation_builder =
+                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR);
+
+            std::cout << "TODO(@mbreughe) Set ports to the paged_cache_load_builder" << std::endl;
+
+    #ifdef NV_CUDNN_DISABLE_EXCEPTION
+            // disable exception macro is defined. Calling build will not throw.
+            // Check status of desc and return error.
+            auto operation = paged_cache_load_operation_builder.build();
+            RETURN_CUDNN_FRONTEND_ERROR_IF(operation.get_status() != CUDNN_STATUS_SUCCESS,
+                                        error_code_t::CUDNN_BACKEND_API_FAILED,
+                                        operation.get_error());
+            operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
+    #else
+            // build() can throw
+            // wrap in try catch
+            try {
+                auto operation = paged_cache_load_operation_builder.build();
+                operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
+            } catch (cudnn_frontend::cudnnException& e) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(
+                    e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
+            }
+    #endif
+
+            auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+            uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
+
             return {error_code_t::OK, ""};
         }
 
@@ -69,6 +96,7 @@ INode::paged_cache_load(std::shared_ptr<Tensor_attributes> container,
                std::shared_ptr<Tensor_attributes> pageTable,
                PagedCacheLoad_attributes attributes,
                std::shared_ptr<Tensor_attributes> yOut) {
+    std::cout << "Creating paged cache load op " << std::endl;
     attributes.inputs[PagedCacheLoad_attributes::input_names::container] = container;
     attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = seqLen;
     attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = pageTable;
