@@ -129,7 +129,8 @@ class INode : public ICudnn {
         RNG,
         SCALED_DOT_PRODUCT_ATTENTION,
         SLICE,
-        WGRAD
+        WGRAD,
+        PAGED_CACHE_LOAD
     };
     Type tag;
 
@@ -183,6 +184,12 @@ class INode : public ICudnn {
         std::shared_ptr<Tensor_attributes> offset,
         Rng_attributes attributes,
         std::shared_ptr<Tensor_attributes> y);
+
+    void paged_cache_load(std::shared_ptr<Tensor_attributes> container,
+               std::shared_ptr<Tensor_attributes> seqLen,
+               std::shared_ptr<Tensor_attributes> pageTable,
+               PagedCacheLoad_attributes attributes,
+               std::shared_ptr<Tensor_attributes> yOut);
 
     error_t
     validate_subtree() {

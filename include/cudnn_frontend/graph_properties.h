@@ -1936,6 +1936,19 @@ class Slice_attributes : public Attributes<Slice_attributes> {
     }
 };
 
+class PagedCacheLoad_attributes : public Attributes<PagedCacheLoad_attributes> {
+    friend class Attributes<PagedCacheLoad_attributes>;
+    friend class PagedCacheLoadNode;
+    friend class INode;
+
+   public:
+    enum class input_names { container, seqLen, pageTable };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { yOut };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(PagedCacheLoad_attributes, name, compute_data_type, inputs, outputs)
+};
+
 }  // namespace graph
 
 }  // namespace cudnn_frontend

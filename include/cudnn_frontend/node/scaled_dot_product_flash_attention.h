@@ -10,6 +10,7 @@
 #include "pointwise.h"
 #include "rng.h"
 #include "softmax.h"
+#include "paged_cache_load.h"
 
 namespace cudnn_frontend::graph {
 
@@ -256,6 +257,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
         attributes.inputs[input_names::K]->set_stride(temp_vec);
 
         std::shared_ptr<Tensor_attributes> last_output;
+
+                // Add paged attention nodes
+
 
         auto bmm1_attributes = Matmul_attributes()
                                    .set_name("bmm1")

@@ -21,6 +21,7 @@ sliding_window_mask_options = [False, True]
 dropout_options = [False, True]
 ragged_options = [False, True]
 is_infer_options = [False, True]
+page_table_options = [False, True]
 
 
 def convert_to_cudnn_type(torch_type):
@@ -424,6 +425,7 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
 @pytest.mark.parametrize("is_padding", padding_mask_options, ids=lambda p: f"padding{int(p)}")
 @pytest.mark.parametrize("is_alibi", alibi_mask_options, ids=lambda p: f"alibi{int(p)}")
 @pytest.mark.parametrize("is_bias", bias_options, ids=lambda p: f"bias{int(p)}")
+@pytest.mark.parametrize("is_paged_attention", page_table_options, ids=lambda p: f"paged{int(p)}")
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
@@ -433,6 +435,7 @@ def test_sdpa(
     input_type,
     layout,
     head_group,
+    is_paged_attention,
     is_bias,
     is_alibi,
     is_padding,
@@ -445,6 +448,8 @@ def test_sdpa(
     request,
     cudnn_handle
 ):
+    
+    #pytest.set_trace()
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
 
@@ -666,6 +671,7 @@ def test_sdpa(
         v=v,
         is_inference=is_infer,
         attn_scale=attn_scale,
+        is_paged_attention=is_paged_attention,
         bias=bias,
         use_alibi_mask=is_alibi,
         use_padding_mask=is_padding,
@@ -688,6 +694,7 @@ def test_sdpa(
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
+        print("Graph not supported")
         pytest.xfail(repr(e))
     except Exception as e:
         pytest.fail(repr(e))

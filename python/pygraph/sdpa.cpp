@@ -28,8 +28,17 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               py::object const& sliding_window_length,
               py::object const& dropout,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
+              bool const is_paged_attention,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_k,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
+                (void) page_table_k;
+                (void) page_table_v;
+                if(is_paged_attention){
+                    std::cout << "TODO(@mbreughe): prepare for paged attention launch" << name << std::endl;
+                }
+    
     auto attributes = cudnn_frontend::graph::SDPA_attributes()
                           .set_is_inference(is_inference)
                           .set_bias(bias)
@@ -97,6 +106,8 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
             attributes.set_dropout(mask, scale);
         }
     }
+
+    // Add page table attributes
 
     auto [O, Stats] = graph.sdpa(q, k, v, attributes);
     return {O, Stats};
@@ -318,6 +329,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
+          py::arg_v("is_paged_attention", false),
+          py::arg_v("page_table_k", nullptr),
+          py::arg_v("page_table_v", nullptr),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
@@ -339,6 +353,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
+                    is_paged_attention (Optional[bool]): Whether to use paged attention. Default is False.
+                    page_table_k (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
+                    page_table_v (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
