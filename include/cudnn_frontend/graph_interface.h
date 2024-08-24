@@ -26,6 +26,7 @@
 
 #include "plans.h"
 #include "graph_helpers.h"
+#include "backend/kernel_cache.h"
 
 namespace cudnn_frontend::graph {
 
@@ -69,6 +70,10 @@ class Graph : public INode {
 
     error_t
     pre_validate_node() const override final {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (is_dynamic_shape_enabled || kernel_cache != nullptr) && detail::get_backend_version() < 90400,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Dynamic shapes or kernel caching enabled, but cuDNN version < 9.4!");
         return {error_code_t::OK, ""};
     }
 
@@ -196,6 +201,33 @@ class Graph : public INode {
         return {error_code_t::OK, ""};
     }
 
+    size_t
+    key(bool remove_shape) {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+        json j;
+        serialize(j);
+        if (remove_shape) {
+            for (auto &sub_node : j["nodes"]) {
+                // Process node inputs
+                for (auto &input : sub_node["inputs"]) {
+                    input[1]["dim"].clear();
+                    input[1]["stride"].clear();
+                }
+
+                // Process node outputs
+                for (auto &output : sub_node["outputs"]) {
+                    output[1]["dim"].clear();
+                    output[1]["stride"].clear();
+                }
+            }
+        }
+        return std::hash<json>{}(j);
+#else
+        CUDNN_FRONTEND_UNUSED(remove_shape);
+        return 1;
+#endif
+    }
+
    public:
     Graph() : INode(detail::Context{}) {}
 
@@ -251,6 +283,10 @@ class Graph : public INode {
 
         // The method here fuses all operations. There will be 1 operation graph in total.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
+
+        if (is_dynamic_shape_enabled && kernel_cache && !kernel_cache->is_finalized()) {
+            CHECK_CUDNN_FRONTEND_ERROR(kernel_cache->build(operation_graph->get_raw_desc()));
+        }
 
         return {error_code_t::OK, ""};
     }
@@ -523,7 +559,11 @@ class Graph : public INode {
     Graph &
     set_compute_data_type(DataType_t type);
     Graph &
+    set_is_dynamic_shape_enabled(bool is_enabled);
+    Graph &
     set_sm_count(int32_t type);
+    Graph &
+    set_kernel_cache(std::shared_ptr<KernelCache> cache);
 
     Graph &
     set_name(std::string const &name) {
@@ -842,6 +882,11 @@ class Graph : public INode {
     };
 #endif
 
+    size_t
+    key() override final {
+        return key(is_dynamic_shape_enabled);
+    }
+
     // TODO: temparorily placed in graphs class. This function needs to be a free standing function.
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     error_t
@@ -1016,6 +1061,7 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 
     plans.set_tag(operation_graph->getTag());
     plans.set_engine_configs(op_graph_to_configs);
+    plans.set_kernel_cache(kernel_cache);
 
     CUDNN_FE_LOG_LABEL_ENDL("INFO: Querying engine config properties.");
     CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
@@ -1063,6 +1109,18 @@ Graph::set_io_data_type(DataType_t const type) {
 inline Graph &
 Graph::set_compute_data_type(DataType_t const type) {
     context.set_compute_data_type(type);
+    return *this;
+}
+
+inline Graph &
+Graph::set_is_dynamic_shape_enabled(bool is_enabled) {
+    is_dynamic_shape_enabled = is_enabled;
+    return *this;
+}
+
+inline Graph &
+Graph::set_kernel_cache(std::shared_ptr<KernelCache> cache) {
+    kernel_cache = cache;
     return *this;
 }
 
