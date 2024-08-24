@@ -156,6 +156,15 @@ class Tensor_attributes {
         return *this;
     }
 
+    int64_t
+    get_volume() const {
+        int64_t volume = 1ul;
+        for (int64_t d : dim) {
+            volume *= d;
+        }
+        return volume;
+    }
+
     std::vector<int64_t>
     get_stride() const {
         return stride;
