@@ -285,7 +285,6 @@ class PyGraph {
          py::object const& sliding_window_length,
          py::object const& dropout,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
-         bool const is_paged_attention,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_k,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
          cudnn_frontend::DataType_t const& compute_data_type,

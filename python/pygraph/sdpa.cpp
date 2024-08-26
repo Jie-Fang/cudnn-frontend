@@ -28,16 +28,10 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               py::object const& sliding_window_length,
               py::object const& dropout,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
-              bool const is_paged_attention,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_k,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
-                (void) page_table_k;
-                (void) page_table_v;
-                if(is_paged_attention){
-                    std::cout << "TODO(@mbreughe): prepare for paged attention launch" << name << std::endl;
-                }
     
     auto attributes = cudnn_frontend::graph::SDPA_attributes()
                           .set_is_inference(is_inference)
@@ -50,6 +44,15 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
+
+    std::cout << "Setting up page tables " << std::endl;
+    if (page_table_k){
+        attributes.set_page_table_K(page_table_k);
+    }
+
+    if (page_table_v){
+        attributes.set_page_table_V(page_table_v);
+    }
 
     if (!attn_scale.is_none()) {
         if (py::isinstance<py::float_>(attn_scale)) {
@@ -329,7 +332,6 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
-          py::arg_v("is_paged_attention", false),
           py::arg_v("page_table_k", nullptr),
           py::arg_v("page_table_v", nullptr),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),

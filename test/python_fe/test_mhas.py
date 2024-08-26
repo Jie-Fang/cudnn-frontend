@@ -483,6 +483,10 @@ def test_sdpa(
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
+    if is_paged_attention and (not is_padding or cudnn_version < "9.4"):
+        pytest.skip("Paged attention is only tested with packed variable length tensors, and only on cuDNNv9.4 or greater")
+
+
     # -------------------------- default randomized parameter testing ------------------------
     # batch size
     b = 2
@@ -664,6 +668,11 @@ def test_sdpa(
     if is_sliding_window:
         sliding_window_length = s_kv // 4
 
+    page_table_k = k
+    page_table_v = v
+    if is_paged_attention :
+        page_table_v = v
+    
     o, stats = graph.sdpa(
         name="sdpa",
         q=q,
@@ -671,7 +680,6 @@ def test_sdpa(
         v=v,
         is_inference=is_infer,
         attn_scale=attn_scale,
-        is_paged_attention=is_paged_attention,
         bias=bias,
         use_alibi_mask=is_alibi,
         use_padding_mask=is_padding,
@@ -682,6 +690,8 @@ def test_sdpa(
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
+        page_table_k=page_table_k,
+        page_table_v=page_table_v
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)

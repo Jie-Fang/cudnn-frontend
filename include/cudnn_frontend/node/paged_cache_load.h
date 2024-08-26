@@ -30,13 +30,21 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
             CUDNN_FRONTEND_UNUSED(raw_operations);
-            (void) tensors;
-            std::cout << "TODO(@mbreughe) create_cudnn_operations" << std::endl;
 
             auto&& paged_cache_load_operation_builder =
                 cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR);
 
-            std::cout << "TODO(@mbreughe) Set ports to the paged_cache_load_builder" << std::endl;
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(container, PagedCacheLoad_attributes::input_names::container);
+            paged_cache_load_operation_builder.setcontainerDesc(*(tensors.at(container->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(pageTable, PagedCacheLoad_attributes::input_names::pageTable);
+            paged_cache_load_operation_builder.setpageTableDesc(*(tensors.at(pageTable->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(seqLen, PagedCacheLoad_attributes::input_names::seqLen);
+            paged_cache_load_operation_builder.setsequenceDesc(*(tensors.at(seqLen->second->get_uid())));
+
+            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(yOut, PagedCacheLoad_attributes::output_names::yOut);
+            paged_cache_load_operation_builder.setyDesc(*(tensors.at(yOut->second->get_uid())));
 
     #ifdef NV_CUDNN_DISABLE_EXCEPTION
             // disable exception macro is defined. Calling build will not throw.
@@ -96,7 +104,6 @@ INode::paged_cache_load(std::shared_ptr<Tensor_attributes> container,
                std::shared_ptr<Tensor_attributes> pageTable,
                PagedCacheLoad_attributes attributes,
                std::shared_ptr<Tensor_attributes> yOut) {
-    std::cout << "Creating paged cache load op " << std::endl;
     attributes.inputs[PagedCacheLoad_attributes::input_names::container] = container;
     attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = seqLen;
     attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = pageTable;

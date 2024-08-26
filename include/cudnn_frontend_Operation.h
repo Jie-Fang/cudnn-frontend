@@ -174,6 +174,9 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor idxdesc            = nullptr;
     ManagedOpaqueDescriptor offsetdesc         = nullptr;
     ManagedOpaqueDescriptor seeddesc           = nullptr;
+    ManagedOpaqueDescriptor containerdesc      = nullptr;
+    ManagedOpaqueDescriptor pageTabledesc      = nullptr;
+    ManagedOpaqueDescriptor sequencedesc       = nullptr;    
     std::vector<ManagedOpaqueDescriptor> peerStatdescs;
 
     cudnnBackendAttributeType_t alphabetaType = CUDNN_TYPE_FLOAT;
@@ -1644,7 +1647,63 @@ class OperationBuilder_v8 {
 
     Operation_v8 &&
     build_paged_cache_load_op() {
-        std::cout << "TODO(@mbreughe): Build paged_cache_load_op operation" << std::endl;
+        // TODO(@mbreughe): compiler guard for backend version
+        // Quick helper lambda to ensure code being DRY
+        auto set_tensor_descriptor = [&](auto attr, std::string error_msg, auto& descriptor) {
+            // TODO(@mbreughe)
+            //msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC";
+            auto status = CUDNN_STATUS_SUCCESS;
+            if (descriptor != nullptr){
+                status = detail::set_attribute(m_operation.pointer->get_backend_descriptor(),
+                                       attr,
+                                       CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                       1,
+                                       descriptor->get_backend_descriptor());
+            }
+            else{
+                status = CUDNN_STATUS_BAD_PARAM;
+            }
+
+            if (status != CUDNN_STATUS_SUCCESS) {
+                set_error_and_throw_exception(
+                    &m_operation,
+                    status,
+                    error_msg.c_str());
+                    // TODO(@mbreughe)
+                    //"CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC Failed");
+            }
+            return status;
+        };
+
+        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC, 
+            "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC",
+            m_operation.containerdesc)){
+                return std::move(m_operation);
+        }
+
+        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC, 
+            "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC",
+            m_operation.pageTabledesc)){
+                return std::move(m_operation);
+        }
+
+        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_SEQUENCE_DESC, 
+            "CUDNN_ATTR_OPERATION_PAGED_CACHE_SEQUENCE_DESC",
+            m_operation.sequencedesc)){
+                return std::move(m_operation);
+        }
+
+        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_YDESC, 
+            "CUDNN_ATTR_OPERATION_PAGED_CACHE_YDESC",
+            m_operation.ydesc)){
+                return std::move(m_operation);
+        }
+
+        auto status = detail::finalize(m_operation.pointer->get_backend_descriptor());
+        if (status != CUDNN_STATUS_SUCCESS) {
+            set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
+            return std::move(m_operation);
+        }
         return std::move(m_operation);
     }
 
@@ -2426,6 +2485,21 @@ class OperationBuilder_v8 {
         return *this;
     }
 
+    auto setcontainerDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.containerdesc = tensor.get_desc();
+        return *this;
+    }
+
+    auto setpageTableDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.pageTabledesc = tensor.get_desc();
+        return *this;
+    }
+
+    auto setsequenceDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+        m_operation.sequencedesc = tensor.get_desc();
+        return *this;
+    }
+
     auto
     setNormFwdPhase(NormFwdPhase_t mode) -> OperationBuilder_v8 & {
         m_operation.norm_fwd_phase = mode;
@@ -2827,6 +2901,7 @@ class OperationBuilder_v8 {
         is_resample_bwd_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR);
         is_rng_op           = (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
         is_reshape_op       = (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR);
+        is_paged_cache_load_op = (m_operation.op_mode == DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR);
     }
 
     // This constructor which takes in cudnn C backend enum for cudnnBackendDescriptorType_t will be deprecated,
@@ -2886,8 +2961,8 @@ class OperationBuilder_v8 {
         }
 
         // Create the descriptor.
-        cudnnBackendDescriptorType_t cudnn_backend_descritpor_type;
-        auto status = detail::convert_to_cudnn_type(m_operation.op_mode, cudnn_backend_descritpor_type);
+        cudnnBackendDescriptorType_t cudnn_backend_descriptor_type;
+        auto status = detail::convert_to_cudnn_type(m_operation.op_mode, cudnn_backend_descriptor_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(
                 &m_operation,
@@ -2895,7 +2970,7 @@ class OperationBuilder_v8 {
                 "CUDNN_BACKEND_OPERATION: cudnnCreate Failed with Invalid backend descriptor type.");
             return std::move(m_operation);
         }
-        status = m_operation.initialize_managed_backend_pointer(cudnn_backend_descritpor_type);
+        status = m_operation.initialize_managed_backend_pointer(cudnn_backend_descriptor_type);
         if (status != CUDNN_STATUS_SUCCESS) {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnCreate Failed");
             return std::move(m_operation);

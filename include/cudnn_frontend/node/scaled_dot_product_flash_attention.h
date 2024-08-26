@@ -259,7 +259,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         std::shared_ptr<Tensor_attributes> last_output;
 
-        // TODO(@mbreughe) Add paged attention nodes
         auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
         // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
         // K-cache has BHDS layout

@@ -1480,8 +1480,6 @@ Graph::sdpa(std::shared_ptr<Tensor_attributes> q,
     attributes.inputs[SDPA_attributes::input_names::K] = k;
     attributes.inputs[SDPA_attributes::input_names::V] = v;
 
-    // Set page tables
-
     sub_nodes.emplace_back(std::make_unique<SDPANode>(std::move(attributes), context));
 
     return {O, Stats};

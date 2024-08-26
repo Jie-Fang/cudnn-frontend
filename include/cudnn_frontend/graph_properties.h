@@ -1503,6 +1503,18 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         outputs[SDPA_attributes::output_names::RNG_DUMP] = value;
         return *this;
     }
+
+    SDPA_attributes&
+    set_page_table_K(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_attributes::input_names::Page_table_K] = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_page_table_V(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_attributes::input_names::Page_table_V] = value;
+        return *this;
+    }
 };
 
 class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
