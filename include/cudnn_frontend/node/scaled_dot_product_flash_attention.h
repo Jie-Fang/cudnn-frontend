@@ -236,7 +236,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto s_q          = q_dim[2];
         auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
-        auto s_kv         = k_dim[2];
+        // TODO(@mbreughe): 1) s_kv can no longer be extracted from container; 2) make sure we pass in consistent dimensions (K vs KT)
+        //auto s_kv         = k_dim[2];
+        auto s_kv = 512;
 
         // cuDNN frontend API attention requires Q, K, V where
         // Q = {b, h_q, s_q, d_qk}
