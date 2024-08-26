@@ -239,6 +239,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // TODO(@mbreughe): 1) s_kv can no longer be extracted from container; 2) make sure we pass in consistent dimensions (K vs KT)
         //auto s_kv         = k_dim[2];
         auto s_kv = 512;
+        auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
+        auto d_v = v_dim[3];
 
         // cuDNN frontend API attention requires Q, K, V where
         // Q = {b, h_q, s_q, d_qk}
@@ -249,15 +251,20 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // KT = {b, h_k, d_qk, s_kv}
         // V = {b, h_v, s_kv, d_v}
         // So the code below maps the K->KT
-        std::vector<int64_t> temp_vec;
+        bool is_paged_k = true;
 
-        temp_vec = attributes.inputs[input_names::K]->get_dim();
-        std::swap(temp_vec[2], temp_vec[3]);
-        attributes.inputs[input_names::K]->set_dim(temp_vec);
+        // TODO(@mbreughe)
+        if (! is_paged_k){
+            std::vector<int64_t> temp_vec;
 
-        temp_vec = attributes.inputs[input_names::K]->get_stride();
-        std::swap(temp_vec[2], temp_vec[3]);
-        attributes.inputs[input_names::K]->set_stride(temp_vec);
+            temp_vec = attributes.inputs[input_names::K]->get_dim();
+            std::swap(temp_vec[2], temp_vec[3]);
+            attributes.inputs[input_names::K]->set_dim(temp_vec);
+
+            temp_vec = attributes.inputs[input_names::K]->get_stride();
+            std::swap(temp_vec[2], temp_vec[3]);
+            attributes.inputs[input_names::K]->set_stride(temp_vec);
+        }
 
         std::shared_ptr<Tensor_attributes> last_output;
 
@@ -631,12 +638,23 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         auto const& seq_len_q  = attributes.inputs[input_names::SEQ_LEN_Q];
         auto const& seq_len_kv = attributes.inputs[input_names::SEQ_LEN_KV];
-        auto const& V          = attributes.inputs[input_names::V];
+        //auto const& V          = attributes.inputs[input_names::V];
         auto const& O          = attributes.outputs[output_names::O];
+
+        // TODO(@mbreughe): dynamically select between physical and paged V cache
+        auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
+        auto v_cache = std::make_shared<Tensor_attributes>();
+        v_cache->set_dim({b, h, s_kv, d_v})
+            .set_stride({d_v * s_kv * h, d_v * s_kv, d_v, 1})
+            .set_data_type(attributes.inputs[input_names::V]->get_data_type());
+        v_cache->set_is_virtual(true); 
+        paged_cache_load(attributes.inputs[input_names::V], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_V], paged_cache_load_attributes_v, v_cache);
+
+
         auto bmm2_attributes =
             Matmul_attributes().set_name("bmm2").set_m_override(seq_len_q).set_k_override(seq_len_kv);
         // Special non-functional-style call. Needed because output already created and provided to user.
-        matmul(last_output, V, bmm2_attributes, O);
+        matmul(last_output, v_cache, bmm2_attributes, O);
 
         return {error_code_t::OK, ""};
     }

@@ -635,10 +635,13 @@ def test_sdpa(
         # shape_k = (b, h_k, s_kv, d_qk)
         block_size = 32
         num_blocks = math.ceil(s_kv/block_size) * b
-        container_k_gpu = torch.randn(num_blocks, h_k, d_qk, block_size, device="cuda", dtype=input_type)
+        container_k_gpu = torch.randn(num_blocks, h_k, block_size, d_qk, device="cuda", dtype=input_type)
         page_table_k_gpu =  torch.randint(low=0, high=1, size=(b, 1, math.ceil(s_kv/block_size), 1), device="cuda", dtype=torch.int32)
-
         k_gpu = container_k_gpu 
+
+        container_v_gpu = torch.randn(num_blocks, h_v, block_size, d_v, device="cuda", dtype=input_type)
+        page_table_v_gpu =  torch.randint(low=0, high=1, size=(b, 1, math.ceil(s_kv/block_size), 1), device="cuda", dtype=torch.int32)
+        v_gpu = container_v_gpu 
        
 
     stream = torch.cuda.current_stream().cuda_stream
@@ -659,6 +662,9 @@ def test_sdpa(
     if is_paged_attention:
         k = graph.tensor_like(container_k_gpu)
         page_table_k = graph.tensor_like(page_table_k_gpu)
+
+        v = graph.tensor_like(container_v_gpu)
+        page_table_v = graph.tensor_like(page_table_v_gpu)
 
     bias = graph.tensor_like(bias_gpu) if is_bias else None
 
@@ -744,7 +750,8 @@ def test_sdpa(
         o: o_gpu,
         stats: stats_gpu,
         rng_dump: rng_dump_gpu,
-        page_table_k: page_table_k_gpu
+        page_table_k: page_table_k_gpu,
+        page_table_v: page_table_v_gpu
     }
 
     if is_dropout:
