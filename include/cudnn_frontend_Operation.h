@@ -1658,7 +1658,7 @@ class OperationBuilder_v8 {
                                        attr,
                                        CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                        1,
-                                       descriptor->get_backend_descriptor());
+                                       &(descriptor->get_backend_descriptor()));
             }
             else{
                 status = CUDNN_STATUS_BAD_PARAM;
@@ -1680,7 +1680,7 @@ class OperationBuilder_v8 {
             m_operation.containerdesc)){
                 return std::move(m_operation);
         }
-
+        
         if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC, 
             "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC",
             m_operation.pageTabledesc)){
