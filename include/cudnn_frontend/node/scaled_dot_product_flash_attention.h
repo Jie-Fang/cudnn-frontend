@@ -242,19 +242,21 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
         auto d_v = v_dim[3];
 
-        // cuDNN frontend API attention requires Q, K, V where
-        // Q = {b, h_q, s_q, d_qk}
-        // K = {b, h_k, s_kv, d_qk}
-        // V = {b, h_v, s_kv, d_v}
-        // but cuDNN backend API attention requires Q, KT, V
-        // Q = {b, h_q, s_q, d_qk}
-        // KT = {b, h_k, d_qk, s_kv}
-        // V = {b, h_v, s_kv, d_v}
-        // So the code below maps the K->KT
-        bool is_paged_k = true;
+        
+        bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
 
-        // TODO(@mbreughe)
+        std::shared_ptr<Tensor_attributes> k_cache;
         if (! is_paged_k){
+            // 1. map K->KT
+            // cuDNN frontend API attention requires Q, K, V where
+            // Q = {b, h_q, s_q, d_qk}
+            // K = {b, h_k, s_kv, d_qk}
+            // V = {b, h_v, s_kv, d_v}
+            // but cuDNN backend API attention requires Q, KT, V
+            // Q = {b, h_q, s_q, d_qk}
+            // KT = {b, h_k, d_qk, s_kv}
+            // V = {b, h_v, s_kv, d_v}
+            // So the code below maps the K->KT
             std::vector<int64_t> temp_vec;
 
             temp_vec = attributes.inputs[input_names::K]->get_dim();
@@ -264,21 +266,26 @@ class SDPANode : public NodeCRTP<SDPANode> {
             temp_vec = attributes.inputs[input_names::K]->get_stride();
             std::swap(temp_vec[2], temp_vec[3]);
             attributes.inputs[input_names::K]->set_stride(temp_vec);
+
+            // 2. Set k_cache
+            k_cache = attributes.inputs[input_names::K];
+        }
+        else{
+            // Create a paged cache load operation
+            auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
+            // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
+            // K-cache has BHDS layout
+            k_cache = std::make_shared<Tensor_attributes>();
+            k_cache->set_dim({b, h, d_qk, s_kv})
+                .set_stride({d_qk * s_kv * h, d_qk * s_kv, 1, d_qk})
+                .set_data_type(attributes.inputs[input_names::K]->get_data_type());
+            k_cache->set_is_virtual(true); 
+            paged_cache_load(attributes.inputs[input_names::K], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_K], paged_cache_load_attributes_k, k_cache);
         }
 
         std::shared_ptr<Tensor_attributes> last_output;
 
-        auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
-        // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
-        // K-cache has BHDS layout
-        // TODO(@mbreughe): set this to physical K in case of unpaged attention (i.e., attributes.inputs[input_names::K])
-        auto k_cache = std::make_shared<Tensor_attributes>();
-        k_cache->set_dim({b, h, d_qk, s_kv})
-            .set_stride({d_qk * s_kv * h, d_qk * s_kv, 1, d_qk})
-            .set_data_type(attributes.inputs[input_names::K]->get_data_type());
-        k_cache->set_is_virtual(true); 
-        paged_cache_load(attributes.inputs[input_names::K], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_K], paged_cache_load_attributes_k, k_cache);
-
+        
         auto bmm1_attributes = Matmul_attributes()
                                    .set_name("bmm1")
                                    .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
@@ -641,15 +648,20 @@ class SDPANode : public NodeCRTP<SDPANode> {
         //auto const& V          = attributes.inputs[input_names::V];
         auto const& O          = attributes.outputs[output_names::O];
 
-        // TODO(@mbreughe): dynamically select between physical and paged V cache
-        auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
-        auto v_cache = std::make_shared<Tensor_attributes>();
-        v_cache->set_dim({b, h, s_kv, d_v})
-            .set_stride({d_v * s_kv * h, d_v * s_kv, d_v, 1})
-            .set_data_type(attributes.inputs[input_names::V]->get_data_type());
-        v_cache->set_is_virtual(true); 
-        paged_cache_load(attributes.inputs[input_names::V], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_V], paged_cache_load_attributes_v, v_cache);
+        std::shared_ptr<Tensor_attributes> v_cache;
 
+        bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
+        if (! is_paged_v){
+            v_cache = attributes.inputs[input_names::V];
+        } else{
+            auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
+            v_cache = std::make_shared<Tensor_attributes>();
+            v_cache->set_dim({b, h, s_kv, d_v})
+                .set_stride({d_v * s_kv * h, d_v * s_kv, d_v, 1})
+                .set_data_type(attributes.inputs[input_names::V]->get_data_type());
+            v_cache->set_is_virtual(true); 
+            paged_cache_load(attributes.inputs[input_names::V], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_V], paged_cache_load_attributes_v, v_cache);
+        }
 
         auto bmm2_attributes =
             Matmul_attributes().set_name("bmm2").set_m_override(seq_len_q).set_k_override(seq_len_kv);

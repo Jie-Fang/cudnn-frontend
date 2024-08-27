@@ -627,22 +627,33 @@ def test_sdpa(
         else None
     )
 
-    page_table_k = None
-    page_table_v = None
+    def create_container_and_page_table(tensor, block_size):
+        B, H, S, D = tensor.shape
+        num_blocks = math.ceil(s_kv/block_size) * b
+        padding_seq = (B*S) % block_size
+        if padding_seq > 0:
+            zeros = torch.zeros(B,H,padding_seq,D, device='cuda', dtype=tensor.dtype)
+            cat_tensor = torch.concat((tensor, zeros), axis = 2)
+        else:
+            cat_tensor = tensor
+        reshaped = (cat_tensor.clone()).reshape(num_blocks, H, block_size, D)
+
+        table_size = math.ceil(S/block_size)
+        page_table = torch.linspace(0, B*table_size-1, B*table_size, device='cuda', dtype=torch.int32).reshape(B,1,table_size,1)
+
+        return(reshaped, page_table)
+
+
+    container_k_gpu = None
+    container_v_gpu = None
     page_table_k_gpu = None
     page_table_v_gpu = None
-    if is_paged_attention :
+    if is_paged_attention:
         # shape_k = (b, h_k, s_kv, d_qk)
         block_size = 32
-        num_blocks = math.ceil(s_kv/block_size) * b
-        container_k_gpu = torch.randn(num_blocks, h_k, block_size, d_qk, device="cuda", dtype=input_type)
-        page_table_k_gpu =  torch.randint(low=0, high=1, size=(b, 1, math.ceil(s_kv/block_size), 1), device="cuda", dtype=torch.int32)
-        k_gpu = container_k_gpu 
-
-        container_v_gpu = torch.randn(num_blocks, h_v, block_size, d_v, device="cuda", dtype=input_type)
-        page_table_v_gpu =  torch.randint(low=0, high=1, size=(b, 1, math.ceil(s_kv/block_size), 1), device="cuda", dtype=torch.int32)
-        v_gpu = container_v_gpu 
-       
+        
+        container_k_gpu, page_table_k_gpu = create_container_and_page_table(k_gpu, block_size)
+        container_v_gpu, page_table_v_gpu = create_container_and_page_table(v_gpu, block_size)
 
     stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=cudnn_handle, stream=stream)
@@ -656,15 +667,11 @@ def test_sdpa(
     )
 
     q = graph.tensor_like(q_gpu)
-    k = graph.tensor_like(k_gpu)
-    v = graph.tensor_like(v_gpu)
+    k = graph.tensor_like(k_gpu) if not is_paged_attention else graph.tensor_like(container_k_gpu)
+    v = graph.tensor_like(v_gpu) if not is_paged_attention else graph.tensor_like(container_v_gpu)
 
-    if is_paged_attention:
-        k = graph.tensor_like(container_k_gpu)
-        page_table_k = graph.tensor_like(page_table_k_gpu)
-
-        v = graph.tensor_like(container_v_gpu)
-        page_table_v = graph.tensor_like(page_table_v_gpu)
+    page_table_k = graph.tensor_like(page_table_k_gpu) if is_paged_attention else None
+    page_table_v = graph.tensor_like(page_table_v_gpu) if is_paged_attention else None
 
     bias = graph.tensor_like(bias_gpu) if is_bias else None
 
@@ -738,8 +745,8 @@ def test_sdpa(
 
     variant_pack = {
         q: q_gpu,
-        k: k_gpu,
-        v: v_gpu,
+        k: k_gpu if not is_paged_attention else container_k_gpu,
+        v: v_gpu if not is_paged_attention else container_v_gpu,
         bias: bias_gpu,
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
