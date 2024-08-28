@@ -55,7 +55,8 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
                                     .set_name("epsilon")
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
-                                    .set_data_type(fe::DataType_t::FLOAT));
+                                    .set_data_type(fe::DataType_t::FLOAT)
+                                    .set_is_pass_by_value(true));
 
     auto layernorm_options =
         fe::graph::Layernorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon);
@@ -69,7 +70,7 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
     SKIP("LayerNorm is not supported in cudnn versions prior to 8.9.5");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("LayerNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
@@ -137,7 +138,8 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
                                     .set_name("epsilon")
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
-                                    .set_data_type(fe::DataType_t::FLOAT));
+                                    .set_data_type(fe::DataType_t::FLOAT)
+                                    .set_is_pass_by_value(true));
 
     auto layernorm_options =
         fe::graph::Layernorm_attributes().set_forward_phase(fe::NormFwdPhase_t::INFERENCE).set_epsilon(epsilon);
@@ -151,7 +153,7 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
     SKIP("LayerNorm is not supported in cudnn versions prior to 8.9.5");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("LayerNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));

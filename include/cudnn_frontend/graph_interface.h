@@ -23,6 +23,7 @@
 #include "node/scaled_dot_product_flash_attention.h"
 #include "node/sdpa_fp8.h"
 #include "node/sdpa_fp8_bwd.h"
+#include "node/block_scale_quantize.h"
 
 #include "plans.h"
 #include "graph_helpers.h"
@@ -643,6 +644,9 @@ class Graph : public INode {
                                                                     SDPA_backward_attributes);
 
     std::shared_ptr<Tensor_attributes> slice(std::shared_ptr<Tensor_attributes>, Slice_attributes);
+
+    std::array<std::shared_ptr<Tensor_attributes>, 2> block_scale_quantize(std::shared_ptr<Tensor_attributes>,
+                                                                           Block_scale_quantize_attributes);
 
     [[deprecated]] std::array<std::shared_ptr<Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
@@ -1623,6 +1627,22 @@ Graph::slice(std::shared_ptr<Tensor_attributes> input, Slice_attributes attribut
 
     sub_nodes.emplace_back(std::make_unique<SliceNode>(std::move(attributes), context));
     return Y;
+}
+
+inline std::array<std::shared_ptr<Tensor_attributes>, 2>
+Graph::block_scale_quantize(std::shared_ptr<Tensor_attributes> x, Block_scale_quantize_attributes attributes) {
+    // Set outputs
+    auto Y = attributes.outputs[Block_scale_quantize_attributes::output_names::Y] =
+        output_tensor(attributes.name + "::Y");
+    auto scale = attributes.outputs[Block_scale_quantize_attributes::output_names::scale] =
+        output_tensor(attributes.name + "::scale");
+
+    // Set inputs
+    attributes.inputs[Block_scale_quantize_attributes::input_names::X] = x;
+
+    sub_nodes.emplace_back(std::make_unique<BlockScaleQuantizeNode>(std::move(attributes), context));
+
+    return {Y, scale};
 }
 
 static inline std::ostream &
