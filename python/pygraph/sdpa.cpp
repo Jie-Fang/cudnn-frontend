@@ -45,7 +45,6 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
-    std::cout << "Setting up page tables " << std::endl;
     if (page_table_k){
         attributes.set_page_table_K(page_table_k);
     }

@@ -482,8 +482,8 @@ def test_sdpa(
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
-    if is_paged_attention and (not is_padding or cudnn_version < "9.4"):
-        pytest.skip("Paged attention is only tested with packed variable length tensors, and only on cuDNNv9.4 or greater")
+    if is_paged_attention and (not is_padding or cudnn_version < "9.4") and not (layout == "bshd_bshd_bshd"):
+        pytest.skip("Paged attention is only tested with packed variable length tensors, thd_thd_thd, and only on cuDNNv9.4 or greater")
 
 
     # -------------------------- default randomized parameter testing ------------------------
@@ -629,7 +629,7 @@ def test_sdpa(
     def create_container_and_page_table(tensor, block_size):
         B, H, S, D = tensor.shape
         # num_blocks = math.ceil(S/block_size) * B
-        chunks = math.ceil(S/block_size)
+        blocks_per_batch = math.ceil(S/block_size)
         padding_seq = (B*S) % block_size
         if padding_seq > 0:
             zeros = torch.zeros(B,H,padding_seq,D, device='cuda', dtype=tensor.dtype)
@@ -637,7 +637,7 @@ def test_sdpa(
         else:
             cat_tensor = tensor
 
-        reshaped = torch.cat((cat_tensor.clone()).chunk(chunks, dim=2), dim=0)
+        reshaped = torch.cat((cat_tensor.clone()).chunk(blocks_per_batch, dim=2), dim=0)
 
         table_size = math.ceil(S/block_size)
         page_table = torch.linspace(0, B*table_size-1, B*table_size, device='cuda', dtype=torch.int32).reshape(table_size,1,B,1)
