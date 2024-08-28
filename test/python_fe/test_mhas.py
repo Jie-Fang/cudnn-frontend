@@ -414,7 +414,6 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
     uniform_tensor = torch.einsum("bshd->bhsd", uniform_tensor)
     return uniform_tensor
 
-
 # fmt: off
 @pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
@@ -629,17 +628,20 @@ def test_sdpa(
 
     def create_container_and_page_table(tensor, block_size):
         B, H, S, D = tensor.shape
-        num_blocks = math.ceil(s_kv/block_size) * b
+        # num_blocks = math.ceil(S/block_size) * B
+        chunks = math.ceil(S/block_size)
         padding_seq = (B*S) % block_size
         if padding_seq > 0:
             zeros = torch.zeros(B,H,padding_seq,D, device='cuda', dtype=tensor.dtype)
             cat_tensor = torch.concat((tensor, zeros), axis = 2)
         else:
             cat_tensor = tensor
-        reshaped = (cat_tensor.clone()).reshape(num_blocks, H, block_size, D)
+
+        reshaped = torch.cat((cat_tensor.clone()).chunk(chunks, dim=2), dim=0)
 
         table_size = math.ceil(S/block_size)
-        page_table = torch.linspace(0, B*table_size-1, B*table_size, device='cuda', dtype=torch.int32).reshape(B,1,table_size,1)
+        page_table = torch.linspace(0, B*table_size-1, B*table_size, device='cuda', dtype=torch.int32).reshape(table_size,1,B,1)
+        page_table = torch.transpose(page_table,0,2)
 
         return(reshaped, page_table)
 
@@ -649,7 +651,6 @@ def test_sdpa(
     page_table_k_gpu = None
     page_table_v_gpu = None
     if is_paged_attention:
-        # shape_k = (b, h_k, s_kv, d_qk)
         block_size = 32
         
         container_k_gpu, page_table_k_gpu = create_container_and_page_table(k_gpu, block_size)
