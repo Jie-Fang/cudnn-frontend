@@ -129,7 +129,8 @@ class INode : public ICudnn {
         RNG,
         SCALED_DOT_PRODUCT_ATTENTION,
         SLICE,
-        WGRAD
+        WGRAD,
+        BLOCK_SCALE_QUANTIZE
     };
     Type tag;
 
@@ -183,6 +184,12 @@ class INode : public ICudnn {
         std::shared_ptr<Tensor_attributes> offset,
         Rng_attributes attributes,
         std::shared_ptr<Tensor_attributes> y);
+
+    void
+    block_scale_quantize(std::shared_ptr<Tensor_attributes> x,
+                         Block_scale_quantize_attributes attributes,
+                         std::shared_ptr<Tensor_attributes> y,
+                         std::shared_ptr<Tensor_attributes> scale);
 
     error_t
     validate_subtree() {

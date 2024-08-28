@@ -443,7 +443,8 @@ enum class DescriptorType_t {
     OPERATION_NORM_BACKWARD_DESCRIPTOR,
     OPERATION_RESHAPE_DESCRIPTOR,
     RNG_DESCRIPTOR,
-    OPERATION_RNG_DESCRIPTOR
+    OPERATION_RNG_DESCRIPTOR,
+    OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR
 };
 
 enum class NormMode_t {
@@ -647,6 +648,8 @@ enum class DataType_t {
     FP8_E4M3,
     FP8_E5M2,
     FAST_FLOAT_FOR_FP8,
+    E8M0,
+    FP4_E2M1,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(DataType_t,
@@ -667,6 +670,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(DataType_t,
                                  {DataType_t::FP8_E4M3, "FP8_E4M3"},
                                  {DataType_t::FP8_E5M2, "FP8_E5M2"},
                                  {DataType_t::FAST_FLOAT_FOR_FP8, "FAST_FLOAT_FOR_FP8"},
+                                 {DataType_t::E8M0, "E8M0"},
+                                 {DataType_t::FP4_E2M1, "FP4_E2M1"},
                              })
 
 enum class ReductionMode_t {
@@ -711,6 +716,20 @@ NLOHMANN_JSON_SERIALIZE_ENUM(RngDistribution_t,
                                  {RngDistribution_t::BERNOULLI, "BERNOULLI"},
                                  {RngDistribution_t::UNIFORM, "UNIFORM"},
                                  {RngDistribution_t::NORMAL, "NORMAL"},
+                             })
+
+enum class DenomMode_t {
+    NOT_SET,
+
+    EMAX,
+    MAX
+};
+
+NLOHMANN_JSON_SERIALIZE_ENUM(DenomMode_t,
+                             {
+                                 {DenomMode_t::NOT_SET, nullptr},
+                                 {DenomMode_t::EMAX, "EMAX"},
+                                 {DenomMode_t::MAX, "MAX"},
                              })
 
 static int64_t
@@ -883,6 +902,9 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
         case DescriptorType_t::OPERATION_RNG_DESCRIPTOR:
             os << "OPERATION_RNG_DESCRIPTOR";
             break;
+        case DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
+            os << "OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR";
+            break;
         case DescriptorType_t::NOT_SET:
             os << "NOT_SET";
             break;
@@ -1012,6 +1034,22 @@ convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cu
 #if (CUDNN_VERSION >= 8700)
             NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(8700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_DATA_FAST_FLOAT_FOR_FP8;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
+        case DataType_t::E8M0:
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_DATA_E8M0;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
+        case DataType_t::FP4_E2M1:
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_DATA_FP4_E2M1;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
@@ -1416,6 +1454,14 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
+        case DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_BACKEND_OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
@@ -1791,6 +1837,10 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
         case CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR:
             return DescriptorType_t::OPERATION_RNG_DESCRIPTOR;
 #endif
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+        case CUDNN_BACKEND_OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
+            return DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR;
+#endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
@@ -1954,6 +2004,14 @@ convert_from_cudnn_type(cudnnDataType_t const cudnn_mode) {
         case CUDNN_DATA_FAST_FLOAT_FOR_FP8:
             return DataType_t::FAST_FLOAT_FOR_FP8;
 #endif
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+        case CUDNN_DATA_E8M0:
+            return DataType_t::E8M0;
+#endif
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+        case CUDNN_DATA_FP4_E2M1:
+            return DataType_t::FP4_E2M1;
+#endif
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
             return DataType_t::NOT_SET;
@@ -2032,6 +2090,28 @@ convert_from_cudnn_type(cudnnRngDistribution_t const cudnn_mode) {
 #endif
     }
     return RngDistribution_t::NOT_SET;
+}
+#endif
+
+#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+static inline cudnnStatus_t
+convert_to_cudnn_type(cudnn_frontend::DenomMode_t const mode, cudnnBackendDenomMode_t& cudnn_mode) {
+    NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+
+    switch (mode) {
+        case DenomMode_t::EMAX:
+            cudnn_mode = CUDNN_DENOM_EMAX;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        case DenomMode_t::MAX:
+            cudnn_mode = CUDNN_DENOM_MAX;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
+    }
+    return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 }
 #endif
 

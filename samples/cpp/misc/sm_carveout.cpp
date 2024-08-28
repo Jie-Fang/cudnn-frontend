@@ -73,7 +73,8 @@ TEST_CASE("SGBN with SM carveout", "[batchnorm][graph][sm_carveout]") {
                                     .set_name("epsilon")
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
-                                    .set_data_type(fe::DataType_t::FLOAT));
+                                    .set_data_type(fe::DataType_t::FLOAT)
+                                    .set_is_pass_by_value(true));
     auto momentum = graph.tensor(fe::graph::Tensor_attributes()
                                      .set_name("momentum")
                                      .set_dim({1, 1, 1, 1})

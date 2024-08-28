@@ -50,7 +50,8 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
                                     .set_is_pass_by_value(true)
-                                    .set_data_type(fe::DataType_t::FLOAT));
+                                    .set_data_type(fe::DataType_t::FLOAT)
+                                    .set_is_pass_by_value(true));
 
     auto rmsnorm_options =
         fe::graph::Rmsnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon);
@@ -126,7 +127,8 @@ TEST_CASE("RmsNorm Inference", "[rmsnorm][graph]") {
                                     .set_dim({1, 1, 1, 1})
                                     .set_stride({1, 1, 1, 1})
                                     .set_is_pass_by_value(true)
-                                    .set_data_type(fe::DataType_t::FLOAT));
+                                    .set_data_type(fe::DataType_t::FLOAT)
+                                    .set_is_pass_by_value(true));
 
     auto rmsnorm_options = fe::graph::Rmsnorm_attributes()
                                .set_forward_phase(fe::NormFwdPhase_t::INFERENCE)

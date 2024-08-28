@@ -44,6 +44,7 @@ add_executable(
     cpp/norm/batchnorm.cpp
     cpp/norm/layernorm.cpp
     cpp/norm/rmsnorm.cpp
+    cpp/norm/norm_block_scale.cpp
 
     cpp/misc/serialization.cpp
     cpp/misc/autotuning.cpp
