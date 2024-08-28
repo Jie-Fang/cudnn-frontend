@@ -1647,6 +1647,14 @@ class OperationBuilder_v8 {
 
     Operation_v8 &&
     build_paged_cache_load_op() {
+#if (CUDNN_VERSION < 90400)
+         set_error_and_throw_exception(&m_operation,
+                                      CUDNN_STATUS_NOT_SUPPORTED,
+                                      "CUDNN_BACKEND_OPERATION: Rng operation Not supported in this version");
+#else
+        NV_CUDNN_FE_DYNAMIC_CHECK_BACKEND_DESCRIPTOR(
+            90400, m_operation, "CUDNN_BACKEND_OPERATION: build_paged_cache_load_op requires cudnn 9.4.0");
+
         // TODO(@mbreughe): compiler guard for backend version
         // Quick helper lambda to ensure code being DRY
         auto set_tensor_descriptor = [&](auto attr, std::string error_msg, auto& descriptor) {
@@ -1704,7 +1712,9 @@ class OperationBuilder_v8 {
             set_error_and_throw_exception(&m_operation, status, "CUDNN_BACKEND_OPERATION: cudnnFinalize Failed");
             return std::move(m_operation);
         }
+#endif
         return std::move(m_operation);
+
     }
 
     Operation_v8 &&

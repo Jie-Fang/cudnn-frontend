@@ -76,16 +76,11 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
     pre_validate_node() const override final {
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating PagedCacheLoadNode " << attributes.name << "...");
 
-                    std::cout << "TODO(@mbreughe) pre_validate_node" << std::endl;
-
-
         return {error_code_t::OK, ""};
     }
 
     error_t
     infer_properties_node() override final {
-        std::cout << "TODO(@mbreughe) infer_properties_node" << std::endl;
-
 
         return {error_code_t::OK, ""};
     }

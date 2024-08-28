@@ -1422,8 +1422,8 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
 #endif
 
         case DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
-#if (CUDNN_VERSION >= 94000)
-            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(94000, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+#if (CUDNN_VERSION >= 90400)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90400, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #endif
@@ -1803,7 +1803,7 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
             return DescriptorType_t::OPERATION_RNG_DESCRIPTOR;
 #endif
 
-#if (CUDNN_VERSION >= 94000)
+#if (CUDNN_VERSION >= 90400)
     case CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
         return DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
 #endif
