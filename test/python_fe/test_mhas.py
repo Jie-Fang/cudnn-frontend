@@ -519,6 +519,9 @@ def test_sdpa(
     else:
         assert False, "Head group must be either MHA, GQA, or MQA"
 
+    # block size for paged attention
+    block_size = random.choice([32, 64, 128])
+
     # -------------------------- override test parameters if args are provided ----------------
     b = int(request.config.option.mha_b) if request.config.option.mha_b != None else b
     s_q = int(request.config.option.mha_s_q) if request.config.option.mha_s_q != None else s_q
@@ -530,6 +533,7 @@ def test_sdpa(
     h_q = int(request.config.option.mha_h_q) if request.config.option.mha_h_q != None else h_q
     h_k = int(request.config.option.mha_h_k) if request.config.option.mha_h_k != None else h_k
     h_v = int(request.config.option.mha_h_v) if request.config.option.mha_h_v != None else h_v
+    block_size = int(request.config.option.mha_block_size) if request.config.option.mha_block_size != None else block_size
 
     if d_qk != d_v and cudnn_version < "8.9.6":
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
@@ -652,8 +656,6 @@ def test_sdpa(
     page_table_k_gpu = None
     page_table_v_gpu = None
     if is_paged_attention:
-        block_size = 32
-        
         container_k_gpu, page_table_k_gpu = create_container_and_page_table(k_gpu, block_size)
         container_v_gpu, page_table_v_gpu = create_container_and_page_table(v_gpu, block_size)
 
