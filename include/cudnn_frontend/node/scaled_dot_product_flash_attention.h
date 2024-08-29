@@ -237,37 +237,36 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
-        auto d_v = v_dim[3];
+        auto d_v          = v_dim[3];
 
-        
         bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
         bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
 
         // Infer s_kv
         int64_t s_kv = -1;
-        // When neither K or V cache are paged, s_kv can be extracted from k_dim 
-        if(!is_paged_k && !is_paged_v){
+        // When neither K or V cache are paged, s_kv can be extracted from k_dim
+        if (!is_paged_k && !is_paged_v) {
             s_kv = k_dim[2];
-        // When at least one is paged, we need to infer s_kv from the page table and container
-        }else{
+            // When at least one is paged, we need to infer s_kv from the page table and container
+        } else {
             int s_k = -1;
             int s_v = -1;
-            if(is_paged_k){
+            if (is_paged_k) {
                 // [b, 1, ceil(s_kv/block_size), 1]
                 auto page_table_dim = attributes.inputs[input_names::Page_table_K]->get_dim();
                 // [b, h_k, block_size, d_k]
                 auto container_dim = attributes.inputs[input_names::K]->get_dim();
-                s_k = page_table_dim[2] * container_dim[2];
-            } else{
+                s_k                = page_table_dim[2] * container_dim[2];
+            } else {
                 s_k = attributes.inputs[input_names::Page_table_K]->get_dim()[2];
             }
-            if(is_paged_v){
+            if (is_paged_v) {
                 // [b, 1, ceil(s_kv/block_size), 1]
                 auto page_table_dim = attributes.inputs[input_names::Page_table_V]->get_dim();
                 // [b, h_v, block_size, d_v]
                 auto container_dim = attributes.inputs[input_names::V]->get_dim();
-                s_v = page_table_dim[2] * container_dim[2];
-            }else{
+                s_v                = page_table_dim[2] * container_dim[2];
+            } else {
                 s_v = attributes.inputs[input_names::V]->get_dim()[2];
             }
 
@@ -275,7 +274,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         }
 
         std::shared_ptr<Tensor_attributes> k_cache;
-        if (! is_paged_k){
+        if (!is_paged_k) {
             // 1. map K->KT
             // cuDNN frontend API attention requires Q, K, V where
             // Q = {b, h_q, s_q, d_qk}
@@ -298,8 +297,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
             // 2. Set k_cache
             k_cache = attributes.inputs[input_names::K];
-        }
-        else{
+        } else {
             // Create a paged cache load operation
             auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
             // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
@@ -308,13 +306,16 @@ class SDPANode : public NodeCRTP<SDPANode> {
             k_cache->set_dim({b, h, d_qk, s_kv})
                 .set_stride({d_qk * s_kv * h, d_qk * s_kv, 1, d_qk})
                 .set_data_type(attributes.inputs[input_names::K]->get_data_type());
-            k_cache->set_is_virtual(true); 
-            paged_cache_load(attributes.inputs[input_names::K], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_K], paged_cache_load_attributes_k, k_cache);
+            k_cache->set_is_virtual(true);
+            paged_cache_load(attributes.inputs[input_names::K],
+                             attributes.inputs[input_names::SEQ_LEN_KV],
+                             attributes.inputs[input_names::Page_table_K],
+                             paged_cache_load_attributes_k,
+                             k_cache);
         }
 
         std::shared_ptr<Tensor_attributes> last_output;
 
-        
         auto bmm1_attributes = Matmul_attributes()
                                    .set_name("bmm1")
                                    .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
@@ -324,8 +325,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
             bmm1_attributes.set_padding(0.0);
         }
 
-        auto const& bmm1_output =
-            matmul(attributes.inputs[input_names::Q], k_cache, bmm1_attributes);
+        auto const& bmm1_output = matmul(attributes.inputs[input_names::Q], k_cache, bmm1_attributes);
         // Setting dim and strides as pointwise op wont have knowledge of how to do it for mha.
         bmm1_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
         last_output = bmm1_output;
@@ -674,21 +674,25 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         auto const& seq_len_q  = attributes.inputs[input_names::SEQ_LEN_Q];
         auto const& seq_len_kv = attributes.inputs[input_names::SEQ_LEN_KV];
-        //auto const& V          = attributes.inputs[input_names::V];
-        auto const& O          = attributes.outputs[output_names::O];
+        // auto const& V          = attributes.inputs[input_names::V];
+        auto const& O = attributes.outputs[output_names::O];
 
         std::shared_ptr<Tensor_attributes> v_cache;
 
-        if (! is_paged_v){
+        if (!is_paged_v) {
             v_cache = attributes.inputs[input_names::V];
-        } else{
+        } else {
             auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
-            v_cache = std::make_shared<Tensor_attributes>();
+            v_cache                            = std::make_shared<Tensor_attributes>();
             v_cache->set_dim({b, h, s_kv, d_v})
                 .set_stride({d_v * s_kv * h, d_v * s_kv, d_v, 1})
                 .set_data_type(attributes.inputs[input_names::V]->get_data_type());
-            v_cache->set_is_virtual(true); 
-            paged_cache_load(attributes.inputs[input_names::V], attributes.inputs[input_names::SEQ_LEN_KV], attributes.inputs[input_names::Page_table_V], paged_cache_load_attributes_v, v_cache);
+            v_cache->set_is_virtual(true);
+            paged_cache_load(attributes.inputs[input_names::V],
+                             attributes.inputs[input_names::SEQ_LEN_KV],
+                             attributes.inputs[input_names::Page_table_V],
+                             paged_cache_load_attributes_v,
+                             v_cache);
         }
 
         auto bmm2_attributes =

@@ -32,7 +32,6 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
-    
     auto attributes = cudnn_frontend::graph::SDPA_attributes()
                           .set_is_inference(is_inference)
                           .set_bias(bias)
@@ -45,11 +44,11 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
-    if (page_table_k){
+    if (page_table_k) {
         attributes.set_page_table_K(page_table_k);
     }
 
-    if (page_table_v){
+    if (page_table_v) {
         attributes.set_page_table_V(page_table_v);
     }
 

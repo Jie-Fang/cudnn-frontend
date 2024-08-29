@@ -29,48 +29,48 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
-            CUDNN_FRONTEND_UNUSED(raw_operations);
+        CUDNN_FRONTEND_UNUSED(raw_operations);
 
-            auto&& paged_cache_load_operation_builder =
-                cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR);
+        auto&& paged_cache_load_operation_builder =
+            cudnn_frontend::OperationBuilder(DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR);
 
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(container, PagedCacheLoad_attributes::input_names::container);
-            paged_cache_load_operation_builder.setcontainerDesc(*(tensors.at(container->second->get_uid())));
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(container, PagedCacheLoad_attributes::input_names::container);
+        paged_cache_load_operation_builder.setcontainerDesc(*(tensors.at(container->second->get_uid())));
 
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(pageTable, PagedCacheLoad_attributes::input_names::pageTable);
-            paged_cache_load_operation_builder.setpageTableDesc(*(tensors.at(pageTable->second->get_uid())));
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(pageTable, PagedCacheLoad_attributes::input_names::pageTable);
+        paged_cache_load_operation_builder.setpageTableDesc(*(tensors.at(pageTable->second->get_uid())));
 
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(seqLen, PagedCacheLoad_attributes::input_names::seqLen);
-            paged_cache_load_operation_builder.setsequenceDesc(*(tensors.at(seqLen->second->get_uid())));
+        CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(seqLen, PagedCacheLoad_attributes::input_names::seqLen);
+        paged_cache_load_operation_builder.setsequenceDesc(*(tensors.at(seqLen->second->get_uid())));
 
-            CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(yOut, PagedCacheLoad_attributes::output_names::yOut);
-            paged_cache_load_operation_builder.setyDesc(*(tensors.at(yOut->second->get_uid())));
+        CUDNN_FE_VALIDATE_AND_ASSIGN_OUTPUT_TENSOR(yOut, PagedCacheLoad_attributes::output_names::yOut);
+        paged_cache_load_operation_builder.setyDesc(*(tensors.at(yOut->second->get_uid())));
 
-    #ifdef NV_CUDNN_DISABLE_EXCEPTION
-            // disable exception macro is defined. Calling build will not throw.
-            // Check status of desc and return error.
+#ifdef NV_CUDNN_DISABLE_EXCEPTION
+        // disable exception macro is defined. Calling build will not throw.
+        // Check status of desc and return error.
+        auto operation = paged_cache_load_operation_builder.build();
+        RETURN_CUDNN_FRONTEND_ERROR_IF(operation.get_status() != CUDNN_STATUS_SUCCESS,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       operation.get_error());
+        operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
+#else
+        // build() can throw
+        // wrap in try catch
+        try {
             auto operation = paged_cache_load_operation_builder.build();
-            RETURN_CUDNN_FRONTEND_ERROR_IF(operation.get_status() != CUDNN_STATUS_SUCCESS,
-                                        error_code_t::CUDNN_BACKEND_API_FAILED,
-                                        operation.get_error());
             operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
-    #else
-            // build() can throw
-            // wrap in try catch
-            try {
-                auto operation = paged_cache_load_operation_builder.build();
-                operations.push_back(std::make_shared<Operation_v8>(std::move(operation)));
-            } catch (cudnn_frontend::cudnnException& e) {
-                RETURN_CUDNN_FRONTEND_ERROR_IF(
-                    e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
-            }
-    #endif
-
-            auto const& non_virtual_uids = attributes.get_non_virtual_uids();
-            uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
-
-            return {error_code_t::OK, ""};
+        } catch (cudnn_frontend::cudnnException& e) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                e.getCudnnStatus() != CUDNN_STATUS_SUCCESS, error_code_t::CUDNN_BACKEND_API_FAILED, e.what());
         }
+#endif
+
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
+
+        return {error_code_t::OK, ""};
+    }
 
     error_t
     pre_validate_node() const override final {
@@ -81,7 +81,6 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
 
     error_t
     infer_properties_node() override final {
-
         return {error_code_t::OK, ""};
     }
 
@@ -95,10 +94,10 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
 
 inline void
 INode::paged_cache_load(std::shared_ptr<Tensor_attributes> container,
-               std::shared_ptr<Tensor_attributes> seqLen,
-               std::shared_ptr<Tensor_attributes> pageTable,
-               PagedCacheLoad_attributes attributes,
-               std::shared_ptr<Tensor_attributes> yOut) {
+                        std::shared_ptr<Tensor_attributes> seqLen,
+                        std::shared_ptr<Tensor_attributes> pageTable,
+                        PagedCacheLoad_attributes attributes,
+                        std::shared_ptr<Tensor_attributes> yOut) {
     attributes.inputs[PagedCacheLoad_attributes::input_names::container] = container;
     attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = seqLen;
     attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = pageTable;

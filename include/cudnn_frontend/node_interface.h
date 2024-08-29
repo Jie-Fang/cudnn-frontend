@@ -185,11 +185,12 @@ class INode : public ICudnn {
         Rng_attributes attributes,
         std::shared_ptr<Tensor_attributes> y);
 
-    void paged_cache_load(std::shared_ptr<Tensor_attributes> container,
-               std::shared_ptr<Tensor_attributes> seqLen,
-               std::shared_ptr<Tensor_attributes> pageTable,
-               PagedCacheLoad_attributes attributes,
-               std::shared_ptr<Tensor_attributes> yOut);
+    void
+    paged_cache_load(std::shared_ptr<Tensor_attributes> container,
+                     std::shared_ptr<Tensor_attributes> seqLen,
+                     std::shared_ptr<Tensor_attributes> pageTable,
+                     PagedCacheLoad_attributes attributes,
+                     std::shared_ptr<Tensor_attributes> yOut);
 
     error_t
     validate_subtree() {

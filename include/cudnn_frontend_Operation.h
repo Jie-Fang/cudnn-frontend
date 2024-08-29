@@ -176,7 +176,7 @@ class Operation_v8 : public BackendDescriptor {
     ManagedOpaqueDescriptor seeddesc           = nullptr;
     ManagedOpaqueDescriptor containerdesc      = nullptr;
     ManagedOpaqueDescriptor pageTabledesc      = nullptr;
-    ManagedOpaqueDescriptor sequencedesc       = nullptr;    
+    ManagedOpaqueDescriptor sequencedesc       = nullptr;
     std::vector<ManagedOpaqueDescriptor> peerStatdescs;
 
     cudnnBackendAttributeType_t alphabetaType = CUDNN_TYPE_FLOAT;
@@ -207,19 +207,19 @@ class Operation_v8 : public BackendDescriptor {
 class OperationBuilder_v8 {
    private:
     Operation_v8 m_operation;
-    bool is_convolution_op   = false;
-    bool is_pointwise_op     = false;
-    bool is_matmul_op        = false;
-    bool is_reduction_op     = false;
-    bool is_genstats_op      = false;
-    bool is_bn_finalize_op   = false;
-    bool is_resample_fwd_op  = false;
-    bool is_resample_bwd_op  = false;
-    bool is_norm_forward_op  = false;
-    bool is_norm_backward_op = false;
-    bool is_bn_bwd_weight    = false;
-    bool is_rng_op           = false;
-    bool is_reshape_op       = false;
+    bool is_convolution_op      = false;
+    bool is_pointwise_op        = false;
+    bool is_matmul_op           = false;
+    bool is_reduction_op        = false;
+    bool is_genstats_op         = false;
+    bool is_bn_finalize_op      = false;
+    bool is_resample_fwd_op     = false;
+    bool is_resample_bwd_op     = false;
+    bool is_norm_forward_op     = false;
+    bool is_norm_backward_op    = false;
+    bool is_bn_bwd_weight       = false;
+    bool is_rng_op              = false;
+    bool is_reshape_op          = false;
     bool is_paged_cache_load_op = false;
 
     using Message_t = const char *;
@@ -1648,7 +1648,7 @@ class OperationBuilder_v8 {
     Operation_v8 &&
     build_paged_cache_load_op() {
 #if (CUDNN_VERSION < 90400)
-         set_error_and_throw_exception(&m_operation,
+        set_error_and_throw_exception(&m_operation,
                                       CUDNN_STATUS_NOT_SUPPORTED,
                                       "CUDNN_BACKEND_OPERATION: Rng operation Not supported in this version");
 #else
@@ -1656,54 +1656,50 @@ class OperationBuilder_v8 {
             90400, m_operation, "CUDNN_BACKEND_OPERATION: build_paged_cache_load_op requires cudnn 9.4.0");
 
         // Quick helper lambda to ensure code being DRY
-        auto set_tensor_descriptor = [&](auto attr, std::string error_msg, auto& descriptor) {
+        auto set_tensor_descriptor = [&](auto attr, std::string error_msg, auto &descriptor) {
             // TODO(@mbreughe)
-            //msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC";
+            // msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC";
             auto status = CUDNN_STATUS_SUCCESS;
-            if (descriptor != nullptr){
+            if (descriptor != nullptr) {
                 status = detail::set_attribute(m_operation.pointer->get_backend_descriptor(),
-                                       attr,
-                                       CUDNN_TYPE_BACKEND_DESCRIPTOR,
-                                       1,
-                                       &(descriptor->get_backend_descriptor()));
-            }
-            else{
+                                               attr,
+                                               CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                               1,
+                                               &(descriptor->get_backend_descriptor()));
+            } else {
                 status = CUDNN_STATUS_BAD_PARAM;
             }
 
             if (status != CUDNN_STATUS_SUCCESS) {
-                set_error_and_throw_exception(
-                    &m_operation,
-                    status,
-                    error_msg.c_str());
-                    // TODO(@mbreughe)
-                    //"CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC Failed");
+                set_error_and_throw_exception(&m_operation, status, error_msg.c_str());
+                // TODO(@mbreughe)
+                //"CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC Failed");
             }
             return status;
         };
 
-        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC, 
-            "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC",
-            m_operation.containerdesc)){
-                return std::move(m_operation);
-        }
-        
-        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC, 
-            "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC",
-            m_operation.pageTabledesc)){
-                return std::move(m_operation);
+        if (CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC,
+                                                          "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC",
+                                                          m_operation.containerdesc)) {
+            return std::move(m_operation);
         }
 
-        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_SEQUENCE_DESC, 
-            "CUDNN_ATTR_OPERATION_PAGED_CACHE_SEQUENCE_DESC",
-            m_operation.sequencedesc)){
-                return std::move(m_operation);
+        if (CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC,
+                                                          "CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_PAGE_TABLE_DESC",
+                                                          m_operation.pageTabledesc)) {
+            return std::move(m_operation);
         }
 
-        if(CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_YDESC, 
-            "CUDNN_ATTR_OPERATION_PAGED_CACHE_YDESC",
-            m_operation.ydesc)){
-                return std::move(m_operation);
+        if (CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_SEQUENCE_DESC,
+                                                          "CUDNN_ATTR_OPERATION_PAGED_CACHE_SEQUENCE_DESC",
+                                                          m_operation.sequencedesc)) {
+            return std::move(m_operation);
+        }
+
+        if (CUDNN_STATUS_SUCCESS != set_tensor_descriptor(CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_YDESC,
+                                                          "CUDNN_ATTR_OPERATION_PAGED_CACHE_YDESC",
+                                                          m_operation.ydesc)) {
+            return std::move(m_operation);
         }
 
         auto status = detail::finalize(m_operation.pointer->get_backend_descriptor());
@@ -1713,7 +1709,6 @@ class OperationBuilder_v8 {
         }
 #endif
         return std::move(m_operation);
-
     }
 
     Operation_v8 &&
@@ -2494,17 +2489,20 @@ class OperationBuilder_v8 {
         return *this;
     }
 
-    auto setcontainerDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+    auto
+    setcontainerDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.containerdesc = tensor.get_desc();
         return *this;
     }
 
-    auto setpageTableDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+    auto
+    setpageTableDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.pageTabledesc = tensor.get_desc();
         return *this;
     }
 
-    auto setsequenceDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
+    auto
+    setsequenceDesc(Tensor_v8 const &tensor) -> OperationBuilder_v8 & {
         m_operation.sequencedesc = tensor.get_desc();
         return *this;
     }
@@ -2898,18 +2896,18 @@ class OperationBuilder_v8 {
              (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR) ||
              (m_operation.op_mode == DescriptorType_t::OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR));
 
-        is_pointwise_op     = (m_operation.op_mode == DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR);
-        is_matmul_op        = (m_operation.op_mode == DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR);
-        is_reduction_op     = (m_operation.op_mode == DescriptorType_t::OPERATION_REDUCTION_DESCRIPTOR);
-        is_genstats_op      = (m_operation.op_mode == DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR);
-        is_bn_finalize_op   = (m_operation.op_mode == DescriptorType_t::OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR);
-        is_bn_bwd_weight    = (m_operation.op_mode == DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR);
-        is_resample_fwd_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_FWD_DESCRIPTOR);
-        is_norm_forward_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
-        is_norm_backward_op = (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR);
-        is_resample_bwd_op  = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR);
-        is_rng_op           = (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
-        is_reshape_op       = (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR);
+        is_pointwise_op        = (m_operation.op_mode == DescriptorType_t::OPERATION_POINTWISE_DESCRIPTOR);
+        is_matmul_op           = (m_operation.op_mode == DescriptorType_t::OPERATION_MATMUL_DESCRIPTOR);
+        is_reduction_op        = (m_operation.op_mode == DescriptorType_t::OPERATION_REDUCTION_DESCRIPTOR);
+        is_genstats_op         = (m_operation.op_mode == DescriptorType_t::OPERATION_GEN_STATS_DESCRIPTOR);
+        is_bn_finalize_op      = (m_operation.op_mode == DescriptorType_t::OPERATION_BN_FINALIZE_STATISTICS_DESCRIPTOR);
+        is_bn_bwd_weight       = (m_operation.op_mode == DescriptorType_t::OPERATION_BN_BWD_WEIGHTS_DESCRIPTOR);
+        is_resample_fwd_op     = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_FWD_DESCRIPTOR);
+        is_norm_forward_op     = (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_FORWARD_DESCRIPTOR);
+        is_norm_backward_op    = (m_operation.op_mode == DescriptorType_t::OPERATION_NORM_BACKWARD_DESCRIPTOR);
+        is_resample_bwd_op     = (m_operation.op_mode == DescriptorType_t::OPERATION_RESAMPLE_BWD_DESCRIPTOR);
+        is_rng_op              = (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR);
+        is_reshape_op          = (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR);
         is_paged_cache_load_op = (m_operation.op_mode == DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR);
     }
 
@@ -2956,7 +2954,7 @@ class OperationBuilder_v8 {
             status_ = validate_norm_op(msg);
         } else if (is_reshape_op) {
             status_ = validate_reshape_op(msg);
-        } else if(is_paged_cache_load_op){
+        } else if (is_paged_cache_load_op) {
             status_ = CUDNN_STATUS_SUCCESS;
         } else {
             status_ = CUDNN_STATUS_BAD_PARAM;
@@ -3013,7 +3011,7 @@ class OperationBuilder_v8 {
             return build_resample_bwd_operation();
         } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RNG_DESCRIPTOR) {
             return build_rng_operation();
-        }else if (m_operation.op_mode == DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR){
+        } else if (m_operation.op_mode == DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR) {
             return build_paged_cache_load_op();
         } else if (m_operation.op_mode == DescriptorType_t::OPERATION_RESHAPE_DESCRIPTOR) {
             return build_reshape_operation();

@@ -1804,8 +1804,8 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
 #endif
 
 #if (CUDNN_VERSION >= 90400)
-    case CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
-        return DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
+        case CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+            return DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
 #endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
