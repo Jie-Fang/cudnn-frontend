@@ -236,14 +236,43 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto s_q          = q_dim[2];
         auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
-        // TODO(@mbreughe): 1) s_kv can no longer be extracted from container; 2) make sure we pass in consistent dimensions (K vs KT)
-        //auto s_kv         = k_dim[2];
-        auto s_kv = 512;
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
         auto d_v = v_dim[3];
 
         
         bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
+        bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
+
+        // Infer s_kv
+        int64_t s_kv = -1;
+        // When neither K or V cache are paged, s_kv can be extracted from k_dim 
+        if(!is_paged_k && !is_paged_v){
+            s_kv = k_dim[2];
+        // When at least one is paged, we need to infer s_kv from the page table and container
+        }else{
+            int s_k = -1;
+            int s_v = -1;
+            if(is_paged_k){
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim = attributes.inputs[input_names::Page_table_K]->get_dim();
+                // [b, h_k, block_size, d_k]
+                auto container_dim = attributes.inputs[input_names::K]->get_dim();
+                s_k = page_table_dim[2] * container_dim[2];
+            } else{
+                s_k = attributes.inputs[input_names::Page_table_K]->get_dim()[2];
+            }
+            if(is_paged_v){
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim = attributes.inputs[input_names::Page_table_V]->get_dim();
+                // [b, h_v, block_size, d_v]
+                auto container_dim = attributes.inputs[input_names::V]->get_dim();
+                s_v = page_table_dim[2] * container_dim[2];
+            }else{
+                s_v = attributes.inputs[input_names::V]->get_dim()[2];
+            }
+
+            s_kv = std::max(s_k, s_v);
+        }
 
         std::shared_ptr<Tensor_attributes> k_cache;
         if (! is_paged_k){
@@ -650,7 +679,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         std::shared_ptr<Tensor_attributes> v_cache;
 
-        bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
         if (! is_paged_v){
             v_cache = attributes.inputs[input_names::V];
         } else{

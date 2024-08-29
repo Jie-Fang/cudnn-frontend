@@ -1655,7 +1655,6 @@ class OperationBuilder_v8 {
         NV_CUDNN_FE_DYNAMIC_CHECK_BACKEND_DESCRIPTOR(
             90400, m_operation, "CUDNN_BACKEND_OPERATION: build_paged_cache_load_op requires cudnn 9.4.0");
 
-        // TODO(@mbreughe): compiler guard for backend version
         // Quick helper lambda to ensure code being DRY
         auto set_tensor_descriptor = [&](auto attr, std::string error_msg, auto& descriptor) {
             // TODO(@mbreughe)

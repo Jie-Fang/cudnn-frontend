@@ -630,10 +630,11 @@ def test_sdpa(
         B, H, S, D = tensor.shape
         # num_blocks = math.ceil(S/block_size) * B
         blocks_per_batch = math.ceil(S/block_size)
-        padding_seq = (B*S) % block_size
+
+        padding_seq = (blocks_per_batch * block_size) - S
         if padding_seq > 0:
             zeros = torch.zeros(B,H,padding_seq,D, device='cuda', dtype=tensor.dtype)
-            cat_tensor = torch.concat((tensor, zeros), axis = 2)
+            cat_tensor = torch.cat((tensor, zeros), axis = 2)
         else:
             cat_tensor = tensor
 
