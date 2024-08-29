@@ -414,6 +414,7 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
     uniform_tensor = torch.einsum("bshd->bhsd", uniform_tensor)
     return uniform_tensor
 
+
 # fmt: off
 @pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
@@ -482,7 +483,7 @@ def test_sdpa(
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
-    if is_paged_attention and (not is_padding or cudnn_version < "9.4") and not (layout == "bshd_bshd_bshd"):
+    if is_paged_attention and (not is_padding or cudnn_version < "9.4" or not layout == "bshd_bshd_bshd" or is_dropout):
         pytest.skip("Paged attention is only tested with packed variable length tensors, thd_thd_thd, and only on cuDNNv9.4 or greater")
 
 

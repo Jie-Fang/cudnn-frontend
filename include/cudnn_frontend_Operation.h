@@ -1648,18 +1648,18 @@ class OperationBuilder_v8 {
     Operation_v8 &&
     build_paged_cache_load_op() {
 #if (CUDNN_VERSION < 90400)
-        set_error_and_throw_exception(&m_operation,
-                                      CUDNN_STATUS_NOT_SUPPORTED,
-                                      "CUDNN_BACKEND_OPERATION: Rng operation Not supported in this version");
+        set_error_and_throw_exception(
+            &m_operation,
+            CUDNN_STATUS_NOT_SUPPORTED,
+            "CUDNN_BACKEND_OPERATION: paged_cache_load_op operation Not supported in this version");
 #else
         NV_CUDNN_FE_DYNAMIC_CHECK_BACKEND_DESCRIPTOR(
             90400, m_operation, "CUDNN_BACKEND_OPERATION: build_paged_cache_load_op requires cudnn 9.4.0");
 
         // Quick helper lambda to ensure code being DRY
-        auto set_tensor_descriptor = [&](auto attr, std::string error_msg, auto &descriptor) {
-            // TODO(@mbreughe)
-            // msg = "CUDNN_BACKEND_OPERATION: Check and Set the CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC";
-            auto status = CUDNN_STATUS_SUCCESS;
+        auto set_tensor_descriptor = [&](auto attr, const std::string &descriptor_name, auto &descriptor) {
+            std::string error_msg = "CUDNN_BACKEND_OPERATION: Check and Set " + descriptor_name;
+            auto status           = CUDNN_STATUS_SUCCESS;
             if (descriptor != nullptr) {
                 status = detail::set_attribute(m_operation.pointer->get_backend_descriptor(),
                                                attr,
@@ -1672,8 +1672,6 @@ class OperationBuilder_v8 {
 
             if (status != CUDNN_STATUS_SUCCESS) {
                 set_error_and_throw_exception(&m_operation, status, error_msg.c_str());
-                // TODO(@mbreughe)
-                //"CUDNN_BACKEND_OPERATION: SetAttribute CUDNN_ATTR_OPERATION_PAGED_CACHE_LOAD_CONTAINER_DESC Failed");
             }
             return status;
         };
