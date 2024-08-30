@@ -232,11 +232,13 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // Gather dim to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();
         auto b            = q_dim[0];
-        auto h            = q_dim[1];
+        auto h_q          = q_dim[1];
         auto s_q          = q_dim[2];
         auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
+        auto h_k          = k_dim[1];
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
+        auto h_v          = v_dim[1];
         auto d_v          = v_dim[3];
 
         bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
@@ -247,7 +249,14 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // When neither K or V cache are paged, s_kv can be extracted from k_dim
         if (!is_paged_k && !is_paged_v) {
             s_kv = k_dim[2];
-            // When at least one is paged, we need to infer s_kv from the page table and container
+            // If there is a bias, extract it from there
+        } else if (attributes.inputs[input_names::Bias] != nullptr) {
+            s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
+            // If there is an rng_dump output, extract it from there
+        } else if (attributes.outputs[output_names::RNG_DUMP] != nullptr) {
+            s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
+            // When at least one cache is paged, and the above failed, we need to infer s_kv from the page table and
+            // container
         } else {
             int s_k = -1;
             int s_v = -1;
@@ -303,8 +312,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
             // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
             // K-cache has BHDS layout
             k_cache = std::make_shared<Tensor_attributes>();
-            k_cache->set_dim({b, h, d_qk, s_kv})
-                .set_stride({d_qk * s_kv * h, d_qk * s_kv, 1, d_qk})
+            k_cache->set_dim({b, h_k, d_qk, s_kv})
+                .set_stride({d_qk * s_kv * h_k, d_qk * s_kv, 1, d_qk})
                 .set_data_type(attributes.inputs[input_names::K]->get_data_type());
             k_cache->set_is_virtual(true);
             paged_cache_load(attributes.inputs[input_names::K],
@@ -327,7 +336,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         auto const& bmm1_output = matmul(attributes.inputs[input_names::Q], k_cache, bmm1_attributes);
         // Setting dim and strides as pointwise op wont have knowledge of how to do it for mha.
-        bmm1_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+        bmm1_output->set_dim({b, h_q, s_q, s_kv}).set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
         last_output = bmm1_output;
 
         // Optional scale
@@ -376,11 +385,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
             // Multiply by alibi slope
             alibi_slopes = std::make_shared<Tensor_attributes>();
-            alibi_slopes->set_dim({1, h, 1, 1})
-                .set_stride({h, 1, 1, 1})
+            alibi_slopes->set_dim({1, h_q, 1, 1})
+                .set_stride({h_q, 1, 1, 1})
                 // Hard code data type float as FE itself will compute and place in variant pack later
                 .set_data_type(DataType_t::FLOAT);
-            alibi_slopes_size = h * sizeof(float);
+            alibi_slopes_size = h_q * sizeof(float);
 
             auto mul_attributes    = Pointwise_attributes().set_name("mul").set_mode(PointwiseMode_t::MUL);
             auto const& alibi_mask = pointwise(sub_output, alibi_slopes, mul_attributes);
@@ -642,8 +651,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                          .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
                     rng_output
                         // Hard coding dim and strides as rng output can no inputs to infer it from.
-                        ->set_dim({b, h, s_q, s_kv})
-                        .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
+                        ->set_dim({b, h_q, s_q, s_kv})
+                        .set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
                 }
 
                 auto mask_attributes =
@@ -684,8 +693,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
         } else {
             auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
             v_cache                            = std::make_shared<Tensor_attributes>();
-            v_cache->set_dim({b, h, s_kv, d_v})
-                .set_stride({d_v * s_kv * h, d_v * s_kv, d_v, 1})
+            v_cache->set_dim({b, h_v, s_kv, d_v})
+                .set_stride({d_v * s_kv * h_v, d_v * s_kv, d_v, 1})
                 .set_data_type(attributes.inputs[input_names::V]->get_data_type());
             v_cache->set_is_virtual(true);
             paged_cache_load(attributes.inputs[input_names::V],
