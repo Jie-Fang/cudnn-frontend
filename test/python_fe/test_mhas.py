@@ -483,8 +483,8 @@ def test_sdpa(
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
-    if is_paged_attention and (not is_padding or cudnn_version < "9.4" or not layout == "bshd_bshd_bshd"):
-        pytest.skip("Paged attention is only tested with packed variable length tensors, thd_thd_thd, and only on cuDNNv9.4 or greater")
+    if is_paged_attention and (not is_padding or cudnn_version < "9.4" or not layout == "bshd_bshd_bshd" or is_ragged):
+        pytest.skip("Paged attention is only tested with packed variable length tensors, thd_thd_thd, no ragged offsets, and only on cuDNNv9.4 or greater")
 
 
     # -------------------------- default randomized parameter testing ------------------------

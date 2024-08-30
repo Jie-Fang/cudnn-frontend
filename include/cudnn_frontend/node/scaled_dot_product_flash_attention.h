@@ -97,6 +97,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value() || is_dropout_custom;
+        bool const is_paged = (attributes.inputs.at(input_names::Page_table_K) ||  attributes.inputs.at(input_names::Page_table_V));
 
         // validation TODO:
         //    - validate stats has valid dims
@@ -170,6 +171,15 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
+        // validate options for paged attention
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && is_ragged,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Paged caches are not supported in combination with ragged offsets.");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (!has_seq_len_q || !has_seq_len_kv || !attributes.padding_mask),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Paged caches can only be used in combination with padding mask and variable sequence lengths for both Q and KV.");
+
         // version specific validation
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -190,6 +200,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90200 && attributes.sliding_window_length.has_value(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.2.0, sliding window attention is not supported");
+        
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90400 && is_paged,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For cuDNN version below 9.4.0, paged caches are not supported");
 
 
         // validate that datatype is set for the graph

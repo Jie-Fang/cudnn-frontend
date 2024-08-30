@@ -339,8 +339,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
 
                 Args:
                     q (cudnn_tensor): The query data.
-                    k (cudnn_tensor): The key data.
-                    v (cudnn_tensor): The value data.
+                    k (cudnn_tensor): The key data. When page_table_k is provided, 'k' is a container of non-contiguous key data.
+                    v (cudnn_tensor): The value data. When page_table_v is provided, 'v' is a container of non-contiguous value data.
                     is_inference (bool): Whether it is an inference step or training step.
                     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
@@ -353,7 +353,6 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
-                    is_paged_attention (Optional[bool]): Whether to use paged attention. Default is False.
                     page_table_k (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
                     page_table_v (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
