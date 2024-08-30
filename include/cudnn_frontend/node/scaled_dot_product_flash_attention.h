@@ -266,25 +266,25 @@ class SDPANode : public NodeCRTP<SDPANode> {
             // If there is a bias, extract it from there
         } else if (!is_paged_v) {
             s_kv = v_dim[2];
-        } else if (attributes.inputs.at(input_names::Bias) != nullptr) {
-            s_kv = attributes.inputs.at(input_names::Bias)->get_dim()[3];
+        } else if (attributes.inputs[input_names::Bias] != nullptr) {
+            s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
             // If there is an rng_dump output, extract it from there
         } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
-                   attributes.outputs.at(output_names::RNG_DUMP) != nullptr) {
-            s_kv = attributes.outputs.at(output_names::RNG_DUMP)->get_dim()[3];
+                   attributes.outputs[output_names::RNG_DUMP] != nullptr) {
+            s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
             // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
             // container
         } else {
             // [b, 1, ceil(s_kv/block_size), 1]
-            auto page_table_dim_k = attributes.inputs.at(input_names::Page_table_K)->get_dim();
+            auto page_table_dim_k = attributes.inputs[input_names::Page_table_K]->get_dim();
             // [b, h_k, block_size, d_k]
-            auto container_dim_k = attributes.inputs.at(input_names::K)->get_dim();
+            auto container_dim_k = attributes.inputs[input_names::K]->get_dim();
             int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
 
             // [b, 1, ceil(s_kv/block_size), 1]
-            auto page_table_dim_v = attributes.inputs.at(input_names::Page_table_V)->get_dim();
+            auto page_table_dim_v = attributes.inputs[input_names::Page_table_V]->get_dim();
             // [b, h_v, block_size, d_v]
-            auto container_dim_v = attributes.inputs.at(input_names::V)->get_dim();
+            auto container_dim_v = attributes.inputs[input_names::V]->get_dim();
             int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
 
             s_kv = std::min(s_k, s_v);

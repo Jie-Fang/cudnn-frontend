@@ -303,14 +303,14 @@ NLOHMANN_JSON_SERIALIZE_ENUM(Rng_attributes::output_names, {{Rng_attributes::out
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PagedCacheLoad_attributes::input_names,
                              {
-                                 {container, "container"},
-                                 {seqLen, "seqLen"},
-                                 {pageTable, "pageTable"},
+                                 {PagedCacheLoad_attributes::input_names::container, "container"},
+                                 {PagedCacheLoad_attributes::input_names::seqLen, "seqLen"},
+                                 {PagedCacheLoad_attributes::input_names::pageTable, "pageTable"},
                              })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PagedCacheLoad_attributes::output_names,
                              {
-                                 {yOut, "yOut"},
+                                 {PagedCacheLoad_attributes::output_names::yOut, "yOut"},
                              })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(SDPA_attributes::input_names,
