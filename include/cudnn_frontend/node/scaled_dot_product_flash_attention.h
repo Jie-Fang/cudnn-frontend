@@ -246,40 +246,34 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // Infer s_kv
         int64_t s_kv = -1;
-        // When neither K or V cache are paged, s_kv can be extracted from k_dim
-        if (!is_paged_k && !is_paged_v) {
+        // When one of K or V cache are paged, s_kv can be extracted directly
+        if (!is_paged_k) {
             s_kv = k_dim[2];
             // If there is a bias, extract it from there
-        } else if (attributes.inputs[input_names::Bias] != nullptr) {
-            s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
+        } else if (!is_paged_v) {
+            s_kv = v_dim[2];
+        } else if (attributes.inputs.at(input_names::Bias) != nullptr) {
+            s_kv = attributes.inputs.at(input_names::Bias)->get_dim()[3];
             // If there is an rng_dump output, extract it from there
-        } else if (attributes.outputs[output_names::RNG_DUMP] != nullptr) {
-            s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
-            // When at least one cache is paged, and the above failed, we need to infer s_kv from the page table and
+        } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
+                   attributes.outputs.at(output_names::RNG_DUMP) != nullptr) {
+            s_kv = attributes.outputs.at(output_names::RNG_DUMP)->get_dim()[3];
+            // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
             // container
         } else {
-            int s_k = -1;
-            int s_v = -1;
-            if (is_paged_k) {
-                // [b, 1, ceil(s_kv/block_size), 1]
-                auto page_table_dim = attributes.inputs[input_names::Page_table_K]->get_dim();
-                // [b, h_k, block_size, d_k]
-                auto container_dim = attributes.inputs[input_names::K]->get_dim();
-                s_k                = page_table_dim[2] * container_dim[2];
-            } else {
-                s_k = attributes.inputs[input_names::Page_table_K]->get_dim()[2];
-            }
-            if (is_paged_v) {
-                // [b, 1, ceil(s_kv/block_size), 1]
-                auto page_table_dim = attributes.inputs[input_names::Page_table_V]->get_dim();
-                // [b, h_v, block_size, d_v]
-                auto container_dim = attributes.inputs[input_names::V]->get_dim();
-                s_v                = page_table_dim[2] * container_dim[2];
-            } else {
-                s_v = attributes.inputs[input_names::V]->get_dim()[2];
-            }
+            // [b, 1, ceil(s_kv/block_size), 1]
+            auto page_table_dim_k = attributes.inputs.at(input_names::Page_table_K)->get_dim();
+            // [b, h_k, block_size, d_k]
+            auto container_dim_k = attributes.inputs.at(input_names::K)->get_dim();
+            int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
 
-            s_kv = std::max(s_k, s_v);
+            // [b, 1, ceil(s_kv/block_size), 1]
+            auto page_table_dim_v = attributes.inputs.at(input_names::Page_table_V)->get_dim();
+            // [b, h_v, block_size, d_v]
+            auto container_dim_v = attributes.inputs.at(input_names::V)->get_dim();
+            int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
+
+            s_kv = std::min(s_k, s_v);
         }
 
         std::shared_ptr<Tensor_attributes> k_cache;

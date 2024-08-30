@@ -75,6 +75,22 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
     error_t
     pre_validate_node() const override final {
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating PagedCacheLoadNode " << attributes.name << "...");
+        auto const yOut_dims      = attributes.outputs.at(PagedCacheLoad_attributes::output_names::yOut)->get_dim();
+        auto const yOut_strides   = attributes.outputs.at(PagedCacheLoad_attributes::output_names::yOut)->get_stride();
+        auto const container_dims = attributes.inputs.at(PagedCacheLoad_attributes::input_names::container)->get_dim();
+        auto const pageTable_dims = attributes.inputs.at(PagedCacheLoad_attributes::input_names::pageTable)->get_dim();
+
+        // In the backend, the k-cache is passed as K^T and has dims [B,H,D,S], while v-cache has dims [B,H,S,D]
+        // Use the strides to distinguish.
+        auto yIsTransposed = yOut_strides[2] == 1;
+        auto s_kv          = !yIsTransposed ? yOut_dims[2] : yOut_dims[3];
+
+        auto block_size = container_dims[2];
+        auto table_size = pageTable_dims[2];
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (s_kv + (block_size - 1)) / block_size != table_size,
+            error_code_t::INVALID_VALUE,
+            "Paged cache load: mismatch between max sequence length, block size and page table size");
 
         return {error_code_t::OK, ""};
     }
