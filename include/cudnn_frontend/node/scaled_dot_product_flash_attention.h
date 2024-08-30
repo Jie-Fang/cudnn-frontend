@@ -97,7 +97,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value() || is_dropout_custom;
-        bool const is_paged = (attributes.inputs.at(input_names::Page_table_K) ||  attributes.inputs.at(input_names::Page_table_V));
+        bool const is_paged = (attributes.inputs.find(input_names::Page_table_K) != attributes.inputs.end() &&  attributes.inputs.at(input_names::Page_table_K)) 
+        ||  (attributes.inputs.find(input_names::Page_table_V) != attributes.inputs.end() && attributes.inputs.at(input_names::Page_table_V));
 
         // validation TODO:
         //    - validate stats has valid dims
