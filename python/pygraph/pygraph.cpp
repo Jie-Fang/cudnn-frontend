@@ -363,7 +363,22 @@ PyGraph::check_support() {
 
 int64_t
 PyGraph::get_workspace_size() {
-    return graph.get_workspace_size();
+    int64_t workspace = 0;
+
+    auto status = graph.get_workspace_size(workspace);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+    return workspace;
+}
+
+int64_t
+PyGraph::get_workspace_size_plan_at_index(int64_t index) {
+    int64_t workspace;
+
+    auto status = graph.get_workspace_size_plan_at_index(index, workspace);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+    return workspace;
 }
 
 std::vector<uint8_t>

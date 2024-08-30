@@ -527,8 +527,6 @@ def test_sdpa(
     b = int(request.config.option.mha_b) if request.config.option.mha_b != None else b
     s_q = int(request.config.option.mha_s_q) if request.config.option.mha_s_q != None else s_q
     s_kv = int(request.config.option.mha_s_kv) if request.config.option.mha_s_kv != None else s_kv
-    if is_sliding_window:
-        s_kv = s_q
     d_qk = int(request.config.option.mha_d_qk) if request.config.option.mha_d_qk != None else d_qk
     d_v = int(request.config.option.mha_d_v) if request.config.option.mha_d_v != None else d_v
     h_q = int(request.config.option.mha_h_q) if request.config.option.mha_h_q != None else h_q
@@ -541,6 +539,9 @@ def test_sdpa(
 
     if d_qk != d_v and is_ragged and cudnn_version < "9.1":
         pytest.skip("d_qk != d_v is not supported with ragged offset")
+
+    if s_q > s_kv and is_sliding_window:
+        pytest.skip("s_q > s_kv is not supported with sliding window attention")
 
     print("\n=============== TEST CMD TO REPRODUCE ===============")
     print(

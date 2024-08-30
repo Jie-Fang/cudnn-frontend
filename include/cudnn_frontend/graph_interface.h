@@ -26,6 +26,7 @@
 
 #include "plans.h"
 #include "graph_helpers.h"
+#include "backend/kernel_cache.h"
 
 namespace cudnn_frontend::graph {
 
@@ -69,6 +70,10 @@ class Graph : public INode {
 
     error_t
     pre_validate_node() const override final {
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (is_dynamic_shape_enabled || kernel_cache != nullptr) && detail::get_backend_version() < 90400,
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "Dynamic shapes or kernel caching enabled, but cuDNN version < 9.4!");
         return {error_code_t::OK, ""};
     }
 
@@ -161,18 +166,6 @@ class Graph : public INode {
     }
 
     int64_t
-    get_cudnn_workspace_size(int64_t plan_index) const {
-        int64_t cudnn_workspace_size = 0;
-
-        auto status = get_cudnn_workspace_size_node(plan_index, cudnn_workspace_size);
-        if (status.is_bad()) {
-            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
-        }
-
-        return cudnn_workspace_size;
-    }
-
-    int64_t
     get_max_cudnn_workspace_size() const {
         return get_max_cudnn_workspace_size_node();
     }
@@ -206,6 +199,33 @@ class Graph : public INode {
             }
         }
         return {error_code_t::OK, ""};
+    }
+
+    size_t
+    key(bool remove_shape) {
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+        json j;
+        serialize(j);
+        if (remove_shape) {
+            for (auto &sub_node : j["nodes"]) {
+                // Process node inputs
+                for (auto &input : sub_node["inputs"]) {
+                    input[1]["dim"].clear();
+                    input[1]["stride"].clear();
+                }
+
+                // Process node outputs
+                for (auto &output : sub_node["outputs"]) {
+                    output[1]["dim"].clear();
+                    output[1]["stride"].clear();
+                }
+            }
+        }
+        return std::hash<json>{}(j);
+#else
+        CUDNN_FRONTEND_UNUSED(remove_shape);
+        return 1;
+#endif
     }
 
    public:
@@ -264,25 +284,55 @@ class Graph : public INode {
         // The method here fuses all operations. There will be 1 operation graph in total.
         CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_operation_graph(handle));
 
+        if (is_dynamic_shape_enabled && kernel_cache && !kernel_cache->is_finalized()) {
+            CHECK_CUDNN_FRONTEND_ERROR(kernel_cache->build(operation_graph->get_raw_desc()));
+        }
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    get_plan_name(std::string &name) const {
+        return get_plan_name_at_index(plans.candidate, name);
+    }
+
+    error_t
+    get_plan_name_at_index(int64_t plan_index, std::string &name) const {
+        auto ret_val = plans.get_name_at_index(plan_index, name);
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_plan_name_at_index(" << plan_index << ") is " + name);
+        return ret_val;
+    }
+
+    error_t
+    get_workspace_size(int64_t &cudnn_workspace_size) const {
+        return get_workspace_size_plan_at_index(plans.candidate, cudnn_workspace_size);
+    }
+
+    error_t
+    get_workspace_size_plan_at_index(int64_t plan_index, int64_t &cudnn_workspace_size) const {
+        // There are two workspaces:
+        // - cudnn execution plan workspace
+        // - FE node workspace (example: alibiSlope for fmha)
+        int64_t cudnn_ws = 0;
+        CHECK_CUDNN_FRONTEND_ERROR(get_cudnn_workspace_size_node(plan_index, cudnn_ws));
+        cudnn_workspace_size = cudnn_ws + fe_workspace_size;
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is " << cudnn_workspace_size);
         return {error_code_t::OK, ""};
     }
 
     int64_t
     get_workspace_size() const {
-        // There are two workspaces:
-        // - cudnn execution plan workspace
-        // - FE node workspace (example: alibiSlope for fmha)
         return get_workspace_size_plan_at_index(plans.candidate);
     }
 
     int64_t
     get_workspace_size_plan_at_index(int64_t plan_index) const {
-        // There are two workspaces:
-        // - cudnn execution plan workspace
-        // - FE node workspace (example: alibiSlope for fmha)
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: get_workspace_size() is "
-                                << fe_workspace_size + get_cudnn_workspace_size(plan_index));
-        return fe_workspace_size + get_cudnn_workspace_size(plan_index);
+        int64_t cudnn_workspace = 0;
+        auto status             = get_workspace_size_plan_at_index(plan_index, cudnn_workspace);
+        if (status.is_bad()) {
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: Querying workspace failed.");
+        }
+        return cudnn_workspace;
     }
 
     int64_t
@@ -509,7 +559,11 @@ class Graph : public INode {
     Graph &
     set_compute_data_type(DataType_t type);
     Graph &
+    set_is_dynamic_shape_enabled(bool is_enabled);
+    Graph &
     set_sm_count(int32_t type);
+    Graph &
+    set_kernel_cache(std::shared_ptr<KernelCache> cache);
 
     Graph &
     set_name(std::string const &name) {
@@ -828,6 +882,11 @@ class Graph : public INode {
     };
 #endif
 
+    size_t
+    key() override final {
+        return key(is_dynamic_shape_enabled);
+    }
+
     // TODO: temparorily placed in graphs class. This function needs to be a free standing function.
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     error_t
@@ -1002,6 +1061,7 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
 
     plans.set_tag(operation_graph->getTag());
     plans.set_engine_configs(op_graph_to_configs);
+    plans.set_kernel_cache(kernel_cache);
 
     CUDNN_FE_LOG_LABEL_ENDL("INFO: Querying engine config properties.");
     CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
@@ -1049,6 +1109,18 @@ Graph::set_io_data_type(DataType_t const type) {
 inline Graph &
 Graph::set_compute_data_type(DataType_t const type) {
     context.set_compute_data_type(type);
+    return *this;
+}
+
+inline Graph &
+Graph::set_is_dynamic_shape_enabled(bool is_enabled) {
+    is_dynamic_shape_enabled = is_enabled;
+    return *this;
+}
+
+inline Graph &
+Graph::set_kernel_cache(std::shared_ptr<KernelCache> cache) {
+    kernel_cache = cache;
     return *this;
 }
 
