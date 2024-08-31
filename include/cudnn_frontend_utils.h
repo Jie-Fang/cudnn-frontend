@@ -443,7 +443,8 @@ enum class DescriptorType_t {
     OPERATION_NORM_BACKWARD_DESCRIPTOR,
     OPERATION_RESHAPE_DESCRIPTOR,
     RNG_DESCRIPTOR,
-    OPERATION_RNG_DESCRIPTOR
+    OPERATION_RNG_DESCRIPTOR,
+    OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR
 };
 
 enum class NormMode_t {
@@ -882,6 +883,9 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
             break;
         case DescriptorType_t::OPERATION_RNG_DESCRIPTOR:
             os << "OPERATION_RNG_DESCRIPTOR";
+            break;
+        case DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+            os << "OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR";
             break;
         case DescriptorType_t::NOT_SET:
             os << "NOT_SET";
@@ -1417,6 +1421,13 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
 
+        case DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+#if (CUDNN_VERSION >= 90400)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90400, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#endif
+
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
@@ -1790,6 +1801,11 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
             return DescriptorType_t::RNG_DESCRIPTOR;
         case CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR:
             return DescriptorType_t::OPERATION_RNG_DESCRIPTOR;
+#endif
+
+#if (CUDNN_VERSION >= 90400)
+        case CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+            return DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
 #endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
