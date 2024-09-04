@@ -176,8 +176,6 @@ TEST_CASE("Convolution fprop dynamic shape", "[conv][graph][dynamic_shape]") {
 
         REQUIRE(graph->build_plans(handle).is_good());
 
-        std::cout << kernel_cache->describe();
-
         return std::make_tuple(graph, X, W, Y);
     };
 
@@ -422,8 +420,6 @@ TEST_CASE("CSBR Graph dynamic shape", "[conv][graph][dynamic_shape]") {
         REQUIRE(graph->check_support(handle).is_good());
 
         REQUIRE(graph->build_plans(handle).is_good());
-
-        std::cout << kernel_cache->describe();
 
         return std::make_tuple(graph, X, W, S, B, Y);
     };

@@ -147,8 +147,6 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
 
         REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::ALL).is_good());
 
-        std::cout << kernel_cache->describe();
-
         return std::make_tuple(graph, A, B, C, Bias);
     };
 
