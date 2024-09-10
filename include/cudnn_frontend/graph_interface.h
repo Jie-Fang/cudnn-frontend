@@ -562,6 +562,9 @@ class Graph : public INode {
         return *this;
     }
 
+    error_t
+    query_tensor_with_uid(int64_t const uid, Tensor_attributes &tensor) const;
+
     std::shared_ptr<Tensor_attributes>
     tensor(Tensor_attributes const &tensor);
 
@@ -1126,6 +1129,25 @@ Graph::tensor(Tensor_attributes const &tensor) {
     auto tensor_ptr = std::make_shared<Tensor_attributes>(tensor);
     full_graph_inputs.emplace(tensor_ptr);
     return tensor_ptr;
+}
+
+inline error_t
+Graph::query_tensor_with_uid(int64_t const uid, Tensor_attributes &tensor) const {
+    for (auto const &o_tensor : full_graph_outputs) {
+        if (uid == o_tensor->get_uid()) {
+            tensor = *o_tensor;
+            return {error_code_t::OK, ""};
+        }
+    }
+
+    for (auto const &i_tensor : full_graph_inputs) {
+        if (uid == i_tensor->get_uid()) {
+            tensor = *i_tensor;
+            return {error_code_t::OK, ""};
+        }
+    }
+
+    return {error_code_t::INVALID_VALUE, "No matching tensor for this UID"};
 }
 
 // tensor_like is meant to create "useable" copies of a tensor.
