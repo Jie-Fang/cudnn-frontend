@@ -207,18 +207,9 @@ class Graph : public INode {
         json j;
         serialize(j);
         if (remove_shape) {
-            for (auto &sub_node : j["nodes"]) {
-                // Process node inputs
-                for (auto &input : sub_node["inputs"]) {
-                    input[1]["dim"].clear();
-                    input[1]["stride"].clear();
-                }
-
-                // Process node outputs
-                for (auto &output : sub_node["outputs"]) {
-                    output[1]["dim"].clear();
-                    output[1]["stride"].clear();
-                }
+            for (auto &tensor : j["tensors"]) {
+                tensor["dim"].clear();
+                tensor["stride"].clear();
             }
         }
         return std::hash<json>{}(j);

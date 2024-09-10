@@ -143,6 +143,11 @@ stages:
     script:
         - ci/run_pycudnntest.sh
 
+.unit_tests:template:
+    stage: unit_tests
+    script:
+        - ci/run_unit_tests.sh
+
 .notebooks:template:
     stage: notebooks
     script:
@@ -290,6 +295,18 @@ pycudnntest:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .pycudnntest:template
     needs: ["build:cudnn_dev_latest"]
+
+unit_tests:cudnn_dev_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_dev:template
+        - .unit_tests:template
+    needs: ["build:cudnn_dev_latest"]
     
 L4_graph_runner:cudnn_dev_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
@@ -360,6 +377,18 @@ pycudnntest:cudnn_rel_latest:
     extends:
         - .fetch_cudnn_rel:template
         - .pycudnntest:template
+    needs: ["build:cudnn_rel_latest"]
+
+unit_tests:cudnn_rel_latest:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .fetch_cudnn_rel:template
+        - .unit_tests:template
     needs: ["build:cudnn_rel_latest"]
     
 L4_graph_runner:cudnn_rel_latest:
