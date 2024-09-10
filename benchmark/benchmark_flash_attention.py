@@ -186,18 +186,21 @@ device = "cuda"
 dtype = torch.bfloat16
 
 bs_seqlen_vals = [
-    (32, 512),
-    (16, 1024),
-    (8, 2048),
+    # (32, 512),
+    # (16, 1024),
+    # (8, 2048),
     (4, 4096),
     (2, 8192),
     (1, 16384),
     (1, 32768),
     (1, 65536),
+    # (1, 262144),
 ]
 causal_vals = [False, True]
-headdim_vals = [128, 256]
-n_heads = 16, 32, 64
+headdim_vals = [128]
+# headdim_vals = [128, 256]
+# n_heads = 16, 32, 64
+n_heads = [16]
 dropout_p = 0.0
 
 fields = [
