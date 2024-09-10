@@ -257,7 +257,9 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         softmax_sum->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
 
         //// Q * K
-        auto bmm_Q_K_attributes = Matmul_attributes().set_name("bmm_Q_K");
+        auto bmm_Q_K_attributes = Matmul_attributes().set_name("bmm_Q_K")
+                                 .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
+                                 .set_n_override(attributes.inputs[input_names::SEQ_LEN_KV]);
         auto last_dV = matmul(attributes.inputs[input_names::Q], attributes.inputs[input_names::K], bmm_Q_K_attributes);
 
         //// Optional Attn scale
@@ -408,12 +410,16 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                    attributes.inputs[input_names::Descale_S],
                    attributes.inputs[input_names::Descale_dO],
                    attributes.inputs[input_names::Scale_dV],
-                   Matmul_fp8_attributes().set_name("bmm_S_T_dO"),
+                   Matmul_fp8_attributes().set_name("bmm_S_T_dO")
+                       .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
+                       .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]),
                    attributes.outputs[output_names::dV],
                    attributes.outputs[output_names::Amax_dV]);
 
         //// dO * V_T
-        auto bmm_dO_V_T_attributes = Matmul_attributes().set_name("bmm_dO_V_T");
+        auto bmm_dO_V_T_attributes = Matmul_attributes().set_name("bmm_dO_V_T")
+                                 .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
+                                 .set_n_override(attributes.inputs[input_names::SEQ_LEN_KV]);
         last_output =
             matmul(attributes.inputs[input_names::dO], attributes.inputs[input_names::V], bmm_dO_V_T_attributes);
 
@@ -459,7 +465,9 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         K->set_dim({kt_dim[0], kt_dim[1], kt_dim[3], kt_dim[2]})
             .set_stride({kt_stride[0], kt_stride[1], kt_stride[3], kt_stride[2]});
 
-        auto bmm_dP_K_attributes = Matmul_fp8_attributes().set_name("bmm_dP_K");
+        auto bmm_dP_K_attributes = Matmul_fp8_attributes().set_name("bmm_dP_K")
+                   .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
+                   .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]);
         // Special non-functional-style call. Needed because output already created and provided to user.
         matmul_fp8(dP,
                    K,
@@ -476,7 +484,9 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         dP_T->set_data_type(attributes.inputs.at(input_names::dO)->get_data_type());
         dP_T->set_name("dP_T").set_dim({b, h_q, s_kv, s_q}).set_stride({h_q * s_q * s_kv, s_q * s_kv, 1, s_kv});
 
-        auto bmm_dP_T_Q_attributes = Matmul_fp8_attributes().set_name("bmm_dP_T_Q");
+        auto bmm_dP_T_Q_attributes = Matmul_fp8_attributes().set_name("bmm_dP_T_Q")
+                       .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
+                       .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]);
         // Special non-functional-style call. Needed because output already created and provided to user.
         matmul_fp8(dP_T,
                    attributes.inputs[input_names::Q],

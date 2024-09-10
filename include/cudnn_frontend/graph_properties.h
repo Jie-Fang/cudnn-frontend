@@ -721,11 +721,29 @@ class Matmul_fp8_attributes : public Attributes<Matmul_fp8_attributes> {
     double padding_value = 0.0;
 
    public:
-    enum class input_names { Descale_A, Descale_B, A, B, Scale_C };
+    enum class input_names { Descale_A, Descale_B, A, B, M_override, N_override, K_override, Scale_C };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { C, Amax_C };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_fp8_attributes, name, compute_data_type, inputs, outputs)
+
+    Matmul_fp8_attributes&
+    set_m_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::M_override] = value;
+        return *this;
+    }
+
+    Matmul_fp8_attributes&
+    set_n_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::N_override] = value;
+        return *this;
+    }
+
+    Matmul_fp8_attributes&
+    set_k_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::K_override] = value;
+        return *this;
+    }
 
     Matmul_fp8_attributes&
     set_padding(double const padding_val) {
