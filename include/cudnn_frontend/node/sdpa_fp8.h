@@ -428,7 +428,10 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
         }
 
         //// S * V
-        auto bmm2_attributes = Matmul_fp8_attributes().set_name("bmm2");
+        auto bmm2_attributes = Matmul_fp8_attributes()
+                                   .set_name("bmm2")
+                                   .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
+                                   .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]);
         // Special non-functional-style call. Needed because output already created and provided to user.
         matmul_fp8(last_output,
                    attributes.inputs.at(input_names::V),
