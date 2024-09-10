@@ -1404,8 +1404,6 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Offset,
         Dropout_mask,
         Dropout_scale,
-        Page_table_K,
-        Page_table_V
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { O, Stats, RNG_DUMP };
@@ -1510,18 +1508,6 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     SDPA_attributes&
     set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
         outputs[SDPA_attributes::output_names::RNG_DUMP] = value;
-        return *this;
-    }
-
-    SDPA_attributes&
-    set_page_table_K(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::Page_table_K] = value;
-        return *this;
-    }
-
-    SDPA_attributes&
-    set_page_table_V(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::Page_table_V] = value;
         return *this;
     }
 };
@@ -2068,19 +2054,6 @@ class Slice_attributes : public Attributes<Slice_attributes> {
         offset *= detail::get_data_type_size(input->get_data_type());
         return offset;
     }
-};
-
-class PagedCacheLoad_attributes : public Attributes<PagedCacheLoad_attributes> {
-    friend class Attributes<PagedCacheLoad_attributes>;
-    friend class PagedCacheLoadNode;
-    friend class INode;
-
-   public:
-    enum class input_names { container, seqLen, pageTable };
-    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-    enum class output_names { yOut };
-    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(PagedCacheLoad_attributes, name, compute_data_type, inputs, outputs)
 };
 
 }  // namespace graph

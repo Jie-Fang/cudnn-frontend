@@ -10,7 +10,6 @@
 #include "pointwise.h"
 #include "rng.h"
 #include "softmax.h"
-#include "paged_cache_load.h"
 
 namespace cudnn_frontend::graph {
 
@@ -97,8 +96,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value() || is_dropout_custom;
-        bool const is_paged = (attributes.inputs.find(input_names::Page_table_K) != attributes.inputs.end() &&  attributes.inputs.at(input_names::Page_table_K)) 
-        ||  (attributes.inputs.find(input_names::Page_table_V) != attributes.inputs.end() && attributes.inputs.at(input_names::Page_table_V));
 
         // validation TODO:
         //    - validate stats has valid dims
@@ -172,15 +169,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
-        // validate options for paged attention
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && is_ragged,
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "Paged caches are not supported in combination with ragged offsets.");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (!has_seq_len_q || !has_seq_len_kv || !attributes.padding_mask),
-            error_code_t::GRAPH_NOT_SUPPORTED,
-            "Paged caches can only be used in combination with padding mask and variable sequence lengths for both Q and KV.");
-
         // version specific validation
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -201,10 +189,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90200 && attributes.sliding_window_length.has_value(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.2.0, sliding window attention is not supported");
-        
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90400 && is_paged,
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version below 9.4.0, paged caches are not supported");
 
 
         // validate that datatype is set for the graph
@@ -247,90 +231,29 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // Gather dim to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();
         auto b            = q_dim[0];
-        auto h_q          = q_dim[1];
+        auto h            = q_dim[1];
         auto s_q          = q_dim[2];
-        auto d_qk         = q_dim[3];
         auto const& k_dim = attributes.inputs[input_names::K]->get_dim();
-        auto h_k          = k_dim[1];
-        auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
-        auto h_v          = v_dim[1];
-        auto d_v          = v_dim[3];
+        auto s_kv         = k_dim[2];
 
-        bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
-        bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
+        // cuDNN frontend API attention requires Q, K, V where
+        // Q = {b, h_q, s_q, d_qk}
+        // K = {b, h_k, s_kv, d_qk}
+        // V = {b, h_v, s_kv, d_v}
+        // but cuDNN backend API attention requires Q, KT, V
+        // Q = {b, h_q, s_q, d_qk}
+        // KT = {b, h_k, d_qk, s_kv}
+        // V = {b, h_v, s_kv, d_v}
+        // So the code below maps the K->KT
+        std::vector<int64_t> temp_vec;
 
-        // Infer s_kv
-        int64_t s_kv = -1;
-        // When one of K or V cache are paged, s_kv can be extracted directly
-        if (!is_paged_k) {
-            s_kv = k_dim[2];
-            // If there is a bias, extract it from there
-        } else if (!is_paged_v) {
-            s_kv = v_dim[2];
-        } else if (attributes.inputs[input_names::Bias] != nullptr) {
-            s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
-            // If there is an rng_dump output, extract it from there
-        } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
-                   attributes.outputs[output_names::RNG_DUMP] != nullptr) {
-            s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
-            // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
-            // container
-        } else {
-            // [b, 1, ceil(s_kv/block_size), 1]
-            auto page_table_dim_k = attributes.inputs[input_names::Page_table_K]->get_dim();
-            // [b, h_k, block_size, d_k]
-            auto container_dim_k = attributes.inputs[input_names::K]->get_dim();
-            int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
+        temp_vec = attributes.inputs[input_names::K]->get_dim();
+        std::swap(temp_vec[2], temp_vec[3]);
+        attributes.inputs[input_names::K]->set_dim(temp_vec);
 
-            // [b, 1, ceil(s_kv/block_size), 1]
-            auto page_table_dim_v = attributes.inputs[input_names::Page_table_V]->get_dim();
-            // [b, h_v, block_size, d_v]
-            auto container_dim_v = attributes.inputs[input_names::V]->get_dim();
-            int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
-
-            s_kv = std::min(s_k, s_v);
-        }
-
-        std::shared_ptr<Tensor_attributes> k_cache;
-        if (!is_paged_k) {
-            // 1. map K->KT
-            // cuDNN frontend API attention requires Q, K, V where
-            // Q = {b, h_q, s_q, d_qk}
-            // K = {b, h_k, s_kv, d_qk}
-            // V = {b, h_v, s_kv, d_v}
-            // but cuDNN backend API attention requires Q, KT, V
-            // Q = {b, h_q, s_q, d_qk}
-            // KT = {b, h_k, d_qk, s_kv}
-            // V = {b, h_v, s_kv, d_v}
-            // So the code below maps the K->KT
-            std::vector<int64_t> temp_vec;
-
-            temp_vec = attributes.inputs[input_names::K]->get_dim();
-            std::swap(temp_vec[2], temp_vec[3]);
-            attributes.inputs[input_names::K]->set_dim(temp_vec);
-
-            temp_vec = attributes.inputs[input_names::K]->get_stride();
-            std::swap(temp_vec[2], temp_vec[3]);
-            attributes.inputs[input_names::K]->set_stride(temp_vec);
-
-            // 2. Set k_cache
-            k_cache = attributes.inputs[input_names::K];
-        } else {
-            // Create a paged cache load operation
-            auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
-            // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
-            // K-cache has BHDS layout
-            k_cache = std::make_shared<Tensor_attributes>();
-            k_cache->set_dim({b, h_k, d_qk, s_kv})
-                .set_stride({d_qk * s_kv * h_k, d_qk * s_kv, 1, d_qk})
-                .set_data_type(attributes.inputs[input_names::K]->get_data_type());
-            k_cache->set_is_virtual(true);
-            paged_cache_load(attributes.inputs[input_names::K],
-                             attributes.inputs[input_names::SEQ_LEN_KV],
-                             attributes.inputs[input_names::Page_table_K],
-                             paged_cache_load_attributes_k,
-                             k_cache);
-        }
+        temp_vec = attributes.inputs[input_names::K]->get_stride();
+        std::swap(temp_vec[2], temp_vec[3]);
+        attributes.inputs[input_names::K]->set_stride(temp_vec);
 
         std::shared_ptr<Tensor_attributes> last_output;
 
@@ -343,9 +266,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
             bmm1_attributes.set_padding(0.0);
         }
 
-        auto const& bmm1_output = matmul(attributes.inputs[input_names::Q], k_cache, bmm1_attributes);
+        auto const& bmm1_output =
+            matmul(attributes.inputs[input_names::Q], attributes.inputs[input_names::K], bmm1_attributes);
         // Setting dim and strides as pointwise op wont have knowledge of how to do it for mha.
-        bmm1_output->set_dim({b, h_q, s_q, s_kv}).set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
+        bmm1_output->set_dim({b, h, s_q, s_kv}).set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
         last_output = bmm1_output;
 
         // Optional scale
@@ -394,11 +318,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
             // Multiply by alibi slope
             alibi_slopes = std::make_shared<Tensor_attributes>();
-            alibi_slopes->set_dim({1, h_q, 1, 1})
-                .set_stride({h_q, 1, 1, 1})
+            alibi_slopes->set_dim({1, h, 1, 1})
+                .set_stride({h, 1, 1, 1})
                 // Hard code data type float as FE itself will compute and place in variant pack later
                 .set_data_type(DataType_t::FLOAT);
-            alibi_slopes_size = h_q * sizeof(float);
+            alibi_slopes_size = h * sizeof(float);
 
             auto mul_attributes    = Pointwise_attributes().set_name("mul").set_mode(PointwiseMode_t::MUL);
             auto const& alibi_mask = pointwise(sub_output, alibi_slopes, mul_attributes);
@@ -660,8 +584,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                          .set_bernoulli_probability(1.0 - attributes.dropout_probability.value()));
                     rng_output
                         // Hard coding dim and strides as rng output can no inputs to infer it from.
-                        ->set_dim({b, h_q, s_q, s_kv})
-                        .set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
+                        ->set_dim({b, h, s_q, s_kv})
+                        .set_stride({h * s_q * s_kv, s_q * s_kv, s_kv, 1});
                 }
 
                 auto mask_attributes =
@@ -692,31 +616,12 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         auto const& seq_len_q  = attributes.inputs[input_names::SEQ_LEN_Q];
         auto const& seq_len_kv = attributes.inputs[input_names::SEQ_LEN_KV];
-        // auto const& V          = attributes.inputs[input_names::V];
-        auto const& O = attributes.outputs[output_names::O];
-
-        std::shared_ptr<Tensor_attributes> v_cache;
-
-        if (!is_paged_v) {
-            v_cache = attributes.inputs[input_names::V];
-        } else {
-            auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
-            v_cache                            = std::make_shared<Tensor_attributes>();
-            v_cache->set_dim({b, h_v, s_kv, d_v})
-                .set_stride({d_v * s_kv * h_v, d_v * s_kv, d_v, 1})
-                .set_data_type(attributes.inputs[input_names::V]->get_data_type());
-            v_cache->set_is_virtual(true);
-            paged_cache_load(attributes.inputs[input_names::V],
-                             attributes.inputs[input_names::SEQ_LEN_KV],
-                             attributes.inputs[input_names::Page_table_V],
-                             paged_cache_load_attributes_v,
-                             v_cache);
-        }
-
+        auto const& V          = attributes.inputs[input_names::V];
+        auto const& O          = attributes.outputs[output_names::O];
         auto bmm2_attributes =
             Matmul_attributes().set_name("bmm2").set_m_override(seq_len_q).set_k_override(seq_len_kv);
         // Special non-functional-style call. Needed because output already created and provided to user.
-        matmul(last_output, v_cache, bmm2_attributes, O);
+        matmul(last_output, V, bmm2_attributes, O);
 
         return {error_code_t::OK, ""};
     }
