@@ -253,8 +253,15 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
 
         // Descale O
         mul_attributes.set_name("descale_O");
-        auto softmax_sum = pointwise(last_output, attributes.inputs.at(input_names::Descale_O), mul_attributes);
-        softmax_sum->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
+        last_output = pointwise(last_output, attributes.inputs.at(input_names::Descale_O), mul_attributes);
+
+        // softmax_sum = last_output * dropout_scale
+        if(attributes.inputs[input_names::Dropout_scale_inv]) {
+            last_output = pointwise(last_output,
+                                    attributes.inputs[input_names::Dropout_scale_inv],
+                                    Pointwise_attributes().set_name("scale_dropout_inv").set_mode(PointwiseMode_t::MUL));
+        }
+        auto softmax_sum = last_output;
 
         //// Q * K
         auto bmm_Q_K_attributes = Matmul_attributes().set_name("bmm_Q_K")
@@ -377,11 +384,6 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         last_dV    = pointwise(last_dV, Pointwise_attributes().set_name("exp_dV").set_mode(PointwiseMode_t::EXP));
         auto exp_S = last_dV;
 
-        // Scale S
-        mul_attributes.set_name("scale_S");
-        last_dV = pointwise(last_dV, attributes.inputs.at(input_names::Scale_S), mul_attributes);
-        last_dV->set_data_type(attributes.inputs.at(input_names::Q)->get_data_type());
-
         // (optional) last_dV = last_dV * dropout rng_output
         if (is_dropout_prob || is_dropout_mask) {
             last_dV =
@@ -397,6 +399,11 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
                           attributes.inputs[input_names::Dropout_scale],
                           Pointwise_attributes().set_name("mul_dS_dropout_scale").set_mode(PointwiseMode_t::MUL));
         }
+
+        // Scale S
+        mul_attributes.set_name("scale_S");
+        last_dV = pointwise(last_dV, attributes.inputs.at(input_names::Scale_S), mul_attributes);
+        last_dV->set_data_type(attributes.inputs.at(input_names::Q)->get_data_type());
 
         // Reshape S
         last_dV = reshape(last_dV, Reshape_attributes().set_name("S_transpose"));
@@ -440,6 +447,20 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
         // dP = dP * exp_S
         mul_attributes.set_name("mul_dP_exp_S");
         dP = pointwise(dP, exp_S, mul_attributes);
+
+        // (optional) dP = dP * dropout_scale
+        if (attributes.inputs[input_names::Dropout_scale]) {
+            dP =
+                pointwise(dP,
+                          attributes.inputs[input_names::Dropout_scale],
+                          Pointwise_attributes().set_name("mul_dS_dropout_scale").set_mode(PointwiseMode_t::MUL));
+        }
+
+        // if (attributes.outputs[output_names::dBias]) {
+        //     reduction(dP,
+        //               Reduction_attributes().set_name("red_dP_dBias").set_mode(ReductionMode_t::ADD),
+        //               attributes.outputs[output_names::dBias]);
+        // }
 
         // (optional) dP = dP * attn_scale
         if (auto attn_scale_it = attributes.inputs.find(input_names::Attn_scale); attn_scale_it != attributes.inputs.end()) {
