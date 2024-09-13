@@ -362,16 +362,6 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
         softmax(last_output, softmax_attributes, softmax_output, softmax_stats);
         last_output = softmax_output;
 
-        // Amax S
-        auto amax_attributes = Reduction_attributes().set_name("amax_s").set_mode(ReductionMode_t::AMAX);
-        // Special non-functional-style call. Needed because output already created and provided to user.
-        reduction(last_output, amax_attributes, attributes.outputs.at(output_names::Amax_S));
-
-        // Scale S
-        mul_attributes.set_name("scale_s");
-        last_output = pointwise(last_output, attributes.inputs.at(input_names::Scale_S), mul_attributes);
-        last_output->set_data_type(attributes.inputs.at(input_names::Q)->get_data_type());
-
         // Two cases for training: dropout present or not
         bool dropout_present         = false;
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
@@ -426,6 +416,20 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
                 last_output                      = dropout_scale_output;
             }
         }
+
+        // Amax S
+        auto amax_attributes = Reduction_attributes().set_name("amax_s").set_mode(ReductionMode_t::AMAX);
+        // Special non-functional-style call. Needed because output already created and provided to user.
+        reduction(last_output, amax_attributes, attributes.outputs.at(output_names::Amax_S));
+
+        // Scale S
+        mul_attributes.set_name("scale_s");
+        last_output = pointwise(last_output, attributes.inputs.at(input_names::Scale_S), mul_attributes);
+        last_output->set_data_type(attributes.inputs.at(input_names::Q)->get_data_type());
+
+        // Lower attributes to bmm2 attributes
+        // Requirement by cudnn backend to take in bmm2 aType as i/o type.
+        last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
 
         //// S * V
         auto bmm2_attributes = Matmul_fp8_attributes()
