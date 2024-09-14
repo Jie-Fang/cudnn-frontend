@@ -38,7 +38,7 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
     // clang-format off
     struct {
         int64_t b,    m,    n,    k;
-    } conv_shapes[] = {
+    } matmul_shapes[] = {
         {      16,   32,   32,  128},
         {      16,   64,   64,  128},
         {      16,   80,   80,  128},
@@ -47,21 +47,21 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
     };
     // clang-format on
 
-    constexpr int conv_shapes_count = sizeof(conv_shapes) / sizeof(conv_shapes[0]);
+    constexpr int matmul_shapes_count = sizeof(matmul_shapes) / sizeof(matmul_shapes[0]);
     int64_t max_a_volume = 0, max_b_volume = 0, max_c_volume = 0, max_bias_volume = 0;
-    for (int idx_shape = 0; idx_shape < conv_shapes_count; ++idx_shape) {
-        const auto& conv_shape = conv_shapes[idx_shape];
-        max_a_volume           = std::max(max_a_volume, conv_shape.b * conv_shape.m * conv_shape.k);
-        max_b_volume           = std::max(max_b_volume, conv_shape.b * conv_shape.k * conv_shape.n);
-        max_c_volume           = std::max(max_c_volume, conv_shape.b * conv_shape.m * conv_shape.n);
-        max_bias_volume        = std::max(max_bias_volume, conv_shape.b * conv_shape.m);
+    for (int idx_shape = 0; idx_shape < matmul_shapes_count; ++idx_shape) {
+        const auto& matmul_shape = matmul_shapes[idx_shape];
+        max_a_volume             = std::max(max_a_volume, matmul_shape.b * matmul_shape.m * matmul_shape.k);
+        max_b_volume             = std::max(max_b_volume, matmul_shape.b * matmul_shape.k * matmul_shape.n);
+        max_c_volume             = std::max(max_c_volume, matmul_shape.b * matmul_shape.m * matmul_shape.n);
+        max_bias_volume          = std::max(max_bias_volume, matmul_shape.b * matmul_shape.m);
     }
 
     auto kernel_cache = std::make_shared<fe::KernelCache>();
 
-    const auto build_new_graph = [&conv_shapes, &kernel_cache, &use_abs, &use_bias](cudnnHandle_t handle,
-                                                                                    int idx_shape) {
-        const auto& conv_shape = conv_shapes[idx_shape];
+    const auto build_new_graph = [&matmul_shapes, &kernel_cache, &use_abs, &use_bias](cudnnHandle_t handle,
+                                                                                      int idx_shape) {
+        const auto& matmul_shape = matmul_shapes[idx_shape];
 
         // Make cudnn graph
         fe::graph::Graph graph{};
@@ -72,15 +72,15 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
         // There are read from global memory.
         auto A_attributes = fe::graph::Tensor_attributes()
                                 .set_name("A")
-                                .set_dim({conv_shape.b, conv_shape.m, conv_shape.k})
-                                .set_stride({conv_shape.m * conv_shape.k, conv_shape.k, 1})
+                                .set_dim({matmul_shape.b, matmul_shape.m, matmul_shape.k})
+                                .set_stride({matmul_shape.m * matmul_shape.k, matmul_shape.k, 1})
                                 .set_data_type(fe::DataType_t::BFLOAT16);
         auto A = graph.tensor(A_attributes);
 
         auto B_attributes = fe::graph::Tensor_attributes()
                                 .set_name("B")
-                                .set_dim({conv_shape.b, conv_shape.k, conv_shape.n})
-                                .set_stride({conv_shape.k * conv_shape.n, conv_shape.n, 1})
+                                .set_dim({matmul_shape.b, matmul_shape.k, matmul_shape.n})
+                                .set_stride({matmul_shape.k * matmul_shape.n, matmul_shape.n, 1})
                                 .set_data_type(fe::DataType_t::BFLOAT16);
         auto B = graph.tensor(B_attributes);
 
@@ -104,8 +104,8 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
             // Create Bias vector
             auto Bias_attributes = fe::graph::Tensor_attributes()
                                        .set_name("Bias")
-                                       .set_dim({conv_shape.b, conv_shape.m, 1})
-                                       .set_stride({conv_shape.m, 1, 1})
+                                       .set_dim({matmul_shape.b, matmul_shape.m, 1})
+                                       .set_stride({matmul_shape.m, 1, 1})
                                        .set_data_type(fe::DataType_t::BFLOAT16);
             Bias = graph.tensor(Bias_attributes);
 
@@ -154,7 +154,7 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
     cudnnHandle_t handle;
     checkCudnnErr(cudnnCreate(&handle));
 
-    for (int idx_shape = 0; idx_shape < conv_shapes_count; idx_shape++) {
+    for (int idx_shape = 0; idx_shape < matmul_shapes_count; idx_shape++) {
         auto [graph, A, B, C, Bias] = build_new_graph(handle, idx_shape);
         // Initialize input tensors
         Surface<half> A_gpu(max_a_volume, false);
