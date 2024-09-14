@@ -66,7 +66,7 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
         // Make cudnn graph
         fe::graph::Graph graph{};
 
-        graph.set_is_dynamic_shape_enabled(true).set_kernel_cache(kernel_cache);
+        graph.set_dynamic_shape_enabled(true).set_kernel_cache(kernel_cache);
 
         // Create the two non-virtual input tensors A and B.
         // There are read from global memory.

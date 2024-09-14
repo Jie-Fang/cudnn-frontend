@@ -122,7 +122,7 @@ TEST_CASE("Convolution fprop dynamic shape", "[conv][graph][dynamic_shape]") {
         auto graph = std::make_shared<fe::graph::Graph>();
         graph->set_io_data_type(fe::DataType_t::HALF)
             .set_compute_data_type(fe::DataType_t::FLOAT)
-            .set_is_dynamic_shape_enabled(true)
+            .set_dynamic_shape_enabled(true)
             .set_kernel_cache(kernel_cache);
 
         auto X = graph->tensor(
@@ -357,7 +357,7 @@ TEST_CASE("CSBR Graph dynamic shape", "[conv][graph][dynamic_shape]") {
         graph->set_io_data_type(fe::DataType_t::HALF)
             .set_intermediate_data_type(fe::DataType_t::FLOAT)
             .set_compute_data_type(fe::DataType_t::FLOAT)
-            .set_is_dynamic_shape_enabled(true)
+            .set_dynamic_shape_enabled(true)
             .set_kernel_cache(kernel_cache);
 
         auto X = graph->tensor(
