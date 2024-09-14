@@ -167,7 +167,7 @@ TEST_CASE("Graph key dynamic shape", "[graph][key][dynamic_shape]") {
         graph.set_io_data_type(fe::DataType_t::HALF)
             .set_intermediate_data_type(fe::DataType_t::FLOAT)
             .set_compute_data_type(fe::DataType_t::FLOAT)
-            .set_is_dynamic_shape_enabled(true);
+            .set_dynamic_shape_enabled(true);
 
         auto X =
             graph.tensor(fe::graph::Tensor_attributes().set_name("image").set_dim({b, m, k}).set_stride({m * k, 1, m}));

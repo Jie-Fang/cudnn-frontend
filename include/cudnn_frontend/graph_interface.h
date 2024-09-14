@@ -550,7 +550,7 @@ class Graph : public INode {
     Graph &
     set_compute_data_type(DataType_t type);
     Graph &
-    set_is_dynamic_shape_enabled(bool is_enabled);
+    set_dynamic_shape_enabled(bool is_enabled);
     Graph &
     set_sm_count(int32_t type);
     Graph &
@@ -1107,7 +1107,7 @@ Graph::set_compute_data_type(DataType_t const type) {
 }
 
 inline Graph &
-Graph::set_is_dynamic_shape_enabled(bool is_enabled) {
+Graph::set_dynamic_shape_enabled(bool is_enabled) {
     is_dynamic_shape_enabled = is_enabled;
     return *this;
 }
