@@ -154,7 +154,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && attributes.sliding_window_length.value() < 0,
                                        error_code_t::INVALID_VALUE,
                                        "Sliding window length should be greater than or equals to zero when set.");
-
+                                       
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && s_q > s_kv,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Sliding window attention is only supported with s_q <= s_kv.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (attributes.padding_mask || !attributes.causal_mask || is_dropout || is_bias || is_ragged),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -823,6 +826,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::INVALID_VALUE,
                                        "Sliding window length should be greater than or equals to zero when set.");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && s_q > s_kv,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Sliding window attention is only supported with s_q <= s_kv.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (attributes.padding_mask || !attributes.causal_mask || is_dropout || is_bias || is_ragged),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
