@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 #include "../../cudnn_frontend_Heuristics.h"
 #include "../../cudnn_frontend_Logging.h"
 
@@ -993,10 +995,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 // allow setting the upper limit with envvars
                 char* env_dp_workspace_limit_char = std::getenv("CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT");
                 if (env_dp_workspace_limit_char) {
-                    try {
-                        std::string env_dp_workspace_limit_str(env_dp_workspace_limit_char);
-                        max_dp_workspace_bytes = static_cast<int64_t>(std::stoll(env_dp_workspace_limit_str));
-                    } catch (...) {
+                    char* end_ptr          = nullptr;
+                    max_dp_workspace_bytes = std::strtoll(env_dp_workspace_limit_char, &end_ptr, 10);
+
+                    if (*end_ptr != '\0') {
                         RETURN_CUDNN_FRONTEND_ERROR_IF(true,
                                                        error_code_t::ATTRIBUTE_NOT_SET,
                                                        "Invalid argument for CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT "
