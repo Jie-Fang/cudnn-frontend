@@ -864,6 +864,14 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.2.0, sliding window attention is not supported");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && attributes.padding_mask,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For cuDNN version below 9.5.0, dBias with variable sequence lengths is not supported");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For cuDNN version below 9.5.0, dBias not support s_q/s_kv which aren't multiple of 64");
+
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
