@@ -124,9 +124,9 @@ TEST_CASE("sdpa_fp8_bprop", "[graph][sdpa][fp8][backward]") {
                                                                                         scale_dP,
                                                                                         sdpa_fp8_backwards_options);
 
-    dQ->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(O_dO_strides);
-    dK->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(O_dO_strides);
-    dV->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(O_dO_strides);
+    dQ->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(Q_dQ_strides);
+    dK->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(Q_dQ_strides);
+    dV->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(Q_dQ_strides);
     Amax_dQ->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dK->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dV->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
