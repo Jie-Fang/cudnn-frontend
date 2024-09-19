@@ -144,7 +144,9 @@ TEST_CASE("Graph key", "[graph][key]") {
 
 TEST_CASE("Graph key dynamic shape", "[graph][key][dynamic_shape]") {
     namespace fe = cudnn_frontend;
-
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
     // clang-format off
     struct {
         int64_t b,    m,    n,    k;
