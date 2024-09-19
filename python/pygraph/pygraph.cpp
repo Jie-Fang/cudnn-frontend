@@ -446,9 +446,9 @@ PyGraph::execute_plan_at_index(std::unordered_map<int64_t, std::intptr_t> var_pa
 }
 
 std::shared_ptr<graph::Tensor_attributes>
-PyGraph::query_tensor_with_uid(int64_t const uid) const {
+PyGraph::query_tensor_attributes_of_uid(int64_t const uid) const {
     graph::Tensor_attributes tensor;
-    auto status = graph.query_tensor_with_uid(uid, tensor);
+    auto status = graph.query_tensor_attributes_of_uid(uid, tensor);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
     return std::make_shared<graph::Tensor_attributes>(tensor);
 }
@@ -752,8 +752,8 @@ init_pygraph_submodule(py::module_& m) {
                     index (int): The index of the plan to get workspace from.
                     If the graph is not built at the index, this will return 0.
             )pbdoc")
-        .def("query_tensor_with_uid",
-             &PyGraph::query_tensor_with_uid,
+        .def("query_tensor_attributes_of_uid",
+             &PyGraph::query_tensor_attributes_of_uid,
              py::arg("uid"),
              R"pbdoc(
                     Get tensor_attributes for a given UID

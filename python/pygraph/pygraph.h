@@ -435,7 +435,7 @@ class PyGraph {
     get_workspace_size_plan_at_index(int64_t index);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
-    query_tensor_with_uid(int64_t const uid) const;
+    query_tensor_attributes_of_uid(int64_t const uid) const;
 };
 
 }  // namespace cudnn_frontend::python_bindings

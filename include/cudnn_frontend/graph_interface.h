@@ -563,7 +563,7 @@ class Graph : public INode {
     }
 
     error_t
-    query_tensor_with_uid(int64_t const uid, Tensor_attributes &tensor) const;
+    query_tensor_attributes_of_uid(int64_t const uid, Tensor_attributes &tensor) const;
 
     std::shared_ptr<Tensor_attributes>
     tensor(Tensor_attributes const &tensor);
@@ -1132,7 +1132,7 @@ Graph::tensor(Tensor_attributes const &tensor) {
 }
 
 inline error_t
-Graph::query_tensor_with_uid(int64_t const uid, Tensor_attributes &tensor) const {
+Graph::query_tensor_attributes_of_uid(int64_t const uid, Tensor_attributes &tensor) const {
     for (auto const &o_tensor : full_graph_outputs) {
         if (uid == o_tensor->get_uid()) {
             tensor = *o_tensor;

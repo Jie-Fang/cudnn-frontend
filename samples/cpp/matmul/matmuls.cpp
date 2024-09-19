@@ -176,14 +176,23 @@ matmul_dynamic_shapes(bool use_abs = false, bool use_bias = false) {
 }
 
 TEST_CASE("Matmul dynamic shape", "[matmul][graph][dynamic_shape]") {
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
     matmul_dynamic_shapes(false, false);  // Matmul dynamic shape, no abs or bias
 }
 
 TEST_CASE("Abs + Matmul dynamic shape", "[matmul][graph][dynamic_shape]") {
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
     matmul_dynamic_shapes(true, false);  // Matmul with abs
 }
 
 TEST_CASE("Bias + Matmul dynamic shape", "[matmul][graph][dynamic_shape]") {
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
     matmul_dynamic_shapes(false, true);  // Matmul with bias
 }
 

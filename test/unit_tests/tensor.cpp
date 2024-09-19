@@ -23,7 +23,7 @@
 
 #include <cudnn_frontend.h>
 
-TEST_CASE("tensor query checks", "[query_tensor_with_uid]") {
+TEST_CASE("tensor query checks", "[query_tensor_attributes_of_uid]") {
     namespace fe = cudnn_frontend;
 
     fe::graph::Graph graph;
@@ -42,7 +42,7 @@ TEST_CASE("tensor query checks", "[query_tensor_with_uid]") {
 
     fe::graph::Tensor_attributes t;
 
-    REQUIRE(graph.query_tensor_with_uid(uid, t).is_good());
+    REQUIRE(graph.query_tensor_attributes_of_uid(uid, t).is_good());
 
     REQUIRE(t.get_name() == name);
 }

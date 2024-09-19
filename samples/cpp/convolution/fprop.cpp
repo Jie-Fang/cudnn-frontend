@@ -93,6 +93,10 @@ TEST_CASE("Convolution fprop", "[conv][graph][caching]") {
 TEST_CASE("Convolution fprop dynamic shape", "[conv][graph][dynamic_shape]") {
     namespace fe = cudnn_frontend;
 
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
+
     // clang-format off
     struct {
         int64_t n,    c,    h,    w,    k,    r,    s;
@@ -325,6 +329,10 @@ TEST_CASE("CSBR Graph", "[conv][graph][caching]") {
 
 TEST_CASE("CSBR Graph dynamic shape", "[conv][graph][dynamic_shape]") {
     namespace fe = cudnn_frontend;
+
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
 
     // clang-format off
     struct {
