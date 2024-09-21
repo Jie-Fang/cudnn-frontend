@@ -168,6 +168,10 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
     // Deserialize the graph and execute
     auto graph = deserialize(handle, serialize_data);
 
+    cudnn_frontend::graph::Tensor_attributes tensor_attr;
+    auto result = graph->query_tensor_attributes_of_uid(x_tensor, tensor_attr);
+    REQUIRE(result.is_good());
+
     Surface<half> x_device_memory(n * c * h * w, false);
     Surface<half> w_device_memory(k * c * r * s, false);
     Surface<half> s_device_memory(k, false);
