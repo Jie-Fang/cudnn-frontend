@@ -36,6 +36,7 @@ class Graph : public INode {
     std::unordered_set<Tensor_attributes::uid_t> used_uids;
     int64_t fe_workspace_size = 0;
 
+    std::unordered_set<std::shared_ptr<Tensor_attributes>> deserialized_tensor_properties;
     std::unordered_map<uid_t, pass_by_values_t> deserialized_pass_by_value;
     std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> deserialized_workspace_modifications;
 
@@ -516,6 +517,15 @@ class Graph : public INode {
     deserialize(cudnnHandle_t handle, std::vector<uint8_t> const &data) {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j = json::from_ubjson(data);
+
+        if (j.contains("tensors")) {
+            auto tensor_map = j["tensors"].get<std::unordered_map<std::string, json>>();
+            for (const auto &tensor_info : tensor_map) {
+                auto tensor_attributes = std::make_shared<Tensor_attributes>();
+                from_json(tensor_info.second, *tensor_attributes);
+                deserialized_tensor_properties.insert(tensor_attributes);
+            }
+        }
 
         auto serialized_plan = j["cudnn_backend_data"];
         CHECK_CUDNN_FRONTEND_ERROR(plans.build_plans(handle, serialized_plan));
@@ -1143,6 +1153,13 @@ Graph::query_tensor_attributes_of_uid(int64_t const uid, Tensor_attributes &tens
     for (auto const &i_tensor : full_graph_inputs) {
         if (uid == i_tensor->get_uid()) {
             tensor = *i_tensor;
+            return {error_code_t::OK, ""};
+        }
+    }
+
+    for (auto const &d_tensor : deserialized_tensor_properties) {
+        if (uid == d_tensor->get_uid()) {
+            tensor = *d_tensor;
             return {error_code_t::OK, ""};
         }
     }
