@@ -30,7 +30,7 @@ namespace fe = cudnn_frontend;
 
 /*
 Run this example by using command:
-bin/samples "Toy sdpa forward"
+bin/samples "Toy sdpa forward with dropout"
 
 This example shows how to construct a sdpa forward graph.
 */
