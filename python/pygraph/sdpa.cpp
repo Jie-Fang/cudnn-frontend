@@ -28,6 +28,8 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               py::object const& sliding_window_length,
               py::object const& dropout,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_k,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
     auto attributes = cudnn_frontend::graph::SDPA_attributes()
@@ -41,6 +43,14 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
+
+    if (page_table_k) {
+        attributes.set_page_table_K(page_table_k);
+    }
+
+    if (page_table_v) {
+        attributes.set_page_table_V(page_table_v);
+    }
 
     if (!attn_scale.is_none()) {
         if (py::isinstance<py::float_>(attn_scale)) {
@@ -97,6 +107,8 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
             attributes.set_dropout(mask, scale);
         }
     }
+
+    // Add page table attributes
 
     auto [O, Stats] = graph.sdpa(q, k, v, attributes);
     return {O, Stats};
@@ -318,6 +330,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
+          py::arg_v("page_table_k", nullptr),
+          py::arg_v("page_table_v", nullptr),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
@@ -325,8 +339,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
 
                 Args:
                     q (cudnn_tensor): The query data.
-                    k (cudnn_tensor): The key data.
-                    v (cudnn_tensor): The value data.
+                    k (cudnn_tensor): The key data. When page_table_k is provided, 'k' is a container of non-contiguous key data.
+                    v (cudnn_tensor): The value data. When page_table_v is provided, 'v' is a container of non-contiguous value data.
                     is_inference (bool): Whether it is an inference step or training step.
                     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
                     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
@@ -339,6 +353,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
+                    page_table_k (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
+                    page_table_v (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
