@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -79,7 +79,7 @@ TEST_CASE("BN Finalize Graph", "[batchnorm][graph]") {
 #endif
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -224,7 +224,7 @@ TEST_CASE("SGBN Add Relu Graph", "[batchnorm][graph]") {
         SKIP("ConvBNFprop requires Ampere and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -351,7 +351,7 @@ TEST_CASE("DBN Add Relu Graph", "[BN][graph][backward]") {
         SKIP("BatchNorm Backward requires Ampere and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -461,7 +461,7 @@ TEST_CASE("BN_inference DRelu DBN Graph", "[Batchnorm][graph][backward]") {
 #endif
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
