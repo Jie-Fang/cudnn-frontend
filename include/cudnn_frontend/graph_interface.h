@@ -137,6 +137,8 @@ class Graph : public INode {
                 tensor_to_pointer_map.emplace(uid, nv_bfloat16_value_ptr);
             } else if (int32_t *int32_t_value_ptr = std::get_if<int32_t>(&value)) {
                 tensor_to_pointer_map.emplace(uid, int32_t_value_ptr);
+            } else if (int64_t *int64_t_value_ptr = std::get_if<int64_t>(&value)) {
+                tensor_to_pointer_map.emplace(uid, int64_t_value_ptr);
             } else if (float *float_value_ptr = std::get_if<float>(&value)) {
                 tensor_to_pointer_map.emplace(uid, float_value_ptr);
             } else {
