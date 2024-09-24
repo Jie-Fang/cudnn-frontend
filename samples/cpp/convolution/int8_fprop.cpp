@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -83,7 +83,7 @@ TEST_CASE("Conv with Int8 datatypes", "[conv][graph][caching]") {
         SKIP("Int8 datatype convolutions require Ampere and later architectures");
     }
 
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto [graph, X, W, Y] = build_new_graph(handle);
 
@@ -94,7 +94,10 @@ TEST_CASE("Conv with Int8 datatypes", "[conv][graph][caching]") {
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}, {W, w_tensor.devPtr}, {Y, y_tensor.devPtr}};
 
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
     cudnnDestroy(handle);
 }

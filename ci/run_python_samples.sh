@@ -5,7 +5,7 @@ GPU_CC=`nvidia-smi --query-gpu=compute_cap --format=csv | grep -v compute_cap | 
 
 export LD_LIBRARY_PATH=/debug_cudnn/lib64
 
-if [ "${GPU_CC}" == "9" ]; then
+if [ "${GPU_CC}" -ge "9" ]; then
     jupyter execute samples/python/*
 else
     jupyter execute samples/python/00*

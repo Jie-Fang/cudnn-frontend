@@ -24,7 +24,7 @@
 
 #include <random>
 
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -105,7 +105,7 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
     REQUIRE(graph.validate().is_good());
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
     REQUIRE(graph.create_execution_plans({fe::HeurMode_t::A}).is_good());
@@ -115,7 +115,10 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
     REQUIRE(graph.build_plans(handle, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE).is_good());
 
     Surface<float> C_gpu(b * m * n, false);
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {A, A_gpu.devPtr},
         {B, B_gpu.devPtr},
@@ -124,5 +127,5 @@ TEST_CASE("Matmul fp8 precision", "[matmul][graph]") {
         {B_descale, B_descale_gpu.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
-    checkCudnnErr(cudnnDestroy(handle));
+    CUDNN_CHECK(cudnnDestroy(handle));
 }

@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -57,7 +57,7 @@ TEST_CASE("Resample Max Pooling NHWC Inference", "[resample][pooling][max][graph
     assert(Index == nullptr);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
     REQUIRE(graph.build_operation_graph(handle).is_good());
@@ -69,10 +69,13 @@ TEST_CASE("Resample Max Pooling NHWC Inference", "[resample][pooling][max][graph
     Surface<half> Y_gpu(N * H * W * C, false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {{X, X_gpu.devPtr},
                                                                                              {Y, Y_gpu.devPtr}};
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudnnErr(cudnnDestroy(handle));
+    CUDNN_CHECK(cudnnDestroy(handle));
 }
 
 TEST_CASE("Resample Max Pooling NHWC Training", "[resample][pooling][max][graph]") {
@@ -109,7 +112,7 @@ TEST_CASE("Resample Max Pooling NHWC Training", "[resample][pooling][max][graph]
     Index->set_output(true).set_data_type(fe::DataType_t::INT8);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -129,10 +132,13 @@ TEST_CASE("Resample Max Pooling NHWC Training", "[resample][pooling][max][graph]
     Surface<int8_t> Index_gpu(N * H * W * C / 8, false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, X_gpu.devPtr}, {Y, Y_gpu.devPtr}, {Index, Index_gpu.devPtr}};
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudnnErr(cudnnDestroy(handle));
+    CUDNN_CHECK(cudnnDestroy(handle));
 }
 
 TEST_CASE("Resample Avg Pooling", "[resample][pooling][average][graph]") {
@@ -168,7 +174,7 @@ TEST_CASE("Resample Avg Pooling", "[resample][pooling][average][graph]") {
     assert(Index == nullptr);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
     REQUIRE(graph.build_operation_graph(handle).is_good());
@@ -180,8 +186,11 @@ TEST_CASE("Resample Avg Pooling", "[resample][pooling][average][graph]") {
     Surface<half> Y_gpu(N * H * W * C, false);
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {{X, X_gpu.devPtr},
                                                                                              {Y, Y_gpu.devPtr}};
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudnnErr(cudnnDestroy(handle));
+    CUDNN_CHECK(cudnnDestroy(handle));
 }

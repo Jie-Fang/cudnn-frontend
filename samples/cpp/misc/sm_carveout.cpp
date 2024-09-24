@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -101,7 +101,7 @@ TEST_CASE("SGBN with SM carveout", "[batchnorm][graph][sm_carveout]") {
         SKIP("ConvBNFprop requires Ampere and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -128,7 +128,10 @@ TEST_CASE("SGBN with SM carveout", "[batchnorm][graph][sm_carveout]") {
     Surface<float> Peer_stats_0_tensor(2 * 4 * c, false, true);
     Surface<float> Peer_stats_1_tensor(2 * 4 * c, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, X_tensor.devPtr},
         {mean, Mean_tensor.devPtr},

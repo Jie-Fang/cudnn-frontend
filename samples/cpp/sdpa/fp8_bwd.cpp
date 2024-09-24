@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cuda_runtime_api.h>
 #include <cudnn_frontend.h>
@@ -124,16 +124,16 @@ TEST_CASE("sdpa_fp8_bprop", "[graph][sdpa][fp8][backward]") {
                                                                                         scale_dP,
                                                                                         sdpa_fp8_backwards_options);
 
-    dQ->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(O_dO_strides);
-    dK->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(O_dO_strides);
-    dV->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(O_dO_strides);
+    dQ->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(Q_dQ_strides);
+    dK->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(Q_dQ_strides);
+    dV->set_output(true).set_dim(Q_dQ_O_dO_dims).set_stride(Q_dQ_strides);
     Amax_dQ->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dK->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dV->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dP->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto status = mha_graph.validate();
     if ((cudnnGetVersion() >= 90100) && check_device_arch_newer_than("hopper")) {
@@ -214,10 +214,13 @@ TEST_CASE("sdpa_fp8_bprop", "[graph][sdpa][fp8][backward]") {
         {Amax_dV, AMax_dV_Tensor.devPtr},
         {Amax_dP, AMax_dP_Tensor.devPtr}};
 
-    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(mha_graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
 }
@@ -301,7 +304,7 @@ TEST_CASE("sdpa_fp8_gqa_bprop", "[graph][sdpa][fp8][backward]") {
     amax_dP->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto status = mha_graph.validate();
     if ((cudnnGetVersion() >= 90100) && check_device_arch_newer_than("hopper")) {
@@ -382,10 +385,13 @@ TEST_CASE("sdpa_fp8_gqa_bprop", "[graph][sdpa][fp8][backward]") {
         {amax_dV, amax_dV_gpu.devPtr},
         {amax_dP, amax_dP_gpu.devPtr}};
 
-    Surface<int8_t> workspace(mha_graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(mha_graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
 }

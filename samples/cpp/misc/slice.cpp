@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -68,7 +68,7 @@ TEST_CASE("Slice gemm", "[slice][gemm][graph][fusion]") {
     C->set_output(true).set_uid(c_uid);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.build(handle, {fe::HeurMode_t::A}).is_good());
 
@@ -80,7 +80,9 @@ TEST_CASE("Slice gemm", "[slice][gemm][graph][fusion]") {
     Surface<half> C_gpu(B * M * N, false);
     std::unordered_map<int64_t, void *> variant_pack = {
         {a_uid, A_gpu.devPtr}, {b_uid, B_gpu.devPtr}, {c_uid, C_gpu.devPtr}};
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
 
     fe::graph::Graph graph2;
     REQUIRE(graph2.deserialize(handle, serialized_data).is_good());
@@ -90,5 +92,5 @@ TEST_CASE("Slice gemm", "[slice][gemm][graph][fusion]") {
         REQUIRE(false);
     }
 
-    checkCudnnErr(cudnnDestroy(handle));
+    CUDNN_CHECK(cudnnDestroy(handle));
 }

@@ -156,6 +156,15 @@ class Tensor_attributes {
         return *this;
     }
 
+    int64_t
+    get_volume() const {
+        int64_t volume = 1ul;
+        for (int64_t d : dim) {
+            volume *= d;
+        }
+        return volume;
+    }
+
     std::vector<int64_t>
     get_stride() const {
         return stride;
@@ -712,11 +721,29 @@ class Matmul_fp8_attributes : public Attributes<Matmul_fp8_attributes> {
     double padding_value = 0.0;
 
    public:
-    enum class input_names { Descale_A, Descale_B, A, B, Scale_C };
+    enum class input_names { Descale_A, Descale_B, A, B, M_override, N_override, K_override, Scale_C };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { C, Amax_C };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_fp8_attributes, name, compute_data_type, inputs, outputs)
+
+    Matmul_fp8_attributes&
+    set_m_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::M_override] = value;
+        return *this;
+    }
+
+    Matmul_fp8_attributes&
+    set_n_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::N_override] = value;
+        return *this;
+    }
+
+    Matmul_fp8_attributes&
+    set_k_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::K_override] = value;
+        return *this;
+    }
 
     Matmul_fp8_attributes&
     set_padding(double const padding_val) {
@@ -1395,6 +1422,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Offset,
         Dropout_mask,
         Dropout_scale,
+        Page_table_K,
+        Page_table_V
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { O, Stats, RNG_DUMP };
@@ -1501,6 +1530,18 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         outputs[SDPA_attributes::output_names::RNG_DUMP] = value;
         return *this;
     }
+
+    SDPA_attributes&
+    set_page_table_K(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_attributes::input_names::Page_table_K] = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_page_table_V(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_attributes::input_names::Page_table_V] = value;
+        return *this;
+    }
 };
 
 class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
@@ -1509,7 +1550,9 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
     friend class Graph;
 
     std::optional<bool> is_inference;
-    bool causal_mask = false;
+    bool padding_mask = false;
+    bool causal_mask  = false;
+    std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
    public:
@@ -1518,6 +1561,14 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
         K,
         V,
         Attn_scale,
+        Bias,
+        SEQ_LEN_Q,
+        SEQ_LEN_KV,
+        Seed,
+        Offset,
+        Dropout_mask,
+        Dropout_scale,
+
         Descale_Q,
         Descale_K,
         Descale_V,
@@ -1535,7 +1586,9 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
                                    inputs,
                                    outputs,
                                    is_inference,
+                                   padding_mask,
                                    causal_mask,
+                                   dropout_probability,
                                    attn_scale_value)
 
     SDPA_fp8_attributes&
@@ -1557,8 +1610,49 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
     }
 
     SDPA_fp8_attributes&
+    set_bias(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_attributes::input_names::Bias] = value;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
+    set_padding_mask(bool const value) {
+        padding_mask = value;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
+    set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_attributes::input_names::SEQ_LEN_Q] = value;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_attributes::input_names::SEQ_LEN_KV] = value;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
+    set_dropout(float const probability,
+                std::shared_ptr<Tensor_attributes> seed,
+                std::shared_ptr<Tensor_attributes> offset) {
+        dropout_probability                              = probability;
+        inputs[SDPA_fp8_attributes::input_names::Seed]   = seed;
+        inputs[SDPA_fp8_attributes::input_names::Offset] = offset;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
+    set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
+        inputs[SDPA_fp8_attributes::input_names::Dropout_mask]  = mask;
+        inputs[SDPA_fp8_attributes::input_names::Dropout_scale] = scale;
         return *this;
     }
 };
@@ -1718,7 +1812,10 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     friend class SDPAFP8BackwardNode;
     friend class Graph;
 
-    bool causal_mask = false;
+    bool padding_mask = false;
+    bool causal_mask  = false;
+
+    std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
    public:
@@ -1730,6 +1827,15 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
         dO,
         Stats,
         Attn_scale,
+        Bias,
+        SEQ_LEN_Q,
+        SEQ_LEN_KV,
+        Seed,
+        Offset,
+        Dropout_mask,
+        Dropout_scale,
+        Dropout_scale_inv,
+
         Descale_Q,
         Descale_K,
         Descale_V,
@@ -1753,7 +1859,9 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
                                    compute_data_type,
                                    inputs,
                                    outputs,
+                                   padding_mask,
                                    causal_mask,
+                                   dropout_probability,
                                    attn_scale_value)
 
     SDPA_fp8_backward_attributes&
@@ -1769,8 +1877,52 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     }
 
     SDPA_fp8_backward_attributes&
+    set_bias(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_backward_attributes::input_names::Bias] = value;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_padding_mask(bool const value) {
+        padding_mask = value;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_backward_attributes::input_names::SEQ_LEN_Q] = value;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_fp8_backward_attributes::input_names::SEQ_LEN_KV] = value;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_dropout(float const probability,
+                std::shared_ptr<Tensor_attributes> seed,
+                std::shared_ptr<Tensor_attributes> offset) {
+        dropout_probability                                       = probability;
+        inputs[SDPA_fp8_backward_attributes::input_names::Seed]   = seed;
+        inputs[SDPA_fp8_backward_attributes::input_names::Offset] = offset;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_dropout(std::shared_ptr<Tensor_attributes> mask,
+                std::shared_ptr<Tensor_attributes> scale,
+                std::shared_ptr<Tensor_attributes> scale_inv) {
+        inputs[SDPA_fp8_backward_attributes::input_names::Dropout_mask]      = mask;
+        inputs[SDPA_fp8_backward_attributes::input_names::Dropout_scale]     = scale;
+        inputs[SDPA_fp8_backward_attributes::input_names::Dropout_scale_inv] = scale_inv;
         return *this;
     }
 };
@@ -1934,6 +2086,19 @@ class Slice_attributes : public Attributes<Slice_attributes> {
         offset *= detail::get_data_type_size(input->get_data_type());
         return offset;
     }
+};
+
+class PagedCacheLoad_attributes : public Attributes<PagedCacheLoad_attributes> {
+    friend class Attributes<PagedCacheLoad_attributes>;
+    friend class PagedCacheLoadNode;
+    friend class INode;
+
+   public:
+    enum class input_names { container, seqLen, pageTable };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { yOut };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(PagedCacheLoad_attributes, name, compute_data_type, inputs, outputs)
 };
 
 class Block_scale_quantize_attributes : public Attributes<Block_scale_quantize_attributes> {

@@ -70,43 +70,48 @@ include:
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
 
-  - local: ci/job-template.yml
-    inputs:
-        cuda_version: "12.5.0"
-        cudnn_version: "9.2.1.18"
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.5.0"
+#         cudnn_version: "9.2.1.18"
 
   - local: ci/job-template.yml
     inputs:
         cuda_version: "12.5.1"
         cudnn_version: "9.3.0.75"
 
+  - local: ci/job-template.yml
+    inputs:
+        cuda_version: "12.6.0"
+        cudnn_version: "9.4.0.58"
+
 stages:
     - analysis
     - build
+    - cpp_samples
     - cpp_tests
+    - python_samples
     - python_tests
     - pycudnnTest
     - L4_graph_runner
-    - unit_tests
-    - notebooks
     - thunder
     - deploy
         
 .fetch_cudnn_dev:template:
     before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.5_cuda_12.6/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.5.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.6_cuda_12.6/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.6.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
         - tar xvf cudnn.tar.gz --directory /
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
-  
+
 .fetch_cudnn_rel:template:
     before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.4_cuda_12.6/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.4.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.5_cuda_12.6/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.5.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
@@ -125,6 +130,13 @@ stages:
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
 
+
+.cudnn_dev_image:template:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.0
+
+.cudnn_rel_image:template:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.0
+
 .build:template:
     script:
         - ci/build.sh
@@ -133,10 +145,10 @@ stages:
         paths:
             - build/
 
-.test:template:
-    stage: cpp_tests
+.cpp_samples:template:
+    stage: cpp_samples
     script:
-        - ci/run_cpp_tests.sh
+        - ci/run_cpp_samples.sh
     # Upload test report to gitlab
     artifacts:
         when: always
@@ -144,7 +156,7 @@ stages:
             junit: build/result-junit.xml
         expire_in: 1 week
 
-.pytest:template:
+.python_tests:template:
     stage: python_tests
     script:
         - ci/run_python_tests.sh
@@ -154,11 +166,16 @@ stages:
     script:
         - ci/run_pycudnntest.sh
 
-.notebooks:template:
-    stage: notebooks
+.cpp_tests:template:
+    stage: cpp_tests
+    script:
+        - ci/run_cpp_tests.sh
+
+.python_samples:template:
+    stage: python_samples
     script:
         - pip install -v .
-        - ci/run_notebooks.sh
+        - ci/run_python_samples.sh
 
 .L4_graph_runner:template:
     stage: L4_graph_runner
@@ -175,7 +192,7 @@ deploy:build_bdist_wheels:
         - wheel_builder
     needs: []
     stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.4_cudnn_9.3.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.5_cudnn_9.4.0
     script:
         - ci/build_pip_wheels.sh
     rules:
@@ -208,9 +225,9 @@ deploy:test_bdist_wheels_8.9.7_3.10:
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python_fe -n 4 --tb=short
+        - pytest test/python -n 4 --tb=short
 
-deploy:test_bdist_wheels_9.2.0_3.10:
+deploy:test_bdist_wheels_9.4.0_3.10:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -218,7 +235,7 @@ deploy:test_bdist_wheels_9.2.0_3.10:
         - ${ARCH}
     needs: ["deploy:build_wheels"]
     stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.2.0.82_12.4.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.4.0.58_12.6.0
     needs: ["deploy:build_bdist_wheels"]
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -234,7 +251,7 @@ deploy:test_bdist_wheels_9.2.0_3.10:
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python_fe -n 4 --tb=short
+        - pytest test/python -n 4 --tb=short
 
 analysis:clang-format:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
@@ -258,10 +275,10 @@ analysis:check-CUDNN_FRONTEND_SKIP_JSON_LIB:
         - ci/build_wo_json.sh
 
 build:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     needs: []
     stage: build
     extends:
+        - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .build:template
 
@@ -293,55 +310,68 @@ test:cudnn_dev_latest:
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
-        - .test:template
+        - .cpp_samples:template
     needs: ["build:cudnn_dev_latest"]
     
-pytest:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+python_tests:cudnn_dev_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
-        - .pytest:template
+        - .python_tests:template
     needs: ["build:cudnn_dev_latest"]
     resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .pycudnntest:template
     needs: ["build:cudnn_dev_latest"]
-    
-L4_graph_runner:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+
+cpp_tests:cudnn_dev_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_dev_image:template
+        - .fetch_cudnn_dev:template
+        - .cpp_tests:template
+    needs: ["build:cudnn_dev_latest"]
+    
+L4_graph_runner:cudnn_dev_latest:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .L4_graph_runner:template
     needs: ["build:cudnn_dev_latest"]
     
 L4_graph_runner_large:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     parallel:
         matrix:
             - ARCH: ["Ampere", "Hopper"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .L4_graph_runner_large:template
     needs: ["build:cudnn_dev_latest"]
@@ -349,70 +379,82 @@ L4_graph_runner_large:cudnn_dev_latest:
         - schedules
 
 build:cudnn_rel_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     needs: []
     stage: build
     extends:
+        - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .build:template
 
-test:cudnn_rel_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+cpp_samples:cudnn_rel_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
-        - .test:template
+        - .cpp_samples:template
     needs: ["build:cudnn_rel_latest"]
     
-pytest:cudnn_rel_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+python_tests:cudnn_rel_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
-        - .pytest:template
+        - .python_tests:template
     needs: ["build:cudnn_rel_latest"]
     resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_rel_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .pycudnntest:template
     needs: ["build:cudnn_rel_latest"]
-    
-L4_graph_runner:cudnn_rel_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
+
+cpp_tests:cudnn_rel_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_rel_image:template
+        - .fetch_cudnn_rel:template
+        - .cpp_tests:template
+    needs: ["build:cudnn_rel_latest"]
+    
+L4_graph_runner:cudnn_rel_latest:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    extends:
+        - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .L4_graph_runner:template
     needs: ["build:cudnn_rel_latest"]
     
 L4_graph_runner_large:cudnn_rel_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     parallel:
         matrix:
             - ARCH: ["Ampere", "Hopper"]
     tags:
         - ${ARCH}
     extends:
+        - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .L4_graph_runner_large:template
     needs: ["build:cudnn_rel_latest"]
@@ -486,9 +528,9 @@ build:cudnn_8.9_windows:
         - cmake ../
         - cmake --build . -j16 --verbose
 
-notebooks:cudnn_dev_latest:
+python_samples:cudnn_dev_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
-    stage: notebooks
+    stage: python_samples
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -497,25 +539,25 @@ notebooks:cudnn_dev_latest:
     script:
         - !reference [.fetch_cudnn_dev:template, before_script]
         - pip install -v .
-        - ci/run_notebooks.sh
+        - ci/run_python_samples.sh
     needs: []
 
-"notebooks:cudnn_8.9.5.29_12.2.2":
+"python_samples:cudnn_8.9.5.29_12.2.2":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.5.29_12.2.2"
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .notebooks:template
+  extends: .python_samples:template
   needs: []
 
-"notebooks:cudnn_9.0.0.312_12.3.1":
+"python_samples:cudnn_9.0.0.312_12.3.1":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .notebooks:template
+  extends: .python_samples:template
   needs: []

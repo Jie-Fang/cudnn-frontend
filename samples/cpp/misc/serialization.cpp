@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -42,7 +42,7 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
     cudnnHandle_t handle;  // Handle to use during deserialize and execute
 
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto build_and_validate_graph_helper =
         [](int64_t n, int64_t c, int64_t h, int64_t w, int64_t k, int64_t r, int64_t s)
@@ -105,7 +105,7 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
                              int64_t n, int64_t c, int64_t h, int64_t w, int64_t k, int64_t r, int64_t s) -> bool {
         cudnnHandle_t handle;
 
-        checkCudnnErr(cudnnCreate(&handle));
+        CUDNN_CHECK(cudnnCreate(&handle));
 
         auto graph = build_and_validate_graph_helper(n, c, h, w, k, r, s);
 
@@ -129,7 +129,7 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
         std::vector<uint8_t> serialized_data;
 
-        checkCudnnErr(cudnnCreate(&handle));
+        CUDNN_CHECK(cudnnCreate(&handle));
 
         auto graph = build_and_validate_graph_helper(n, c, h, w, k, r, s);
 
@@ -168,13 +168,19 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
     // Deserialize the graph and execute
     auto graph = deserialize(handle, serialize_data);
 
+    cudnn_frontend::graph::Tensor_attributes tensor_attr;
+    auto result = graph->query_tensor_attributes_of_uid(x_tensor, tensor_attr);
+    REQUIRE(result.is_good());
+
     Surface<half> x_device_memory(n * c * h * w, false);
     Surface<half> w_device_memory(k * c * r * s, false);
     Surface<half> s_device_memory(k, false);
     Surface<half> b_device_memory(k, false);
     Surface<half> y_device_memory(n * k * h * w, false);  // Should be p, q.
 
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
 
     std::unordered_map<int64_t, void*> variant_pack = {{x_tensor, x_device_memory.devPtr},
                                                        {w_tensor, w_device_memory.devPtr},
@@ -310,7 +316,7 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                                            float dropout_probability) -> bool {
         cudnnHandle_t handle;
 
-        checkCudnnErr(cudnnCreate(&handle));
+        CUDNN_CHECK(cudnnCreate(&handle));
 
         auto graph = build_and_validate_graph_helper(
             b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability);
@@ -339,7 +345,7 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         std::vector<uint8_t> serialized_data;
 
-        checkCudnnErr(cudnnCreate(&handle));
+        CUDNN_CHECK(cudnnCreate(&handle));
 
         auto graph = build_and_validate_graph_helper(
             b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability);
@@ -378,7 +384,7 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
         serialize(b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability);
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto graph = deserialize(handle, serialize_data);
 
@@ -395,9 +401,11 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
     Surface<int32_t> dropoutSeed(scaleSize, false, seed_value);
     Surface<int32_t> dropoutOffset(scaleSize, false, (int32_t)1);
 
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
 
-    std::cout << "Graph requires workspace " << graph->get_workspace_size() << std::endl;
+    std::cout << "Graph requires workspace " << workspace_size << std::endl;
 
     std::unordered_map<int64_t, void*> variant_pack = {{uid_Q, devPtrQ},
                                                        {uid_K, devPtrK},
@@ -409,5 +417,5 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudnnErr(cudnnDestroy(handle));
+    CUDNN_CHECK(cudnnDestroy(handle));
 }

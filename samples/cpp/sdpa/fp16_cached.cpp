@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cuda_runtime_api.h>
 
@@ -115,7 +115,7 @@ TEST_CASE("Cached sdpa", "[graph][sdpa][flash]") {
     }
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto fwd_graph = create_sdpa_forward_graph(b, h_q, h_k, h_v, s_q, s_kv, d_qk, d_v);
     auto bwd_graph = create_sdpa_backward_graph(b, h_q, h_k, h_v, s_q, s_kv, d_qk, d_v);
@@ -146,9 +146,12 @@ TEST_CASE("Cached sdpa", "[graph][sdpa][flash]") {
                     {O_UID, o_tensor.devPtr},
                     {STATS_UID, stats_tensor.devPtr}};
 
-    Surface<int8_t> fwd_workspace(fwd_graph2->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(fwd_graph2->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> fwd_workspace(workspace_size, false);
+
     REQUIRE(fwd_graph2->execute(handle, variant_pack, fwd_workspace.devPtr).is_good());
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     Surface<half> dO_tensor(b * h_q * s_q * d_qk, false);
     Surface<half> dQ_tensor(b * h_q * s_q * d_qk, false);
@@ -166,10 +169,13 @@ TEST_CASE("Cached sdpa", "[graph][sdpa][flash]") {
                     {DQ_UID, dQ_tensor.devPtr},
                     {DK_UID, dK_tensor.devPtr},
                     {DV_UID, dV_tensor.devPtr}};
-    Surface<int8_t> bwd_workspace(bwd_graph2->get_workspace_size(), false);
+
+    REQUIRE(bwd_graph2->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> bwd_workspace(workspace_size, false);
+
     REQUIRE(bwd_graph2->execute(handle, variant_pack, bwd_workspace.devPtr).is_good());
 
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
 }

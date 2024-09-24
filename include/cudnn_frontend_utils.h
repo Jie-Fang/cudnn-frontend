@@ -104,7 +104,7 @@ struct nlohmann::adl_serializer<std::variant<int32_t, half, float, nv_bfloat16>>
     static void
     from_json(const nlohmann::json& j, std::variant<int32_t, half, float, nv_bfloat16>& data) {
         if (!j.is_object() || !j.contains("index") || !j.contains("value")) {
-            throw std::invalid_argument("Invalid JSON format for std::variant");
+            return;
         }
 
         size_t type_index = j.at("index").get<size_t>();
@@ -117,7 +117,7 @@ struct nlohmann::adl_serializer<std::variant<int32_t, half, float, nv_bfloat16>>
         } else if (type_index == 3) {
             data = j.at("value").get<nv_bfloat16>();
         } else {
-            throw std::out_of_range("Variant index out of range");
+            return;
         }
     }
 };
@@ -444,6 +444,7 @@ enum class DescriptorType_t {
     OPERATION_RESHAPE_DESCRIPTOR,
     RNG_DESCRIPTOR,
     OPERATION_RNG_DESCRIPTOR,
+    OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR,
     OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR
 };
 
@@ -901,6 +902,9 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
             break;
         case DescriptorType_t::OPERATION_RNG_DESCRIPTOR:
             os << "OPERATION_RNG_DESCRIPTOR";
+            break;
+        case DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+            os << "OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR";
             break;
         case DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
             os << "OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR";
@@ -1454,6 +1458,13 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
+
+        case DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+#if (CUDNN_VERSION >= 90500)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90500, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#endif
         case DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
 #if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
             NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
@@ -1836,6 +1847,11 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
             return DescriptorType_t::RNG_DESCRIPTOR;
         case CUDNN_BACKEND_OPERATION_RNG_DESCRIPTOR:
             return DescriptorType_t::OPERATION_RNG_DESCRIPTOR;
+#endif
+
+#if (CUDNN_VERSION >= 90500)
+        case CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
+            return DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
 #endif
 #if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
         case CUDNN_BACKEND_OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:

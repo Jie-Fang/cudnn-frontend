@@ -48,6 +48,10 @@ Users are expected to build a graph once and then execute it multiple times. Thi
 
 cudnn's sdpa operation enables various customizations on itself. These examples show how to build a graph with sdpa operation for your own custom sdpa needs.
 
+- [Fwd SDPA with paged caches](cpp/sdpa/fp16_fwd_with_paged_caches.cpp)
+
+Similar to [Fwd SDPA](cpp/sdpa/fp16_fwd.cpp), but here with the ability to use non contiguous K and V caches in combination with page tables, as described in the [PagedAttention paper](https://arxiv.org/abs/2309.06180).
+
 - [Fwd FP8 SDPA](cpp/sdpa/fp8_fwd.cpp) and [Bwd SDPA](cpp/sdpa/fp8_bwd.cpp)
 
 Extends the sdpa sample to fp8 precision.

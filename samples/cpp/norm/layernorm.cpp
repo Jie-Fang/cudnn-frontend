@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -73,7 +73,7 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
         SKIP("LayerNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -93,7 +93,10 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
     float epsilon_cpu = 1e-05f;
     Surface<half> Y_tensor(batch_size * seq_length * hidden_size, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, X_tensor.devPtr},
         {mean, Mean_tensor.devPtr},
@@ -156,7 +159,7 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
         SKIP("LayerNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -174,7 +177,10 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
     float epsilon_cpu = 1e-05f;
     Surface<half> Y_tensor(batch_size * seq_length * hidden_size, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, X_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
@@ -236,7 +242,7 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
         SKIP("LayerNorm Backward requires Ampere and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -257,7 +263,10 @@ TEST_CASE("LayerNorm Backward", "[layernorm][graph]") {
     Surface<float> Dbias_tensor(hidden_size, false);
     Surface<half> DX_tensor(batch_size * seq_length * hidden_size, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, X_tensor.devPtr},
         {DY, DY_tensor.devPtr},

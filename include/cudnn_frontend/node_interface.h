@@ -130,6 +130,7 @@ class INode : public ICudnn {
         SCALED_DOT_PRODUCT_ATTENTION,
         SLICE,
         WGRAD,
+        PAGED_CACHE_LOAD,
         BLOCK_SCALE_QUANTIZE
     };
     Type tag;
@@ -184,6 +185,13 @@ class INode : public ICudnn {
         std::shared_ptr<Tensor_attributes> offset,
         Rng_attributes attributes,
         std::shared_ptr<Tensor_attributes> y);
+
+    void
+    paged_cache_load(std::shared_ptr<Tensor_attributes> container,
+                     std::shared_ptr<Tensor_attributes> seqLen,
+                     std::shared_ptr<Tensor_attributes> pageTable,
+                     PagedCacheLoad_attributes attributes,
+                     std::shared_ptr<Tensor_attributes> yOut);
 
     void
     block_scale_quantize(std::shared_ptr<Tensor_attributes> x,
@@ -326,7 +334,7 @@ class INode : public ICudnn {
     serialize(json& j) const = 0;
 #endif
 
-    size_t
+    virtual size_t
     key() {
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j;

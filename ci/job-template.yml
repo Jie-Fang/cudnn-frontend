@@ -43,22 +43,22 @@ spec:
     - ${ARCH}
   script:
     - export PYTHONPATH=build
-    - pytest test/python_fe -n 4 --tb=short --junit-xml=result-junit.xml
+    - pytest test/python -n 4 --tb=short --junit-xml=result-junit.xml
   artifacts:
     when: always
     reports:
       junit: result-junit.xml
 
-"unit_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+"cpp_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  stage: unit_tests
+  stage: cpp_tests
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
-  script:
-    - build/bin/unit_tests --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
-  artifacts:
-    when: always
-    reports:
-      junit: result-junit.xml
+  parallel:
+    matrix:
+      - ARCH: ["Hopper", "Ampere"]
+  tags:
+    - ${ARCH}
+  extends: .cpp_tests:template
 
 "pycudnntest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"

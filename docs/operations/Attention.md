@@ -17,7 +17,7 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 
 - C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 
-- Python tests: [test/python_fe/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python_fe/test_mhas.py)
+- Python tests: [test/python/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas.py)
 
 #### Configurable Options:
 
@@ -38,22 +38,33 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
     - `dropout mask` that matches the attention weights' dimensions, indicating which weights to drop. The dimensions that are passed as 1 will apply a broadcasted dropout mask.
     - `dropout scale` used to adjust the scale of the remaining weights accordingly, such as $1 / (1 - \text{dropout probability})$.
 - Packed layout: With packed layout, the query, key, value, and output tensor should be [ragged tensors](https://www.tensorflow.org/guide/ragged_tensor), which are tensors with nested variable length lists as inner dimensions. Users must pass another tensor called ragged offset tensor using the `Tensor_attributes.set_ragged_offset()` method. the ragged offset tensor must be a tensor of size $(B + 1, 1, 1, 1)$ that contains the nested tensor's offset in terms of number of elements (not bytes). The last value of the offset tensor specifies the offset of the past-the-end element of the ragged tensor. See Appendix A for more information on the supported layouts.
+- Paged caches: with paged K and/or V caches, the K/V blocks no longer need to be contiguous, allowing users to better utilize memory by avoiding fragmentation. 
+  - Users must therefore:
+    - Pass a `page table k` tensor containing offsets to the container with K blocks. This is optional, and only needed if the K cache is paged.
+    - Pass a `page table v` tensor containing offsets to the container with V blocks. This is optional, and only needed if the V cache is paged.
+    - Pass anything required for `Padding mask` above (i.e., per-batch sequence lengths for both K and V caches). This is needed if at least one of the K/V caches are paged.
+  - Offsets to the K/V containers will be calculcated as 
+    - $Kcache[b,h,s,d] = K[page\ table\ k[b,1,s / bs_k, 1],h,s\ mod\ bs_{k},d]$
+    - $Vcache[b,h,s,d] = V[page\ table\ v[b,1,s / bs_v, 1],h,s\ mod\ bs_{v},d]$
+  - See also the [PagedAttention paper](https://arxiv.org/abs/2309.06180).
 
 ##### Input Tensors:
 
-| Tensor Name                         | Device     | Data Type      | Dimensions                                                                                                     |
-|-------------------------------------|------------|----------------|----------------------------------------------------------------------------------------------------------------|
-| Q                                   | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{qk})$                                                                                    |
-| K                                   | GPU        | FP16 or BF16   | $(B, H_{k}, S_{kv}, D_{qk})$                                                                                   |
-| V                                   | GPU        | FP16 or BF16   | $(B, H_{v}, S_{kv}, D_{v})$                                                                                    |
-| (Bias mask) Bias Mask               | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
-| (Padding mask) Sequence Length Q    | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Padding mask) Sequence Length KV   | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Philoc RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Philoc RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Custom Dropout Mask) Mask          | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
-| (Custom Dropout Mask) Scale         | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
-| (Packed Layout) Ragged Offset       | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
+| Tensor Name                                    | Device     | Data Type      | Dimensions                                                                                                     |
+|------------------------------------------------|------------|----------------|----------------------------------------------------------------------------------------------------------------|
+| Q                                              | GPU        | FP16 or BF16   | $(B, H_{q}, S_{q}, D_{qk})$                                                                                    |
+| K                                              | GPU        | FP16 or BF16   | $(B, H_{k}, S_{kv}, D_{qk})$, or $(num\_blocks_{k}, H_{k}, bs_{k}, D_{qk})$ in case of paged K cache           |
+| V                                              | GPU        | FP16 or BF16   | $(B, H_{v}, S_{kv}, D_{v})$, or $(num\_blocks_{v}, H_{v}, bs_{v}, D_{v})$  in case of paged V cache            |
+| (Bias mask) Bias Mask                          | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Padding mask/Paged Caches) Sequence Length Q  | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Padding mask/Paged Caches) Sequence Length KV | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Philoc RNG Dropout) Seed                      | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philoc RNG Dropout) Offset                    | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Custom Dropout Mask) Mask                     | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Custom Dropout Mask) Scale                    | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
+| (Packed Layout) Ragged Offset                  | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
+| (Paged Caches) Page Table K                    | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{k}), 1)$                                                                               |
+| (Paged Caches) Page Table V                    | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{v}), 1)$                                                                               |
 
 ##### Output Tensors
 
@@ -73,6 +84,10 @@ Where,
 - $S_{kv}$ is the sequence length of the key and value
 - $D_{qk}$ is the embedding dimension per head of query and key
 - $D_{v}$ is the embedding dimension per head of value
+- $bs_{k}$ is the (power of 2) block size of the K container
+- $bs_{v}$ is the (power of 2) block size of the V container
+- $num\_blocks_{k}$ is the number of blocks in the K container
+- $num\_blocks_{v}$ is the number of blocks in the V container
 
 #### Group-query attention (GQA) and Multi-query attention (MQA)
 
@@ -146,6 +161,13 @@ set_dropout(std::shared_ptr<Tensor_attributes> mask,
 
 SDPA_attributes&
 set_compute_data_type(DataType_t value);
+
+SDPA_attributes&
+set_page_table_K(std::shared_ptr<Tensor_attributes> value);
+
+SDPA_attributes&
+set_page_table_V(std::shared_ptr<Tensor_attributes> value);
+
 ```
 
 #### Python API:
@@ -153,8 +175,8 @@ set_compute_data_type(DataType_t value);
 ```
 Args:
     q (cudnn_tensor): The query data.
-    k (cudnn_tensor): The key data.
-    v (cudnn_tensor): The value data.
+    k (cudnn_tensor): The key data. When page_table_k is provided, 'k' is a container of non-contiguous key data.
+    v (cudnn_tensor): The value data. When page_table_v is provided, 'v' is a container of non-contiguous value data.
     is_inference (bool): Whether it is an inference step or training step.
     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
@@ -166,6 +188,8 @@ Args:
     use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
     rng_dump (Optional[cudnn_tensor]): Debug tensor used to output the Philox RNG dropout mask
+    page_table_k (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
+    page_table_v (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
 
@@ -182,7 +206,7 @@ This operation computes gradient tensors for scaled dot product attention (SDPA)
 
 - C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 
-- Python tests: [test/python_fe/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python_fe/test_mhas.py)
+- Python tests: [test/python/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas.py)
 
 #### Configurable Options:
 
@@ -356,6 +380,13 @@ $O = SV$
 | Descale Q             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Descale K             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Descale V             | GPU        | FP32         | $(1, 1, 1, 1)$               |
+| (Bias mask) Bias Mask               | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Padding mask) Sequence Length Q    | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Padding mask) Sequence Length KV   | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
+| (Philoc RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philoc RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Custom Dropout Mask) Mask          | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Custom Dropout Mask) Scale         | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
 | Descale S             | GPU        | FP32         | $(1, 1, 1, 1)$               |
 | Scale S               | GPU        | FP32         | $(1, 1, 1, 1)$               |
 
@@ -421,7 +452,29 @@ set_attn_scale(float const value);
 
 SDPA_fp8_attributes&
 set_causal_mask(bool const value);
+
+SDPA_fp8_attributes&
+set_bias(std::shared_ptr<Tensor_attributes> value);
+
+SDPA_fp8_attributes&
+set_padding_mask(bool const value);
+
+SDPA_fp8_attributes&
+set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
+
+SDPA_fp8_attributes&
+set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
+
+SDPA_fp8_attributes&
+set_dropout(float const probability,
+            std::shared_ptr<Tensor_attributes> seed,
+            std::shared_ptr<Tensor_attributes> offset);
+
+SDPA_fp8_attributes&
+set_dropout(std::shared_ptr<Tensor_attributes> mask,
+            std::shared_ptr<Tensor_attributes> scale);
 ```
+
 
 #### Python API: 
 ```

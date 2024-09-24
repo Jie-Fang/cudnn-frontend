@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -57,12 +57,8 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
                                  .set_stride({hidden_size, hidden_size, 1, hidden_size})
                                  .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon = graph.tensor(fe::graph::Tensor_attributes()
-                                    .set_name("epsilon")
-                                    .set_dim({1, 1, 1, 1})
-                                    .set_stride({1, 1, 1, 1})
-                                    .set_data_type(fe::DataType_t::FLOAT)
-                                    .set_is_pass_by_value(true));
+    float epsilon_cpu = 1e-05f;
+    auto epsilon      = graph.tensor(epsilon_cpu);
 
     auto layernorm_options =
         fe::graph::Layernorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon);
@@ -95,7 +91,7 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
         SKIP("MXFP8 requires Blackwell and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -112,7 +108,6 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
     Surface<float> Var_tensor(batch_size * seq_length, false);
     Surface<float> Scale_tensor(hidden_size, false);
     Surface<float> Bias_tensor(hidden_size, false);
-    float epsilon_cpu = 1e-05f;
     Surface<int8_t> Y_row_tensor(batch_size * seq_length * hidden_size, false);
     Surface<int8_t> mx_row_tensor(batch_size * seq_length * hidden_size / block_size, false);
     Surface<int8_t> Y_col_tensor(batch_size * seq_length * hidden_size, false);
@@ -125,7 +120,6 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
         {inv_variance, Var_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
         {bias, Bias_tensor.devPtr},
-        {epsilon, &epsilon_cpu},
         {Y_row, Y_row_tensor.devPtr},
         {mx_row, mx_row_tensor.devPtr},
         {Y_col, Y_col_tensor.devPtr},
@@ -168,12 +162,8 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
                                  .set_stride({hidden_size, 1, hidden_size, hidden_size})
                                  .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon = graph.tensor(fe::graph::Tensor_attributes()
-                                    .set_name("epsilon")
-                                    .set_dim({1, 1, 1, 1})
-                                    .set_stride({1, 1, 1, 1})
-                                    .set_data_type(fe::DataType_t::FLOAT)
-                                    .set_is_pass_by_value(true));
+    float epsilon_cpu = 1e-05f;
+    auto epsilon      = graph.tensor(epsilon_cpu);
 
     auto layernorm_options =
         fe::graph::Layernorm_attributes().set_forward_phase(fe::NormFwdPhase_t::INFERENCE).set_epsilon(epsilon);
@@ -194,7 +184,7 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
         SKIP("MXFP8 requires Blackwell and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -209,7 +199,6 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
     Surface<half> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Scale_tensor(hidden_size, false);
     Surface<float> Bias_tensor(hidden_size, false);
-    float epsilon_cpu = 1e-05f;
     Surface<int8_t> Y_tensor(batch_size * seq_length * hidden_size, false);
     Surface<int8_t> mx_scale_tensor(batch_size * seq_length * hidden_size / block_size, false);
 
@@ -218,7 +207,6 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
         {X, X_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
         {bias, Bias_tensor.devPtr},
-        {epsilon, &epsilon_cpu},
         {Y, Y_tensor.devPtr},
         {mx_scale, mx_scale_tensor.devPtr}};
 
@@ -253,13 +241,8 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
                                   .set_stride({hidden_size, hidden_size, 1, hidden_size})
                                   .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon = graph.tensor(fe::graph::Tensor_attributes()
-                                    .set_name("epsilon")
-                                    .set_dim({1, 1, 1, 1})
-                                    .set_stride({1, 1, 1, 1})
-                                    .set_is_pass_by_value(true)
-                                    .set_data_type(fe::DataType_t::FLOAT)
-                                    .set_is_pass_by_value(true));
+    float epsilon_cpu = 1e-05f;
+    auto epsilon      = graph.tensor(epsilon_cpu);
 
     auto rmsnorm_options =
         fe::graph::Rmsnorm_attributes().set_forward_phase(fe::NormFwdPhase_t::TRAINING).set_epsilon(epsilon);
@@ -288,7 +271,7 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
         SKIP("MXFP8 requires Blackwell and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -303,7 +286,6 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
     Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Var_tensor(batch_size * seq_length, false);
     Surface<float> Scale_tensor(hidden_size, false);
-    float epsilon_cpu = 1e-05f;
     Surface<int8_t> Y_row_tensor(batch_size * seq_length * hidden_size, false);
     Surface<int8_t> mx_row_tensor(batch_size * seq_length * hidden_size / block_size, false);
     Surface<int8_t> Y_col_tensor(batch_size * seq_length * hidden_size, false);
@@ -314,7 +296,6 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
         {X, X_tensor.devPtr},
         {inv_variance, Var_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
-        {epsilon, &epsilon_cpu},
         {Y_row, Y_row_tensor.devPtr},
         {mx_row, mx_row_tensor.devPtr},
         {Y_col, Y_col_tensor.devPtr},
@@ -340,28 +321,24 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
     auto hidden_size = 128;
     auto block_size  = 16;
 
-    auto X       = graph.tensor(fe::graph::Tensor_attributes()
+    auto X     = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_data_type(fe::DataType_t::FLOAT)
                               .set_dim({batch_size, seq_length, hidden_size, 1})
                               .set_stride({seq_length * hidden_size, hidden_size, 1, hidden_size}));
-    auto scale   = graph.tensor(fe::graph::Tensor_attributes()
+    auto scale = graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("scale")
                                   .set_dim({1, 1, hidden_size, 1})
                                   .set_stride({hidden_size, hidden_size, 1, hidden_size})
                                   .set_data_type(fe::DataType_t::FLOAT));
-    auto bias    = graph.tensor(fe::graph::Tensor_attributes()
+    auto bias  = graph.tensor(fe::graph::Tensor_attributes()
                                  .set_name("bias")
                                  .set_dim({1, 1, hidden_size, 1})
                                  .set_stride({hidden_size, hidden_size, 1, hidden_size})
                                  .set_data_type(fe::DataType_t::FLOAT));
-    auto epsilon = graph.tensor(fe::graph::Tensor_attributes()
-                                    .set_name("epsilon")
-                                    .set_dim({1, 1, 1, 1})
-                                    .set_stride({1, 1, 1, 1})
-                                    .set_is_pass_by_value(true)
-                                    .set_data_type(fe::DataType_t::FLOAT)
-                                    .set_is_pass_by_value(true));
+
+    float epsilon_cpu = 1e-05f;
+    auto epsilon      = graph.tensor(epsilon_cpu);
 
     auto rmsnorm_options = fe::graph::Rmsnorm_attributes()
                                .set_forward_phase(fe::NormFwdPhase_t::INFERENCE)
@@ -383,7 +360,7 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
         SKIP("NVFP4 requires Blackwell and up");
     }
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -398,7 +375,6 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
     Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Scale_tensor(hidden_size, false);
     Surface<float> Bias_tensor(hidden_size, false);
-    float epsilon_cpu = 1e-05f;
     Surface<int8_t> Y_tensor(batch_size * seq_length * hidden_size / 2, false);
     Surface<int8_t> mx_scale_tensor(batch_size * seq_length * hidden_size / block_size, false);
 
@@ -407,7 +383,6 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
         {X, X_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
         {bias, Bias_tensor.devPtr},
-        {epsilon, &epsilon_cpu},
         {Y, Y_tensor.devPtr},
         {mx_scale, mx_scale_tensor.devPtr}};
 

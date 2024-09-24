@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cuda_runtime_api.h>
 
@@ -42,8 +42,9 @@ This example shows how to construct a sdpa backward graph->
 #define O_UID 4
 #define STATS_UID 5
 #define BIAS_UID 6
-#define SEQ_LEN_Q_UID 7
-#define SEQ_LEN_KV_UID 8
+#define DBIAS_UID 7
+#define SEQ_LEN_Q_UID 8
+#define SEQ_LEN_KV_UID 9
 
 #define DO_UID 101
 #define DQ_UID 102
@@ -128,6 +129,13 @@ create_sdpa_backward_graph(int64_t const b,
                                       .set_dim({b, 1, s_q, s_kv})
                                       .set_stride({s_q * s_kv, s_q * s_kv, s_kv, 1}));
         sdpa_options.set_bias(bias);
+
+        auto dbias = graph->tensor(fe::graph::Tensor_attributes()
+                                       .set_name("dbias")
+                                       .set_uid(DBIAS_UID)
+                                       .set_dim({1, h_q, s_q, s_kv})
+                                       .set_stride({s_q * s_kv * h_q, s_q * s_kv, s_kv, 1}));
+        sdpa_options.set_dbias(dbias);
     }
 
     // If padding mask is enabled, set sequence lengths
@@ -182,7 +190,7 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
     bool causal_mask   = true;
     bool padding_mask  = (cudnnGetVersion() >= 8903);
     bool alibi_mask    = (cudnnGetVersion() >= 8904);
-    bool has_attn_bias = (cudnnGetVersion() >= 8903);
+    bool has_attn_bias = (cudnnGetVersion() >= 90500);
 
     if (cudnnGetVersion() < 8903) {
         SKIP("Test requires cudnn 8.9.3 or above");
@@ -190,7 +198,7 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
     }
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     // Create the SDPA backward graph
     auto graph = create_sdpa_backward_graph(b,
@@ -223,7 +231,8 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
     Surface<half> dK_tensor(b * h_k * s_kv * d_qk, false);
     Surface<half> dV_tensor(b * h_v * s_kv * d_v, false);
 
-    Surface<half> bias_tensor(b * 1 * s_q * s_kv, false);
+    Surface<half> bias_tensor(1 * h_q * s_q * s_kv, false);
+    Surface<half> dbias_tensor(1 * h_q * s_q * s_kv, false);
 
     // Create variant pack with input and output tensors
     std::unordered_map<fe::graph::Tensor_attributes::uid_t, void*> variant_pack = {// inputs
@@ -240,7 +249,8 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
 
     // If attention bias is provided, add it to the variant pack
     if (has_attn_bias) {
-        variant_pack[BIAS_UID] = bias_tensor.devPtr;
+        variant_pack[BIAS_UID]  = bias_tensor.devPtr;
+        variant_pack[DBIAS_UID] = dbias_tensor.devPtr;
     }
 
     // If padding mask is enabled, add sequence lengths to the variant pack
@@ -250,25 +260,28 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
         std::vector<int32_t> hostActualSeqlenQ(b, 20);
         std::vector<int32_t> hostActualSeqlenKV(b, 20);
 
-        checkCudaErr(cudaMemcpy(devActualSeqlenQ.devPtr,
-                                hostActualSeqlenQ.data(),
-                                sizeof(hostActualSeqlenQ[0]) * b,
-                                cudaMemcpyHostToDevice));
-        checkCudaErr(cudaMemcpy(devActualSeqlenKV.devPtr,
-                                hostActualSeqlenKV.data(),
-                                sizeof(hostActualSeqlenKV[0]) * b,
-                                cudaMemcpyHostToDevice));
-        checkCudaErr(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaMemcpy(devActualSeqlenQ.devPtr,
+                              hostActualSeqlenQ.data(),
+                              sizeof(hostActualSeqlenQ[0]) * b,
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(devActualSeqlenKV.devPtr,
+                              hostActualSeqlenKV.data(),
+                              sizeof(hostActualSeqlenKV[0]) * b,
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaDeviceSynchronize());
 
         variant_pack[SEQ_LEN_Q_UID]  = devActualSeqlenQ.devPtr;
         variant_pack[SEQ_LEN_KV_UID] = devActualSeqlenKV.devPtr;
     }
 
     // Allocate workspace
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
 }

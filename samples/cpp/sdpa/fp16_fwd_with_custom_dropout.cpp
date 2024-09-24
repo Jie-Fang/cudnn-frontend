@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cuda_runtime_api.h>
 
@@ -30,7 +30,7 @@ namespace fe = cudnn_frontend;
 
 /*
 Run this example by using command:
-bin/samples "Toy sdpa forward"
+bin/samples "Toy sdpa forward with dropout"
 
 This example shows how to construct a sdpa forward graph.
 */
@@ -146,7 +146,7 @@ TEST_CASE("Toy sdpa forward with dropout", "[graph][sdpa][flash][forward]") {
     }
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto graph = create_sdpa_forward_graph_with_custom_dropout(
         b, h_q, h_k, h_v, s_q, s_kv, d_qk, d_v, attn_scale, is_inference, causal_mask, has_attn_bias);
@@ -178,10 +178,13 @@ TEST_CASE("Toy sdpa forward with dropout", "[graph][sdpa][flash][forward]") {
         variant_pack[STATS_UID] = statsTensor.devPtr;
     }
 
-    Surface<int8_t> workspace(graph->get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph->get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
 }

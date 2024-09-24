@@ -285,6 +285,8 @@ class PyGraph {
          py::object const& sliding_window_length,
          py::object const& dropout,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_k,
+         std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name);
 
@@ -432,9 +434,10 @@ class PyGraph {
     }
 
     int64_t
-    get_workspace_size_plan_at_index(int64_t index) const {
-        return graph.get_workspace_size_plan_at_index(index);
-    }
+    get_workspace_size_plan_at_index(int64_t index);
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    query_tensor_attributes_of_uid(int64_t const uid) const;
 };
 
 }  // namespace cudnn_frontend::python_bindings

@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
 
@@ -48,7 +48,7 @@ TEST_CASE("Convolution Wgrad", "[wgrad][graph][wgrad][Conv_wgrad]") {
     DW->set_output(true).set_dim({64, 64, 3, 3});
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -64,7 +64,10 @@ TEST_CASE("Convolution Wgrad", "[wgrad][graph][wgrad][Conv_wgrad]") {
     Surface<half> dy_tensor(4 * 64 * 16 * 16, false);
     Surface<half> dw_tensor(64 * 64 * 3 * 3, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {
         {X, x_tensor.devPtr}, {DY, dy_tensor.devPtr}, {DW, dw_tensor.devPtr}};
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
@@ -112,7 +115,7 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     }
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     REQUIRE(graph.validate().is_good());
 
@@ -130,7 +133,10 @@ TEST_CASE("Wgrad Graph", "[wgrad][graph][scale-bias-relu-wgrad][ConvBNwgrad]") {
     Surface<half> dy_tensor(4 * 64 * 16 * 16, false);
     Surface<half> dw_tensor(64 * 64 * 3 * 3, false);
 
-    Surface<int8_t> workspace(graph.get_workspace_size(), false);
+    int64_t workspace_size;
+    REQUIRE(graph.get_workspace_size(workspace_size).is_good());
+    Surface<int8_t> workspace(workspace_size, false);
+
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void*> variant_pack = {{X, x_tensor.devPtr},
                                                                                              {S, s_tensor.devPtr},
                                                                                              {B, b_tensor.devPtr},
