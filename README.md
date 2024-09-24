@@ -60,7 +60,7 @@ To provide a custom CUDNN installation path, use environment variable: `CUDNN_PA
 #### Checking the installation
 To test whether installation is successful, run:
 ```
-pytest test/python_fe
+pytest test/python
 ```
 
 NOTE: Only v1.0 API is exposed via python bindings.

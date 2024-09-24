@@ -18,7 +18,7 @@ endif()
 include(${PROJECT_SOURCE_DIR}/cmake/cuDNN.cmake)
 
 add_executable(
-    unit_tests
+    tests
 
     serialize.cpp
     validate.cpp
@@ -28,7 +28,7 @@ add_executable(
 
 if (MSVC)
     target_compile_options(
-        unit_tests PRIVATE
+        tests PRIVATE
         /W4 /WX # warning level 3 and all warnings as errors
         /wd4100 # allow unused parameters
         /wd4458 # local hides class member (currently a problem for all inline setters)
@@ -38,7 +38,7 @@ if (MSVC)
     )
 else()
     target_compile_options(
-        unit_tests PRIVATE
+        tests PRIVATE
         -Wall
         -Wextra
         -Werror
@@ -47,7 +47,7 @@ else()
 endif()
 
 target_link_libraries(
-    unit_tests
+    tests
     cudnn_frontend
     _cudnn_frontend_pch
     Catch2::Catch2WithMain
@@ -58,7 +58,7 @@ target_link_libraries(
 # cuDNN dlopen's its libraries
 # Add all libraries in link line as NEEDED
 set_target_properties(
-    unit_tests
+    tests
     PROPERTIES
     LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin

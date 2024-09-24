@@ -4,7 +4,7 @@ project(cudnn_frontend VERSION 1.7.0)
 
 option(CUDNN_FRONTEND_SKIP_JSON_LIB "Defines whether FE should not include nlohmann/json.hpp." OFF)
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
-option(CUDNN_FRONTEND_BUILD_UNIT_TESTS "Defines if unittests are built or not." ON)
+option(CUDNN_FRONTEND_BUILD_TESTS "Defines if unittests are built or not." ON)
 
 if(MSVC OR MSYS OR MINGW)
     option(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS "Defines if python bindings are built or not." OFF)
@@ -47,7 +47,7 @@ if (CUDNN_FRONTEND_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
 
-if (CUDNN_FRONTEND_BUILD_UNIT_TESTS)
+if (CUDNN_FRONTEND_BUILD_TESTS)
     add_subdirectory(test)
 endif()
 

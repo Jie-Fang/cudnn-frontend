@@ -88,12 +88,12 @@ include:
 stages:
     - analysis
     - build
+    - cpp_samples
     - cpp_tests
+    - python_samples
     - python_tests
     - pycudnnTest
     - L4_graph_runner
-    - unit_tests
-    - notebooks
     - thunder
     - deploy
         
@@ -133,10 +133,10 @@ stages:
         paths:
             - build/
 
-.test:template:
-    stage: cpp_tests
+.cpp_samples:template:
+    stage: cpp_samples
     script:
-        - ci/run_cpp_tests.sh
+        - ci/run_cpp_samples.sh
     # Upload test report to gitlab
     artifacts:
         when: always
@@ -144,7 +144,7 @@ stages:
             junit: build/result-junit.xml
         expire_in: 1 week
 
-.pytest:template:
+.python_tests:template:
     stage: python_tests
     script:
         - ci/run_python_tests.sh
@@ -154,16 +154,16 @@ stages:
     script:
         - ci/run_pycudnntest.sh
 
-.unit_tests:template:
-    stage: unit_tests
+.cpp_tests:template:
+    stage: cpp_tests
     script:
-        - ci/run_unit_tests.sh
+        - ci/run_cpp_tests.sh
 
-.notebooks:template:
-    stage: notebooks
+.python_samples:template:
+    stage: python_samples
     script:
         - pip install -v .
-        - ci/run_notebooks.sh
+        - ci/run_python_samples.sh
 
 .L4_graph_runner:template:
     stage: L4_graph_runner
@@ -213,7 +213,7 @@ deploy:test_bdist_wheels_8.9.7_3.10:
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python_fe -n 4 --tb=short
+        - pytest test/python -n 4 --tb=short
 
 deploy:test_bdist_wheels_9.4.0_3.10:
     parallel:
@@ -239,7 +239,7 @@ deploy:test_bdist_wheels_9.4.0_3.10:
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python_fe -n 4 --tb=short
+        - pytest test/python -n 4 --tb=short
 
 analysis:clang-format:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
@@ -270,7 +270,7 @@ build:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .build:template
 
-test:cudnn_dev_latest:
+cpp_samples:cudnn_dev_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -279,10 +279,10 @@ test:cudnn_dev_latest:
     extends:
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
-        - .test:template
+        - .cpp_samples:template
     needs: ["build:cudnn_dev_latest"]
     
-pytest:cudnn_dev_latest:
+python_tests:cudnn_dev_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -291,7 +291,7 @@ pytest:cudnn_dev_latest:
     extends:
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
-        - .pytest:template
+        - .python_tests:template
     needs: ["build:cudnn_dev_latest"]
     resource_group: memory_heavy_${ARCH}
     
@@ -307,7 +307,7 @@ pycudnntest:cudnn_dev_latest:
         - .pycudnntest:template
     needs: ["build:cudnn_dev_latest"]
 
-unit_tests:cudnn_dev_latest:
+cpp_tests:cudnn_dev_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -316,7 +316,7 @@ unit_tests:cudnn_dev_latest:
     extends:
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
-        - .unit_tests:template
+        - .cpp_tests:template
     needs: ["build:cudnn_dev_latest"]
     
 L4_graph_runner:cudnn_dev_latest:
@@ -353,7 +353,7 @@ build:cudnn_rel_latest:
         - .fetch_cudnn_rel:template
         - .build:template
 
-test:cudnn_rel_latest:
+cpp_samples:cudnn_rel_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -362,10 +362,10 @@ test:cudnn_rel_latest:
     extends:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
-        - .test:template
+        - .cpp_samples:template
     needs: ["build:cudnn_rel_latest"]
     
-pytest:cudnn_rel_latest:
+python_tests:cudnn_rel_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -374,7 +374,7 @@ pytest:cudnn_rel_latest:
     extends:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
-        - .pytest:template
+        - .python_tests:template
     needs: ["build:cudnn_rel_latest"]
     resource_group: memory_heavy_${ARCH}
     
@@ -390,7 +390,7 @@ pycudnntest:cudnn_rel_latest:
         - .pycudnntest:template
     needs: ["build:cudnn_rel_latest"]
 
-unit_tests:cudnn_rel_latest:
+cpp_tests:cudnn_rel_latest:
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -399,7 +399,7 @@ unit_tests:cudnn_rel_latest:
     extends:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
-        - .unit_tests:template
+        - .cpp_tests:template
     needs: ["build:cudnn_rel_latest"]
     
 L4_graph_runner:cudnn_rel_latest:
@@ -495,9 +495,9 @@ build:cudnn_8.9_windows:
         - cmake ../
         - cmake --build . -j16 --verbose
 
-notebooks:cudnn_dev_latest:
+python_samples:cudnn_dev_latest:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
-    stage: notebooks
+    stage: python_samples
     parallel:
         matrix:
             - ARCH: ["Hopper", "Ampere"]
@@ -506,25 +506,25 @@ notebooks:cudnn_dev_latest:
     script:
         - !reference [.fetch_cudnn_dev:template, before_script]
         - pip install -v .
-        - ci/run_notebooks.sh
+        - ci/run_python_samples.sh
     needs: []
 
-"notebooks:cudnn_8.9.5.29_12.2.2":
+"python_samples:cudnn_8.9.5.29_12.2.2":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.5.29_12.2.2"
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .notebooks:template
+  extends: .python_samples:template
   needs: []
 
-"notebooks:cudnn_9.0.0.312_12.3.1":
+"python_samples:cudnn_9.0.0.312_12.3.1":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .notebooks:template
+  extends: .python_samples:template
   needs: []

@@ -7,10 +7,10 @@ function display_header() {
     echo $CUDA_VERSION
 }
 
-function run_cpp_tests() {
+function run_cpp_samples() {
     cd build
-    bin/tests --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
+    bin/samples --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
 }
 
 display_header
-run_cpp_tests
+run_cpp_samples
