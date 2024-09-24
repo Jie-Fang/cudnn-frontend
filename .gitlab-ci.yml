@@ -236,6 +236,7 @@ deploy:test_bdist_wheels_9.4.0_3.10:
         - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
         - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
         - pip uninstall -y nvidia_cudnn_frontend
+        - ls many_linux_wheels/*.whl
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
