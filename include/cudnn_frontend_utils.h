@@ -95,14 +95,14 @@ struct nlohmann::adl_serializer<nv_bfloat16> {
 };
 
 template <>
-struct nlohmann::adl_serializer<std::variant<int32_t, half, float, nv_bfloat16>> {
+struct nlohmann::adl_serializer<std::variant<int64_t, int32_t, half, float, nv_bfloat16>> {
     static void
-    to_json(nlohmann::json& j, const std::variant<int32_t, half, float, nv_bfloat16>& data) {
+    to_json(nlohmann::json& j, const std::variant<int64_t, int32_t, half, float, nv_bfloat16>& data) {
         std::visit([&](const auto& v) { j = {{"index", data.index()}, {"value", v}}; }, data);
     }
 
     static void
-    from_json(const nlohmann::json& j, std::variant<int32_t, half, float, nv_bfloat16>& data) {
+    from_json(const nlohmann::json& j, std::variant<int64_t, int32_t, half, float, nv_bfloat16>& data) {
         if (!j.is_object() || !j.contains("index") || !j.contains("value")) {
             return;
         }
@@ -111,10 +111,12 @@ struct nlohmann::adl_serializer<std::variant<int32_t, half, float, nv_bfloat16>>
         if (type_index == 0) {
             data = j.at("value").get<int32_t>();
         } else if (type_index == 1) {
-            data = j.at("value").get<half>();
+            data = j.at("value").get<int32_t>();
         } else if (type_index == 2) {
-            data = j.at("value").get<float>();
+            data = j.at("value").get<half>();
         } else if (type_index == 3) {
+            data = j.at("value").get<float>();
+        } else if (type_index == 4) {
             data = j.at("value").get<nv_bfloat16>();
         } else {
             return;

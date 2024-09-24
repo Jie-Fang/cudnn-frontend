@@ -29,7 +29,7 @@ class Tensor_attributes {
     // In approach 1, users provide a value to embed into the graph.
     // In approach 2, users set is_pass_by_value boolean and then pass a pointer to scalar value with execute() API.
     // A closed set of types that are allowed to be passed by value.
-    using pass_by_values_t = std::variant<int32_t, half, float, nv_bfloat16>;
+    using pass_by_values_t = std::variant<int64_t, int32_t, half, float, nv_bfloat16>;
 
     error_t
     validate() const {
@@ -121,6 +121,13 @@ class Tensor_attributes {
         is_pass_by_value = true;
         dim = stride = {1};
         data_type    = DataType_t::INT32;
+    }
+
+    Tensor_attributes(int64_t const& scalar) {
+        pass_by_value    = scalar;
+        is_pass_by_value = true;
+        dim = stride = {1};
+        data_type    = DataType_t::INT64;
     }
 
     std::string
