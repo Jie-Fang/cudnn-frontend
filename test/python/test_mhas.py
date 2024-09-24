@@ -1395,7 +1395,7 @@ if __name__ == "__main__":
     # ================== forward ==================
     """
     pytest \
-      test/python_fe/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0-infer0] \
+      test/python/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0-infer0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \
@@ -1410,7 +1410,7 @@ if __name__ == "__main__":
     # ================== backward ==================
     """
     pytest \
-      test/python_fe/test_mhas.py::test_sdpa_backward[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0] \
+      test/python/test_mhas.py::test_sdpa_backward[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \

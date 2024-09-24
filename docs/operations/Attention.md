@@ -17,7 +17,7 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 
 - C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 
-- Python tests: [test/python_fe/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python_fe/test_mhas.py)
+- Python tests: [test/python/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas.py)
 
 #### Configurable Options:
 
@@ -206,7 +206,7 @@ This operation computes gradient tensors for scaled dot product attention (SDPA)
 
 - C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 
-- Python tests: [test/python_fe/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python_fe/test_mhas.py)
+- Python tests: [test/python/test_mhas.py](https://github.com/NVIDIA/cudnn-frontend/blob/main/test/python/test_mhas.py)
 
 #### Configurable Options:
 
