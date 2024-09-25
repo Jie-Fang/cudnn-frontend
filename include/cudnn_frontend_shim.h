@@ -290,7 +290,7 @@ get_last_error_string_() {
 
     std::string message;
 
-    message.reserve(size);
+    message.resize(size);
 
     get_last_error_string(message.data(), size);
 
