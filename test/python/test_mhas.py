@@ -900,9 +900,6 @@ def test_sdpa_backward(
     if is_ragged and not (layout == "bshd_bshd_bshd" or layout == "bs3hd"):
         pytest.skip("Ragged tensor is only tested with thd_thd_thd and t3hd")
 
-    if is_ragged and head_group != "multi_head":
-        pytest.skip("Ragged offset is only supported with multi_head")
-
     if is_ragged and layout == "bs3hd" and cudnn_version < "9.1.0":
         pytest.skip("t3hd is only supported on 9.1.0 onwards")
 
