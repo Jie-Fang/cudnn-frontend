@@ -299,7 +299,7 @@ test:cudnn_dev_feature:
         - ${ARCH}
     extends:
         - .fetch_cudnn_feature_next:template
-        - .test:template
+        - .cpp_samples:template
     needs: ["build:cudnn_dev_feature"]
 
 test:cudnn_dev_latest:
