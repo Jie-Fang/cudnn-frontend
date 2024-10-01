@@ -52,7 +52,9 @@ target_link_libraries(
     _cudnn_frontend_pch
     Catch2::Catch2WithMain
 
-    CUDNN::cudnn_all
+    CUDNN::cudnn
+
+    CUDA::cudart
 )
 
 # cuDNN dlopen's its libraries
@@ -60,6 +62,5 @@ target_link_libraries(
 set_target_properties(
     tests
     PROPERTIES
-    LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )

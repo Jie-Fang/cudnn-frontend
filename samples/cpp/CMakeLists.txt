@@ -63,11 +63,12 @@ target_link_libraries(
     cudnn_frontend
     _cudnn_frontend_pch
     CUDNN::cudnn
+
+    CUDA::cudart
 )
 
 # target cmake properties
 set_target_properties(
     samples PROPERTIES
-    LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )

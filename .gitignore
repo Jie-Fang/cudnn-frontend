@@ -6,3 +6,4 @@ venv/
 .cache/
 __pycache__/
 .vscode/
+CMakePresets.json
