@@ -715,6 +715,7 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The result of reshape operation. Please set the dims for the output tensor.
             )pbdoc")
+        .def("deselect_engines", &PyGraph::deselect_engines)
         .def("deselect_numeric_notes", &PyGraph::deselect_numeric_notes)
         .def("deselect_behavior_notes", &PyGraph::deselect_behavior_notes)
         .def("select_numeric_notes", &PyGraph::select_numeric_notes)
