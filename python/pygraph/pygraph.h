@@ -405,6 +405,12 @@ class PyGraph {
     }
 
     void
+    deselect_engines(std::vector<std::string> const& engine_names) {
+        graph.deselect_engines(engine_names);
+        return;
+    }
+
+    void
     deselect_numeric_notes(std::vector<NumericalNote_t> const& notes) {
         graph.deselect_numeric_notes(notes);
         return;
