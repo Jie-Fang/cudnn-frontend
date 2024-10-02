@@ -28,8 +28,9 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               py::object const& sliding_window_length,
               py::object const& dropout,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& rng_dump,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_k,
-              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& page_table_v,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& paged_attention_k_table,
+              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& paged_attention_v_table,
+              py::object const& paged_attention_max_seq_len_kv,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name) {
     auto attributes = cudnn_frontend::graph::SDPA_attributes()
@@ -44,12 +45,20 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
-    if (page_table_k) {
-        attributes.set_page_table_K(page_table_k);
+    if (paged_attention_k_table) {
+        attributes.set_paged_attention_k_table(paged_attention_k_table);
     }
 
-    if (page_table_v) {
-        attributes.set_page_table_V(page_table_v);
+    if (paged_attention_v_table) {
+        attributes.set_paged_attention_v_table(paged_attention_v_table);
+    }
+
+    if (!paged_attention_max_seq_len_kv.is_none()) {
+        if (py::isinstance<py::int_>(paged_attention_max_seq_len_kv)) {
+            attributes.set_paged_attention_max_seq_len_kv(paged_attention_max_seq_len_kv.cast<int>());
+        } else {
+            throw std::runtime_error("paged_attention_max_seq_len_kv must be an integer.");
+        }
     }
 
     if (!attn_scale.is_none()) {
@@ -330,8 +339,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
-          py::arg_v("page_table_k", nullptr),
-          py::arg_v("page_table_v", nullptr),
+          py::arg_v("paged_attention_k_table", py::none()),
+          py::arg_v("paged_attention_v_table", py::none()),
+          py::arg_v("paged_attention_max_seq_len_kv", py::none()),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
@@ -353,8 +363,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     sliding_window_length (Optional[int]): The length of sliding window. Default is None.
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
-                    page_table_k (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
-                    page_table_v (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
+                    paged_attention_k_table (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
+                    paged_attention_v_table (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
+                    paged_attention_max_seq_len_kv (Optional[integer]): The maximum sequence length for k/v caches when paged attention is active.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
