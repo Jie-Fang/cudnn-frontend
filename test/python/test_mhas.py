@@ -724,8 +724,9 @@ def test_sdpa(
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
-        page_table_k=page_table_k,
-        page_table_v=page_table_v
+        paged_attention_k_table=page_table_k,
+        paged_attention_v_table=page_table_v,
+        paged_attention_max_seq_len_kv=s_kv if is_paged_attention else None
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)

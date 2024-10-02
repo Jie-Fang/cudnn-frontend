@@ -1415,6 +1415,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     std::optional<int> sliding_window_length;
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
+    std::optional<int> max_seq_len_kv;
 
    public:
     enum class input_names {
@@ -1539,14 +1540,20 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     SDPA_attributes&
-    set_page_table_K(std::shared_ptr<Tensor_attributes> value) {
+    set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_attributes::input_names::Page_table_K] = value;
         return *this;
     }
 
     SDPA_attributes&
-    set_page_table_V(std::shared_ptr<Tensor_attributes> value) {
+    set_paged_attention_v_table(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_attributes::input_names::Page_table_V] = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_paged_attention_max_seq_len_kv(int const value) {
+        max_seq_len_kv = value;
         return *this;
     }
 };
