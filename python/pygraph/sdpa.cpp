@@ -230,11 +230,18 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_o,
                   bool const is_inference,
                   py::object const& attn_scale,
+                  bool const use_padding_mask,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                   bool const use_causal_mask,
+                  py::object const& dropout,
                   cudnn_frontend::DataType_t const& compute_data_type,
                   std::string const& name) {
     auto attributes = cudnn_frontend::graph::SDPA_fp8_attributes()
                           .set_is_inference(is_inference)
+                          .set_padding_mask(use_padding_mask)
+                          .set_seq_len_q(seq_len_q)
+                          .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
@@ -249,6 +256,41 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                 throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
             }
             attributes.set_attn_scale(attn_scale_tensor);
+        }
+    }
+
+    if (!dropout.is_none()) {
+        py::tuple dropout_tuple = dropout.cast<py::tuple>();
+        if ((!dropout_tuple) || (dropout_tuple.size() != 3 && dropout_tuple.size() != 2)) {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor, and an offset tensor) or (mask "
+                "tensor, scale tensor)");
+        }
+        if (py::isinstance<py::float_>(dropout_tuple[0])) {
+            auto const probability = dropout_tuple[0].cast<float>();
+            auto const seed        = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!seed) {
+                throw std::runtime_error("dropout seed must be a cudnn_tensor.");
+            }
+
+            auto const offset = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!offset) {
+                throw std::runtime_error("dropout offset must be a cudnn_tensor.");
+            }
+
+            attributes.set_dropout(probability, seed, offset);
+        } else {
+            auto const mask = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!mask) {
+                throw std::runtime_error("dropout mask must be a cudnn_tensor.");
+            }
+
+            auto const scale = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            if (!scale) {
+                throw std::runtime_error("dropout scale must be a cudnn_tensor.");
+            }
+
+            attributes.set_dropout(mask, scale);
         }
     }
 
@@ -277,10 +319,17 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dV,
                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dP,
                            py::object const& attn_scale,
+                           bool const use_padding_mask,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                            bool const use_causal_mask,
+                           py::object const& dropout,
                            cudnn_frontend::DataType_t const& compute_data_type,
                            std::string const& name) {
     auto attributes = cudnn_frontend::graph::SDPA_fp8_backward_attributes()
+                          .set_padding_mask(use_padding_mask)
+                          .set_seq_len_q(seq_len_q)
+                          .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
@@ -295,6 +344,41 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
                 throw std::runtime_error("attn_scale must be a cudnn_tensor or float.");
             }
             attributes.set_attn_scale(attn_scale_tensor);
+        }
+    }
+
+    py::object cudnn_tensor_type = py::module_::import("cudnn").attr("tensor");
+
+    if (!dropout.is_none()) {
+        if (!py::isinstance<py::tuple>(dropout)) {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor"
+                ", and an offset tensor) or (mask tensor, scale tensor)");
+        }
+        py::tuple dropout_tuple = dropout.cast<py::tuple>();
+        if (dropout_tuple.size() != 3) {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor"
+                ", and an offset tensor) or (mask tensor, scale tensor)");
+        }
+
+        if (py::isinstance<py::float_>(dropout_tuple[0]) && py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
+            py::isinstance(dropout_tuple[2], cudnn_tensor_type)) {
+            auto const probability = dropout_tuple[0].cast<float>();
+            auto const seed        = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            auto const offset      = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            attributes.set_dropout(probability, seed, offset);
+        } else if (py::isinstance(dropout_tuple[0], cudnn_tensor_type) &&
+                   py::isinstance(dropout_tuple[1], cudnn_tensor_type) &&
+                   py::isinstance(dropout_tuple[2], cudnn_tensor_type)) {
+            auto const mask      = dropout_tuple[0].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            auto const scale     = dropout_tuple[1].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            auto const scale_inv = dropout_tuple[2].cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>>();
+            attributes.set_dropout(mask, scale, scale_inv);
+        } else {
+            throw std::runtime_error(
+                "dropout must be a tuple of (float probability, a seed tensor"
+                ", and an offset tensor) or (mask tensor, scale tensor)");
         }
     }
 
@@ -440,7 +524,11 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg("scale_o"),
           py::arg("is_inference"),
           py::arg_v("attn_scale", py::none()),
+          py::arg("use_padding_mask"),
+          py::arg_v("seq_len_q", nullptr),
+          py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
+          py::arg_v("dropout", py::none()),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
@@ -458,7 +546,11 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     scale_o (cudnn_tensor): Scale factor for output.
                     is_inference (bool): Whether it is an inference step or training step.
                     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
+                    use_padding_mask (bool): Whether it is an inference step or training step.
+                    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+                    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
@@ -489,7 +581,11 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg("scale_dV"),
           py::arg("scale_dP"),
           py::arg_v("attn_scale", py::none()),
+          py::arg_v("use_padding_mask", false),
+          py::arg_v("seq_len_q", nullptr),
+          py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
+          py::arg_v("dropout", py::none()),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
           R"pbdoc(
@@ -515,7 +611,11 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     scale_dV (cudnn_tensor): Scale factor for value gradient.
                     scale_dP (cudnn_tensor): Scale factor for dP gradient.
                     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
+                    use_padding_mask (bool): Whether it is an inference step or training step.
+                    seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
+                    seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+                    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
 
