@@ -328,7 +328,11 @@ class PyGraph {
              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_o,
              bool const is_inference,
              py::object const& attn_scale,
+             bool const use_padding_mask,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
              bool const use_causal_mask,
+             py::object const& dropout,
              cudnn_frontend::DataType_t const& compute_data_type,
              std::string const& name);
 
@@ -353,7 +357,11 @@ class PyGraph {
                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dV,
                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_dP,
                       py::object const& attn_scale,
+                      bool const use_padding_mask,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
+                      std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                       bool const use_causal_mask,
+                      py::object const& dropout,
                       cudnn_frontend::DataType_t const& compute_data_type,
                       std::string const& name);
 
