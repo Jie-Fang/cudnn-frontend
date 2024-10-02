@@ -385,6 +385,18 @@ class PyGraph {
     get_workspace_size();
 
     void
+    populate_cuda_graph(std::intptr_t handle,
+                        std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, int64_t> var_pack,
+                        std::intptr_t workspace,
+                        std::intptr_t cuda_graph);
+
+    void
+    update_cuda_graph(std::intptr_t handle,
+                      std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, int64_t> var_pack,
+                      std::intptr_t workspace,
+                      std::intptr_t cuda_graph);
+
+    void
     execute(std::unordered_map<int64_t, int64_t> var_pack, int64_t workspace, std::optional<std::intptr_t>);
 
     void

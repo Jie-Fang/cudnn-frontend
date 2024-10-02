@@ -136,6 +136,10 @@ How to serialize a graph into a file and read it back on another thread/process.
 
 How to choose the best performing plan among multiple plans suggested by the heuristics.
 
+- [Cuda Graphs](cpp/misc/cudagraphs.cpp)
+
+Shows how to use the native cuda graph API. The samples show how to create cudnn's cuda graph, and how to repeatedly update it with new device buffers for multiple execution.
+
 - [SM Carveout](cpp/misc/sm_carveout.cpp)
 
 Showcases a Batch norm example, where only a partial number of SMs participate in executing the kernel.

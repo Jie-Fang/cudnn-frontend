@@ -33,6 +33,7 @@ add_executable(
     misc/resample.cpp
     misc/slice.cpp
     misc/sm_carveout.cpp
+    misc/cudagraphs.cpp
 )
 
 # target flags
@@ -66,6 +67,7 @@ target_link_libraries(
     CUDNN::cudnn
 
     CUDA::cudart
+    CUDA::cuda_driver # Needed as calls all CUDA calls will eventually move to driver
 )
 
 # target cmake properties
