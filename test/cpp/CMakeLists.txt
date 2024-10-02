@@ -20,6 +20,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/cuDNN.cmake)
 add_executable(
     tests
 
+    pointwise_tests.cpp
     serialize.cpp
     validate.cpp
     version.cpp
