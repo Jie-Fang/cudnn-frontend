@@ -407,10 +407,50 @@ PyGraph::deserialize(py::object const& pyobj) {
 }
 
 void
+PyGraph::update_cuda_graph(std::intptr_t handle,
+                           std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, std::intptr_t> var_pack,
+                           std::intptr_t workspace,
+                           std::intptr_t cuda_graph) {
+    std::unordered_map<int64_t, void*> var_pack_;
+    for (auto const& [uid, device_pointer] : var_pack) {
+        var_pack_.emplace(uid, (void*)device_pointer);
+    }
+
+    auto status = graph.update_cuda_graph(reinterpret_cast<cudnnHandle_t>(handle),
+                                          var_pack_,
+                                          reinterpret_cast<void*>(workspace),
+                                          reinterpret_cast<cudaGraph_t>(cuda_graph));
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+    return;
+}
+
+void
+PyGraph::populate_cuda_graph(
+    std::intptr_t handle,
+    std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, std::intptr_t> var_pack,
+    std::intptr_t workspace,
+    std::intptr_t cuda_graph) {
+    std::unordered_map<int64_t, void*> var_pack_;
+    for (auto const& [uid, device_pointer] : var_pack) {
+        var_pack_.emplace(uid, (void*)device_pointer);
+    }
+
+    auto status = graph.populate_cuda_graph(reinterpret_cast<cudnnHandle_t>(handle),
+                                            var_pack_,
+                                            reinterpret_cast<void*>(workspace),
+                                            reinterpret_cast<cudaGraph_t>(cuda_graph));
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+
+    return;
+}
+
+void
 PyGraph::execute(std::unordered_map<int64_t, std::intptr_t> var_pack,
                  std::intptr_t workspace,
                  std::optional<std::intptr_t> exec_handle) {
     std::unordered_map<int64_t, void*> var_pack_;
+    var_pack_.reserve(var_pack.size());
     for (auto const& [uid, device_pointer] : var_pack) {
         var_pack_.emplace(uid, (void*)device_pointer);
     }
@@ -763,6 +803,8 @@ init_pygraph_submodule(py::module_& m) {
                     If the graph does not have the UID, this will raise an error
                 )pbdoc")
         .def("_execute", &PyGraph::execute)
+        .def("populate_cuda_graph", &PyGraph::populate_cuda_graph)
+        .def("update_cuda_graph", &PyGraph::update_cuda_graph)
         .def("serialize", &PyGraph::serialize)
         .def("deserialize", &PyGraph::deserialize)
         .def("_execute_plan_at_index", &PyGraph::execute_plan_at_index)
