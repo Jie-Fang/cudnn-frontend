@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-project(cudnn_frontend VERSION 1.7.0)
+project(cudnn_frontend VERSION 1.8.0)
 
 option(CUDNN_FRONTEND_SKIP_JSON_LIB "Defines whether FE should not include nlohmann/json.hpp." OFF)
 option(CUDNN_FRONTEND_BUILD_SAMPLES "Defines if samples are built or not." ON)
@@ -28,13 +28,11 @@ target_include_directories(
 )
 
 # Find the cuda compiler
-find_package(CUDAToolkit)
+find_package(CUDAToolkit REQUIRED)
 
-target_link_libraries(
+target_include_directories(
     cudnn_frontend INTERFACE
-
-    CUDA::cudart
-    CUDA::nvrtc
+    ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 target_compile_features(cudnn_frontend INTERFACE cxx_std_17)

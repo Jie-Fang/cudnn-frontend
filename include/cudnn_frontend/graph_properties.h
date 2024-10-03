@@ -29,7 +29,7 @@ class Tensor_attributes {
     // In approach 1, users provide a value to embed into the graph.
     // In approach 2, users set is_pass_by_value boolean and then pass a pointer to scalar value with execute() API.
     // A closed set of types that are allowed to be passed by value.
-    using pass_by_values_t = std::variant<int32_t, half, float, nv_bfloat16>;
+    using pass_by_values_t = std::variant<int64_t, int32_t, half, float, nv_bfloat16>;
 
     error_t
     validate() const {
@@ -121,6 +121,13 @@ class Tensor_attributes {
         is_pass_by_value = true;
         dim = stride = {1};
         data_type    = DataType_t::INT32;
+    }
+
+    Tensor_attributes(int64_t const& scalar) {
+        pass_by_value    = scalar;
+        is_pass_by_value = true;
+        dim = stride = {1};
+        data_type    = DataType_t::INT64;
     }
 
     std::string
@@ -1408,6 +1415,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     std::optional<int> sliding_window_length;
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
+    std::optional<int> max_seq_len_kv;
 
    public:
     enum class input_names {
@@ -1532,14 +1540,20 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     SDPA_attributes&
-    set_page_table_K(std::shared_ptr<Tensor_attributes> value) {
+    set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_attributes::input_names::Page_table_K] = value;
         return *this;
     }
 
     SDPA_attributes&
-    set_page_table_V(std::shared_ptr<Tensor_attributes> value) {
+    set_paged_attention_v_table(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_attributes::input_names::Page_table_V] = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_paged_attention_max_seq_len_kv(int const value) {
+        max_seq_len_kv = value;
         return *this;
     }
 };

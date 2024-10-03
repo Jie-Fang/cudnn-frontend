@@ -21,7 +21,7 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "../../utils/helpers.h"
+#include "../utils/helpers.h"
 
 #include <cuda_runtime_api.h>
 
@@ -135,8 +135,9 @@ create_sdpa_forward_graph_with_paged_caches(int64_t const b,
                                           .set_stride({{table_size, table_size, 1, 1}})
                                           .set_data_type(fe::DataType_t::INT32));
 
-    sdpa_options.set_page_table_K(page_table_k);
-    sdpa_options.set_page_table_V(page_table_v);
+    sdpa_options.set_paged_attention_k_table(page_table_k);
+    sdpa_options.set_paged_attention_v_table(page_table_v);
+    sdpa_options.set_paged_attention_max_seq_len_kv(static_cast<int>(s_kv));
 
     auto [O, Stats] = graph->sdpa(Q, K, V, sdpa_options);
 
@@ -176,7 +177,7 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
     }
 
     cudnnHandle_t handle;
-    checkCudnnErr(cudnnCreate(&handle));
+    CUDNN_CHECK(cudnnCreate(&handle));
 
     auto graph = create_sdpa_forward_graph_with_paged_caches(b,
                                                              h_q,
@@ -222,15 +223,15 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
         elem = distribution(rng);
     }
 
-    checkCudaErr(cudaMemcpy(page_table_k_tensor.devPtr,
-                            host_page_table_k.data(),
-                            sizeof(host_page_table_k[0]) * b,
-                            cudaMemcpyHostToDevice));
-    checkCudaErr(cudaMemcpy(page_table_v_tensor.devPtr,
-                            host_page_table_v.data(),
-                            sizeof(host_page_table_v[0]) * b,
-                            cudaMemcpyHostToDevice));
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaMemcpy(page_table_k_tensor.devPtr,
+                          host_page_table_k.data(),
+                          sizeof(host_page_table_k[0]) * b,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(page_table_v_tensor.devPtr,
+                          host_page_table_v.data(),
+                          sizeof(host_page_table_v[0]) * b,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     std::unordered_map<fe::graph::Tensor_attributes::uid_t, void*> variant_pack = {
         {Q_UID, q_tensor.devPtr},
@@ -251,13 +252,13 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
     std::vector<int32_t> hostActualSeqlenQ(b, 20);
     std::vector<int32_t> hostActualSeqlenKV(b, 20);
 
-    checkCudaErr(cudaMemcpy(
+    CUDA_CHECK(cudaMemcpy(
         devActualSeqlenQ.devPtr, hostActualSeqlenQ.data(), sizeof(hostActualSeqlenQ[0]) * b, cudaMemcpyHostToDevice));
-    checkCudaErr(cudaMemcpy(devActualSeqlenKV.devPtr,
-                            hostActualSeqlenKV.data(),
-                            sizeof(hostActualSeqlenKV[0]) * b,
-                            cudaMemcpyHostToDevice));
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaMemcpy(devActualSeqlenKV.devPtr,
+                          hostActualSeqlenKV.data(),
+                          sizeof(hostActualSeqlenKV[0]) * b,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     variant_pack[SEQ_LEN_Q_UID]  = devActualSeqlenQ.devPtr;
     variant_pack[SEQ_LEN_KV_UID] = devActualSeqlenKV.devPtr;
@@ -273,7 +274,7 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
 
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
-    checkCudaErr(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudnnDestroy(handle);
 }

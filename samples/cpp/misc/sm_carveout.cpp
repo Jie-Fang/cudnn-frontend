@@ -69,22 +69,16 @@ TEST_CASE("SGBN with SM carveout", "[batchnorm][graph][sm_carveout]") {
                                          .set_stride({4 * c, 1, 4 * c, 4 * c})
                                          .set_data_type(fe::DataType_t::FLOAT));
 
-    auto epsilon  = graph.tensor(fe::graph::Tensor_attributes()
-                                    .set_name("epsilon")
-                                    .set_dim({1, 1, 1, 1})
-                                    .set_stride({1, 1, 1, 1})
-                                    .set_data_type(fe::DataType_t::FLOAT)
-                                    .set_is_pass_by_value(true));
-    auto momentum = graph.tensor(fe::graph::Tensor_attributes()
-                                     .set_name("momentum")
-                                     .set_dim({1, 1, 1, 1})
-                                     .set_stride({1, 1, 1, 1})
-                                     .set_data_type(fe::DataType_t::FLOAT));
+    float epsilon_cpu  = 1e-05f;
+    float momentum_cpu = 1e-01f;
+    auto epsilon       = graph.tensor(epsilon_cpu);
+    auto momentum      = graph.tensor(momentum_cpu);
 
     auto batchnorm_options = fe::graph::Batchnorm_attributes()
                                  .set_epsilon(epsilon)
                                  .set_previous_running_stats(prev_running_mean, prev_running_var, momentum)
                                  .set_peer_stats({peer_stats_0, peer_stats_1});
+
     auto [Y, mean, inv_variance, next_running_mean, next_running_var] =
         graph.batchnorm(X, scale, bias, batchnorm_options);
     mean->set_output(true).set_data_type(fe::DataType_t::FLOAT);
@@ -122,8 +116,7 @@ TEST_CASE("SGBN with SM carveout", "[batchnorm][graph][sm_carveout]") {
     Surface<float> Next_running_var_tensor(c, false);
     Surface<float> Scale_tensor(c, false);
     Surface<float> Bias_tensor(c, false);
-    float epsilon_cpu  = 1e-05f;
-    float momentum_cpu = 1e-01f;
+
     Surface<half> Y_tensor(n * c * h * w, false);
     Surface<float> Peer_stats_0_tensor(2 * 4 * c, false, true);
     Surface<float> Peer_stats_1_tensor(2 * 4 * c, false);
@@ -142,8 +135,6 @@ TEST_CASE("SGBN with SM carveout", "[batchnorm][graph][sm_carveout]") {
         {next_running_var, Next_running_var_tensor.devPtr},
         {scale, Scale_tensor.devPtr},
         {bias, Bias_tensor.devPtr},
-        {epsilon, &epsilon_cpu},
-        {momentum, &momentum_cpu},
         {Y, Y_tensor.devPtr},
         {peer_stats_0, Peer_stats_0_tensor.devPtr},
         {peer_stats_1, Peer_stats_1_tensor.devPtr}};
