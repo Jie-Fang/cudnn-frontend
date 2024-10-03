@@ -724,8 +724,9 @@ def test_sdpa(
         sliding_window_length=sliding_window_length,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
-        page_table_k=page_table_k,
-        page_table_v=page_table_v
+        paged_attention_k_table=page_table_k,
+        paged_attention_v_table=page_table_v,
+        paged_attention_max_seq_len_kv=s_kv if is_paged_attention else None
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
@@ -899,9 +900,6 @@ def test_sdpa_backward(
 
     if is_ragged and not (layout == "bshd_bshd_bshd" or layout == "bs3hd"):
         pytest.skip("Ragged tensor is only tested with thd_thd_thd and t3hd")
-
-    if is_ragged and head_group != "multi_head":
-        pytest.skip("Ragged offset is only supported with multi_head")
 
     if is_ragged and layout == "bs3hd" and cudnn_version < "9.1.0":
         pytest.skip("t3hd is only supported on 9.1.0 onwards")

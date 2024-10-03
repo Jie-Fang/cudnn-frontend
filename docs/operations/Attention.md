@@ -38,11 +38,12 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
     - `dropout mask` that matches the attention weights' dimensions, indicating which weights to drop. The dimensions that are passed as 1 will apply a broadcasted dropout mask.
     - `dropout scale` used to adjust the scale of the remaining weights accordingly, such as $1 / (1 - \text{dropout probability})$.
 - Packed layout: With packed layout, the query, key, value, and output tensor should be [ragged tensors](https://www.tensorflow.org/guide/ragged_tensor), which are tensors with nested variable length lists as inner dimensions. Users must pass another tensor called ragged offset tensor using the `Tensor_attributes.set_ragged_offset()` method. the ragged offset tensor must be a tensor of size $(B + 1, 1, 1, 1)$ that contains the nested tensor's offset in terms of number of elements (not bytes). The last value of the offset tensor specifies the offset of the past-the-end element of the ragged tensor. See Appendix A for more information on the supported layouts.
-- Paged caches: with paged K and/or V caches, the K/V blocks no longer need to be contiguous, allowing users to better utilize memory by avoiding fragmentation. 
+- Paged attention: with paged K and/or V caches, the K/V blocks no longer need to be contiguous, allowing users to better utilize memory by avoiding fragmentation. 
   - Users must therefore:
     - Pass a `page table k` tensor containing offsets to the container with K blocks. This is optional, and only needed if the K cache is paged.
     - Pass a `page table v` tensor containing offsets to the container with V blocks. This is optional, and only needed if the V cache is paged.
     - Pass anything required for `Padding mask` above (i.e., per-batch sequence lengths for both K and V caches). This is needed if at least one of the K/V caches are paged.
+    - Optionally, but recommended, pass the maximum sequence length for the K/V caches. When omitted, it will be (over)estimated, which could result in a corrupted graph in some corner cases.
   - Offsets to the K/V containers will be calculcated as 
     - $Kcache[b,h,s,d] = K[page\ table\ k[b,1,s / bs_k, 1],h,s\ mod\ bs_{k},d]$
     - $Vcache[b,h,s,d] = V[page\ table\ v[b,1,s / bs_v, 1],h,s\ mod\ bs_{v},d]$
@@ -63,8 +64,9 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 | (Custom Dropout Mask) Mask                     | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
 | (Custom Dropout Mask) Scale                    | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
 | (Packed Layout) Ragged Offset                  | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
-| (Paged Caches) Page Table K                    | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{k}), 1)$                                                                               |
-| (Paged Caches) Page Table V                    | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{v}), 1)$                                                                               |
+| (Paged Attention) Page Table K                 | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{k}), 1)$                                                                               |
+| (Paged Attention) Page Table V                 | GPU        | INT32          | $(B, 1, ceil(S_{kv}/bs_{v}), 1)$                                                                               |
+| (Paged Attention) Max Sequence Length KV       | CPU        | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
 
 ##### Output Tensors
 
@@ -163,10 +165,13 @@ SDPA_attributes&
 set_compute_data_type(DataType_t value);
 
 SDPA_attributes&
-set_page_table_K(std::shared_ptr<Tensor_attributes> value);
+set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value);
 
 SDPA_attributes&
-set_page_table_V(std::shared_ptr<Tensor_attributes> value);
+set_paged_attention_v_table(std::shared_ptr<Tensor_attributes> value);
+
+SDPA_attributes&
+set_paged_attention_max_seq_len_kv(int const value);
 
 ```
 
@@ -188,8 +193,9 @@ Args:
     use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
     rng_dump (Optional[cudnn_tensor]): Debug tensor used to output the Philox RNG dropout mask
-    page_table_k (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
-    page_table_v (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
+    paged_attention_k_table (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
+    paged_attention_v_table (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
+    paged_attention_max_seq_len_kv (Optional[integer]): The maximum sequence length for k/v caches when paged attention is active.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
 

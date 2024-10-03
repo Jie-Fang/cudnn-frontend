@@ -7,6 +7,7 @@ add_executable(
     sdpa/fp16_cached.cpp
     sdpa/fp16_benchmark.cpp
     sdpa/fp16_fwd_with_custom_dropout.cpp
+    sdpa/fp16_fwd_with_paged_caches.cpp
     sdpa/fp8_fwd.cpp
     sdpa/fp8_bwd.cpp
 
@@ -33,6 +34,7 @@ add_executable(
     misc/resample.cpp
     misc/slice.cpp
     misc/sm_carveout.cpp
+    misc/cudagraphs.cpp
 )
 
 # target flags
@@ -64,11 +66,13 @@ target_link_libraries(
     cudnn_frontend
     _cudnn_frontend_pch
     CUDNN::cudnn
+
+    CUDA::cudart
+    CUDA::cuda_driver # Needed as calls all CUDA calls will eventually move to driver
 )
 
 # target cmake properties
 set_target_properties(
     samples PROPERTIES
-    LINK_WHAT_YOU_USE TRUE
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )

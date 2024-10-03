@@ -105,6 +105,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
         bool const is_paged  = ((page_table_k_it) != attributes.inputs.end() &&  page_table_k_it->second != nullptr) ||  
                                ((page_table_v_it) != attributes.inputs.end() &&  page_table_v_it->second != nullptr);
 
+        auto const& rng_tensor = attributes.outputs.find(output_names::RNG_DUMP);
+        bool const is_rng   = (rng_tensor != attributes.outputs.end() && rng_tensor->second != nullptr);
+        
+        bool const max_seq_kv_explicit = attributes.max_seq_len_kv.has_value();
+
         // validation TODO:
         //    - validate stats has valid dims
 
@@ -189,6 +194,20 @@ class SDPANode : public NodeCRTP<SDPANode> {
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Paged caches can only be used in combination with padding mask and variable sequence lengths for both Q and KV.");
 
+       RETURN_CUDNN_FRONTEND_ERROR_IF(!is_paged && max_seq_kv_explicit,
+            error_code_t::GRAPH_NOT_SUPPORTED, "When not using paged attention, there is no need to explicitly set max kv sequence length.");
+        
+        if (max_seq_kv_explicit){
+           auto max_seq_kv = attributes.max_seq_len_kv.value();
+           
+           RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && (bias_mask->second->get_dim()[3] != max_seq_kv),
+            error_code_t::GRAPH_NOT_SUPPORTED, "Value set through set_paged_attention_max_seq_len_kv is incompatible with the sequence length of the bias");
+
+           RETURN_CUDNN_FRONTEND_ERROR_IF(is_rng &&
+                    rng_tensor->second->get_dim()[3] != max_seq_kv,
+            error_code_t::GRAPH_NOT_SUPPORTED, "Value set through set_paged_attention_max_seq_len_kv is incompatible with the sequence length of the RNG_DUMP");
+        }
+
         // version specific validation
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -269,35 +288,46 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // Infer s_kv
         int64_t s_kv = -1;
+
+        // If s_kv was set explicitly, use that
+        if (attributes.max_seq_len_kv.has_value()) {
+            s_kv = attributes.max_seq_len_kv.value();
+        }
         // When one of K or V cache are paged, s_kv can be extracted directly
-        if (!is_paged_k) {
+        else if (!is_paged_k) {
             s_kv = k_dim[2];
 
         } else if (!is_paged_v) {
             s_kv = v_dim[2];
-            // If there is a bias, extract it from there
-        } else if (attributes.inputs[input_names::Bias] != nullptr) {
-            s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
-            // If there is an rng_dump output, extract it from there
-        } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
-                   attributes.outputs[output_names::RNG_DUMP] != nullptr) {
-            s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
-            // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
-            // container
         } else {
-            // [b, 1, ceil(s_kv/block_size), 1]
-            auto page_table_dim_k = attributes.inputs[input_names::Page_table_K]->get_dim();
-            // [b, h_k, block_size, d_k]
-            auto container_dim_k = attributes.inputs[input_names::K]->get_dim();
-            int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
+            CUDNN_FE_LOG_LABEL_ENDL(
+                "WARNING: maximum kv sequence length is being inferred. To set it explicitly, please use  "
+                "\"set_paged_attention_max_seq_len_kv\"");
 
-            // [b, 1, ceil(s_kv/block_size), 1]
-            auto page_table_dim_v = attributes.inputs[input_names::Page_table_V]->get_dim();
-            // [b, h_v, block_size, d_v]
-            auto container_dim_v = attributes.inputs[input_names::V]->get_dim();
-            int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
+            // If there is a bias, extract it from there
+            if (attributes.inputs[input_names::Bias] != nullptr) {
+                s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
+                // If there is an rng_dump output, extract it from there
+            } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
+                       attributes.outputs[output_names::RNG_DUMP] != nullptr) {
+                s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
+                // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
+                // container
+            } else {
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim_k = attributes.inputs[input_names::Page_table_K]->get_dim();
+                // [b, h_k, block_size, d_k]
+                auto container_dim_k = attributes.inputs[input_names::K]->get_dim();
+                int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
 
-            s_kv = std::min(s_k, s_v);
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim_v = attributes.inputs[input_names::Page_table_V]->get_dim();
+                // [b, h_v, block_size, d_v]
+                auto container_dim_v = attributes.inputs[input_names::V]->get_dim();
+                int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
+
+                s_kv = std::min(s_k, s_v);
+            }
         }
 
         std::shared_ptr<Tensor_attributes> k_cache;
@@ -972,6 +1002,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, dBias not support s_q/s_kv which aren't multiple of 64");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90600 && is_ragged && ((h_q != h_k) || (h_q != h_v)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For cuDNN version below 9.6.0, group-query attention with raggged offset is not supported");
 
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
