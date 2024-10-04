@@ -30,7 +30,7 @@
 
 namespace cudnn_frontend::graph {
 
-class Graph : public INode {
+class Graph : public ICudnn, public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> full_graph_inputs;
     std::unordered_set<Tensor_attributes::uid_t> used_uids;
@@ -99,7 +99,8 @@ class Graph : public INode {
 
     virtual error_t
     collect_tensors_in_workspace_node(
-        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> &worskspace_modifications,
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>
+            &worskspace_modifications,
         int64_t &) const override {
         for (auto [uid, value] : deserialized_workspace_modifications) {
             worskspace_modifications.emplace(uid, value);

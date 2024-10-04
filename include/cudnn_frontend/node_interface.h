@@ -36,7 +36,7 @@ class RngNode;
 class SoftmaxNode;
 
 // Interface for all nodes to follow.
-class INode : public ICudnn {
+class INode {
    public:
     // A closed set of types that are allowed to be passed by value today
     using pass_by_values_t = Tensor_attributes::pass_by_values_t;
@@ -79,7 +79,7 @@ class INode : public ICudnn {
     }
 
     virtual error_t
-    collect_pass_by_value_tensors_node(std::unordered_map<uid_t, pass_by_values_t>&) const {
+    collect_pass_by_value_tensors_node(std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>&) const {
         return {error_code_t::OK, ""};
     };
 
@@ -96,8 +96,9 @@ class INode : public ICudnn {
         std::unordered_set<int64_t> const& used_uids) const = 0;
 
     virtual error_t
-    collect_tensors_in_workspace_node(std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&,
-                                      int64_t&) const {
+    collect_tensors_in_workspace_node(
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&,
+        int64_t&) const {
         return {error_code_t::OK, ""};
     }
 
@@ -233,7 +234,8 @@ class INode : public ICudnn {
     }
 
     error_t
-    collect_pass_by_value_tensors_subtree(std::unordered_map<uid_t, pass_by_values_t>& tensor_to_pass_by_value) const {
+    collect_pass_by_value_tensors_subtree(
+        std::unordered_map<Tensor_attributes::uid_t, pass_by_values_t>& tensor_to_pass_by_value) const {
         CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_node(tensor_to_pass_by_value));
         for (auto const& sub_node : sub_nodes) {
             CHECK_CUDNN_FRONTEND_ERROR(sub_node->collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
@@ -243,7 +245,8 @@ class INode : public ICudnn {
 
     error_t
     collect_tensors_in_workspace_subtree(
-        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& worskspace_modifications,
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&
+            worskspace_modifications,
         int64_t& offset) const {
         CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_node(worskspace_modifications, offset));
         offset = get_fe_workspace_size_node();
@@ -279,7 +282,7 @@ class INode : public ICudnn {
     // Only INode that map to a primitive cudnn operation need to specialize.
     virtual error_t
     create_cudnn_operations(
-        std::unordered_set<uid_t>& uids_involved_in_operation,
+        std::unordered_set<Tensor_attributes::uid_t>& uids_involved_in_operation,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& backend_operations,
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& uid_to_backend_tensors) const {
@@ -375,13 +378,13 @@ class NodeCRTP : public INode {
         for (auto const& [name, tensor] : self().attributes.inputs) {
             (void)name;
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, tensors, potential_uid, used_uids));
+                CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_tensor(tensor, tensors, potential_uid, used_uids));
             }
         }
         for (auto const& [name, tensor] : self().attributes.outputs) {
             (void)name;
             if (tensor) {
-                CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, tensors, potential_uid, used_uids));
+                CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_tensor(tensor, tensors, potential_uid, used_uids));
             }
         }
 
@@ -390,7 +393,7 @@ class NodeCRTP : public INode {
             // Special case in BN where peer stats is also an input but is not present in inputs map
             for (auto const& tensor : self().attributes.peer_stats) {
                 if (tensor) {
-                    CHECK_CUDNN_FRONTEND_ERROR(create_cudnn_tensor(tensor, tensors, potential_uid, used_uids));
+                    CHECK_CUDNN_FRONTEND_ERROR(detail::create_cudnn_tensor(tensor, tensors, potential_uid, used_uids));
                 }
             }
         }
