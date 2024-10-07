@@ -894,6 +894,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         auto const& bias_mask = attributes.inputs.find(input_names::Bias);
         bool const is_bias   = (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr);
+        auto const& dbias_mask = attributes.outputs.find(output_names::dBias);
+        bool const is_dbias   = (dbias_mask != attributes.outputs.end() && dbias_mask->second != nullptr);
 
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
@@ -996,11 +998,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.2.0, sliding window attention is not supported");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && attributes.padding_mask,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_dbias && attributes.padding_mask,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, dBias with variable sequence lengths is not supported");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_dbias && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, dBias not support s_q/s_kv which aren't multiple of 64");
 
