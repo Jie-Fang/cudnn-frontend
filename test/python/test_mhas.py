@@ -1,3 +1,13 @@
+"""
+This test harness allows for testing the various options of the attention operator. See example usage under "main" below.
+
+The full documentation on the attention operator can be found in: https://github.com/NVIDIA/cudnn-frontend/blob/main/docs/operations/Attention.md#scaled-dot-product-attention
+
+Notebooks that demonstrate the attention operator can be found here:
+- Introductory example: https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/50_scaled_dot_product_attention.ipynb
+- Example with paged caches: https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/samples/python/52_scaled_dot_product_attention_with_paged_caches.ipynb
+"""
+
 import cudnn
 import pytest
 import torch
@@ -1393,7 +1403,7 @@ if __name__ == "__main__":
     # ================== forward ==================
     """
     pytest \
-      test/python/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0-infer0] \
+      test/python/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-paged0-bias0-alibi0-padding0-causal0-causal_bottom_right0-sliding_window0-dropout0-ragged0-infer0] \
       -s \
       --mha_b 3 \
       --mha_s_q 256 \

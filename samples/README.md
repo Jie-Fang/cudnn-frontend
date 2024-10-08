@@ -17,6 +17,9 @@ Samples leveraging FE's Python interface are located in [samples/python](python/
 * [51_sdpa](python/51_scaled_dot_product_attention_backward.ipynb)
     Shows how to run causal self attention in bprop.
 
+* [52_sdpa](python/52_scaled_dot_product_attention_with_paged_caches.ipynb)
+    Shows how to run scaled dot product attention where the K and V caches are stored in non contiguous memory.
+
 ## C++ Interface Samples
 Samples leveraging FE's C++ interface are located in [samples/cpp](cpp/).
 
