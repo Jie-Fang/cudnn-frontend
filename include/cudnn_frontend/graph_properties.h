@@ -2179,6 +2179,32 @@ class Block_scale_quantize_attributes : public Attributes<Block_scale_quantize_a
     }
 };
 
+class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequantize_attributes> {
+    friend class Attributes<Block_scale_dequantize_attributes>;
+    friend class BlockScaleDequantizeNode;
+    friend class Graph;
+
+    std::optional<int32_t> block_size;
+
+   public:
+    enum class input_names { X, scale };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { Y };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Block_scale_dequantize_attributes,
+                                   name,
+                                   compute_data_type,
+                                   inputs,
+                                   outputs,
+                                   block_size)
+
+    Block_scale_dequantize_attributes&
+    set_block_size(int32_t const value) {
+        block_size = value;
+        return *this;
+    }
+};
+
 }  // namespace graph
 
 }  // namespace cudnn_frontend

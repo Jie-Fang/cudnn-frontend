@@ -132,7 +132,8 @@ class INode {
         SLICE,
         WGRAD,
         PAGED_CACHE_LOAD,
-        BLOCK_SCALE_QUANTIZE
+        BLOCK_SCALE_QUANTIZE,
+        BLOCK_SCALE_DEQUANTIZE
     };
     Type tag;
 
@@ -199,6 +200,12 @@ class INode {
                          Block_scale_quantize_attributes attributes,
                          std::shared_ptr<Tensor_attributes> y,
                          std::shared_ptr<Tensor_attributes> scale);
+
+    void
+    block_scale_dequantize(std::shared_ptr<Tensor_attributes> x,
+                           std::shared_ptr<Tensor_attributes> scale,
+                           Block_scale_dequantize_attributes attributes,
+                           std::shared_ptr<Tensor_attributes> y);
 
     error_t
     validate_subtree() {
