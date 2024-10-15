@@ -137,6 +137,8 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        bool const use_padding_mask,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
+                       py::object const& max_total_seq_len_q,
+                       py::object const& max_total_seq_len_kv,
                        bool const use_causal_mask,
                        bool const use_causal_mask_bottom_right,
                        py::object const& sliding_window_length,
@@ -171,6 +173,16 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
             }
             attributes.set_attn_scale(attn_scale_tensor);
         }
+    }
+
+    if (!max_total_seq_len_q.is_none()) {
+        int const max_total_seq_len_q_value = max_total_seq_len_q.cast<int>();
+        attributes.set_max_total_seq_len_q(max_total_seq_len_q_value);
+    }
+
+    if (!max_total_seq_len_kv.is_none()) {
+        int const max_total_seq_len_kv_value = max_total_seq_len_kv.cast<int>();
+        attributes.set_max_total_seq_len_kv(max_total_seq_len_kv_value);
     }
 
     if (!sliding_window_length.is_none()) {
@@ -472,6 +484,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("use_padding_mask", false),
           py::arg_v("seq_len_q", nullptr),
           py::arg_v("seq_len_kv", nullptr),
+          py::arg_v("max_total_seq_len_q", py::none()),
+          py::arg_v("max_total_seq_len_kv", py::none()),
           py::arg_v("use_causal_mask", false),
           py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("sliding_window_length", py::none()),
