@@ -1685,6 +1685,9 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
+    std::optional<int64_t> max_total_seq_len_q;
+    std::optional<int64_t> max_total_seq_len_kv;
+
     bool is_deterministic_algorithm = false;
 
    public:
@@ -1766,6 +1769,18 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     SDPA_backward_attributes&
     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_backward_attributes::input_names::SEQ_LEN_KV] = value;
+        return *this;
+    }
+
+    SDPA_backward_attributes&
+    set_max_total_seq_len_q(int64_t const value) {
+        max_total_seq_len_q = value;
+        return *this;
+    }
+
+    SDPA_backward_attributes&
+    set_max_total_seq_len_kv(int64_t const value) {
+        max_total_seq_len_kv = value;
         return *this;
     }
 

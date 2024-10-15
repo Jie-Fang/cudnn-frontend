@@ -312,6 +312,8 @@ class PyGraph {
                   bool const use_padding_mask,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
+                  py::object const& max_total_seq_len_q,
+                  py::object const& max_total_seq_len_kv,
                   bool const use_causal_mask,
                   bool const use_causal_mask_bottom_right,
                   py::object const& sliding_window_length,
