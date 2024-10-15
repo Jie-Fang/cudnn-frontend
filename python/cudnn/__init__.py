@@ -145,7 +145,7 @@ def _dlopen_cudnn():
         )
     )
 
-    if False:
+    if lib_path:
         assert (
             len(lib_path) == 1
         ), f"Found {len(lib_path)} libcudnn.so.x in nvidia-cudnn-cuXX."
