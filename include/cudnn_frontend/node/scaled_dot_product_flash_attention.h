@@ -905,11 +905,22 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         //    - validate stats has valid dims
         //    - validate Q and dQ have the same dims
 
-        // validate basic dimension requirements
-        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        cudaDeviceProp prop;
+        int device;
+        CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
+        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
+        if (prop.major >= 9) { 
+            // validate basic dimension requirements
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                                        error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        } else {
+            // validate basic dimension requirements
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                                        error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        }
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For group-query attention, number of heads for key and query must be a factor of number of heads for query");
