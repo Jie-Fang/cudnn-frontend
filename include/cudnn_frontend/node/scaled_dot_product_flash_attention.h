@@ -1686,7 +1686,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 // sized THD dQ_accum
                 dQ_accum->set_stride(attributes.outputs[output_names::dQ]->get_stride());
                 dQ_accum->set_ragged_offset(attributes.outputs[output_names::dQ]->get_ragged_offset());
-                dQ_accum_size = attributes.max_total_seq_len_q.value() * h_q * d_qk * sizeof(float);
+                dQ_accum_size = attributes.max_total_seq_len_q.value() *
+                                (attributes.outputs[output_names::dQ]->get_stride())[2] * sizeof(float);
             } else {
                 // sized BHSD dQ_accum
                 dQ_accum->set_stride({h_q * s_q * d_qk, s_q * d_qk, d_qk, 1});
@@ -1743,8 +1744,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         }
 
         if (dQ_accum && !dQ_accum->get_is_virtual()) {
-            std::vector<float> f_vec = {(float)dQ_accum_size};
-            workspace_modifications.emplace(dQ_accum->get_uid(), std::make_tuple(1, offset, f_vec));
+            std::vector<float> f_vec        = {(float)dQ_accum_size};
+            int64_t dQ_accum_workspace_type = detail::get_backend_version() < 90600 ? 1 : 2;
+            workspace_modifications.emplace(dQ_accum->get_uid(),
+                                            std::make_tuple(dQ_accum_workspace_type, offset, f_vec));
             offset = offset + dQ_accum_size;
         }
 
