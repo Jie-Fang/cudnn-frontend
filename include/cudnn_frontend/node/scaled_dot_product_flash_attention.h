@@ -791,7 +791,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
     virtual error_t
     collect_tensors_in_workspace_node(
-        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications,
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&
+            workspace_modifications,
         int64_t& offset) const override final {
         if (attributes.alibi_mask) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
@@ -893,6 +894,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         auto const& bias_mask = attributes.inputs.find(input_names::Bias);
         bool const is_bias   = (bias_mask != attributes.inputs.end() && bias_mask->second != nullptr);
+        auto const& dbias_mask = attributes.outputs.find(output_names::dBias);
+        bool const is_dbias   = (dbias_mask != attributes.outputs.end() && dbias_mask->second != nullptr);
 
         auto const& dropout_mask     = attributes.inputs.find(input_names::Dropout_mask);
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
@@ -902,11 +905,22 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         //    - validate stats has valid dims
         //    - validate Q and dQ have the same dims
 
-        // validate basic dimension requirements
-        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        cudaDeviceProp prop;
+        int device;
+        CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
+        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
+        if (prop.major >= 9) { 
+            // validate basic dimension requirements
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
+                                        error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "Num hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8");
+        } else {
+            // validate basic dimension requirements
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                                        error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+        }
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For group-query attention, number of heads for key and query must be a factor of number of heads for query");
@@ -934,6 +948,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
+
+        // validate options for max_total_seq_len
+        RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value()) && !is_ragged,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "max_total_seq_len_q is only supported with packed layout");
 
         // validate options for bottom right causal mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask && attributes.causal_mask_bottom_right,
@@ -995,17 +1014,24 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.2.0, sliding window attention is not supported");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && attributes.padding_mask,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_dbias && attributes.padding_mask,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, dBias with variable sequence lengths is not supported");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_bias && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 && is_dbias && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, dBias not support s_q/s_kv which aren't multiple of 64");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90600 && is_ragged && ((h_q != h_k) || (h_q != h_v)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.6.0, group-query attention with raggged offset is not supported");
+
+        if (detail::get_backend_version() < 90600 && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value())) {
+            CUDNN_FE_LOG_LABEL_ENDL(
+                "WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but cuDNN version is below 9.6.0 "
+                "which does not support max_total_seq_len_q. The workspace memory size required to execute this graph "
+                "may be unexpectedly large");
+        }
 
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
@@ -1103,7 +1129,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         // ---------------------input tensor workarounds---------------------------
 
-        bool use_workspace_opt = false;
+        bool use_dp_workspace = false;
 
         if (detail::get_backend_version() >= 8905 && detail::get_backend_version() < 90000) {
             // workspace optimization is enabled by default when:
@@ -1144,11 +1170,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 int64_t required_dp_workspace_bytes = b * h_q * workspace_s_q * workspace_s_kv * 2;
 
                 if (max_dp_workspace_bytes == -1) {
-                    use_workspace_opt = true;
+                    use_dp_workspace = true;
                 } else if (max_dp_workspace_bytes == 0) {
-                    use_workspace_opt = false;
+                    use_dp_workspace = false;
                 } else {
-                    use_workspace_opt = (required_dp_workspace_bytes <= max_dp_workspace_bytes);
+                    use_dp_workspace = (required_dp_workspace_bytes <= max_dp_workspace_bytes);
                 }
             }
         }
@@ -1157,16 +1183,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         //  - dBias is enabled (dBias is only supported on workspace implementation)
         //  - the user force requests deterministic algorithm
         if (attributes.outputs[output_names::dBias] || attributes.is_deterministic_algorithm) {
-            use_workspace_opt = true;
-        }
-
-        // non-virtual dQ_accum is how the backend API signals workspace optimization
-        if (!use_workspace_opt) {
-            dQ_accum = std::make_shared<Tensor_attributes>();
-            dQ_accum->set_is_virtual(false);
-            dQ_accum->set_dim({b, h_q, s_q, d_qk}).set_stride({h_q * s_q * d_qk, s_q * d_qk, d_qk, 1});
-            dQ_accum->set_data_type(DataType_t::FLOAT).set_reordering_type(TensorReordering_t::F16x16);
-            dQ_accum_size = b * h_q * s_q * d_qk * sizeof(float);
+            use_dp_workspace = true;
         }
 
         // --------------RNG node--------------------
@@ -1216,6 +1233,21 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         last_output->set_dim({b, h_q, s_q, 1}).set_stride({h_q * s_q, s_q, 1, 1});
 
         softmax_sum = last_output;
+        softmax_sum->set_is_virtual(false);
+        softmax_sum->set_dim({b, h_q, s_q, 1});
+        softmax_sum->set_data_type(DataType_t::FLOAT);
+
+        if (attributes.inputs[input_names::Stats]->get_ragged_offset() && attributes.max_total_seq_len_q.has_value() &&
+            detail::get_backend_version() >= 90600) {
+            // sized TH1 softmax_sum
+            softmax_sum->set_stride(attributes.inputs[input_names::Stats]->get_stride());
+            softmax_sum->set_ragged_offset(attributes.inputs[input_names::Stats]->get_ragged_offset());
+            softmax_sum_size = attributes.max_total_seq_len_q.value() * h_q * 1 * sizeof(float);
+        } else {
+            // sized BHS1 softmax_sum
+            softmax_sum->set_stride({h_q * s_q, s_q, 1, 1});
+            softmax_sum_size = b * h_q * s_q * 1 * sizeof(float);
+        }
 
         // --------------"Q @ KT => exp_softmax => dV" chain--------------------
 
@@ -1643,29 +1675,44 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             last_output->set_ragged_offset(attributes.inputs[input_names::K]->get_ragged_offset());
         }
 
-        matmul(dS_output,
-               last_output,
-               Matmul_attributes()
-                   .set_name("matmul_dS_K")
-                   .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
-                   .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]),
-               (dQ_accum) ? dQ_accum : attributes.outputs[output_names::dQ]);
+        if (!use_dp_workspace) {
+            dQ_accum = std::make_shared<Tensor_attributes>();
+            dQ_accum->set_is_virtual(false);
+            dQ_accum->set_dim({b, h_q, s_q, d_qk});
+            dQ_accum->set_data_type(DataType_t::FLOAT);
 
-        if (dQ_accum) {
+            if (attributes.outputs[output_names::dQ]->get_ragged_offset() &&
+                attributes.max_total_seq_len_q.has_value() && detail::get_backend_version() >= 90600) {
+                // sized THD dQ_accum
+                dQ_accum->set_stride(attributes.outputs[output_names::dQ]->get_stride());
+                dQ_accum->set_ragged_offset(attributes.outputs[output_names::dQ]->get_ragged_offset());
+                dQ_accum_size = attributes.max_total_seq_len_q.value() *
+                                (attributes.outputs[output_names::dQ]->get_stride())[2] * sizeof(float);
+            } else {
+                // sized BHSD dQ_accum
+                dQ_accum->set_stride({h_q * s_q * d_qk, s_q * d_qk, d_qk, 1});
+                dQ_accum_size = b * h_q * s_q * d_qk * sizeof(float);
+            }
+
+            matmul(dS_output,
+                   last_output,
+                   Matmul_attributes()
+                       .set_name("matmul_dS_K")
+                       .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
+                       .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]),
+                   (dQ_accum) ? dQ_accum : attributes.outputs[output_names::dQ]);
+
             pointwise(dQ_accum,
                       Pointwise_attributes().set_name("identity_dQ").set_mode(PointwiseMode_t::IDENTITY),
                       attributes.outputs[output_names::dQ]);
-        }
-
-        // ---------------------output tensor workarounds---------------------------
-
-        // non-virtual softmax_sum is required for below cuDNN 8.9.5
-        // non-virtual softmax_sum is passed by the node
-        if (detail::get_backend_version() < 8905) {
-            softmax_sum->set_is_virtual(false);
-            softmax_sum->set_dim({b, h_q, s_q, 1});
-            softmax_sum->set_data_type(DataType_t::FLOAT);
-            softmax_sum_size = b * h_q * s_q * sizeof(float);
+        } else {
+            matmul(dS_output,
+                   last_output,
+                   Matmul_attributes()
+                       .set_name("matmul_dS_K")
+                       .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
+                       .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]),
+                   attributes.outputs[output_names::dQ]);
         }
 
         return {error_code_t::OK, ""};
@@ -1684,7 +1731,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
     virtual error_t
     collect_tensors_in_workspace_node(
-        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>& workspace_modifications,
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&
+            workspace_modifications,
         int64_t& offset) const override final {
         if (attributes.alibi_mask) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
@@ -1696,8 +1744,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         }
 
         if (dQ_accum && !dQ_accum->get_is_virtual()) {
-            std::vector<float> f_vec = {(float)dQ_accum_size};
-            workspace_modifications.emplace(dQ_accum->get_uid(), std::make_tuple(1, offset, f_vec));
+            std::vector<float> f_vec        = {(float)dQ_accum_size};
+            int64_t dQ_accum_workspace_type = detail::get_backend_version() < 90600 ? 1 : 2;
+            workspace_modifications.emplace(dQ_accum->get_uid(),
+                                            std::make_tuple(dQ_accum_workspace_type, offset, f_vec));
             offset = offset + dQ_accum_size;
         }
 

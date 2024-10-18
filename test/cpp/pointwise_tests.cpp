@@ -24,7 +24,6 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Pointwise shape deduction", "[pointwise_shape_deduction]") {
-    SKIP("Unsupported by cudnn");
     namespace fe = cudnn_frontend;
 
     cudnnHandle_t handle;
@@ -45,6 +44,8 @@ TEST_CASE("Pointwise shape deduction", "[pointwise_shape_deduction]") {
 
     auto out_0 = graph.pointwise(in0, in1, add_options);
 
+    out_0->set_output(true);
+
     REQUIRE(graph.validate().is_good());
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
@@ -56,7 +57,6 @@ TEST_CASE("Pointwise shape deduction", "[pointwise_shape_deduction]") {
 }
 
 TEST_CASE("Pointwise Add shape deduction", "[pointwise_shape_deduction]") {
-    SKIP("Unsupported by cudnn");
     namespace fe = cudnn_frontend;
 
     cudnnHandle_t handle;
@@ -76,13 +76,14 @@ TEST_CASE("Pointwise Add shape deduction", "[pointwise_shape_deduction]") {
     auto add_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::ADD);
 
     auto out_0 = graph.pointwise(in0, in1, add_options);
+    out_0->set_output(true);
 
     REQUIRE(graph.validate().is_good());
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
 
-    REQUIRE(out_0->get_dim() == in0->get_dim());
-    REQUIRE(out_0->get_stride() == in0->get_stride());
+    REQUIRE(out_0->get_dim() == in1->get_dim());
+    REQUIRE(out_0->get_stride() == in1->get_stride());
 
     cudnnDestroy(handle);
 }
