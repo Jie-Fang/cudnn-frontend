@@ -56,6 +56,14 @@ class PointwiseNode : public NodeCRTP<PointwiseNode> {
                     break;
                 }
             }
+            if (out_0_tensor->get_stride().empty() && out_0_tensor->get_is_virtual()) {
+                // If the tensor is virtual the strides are immaterial
+                auto input_stride = attributes.inputs.at(Pointwise_attributes::input_names::IN_0)->get_stride();
+                std::vector<int64_t> stride_order;
+                CHECK_CUDNN_FRONTEND_ERROR(
+                    detail::generate_stride_order_preserving_format(input_stride, output_dim.size(), stride_order));
+                out_0_tensor->set_stride(detail::generate_stride(output_dim, stride_order));
+            }
             RETURN_CUDNN_FRONTEND_ERROR_IF(out_0_tensor->get_stride().empty(),
                                            error_code_t::SHAPE_DEDUCTION_FAILED,
                                            "Pointwise output strides could not be computed");
@@ -66,7 +74,7 @@ class PointwiseNode : public NodeCRTP<PointwiseNode> {
 
     error_t
     create_cudnn_operations(
-        std::unordered_set<uid_t>& uids_involved_in_operations,
+        std::unordered_set<Tensor_attributes::uid_t>& uids_involved_in_operations,
         std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {

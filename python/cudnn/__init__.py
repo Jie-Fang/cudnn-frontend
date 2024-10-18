@@ -12,6 +12,7 @@ from ._compiled_module import (
     reduction_mode,
     behavior_note,
     create_handle,
+    create_kernel_cache,
     get_stream,
     numerical_note,
     set_stream,

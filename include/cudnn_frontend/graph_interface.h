@@ -31,7 +31,7 @@
 
 namespace cudnn_frontend::graph {
 
-class Graph : public INode {
+class Graph : public ICudnn, public INode {
    private:
     std::unordered_set<std::shared_ptr<Tensor_attributes>> full_graph_inputs;
     std::unordered_set<Tensor_attributes::uid_t> used_uids;
@@ -76,6 +76,9 @@ class Graph : public INode {
             (is_dynamic_shape_enabled || kernel_cache != nullptr) && detail::get_backend_version() < 90400,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Dynamic shapes or kernel caching enabled, but cuDNN version < 9.4!");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(((is_dynamic_shape_enabled == false) && (kernel_cache != nullptr)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Kernel caching enabled but dynamic shapes is disabled");
         return {error_code_t::OK, ""};
     }
 
@@ -100,7 +103,8 @@ class Graph : public INode {
 
     virtual error_t
     collect_tensors_in_workspace_node(
-        std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> &worskspace_modifications,
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>
+            &worskspace_modifications,
         int64_t &) const override {
         for (auto [uid, value] : deserialized_workspace_modifications) {
             worskspace_modifications.emplace(uid, value);
@@ -486,10 +490,14 @@ class Graph : public INode {
 
         // Finally get the backend cuda graph.
         cudaGraph_t backend_cuda_graph;
-        CHECK_CUDNN_ERROR(detail::create_cuda_graph(handle,
-                                                    plans.execution_plans[candidate]->get_raw_desc(),
-                                                    variant_pack_descriptor.get_ptr(),
-                                                    &backend_cuda_graph));
+        // Initialize the cudnn cuda graph.
+        // The responsibility to destroy is on the user.
+        detail::cu_graph_create(&backend_cuda_graph, 0);  // 0 is just what the API says to pass
+
+        CHECK_CUDNN_ERROR(detail::populate_cuda_graph(handle,
+                                                      plans.execution_plans[candidate]->get_raw_desc(),
+                                                      variant_pack_descriptor.get_ptr(),
+                                                      backend_cuda_graph));
 
         // Clone BE graph into a graph_node
         // This same call also places the newly created into FE's graph
