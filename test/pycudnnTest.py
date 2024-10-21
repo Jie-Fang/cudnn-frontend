@@ -11,6 +11,12 @@ from json_graph_test import run_test_from_legacy_args
 
 utils.reportCurrentTime("import_json_graph_test")
 
+
+def reportError(e, repro_cmd):
+    print(e)
+    print("FAILED: {}".format(repro_cmd))
+
+
 if __name__ == "__main__":
     # We disable help here, as each specific mode has it's own set of options and associated help
     pct_parser = argparse.ArgumentParser(
@@ -97,7 +103,11 @@ if __name__ == "__main__":
 
     # Legacy style of calling cudnnTest (from e.g., cudnn_run.py)
     if args.R == "graphRunner":
-        run_test_from_legacy_args(args, unknown_args)
+        try:
+            run_test_from_legacy_args(args, unknown_args)
+        except Exception as e:
+            reportError(e, cmd)
+            sys.exit(1)
 
         utils.reportCurrentTime("done")
         sys.exit(0)
@@ -128,9 +138,9 @@ if __name__ == "__main__":
             try:
                 run_test_from_legacy_args(args_stream, unknown_args_stream)
             except Exception as e:
-                print(e)
                 error_count += 1
-                print("ERROR: {}".format(line.strip()))
+                repro_cmd = "{} {}".format(sys.argv[0], line.strip())
+                reportError(e, repro_cmd)
 
             utils.reportCurrentTime("done")
 
