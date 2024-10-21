@@ -490,14 +490,22 @@ class Graph : public ICudnn, public INode {
 
         // Finally get the backend cuda graph.
         cudaGraph_t backend_cuda_graph;
-        // Initialize the cudnn cuda graph.
-        // The responsibility to destroy is on the user.
-        detail::cu_graph_create(&backend_cuda_graph, 0);  // 0 is just what the API says to pass
 
-        CHECK_CUDNN_ERROR(detail::populate_cuda_graph(handle,
-                                                      plans.execution_plans[candidate]->get_raw_desc(),
-                                                      variant_pack_descriptor.get_ptr(),
-                                                      backend_cuda_graph));
+        if (detail::get_backend_version() >= 99900) {
+            CHECK_CUDNN_ERROR(detail::create_cuda_graph(handle,
+                                                        plans.execution_plans[candidate]->get_raw_desc(),
+                                                        variant_pack_descriptor.get_ptr(),
+                                                        &backend_cuda_graph));
+        } else {
+            // Initialize the cudnn cuda graph.
+            // The responsibility to destroy is on the user.
+            detail::cu_graph_create(&backend_cuda_graph, 0);  // 0 is just what the API says to pass
+
+            CHECK_CUDNN_ERROR(detail::populate_cuda_graph(handle,
+                                                          plans.execution_plans[candidate]->get_raw_desc(),
+                                                          variant_pack_descriptor.get_ptr(),
+                                                          backend_cuda_graph));
+        }
 
         // Clone BE graph into a graph_node
         // This same call also places the newly created into FE's graph
