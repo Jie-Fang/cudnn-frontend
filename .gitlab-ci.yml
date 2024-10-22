@@ -180,7 +180,7 @@ deploy:build_bdist_wheels:
         - wheel_builder
     needs: []
     stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.5_cudnn_9.4.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.6_cudnn_9.5.0
     script:
         - ci/build_pip_wheels.sh
     rules:
