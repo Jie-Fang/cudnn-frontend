@@ -658,7 +658,7 @@ enum class DataType_t {
     FP8_E4M3,
     FP8_E5M2,
     FAST_FLOAT_FOR_FP8,
-    E8M0,
+    FP8_E8M0,
     FP4_E2M1,
 };
 
@@ -680,7 +680,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(DataType_t,
                                  {DataType_t::FP8_E4M3, "FP8_E4M3"},
                                  {DataType_t::FP8_E5M2, "FP8_E5M2"},
                                  {DataType_t::FAST_FLOAT_FOR_FP8, "FAST_FLOAT_FOR_FP8"},
-                                 {DataType_t::E8M0, "E8M0"},
+                                 {DataType_t::FP8_E8M0, "FP8_E8M0"},
                                  {DataType_t::FP4_E2M1, "FP4_E2M1"},
                              })
 
@@ -1051,10 +1051,10 @@ convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cu
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
-        case DataType_t::E8M0:
+        case DataType_t::FP8_E8M0:
 #if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
             NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
-            cudnn_mode = CUDNN_DATA_E8M0;
+            cudnn_mode = CUDNN_DATA_FP8_E8M0;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
@@ -2038,8 +2038,8 @@ convert_from_cudnn_type(cudnnDataType_t const cudnn_mode) {
             return DataType_t::FAST_FLOAT_FOR_FP8;
 #endif
 #if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-        case CUDNN_DATA_E8M0:
-            return DataType_t::E8M0;
+        case CUDNN_DATA_FP8_E8M0:
+            return DataType_t::FP8_E8M0;
 #endif
 #if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
         case CUDNN_DATA_FP4_E2M1:

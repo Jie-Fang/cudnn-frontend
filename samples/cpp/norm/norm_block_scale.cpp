@@ -76,7 +76,7 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
                                        .set_transpose(false);
     auto [Y_row, mx_row] = graph.block_scale_quantize(Y_ln_2d, mxfp8_quantize_row_opts);
     Y_row->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
-    mx_row->set_output(true).set_data_type(fe::DataType_t::E8M0);
+    mx_row->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
     auto mxfp8_quantize_col_opts = fe::graph::Block_scale_quantize_attributes()
                                        .set_block_size(block_size)
@@ -85,7 +85,7 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
                                        .set_transpose(false);
     auto [Y_col, mx_col] = graph.block_scale_quantize(Y_ln_2d, mxfp8_quantize_col_opts);
     Y_col->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
-    mx_col->set_output(true).set_data_type(fe::DataType_t::E8M0);
+    mx_col->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("MXFP8 requires Blackwell and up");
@@ -175,7 +175,7 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
                                    .set_axis(1);
     auto [Y, mx_scale] = graph.block_scale_quantize(Y_ln, mxfp8_quantize_opts);
     Y->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
-    mx_scale->set_output(true).set_data_type(fe::DataType_t::E8M0);
+    mx_scale->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
     REQUIRE(mean == nullptr);
     REQUIRE(inv_variance == nullptr);
@@ -256,7 +256,7 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
                                        .set_transpose(false);
     auto [Y_row, mx_row] = graph.block_scale_quantize(Y_ln, mxfp8_quantize_row_opts);
     Y_row->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
-    mx_row->set_output(true).set_data_type(fe::DataType_t::E8M0);
+    mx_row->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
     auto mxfp8_quantize_col_opts = fe::graph::Block_scale_quantize_attributes()
                                        .set_block_size(block_size)
@@ -265,7 +265,7 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
                                        .set_transpose(true);
     auto [Y_col, mx_col] = graph.block_scale_quantize(Y_ln, mxfp8_quantize_col_opts);
     Y_col->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
-    mx_col->set_output(true).set_data_type(fe::DataType_t::E8M0);
+    mx_col->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("MXFP8 requires Blackwell and up");
