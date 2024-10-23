@@ -412,6 +412,7 @@ PyGraph::update_cuda_graph(std::intptr_t handle,
                            std::intptr_t workspace,
                            std::intptr_t cuda_graph) {
     std::unordered_map<int64_t, void*> var_pack_;
+    var_pack_.reserve(var_pack.size());
     for (auto const& [uid, device_pointer] : var_pack) {
         var_pack_.emplace(uid, (void*)device_pointer);
     }
@@ -432,6 +433,7 @@ PyGraph::populate_cuda_graph(
     std::intptr_t workspace,
     std::intptr_t cuda_graph) {
     std::unordered_map<int64_t, void*> var_pack_;
+    var_pack_.reserve(var_pack.size());
     for (auto const& [uid, device_pointer] : var_pack) {
         var_pack_.emplace(uid, (void*)device_pointer);
     }

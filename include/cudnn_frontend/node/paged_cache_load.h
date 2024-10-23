@@ -114,10 +114,10 @@ INode::paged_cache_load(std::shared_ptr<Tensor_attributes> container,
                         std::shared_ptr<Tensor_attributes> pageTable,
                         PagedCacheLoad_attributes attributes,
                         std::shared_ptr<Tensor_attributes> yOut) {
-    attributes.inputs[PagedCacheLoad_attributes::input_names::container] = container;
-    attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = seqLen;
-    attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = pageTable;
-    attributes.outputs[PagedCacheLoad_attributes::output_names::yOut]    = yOut;
+    attributes.inputs[PagedCacheLoad_attributes::input_names::container] = std::move(container);
+    attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = std::move(seqLen);
+    attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = std::move(pageTable);
+    attributes.outputs[PagedCacheLoad_attributes::output_names::yOut]    = std::move(yOut);
     sub_nodes.emplace_back(std::make_unique<PagedCacheLoadNode>(std::move(attributes), context));
 }
 }  // namespace cudnn_frontend::graph
