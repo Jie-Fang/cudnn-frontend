@@ -176,6 +176,11 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
         return;
     }
 
+    // switch off certain features on blackwell
+    if (is_blackwell_arch()) {
+        SKIP("Providing paged caches for attention is not supported on Blackwell");
+    }
+
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));
 
