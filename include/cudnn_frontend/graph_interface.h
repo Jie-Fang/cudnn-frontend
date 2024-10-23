@@ -278,6 +278,10 @@ class Graph : public ICudnn, public INode {
         // Make sure device pointer is provided for all uids expected for this plan
         std::vector<void *> device_ptrs;
         std::vector<uid_t> uids;
+
+        device_ptrs.reserve(variant_pack_uids.size());
+        uids.reserve(variant_pack_uids.size());
+
         for (auto const &uid : variant_pack_uids) {
             auto search = uid_to_device_ptrs.find(uid);
             RETURN_CUDNN_FRONTEND_ERROR_IF(search == uid_to_device_ptrs.end(),
