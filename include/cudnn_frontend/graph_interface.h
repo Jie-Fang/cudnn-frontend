@@ -24,6 +24,7 @@
 #include "node/sdpa_fp8.h"
 #include "node/sdpa_fp8_bwd.h"
 #include "node/block_scale_quantize.h"
+#include "node/block_scale_dequantize.h"
 
 #include "plans.h"
 #include "graph_helpers.h"
@@ -1002,6 +1003,10 @@ class Graph : public ICudnn, public INode {
 
     std::array<std::shared_ptr<Tensor_attributes>, 2> block_scale_quantize(std::shared_ptr<Tensor_attributes>,
                                                                            Block_scale_quantize_attributes);
+
+    std::shared_ptr<Tensor_attributes> block_scale_dequantize(std::shared_ptr<Tensor_attributes>,
+                                                              std::shared_ptr<Tensor_attributes>,
+                                                              Block_scale_dequantize_attributes);
 
     [[deprecated]] std::array<std::shared_ptr<Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
@@ -2023,6 +2028,23 @@ Graph::block_scale_quantize(std::shared_ptr<Tensor_attributes> x, Block_scale_qu
     sub_nodes.emplace_back(std::make_unique<BlockScaleQuantizeNode>(std::move(attributes), context));
 
     return {Y, scale};
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::block_scale_dequantize(std::shared_ptr<Tensor_attributes> x,
+                              std::shared_ptr<Tensor_attributes> scale,
+                              Block_scale_dequantize_attributes attributes) {
+    // Set outputs
+    auto Y = attributes.outputs[Block_scale_dequantize_attributes::output_names::Y] =
+        output_tensor(attributes.name + "::Y");
+
+    // Set inputs
+    attributes.inputs[Block_scale_dequantize_attributes::input_names::X]     = x;
+    attributes.inputs[Block_scale_dequantize_attributes::input_names::scale] = scale;
+
+    sub_nodes.emplace_back(std::make_unique<BlockScaleDequantizeNode>(std::move(attributes), context));
+
+    return Y;
 }
 
 static inline std::ostream &
