@@ -356,7 +356,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
             k_cache = attributes.inputs[input_names::K];
         } else {
             // Create a paged cache load operation
-            auto paged_cache_load_attributes_k = PagedCacheLoad_attributes();
+            auto paged_cache_load_attributes_k = PagedCacheLoad_attributes().set_name("paged_k_cache_operation");
             // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
             // K-cache has BHDS layout
             k_cache = std::make_shared<Tensor_attributes>();
@@ -739,7 +739,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (!is_paged_v) {
             v_cache = attributes.inputs[input_names::V];
         } else {
-            auto paged_cache_load_attributes_v = PagedCacheLoad_attributes();
+            auto paged_cache_load_attributes_v = PagedCacheLoad_attributes().set_name("paged_v_cache_operation");
             v_cache                            = std::make_shared<Tensor_attributes>();
             v_cache->set_dim({b, h_v, s_kv, d_v})
                 .set_stride({d_v * s_kv * h_v, d_v * s_kv, d_v, 1})
