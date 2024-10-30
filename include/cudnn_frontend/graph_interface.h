@@ -78,6 +78,11 @@ class Graph : public ICudnn, public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(((is_dynamic_shape_enabled == false) && (kernel_cache != nullptr)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Kernel caching enabled but dynamic shapes is disabled");
+        if (detail::get_backend_version() != detail::get_compiled_version()) {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: The cuDNN version used at compilation ("
+                                    << detail::get_compiled_version() << ") and the one used at runtime ("
+                                    << detail::get_backend_version() << ") differ.");
+        }
         return {error_code_t::OK, ""};
     }
 
