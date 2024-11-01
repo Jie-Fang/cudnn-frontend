@@ -425,6 +425,30 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
     return uniform_tensor
 
 
+def generate_actual_seq_lens(
+    b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window
+):
+    seq_len_q_gpu = None
+    seq_len_kv_gpu = None
+
+    if is_padding:
+        seq_len_q_gpu = torch.randint(
+            1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda"
+        )
+
+        if not (layout == "bs3hd" and head_group == "multi_head"):
+            seq_len_kv_gpu = torch.randint(
+                1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda"
+            )
+            # Avoid seq_len_q > seq_len_kv (known limitation):
+            if is_sliding_window:
+                seq_len_q_gpu = seq_len_q_gpu % (seq_len_kv_gpu - 1) + 1
+        else:
+            seq_len_kv_gpu = seq_len_q_gpu
+
+    return (seq_len_q_gpu, seq_len_kv_gpu)
+
+
 # fmt: off
 @pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
@@ -493,8 +517,8 @@ def test_sdpa(
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
-    if is_paged_attention and (not is_padding or cudnn_version < "9.4" or not layout == "bshd_bshd_bshd" or is_ragged):
-        pytest.skip("Paged attention is only tested with packed variable length tensors, thd_thd_thd, no ragged offsets, and only on cuDNNv9.4 or greater")
+    if is_paged_attention and (not is_padding or cudnn_version < "9.5" or not layout == "bshd_bshd_bshd" or is_ragged):
+        pytest.skip("Paged attention is only tested with packed variable length tensors, bshd_bshd_bshd, no ragged offsets, and only on cuDNNv9.5 or greater")
 
 
     # -------------------------- default randomized parameter testing ------------------------
@@ -591,20 +615,7 @@ def test_sdpa(
         else None
     )
 
-    seq_len_q_gpu = (
-        torch.randint(1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-        if is_padding
-        else None
-    )
-    seq_len_kv_gpu = (
-        (
-            torch.randint(1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-            if is_padding
-            else None
-        )
-        if not (layout == "bs3hd" and head_group == "multi_head")
-        else seq_len_q_gpu
-    )
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window)
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -1035,20 +1046,7 @@ def test_sdpa_backward(
         else None
     )
 
-    seq_len_q_gpu = (
-        torch.randint(1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-        if is_padding
-        else None
-    )
-    seq_len_kv_gpu = (
-        (
-            torch.randint(1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-            if is_padding
-            else None
-        )
-        if not (layout == "bs3hd" and head_group == "multi_head")
-        else seq_len_q_gpu
-    )
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window)
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
