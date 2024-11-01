@@ -398,28 +398,11 @@ execute(cudnnHandle_t handle, cudnnBackendDescriptor_t executionPlan, cudnnBacke
 }
 
 inline cudnnStatus_t
-create_cuda_graph(cudnnHandle_t handle,
-                  cudnnBackendDescriptor_t executionPlan,
-                  cudnnBackendDescriptor_t variantPack,
-                  cudaGraph_t *cuda_graph) {
-#if CUDNN_VERSION >= 99900
-    NV_FE_CALL_TO_BACKEND(
-        create_cuda_graph, cudnnBackendCreateCudaGraph, handle, executionPlan, variantPack, cuda_graph);
-#else
-    (void)handle;
-    (void)executionPlan;
-    (void)variantPack;
-    (void)cuda_graph;
-    return CUDNN_STATUS_VERSION_MISMATCH;
-#endif
-}
-
-inline cudnnStatus_t
 populate_cuda_graph(cudnnHandle_t handle,
                     cudnnBackendDescriptor_t executionPlan,
                     cudnnBackendDescriptor_t variantPack,
                     cudaGraph_t cuda_graph) {
-#if CUDNN_VERSION >= 90500 and CUDNN_VERSION < 99900
+#if CUDNN_VERSION >= 90500
     NV_FE_CALL_TO_BACKEND(
         populate_cuda_graph, cudnnBackendPopulateCudaGraph, handle, executionPlan, variantPack, cuda_graph);
 #else

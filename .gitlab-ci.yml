@@ -121,7 +121,7 @@ stages:
 
 .fetch_cudnn_feature_next:template:
     before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.99_cuda_dev/
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.99_cuda_12.8/
         - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.99.2" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
