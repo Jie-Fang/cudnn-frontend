@@ -30,10 +30,6 @@ class BlockScaleQuantizeNode : public NodeCRTP<BlockScaleQuantizeNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             !attributes.block_size.has_value(), error_code_t::ATTRIBUTE_NOT_SET, "Block size not set.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.mode == DenomMode_t::NOT_SET,
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "Denominator factor mode not set for block scale quantize node.");
-
         return {error_code_t::OK, ""};
     }
 
@@ -168,14 +164,6 @@ class BlockScaleQuantizeNode : public NodeCRTP<BlockScaleQuantizeNode> {
                                                 CUDNN_TYPE_INT32,
                                                 1,
                                                 &block_size));
-
-        cudnnBackendDenomMode_t cudnn_denom_mode;
-        CHECK_CUDNN_ERROR(detail::convert_to_cudnn_type(attributes.mode, cudnn_denom_mode));
-        CHECK_CUDNN_ERROR(detail::set_attribute(block_scale_quantize_operation->get_backend_descriptor(),
-                                                CUDNN_ATTR_OPERATION_BLOCK_SCALE_QUANTIZE_DENOM_FACTOR_MODE,
-                                                CUDNN_TYPE_DENOM_FACTOR_MODE,
-                                                1,
-                                                &cudnn_denom_mode));
 
         CHECK_CUDNN_ERROR(detail::finalize(block_scale_quantize_operation->get_backend_descriptor()));
 

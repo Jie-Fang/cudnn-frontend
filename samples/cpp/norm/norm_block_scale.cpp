@@ -69,20 +69,14 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
     auto Y_ln_2d = graph.reshape(Y_ln, fe::graph::Reshape_attributes());
     Y_ln_2d->set_dim({batch_size * seq_length, hidden_size});
 
-    auto mxfp8_quantize_row_opts = fe::graph::Block_scale_quantize_attributes()
-                                       .set_block_size(block_size)
-                                       .set_mode(fe::DenomMode_t::EMAX)
-                                       .set_axis(1)
-                                       .set_transpose(false);
+    auto mxfp8_quantize_row_opts =
+        fe::graph::Block_scale_quantize_attributes().set_block_size(block_size).set_axis(1).set_transpose(false);
     auto [Y_row, mx_row] = graph.block_scale_quantize(Y_ln_2d, mxfp8_quantize_row_opts);
     Y_row->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
     mx_row->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
-    auto mxfp8_quantize_col_opts = fe::graph::Block_scale_quantize_attributes()
-                                       .set_block_size(block_size)
-                                       .set_mode(fe::DenomMode_t::EMAX)
-                                       .set_axis(0)
-                                       .set_transpose(false);
+    auto mxfp8_quantize_col_opts =
+        fe::graph::Block_scale_quantize_attributes().set_block_size(block_size).set_axis(0).set_transpose(false);
     auto [Y_col, mx_col] = graph.block_scale_quantize(Y_ln_2d, mxfp8_quantize_col_opts);
     Y_col->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
     mx_col->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
@@ -169,11 +163,8 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
         fe::graph::Layernorm_attributes().set_forward_phase(fe::NormFwdPhase_t::INFERENCE).set_epsilon(epsilon);
     auto [Y_ln, mean, inv_variance] = graph.layernorm(X, scale, bias, layernorm_options);
 
-    auto mxfp8_quantize_opts = fe::graph::Block_scale_quantize_attributes()
-                                   .set_block_size(block_size)
-                                   .set_mode(fe::DenomMode_t::EMAX)
-                                   .set_axis(1);
-    auto [Y, mx_scale] = graph.block_scale_quantize(Y_ln, mxfp8_quantize_opts);
+    auto mxfp8_quantize_opts = fe::graph::Block_scale_quantize_attributes().set_block_size(block_size).set_axis(1);
+    auto [Y, mx_scale]       = graph.block_scale_quantize(Y_ln, mxfp8_quantize_opts);
     Y->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
     mx_scale->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
@@ -249,20 +240,14 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
     auto [Y_ln, inv_variance] = graph.rmsnorm(X, scale, rmsnorm_options);
     inv_variance->set_output(true).set_data_type(fe::DataType_t::FLOAT);
 
-    auto mxfp8_quantize_row_opts = fe::graph::Block_scale_quantize_attributes()
-                                       .set_block_size(block_size)
-                                       .set_mode(fe::DenomMode_t::EMAX)
-                                       .set_axis(2)
-                                       .set_transpose(false);
+    auto mxfp8_quantize_row_opts =
+        fe::graph::Block_scale_quantize_attributes().set_block_size(block_size).set_axis(2).set_transpose(false);
     auto [Y_row, mx_row] = graph.block_scale_quantize(Y_ln, mxfp8_quantize_row_opts);
     Y_row->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
     mx_row->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
 
-    auto mxfp8_quantize_col_opts = fe::graph::Block_scale_quantize_attributes()
-                                       .set_block_size(block_size)
-                                       .set_mode(fe::DenomMode_t::EMAX)
-                                       .set_axis(1)
-                                       .set_transpose(true);
+    auto mxfp8_quantize_col_opts =
+        fe::graph::Block_scale_quantize_attributes().set_block_size(block_size).set_axis(1).set_transpose(true);
     auto [Y_col, mx_col] = graph.block_scale_quantize(Y_ln, mxfp8_quantize_col_opts);
     Y_col->set_output(true).set_data_type(fe::DataType_t::FP8_E5M2);
     mx_col->set_output(true).set_data_type(fe::DataType_t::FP8_E8M0);
@@ -347,11 +332,8 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
     auto [Y_ln, inv_variance] = graph.rmsnorm(X, scale, rmsnorm_options);
     REQUIRE(inv_variance == nullptr);
 
-    auto nvfp4_quantize_opts = fe::graph::Block_scale_quantize_attributes()
-                                   .set_block_size(block_size)
-                                   .set_mode(fe::DenomMode_t::MAX)
-                                   .set_axis(2)
-                                   .set_transpose(false);
+    auto nvfp4_quantize_opts =
+        fe::graph::Block_scale_quantize_attributes().set_block_size(block_size).set_axis(2).set_transpose(false);
     auto [Y, mx_scale] = graph.block_scale_quantize(Y_ln, nvfp4_quantize_opts);
     Y->set_output(true).set_data_type(fe::DataType_t::FP4_E2M1);
     mx_scale->set_output(true).set_data_type(fe::DataType_t::FP8_E4M3);
