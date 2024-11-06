@@ -2136,7 +2136,6 @@ class Block_scale_quantize_attributes : public Attributes<Block_scale_quantize_a
     friend class Graph;
 
     std::optional<int32_t> block_size;
-    DenomMode_t mode = DenomMode_t::NOT_SET;
     std::optional<int64_t> axis;
     bool transpose = false;
 
@@ -2151,18 +2150,11 @@ class Block_scale_quantize_attributes : public Attributes<Block_scale_quantize_a
                                    inputs,
                                    outputs,
                                    block_size,
-                                   mode,
                                    axis)
 
     Block_scale_quantize_attributes&
     set_block_size(int32_t const value) {
         block_size = value;
-        return *this;
-    }
-
-    Block_scale_quantize_attributes&
-    set_mode(DenomMode_t const value) {
-        mode = value;
         return *this;
     }
 

@@ -729,20 +729,6 @@ NLOHMANN_JSON_SERIALIZE_ENUM(RngDistribution_t,
                                  {RngDistribution_t::NORMAL, "NORMAL"},
                              })
 
-enum class DenomMode_t {
-    NOT_SET,
-
-    EMAX,
-    MAX
-};
-
-NLOHMANN_JSON_SERIALIZE_ENUM(DenomMode_t,
-                             {
-                                 {DenomMode_t::NOT_SET, nullptr},
-                                 {DenomMode_t::EMAX, "EMAX"},
-                                 {DenomMode_t::MAX, "MAX"},
-                             })
-
 static int64_t
 get_pointwise_mode_port_count(PointwiseMode_t const& mode) {
     switch (mode) {
@@ -2137,28 +2123,6 @@ convert_from_cudnn_type(cudnnRngDistribution_t const cudnn_mode) {
 #endif
     }
     return RngDistribution_t::NOT_SET;
-}
-#endif
-
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-static inline cudnnStatus_t
-convert_to_cudnn_type(cudnn_frontend::DenomMode_t const mode, cudnnBackendDenomMode_t& cudnn_mode) {
-    NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
-
-    switch (mode) {
-        case DenomMode_t::EMAX:
-            cudnn_mode = CUDNN_DENOM_EMAX;
-            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-        case DenomMode_t::MAX:
-            cudnn_mode = CUDNN_DENOM_MAX;
-            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
-
-#ifndef NO_DEFAULT_IN_SWITCH
-        default:
-            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
-#endif
-    }
-    return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 }
 #endif
 
