@@ -155,9 +155,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Bottom right causal mask does not support s_q > s_kv. Please virtually slice the Q tensor and pass it as s_q == s_kv");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || attributes.alibi_mask || is_ragged || attributes.padding_mask || is_dropout),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || attributes.alibi_mask || (is_ragged && !attributes.padding_mask) || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_ragged=False, padding_mask=False, is_dropout=False");
+                                       "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -172,9 +172,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with s_q <= s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged != attributes.padding_mask)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False, and one of the following conditions: (in the case of THD) is_ragged=padding_mask=True, or (non-THD) is_ragged=padding_mask=False.");
+                                       "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
         // validate options for dropout mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && is_dropout_custom,
@@ -963,9 +963,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Bottom right causal mask does not support s_q > s_kv. Please virtually slice the Q tensor and pass it as s_q == s_kv");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || attributes.alibi_mask || is_ragged || attributes.padding_mask || is_dropout),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && (is_bias || attributes.alibi_mask || (is_ragged && !attributes.padding_mask) || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_ragged=False, padding_mask=False, is_dropout=False");
+                                       "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.causal_mask_bottom_right && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -980,9 +980,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with s_q <= s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged != attributes.padding_mask)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False. In the case of THD: is_ragged=padding_mask=True. Non-THD: is_ragged=padding_mask=False.");
+                                       "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
         // validate options for dropout mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && is_dropout_custom,
