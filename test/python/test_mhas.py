@@ -94,7 +94,7 @@ def compute_ref(
             1, 1, s_q, 1, dtype=torch.bool, device=device
         )
         causal_mask_bottom_right_zero[:, :, : s_q - s_kv, :] = False
-        q = q * causal_mask_bottom_right_zero
+
     if sliding_window_length is not None:
         swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
         swa_mask_zero[:, :, s_kv + sliding_window_length - 1 :, :] = False
@@ -161,11 +161,21 @@ def compute_ref(
         causal_mask.triu_(diagonal=1)
         s = s.masked_fill(causal_mask, float("-inf"))
     if is_causal_bottom_right:
-        causal_mask_bottom_right = torch.ones(
-            s_q, s_kv, dtype=torch.bool, device=device
-        )
-        causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
-        causal_mask_bottom_right &= causal_mask_bottom_right_zero.view(s_q, 1)
+        causal_mask_bottom_right = None
+        if padding:
+            causal_mask_bottom_right = torch.ones(
+                b, 1, s_q, s_kv, dtype=torch.bool, device=device
+            )
+            seq_len_q, seq_len_kv = padding
+            for i in range(b):
+                causal_mask_bottom_right[i, :, :, :].triu_(
+                    diagonal=seq_len_kv[i] - seq_len_q[i] + 1
+                )
+        else:
+            causal_mask_bottom_right = torch.ones(
+                s_q, s_kv, dtype=torch.bool, device=device
+            )
+            causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
         s = s.masked_fill(causal_mask_bottom_right, float("-inf"))
     if sliding_window_length is not None:
         assert is_causal == True
@@ -175,8 +185,7 @@ def compute_ref(
         s = s.masked_fill(swa_mask, float("-inf"))
 
     p = torch.softmax(s, dim=-1)
-    if is_causal_bottom_right:
-        p = p * causal_mask_bottom_right_zero
+
     if sliding_window_length is not None:
         p = p * swa_mask_zero
     if padding is not None:
@@ -427,7 +436,7 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
 
 
 def generate_actual_seq_lens(
-    b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window
+    b, s_q, s_kv, layout, head_group, is_padding, force_sq_less_or_equal_than_skv
 ):
     seq_len_q_gpu = None
     seq_len_kv_gpu = None
@@ -442,7 +451,7 @@ def generate_actual_seq_lens(
                 1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda"
             )
             # Avoid seq_len_q > seq_len_kv (known limitation):
-            if is_sliding_window:
+            if force_sq_less_or_equal_than_skv:
                 seq_len_q_gpu = torch.max(
                     torch.tensor(1), seq_len_q_gpu % seq_len_kv_gpu
                 )
@@ -616,7 +625,7 @@ def test_sdpa(
         else None
     )
 
-    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window)
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window or is_causal_bottom_right)
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -1047,7 +1056,7 @@ def test_sdpa_backward(
         else None
     )
 
-    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window)
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window or is_causal_bottom_right)
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
