@@ -16,9 +16,9 @@ spec:
     paths:
       - build/
 
-"cpp_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+"cpp_samples:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  stage: cpp_tests
+  stage: cpp_samples
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
   parallel:
     matrix:
@@ -26,7 +26,7 @@ spec:
   tags:
     - ${ARCH}
   script:
-    - build/bin/samples --reporter JUnit::out=result-junit.xml --reporter console::out=-::colour-mode=ansi
+    - ci/run_cpp_samples.sh
   artifacts:
     when: always
     reports:
@@ -58,7 +58,12 @@ spec:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .cpp_tests:template
+  script:
+    - ci/run_cpp_tests.sh
+  artifacts:
+    when: always
+    reports:
+      junit: result-junit.xml
 
 "pycudnntest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
