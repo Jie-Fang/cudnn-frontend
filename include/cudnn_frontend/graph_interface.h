@@ -80,6 +80,11 @@ class Graph : public ICudnn, public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(((is_dynamic_shape_enabled == false) && (kernel_cache != nullptr)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Kernel caching enabled but dynamic shapes is disabled");
+        if (detail::get_backend_version() != detail::get_compiled_version()) {
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: The cuDNN version used at compilation ("
+                                    << detail::get_compiled_version() << ") and the one used at runtime ("
+                                    << detail::get_backend_version() << ") differ.");
+        }
         return {error_code_t::OK, ""};
     }
 
@@ -280,6 +285,10 @@ class Graph : public ICudnn, public INode {
         // Make sure device pointer is provided for all uids expected for this plan
         std::vector<void *> device_ptrs;
         std::vector<uid_t> uids;
+
+        device_ptrs.reserve(variant_pack_uids.size());
+        uids.reserve(variant_pack_uids.size());
+
         for (auto const &uid : variant_pack_uids) {
             auto search = uid_to_device_ptrs.find(uid);
             RETURN_CUDNN_FRONTEND_ERROR_IF(search == uid_to_device_ptrs.end(),
@@ -492,6 +501,7 @@ class Graph : public ICudnn, public INode {
         // Finally get the backend cuda graph.
         cudaGraph_t backend_cuda_graph;
         // Initialize the cudnn cuda graph.
+        // The responsibility to destroy is on the user.
         detail::cu_graph_create(&backend_cuda_graph, 0);  // 0 is just what the API says to pass
 
         CHECK_CUDNN_ERROR(detail::populate_cuda_graph(handle,

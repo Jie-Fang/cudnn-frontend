@@ -94,7 +94,7 @@ def compute_ref(
             1, 1, s_q, 1, dtype=torch.bool, device=device
         )
         causal_mask_bottom_right_zero[:, :, : s_q - s_kv, :] = False
-        q = q * causal_mask_bottom_right_zero
+
     if sliding_window_length is not None:
         swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
         swa_mask_zero[:, :, s_kv + sliding_window_length - 1 :, :] = False
@@ -102,21 +102,22 @@ def compute_ref(
     # generate masks to compute reference values for padding mask
     # (also called variable sequence length)
     if padding is not None:
-        q_mask = torch.ones(b, 1, s_q, 1, dtype=torch.bool, device=device)
-        k_mask = torch.ones(b, 1, s_kv, 1, dtype=torch.bool, device=device)
-        v_mask = torch.ones(b, 1, s_kv, 1, dtype=torch.bool, device=device)
+        q_mask = torch.zeros(b, 1, s_q, 1, dtype=torch.bool, device=device)
+        k_mask = torch.zeros(b, 1, s_kv, 1, dtype=torch.bool, device=device)
+        v_mask = torch.zeros(b, 1, s_kv, 1, dtype=torch.bool, device=device)
         s_mask = torch.zeros(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
-        p_mask = torch.ones(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
+        p_mask = torch.zeros(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
         seq_len_q, seq_len_kv = padding
         for i, (m, n) in enumerate(zip(seq_len_q, seq_len_kv)):
-            q_mask[i, :, m:, :] = False
-            k_mask[i, :, n:, :] = False
-            v_mask[i, :, n:, :] = False
+            q_mask[i, :, m:, :] = True
+            k_mask[i, :, n:, :] = True
+            v_mask[i, :, n:, :] = True
             s_mask[i, :, :, n:] = True
-            p_mask[i, :, m:, :] = False
-        q = q * q_mask
-        k = k * k_mask
-        v = v * v_mask
+            p_mask[i, :, m:, :] = True
+
+        q = q.masked_fill(q_mask, 0.0)
+        k = k.masked_fill(k_mask, 0.0)
+        v = v.masked_fill(v_mask, 0.0)
 
     s = torch.einsum("bhqd,bhkd->bhqk", q, k) * attn_scale
 
@@ -160,11 +161,21 @@ def compute_ref(
         causal_mask.triu_(diagonal=1)
         s = s.masked_fill(causal_mask, float("-inf"))
     if is_causal_bottom_right:
-        causal_mask_bottom_right = torch.ones(
-            s_q, s_kv, dtype=torch.bool, device=device
-        )
-        causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
-        causal_mask_bottom_right &= causal_mask_bottom_right_zero.view(s_q, 1)
+        causal_mask_bottom_right = None
+        if padding:
+            causal_mask_bottom_right = torch.ones(
+                b, 1, s_q, s_kv, dtype=torch.bool, device=device
+            )
+            seq_len_q, seq_len_kv = padding
+            for i in range(b):
+                causal_mask_bottom_right[i, :, :, :].triu_(
+                    diagonal=seq_len_kv[i] - seq_len_q[i] + 1
+                )
+        else:
+            causal_mask_bottom_right = torch.ones(
+                s_q, s_kv, dtype=torch.bool, device=device
+            )
+            causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
         s = s.masked_fill(causal_mask_bottom_right, float("-inf"))
     if sliding_window_length is not None:
         assert is_causal == True
@@ -174,12 +185,11 @@ def compute_ref(
         s = s.masked_fill(swa_mask, float("-inf"))
 
     p = torch.softmax(s, dim=-1)
-    if is_causal_bottom_right:
-        p = p * causal_mask_bottom_right_zero
+
     if sliding_window_length is not None:
         p = p * swa_mask_zero
     if padding is not None:
-        p = p * p_mask
+        p = p.masked_fill(p_mask, 0.0)
 
     # apply dropout mask over softmax outputs
     if dropout_prob != 0.0:
@@ -425,6 +435,32 @@ def convert_ragged_to_uniform(ragged_tensor, seq_len):
     return uniform_tensor
 
 
+def generate_actual_seq_lens(
+    b, s_q, s_kv, layout, head_group, is_padding, force_sq_less_or_equal_than_skv
+):
+    seq_len_q_gpu = None
+    seq_len_kv_gpu = None
+
+    if is_padding:
+        seq_len_q_gpu = torch.randint(
+            1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda"
+        )
+
+        if not (layout == "bs3hd" and head_group == "multi_head"):
+            seq_len_kv_gpu = torch.randint(
+                1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda"
+            )
+            # Avoid seq_len_q > seq_len_kv (known limitation):
+            if force_sq_less_or_equal_than_skv:
+                seq_len_q_gpu = torch.max(
+                    torch.tensor(1), seq_len_q_gpu % seq_len_kv_gpu
+                )
+        else:
+            seq_len_kv_gpu = seq_len_q_gpu
+
+    return (seq_len_q_gpu, seq_len_kv_gpu)
+
+
 # fmt: off
 @pytest.mark.parametrize("is_infer", is_infer_options, ids=lambda p: f"infer{int(p)}")
 @pytest.mark.parametrize("is_ragged", ragged_options, ids=lambda p: f"ragged{int(p)}")
@@ -459,8 +495,6 @@ def test_sdpa(
     cudnn_handle
 ):
     
-    #pytest.set_trace()
-
     cudnn_version = LooseVersion(cudnn.backend_version_string())
 
     if cudnn_version < "8.9.3":
@@ -493,8 +527,8 @@ def test_sdpa(
     if is_ragged and not is_padding:
         pytest.skip("Ragged tensor is only tested with packed variable length tensors")
 
-    if is_paged_attention and (not is_padding or cudnn_version < "9.4" or not layout == "bshd_bshd_bshd" or is_ragged):
-        pytest.skip("Paged attention is only tested with packed variable length tensors, thd_thd_thd, no ragged offsets, and only on cuDNNv9.4 or greater")
+    if is_paged_attention and (not is_padding or cudnn_version < "9.5" or not layout == "bshd_bshd_bshd" or is_ragged):
+        pytest.skip("Paged attention is only tested with packed variable length tensors, bshd_bshd_bshd, no ragged offsets, and only on cuDNNv9.5 or greater")
 
 
     # -------------------------- default randomized parameter testing ------------------------
@@ -591,20 +625,7 @@ def test_sdpa(
         else None
     )
 
-    seq_len_q_gpu = (
-        torch.randint(1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-        if is_padding
-        else None
-    )
-    seq_len_kv_gpu = (
-        (
-            torch.randint(1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-            if is_padding
-            else None
-        )
-        if not (layout == "bs3hd" and head_group == "multi_head")
-        else seq_len_q_gpu
-    )
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window or is_causal_bottom_right)
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -1035,20 +1056,7 @@ def test_sdpa_backward(
         else None
     )
 
-    seq_len_q_gpu = (
-        torch.randint(1, s_q + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-        if is_padding
-        else None
-    )
-    seq_len_kv_gpu = (
-        (
-            torch.randint(1, s_kv + 1, (b, 1, 1, 1), dtype=torch.int32, device="cuda")
-            if is_padding
-            else None
-        )
-        if not (layout == "bs3hd" and head_group == "multi_head")
-        else seq_len_q_gpu
-    )
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window or is_causal_bottom_right)
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")

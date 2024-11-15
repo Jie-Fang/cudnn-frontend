@@ -1457,7 +1457,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
 
     SDPA_attributes&
     set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::Attn_scale] = value;
+        inputs[SDPA_attributes::input_names::Attn_scale] = std::move(value);
         return *this;
     }
 
@@ -1469,7 +1469,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
 
     SDPA_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::Bias] = value;
+        inputs[SDPA_attributes::input_names::Bias] = std::move(value);
         return *this;
     }
 
@@ -1487,13 +1487,13 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
 
     SDPA_attributes&
     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::SEQ_LEN_Q] = value;
+        inputs[SDPA_attributes::input_names::SEQ_LEN_Q] = std::move(value);
         return *this;
     }
 
     SDPA_attributes&
     set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::SEQ_LEN_KV] = value;
+        inputs[SDPA_attributes::input_names::SEQ_LEN_KV] = std::move(value);
         return *this;
     }
 
@@ -1520,34 +1520,34 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                 std::shared_ptr<Tensor_attributes> seed,
                 std::shared_ptr<Tensor_attributes> offset) {
         dropout_probability                          = probability;
-        inputs[SDPA_attributes::input_names::Seed]   = seed;
-        inputs[SDPA_attributes::input_names::Offset] = offset;
+        inputs[SDPA_attributes::input_names::Seed]   = std::move(seed);
+        inputs[SDPA_attributes::input_names::Offset] = std::move(offset);
         return *this;
     }
 
     SDPA_attributes&
     set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
-        inputs[SDPA_attributes::input_names::Dropout_mask]  = mask;
-        inputs[SDPA_attributes::input_names::Dropout_scale] = scale;
+        inputs[SDPA_attributes::input_names::Dropout_mask]  = std::move(mask);
+        inputs[SDPA_attributes::input_names::Dropout_scale] = std::move(scale);
         return *this;
     }
 
     // For debugging purposes only.
     SDPA_attributes&
     set_rng_dump(std::shared_ptr<Tensor_attributes> value) {
-        outputs[SDPA_attributes::output_names::RNG_DUMP] = value;
+        outputs[SDPA_attributes::output_names::RNG_DUMP] = std::move(value);
         return *this;
     }
 
     SDPA_attributes&
     set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::Page_table_K] = value;
+        inputs[SDPA_attributes::input_names::Page_table_K] = std::move(value);
         return *this;
     }
 
     SDPA_attributes&
     set_paged_attention_v_table(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_attributes::input_names::Page_table_V] = value;
+        inputs[SDPA_attributes::input_names::Page_table_V] = std::move(value);
         return *this;
     }
 

@@ -75,6 +75,12 @@ class PagedCacheLoadNode : public NodeCRTP<PagedCacheLoadNode> {
     error_t
     pre_validate_node() const override final {
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating PagedCacheLoadNode " << attributes.name << "...");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500 || detail::get_compiled_version() < 90500,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       "The cuDNN backend version must be at least 9.5.0 at compile time and runtime "
+                                       "in order to use PagedCacheLoadNode.");
+
         auto const yOut_dims      = attributes.outputs.at(PagedCacheLoad_attributes::output_names::yOut)->get_dim();
         auto const yOut_strides   = attributes.outputs.at(PagedCacheLoad_attributes::output_names::yOut)->get_stride();
         auto const container_dims = attributes.inputs.at(PagedCacheLoad_attributes::input_names::container)->get_dim();
@@ -114,10 +120,10 @@ INode::paged_cache_load(std::shared_ptr<Tensor_attributes> container,
                         std::shared_ptr<Tensor_attributes> pageTable,
                         PagedCacheLoad_attributes attributes,
                         std::shared_ptr<Tensor_attributes> yOut) {
-    attributes.inputs[PagedCacheLoad_attributes::input_names::container] = container;
-    attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = seqLen;
-    attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = pageTable;
-    attributes.outputs[PagedCacheLoad_attributes::output_names::yOut]    = yOut;
+    attributes.inputs[PagedCacheLoad_attributes::input_names::container] = std::move(container);
+    attributes.inputs[PagedCacheLoad_attributes::input_names::seqLen]    = std::move(seqLen);
+    attributes.inputs[PagedCacheLoad_attributes::input_names::pageTable] = std::move(pageTable);
+    attributes.outputs[PagedCacheLoad_attributes::output_names::yOut]    = std::move(yOut);
     sub_nodes.emplace_back(std::make_unique<PagedCacheLoadNode>(std::move(attributes), context));
 }
 }  // namespace cudnn_frontend::graph
