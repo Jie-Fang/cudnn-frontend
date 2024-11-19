@@ -360,10 +360,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
             // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
             // K-cache has BHDS layout
             k_cache = std::make_shared<Tensor_attributes>();
-            k_cache->set_dim({b, h_k, d_qk, s_kv})
-                .set_stride({d_qk * s_kv * h_k, d_qk * s_kv, 1, d_qk})
-                .set_data_type(attributes.inputs[input_names::K]->get_data_type());
             k_cache->set_is_virtual(true);
+            k_cache->set_dim({b, h_k, d_qk, s_kv});
+            k_cache->set_stride({d_qk * s_kv * h_k, d_qk * s_kv, 1, d_qk});
+            k_cache->set_data_type(attributes.inputs[input_names::K]->get_data_type());
             paged_cache_load(attributes.inputs[input_names::K],
                              attributes.inputs[input_names::SEQ_LEN_KV],
                              attributes.inputs[input_names::Page_table_K],
@@ -822,6 +822,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
     // non-virtual node gpu tensors
     std::shared_ptr<Tensor_attributes> dQ_accum;
     int64_t dQ_accum_size = 0;
+    std::shared_ptr<Tensor_attributes> dK_fullhead;
+    int64_t dK_fullhead_size = 0;
+    std::shared_ptr<Tensor_attributes> dV_fullhead;
+    int64_t dV_fullhead_size = 0;
     std::shared_ptr<Tensor_attributes> softmax_sum;
     int64_t softmax_sum_size = 0;
     std::shared_ptr<Tensor_attributes> alibi_slopes;
@@ -1242,7 +1246,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             // sized TH1 softmax_sum
             softmax_sum->set_stride(attributes.inputs[input_names::Stats]->get_stride());
             softmax_sum->set_ragged_offset(attributes.inputs[input_names::Stats]->get_ragged_offset());
-            softmax_sum_size = attributes.max_total_seq_len_q.value() * h_q * 1 * sizeof(float);
+            softmax_sum_size = attributes.max_total_seq_len_q.value() *
+                               (attributes.inputs[input_names::Stats]->get_stride())[2] * sizeof(float);
         } else {
             // sized BHS1 softmax_sum
             softmax_sum->set_stride({h_q * s_q, s_q, 1, 1});
@@ -1567,15 +1572,35 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                    attributes.outputs[output_names::dV]);
         } else {
             // for GQA and MQA
-            last_output = matmul(last_output,
+            dV_fullhead = matmul(last_output,
                                  attributes.inputs[input_names::dO],
                                  Matmul_attributes()
                                      .set_name("matmul_pT_dO")
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
-            last_output->set_dim({b, h_q, s_kv, d_v}).set_stride({h_q * s_kv * d_v, s_kv * d_v, d_v, 1});
-            last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
-            reduction(last_output,
+
+            dV_fullhead->set_dim({b, h_q, s_kv, d_v});
+            dV_fullhead->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
+
+            if (attributes.outputs[output_names::dV]->get_ragged_offset() &&
+                attributes.max_total_seq_len_kv.has_value() && detail::get_backend_version() >= 90600) {
+                // hack 1 - map dV strides to dV_fullhead strides
+                std::vector<int64_t> dV_fullhead_stride = attributes.outputs[output_names::dV]->get_stride();
+                dV_fullhead_stride[2]                   = dV_fullhead_stride[2] * (h_q / h_v);  // sequence stride
+                dV_fullhead_stride[0]                   = dV_fullhead_stride[0] * (h_q / h_v);  // batch stride
+                dV_fullhead->set_stride(dV_fullhead_stride);
+                // hack 2 - map dV ragged offset to dV_fullhead ragged offset with implicit multiplier
+                // implicit multiplier = h_q / h_v
+                dV_fullhead->set_ragged_offset(attributes.outputs[output_names::dV]->get_ragged_offset());
+                // hack 3 - non virtual dV full head
+                dV_fullhead->set_is_virtual(false);
+                dV_fullhead_size = attributes.max_total_seq_len_kv.value() * dV_fullhead_stride[2] * sizeof(float);
+            } else {
+                // sized BHSD dQ_accum
+                dV_fullhead->set_stride({h_q * s_kv * d_v, s_kv * d_v, d_v, 1});
+            }
+
+            reduction(dV_fullhead,
                       Reduction_attributes().set_name("red_dV_head").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dV]);
         }
@@ -1647,15 +1672,36 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                    attributes.outputs[output_names::dK]);
         } else {
             // for GQA and MQA
-            last_output = matmul(last_output,
+            dK_fullhead = matmul(last_output,
                                  attributes.inputs[input_names::Q],
                                  Matmul_attributes()
                                      .set_name("matmul_dST_Q")
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
-            last_output->set_dim({b, h_q, s_kv, d_qk}).set_stride({h_q * s_kv * d_qk, s_kv * d_qk, d_qk, 1});
-            last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
-            reduction(last_output,
+
+            dK_fullhead->set_dim({b, h_q, s_kv, d_qk});
+            dK_fullhead->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
+
+            if (attributes.outputs[output_names::dK]->get_ragged_offset() &&
+                attributes.max_total_seq_len_kv.has_value() && detail::get_backend_version() >= 90600) {
+                // sized THD dK_full_heads
+                // hack 1 - map dK strides to dK_fullhead strides
+                std::vector<int64_t> dK_fullhead_stride = attributes.outputs[output_names::dK]->get_stride();
+                dK_fullhead_stride[0]                   = dK_fullhead_stride[0] * (h_q / h_k);  // batch stride
+                dK_fullhead_stride[2]                   = dK_fullhead_stride[2] * (h_q / h_k);  // sequence stride
+                dK_fullhead->set_stride(dK_fullhead_stride);
+                // hack 2 - map dK ragged offset to dK_fullhead ragged offset with implicit multiplier
+                // implicit multiplier = h_q / h_k
+                dK_fullhead->set_ragged_offset(attributes.outputs[output_names::dK]->get_ragged_offset());
+                // hack 3 - non virtual dK full head
+                dK_fullhead->set_is_virtual(false);
+                dK_fullhead_size = attributes.max_total_seq_len_kv.value() * dK_fullhead_stride[2] * sizeof(float);
+            } else {
+                // sized BHSD dQ_accum
+                dK_fullhead->set_stride({h_q * s_kv * d_qk, s_kv * d_qk, d_qk, 1});
+            }
+
+            reduction(dK_fullhead,
                       Reduction_attributes().set_name("red_dK_head").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dK]);
         }
@@ -1700,7 +1746,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                        .set_name("matmul_dS_K")
                        .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
                        .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]),
-                   (dQ_accum) ? dQ_accum : attributes.outputs[output_names::dQ]);
+                   dQ_accum);
 
             pointwise(dQ_accum,
                       Pointwise_attributes().set_name("identity_dQ").set_mode(PointwiseMode_t::IDENTITY),
@@ -1724,6 +1770,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         size += ((alibi_slopes_size + 15) / 16 * 16);  // align alibi slopes memory to 16 bytes
         size += dQ_accum_size;
+        size += dK_fullhead_size;
+        size += dV_fullhead_size;
         size += softmax_sum_size;
 
         return size;
@@ -1744,17 +1792,29 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         }
 
         if (dQ_accum && !dQ_accum->get_is_virtual()) {
-            std::vector<float> f_vec        = {(float)dQ_accum_size};
-            int64_t dQ_accum_workspace_type = detail::get_backend_version() < 90600 ? 1 : 2;
-            workspace_modifications.emplace(dQ_accum->get_uid(),
-                                            std::make_tuple(dQ_accum_workspace_type, offset, f_vec));
+            if (detail::get_backend_version() < 90600) {
+                // prior to cuDNN 9.6.0, dQ_accum needed to be memset by frontend
+                workspace_modifications.emplace(dQ_accum->get_uid(),
+                                                std::make_tuple(1, offset, std::vector<float>{(float)dQ_accum_size}));
+            } else {
+                workspace_modifications.emplace(dQ_accum->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            }
             offset = offset + dQ_accum_size;
         }
 
+        if (dK_fullhead && !dK_fullhead->get_is_virtual()) {
+            workspace_modifications.emplace(dK_fullhead->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            offset = offset + dK_fullhead_size;
+        }
+
+        if (dV_fullhead && !dV_fullhead->get_is_virtual()) {
+            workspace_modifications.emplace(dV_fullhead->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            offset = offset + dV_fullhead_size;
+        }
+
         if (softmax_sum && !softmax_sum->get_is_virtual()) {
-            // There is no requirement for softmax_sum to be memset to 0
-            std::vector<float> f_vec = {};
-            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_tuple(2, offset, f_vec));
+            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            offset = offset + softmax_sum_size;
         }
 
         return {error_code_t::OK, ""};
