@@ -343,7 +343,15 @@ def generate_layout(
 
 
 def generate_ragged_offset(
-    layout, head_group, shape_q, shape_k, shape_v, shape_o, seq_len_q, seq_len_kv
+    layout,
+    head_group,
+    shape_q,
+    shape_k,
+    shape_v,
+    shape_o,
+    seq_len_q,
+    seq_len_kv,
+    cudnn_version,
 ):
     b, h_q, s_q, d_qk = shape_q
     b, h_k, s_kv, d_qk = shape_k
@@ -396,10 +404,18 @@ def generate_ragged_offset(
     else:
         raise ValueError()
 
-    q_ragged_offset = q_ragged_offset.to(dtype=seq_len_q.dtype)
-    k_ragged_offset = k_ragged_offset.to(dtype=seq_len_kv.dtype)
-    v_ragged_offset = v_ragged_offset.to(dtype=seq_len_kv.dtype)
-    o_ragged_offset = o_ragged_offset.to(dtype=seq_len_q.dtype)
+    q_ragged_offset = q_ragged_offset.to(
+        dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32
+    )
+    k_ragged_offset = k_ragged_offset.to(
+        dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32
+    )
+    v_ragged_offset = v_ragged_offset.to(
+        dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32
+    )
+    o_ragged_offset = o_ragged_offset.to(
+        dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32
+    )
 
     return q_ragged_offset, k_ragged_offset, v_ragged_offset, o_ragged_offset
 
@@ -652,6 +668,7 @@ def test_sdpa(
             shape_o,
             seq_len_q_gpu,
             seq_len_kv_gpu,
+            cudnn_version
         )
 
     o_gpu = torch.empty(
@@ -1058,6 +1075,14 @@ def test_sdpa_backward(
 
     seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(b, s_q, s_kv, layout, head_group, is_padding, is_sliding_window or is_causal_bottom_right)
 
+    # maxT = next_multiple_of_64(sum(seq_len))
+    max_t_q = ((torch.sum(seq_len_q_gpu).item() + 63) // 64) * 64 if is_ragged else None
+    max_t_kv = ((torch.sum(seq_len_kv_gpu).item() + 63) // 64) * 64 if is_ragged else None
+
+    if (d_qk % 16 != 0 or d_v % 16 != 0) and cudnn_version < "9.8.0":
+        max_t_q = None
+        max_t_kv = None
+
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
@@ -1083,6 +1108,7 @@ def test_sdpa_backward(
             shape_o,
             seq_len_q_gpu,
             seq_len_kv_gpu,
+            cudnn_version
         )
 
     o_gpu = torch.empty(
@@ -1260,6 +1286,8 @@ def test_sdpa_backward(
         use_padding_mask=is_padding,
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
+        max_total_seq_len_q=max_t_q,
+        max_total_seq_len_kv=max_t_kv,
         use_causal_mask=is_causal,
         use_causal_mask_bottom_right=is_causal_bottom_right,
         sliding_window_length=sliding_window_length,
