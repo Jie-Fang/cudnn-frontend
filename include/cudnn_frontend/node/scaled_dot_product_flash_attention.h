@@ -113,6 +113,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // validation TODO:
         //    - validate stats has valid dims
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.attention_score_modifier.has_value() &&
+                    (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
+                     attributes.sliding_window_length.has_value()),error_code_t::GRAPH_NOT_SUPPORTED, "Attention score mod enabled and hence other subgraphs are disabled.");
+
         // validate basic dimension requirements
         RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
@@ -398,6 +402,14 @@ class SDPANode : public NodeCRTP<SDPANode> {
             auto const& attn_scale_output =
                 pointwise(last_output, attributes.inputs[input_names::Attn_scale], scale_attributes);
             last_output = attn_scale_output;
+        }
+
+        if (attributes.attention_score_modifier.has_value()) {
+            auto graph_                  = std::make_shared<Graph>();
+            std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
+            node_->context               = context;
+            last_output                  = (*attributes.attention_score_modifier)(graph_, last_output);
+            sub_nodes.emplace_back(graph_);
         }
 
         // Optional bias
@@ -921,6 +933,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
         }
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.attention_score_modifier.has_value() &&
+                    (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
+                     attributes.sliding_window_length.has_value()), error_code_t::GRAPH_NOT_SUPPORTED,"Attention score mod enabled and hence other subgraphs are disabled.");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For group-query attention, number of heads for key and query must be a factor of number of heads for query");
@@ -1265,6 +1282,14 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             last_output = pointwise(last_output,
                                     attributes.inputs[input_names::Attn_scale],
                                     Pointwise_attributes().set_name("mul_s_attn_scale").set_mode(PointwiseMode_t::MUL));
+        }
+
+        if (attributes.attention_score_modifier.has_value()) {
+            auto graph_                  = std::make_shared<Graph>();
+            std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
+            node_->context               = context;
+            last_output                  = (*attributes.attention_score_modifier)(graph_, last_output);
+            sub_nodes.emplace_back(graph_);
         }
 
         // (optional) last_output = last_output + bias
@@ -1617,6 +1642,15 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             reduction(last_output,
                       Reduction_attributes().set_name("red_dP_dBias").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dBias]);
+        }
+
+        // apply the bprop of attention score modifier
+        if (attributes.attention_score_modifier_bprop.has_value()) {
+            auto graph_                  = std::make_shared<Graph>();
+            std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
+            node_->context               = context;
+            last_output                  = (*attributes.attention_score_modifier_bprop)(graph_, last_output);
+            sub_nodes.emplace_back(graph_);
         }
 
         // (optional) last_output = last_output * bmm_scale
