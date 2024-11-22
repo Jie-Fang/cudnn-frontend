@@ -176,7 +176,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with s_q <= s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (! (attributes.causal_mask || attributes.causal_mask_bottom_right) || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
@@ -609,33 +609,109 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.sliding_window_length.has_value()) {
             auto row_index_attributes =
                 Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+            std::shared_ptr<Tensor_attributes> row_index_output = pointwise(last_output, row_index_attributes);
 
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+            std::shared_ptr<Tensor_attributes> col_index_output = pointwise(last_output, col_index_attributes);
 
-            // sliding window length parameter should be of float type
-            auto const& sliding_window_length =
-                std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+            // Without bottom right causal masking: setup a graph so we can compare column + window_size > row
+            // All elements for which column + window_size > row, will be retained, all others will be masked out
+            // Note that here and following sections, row refers to the s_q index and column refers to the s_kv index in
+            // the s_q x s_kv masking matrix
+            if (!attributes.causal_mask_bottom_right) {
+                // sliding window length parameter should be of float type
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto add_col_attributes = Pointwise_attributes()
-                                          .set_name("add_window_len")
-                                          .set_mode(PointwiseMode_t::ADD)
-                                          .set_compute_data_type(DataType_t::FLOAT)
-                                          .set_axis(3);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking, we need to shift the diagonal.
+            // Setup a graph so we can compare column + window_size - (s_kv - s_q) > row
+            // Optimization with fixed sequence lengths: single pointwise addition for the left-hand of the comparison
+            // Again, all elements satisfying the comparison will be retained.
+            else if (!attributes.inputs[input_names::SEQ_LEN_KV] && !attributes.inputs[input_names::SEQ_LEN_Q]) {
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)(attributes.sliding_window_length.value() - s_kv + s_q));
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window-skv+sq")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto const& col_index_lower_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking: general case when at least one of Q and KV have variable sequence
+            // lengths.
+            // Setup a graph so we can compare column + window_size - (s_k[i] - s_q[i]) > row  for each batch i
+            // Also here, all elements satisfying the comparison will be retained.
+            else {
+                col_index_output->set_data_type(DataType_t::INT32);
+                row_index_output->set_data_type(DataType_t::INT32);
 
-            auto greater_than_attributes = Pointwise_attributes()
-                                               .set_name("greaterthan_row<col+ws")
-                                               .set_mode(PointwiseMode_t::CMP_GT)
-                                               .set_compute_data_type(DataType_t::BOOLEAN);
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((int32_t)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::INT32)
+                                              .set_axis(3);
 
-            auto const& row_lesser_than_col_ws_output =
-                pointwise(col_index_lower_output, row_index_output, greater_than_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output->set_data_type(DataType_t::INT32);
 
-            row_lesser_than_col_ws_output->set_data_type(DataType_t::BOOLEAN);
+                if (attributes.inputs[input_names::SEQ_LEN_KV]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_KV],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+
+                if (attributes.inputs[input_names::SEQ_LEN_Q]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_Q],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_q)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+            }
+
+            auto greater_than_attributes =
+                Pointwise_attributes().set_mode(PointwiseMode_t::CMP_GT).set_compute_data_type(DataType_t::BOOLEAN);
+
+            if (attributes.causal_mask_bottom_right) {
+                greater_than_attributes.set_name("col+window-skv+sq>row");
+            } else {
+                greater_than_attributes.set_name("col+ws>row");
+            }
+
+            auto const& swa_comparison_output = pointwise(col_index_output, row_index_output, greater_than_attributes);
+
+            swa_comparison_output->set_data_type(DataType_t::BOOLEAN);
 
             // Lower attributes to binary select attributes
             auto negative_inf_swa = std::make_shared<Tensor_attributes>(-1024.0f * 1024.0f * 1024.0f);
@@ -644,7 +720,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
 
             auto const& swa_mask_output =
-                pointwise(last_output, negative_inf_swa, row_lesser_than_col_ws_output, binary_select_attributes);
+                pointwise(last_output, negative_inf_swa, swa_comparison_output, binary_select_attributes);
 
             last_output = swa_mask_output;
         }
@@ -1001,7 +1077,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with s_q <= s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (! (attributes.causal_mask || attributes.causal_mask_bottom_right) || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
@@ -1518,33 +1594,109 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         if (attributes.sliding_window_length.has_value()) {
             auto row_index_attributes =
                 Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+            std::shared_ptr<Tensor_attributes> row_index_output = pointwise(last_output, row_index_attributes);
 
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+            std::shared_ptr<Tensor_attributes> col_index_output = pointwise(last_output, col_index_attributes);
 
-            // sliding window length parameter should be of float type
-            auto const& sliding_window_length =
-                std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+            // Without bottom right causal masking: setup a graph so we can compare column + window_size > row
+            // All elements for which column + window_size > row, will be retained, all others will be masked out
+            // Note that here and following sections, row refers to the s_q index and column refers to the s_kv index in
+            // the s_q x s_kv masking matrix
+            if (!attributes.causal_mask_bottom_right) {
+                // sliding window length parameter should be of float type
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto add_col_attributes = Pointwise_attributes()
-                                          .set_name("add_window_len")
-                                          .set_mode(PointwiseMode_t::ADD)
-                                          .set_compute_data_type(DataType_t::FLOAT)
-                                          .set_axis(3);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking, we need to shift the diagonal.
+            // Setup a graph so we can compare column + window_size - (s_kv - s_q) > row
+            // Optimization with fixed sequence lengths: single pointwise addition for the left-hand of the comparison
+            // Again, all elements satisfying the comparison will be retained.
+            else if (!attributes.inputs[input_names::SEQ_LEN_KV] && !attributes.inputs[input_names::SEQ_LEN_Q]) {
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)(attributes.sliding_window_length.value() - s_kv + s_q));
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window-skv+sq")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto const& col_index_lower_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking: general case when at least one of Q and KV have variable sequence
+            // lengths.
+            // Setup a graph so we can compare column + window_size - (s_k[i] - s_q[i]) > row  for each batch i
+            // Also here, all elements satisfying the comparison will be retained.
+            else {
+                col_index_output->set_data_type(DataType_t::INT32);
+                row_index_output->set_data_type(DataType_t::INT32);
 
-            auto greater_than_attributes = Pointwise_attributes()
-                                               .set_name("greaterthan_row<col+ws")
-                                               .set_mode(PointwiseMode_t::CMP_GT)
-                                               .set_compute_data_type(DataType_t::BOOLEAN);
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((int32_t)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::INT32)
+                                              .set_axis(3);
 
-            auto const& row_lesser_than_col_ws_output =
-                pointwise(col_index_lower_output, row_index_output, greater_than_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output->set_data_type(DataType_t::INT32);
 
-            row_lesser_than_col_ws_output->set_data_type(DataType_t::BOOLEAN);
+                if (attributes.inputs[input_names::SEQ_LEN_KV]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_KV],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+
+                if (attributes.inputs[input_names::SEQ_LEN_Q]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_Q],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_q)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+            }
+
+            auto greater_than_attributes =
+                Pointwise_attributes().set_mode(PointwiseMode_t::CMP_GT).set_compute_data_type(DataType_t::BOOLEAN);
+
+            if (attributes.causal_mask_bottom_right) {
+                greater_than_attributes.set_name("col+window-skv+sq>row");
+            } else {
+                greater_than_attributes.set_name("col+ws>row");
+            }
+
+            auto const& swa_comparison_output = pointwise(col_index_output, row_index_output, greater_than_attributes);
+
+            swa_comparison_output->set_data_type(DataType_t::BOOLEAN);
 
             // Lower attributes to binary select attributes
             auto negative_inf_swa = std::make_shared<Tensor_attributes>(std::numeric_limits<float>::lowest());
@@ -1553,7 +1705,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
 
             auto const& swa_mask_output =
-                pointwise(last_output, negative_inf_swa, row_lesser_than_col_ws_output, binary_select_attributes);
+                pointwise(last_output, negative_inf_swa, swa_comparison_output, binary_select_attributes);
 
             last_output = swa_mask_output;
         }
