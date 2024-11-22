@@ -178,9 +178,25 @@ def compute_ref(
             causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
         s = s.masked_fill(causal_mask_bottom_right, float("-inf"))
     if sliding_window_length is not None:
-        assert is_causal == True
-        swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
-        swa_mask.tril_(diagonal=-1 * sliding_window_length)
+        assert is_causal == True or is_causal_bottom_right == True
+        if is_causal:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+            swa_mask.tril_(diagonal=-1 * sliding_window_length)
+
+        elif is_causal_bottom_right:
+            # BRCM + SWA for variable sequence lengths
+            if padding:
+                swa_mask = torch.ones(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
+                seq_len_q, seq_len_kv = padding
+                for i in range(b):
+                    swa_mask[i, :, :, :].tril_(
+                        diagonal=seq_len_kv[i] - seq_len_q[i] - sliding_window_length
+                    )
+            # BRCM + SWA for fixed sequence lengths
+            else:
+                swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+                swa_mask.tril_(diagonal=-1 * sliding_window_length + (s_kv - s_q))
+
         swa_mask &= swa_mask_zero.view(s_q, 1)
         s = s.masked_fill(swa_mask, float("-inf"))
 
@@ -881,6 +897,9 @@ def test_sdpa(
     torch.testing.assert_close(o_ref, o_gpu, check_dtype=False, atol=2e-2, rtol=2e-2)
     if is_infer == False:
         torch.testing.assert_close(stats_ref, stats_gpu, atol=2e-2, rtol=2e-2)
+
+    
+    
 
 
 
