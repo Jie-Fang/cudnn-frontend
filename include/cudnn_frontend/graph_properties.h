@@ -1564,8 +1564,9 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
     friend class Graph;
 
     std::optional<bool> is_inference;
-    bool padding_mask = false;
-    bool causal_mask  = false;
+    bool padding_mask             = false;
+    bool causal_mask              = false;
+    bool causal_mask_bottom_right = false;
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
 
@@ -1602,6 +1603,7 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
                                    is_inference,
                                    padding_mask,
                                    causal_mask,
+                                   causal_mask_bottom_right,
                                    dropout_probability,
                                    attn_scale_value)
 
@@ -1667,6 +1669,12 @@ class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
     set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
         inputs[SDPA_fp8_attributes::input_names::Dropout_mask]  = mask;
         inputs[SDPA_fp8_attributes::input_names::Dropout_scale] = scale;
+        return *this;
+    }
+
+    SDPA_fp8_attributes&
+    set_causal_mask_bottom_right(bool const value) {
+        causal_mask_bottom_right = value;
         return *this;
     }
 };
@@ -1841,8 +1849,9 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     friend class SDPAFP8BackwardNode;
     friend class Graph;
 
-    bool padding_mask = false;
-    bool causal_mask  = false;
+    bool padding_mask             = false;
+    bool causal_mask              = false;
+    bool causal_mask_bottom_right = false;
 
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
@@ -1891,6 +1900,7 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
                                    padding_mask,
                                    causal_mask,
                                    dropout_probability,
+                                   causal_mask_bottom_right,
                                    attn_scale_value)
 
     SDPA_fp8_backward_attributes&
@@ -1932,6 +1942,12 @@ class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attribu
     SDPA_fp8_backward_attributes&
     set_causal_mask(bool const value) {
         causal_mask = value;
+        return *this;
+    }
+
+    SDPA_fp8_backward_attributes&
+    set_causal_mask_bottom_right(bool const value) {
+        causal_mask_bottom_right = value;
         return *this;
     }
 

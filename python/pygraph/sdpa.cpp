@@ -246,6 +246,7 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                   bool const use_causal_mask,
+                  bool const use_causal_mask_bottom_right,
                   py::object const& dropout,
                   cudnn_frontend::DataType_t const& compute_data_type,
                   std::string const& name) {
@@ -255,6 +256,7 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
+                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -335,6 +337,7 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_kv,
                            bool const use_causal_mask,
+                           bool const use_causal_mask_bottom_right,
                            py::object const& dropout,
                            cudnn_frontend::DataType_t const& compute_data_type,
                            std::string const& name) {
@@ -343,6 +346,7 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
                           .set_seq_len_q(seq_len_q)
                           .set_seq_len_kv(seq_len_kv)
                           .set_causal_mask(use_causal_mask)
+                          .set_causal_mask_bottom_right(use_causal_mask_bottom_right)
                           .set_compute_data_type(compute_data_type)
                           .set_name(name);
 
@@ -539,6 +543,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg("is_inference"),
           py::arg_v("attn_scale", py::none()),
           py::arg("use_padding_mask"),
+          py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("seq_len_q", nullptr),
           py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
@@ -596,6 +601,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg("scale_dP"),
           py::arg_v("attn_scale", py::none()),
           py::arg_v("use_padding_mask", false),
+          py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("seq_len_q", nullptr),
           py::arg_v("seq_len_kv", nullptr),
           py::arg_v("use_causal_mask", false),
