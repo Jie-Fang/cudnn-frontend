@@ -187,7 +187,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // validation TODO:
         //    - validate stats has valid dims
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.attention_score_modifier.has_value() &&
+        RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.attention_score_modifier != nullptr) &&
                     (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
                      attributes.sliding_window_length.has_value()),error_code_t::GRAPH_NOT_SUPPORTED, "Attention score mod enabled and hence other subgraphs are disabled.");
 
@@ -433,11 +433,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
             last_output = attn_scale_output;
         }
 
-        if (attributes.attention_score_modifier.has_value()) {
+        if (attributes.attention_score_modifier != nullptr) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
             node_->context               = context;
-            last_output                  = (*attributes.attention_score_modifier)(graph_, last_output);
+            last_output                  = attributes.attention_score_modifier(graph_, last_output);
             sub_nodes.emplace_back(graph_);
         }
 
@@ -1043,7 +1043,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                         "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
         }
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.attention_score_modifier.has_value() &&
+        RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.attention_score_modifier != nullptr) &&
                     (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
                      attributes.sliding_window_length.has_value()), error_code_t::GRAPH_NOT_SUPPORTED,"Attention score mod enabled and hence other subgraphs are disabled.");
 
@@ -1394,11 +1394,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                     Pointwise_attributes().set_name("mul_s_attn_scale").set_mode(PointwiseMode_t::MUL));
         }
 
-        if (attributes.attention_score_modifier.has_value()) {
+        if (attributes.attention_score_modifier != nullptr) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
             node_->context               = context;
-            last_output                  = (*attributes.attention_score_modifier)(graph_, last_output);
+            last_output                  = attributes.attention_score_modifier(graph_, last_output);
             sub_nodes.emplace_back(graph_);
         }
 
@@ -1851,11 +1851,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         }
 
         // apply the bprop of attention score modifier
-        if (attributes.attention_score_modifier_bprop.has_value()) {
+        if (attributes.attention_score_modifier_bprop != nullptr) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
             node_->context               = context;
-            last_output                  = (*attributes.attention_score_modifier_bprop)(graph_, last_output);
+            last_output                  = attributes.attention_score_modifier_bprop(graph_, last_output);
             sub_nodes.emplace_back(graph_);
         }
 

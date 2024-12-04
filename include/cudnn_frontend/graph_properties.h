@@ -1421,7 +1421,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     std::optional<float> dropout_probability;
     std::optional<float> attn_scale_value;
     std::optional<int> max_seq_len_kv;
-    std::optional<AttentionScoreModifier_t> attention_score_modifier;
+    AttentionScoreModifier_t attention_score_modifier = nullptr;
 
    public:
     enum class input_names {
@@ -1704,9 +1704,9 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     std::optional<int64_t> max_total_seq_len_q;
     std::optional<int64_t> max_total_seq_len_kv;
 
-    bool is_deterministic_algorithm = false;
-    std::optional<AttentionScoreModifier_t> attention_score_modifier;
-    std::optional<AttentionScoreModifier_t> attention_score_modifier_bprop;
+    bool is_deterministic_algorithm                         = false;
+    AttentionScoreModifier_t attention_score_modifier       = nullptr;
+    AttentionScoreModifier_t attention_score_modifier_bprop = nullptr;
 
    public:
     enum class input_names {
