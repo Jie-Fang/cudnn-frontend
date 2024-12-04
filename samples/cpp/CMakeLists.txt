@@ -12,6 +12,8 @@ add_executable(
     sdpa/fp16_fwd_with_paged_caches.cpp
     sdpa/fp8_fwd.cpp
     sdpa/fp8_bwd.cpp
+    sdpa/fp8_fwd_bottom_right_causal_mask.cpp
+    sdpa/fp8_bwd_bottom_right_causal_mask.cpp
 
     convolution/fprop.cpp
     convolution/fp8_fprop.cpp
