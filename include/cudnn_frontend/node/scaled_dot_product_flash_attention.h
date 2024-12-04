@@ -35,6 +35,83 @@ class SDPANode : public NodeCRTP<SDPANode> {
         return Type::COMPOSITE;
     }
 
+    bool
+    is_paged_v() const {
+        auto page_table_v_it = attributes.inputs.find(input_names::Page_table_V);
+        return ((page_table_v_it) != attributes.inputs.end() && page_table_v_it->second != nullptr);
+    }
+
+    bool
+    is_paged_k() const {
+        auto page_table_k_it = attributes.inputs.find(input_names::Page_table_K);
+        return ((page_table_k_it) != attributes.inputs.end() && page_table_k_it->second != nullptr);
+    }
+
+    // Helper function to infer KV sequence length
+    // Note that it cannot be run as part of infer_properties_node as
+    // this is being used in pre_validate_node
+    int64_t
+    infer_s_kv() const {
+        int64_t s_kv = -1;
+
+        auto get_input_dim = [this](const SDPA_attributes::input_names& input_name) {
+            auto const input_it = attributes.inputs.find(input_name);
+            if (input_it != attributes.inputs.end()) {
+                return input_it->second->get_dim();
+            } else {
+                return std::vector<int64_t>({-1, -1, -1, -1});
+            }
+        };
+
+        auto const& k_dim = get_input_dim(input_names::K);
+        auto const& v_dim = get_input_dim(input_names::V);
+
+        // If s_kv was set explicitly, use that
+        if (attributes.max_seq_len_kv.has_value()) {
+            s_kv = attributes.max_seq_len_kv.value();
+        }
+        // When one of K or V cache are paged, s_kv can be extracted directly
+        else if (!is_paged_k()) {
+            s_kv = k_dim[2];
+
+        } else if (!is_paged_v()) {
+            s_kv = v_dim[2];
+        } else {
+            CUDNN_FE_LOG_LABEL_ENDL(
+                "WARNING: maximum kv sequence length is being inferred. To set it explicitly, please use  "
+                "\"set_paged_attention_max_seq_len_kv\"");
+
+            auto bias_it = attributes.inputs.find(input_names::Bias);
+            auto rng_it  = attributes.outputs.find(output_names::RNG_DUMP);
+
+            // If there is a bias, extract it from there
+            if (bias_it != attributes.inputs.end() && bias_it->second != nullptr) {
+                s_kv = get_input_dim(input_names::Bias)[3];
+                // If there is an rng_dump output, extract it from there
+            } else if (rng_it != attributes.outputs.end() && rng_it->second != nullptr) {
+                s_kv = rng_it->second->get_dim()[3];
+                // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
+                // container
+            } else {
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim_k = get_input_dim(input_names::Page_table_K);
+                // [b, h_k, block_size, d_k]
+                auto const container_dim_k = get_input_dim(input_names::K);
+                int64_t s_k                = page_table_dim_k[2] * container_dim_k[2];
+
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim_v = get_input_dim(input_names::Page_table_V);
+                // [b, h_v, block_size, d_v]
+                auto const container_dim_v = get_input_dim(input_names::V);
+                int64_t s_v                = page_table_dim_v[2] * container_dim_v[2];
+
+                s_kv = std::min(s_k, s_v);
+            }
+        }
+
+        return s_kv;
+    }
+
     error_t
     pre_validate_node() const override final {
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SDPANode " << attributes.name << "...");
@@ -81,7 +158,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // validate backend limitations for the operation
         // clang-format off
         int64_t s_q  = attributes.inputs.at(input_names::Q)->get_dim()[2];
-        int64_t s_kv = attributes.inputs.at(input_names::K)->get_dim()[2];
+        int64_t s_kv = infer_s_kv(); // When using paged attention K/V dimensions are implicit
         int64_t h_q  = attributes.inputs.at(input_names::Q)->get_dim()[1];
         int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
         int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
@@ -100,10 +177,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value() || is_dropout_custom;
 
-        auto page_table_v_it = attributes.inputs.find(input_names::Page_table_V);
-        auto page_table_k_it = attributes.inputs.find(input_names::Page_table_K);
-        bool const is_paged  = ((page_table_k_it) != attributes.inputs.end() &&  page_table_k_it->second != nullptr) ||  
-                               ((page_table_v_it) != attributes.inputs.end() &&  page_table_v_it->second != nullptr);
+        bool const is_paged  = is_paged_k() || is_paged_v();
 
         auto const& rng_tensor = attributes.outputs.find(output_names::RNG_DUMP);
         bool const is_rng   = (rng_tensor != attributes.outputs.end() && rng_tensor->second != nullptr);
@@ -112,6 +186,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // validation TODO:
         //    - validate stats has valid dims
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.attention_score_modifier.has_value() &&
+                    (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
+                     attributes.sliding_window_length.has_value()),error_code_t::GRAPH_NOT_SUPPORTED, "Attention score mod enabled and hence other subgraphs are disabled.");
 
         // validate basic dimension requirements
         RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
@@ -172,7 +250,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with s_q <= s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (! (attributes.causal_mask || attributes.causal_mask_bottom_right) || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
@@ -282,56 +360,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
         auto h_v          = v_dim[1];
         auto d_v          = v_dim[3];
-
-        bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
-        bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
-
         // Infer s_kv
-        int64_t s_kv = -1;
-
-        // If s_kv was set explicitly, use that
-        if (attributes.max_seq_len_kv.has_value()) {
-            s_kv = attributes.max_seq_len_kv.value();
-        }
-        // When one of K or V cache are paged, s_kv can be extracted directly
-        else if (!is_paged_k) {
-            s_kv = k_dim[2];
-
-        } else if (!is_paged_v) {
-            s_kv = v_dim[2];
-        } else {
-            CUDNN_FE_LOG_LABEL_ENDL(
-                "WARNING: maximum kv sequence length is being inferred. To set it explicitly, please use  "
-                "\"set_paged_attention_max_seq_len_kv\"");
-
-            // If there is a bias, extract it from there
-            if (attributes.inputs[input_names::Bias] != nullptr) {
-                s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
-                // If there is an rng_dump output, extract it from there
-            } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
-                       attributes.outputs[output_names::RNG_DUMP] != nullptr) {
-                s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
-                // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
-                // container
-            } else {
-                // [b, 1, ceil(s_kv/block_size), 1]
-                auto page_table_dim_k = attributes.inputs[input_names::Page_table_K]->get_dim();
-                // [b, h_k, block_size, d_k]
-                auto container_dim_k = attributes.inputs[input_names::K]->get_dim();
-                int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
-
-                // [b, 1, ceil(s_kv/block_size), 1]
-                auto page_table_dim_v = attributes.inputs[input_names::Page_table_V]->get_dim();
-                // [b, h_v, block_size, d_v]
-                auto container_dim_v = attributes.inputs[input_names::V]->get_dim();
-                int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
-
-                s_kv = std::min(s_k, s_v);
-            }
-        }
+        int64_t s_kv = infer_s_kv();
 
         std::shared_ptr<Tensor_attributes> k_cache;
-        if (!is_paged_k) {
+        if (!is_paged_k()) {
             // 1. map K->KT
             // cuDNN frontend API attention requires Q, K, V where
             // Q = {b, h_q, s_q, d_qk}
@@ -360,10 +393,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
             // Need to create virtual tensor descriptor for yOut here as it cannot be inferred
             // K-cache has BHDS layout
             k_cache = std::make_shared<Tensor_attributes>();
-            k_cache->set_dim({b, h_k, d_qk, s_kv})
-                .set_stride({d_qk * s_kv * h_k, d_qk * s_kv, 1, d_qk})
-                .set_data_type(attributes.inputs[input_names::K]->get_data_type());
             k_cache->set_is_virtual(true);
+            k_cache->set_dim({b, h_k, d_qk, s_kv});
+            k_cache->set_stride({d_qk * s_kv * h_k, d_qk * s_kv, 1, d_qk});
+            k_cache->set_data_type(attributes.inputs[input_names::K]->get_data_type());
             paged_cache_load(attributes.inputs[input_names::K],
                              attributes.inputs[input_names::SEQ_LEN_KV],
                              attributes.inputs[input_names::Page_table_K],
@@ -398,6 +431,14 @@ class SDPANode : public NodeCRTP<SDPANode> {
             auto const& attn_scale_output =
                 pointwise(last_output, attributes.inputs[input_names::Attn_scale], scale_attributes);
             last_output = attn_scale_output;
+        }
+
+        if (attributes.attention_score_modifier.has_value()) {
+            auto graph_                  = std::make_shared<Graph>();
+            std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
+            node_->context               = context;
+            last_output                  = (*attributes.attention_score_modifier)(graph_, last_output);
+            sub_nodes.emplace_back(graph_);
         }
 
         // Optional bias
@@ -597,33 +638,109 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.sliding_window_length.has_value()) {
             auto row_index_attributes =
                 Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+            std::shared_ptr<Tensor_attributes> row_index_output = pointwise(last_output, row_index_attributes);
 
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+            std::shared_ptr<Tensor_attributes> col_index_output = pointwise(last_output, col_index_attributes);
 
-            // sliding window length parameter should be of float type
-            auto const& sliding_window_length =
-                std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+            // Without bottom right causal masking: setup a graph so we can compare column + window_size > row
+            // All elements for which column + window_size > row, will be retained, all others will be masked out
+            // Note that here and following sections, row refers to the s_q index and column refers to the s_kv index in
+            // the s_q x s_kv masking matrix
+            if (!attributes.causal_mask_bottom_right) {
+                // sliding window length parameter should be of float type
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto add_col_attributes = Pointwise_attributes()
-                                          .set_name("add_window_len")
-                                          .set_mode(PointwiseMode_t::ADD)
-                                          .set_compute_data_type(DataType_t::FLOAT)
-                                          .set_axis(3);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking, we need to shift the diagonal.
+            // Setup a graph so we can compare column + window_size - (s_kv - s_q) > row
+            // Optimization with fixed sequence lengths: single pointwise addition for the left-hand of the comparison
+            // Again, all elements satisfying the comparison will be retained.
+            else if (!attributes.inputs[input_names::SEQ_LEN_KV] && !attributes.inputs[input_names::SEQ_LEN_Q]) {
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)(attributes.sliding_window_length.value() - s_kv + s_q));
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window-skv+sq")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto const& col_index_lower_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking: general case when at least one of Q and KV have variable sequence
+            // lengths.
+            // Setup a graph so we can compare column + window_size - (s_k[i] - s_q[i]) > row  for each batch i
+            // Also here, all elements satisfying the comparison will be retained.
+            else {
+                col_index_output->set_data_type(DataType_t::INT32);
+                row_index_output->set_data_type(DataType_t::INT32);
 
-            auto greater_than_attributes = Pointwise_attributes()
-                                               .set_name("greaterthan_row<col+ws")
-                                               .set_mode(PointwiseMode_t::CMP_GT)
-                                               .set_compute_data_type(DataType_t::BOOLEAN);
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((int32_t)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::INT32)
+                                              .set_axis(3);
 
-            auto const& row_lesser_than_col_ws_output =
-                pointwise(col_index_lower_output, row_index_output, greater_than_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output->set_data_type(DataType_t::INT32);
 
-            row_lesser_than_col_ws_output->set_data_type(DataType_t::BOOLEAN);
+                if (attributes.inputs[input_names::SEQ_LEN_KV]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_KV],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+
+                if (attributes.inputs[input_names::SEQ_LEN_Q]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_Q],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_q)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+            }
+
+            auto greater_than_attributes =
+                Pointwise_attributes().set_mode(PointwiseMode_t::CMP_GT).set_compute_data_type(DataType_t::BOOLEAN);
+
+            if (attributes.causal_mask_bottom_right) {
+                greater_than_attributes.set_name("col+window-skv+sq>row");
+            } else {
+                greater_than_attributes.set_name("col+ws>row");
+            }
+
+            auto const& swa_comparison_output = pointwise(col_index_output, row_index_output, greater_than_attributes);
+
+            swa_comparison_output->set_data_type(DataType_t::BOOLEAN);
 
             // Lower attributes to binary select attributes
             auto negative_inf_swa = std::make_shared<Tensor_attributes>(-1024.0f * 1024.0f * 1024.0f);
@@ -632,7 +749,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
 
             auto const& swa_mask_output =
-                pointwise(last_output, negative_inf_swa, row_lesser_than_col_ws_output, binary_select_attributes);
+                pointwise(last_output, negative_inf_swa, swa_comparison_output, binary_select_attributes);
 
             last_output = swa_mask_output;
         }
@@ -736,7 +853,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         std::shared_ptr<Tensor_attributes> v_cache;
 
-        if (!is_paged_v) {
+        if (!is_paged_v()) {
             v_cache = attributes.inputs[input_names::V];
         } else {
             auto paged_cache_load_attributes_v = PagedCacheLoad_attributes().set_name("paged_v_cache_operation");
@@ -822,6 +939,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
     // non-virtual node gpu tensors
     std::shared_ptr<Tensor_attributes> dQ_accum;
     int64_t dQ_accum_size = 0;
+    std::shared_ptr<Tensor_attributes> dK_fullhead;
+    int64_t dK_fullhead_size = 0;
+    std::shared_ptr<Tensor_attributes> dV_fullhead;
+    int64_t dV_fullhead_size = 0;
     std::shared_ptr<Tensor_attributes> softmax_sum;
     int64_t softmax_sum_size = 0;
     std::shared_ptr<Tensor_attributes> alibi_slopes;
@@ -921,6 +1042,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
         }
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.attention_score_modifier.has_value() &&
+                    (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
+                     attributes.sliding_window_length.has_value()), error_code_t::GRAPH_NOT_SUPPORTED,"Attention score mod enabled and hence other subgraphs are disabled.");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For group-query attention, number of heads for key and query must be a factor of number of heads for query");
@@ -980,7 +1106,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with s_q <= s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (!attributes.causal_mask || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.sliding_window_length.has_value() && (! (attributes.causal_mask || attributes.causal_mask_bottom_right) || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with causal_mask=True, is_dropout=False, is_bias=False, is_ragged=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
@@ -1242,7 +1368,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             // sized TH1 softmax_sum
             softmax_sum->set_stride(attributes.inputs[input_names::Stats]->get_stride());
             softmax_sum->set_ragged_offset(attributes.inputs[input_names::Stats]->get_ragged_offset());
-            softmax_sum_size = attributes.max_total_seq_len_q.value() * h_q * 1 * sizeof(float);
+            softmax_sum_size = attributes.max_total_seq_len_q.value() *
+                               (attributes.inputs[input_names::Stats]->get_stride())[2] * sizeof(float);
         } else {
             // sized BHS1 softmax_sum
             softmax_sum->set_stride({h_q * s_q, s_q, 1, 1});
@@ -1265,6 +1392,14 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             last_output = pointwise(last_output,
                                     attributes.inputs[input_names::Attn_scale],
                                     Pointwise_attributes().set_name("mul_s_attn_scale").set_mode(PointwiseMode_t::MUL));
+        }
+
+        if (attributes.attention_score_modifier.has_value()) {
+            auto graph_                  = std::make_shared<Graph>();
+            std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
+            node_->context               = context;
+            last_output                  = (*attributes.attention_score_modifier)(graph_, last_output);
+            sub_nodes.emplace_back(graph_);
         }
 
         // (optional) last_output = last_output + bias
@@ -1488,33 +1623,109 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         if (attributes.sliding_window_length.has_value()) {
             auto row_index_attributes =
                 Pointwise_attributes().set_name("gen_row_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(2);
-            auto const& row_index_output = pointwise(last_output, row_index_attributes);
+            std::shared_ptr<Tensor_attributes> row_index_output = pointwise(last_output, row_index_attributes);
 
             auto col_index_attributes =
                 Pointwise_attributes().set_name("gen_col_index").set_mode(PointwiseMode_t::GEN_INDEX).set_axis(3);
-            auto const& col_index_output = pointwise(last_output, col_index_attributes);
+            std::shared_ptr<Tensor_attributes> col_index_output = pointwise(last_output, col_index_attributes);
 
-            // sliding window length parameter should be of float type
-            auto const& sliding_window_length =
-                std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+            // Without bottom right causal masking: setup a graph so we can compare column + window_size > row
+            // All elements for which column + window_size > row, will be retained, all others will be masked out
+            // Note that here and following sections, row refers to the s_q index and column refers to the s_kv index in
+            // the s_q x s_kv masking matrix
+            if (!attributes.causal_mask_bottom_right) {
+                // sliding window length parameter should be of float type
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto add_col_attributes = Pointwise_attributes()
-                                          .set_name("add_window_len")
-                                          .set_mode(PointwiseMode_t::ADD)
-                                          .set_compute_data_type(DataType_t::FLOAT)
-                                          .set_axis(3);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking, we need to shift the diagonal.
+            // Setup a graph so we can compare column + window_size - (s_kv - s_q) > row
+            // Optimization with fixed sequence lengths: single pointwise addition for the left-hand of the comparison
+            // Again, all elements satisfying the comparison will be retained.
+            else if (!attributes.inputs[input_names::SEQ_LEN_KV] && !attributes.inputs[input_names::SEQ_LEN_Q]) {
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((float)(attributes.sliding_window_length.value() - s_kv + s_q));
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window-skv+sq")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::FLOAT)
+                                              .set_axis(3);
 
-            auto const& col_index_lower_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+            }
+            // With bottom right causal masking: general case when at least one of Q and KV have variable sequence
+            // lengths.
+            // Setup a graph so we can compare column + window_size - (s_k[i] - s_q[i]) > row  for each batch i
+            // Also here, all elements satisfying the comparison will be retained.
+            else {
+                col_index_output->set_data_type(DataType_t::INT32);
+                row_index_output->set_data_type(DataType_t::INT32);
 
-            auto greater_than_attributes = Pointwise_attributes()
-                                               .set_name("greaterthan_row<col+ws")
-                                               .set_mode(PointwiseMode_t::CMP_GT)
-                                               .set_compute_data_type(DataType_t::BOOLEAN);
+                auto sliding_window_length =
+                    std::make_shared<Tensor_attributes>((int32_t)attributes.sliding_window_length.value());
+                auto add_col_attributes = Pointwise_attributes()
+                                              .set_name("col+window")
+                                              .set_mode(PointwiseMode_t::ADD)
+                                              .set_compute_data_type(DataType_t::INT32)
+                                              .set_axis(3);
 
-            auto const& row_lesser_than_col_ws_output =
-                pointwise(col_index_lower_output, row_index_output, greater_than_attributes);
+                col_index_output = pointwise(col_index_output, sliding_window_length, add_col_attributes);
+                col_index_output->set_data_type(DataType_t::INT32);
 
-            row_lesser_than_col_ws_output->set_data_type(DataType_t::BOOLEAN);
+                if (attributes.inputs[input_names::SEQ_LEN_KV]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_KV],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_kv)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv")
+                                                     .set_mode(PointwiseMode_t::SUB)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+
+                if (attributes.inputs[input_names::SEQ_LEN_Q]) {
+                    col_index_output = pointwise(col_index_output,
+                                                 attributes.inputs[input_names::SEQ_LEN_Q],
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                } else {
+                    col_index_output = pointwise(col_index_output,
+                                                 std::make_shared<Tensor_attributes>(static_cast<int32_t>(s_q)),
+                                                 Pointwise_attributes()
+                                                     .set_name("col+window-skv+sq")
+                                                     .set_mode(PointwiseMode_t::ADD)
+                                                     .set_compute_data_type(DataType_t::INT32));
+                }
+                col_index_output->set_data_type(DataType_t::INT32);
+            }
+
+            auto greater_than_attributes =
+                Pointwise_attributes().set_mode(PointwiseMode_t::CMP_GT).set_compute_data_type(DataType_t::BOOLEAN);
+
+            if (attributes.causal_mask_bottom_right) {
+                greater_than_attributes.set_name("col+window-skv+sq>row");
+            } else {
+                greater_than_attributes.set_name("col+ws>row");
+            }
+
+            auto const& swa_comparison_output = pointwise(col_index_output, row_index_output, greater_than_attributes);
+
+            swa_comparison_output->set_data_type(DataType_t::BOOLEAN);
 
             // Lower attributes to binary select attributes
             auto negative_inf_swa = std::make_shared<Tensor_attributes>(std::numeric_limits<float>::lowest());
@@ -1523,7 +1734,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
 
             auto const& swa_mask_output =
-                pointwise(last_output, negative_inf_swa, row_lesser_than_col_ws_output, binary_select_attributes);
+                pointwise(last_output, negative_inf_swa, swa_comparison_output, binary_select_attributes);
 
             last_output = swa_mask_output;
         }
@@ -1567,15 +1778,35 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                    attributes.outputs[output_names::dV]);
         } else {
             // for GQA and MQA
-            last_output = matmul(last_output,
+            dV_fullhead = matmul(last_output,
                                  attributes.inputs[input_names::dO],
                                  Matmul_attributes()
                                      .set_name("matmul_pT_dO")
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
-            last_output->set_dim({b, h_q, s_kv, d_v}).set_stride({h_q * s_kv * d_v, s_kv * d_v, d_v, 1});
-            last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
-            reduction(last_output,
+
+            dV_fullhead->set_dim({b, h_q, s_kv, d_v});
+            dV_fullhead->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
+
+            if (attributes.outputs[output_names::dV]->get_ragged_offset() &&
+                attributes.max_total_seq_len_kv.has_value() && detail::get_backend_version() >= 90600) {
+                // hack 1 - map dV strides to dV_fullhead strides
+                std::vector<int64_t> dV_fullhead_stride = attributes.outputs[output_names::dV]->get_stride();
+                dV_fullhead_stride[2]                   = dV_fullhead_stride[2] * (h_q / h_v);  // sequence stride
+                dV_fullhead_stride[0]                   = dV_fullhead_stride[0] * (h_q / h_v);  // batch stride
+                dV_fullhead->set_stride(dV_fullhead_stride);
+                // hack 2 - map dV ragged offset to dV_fullhead ragged offset with implicit multiplier
+                // implicit multiplier = h_q / h_v
+                dV_fullhead->set_ragged_offset(attributes.outputs[output_names::dV]->get_ragged_offset());
+                // hack 3 - non virtual dV full head
+                dV_fullhead->set_is_virtual(false);
+                dV_fullhead_size = attributes.max_total_seq_len_kv.value() * dV_fullhead_stride[2] * sizeof(float);
+            } else {
+                // sized BHSD dQ_accum
+                dV_fullhead->set_stride({h_q * s_kv * d_v, s_kv * d_v, d_v, 1});
+            }
+
+            reduction(dV_fullhead,
                       Reduction_attributes().set_name("red_dV_head").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dV]);
         }
@@ -1619,6 +1850,15 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                       attributes.outputs[output_names::dBias]);
         }
 
+        // apply the bprop of attention score modifier
+        if (attributes.attention_score_modifier_bprop.has_value()) {
+            auto graph_                  = std::make_shared<Graph>();
+            std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
+            node_->context               = context;
+            last_output                  = (*attributes.attention_score_modifier_bprop)(graph_, last_output);
+            sub_nodes.emplace_back(graph_);
+        }
+
         // (optional) last_output = last_output * bmm_scale
         if (attributes.inputs[input_names::Attn_scale]) {
             last_output =
@@ -1647,15 +1887,36 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                    attributes.outputs[output_names::dK]);
         } else {
             // for GQA and MQA
-            last_output = matmul(last_output,
+            dK_fullhead = matmul(last_output,
                                  attributes.inputs[input_names::Q],
                                  Matmul_attributes()
                                      .set_name("matmul_dST_Q")
                                      .set_m_override(attributes.inputs[input_names::SEQ_LEN_KV])
                                      .set_k_override(attributes.inputs[input_names::SEQ_LEN_Q]));
-            last_output->set_dim({b, h_q, s_kv, d_qk}).set_stride({h_q * s_kv * d_qk, s_kv * d_qk, d_qk, 1});
-            last_output->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
-            reduction(last_output,
+
+            dK_fullhead->set_dim({b, h_q, s_kv, d_qk});
+            dK_fullhead->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
+
+            if (attributes.outputs[output_names::dK]->get_ragged_offset() &&
+                attributes.max_total_seq_len_kv.has_value() && detail::get_backend_version() >= 90600) {
+                // sized THD dK_full_heads
+                // hack 1 - map dK strides to dK_fullhead strides
+                std::vector<int64_t> dK_fullhead_stride = attributes.outputs[output_names::dK]->get_stride();
+                dK_fullhead_stride[0]                   = dK_fullhead_stride[0] * (h_q / h_k);  // batch stride
+                dK_fullhead_stride[2]                   = dK_fullhead_stride[2] * (h_q / h_k);  // sequence stride
+                dK_fullhead->set_stride(dK_fullhead_stride);
+                // hack 2 - map dK ragged offset to dK_fullhead ragged offset with implicit multiplier
+                // implicit multiplier = h_q / h_k
+                dK_fullhead->set_ragged_offset(attributes.outputs[output_names::dK]->get_ragged_offset());
+                // hack 3 - non virtual dK full head
+                dK_fullhead->set_is_virtual(false);
+                dK_fullhead_size = attributes.max_total_seq_len_kv.value() * dK_fullhead_stride[2] * sizeof(float);
+            } else {
+                // sized BHSD dQ_accum
+                dK_fullhead->set_stride({h_q * s_kv * d_qk, s_kv * d_qk, d_qk, 1});
+            }
+
+            reduction(dK_fullhead,
                       Reduction_attributes().set_name("red_dK_head").set_mode(ReductionMode_t::ADD),
                       attributes.outputs[output_names::dK]);
         }
@@ -1700,7 +1961,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                        .set_name("matmul_dS_K")
                        .set_m_override(attributes.inputs[input_names::SEQ_LEN_Q])
                        .set_k_override(attributes.inputs[input_names::SEQ_LEN_KV]),
-                   (dQ_accum) ? dQ_accum : attributes.outputs[output_names::dQ]);
+                   dQ_accum);
 
             pointwise(dQ_accum,
                       Pointwise_attributes().set_name("identity_dQ").set_mode(PointwiseMode_t::IDENTITY),
@@ -1724,6 +1985,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         size += ((alibi_slopes_size + 15) / 16 * 16);  // align alibi slopes memory to 16 bytes
         size += dQ_accum_size;
+        size += dK_fullhead_size;
+        size += dV_fullhead_size;
         size += softmax_sum_size;
 
         return size;
@@ -1744,17 +2007,29 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         }
 
         if (dQ_accum && !dQ_accum->get_is_virtual()) {
-            std::vector<float> f_vec        = {(float)dQ_accum_size};
-            int64_t dQ_accum_workspace_type = detail::get_backend_version() < 90600 ? 1 : 2;
-            workspace_modifications.emplace(dQ_accum->get_uid(),
-                                            std::make_tuple(dQ_accum_workspace_type, offset, f_vec));
+            if (detail::get_backend_version() < 90600) {
+                // prior to cuDNN 9.6.0, dQ_accum needed to be memset by frontend
+                workspace_modifications.emplace(dQ_accum->get_uid(),
+                                                std::make_tuple(1, offset, std::vector<float>{(float)dQ_accum_size}));
+            } else {
+                workspace_modifications.emplace(dQ_accum->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            }
             offset = offset + dQ_accum_size;
         }
 
+        if (dK_fullhead && !dK_fullhead->get_is_virtual()) {
+            workspace_modifications.emplace(dK_fullhead->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            offset = offset + dK_fullhead_size;
+        }
+
+        if (dV_fullhead && !dV_fullhead->get_is_virtual()) {
+            workspace_modifications.emplace(dV_fullhead->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            offset = offset + dV_fullhead_size;
+        }
+
         if (softmax_sum && !softmax_sum->get_is_virtual()) {
-            // There is no requirement for softmax_sum to be memset to 0
-            std::vector<float> f_vec = {};
-            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_tuple(2, offset, f_vec));
+            workspace_modifications.emplace(softmax_sum->get_uid(), std::make_tuple(2, offset, std::vector<float>()));
+            offset = offset + softmax_sum_size;
         }
 
         return {error_code_t::OK, ""};
