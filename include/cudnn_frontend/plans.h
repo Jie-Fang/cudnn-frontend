@@ -461,8 +461,10 @@ class Execution_plan_list {
             }
         }
 
+        std::string err_msg = detail::get_last_error_string_();
+        CUDNN_FE_LOG_LABEL_ENDL("ERROR: No valid engine configs returned from heuristics.\n" << err_msg);
         return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
-                "[cudnn_frontend] Error: No execution plans support the graph."};
+                "[cudnn_frontend] Error: No execution plans support the graph." + err_msg};
     }
 
     error_t
