@@ -1468,6 +1468,7 @@ if __name__ == "__main__":
       --mha_h_q 12 \
       --mha_h_k 3 \
       --mha_h_v 4 \
+      --mha_block_size 32 \
       --mha_deterministic 0
     """
     # ================== backward ==================

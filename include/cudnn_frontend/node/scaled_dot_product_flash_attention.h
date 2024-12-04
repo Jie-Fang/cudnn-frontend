@@ -35,6 +35,83 @@ class SDPANode : public NodeCRTP<SDPANode> {
         return Type::COMPOSITE;
     }
 
+    bool
+    is_paged_v() const {
+        auto page_table_v_it = attributes.inputs.find(input_names::Page_table_V);
+        return ((page_table_v_it) != attributes.inputs.end() && page_table_v_it->second != nullptr);
+    }
+
+    bool
+    is_paged_k() const {
+        auto page_table_k_it = attributes.inputs.find(input_names::Page_table_K);
+        return ((page_table_k_it) != attributes.inputs.end() && page_table_k_it->second != nullptr);
+    }
+
+    // Helper function to infer KV sequence length
+    // Note that it cannot be run as part of infer_properties_node as
+    // this is being used in pre_validate_node
+    int64_t
+    infer_s_kv() const {
+        int64_t s_kv = -1;
+
+        auto get_input_dim = [this](const SDPA_attributes::input_names& input_name) {
+            auto const input_it = attributes.inputs.find(input_name);
+            if (input_it != attributes.inputs.end()) {
+                return input_it->second->get_dim();
+            } else {
+                return std::vector<int64_t>({-1, -1, -1, -1});
+            }
+        };
+
+        auto const& k_dim = get_input_dim(input_names::K);
+        auto const& v_dim = get_input_dim(input_names::V);
+
+        // If s_kv was set explicitly, use that
+        if (attributes.max_seq_len_kv.has_value()) {
+            s_kv = attributes.max_seq_len_kv.value();
+        }
+        // When one of K or V cache are paged, s_kv can be extracted directly
+        else if (!is_paged_k()) {
+            s_kv = k_dim[2];
+
+        } else if (!is_paged_v()) {
+            s_kv = v_dim[2];
+        } else {
+            CUDNN_FE_LOG_LABEL_ENDL(
+                "WARNING: maximum kv sequence length is being inferred. To set it explicitly, please use  "
+                "\"set_paged_attention_max_seq_len_kv\"");
+
+            auto bias_it = attributes.inputs.find(input_names::Bias);
+            auto rng_it  = attributes.outputs.find(output_names::RNG_DUMP);
+
+            // If there is a bias, extract it from there
+            if (bias_it != attributes.inputs.end() && bias_it->second != nullptr) {
+                s_kv = get_input_dim(input_names::Bias)[3];
+                // If there is an rng_dump output, extract it from there
+            } else if (rng_it != attributes.outputs.end() && rng_it->second != nullptr) {
+                s_kv = rng_it->second->get_dim()[3];
+                // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
+                // container
+            } else {
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim_k = get_input_dim(input_names::Page_table_K);
+                // [b, h_k, block_size, d_k]
+                auto const container_dim_k = get_input_dim(input_names::K);
+                int64_t s_k                = page_table_dim_k[2] * container_dim_k[2];
+
+                // [b, 1, ceil(s_kv/block_size), 1]
+                auto page_table_dim_v = get_input_dim(input_names::Page_table_V);
+                // [b, h_v, block_size, d_v]
+                auto const container_dim_v = get_input_dim(input_names::V);
+                int64_t s_v                = page_table_dim_v[2] * container_dim_v[2];
+
+                s_kv = std::min(s_k, s_v);
+            }
+        }
+
+        return s_kv;
+    }
+
     error_t
     pre_validate_node() const override final {
         CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SDPANode " << attributes.name << "...");
@@ -81,7 +158,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // validate backend limitations for the operation
         // clang-format off
         int64_t s_q  = attributes.inputs.at(input_names::Q)->get_dim()[2];
-        int64_t s_kv = attributes.inputs.at(input_names::K)->get_dim()[2];
+        int64_t s_kv = infer_s_kv(); // When using paged attention K/V dimensions are implicit
         int64_t h_q  = attributes.inputs.at(input_names::Q)->get_dim()[1];
         int64_t h_k  = attributes.inputs.at(input_names::K)->get_dim()[1];
         int64_t h_v  = attributes.inputs.at(input_names::V)->get_dim()[1];
@@ -100,10 +177,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value() || is_dropout_custom;
 
-        auto page_table_v_it = attributes.inputs.find(input_names::Page_table_V);
-        auto page_table_k_it = attributes.inputs.find(input_names::Page_table_K);
-        bool const is_paged  = ((page_table_k_it) != attributes.inputs.end() &&  page_table_k_it->second != nullptr) ||  
-                               ((page_table_v_it) != attributes.inputs.end() &&  page_table_v_it->second != nullptr);
+        bool const is_paged  = is_paged_k() || is_paged_v();
 
         auto const& rng_tensor = attributes.outputs.find(output_names::RNG_DUMP);
         bool const is_rng   = (rng_tensor != attributes.outputs.end() && rng_tensor->second != nullptr);
@@ -286,56 +360,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
         auto const& v_dim = attributes.inputs[input_names::V]->get_dim();
         auto h_v          = v_dim[1];
         auto d_v          = v_dim[3];
-
-        bool is_paged_k = attributes.inputs[input_names::Page_table_K] != nullptr;
-        bool is_paged_v = attributes.inputs[input_names::Page_table_V] != nullptr;
-
         // Infer s_kv
-        int64_t s_kv = -1;
-
-        // If s_kv was set explicitly, use that
-        if (attributes.max_seq_len_kv.has_value()) {
-            s_kv = attributes.max_seq_len_kv.value();
-        }
-        // When one of K or V cache are paged, s_kv can be extracted directly
-        else if (!is_paged_k) {
-            s_kv = k_dim[2];
-
-        } else if (!is_paged_v) {
-            s_kv = v_dim[2];
-        } else {
-            CUDNN_FE_LOG_LABEL_ENDL(
-                "WARNING: maximum kv sequence length is being inferred. To set it explicitly, please use  "
-                "\"set_paged_attention_max_seq_len_kv\"");
-
-            // If there is a bias, extract it from there
-            if (attributes.inputs[input_names::Bias] != nullptr) {
-                s_kv = attributes.inputs[input_names::Bias]->get_dim()[3];
-                // If there is an rng_dump output, extract it from there
-            } else if (attributes.outputs.find(output_names::RNG_DUMP) != attributes.outputs.end() &&
-                       attributes.outputs[output_names::RNG_DUMP] != nullptr) {
-                s_kv = attributes.outputs[output_names::RNG_DUMP]->get_dim()[3];
-                // When both caches are paged, and the above failed, we need to infer s_kv from the page table and
-                // container
-            } else {
-                // [b, 1, ceil(s_kv/block_size), 1]
-                auto page_table_dim_k = attributes.inputs[input_names::Page_table_K]->get_dim();
-                // [b, h_k, block_size, d_k]
-                auto container_dim_k = attributes.inputs[input_names::K]->get_dim();
-                int64_t s_k          = page_table_dim_k[2] * container_dim_k[2];
-
-                // [b, 1, ceil(s_kv/block_size), 1]
-                auto page_table_dim_v = attributes.inputs[input_names::Page_table_V]->get_dim();
-                // [b, h_v, block_size, d_v]
-                auto container_dim_v = attributes.inputs[input_names::V]->get_dim();
-                int64_t s_v          = page_table_dim_v[2] * container_dim_v[2];
-
-                s_kv = std::min(s_k, s_v);
-            }
-        }
+        int64_t s_kv = infer_s_kv();
 
         std::shared_ptr<Tensor_attributes> k_cache;
-        if (!is_paged_k) {
+        if (!is_paged_k()) {
             // 1. map K->KT
             // cuDNN frontend API attention requires Q, K, V where
             // Q = {b, h_q, s_q, d_qk}
@@ -824,7 +853,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         std::shared_ptr<Tensor_attributes> v_cache;
 
-        if (!is_paged_v) {
+        if (!is_paged_v()) {
             v_cache = attributes.inputs[input_names::V];
         } else {
             auto paged_cache_load_attributes_v = PagedCacheLoad_attributes().set_name("paged_v_cache_operation");
