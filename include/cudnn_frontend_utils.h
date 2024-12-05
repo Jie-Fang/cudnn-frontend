@@ -1042,16 +1042,16 @@ convert_to_cudnn_type(cudnn_frontend::DataType_t const mode, cudnnDataType_t& cu
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
         case DataType_t::FP8_E8M0:
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_DATA_FP8_E8M0;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
         case DataType_t::FP4_E2M1:
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_DATA_FP4_E2M1;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1473,16 +1473,16 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #endif
         case DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
         case DescriptorType_t::OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR:
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90700, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BACKEND_OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
@@ -1868,7 +1868,7 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
         case CUDNN_BACKEND_OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR:
             return DescriptorType_t::OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR;
 #endif
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
         case CUDNN_BACKEND_OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR:
             return DescriptorType_t::OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR;
         case CUDNN_BACKEND_OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR:
@@ -2037,11 +2037,11 @@ convert_from_cudnn_type(cudnnDataType_t const cudnn_mode) {
         case CUDNN_DATA_FAST_FLOAT_FOR_FP8:
             return DataType_t::FAST_FLOAT_FOR_FP8;
 #endif
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
         case CUDNN_DATA_FP8_E8M0:
             return DataType_t::FP8_E8M0;
 #endif
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
         case CUDNN_DATA_FP4_E2M1:
             return DataType_t::FP4_E2M1;
 #endif

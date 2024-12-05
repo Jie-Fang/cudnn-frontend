@@ -7,13 +7,20 @@ before_script:
     - echo "CUDNN_VERSION=$CUDNN_VERSION"
 
 .cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.2
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
 
 .cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.2
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
 
 .cudnn_ga_image:template:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.6.0.74_12.6.3
+
+.device_matrix:template:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere", "Blackwell"]
+    tags:
+        - ${ARCH}
 
 .fetch_cudnn_dev:template:
     before_script:
@@ -193,46 +200,17 @@ build:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .build:template
 
-build:cudnn_dev_feature:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
-    needs: []
-    stage: build
+cpp_samples:cudnn_dev_latest:
     extends:
-        - .fetch_cudnn_feature_next:template
-        - .build:template
-
-test:cudnn_dev_feature:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere", "Blackwell"]
-    tags:
-        - ${ARCH}
-    extends:
-        - .fetch_cudnn_feature_next:template
-        - .cpp_samples:template
-    needs: ["build:cudnn_dev_feature"]
-
-test:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
-    extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .cpp_samples:template
     needs: ["build:cudnn_dev_latest"]
     
 python_tests:cudnn_dev_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .python_tests:template
@@ -240,48 +218,32 @@ python_tests:cudnn_dev_latest:
     resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_dev_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .pycudnntest:template
     needs: ["build:cudnn_dev_latest"]
 
 cpp_tests:cudnn_dev_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .cpp_tests:template
     needs: ["build:cudnn_dev_latest"]
     
 L4_graph_runner:cudnn_dev_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .L4_graph_runner:template
     needs: ["build:cudnn_dev_latest"]
     
 L4_graph_runner_large:cudnn_dev_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Ampere", "Hopper"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .L4_graph_runner_large:template
@@ -298,24 +260,16 @@ build:cudnn_rel_latest:
         - .build:template
 
 cpp_samples:cudnn_rel_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .cpp_samples:template
     needs: ["build:cudnn_rel_latest"]
     
 python_tests:cudnn_rel_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .python_tests:template
@@ -323,48 +277,32 @@ python_tests:cudnn_rel_latest:
     resource_group: memory_heavy_${ARCH}
     
 pycudnntest:cudnn_rel_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .pycudnntest:template
     needs: ["build:cudnn_rel_latest"]
 
 cpp_tests:cudnn_rel_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .cpp_tests:template
     needs: ["build:cudnn_rel_latest"]
     
 L4_graph_runner:cudnn_rel_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .L4_graph_runner:template
     needs: ["build:cudnn_rel_latest"]
     
 L4_graph_runner_large:cudnn_rel_latest:
-    parallel:
-        matrix:
-            - ARCH: ["Ampere", "Hopper"]
-    tags:
-        - ${ARCH}
     extends:
+        - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .L4_graph_runner_large:template
@@ -410,17 +348,13 @@ build:cudnn_8.9_windows:
 
 python_samples:cudnn_dev_latest:
     stage: python_samples
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
     script:
         - !reference [.fetch_cudnn_dev:template, before_script]
         - pip install -v .
         - ci/run_python_samples.sh
     needs: []
     extends:
+        - .device_matrix:template
         - .cudnn_dev_image:template    
 
 python_samples:cudnn_8.9.5.29_12.2.2:
