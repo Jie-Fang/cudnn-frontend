@@ -6,6 +6,37 @@ before_script:
     - echo "CUDA_VERSION=$CUDA_VERSION"
     - echo "CUDNN_VERSION=$CUDNN_VERSION"
 
+.cudnn_dev_image:template:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.2
+
+.cudnn_rel_image:template:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.2
+
+.cudnn_ga_image:template:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.6.0.74_12.6.3
+
+.fetch_cudnn_dev:template:
+    before_script:
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.8_cuda_12.8/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.8.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
+        - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
+        - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
+        - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
+        - tar xvf cudnn.tar.gz --directory /
+        - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
+        - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
+  
+.fetch_cudnn_rel:template:
+    before_script:
+        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.7_cuda_12.8/
+        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.7.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
+        - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
+        - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
+        - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
+        - tar xvf cudnn.tar.gz --directory /
+        - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
+        - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
+
 include:
 #   - local: ci/job-template.yml
 #     inputs:
@@ -13,7 +44,8 @@ include:
 #         cudnn_version: "8.5.0.96"
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
-        
+  - 'ci/build_test_wheels.yml'
+  - 'ci/analysis.yml'
   - local: ci/job-template.yml
     inputs:
         cuda_version: "11.8.0"
@@ -87,8 +119,8 @@ include:
 
   - local: ci/job-template.yml
     inputs:
-        cuda_version: "12.6.2"
-        cudnn_version: "9.5.1.17"
+        cuda_version: "12.6.3"
+        cudnn_version: "9.6.0.74"
 
 stages:
     - analysis
@@ -102,33 +134,7 @@ stages:
     - thunder
     - deploy
         
-.fetch_cudnn_dev:template:
-    before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.7_cuda_12.8/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.7.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
-        - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
-        - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
-        - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
-        - tar xvf cudnn.tar.gz --directory /
-        - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
-        - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
-  
-.fetch_cudnn_rel:template:
-    before_script:
-        - BASE_URL=https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.6_cuda_12.6/
-        - LATEST_DATE_TIME=`curl -S $BASE_URL 2> /dev/null | grep "9.6.0" | grep href |  awk -F\  '{print $3, $4}' | sort -n -t- -k3,3 -k2,2M -k1,1n | tail -1`
-        - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
-        - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
-        - wget -q --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O cudnn.tar.gz
-        - tar xvf cudnn.tar.gz --directory /
-        - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
-        - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
 
-.cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.2
-
-.cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.6.2
 
 .build:template:
     script:
@@ -179,94 +185,6 @@ stages:
     stage: L4_graph_runner
     script:
         - ci/run_L4_streams.sh
-
-deploy:build_bdist_wheels:
-    tags:
-        - wheel_builder
-    needs: []
-    stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.6_cudnn_9.5.0
-    script:
-        - ci/build_pip_wheels.sh
-    rules:
-        - if: $CI_PIPELINE_SOURCE == "schedule"
-    artifacts:
-        paths:
-            - many_linux_wheels/*.whl
-
-deploy:test_bdist_wheels_8.9.7_3.10:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
-    needs: ["deploy:build_wheels"]
-    stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.7.29_12.2.2
-    needs: ["deploy:build_bdist_wheels"]
-    rules:
-        - if: $CI_PIPELINE_SOURCE == "schedule"
-    script:
-        - apt-get update
-        - apt-get install -y software-properties-common
-        - add-apt-repository ppa:deadsnakes/ppa
-        - apt-get update
-        - apt-get -y install python3.10 python3-pip python3.10-distutils
-        - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
-        - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
-        - pip uninstall -y nvidia_cudnn_frontend
-        - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
-        - pip install -r /tmp/requirements.txt
-        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python -n 4 --tb=short
-
-deploy:test_bdist_wheels_9.4.0_3.10:
-    parallel:
-        matrix:
-            - ARCH: ["Hopper", "Ampere"]
-    tags:
-        - ${ARCH}
-    needs: ["deploy:build_wheels"]
-    stage: deploy
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.4.0.58_12.6.0
-    needs: ["deploy:build_bdist_wheels"]
-    rules:
-        - if: $CI_PIPELINE_SOURCE == "schedule"
-    script:
-        - apt-get update
-        - apt-get install -y software-properties-common
-        - add-apt-repository ppa:deadsnakes/ppa
-        - apt-get update
-        - apt-get -y install python3.10 python3-pip python3.10-distutils
-        - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
-        - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
-        - pip uninstall -y nvidia_cudnn_frontend
-        - ls many_linux_wheels/*.whl
-        - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
-        - pip install -r /tmp/requirements.txt
-        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python -n 4 --tb=short
-
-analysis:clang-format:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
-    stage: analysis
-    allow_failure: true
-    script:
-        - ci/run_style_check_diff.sh
-        
-analysis:check-relative-includes:
-    image: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
-    stage: analysis
-    script:
-        - echo "#include \"$CI_PROJECT_DIR/include/cudnn_frontend.h\"" > test_build.cpp
-        - echo 'int main() { return 0; }' >> test_build.cpp
-        - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/ -L/usr/lib/x86_64-linux-gnu/ -lcudnn
-
-analysis:check-CUDNN_FRONTEND_SKIP_JSON_LIB:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.1.0.70_12.4.0
-    stage: analysis
-    script:
-        - ci/build_wo_json.sh
 
 build:cudnn_dev_latest:
     needs: []
@@ -453,38 +371,7 @@ thunder:pjnl_latest:
         - pytest thunder/tests/test_cudnn_executor.py -v
     only:
         - schedules
-
-analysis:cudnn_clang_disable_exception:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
-    needs: []
-    stage: analysis
-    script:
-        - apt-get update && apt-get install -y clang
-        - !reference [.fetch_cudnn_dev:template, before_script]
-        - mkdir build && cd build
-        - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_CXX_FLAGS="-DNV_CUDNN_DISABLE_EXCEPTION" ../
-        - cmake --build . -j16 --verbose
-        
-analysis:cudnn_v9_no_half_conversion:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.7.29_12.2.2
-    needs: []
-    stage: analysis
-    script:
-        - mkdir build && cd build
-        - cmake -DCMAKE_CXX_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__" ../
-        - cmake --build . -j16 --verbose
-    
-analysis:cudnn_clang:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
-    needs: []
-    stage: analysis
-    script:
-        - apt-get update && apt-get install -y clang
-        - !reference [.fetch_cudnn_dev:template, before_script]
-        - mkdir build && cd build
-        - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake ../
-        - cmake --build . -j16 --verbose
-    
+   
 build:cudnn_8.9_windows:
     tags:
         - Windows
@@ -502,7 +389,6 @@ build:cudnn_8.9_windows:
         - cmake --build . -j16 --verbose
 
 python_samples:cudnn_dev_latest:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.5.0
     stage: python_samples
     parallel:
         matrix:
@@ -514,8 +400,10 @@ python_samples:cudnn_dev_latest:
         - pip install -v .
         - ci/run_python_samples.sh
     needs: []
+    extends:
+        - .cudnn_dev_image:template    
 
-"python_samples:cudnn_8.9.5.29_12.2.2":
+python_samples:cudnn_8.9.5.29_12.2.2:
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.5.29_12.2.2"
   parallel:
     matrix:
@@ -525,7 +413,7 @@ python_samples:cudnn_dev_latest:
   extends: .python_samples:template
   needs: []
 
-"python_samples:cudnn_9.0.0.312_12.3.1":
+python_samples:cudnn_9.0.0.312_12.3.1:
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
   parallel:
     matrix:

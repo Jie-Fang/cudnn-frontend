@@ -1,0 +1,65 @@
+deploy:build_bdist_wheels:
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.6_cudnn_9.5.0
+    tags:
+        - wheel_builder
+    needs: []
+    stage: deploy
+    script:
+        - ci/build_pip_wheels.sh
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+    artifacts:
+        paths:
+            - many_linux_wheels/*.whl
+
+deploy:test_bdist_wheels_8.9.7_3.10:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    needs: ["deploy:build_bdist_wheels"]
+    stage: deploy
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.7.29_12.2.2
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+    script:
+        - apt-get update
+        - apt-get install -y software-properties-common
+        - add-apt-repository ppa:deadsnakes/ppa
+        - apt-get update
+        - apt-get -y install python3.10 python3-pip python3.10-distutils
+        - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
+        - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
+        - pip uninstall -y nvidia_cudnn_frontend
+        - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
+        - pip install -r /tmp/requirements.txt
+        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
+        - pytest test/python -n 4 --tb=short
+
+deploy:test_bdist_wheels_ga_cudnn_3.10:
+    parallel:
+        matrix:
+            - ARCH: ["Hopper", "Ampere"]
+    tags:
+        - ${ARCH}
+    needs: ["deploy:build_bdist_wheels"]
+    stage: deploy
+    extends:
+        - .cudnn_ga_image:template
+    rules:
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+    script:
+        - apt-get update
+        - apt-get install -y software-properties-common
+        - add-apt-repository ppa:deadsnakes/ppa
+        - apt-get update
+        - apt-get -y install python3.10 python3-pip python3.10-distutils
+        - update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 2
+        - update-alternatives --install /usr/bin/python python /usr/bin/python3.10 2
+        - pip uninstall -y nvidia_cudnn_frontend
+        - ls many_linux_wheels/*.whl
+        - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
+        - pip install -r /tmp/requirements.txt
+        - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
+        - pytest test/python -n 4 --tb=short
