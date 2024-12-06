@@ -28,8 +28,8 @@
 TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_scale]") {
     namespace fe = cudnn_frontend;
 
-#if (CUDNN_VERSION < 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-    SKIP("MXFP8 is not supported in cudnn versions prior to 9.99.0");
+#if (CUDNN_VERSION < 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+    SKIP("MXFP8 is not supported in cudnn versions prior to 9.7.0");
 #endif
 
     fe::graph::Graph graph;
@@ -127,8 +127,8 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
 TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
     namespace fe = cudnn_frontend;
 
-#if (CUDNN_VERSION < 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-    SKIP("MXFP8 is not supported in cudnn versions prior to 9.99.0");
+#if (CUDNN_VERSION < 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+    SKIP("MXFP8 is not supported in cudnn versions prior to 9.7.0");
 #endif
 
     fe::graph::Graph graph;
@@ -209,8 +209,8 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
 TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
     namespace fe = cudnn_frontend;
 
-#if (CUDNN_VERSION < 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-    SKIP("MXFP8 is not supported in cudnn versions prior to 9.99.0");
+#if (CUDNN_VERSION < 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+    SKIP("MXFP8 is not supported in cudnn versions prior to 9.7.0");
 #endif
 
     fe::graph::Graph graph;
@@ -294,8 +294,8 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
 TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
     namespace fe = cudnn_frontend;
 
-#if (CUDNN_VERSION < 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-    SKIP("NVFP4 is not supported in cudnn versions prior to 9.99.0");
+#if (CUDNN_VERSION < 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+    SKIP("NVFP4 is not supported in cudnn versions prior to 9.7.0");
 #endif
 
     fe::graph::Graph graph;

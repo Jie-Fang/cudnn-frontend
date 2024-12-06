@@ -111,10 +111,10 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
         getLogger() << "[cudnn_frontend] INFO: " << "Building BlockScaleDequantizeNode operations " << attributes.name
                     << "..." << std::endl;
         auto cudnn_ver_error =
-            error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Block scale dequantize requires cuDNN v9.99.0"};
+            error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Block scale dequantize requires cuDNN v9.7.0"};
 
-#if (CUDNN_VERSION >= 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-        NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(99900, cudnn_ver_error);
+#if (CUDNN_VERSION >= 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+        NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90700, cudnn_ver_error);
         CUDNN_FRONTEND_UNUSED(operations);
         auto block_scale_dequantize_operation = make_shared_backend_pointer(
             (cudnnBackendDescriptorType_t)CUDNN_BACKEND_OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR);

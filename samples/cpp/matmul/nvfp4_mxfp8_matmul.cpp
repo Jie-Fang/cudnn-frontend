@@ -98,8 +98,8 @@ struct TestParams {
 TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
     namespace fe = cudnn_frontend;
 
-#if (CUDNN_VERSION < 99900)  // TODO: v9.99 is new feature branch; switch to release branch when ready
-    SKIP("Matmul with block scaling is not supported in cudnn versions prior to 9.99.0");
+#if (CUDNN_VERSION < 90700)  // TODO: v9.99 is new feature branch; switch to release branch when ready
+    SKIP("Matmul with block scaling is not supported in cudnn versions prior to 9.7.0");
 #endif
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("block scale requires Blackwell and up");
