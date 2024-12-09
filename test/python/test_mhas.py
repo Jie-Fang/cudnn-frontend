@@ -1098,7 +1098,7 @@ def test_sdpa_backward(
     max_t_q = ((torch.sum(seq_len_q_gpu).item() + 63) // 64) * 64 if is_ragged else None
     max_t_kv = ((torch.sum(seq_len_kv_gpu).item() + 63) // 64) * 64 if is_ragged else None
 
-    if (d_qk % 16 != 0 or d_v % 16 != 0) and cudnn_version < "9.8.0":
+    if (d_qk % 16 != 0 or d_v % 16 != 0) and cudnn_version < "9.9.0":
         max_t_q = None
         max_t_kv = None
 
