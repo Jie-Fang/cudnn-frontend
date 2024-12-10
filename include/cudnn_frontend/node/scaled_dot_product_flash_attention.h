@@ -438,7 +438,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
             node_->context               = context;
             last_output                  = attributes.attention_score_modifier(graph_, last_output);
-            sub_nodes.emplace_back(graph_);
+            sub_nodes.emplace_back(node_);
         }
 
         // Optional bias
@@ -1399,7 +1399,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
             node_->context               = context;
             last_output                  = attributes.attention_score_modifier(graph_, last_output);
-            sub_nodes.emplace_back(graph_);
+            sub_nodes.emplace_back(node_);
         }
 
         // (optional) last_output = last_output + bias
@@ -1856,7 +1856,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
             node_->context               = context;
             last_output                  = attributes.attention_score_modifier_bprop(graph_, last_output);
-            sub_nodes.emplace_back(graph_);
+            sub_nodes.emplace_back(node_);
         }
 
         // (optional) last_output = last_output * bmm_scale
