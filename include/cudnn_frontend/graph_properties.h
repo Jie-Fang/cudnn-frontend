@@ -1103,6 +1103,7 @@ class Resample_attributes : public Attributes<Resample_attributes> {
                                    name,
                                    inputs,
                                    outputs,
+                                   is_inference,
                                    resample_mode,
                                    padding_mode,
                                    pre_padding,

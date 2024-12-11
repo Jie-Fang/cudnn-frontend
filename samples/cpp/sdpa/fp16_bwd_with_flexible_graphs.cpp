@@ -197,8 +197,8 @@ TEST_CASE("Toy sdpa backward with flexible graph", "[graph][sdpa][flash][backwar
     int64_t d_v      = 128;   // hidden dim
     float attn_scale = 0.123f;
 
-    if (cudnnGetVersion() < 8903) {
-        SKIP("Test requires cudnn 8.9.3 or above");
+    if (cudnnGetVersion() < 90400) {
+        SKIP("Test requires cudnn 9.4.0 or above");
         return;
     }
 
