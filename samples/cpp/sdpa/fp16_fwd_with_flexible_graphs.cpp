@@ -202,8 +202,8 @@ TEST_CASE("Toy sdpa forward with flexible graph", "[graph][sdpa][flash][forward]
 
     bool has_attn_bias = true;
 
-    if (cudnnGetVersion() < 90500) {
-        SKIP("Test requires cudnn 8.9.3 or above");
+    if (cudnnGetVersion() < 90400) {
+        SKIP("Test requires cudnn 9.4.0 or above");
         return;
     }
 
