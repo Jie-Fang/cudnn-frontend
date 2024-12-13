@@ -44,57 +44,6 @@ namespace fe = cudnn_frontend;
 #define DK_UID 103
 #define DV_UID 104
 
-class Softcap {
-   private:
-    // saved tensors in fprop to be used in bprop
-
-    std::shared_ptr<fe::graph::Tensor_attributes> before_tanh_activation;
-
-   public:
-    std::shared_ptr<fe::graph::Tensor_attributes>
-    forward(std::shared_ptr<fe::graph::Graph> graph,
-            std::shared_ptr<fe::graph::Tensor_attributes> attention_score,
-            std::shared_ptr<fe::graph::Tensor_attributes> soft_cap_scalar) {
-        before_tanh_activation = graph->pointwise(
-            attention_score,
-            soft_cap_scalar,
-            fe::graph::Pointwise_attributes().set_name("div_by_soft_cap").set_mode(fe::PointwiseMode_t::DIV));
-
-        auto tanh_out = graph->pointwise(
-            before_tanh_activation,
-            fe::graph::Pointwise_attributes().set_name("activation").set_mode(fe::PointwiseMode_t::TANH_FWD));
-
-        auto out = graph->pointwise(
-            tanh_out,
-            soft_cap_scalar,
-            fe::graph::Pointwise_attributes().set_name("mul_by_soft_cap").set_mode(fe::PointwiseMode_t::MUL));
-
-        return out;
-    }
-
-    std::shared_ptr<fe::graph::Tensor_attributes>
-    backward(std::shared_ptr<fe::graph::Graph> graph,
-             std::shared_ptr<fe::graph::Tensor_attributes> attention_score,
-             std::shared_ptr<fe::graph::Tensor_attributes> soft_cap_scalar) {
-        auto mul_out = graph->pointwise(
-            attention_score,
-            soft_cap_scalar,
-            fe::graph::Pointwise_attributes().set_name("mul_by_soft_cap_bprop").set_mode(fe::PointwiseMode_t::MUL));
-
-        auto tanh_out = graph->pointwise(
-            mul_out,
-            before_tanh_activation,
-            fe::graph::Pointwise_attributes().set_name("dtanh").set_mode(fe::PointwiseMode_t::TANH_BWD));
-
-        auto out = graph->pointwise(
-            tanh_out,
-            soft_cap_scalar,
-            fe::graph::Pointwise_attributes().set_name("div_by_soft_cap_bprop").set_mode(fe::PointwiseMode_t::DIV));
-
-        return out;
-    }
-};
-
 std::shared_ptr<fe::graph::Graph>
 create_sdpa_backward_graph(int64_t const b,
                            int64_t const h_q,
@@ -154,16 +103,21 @@ create_sdpa_backward_graph(int64_t const b,
                                    .set_stride({h_q * s_q, s_q, 1, 1})
                                    .set_data_type(fe::DataType_t::FLOAT));
 
-    auto softcap = std::make_shared<Softcap>();
+    auto softcap = std::make_shared<fe::graph::attn::score_modifiers::Softcap>();
     // Set SDPA backward options
-    auto sdpa_options =
-        fe::graph::SDPA_backward_attributes()
-            .set_name("flash_attention_backward")
-            .set_attn_scale(attn_scale)
-            .set_attention_score_modifier(
-                std::bind(&Softcap::forward, softcap, std::placeholders::_1, std::placeholders::_2, soft_cap_scalar))
-            .set_attention_score_modifier_bprop(
-                std::bind(&Softcap::backward, softcap, std::placeholders::_1, std::placeholders::_2, soft_cap_scalar));
+    auto sdpa_options = fe::graph::SDPA_backward_attributes()
+                            .set_name("flash_attention_backward")
+                            .set_attn_scale(attn_scale)
+                            .set_score_mod(std::bind(&fe::graph::attn::score_modifiers::Softcap::forward,
+                                                     softcap,
+                                                     std::placeholders::_1,
+                                                     std::placeholders::_2,
+                                                     soft_cap_scalar))
+                            .set_score_mod_bprop(std::bind(&fe::graph::attn::score_modifiers::Softcap::backward,
+                                                           softcap,
+                                                           std::placeholders::_1,
+                                                           std::placeholders::_2,
+                                                           soft_cap_scalar));
 
     // Compute SDPA backward and get gradients dQ, dK, dV
     auto [dQ, dK, dV] = graph->sdpa_backward(Q, K, V, O, dO, Stats, sdpa_options);
