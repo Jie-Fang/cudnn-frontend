@@ -36,41 +36,6 @@ namespace fe = cudnn_frontend;
 #define STATS_UID 5
 #define BIAS_UID 6
 
-[[maybe_unused]] static std::shared_ptr<fe::graph::Tensor_attributes>
-causal_mask(std::shared_ptr<fe::graph::Graph> graph, std::shared_ptr<fe::graph::Tensor_attributes> attention_score) {
-    auto row_index = graph->pointwise(attention_score,
-                                      fe::graph::Pointwise_attributes()
-                                          .set_name("gen_row_idx_causal")
-                                          .set_mode(fe::PointwiseMode_t::GEN_INDEX)
-                                          .set_axis(2)
-                                          .set_compute_data_type(fe::DataType_t::INT32));
-    row_index->set_data_type(fe::DataType_t::INT32);
-
-    auto col_index = graph->pointwise(attention_score,
-                                      fe::graph::Pointwise_attributes()
-                                          .set_name("gen_col_idx_causal")
-                                          .set_mode(fe::PointwiseMode_t::GEN_INDEX)
-                                          .set_axis(3)
-                                          .set_compute_data_type(fe::DataType_t::INT32));
-    col_index->set_data_type(fe::DataType_t::INT32);
-
-    auto bool_mask = graph->pointwise(row_index,
-                                      col_index,
-                                      fe::graph::Pointwise_attributes()
-                                          .set_name("row_greater_than_col")
-                                          .set_mode(fe::PointwiseMode_t::CMP_GE)
-                                          .set_compute_data_type(fe::DataType_t::BOOLEAN));
-    bool_mask->set_data_type(fe::DataType_t::BOOLEAN);
-
-    auto after_causal_mask = graph->pointwise(
-        attention_score,
-        std::make_shared<fe::graph::Tensor_attributes>(std::numeric_limits<float>::lowest()),
-        bool_mask,
-        fe::graph::Pointwise_attributes().set_name("binary_select").set_mode(fe::PointwiseMode_t::BINARY_SELECT));
-
-    return after_causal_mask;
-}
-
 static std::shared_ptr<fe::graph::Tensor_attributes>
 soft_cap(std::shared_ptr<fe::graph::Graph> graph,
          std::shared_ptr<fe::graph::Tensor_attributes> attention_score,
@@ -92,23 +57,11 @@ soft_cap(std::shared_ptr<fe::graph::Graph> graph,
 }
 
 [[maybe_unused]] static std::shared_ptr<fe::graph::Tensor_attributes>
-bias(std::shared_ptr<fe::graph::Graph> graph,
-     std::shared_ptr<fe::graph::Tensor_attributes> attention_score,
-     std::shared_ptr<fe::graph::Tensor_attributes> bias) {
-    auto bias_out =
-        graph->pointwise(attention_score,
-                         bias,
-                         fe::graph::Pointwise_attributes().set_name("bias_add").set_mode(fe::PointwiseMode_t::ADD));
-
-    return bias_out;
-}
-
-[[maybe_unused]] static std::shared_ptr<fe::graph::Tensor_attributes>
 softcap_and_bias_mask(std::shared_ptr<fe::graph::Graph> graph,
                       std::shared_ptr<fe::graph::Tensor_attributes> attention_score,
                       std::shared_ptr<fe::graph::Tensor_attributes> bias_,
                       std::shared_ptr<fe::graph::Tensor_attributes> soft_cap_sclar_) {
-    auto bias_out     = bias(graph, attention_score, bias_);
+    auto bias_out     = fe::graph::attn::score_modifiers::bias(graph, attention_score, bias_);
     auto soft_cap_out = soft_cap(graph, bias_out, soft_cap_sclar_);
 
     return soft_cap_out;
@@ -167,12 +120,11 @@ create_sdpa_forward_graph(int64_t const b,
                             .set_is_inference(is_inference)
                             .set_attn_scale(attn_scale);
     if (has_attn_bias) {
-        sdpa_options.set_attention_score_modifier(
+        sdpa_options.set_score_mod(
             std::bind(softcap_and_bias_mask, std::placeholders::_1, std::placeholders::_2, bias, soft_cap_scalar));
 
     } else {
-        sdpa_options.set_attention_score_modifier(
-            std::bind(soft_cap, std::placeholders::_1, std::placeholders::_2, soft_cap_scalar));
+        sdpa_options.set_score_mod(std::bind(soft_cap, std::placeholders::_1, std::placeholders::_2, soft_cap_scalar));
     }
 
     auto [O, Stats] = graph->sdpa(Q, K, V, sdpa_options);
