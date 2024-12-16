@@ -47,7 +47,7 @@ analysis:check-CUDNN_FRONTEND_SKIP_JSON_LIB:
         - ci/build_wo_json.sh
 
 analysis:clang-format:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.3.1
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.5.1.17_12.6.2
     stage: analysis
     allow_failure: true
     script:
