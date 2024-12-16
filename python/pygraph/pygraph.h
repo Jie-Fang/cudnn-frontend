@@ -475,6 +475,9 @@ class PyGraph {
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     query_tensor_attributes_of_uid(int64_t const uid) const;
+
+    std::string
+    get_plan_name_at_index(int64_t index);
 };
 
 }  // namespace cudnn_frontend::python_bindings

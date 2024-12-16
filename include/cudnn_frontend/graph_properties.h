@@ -1103,6 +1103,7 @@ class Resample_attributes : public Attributes<Resample_attributes> {
                                    name,
                                    inputs,
                                    outputs,
+                                   is_inference,
                                    resample_mode,
                                    padding_mode,
                                    pre_padding,
@@ -1516,7 +1517,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     SDPA_attributes&
-    set_attention_score_modifier(AttentionScoreModifier_t fn) {
+    set_score_mod(AttentionScoreModifier_t fn) {
         attention_score_modifier = std::move(fn);
         return *this;
     }
@@ -1787,13 +1788,13 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     }
 
     SDPA_backward_attributes&
-    set_attention_score_modifier(AttentionScoreModifier_t fn) {
+    set_score_mod(AttentionScoreModifier_t fn) {
         attention_score_modifier = std::move(fn);
         return *this;
     }
 
     SDPA_backward_attributes&
-    set_attention_score_modifier_bprop(AttentionScoreModifier_t fn) {
+    set_score_mod_bprop(AttentionScoreModifier_t fn) {
         attention_score_modifier_bprop = std::move(fn);
         return *this;
     }
