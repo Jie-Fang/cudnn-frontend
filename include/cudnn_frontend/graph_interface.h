@@ -316,6 +316,7 @@ class Graph : public ICudnn, public INode {
                                                                      vec_data.data(),
                                                                      vec_data.size() * sizeof(float),
                                                                      cudaMemcpyHostToDevice));
+                uid_to_device_ptrs[uid] = static_cast<char *>(workspace) + offset;
             }
             // 1 means memset
             else if (operation_type == 1) {
@@ -441,6 +442,7 @@ class Graph : public ICudnn, public INode {
                                                                        vec_data.data(),
                                                                        vec_data.size() * sizeof(float),
                                                                        cudaMemcpyHostToDevice));
+                uid_to_device_ptrs[uid] = static_cast<char *>(workspace) + offset;
             }
             // 1 means memset
             else if (operation_type == 1) {
