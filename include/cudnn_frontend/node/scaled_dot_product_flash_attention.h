@@ -975,13 +975,6 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.6.0, group-query attention with raggged offset is not supported");
 
-        if (detail::get_backend_version() < 90600 && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value())) {
-            CUDNN_FE_LOG_LABEL_ENDL(
-                "WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but cuDNN version is below 9.6.0 "
-                "which does not support max_total_seq_len_q. The workspace memory size required to execute this graph "
-                "may be unexpectedly large");
-        }
-
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
@@ -993,6 +986,22 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
     error_t
     infer_properties_node() override final {
+        // clang-format off
+        if (detail::get_backend_version() < 90600 && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value())) {
+            CUDNN_FE_LOG_LABEL_ENDL("WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but cuDNN version is below 9.6.0 does not support max_total_seq_len_q. The workspace memory size required to execute this graph may be unexpectedly large");
+            attributes.max_total_seq_len_q.reset();
+            attributes.max_total_seq_len_kv.reset();
+        }
+
+        int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
+        int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
+        if (detail::get_backend_version() < 90900 && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value()) && (d_qk % 16 != 0 || d_v % 16 != 0)) {
+            CUDNN_FE_LOG_LABEL_ENDL("WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but cuDNN version is below 9.9.0 and d is not a multiple of 16 has a known functional issue. The workspace memory size required to execute this graph may be unexpectedly large");
+            attributes.max_total_seq_len_q.reset();
+            attributes.max_total_seq_len_kv.reset();
+        }
+        // clang-format on
+
         return {error_code_t::OK, ""};
     }
 
@@ -1176,8 +1185,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         softmax_sum->set_dim({b, h_q, s_q, 1});
         softmax_sum->set_data_type(DataType_t::FLOAT);
 
-        if (attributes.inputs[input_names::Stats]->get_ragged_offset() && attributes.max_total_seq_len_q.has_value() &&
-            detail::get_backend_version() >= 90600) {
+        if (attributes.inputs[input_names::Stats]->get_ragged_offset() && attributes.max_total_seq_len_q.has_value()) {
             // sized TH1 softmax_sum
             softmax_sum->set_stride(attributes.inputs[input_names::Stats]->get_stride());
             softmax_sum->set_ragged_offset(attributes.inputs[input_names::Stats]->get_ragged_offset());
@@ -1396,7 +1404,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             dV_fullhead->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
 
             if (attributes.outputs[output_names::dV]->get_ragged_offset() &&
-                attributes.max_total_seq_len_kv.has_value() && detail::get_backend_version() >= 90600) {
+                attributes.max_total_seq_len_kv.has_value()) {
                 // hack 1 - map dV strides to dV_fullhead strides
                 std::vector<int64_t> dV_fullhead_stride = attributes.outputs[output_names::dV]->get_stride();
                 dV_fullhead_stride[2]                   = dV_fullhead_stride[2] * (h_q / h_v);  // sequence stride
@@ -1505,7 +1513,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             dK_fullhead->set_data_type(attributes.inputs[input_names::Q]->get_data_type());
 
             if (attributes.outputs[output_names::dK]->get_ragged_offset() &&
-                attributes.max_total_seq_len_kv.has_value() && detail::get_backend_version() >= 90600) {
+                attributes.max_total_seq_len_kv.has_value()) {
                 // sized THD dK_full_heads
                 // hack 1 - map dK strides to dK_fullhead strides
                 std::vector<int64_t> dK_fullhead_stride = attributes.outputs[output_names::dK]->get_stride();
@@ -1550,7 +1558,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             dQ_accum->set_data_type(DataType_t::FLOAT);
 
             if (attributes.outputs[output_names::dQ]->get_ragged_offset() &&
-                attributes.max_total_seq_len_q.has_value() && detail::get_backend_version() >= 90600) {
+                attributes.max_total_seq_len_q.has_value()) {
                 // sized THD dQ_accum
                 dQ_accum->set_stride(attributes.outputs[output_names::dQ]->get_stride());
                 dQ_accum->set_ragged_offset(attributes.outputs[output_names::dQ]->get_ragged_offset());
