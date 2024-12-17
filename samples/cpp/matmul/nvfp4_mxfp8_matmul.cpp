@@ -104,6 +104,17 @@ TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("block scale requires Blackwell and up");
     }
+
+    // auto test_params = GENERATE(TestParams(1,
+    //                                        128,
+    //                                        128,
+    //                                        64,
+    //                                        16,
+    //                                        cudnn_frontend::DataType_t::FP4_E2M1,
+    //                                        cudnn_frontend::DataType_t::FP4_E2M1,
+    //                                        cudnn_frontend::DataType_t::FP8_E4M3,
+    //                                        cudnn_frontend::DataType_t::FLOAT));
+
     auto test_params = GENERATE(TestParams(1,
                                            128,
                                            128,
@@ -373,13 +384,15 @@ TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
                                             .set_name("block_descale_a")
                                             .set_data_type(datatype_block_scale)
                                             .set_dim({b, rounded_m, rounded_block_scale_k})
-                                            .set_stride({rounded_m * rounded_block_scale_k, rounded_block_scale_k, 1}));
+                                            .set_stride({rounded_m * rounded_block_scale_k, rounded_block_scale_k, 1})
+                                            .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto block_descale_b = graph.tensor(fe::graph::Tensor_attributes()
                                             .set_name("block_descale_b")
                                             .set_data_type(datatype_block_scale)
                                             .set_dim({b, rounded_block_scale_k, rounded_n})
-                                            .set_stride({rounded_n * rounded_block_scale_k, 1, rounded_block_scale_k}));
+                                            .set_stride({rounded_n * rounded_block_scale_k, 1, rounded_block_scale_k})
+                                            .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto nvfp4_dequantize_attr = fe::graph::Block_scale_dequantize_attributes().set_block_size(block_size);
 

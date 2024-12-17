@@ -342,6 +342,7 @@ enum class TensorReordering_t {
     NONE,
     INT8x32,
     F16x16,
+    F8_128x4,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(TensorReordering_t,
@@ -349,6 +350,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(TensorReordering_t,
                                  {TensorReordering_t::NONE, "NONE"},
                                  {TensorReordering_t::INT8x32, "INT8x32"},
                                  {TensorReordering_t::F16x16, "F16x16"},
+                                 {TensorReordering_t::F8_128x4, "F8_128x4"},
                              })
 
 enum class ResampleMode_t {
@@ -1759,6 +1761,11 @@ convert_to_cudnn_type(cudnn_frontend::TensorReordering_t const mode, cudnnBacken
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
+        case cudnn_frontend::TensorReordering_t::F8_128x4:
+#if CUDNN_VERSION >= 90700
+            cudnn_mode = CUDNN_TENSOR_REORDERING_F8_128x4;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#endif
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
@@ -1778,6 +1785,11 @@ convert_from_cudnn_type(cudnnBackendTensorReordering_t const cudnn_mode, cudnn_f
 #if CUDNN_VERSION >= 8800
         case CUDNN_TENSOR_REORDERING_F16x16:
             mode = cudnn_frontend::TensorReordering_t::F16x16;
+            break;
+#endif
+#if CUDNN_VERSION >= 90700
+        case CUDNN_TENSOR_REORDERING_F8_128x4:
+            mode = cudnn_frontend::TensorReordering_t::F8_128x4;
             break;
 #endif
 #ifndef NO_DEFAULT_IN_SWITCH
