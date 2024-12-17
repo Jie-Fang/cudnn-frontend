@@ -18,6 +18,7 @@ add_executable(
     convolution/int8_fprop.cpp
     convolution/dgrads.cpp
     convolution/wgrads.cpp
+    convolution/conv_dynamic_shape_benchmark.cpp
 
     matmul/matmuls.cpp
     matmul/fp8_matmul.cpp
