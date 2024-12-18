@@ -993,10 +993,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             attributes.max_total_seq_len_kv.reset();
         }
 
+        // TODO add version check once fixed
         int64_t d_qk = attributes.inputs.at(input_names::Q)->get_dim()[3];
         int64_t d_v  = attributes.inputs.at(input_names::V)->get_dim()[3];
-        if (detail::get_backend_version() < 90900 && (attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value()) && (d_qk % 16 != 0 || d_v % 16 != 0)) {
-            CUDNN_FE_LOG_LABEL_ENDL("WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but cuDNN version is below 9.9.0 and d is not a multiple of 16 has a known functional issue. The workspace memory size required to execute this graph may be unexpectedly large");
+        if ((attributes.max_total_seq_len_q.has_value() || attributes.max_total_seq_len_kv.has_value()) && (d_qk % 16 != 0 || d_v % 16 != 0)) {
+            CUDNN_FE_LOG_LABEL_ENDL("WARNING: sdpa_backward.attributes.max_total_seq_len has been set, but d is not a multiple of 16 has a known functional issue. The workspace memory size required to execute this graph may be unexpectedly large");
             attributes.max_total_seq_len_q.reset();
             attributes.max_total_seq_len_kv.reset();
         }
