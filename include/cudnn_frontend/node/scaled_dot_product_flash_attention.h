@@ -223,6 +223,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // validation TODO:
         //    - validate stats has valid dims
+        cudaDeviceProp prop;
+        int device;
+        CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
+        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.attention_score_modifier != nullptr) &&
                     (attributes.alibi_mask || attributes.causal_mask || attributes.padding_mask || attributes.causal_mask_bottom_right ||
@@ -348,6 +352,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, paged caches are not supported");
 
+        // TODO add version check once fixed
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_rng,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "dropout RNG dump is not supported for Blackwell architecture");
 
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
@@ -845,6 +853,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         bool const is_dropout_custom = (dropout_mask != attributes.inputs.end()) && (dropout_mask->second != nullptr);
         bool const is_dropout        = attributes.dropout_probability.has_value() || is_dropout_custom;
 
+        auto const& rng_tensor = attributes.outputs.find(output_names::RNG_DUMP);
+        bool const is_rng   = (rng_tensor != attributes.outputs.end() && rng_tensor->second != nullptr);
+
         // validation TODO:
         //    - validate stats has valid dims
         //    - validate Q and dQ have the same dims
@@ -974,6 +985,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90600 && is_ragged && ((h_q != h_k) || (h_q != h_v)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.6.0, group-query attention with raggged offset is not supported");
+
+        // TODO add version check once fixed
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_rng,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Dropout RNG dump is not supported for SM Major version 10");
 
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
