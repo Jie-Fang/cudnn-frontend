@@ -26,7 +26,8 @@ before_script:
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - mkdir -p downloads
-        - wget -q --no-clobber --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O downloads/cudnn-${LATEST_VER}.tar.gz
+        - ls -1 downloads
+        - if [ ! -f downloads/cudnn-${LATEST_VER}.tar.gz ]; then wget --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O downloads/cudnn-${LATEST_VER}.tar.gz; fi
         - tar xvf downloads/cudnn-${LATEST_VER}.tar.gz --directory /
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -42,7 +43,8 @@ before_script:
         - LATEST_VER=`curl -S $BASE_URL 2> /dev/null | grep "$LATEST_DATE_TIME" | awk -F'["/]' '{print $2}'`
         - echo ${LATEST_DATE_TIME} ${LATEST_VER} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz
         - mkdir -p downloads
-        - wget -q --no-clobber --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O downloads/cudnn-${LATEST_VER}.tar.gz
+        - ls -1 downloads
+        - if [ ! -f downloads/cudnn-${LATEST_VER}.tar.gz ]; then wget --password ${JFROG_API_KEY} ${BASE_URL}${LATEST_VER}/debug_cudnn-linux-x86_64-${LATEST_VER}.tar.gz -O downloads/cudnn-${LATEST_VER}.tar.gz; fi
         - tar xvf downloads/cudnn-${LATEST_VER}.tar.gz --directory /
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
