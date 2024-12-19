@@ -74,8 +74,8 @@ create_conv_relu_forward_graph(conv_shape_params conv_shape, const std::shared_p
 TEST_CASE("Benchmark conv graph API runtimes", "[conv][graph][benchmark]") {
     // SKIP("Very long test turned off by default.");
 
-    if (cudnnGetVersion() < 8903) {
-        SKIP("Test requires cudnn 8.9.3 or above");
+    if (cudnnGetVersion() < 90500) {
+        SKIP("Test requires cudnn 9.5.0 or above");
         return;
     }
 
