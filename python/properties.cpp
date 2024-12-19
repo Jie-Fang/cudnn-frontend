@@ -173,6 +173,10 @@ init_properties(py::module_& m) {
         .value("REQUIRES_FILTER_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER)
         .value("REQUIRES_BIAS_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER)
         .value("SUPPORTS_CUDA_GRAPH_NATIVE_API", cudnn_frontend::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API);
+
+    py::enum_<cudnn_frontend::DiagonalAlignment_t>(m, "diagonal_alignment")
+        .value("TOP_LEFT", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT)
+        .value("BOTTOM_RIGHT", cudnn_frontend::DiagonalAlignment_t::BOTTOM_RIGHT);
 }
 
 }  // namespace python_bindings

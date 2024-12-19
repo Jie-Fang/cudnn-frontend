@@ -903,6 +903,13 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
     return os;
 }
 
+enum class DiagonalAlignment_t { TOP_LEFT, BOTTOM_RIGHT };
+NLOHMANN_JSON_SERIALIZE_ENUM(DiagonalAlignment_t,
+                             {
+                                 {DiagonalAlignment_t::TOP_LEFT, "TOP_LEFT"},
+                                 {DiagonalAlignment_t::BOTTOM_RIGHT, "BOTTOM_RIGHT"},
+                             })
+
 namespace detail {
 
 inline size_t

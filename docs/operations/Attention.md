@@ -27,8 +27,11 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 - Bias mask: Applies an additive bias mask to attention scores. Users must pass a bias tensor as specified in the tensors section below. The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
 - Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 - Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. Users must pass a per-batch sequence length as specified in the tensors section below.
-- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity.
-- Sliding window mask: Allows computation of attention scores from \(pos-sliding_window_length, pos\] for every position `pos`. Fills rest of the entries in the matrix with negative infinity.
+- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity. The diagonal of the matrix starts at the top left. As explained below, this can be set by calling `set_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT)`, or with the deprecated option `set_causal_mask`.
+- Bottom right causal mask: Similar as causal mask, but the diagonal starts from the bottom right. In addition, if variable sequence lengths are used, the diagonal is specified on a "per-batch" basis, depending on the sequence length of the given batch. This can be set by calling `set_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_RIGHT)`, or with the deprecated option `set_causal_mask_bottom_right`.
+- Sliding window length (deprecated)/Left bound (new): Specifies that attention scores up to and including column `row_idx-left_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
+- Right bound: Specifies that attention scores beyond column `row_idx+right_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
+- Diagonal Alignment: Specifies that when using left and/or right bounds, the diagonal starts at the top left ("TOP_LEFT") or at the bottom right aligned with the actual sequence length ("BOTTOM_RIGHT").
 - Dropout: Randomly zeros some of the attention weights after the softmax as a form of regularization.
   Users can configure dropout in two ways:
   - To use the more performant Philox RNG dropout implementation, users must provide:
@@ -144,13 +147,31 @@ set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
 SDPA_attributes&
 set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 
+// calls set_left_bound(value)
+// Deprecated
+SDPA_attributes&
+set_sliding_window_length(int const value);
+
+SDPA_attributes& set_left_bound(int const value);
+
+// Use in combination with set_diagonal_alignment to set (bottom right) causal masking
+SDPA_attributes& set_right_bound(int const value);
+
+SDPA_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
+
+// Sets the diagonal position to TOP_LEFT
+// calls set_right_bound(0) if no right_bound was specified
+// Deprecated
 SDPA_attributes&
 set_causal_mask(bool const value);
 
-SDPA_attributes &
-set_sliding_window_length(int const value);
+// Sets the diagonal position to BOTTOM_RIGHT
+// and calls set_right_bound(0) if no right_bound was specified
+// Deprecated
+SDPA_attributes&
+set_causal_mask_bottom_right(bool const value);
 
-SDPA_attributes &
+SDPA_attributes&
 set_dropout(float const probability,
             std::shared_ptr<Tensor_attributes> seed,
             std::shared_ptr<Tensor_attributes> offset);
@@ -193,15 +214,21 @@ Args:
     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
-    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
-    rng_dump (Optional[cudnn_tensor]): Debug tensor used to output the Philox RNG dropout mask
+    rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
     paged_attention_k_table (Optional[cudnn_tensor]): The page table to look up offsets into 'k'
     paged_attention_v_table (Optional[cudnn_tensor]): The page table to look up offsets into 'v'
     paged_attention_max_seq_len_kv (Optional[integer]): The maximum sequence length for k/v caches when paged attention is active.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
+Preferred masking Args:
+    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
+    left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+    right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
+    sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
+    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
 
 Returns:
     o (cudnn_tensor): The output data.
@@ -284,11 +311,29 @@ set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
 SDPA_backward_attributes&
 set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 
+// calls set_left_bound(value)
+// Deprecated
+SDPA_backward_attributes&
+set_sliding_window_length(int const value);
+
+SDPA_backward_attributes& set_left_bound(int const value);
+
+// Use in combination with set_diagonal_alignment to set (bottom right) causal masking
+SDPA_backward_attributes& set_right_bound(int const value);
+
+SDPA_backward_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
+
+// Sets the diagonal position to TOP_LEFT
+// calls set_right_bound(0) if no right_bound was specified
+// Deprecated
 SDPA_backward_attributes&
 set_causal_mask(bool const value);
 
-SDPA_backward_attributes &
-set_sliding_window_length(int const value);
+// Sets the diagonal position to BOTTOM_RIGHT
+// and calls set_right_bound(0) if no right_bound was specified
+// Deprecated
+SDPA_backward_attributes&
+set_causal_mask_bottom_right(bool const value);
 
 SDPA_backward_attributes&
 set_dropout(float const probability,
@@ -326,20 +371,24 @@ Args:
     stats (cudnn_tensor): The softmax statistics from the forward pass.
     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
-    dBias (Optional[cudnn_tensor]): The dBias output for attention. Default is None.
+    dBias (Optional[cudnn_tensor]): The dBias data for attention. Default is None.
     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
-    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
-    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
-    sliding_window_length (Optional[int]): The length of sliding window. Default is None.
-    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)],
-                            Tuple[mask: cudnn_tensor, scale: cudnn_tensor, scale_inv: cudnn_tensor]]]):
-        Whether to do dropout. Default is None.
-    rng_dump (Optional[cudnn_tensor]): Debug tensor used to output the Philox RNG dropout mask
+    dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
+    rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
+    use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
+Preferred masking Args:
+    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
+    left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+    right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
+    sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
+    use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
+    use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
 
 Returns:
     dQ (cudnn_tensor): The query gradient data.
