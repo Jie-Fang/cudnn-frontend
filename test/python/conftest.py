@@ -46,3 +46,13 @@ def pytest_addoption(parser):
         default=None,
         help="[test_mhas.py] block size for paged attention",
     )
+    parser.addoption(
+        "--mha_left_bound",
+        default=None,
+        help="[test_mhas.py] size of the window to the left of the diagonal",
+    )
+    parser.addoption(
+        "--mha_right_bound",
+        default=None,
+        help="[test_mhas.py] size of the window to the right of the diagonal",
+    )

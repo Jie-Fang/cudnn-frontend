@@ -22,6 +22,7 @@ from ._compiled_module import (
     pygraph,
     tensor,
     cudnnGraphNotSupportedError,
+    diagonal_alignment,
 )
 
 from .datatypes import _library_type, _is_torch_tensor
