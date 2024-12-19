@@ -24,7 +24,9 @@
 #include "node/sdpa_fp8.h"
 #include "node/sdpa_fp8_bwd.h"
 
+#include "backend/backend_descriptor.h"
 #include "plans.h"
+#include "knobs.h"
 #include "graph_helpers.h"
 #include "backend/kernel_cache.h"
 
@@ -1023,8 +1025,17 @@ class Graph : public ICudnn, public INode {
     error_t
     create_execution_plans(std::vector<HeurMode_t> const &mode);
 
+    error_t
+    create_execution_plan(int64_t const engine_id, std::unordered_map<KnobType_t, int64_t> const &knobs);
+
     int64_t
     get_execution_plan_count() const;
+
+    inline error_t
+    get_engine_count(int64_t &count);
+
+    inline error_t
+    get_knobs_for_engine(int64_t const engine, std::vector<Knob> &);
 
     error_t
     check_support(cudnnHandle_t h) {
@@ -1371,6 +1382,25 @@ Graph::get_execution_plan_count() const {
 }
 
 inline error_t
+Graph::get_engine_count(int64_t &count) {
+    CHECK_CUDNN_ERROR(detail::get_attribute(operation_graph->get_raw_desc(),
+                                            CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT,
+                                            CUDNN_TYPE_INT64,
+                                            1,
+                                            nullptr,
+                                            &count));
+
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+Graph::get_knobs_for_engine(int64_t const engine, std::vector<Knob> &knobs) {
+    CHECK_CUDNN_FRONTEND_ERROR(detail::query_knobs(engine, operation_graph->get_raw_desc(), knobs));
+
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
 Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     EngineConfigList op_graph_to_configs;
     CHECK_CUDNN_FRONTEND_ERROR(
@@ -1379,10 +1409,32 @@ Graph::create_execution_plans(std::vector<HeurMode_t> const &mode) {
     CUDNN_FE_LOG_LABEL_ENDL("INFO: Extracting engine configs.");
 
     plans.set_tag(operation_graph->getTag());
-    plans.set_engine_configs(op_graph_to_configs);
+    plans.enqueue_engine_configs(op_graph_to_configs);
     plans.set_kernel_cache(kernel_cache);
 
     CUDNN_FE_LOG_LABEL_ENDL("INFO: Querying engine config properties.");
+    CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
+
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+Graph::create_execution_plan(int64_t const engine_id, std::unordered_map<KnobType_t, int64_t> const &user_knobs) {
+    // first create the engine
+    // this just uses the global engine id and operation graph
+    detail::backend_descriptor engine(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
+    RETURN_CUDNN_FRONTEND_ERROR_IF(engine.get_status() != CUDNN_STATUS_SUCCESS,
+                                   error_code_t::CUDNN_BACKEND_API_FAILED,
+                                   "Failed to create engine's backend descriptor.");
+    CHECK_CUDNN_FRONTEND_ERROR(detail::create_engine(engine, engine_id, operation_graph->get_raw_desc()));
+
+    // Create an array of knob choices
+    std::vector<detail::backend_descriptor> knob_choices;
+    CHECK_CUDNN_FRONTEND_ERROR(detail::set_knob_choices(user_knobs, knob_choices));
+
+    auto engine_config = make_shared_backend_pointer((cudnnBackendDescriptorType_t)CUDNN_BACKEND_ENGINECFG_DESCRIPTOR);
+    CHECK_CUDNN_FRONTEND_ERROR(detail::create_engine_config(engine_config, engine, knob_choices));
+    plans.enqueue_engine_configs({engine_config});
     CHECK_CUDNN_FRONTEND_ERROR(plans.query_properties());
 
     return {error_code_t::OK, ""};

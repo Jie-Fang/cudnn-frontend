@@ -234,8 +234,8 @@ class Execution_plan_list {
         operation_tag = tag;
     }
     void
-    set_engine_configs(EngineConfigList list) {
-        engine_configs = list;
+    enqueue_engine_configs(EngineConfigList list) {
+        std::move(list.begin(), list.end(), back_inserter(engine_configs));
     }
     void
     set_kernel_cache(std::shared_ptr<KernelCache> kernel_cache_) {
