@@ -1799,6 +1799,8 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
                                    left_bound,
                                    right_bound,
                                    diagonal_alignment,
+                                   max_total_seq_len_q,
+                                   max_total_seq_len_kv,
                                    is_deterministic_algorithm)
 
     SDPA_backward_attributes&
