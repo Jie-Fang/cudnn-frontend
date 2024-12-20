@@ -119,6 +119,10 @@ Eg for rmsnorm training, inference and back propagation
 
 Shows different fusions in batch norm fprop and bprop. And split batch norm fusions.
 
+- [Block scale quantize](cpp/norm/norm_block_scale.cpp)
+
+Showcases normalization with block scale quantize epilogue fusion.
+
 ### Miscellaneous examples
 
 ##### [Misc](cpp/misc/) Miscellaneous samples

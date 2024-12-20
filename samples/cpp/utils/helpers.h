@@ -32,8 +32,10 @@
 
 inline size_t
 get_compute_capability() {
+    int current_device;
+    CUDA_CHECK(cudaGetDevice(&current_device));
     struct cudaDeviceProp prop;
-    CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, current_device));
     return prop.major * 10 + prop.minor;
 }
 
@@ -52,7 +54,13 @@ is_ada_arch() {
 inline bool
 is_hopper_arch() {
     auto cc = get_compute_capability();
-    return (90 <= cc && cc < 100);
+    return (90 <= cc) && (cc < 100);
+}
+
+inline bool
+is_blackwell_arch() {
+    auto cc = get_compute_capability();
+    return (100 <= cc);
 }
 
 inline bool
@@ -67,6 +75,9 @@ inline bool
 check_device_arch_newer_than(std::string const& arch) {
     size_t arch_major = 6;
     size_t arch_minor = 0;
+    if (arch == "blackwell") {
+        arch_major = 10;
+    }
     if (arch == "hopper") {
         arch_major = 9;
     }

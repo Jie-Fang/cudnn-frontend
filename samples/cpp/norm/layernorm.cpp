@@ -210,7 +210,7 @@ TEST_CASE("LayerNorm Training", "[layernorm][graph]") {
     SKIP("LayerNorm is not supported in cudnn versions prior to 8.9.5");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("LayerNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));
@@ -290,7 +290,7 @@ TEST_CASE("LayerNorm Inference", "[layernorm][graph]") {
     SKIP("LayerNorm is not supported in cudnn versions prior to 8.9.5");
 #endif
     if (check_device_arch_newer_than("ampere") == false) {
-        SKIP("ConvBNFprop requires Ampere and up");
+        SKIP("LayerNorm requires Ampere and up");
     }
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));
