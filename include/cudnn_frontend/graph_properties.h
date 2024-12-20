@@ -1749,6 +1749,8 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
                                    dropout_probability,
                                    attn_scale_value,
                                    sliding_window_length,
+                                   max_total_seq_len_q,
+                                   max_total_seq_len_kv,
                                    is_deterministic_algorithm)
 
     SDPA_backward_attributes&
