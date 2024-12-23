@@ -29,6 +29,12 @@ TEST_CASE("Matmul custom plan", "[matmul][graph][autotuning]") {
     if (is_arch_supported_by_cudnn() == false) {
         SKIP("Architecture is not supported by currend cudnn version");
     }
+
+    if (cudnnGetVersion() < 90300) {
+        SKIP("Test requires cudnn 9.3.0 or above");
+        return;
+    }
+
     namespace fe = cudnn_frontend;
 
     // matmul problem size
