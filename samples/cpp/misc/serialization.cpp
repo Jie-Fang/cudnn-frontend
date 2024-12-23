@@ -207,6 +207,9 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
     // Mode of sdpa operation
     bool is_inference = true;
 
+    bool use_causal_mask = true;
+    bool use_alibi_mask  = true;
+
     // attention scale
     bool is_attn_scale   = true;
     float attn_scale_cpu = 0.5f;
@@ -214,6 +217,12 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
     // Dropout configutation
     bool use_dropout_with_rng = true;
     float dropout_probability = 0.1f;
+
+    // switch off certain features on blackwell
+    if (is_blackwell_arch()) {
+        use_dropout_with_rng = false;
+        use_alibi_mask       = false;
+    }
 
     enum UIDs { uid_Q, uid_K, uid_V, uid_ATTN_SCALE, uid_SEED, uid_OFFSET, uid_O, uid_STATS };
 
@@ -225,6 +234,8 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
            int64_t d,
            bool is_attn_scale,
            bool is_inference,
+           bool use_causal_mask,
+           bool use_alibi_mask,
            bool use_dropout_with_rng,
            float dropout_probability) -> std::shared_ptr<cudnn_frontend::graph::Graph> {
         namespace fe = cudnn_frontend;
@@ -262,8 +273,8 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         auto sdpa_options = fe::graph::SDPA_attributes().set_name("flash_attention").set_is_inference(is_inference);
 
-        sdpa_options.set_causal_mask(true);
-        sdpa_options.set_alibi_mask(true);
+        sdpa_options.set_causal_mask(use_causal_mask);
+        sdpa_options.set_alibi_mask(use_alibi_mask);
 
         if (is_attn_scale) {
             sdpa_options.set_attn_scale(attn_scale);
@@ -312,14 +323,25 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                                            int64_t d,
                                                            bool is_attn_scale,
                                                            bool is_inference,
+                                                           bool use_causal_mask,
+                                                           bool use_alibi_mask,
                                                            bool use_dropout_with_rng,
                                                            float dropout_probability) -> bool {
         cudnnHandle_t handle;
 
         CUDNN_CHECK(cudnnCreate(&handle));
 
-        auto graph = build_and_validate_graph_helper(
-            b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability);
+        auto graph = build_and_validate_graph_helper(b,
+                                                     h,
+                                                     s_q,
+                                                     s_kv,
+                                                     d,
+                                                     is_attn_scale,
+                                                     is_inference,
+                                                     use_causal_mask,
+                                                     use_alibi_mask,
+                                                     use_dropout_with_rng,
+                                                     dropout_probability);
 
         REQUIRE(graph->build_operation_graph(handle).is_good());
 
@@ -339,6 +361,8 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                                        int64_t d,
                                                        bool is_attn_scale,
                                                        bool is_inference,
+                                                       bool use_causal_mask,
+                                                       bool use_alibi_mask,
                                                        bool use_dropout_with_rng,
                                                        float dropout_probability) -> std::vector<uint8_t> {
         cudnnHandle_t handle;
@@ -347,8 +371,17 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         CUDNN_CHECK(cudnnCreate(&handle));
 
-        auto graph = build_and_validate_graph_helper(
-            b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability);
+        auto graph = build_and_validate_graph_helper(b,
+                                                     h,
+                                                     s_q,
+                                                     s_kv,
+                                                     d,
+                                                     is_attn_scale,
+                                                     is_inference,
+                                                     use_causal_mask,
+                                                     use_alibi_mask,
+                                                     use_dropout_with_rng,
+                                                     dropout_probability);
 
         REQUIRE(graph->build_operation_graph(handle).is_good());
 
@@ -377,11 +410,30 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
     };
 
     // Check support
-    REQUIRE(check_support(b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability));
+    REQUIRE(check_support(b,
+                          h,
+                          s_q,
+                          s_kv,
+                          d,
+                          is_attn_scale,
+                          is_inference,
+                          use_causal_mask,
+                          use_alibi_mask,
+                          use_dropout_with_rng,
+                          dropout_probability));
 
     // Serialize the graph.
-    auto serialize_data =
-        serialize(b, h, s_q, s_kv, d, is_attn_scale, is_inference, use_dropout_with_rng, dropout_probability);
+    auto serialize_data = serialize(b,
+                                    h,
+                                    s_q,
+                                    s_kv,
+                                    d,
+                                    is_attn_scale,
+                                    is_inference,
+                                    use_causal_mask,
+                                    use_alibi_mask,
+                                    use_dropout_with_rng,
+                                    dropout_probability);
 
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));

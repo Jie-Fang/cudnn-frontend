@@ -448,6 +448,28 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SDPA_fp8_backward_attributes::output_names,
                                  {SDPA_fp8_backward_attributes::output_names::Amax_dP, "Amax_d"},
                              })
 
+NLOHMANN_JSON_SERIALIZE_ENUM(Block_scale_quantize_attributes::input_names,
+                             {
+                                 {Block_scale_quantize_attributes::input_names::X, "X"},
+                             })
+
+NLOHMANN_JSON_SERIALIZE_ENUM(Block_scale_quantize_attributes::output_names,
+                             {
+                                 {Block_scale_quantize_attributes::output_names::Y, "Y"},
+                                 {Block_scale_quantize_attributes::output_names::scale, "scale"},
+                             })
+
+NLOHMANN_JSON_SERIALIZE_ENUM(Block_scale_dequantize_attributes::input_names,
+                             {
+                                 {Block_scale_dequantize_attributes::input_names::X, "X"},
+                                 {Block_scale_dequantize_attributes::input_names::scale, "scale"},
+                             })
+
+NLOHMANN_JSON_SERIALIZE_ENUM(Block_scale_dequantize_attributes::output_names,
+                             {
+                                 {Block_scale_dequantize_attributes::output_names::Y, "Y"},
+                             })
+
 inline void
 to_json(nlohmann::json& j, const Tensor_attributes& ta) {
     j = nlohmann::json{{"name", ta.name},

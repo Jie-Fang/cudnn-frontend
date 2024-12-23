@@ -12,6 +12,8 @@ add_executable(
     sdpa/fp16_fwd_with_paged_caches.cpp
     sdpa/fp8_fwd.cpp
     sdpa/fp8_bwd.cpp
+    sdpa/fp8_fwd_bottom_right_causal_mask.cpp
+    sdpa/fp8_bwd_bottom_right_causal_mask.cpp
 
     convolution/fprop.cpp
     convolution/fp8_fprop.cpp
@@ -24,10 +26,12 @@ add_executable(
     matmul/fp8_matmul.cpp
     matmul/int8_matmul.cpp
     matmul/mixed_matmul.cpp
+    matmul/nvfp4_mxfp8_matmul.cpp
 
     norm/batchnorm.cpp
     norm/layernorm.cpp
     norm/rmsnorm.cpp
+    norm/norm_block_scale.cpp
 
     misc/serialization.cpp
     misc/autotuning.cpp

@@ -145,6 +145,11 @@ TEST_CASE("Toy sdpa forward with dropout", "[graph][sdpa][flash][forward]") {
         return;
     }
 
+    // switch off certain features on blackwell
+    if (is_blackwell_arch()) {
+        SKIP("Providing a custom dropout is not supported on blackwell");
+    }
+
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));
 
