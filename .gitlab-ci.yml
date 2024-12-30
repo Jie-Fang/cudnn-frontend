@@ -6,6 +6,20 @@ before_script:
     - echo "CUDA_VERSION=$CUDA_VERSION"
     - echo "CUDNN_VERSION=$CUDNN_VERSION"
 
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: always
+    - when: always
+
+.default_job_template:
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "web"
+
+.manual_job_template:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+
 .cudnn_dev_image:template:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
 
@@ -48,6 +62,63 @@ before_script:
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
 
+.build:template:
+    stage: build
+    script:
+        - ci/build.sh
+    # keep the build directory so that later jobs can use it
+    artifacts:
+        paths:
+            - build/
+
+.cpp_samples:template:
+    stage: cpp_samples
+    script:
+        - ci/run_cpp_samples.sh
+    # Upload test report to gitlab
+    artifacts:
+        when: always
+        reports:
+            junit: result-junit.xml
+        expire_in: 1 week
+
+.python_tests:template:
+    stage: python_tests
+    script:
+        - ci/run_python_tests.sh
+    # Upload test report to gitlab
+    artifacts:
+        when: always
+        reports:
+            junit: result-junit.xml
+        expire_in: 1 week
+
+.pycudnntest:template:
+    stage: pycudnnTest
+    script:
+        - ci/run_pycudnntest.sh
+
+.cpp_tests:template:
+    stage: cpp_tests
+    script:
+        - ci/run_cpp_tests.sh
+
+.python_samples:template:
+    stage: python_samples
+    script:
+        - pip install -v .
+        - ci/run_python_samples.sh
+
+.L4_graph_runner:template:
+    stage: L4_graph_runner
+    script:
+        - ci/run_L4_graph_runner.sh
+
+.L4_graph_runner_large:template:
+    stage: L4_graph_runner
+    script:
+        - ci/run_L4_streams.sh
+
 include:
 #   - local: ci/job-template.yml
 #     inputs:
@@ -55,6 +126,9 @@ include:
 #         cudnn_version: "8.5.0.96"
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
+
+#   - local: 'ci/manual-pipeline.yml'
+
   - 'ci/build_test_wheels.yml'
   - 'ci/analysis.yml'
   - local: ci/job-template.yml
@@ -144,61 +218,9 @@ stages:
     - L4_graph_runner
     - thunder
     - deploy
-        
-
-.build:template:
-    script:
-        - ci/build.sh
-    # keep the build directory so that later jobs can use it
-    artifacts:
-        paths:
-            - build/
-
-.cpp_samples:template:
-    stage: cpp_samples
-    script:
-        - ci/run_cpp_samples.sh
-    # Upload test report to gitlab
-    artifacts:
-        when: always
-        reports:
-            junit: build/result-junit.xml
-        expire_in: 1 week
-
-.python_tests:template:
-    stage: python_tests
-    script:
-        - ci/run_python_tests.sh
-
-.pycudnntest:template:
-    stage: pycudnnTest
-    script:
-        - ci/run_pycudnntest.sh
-
-.cpp_tests:template:
-    stage: cpp_tests
-    script:
-        - ci/run_cpp_tests.sh
-
-.python_samples:template:
-    stage: python_samples
-    script:
-        - pip install -v .
-        - ci/run_python_samples.sh
-
-.L4_graph_runner:template:
-    stage: L4_graph_runner
-    script:
-        - ci/run_L4_graph_runner.sh
-
-.L4_graph_runner_large:template:
-    stage: L4_graph_runner
-    script:
-        - ci/run_L4_streams.sh
 
 build:cudnn_dev_latest:
     needs: []
-    stage: build
     extends:
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
@@ -257,7 +279,6 @@ L4_graph_runner_large:cudnn_dev_latest:
 
 build:cudnn_rel_latest:
     needs: []
-    stage: build
     extends:
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
