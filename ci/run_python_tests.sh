@@ -9,9 +9,9 @@ function display_header() {
 
 function run_python_tests() {
     export PYTHONPATH=build
-    export LD_LIBRARY_PATH=/debug_cudnn/lib64
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64
     
-    pytest test/python -n 4 --tb=short
+    pytest test/python -n 4 --tb=short --junit-xml=result-junit.xml
 }
 
 display_header

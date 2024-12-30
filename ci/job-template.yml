@@ -7,34 +7,22 @@ spec:
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
   stage: build
   needs: []
-  script:
-    - mkdir build
-    - cd build
-    - cmake -DCUDNN_FRONTEND_BUILD_PYTHON_BINDINGS=ON ../
-    - cmake --build . -j16
-  artifacts:
-    paths:
-      - build/
+  extends:
+    - .build:template
 
 "cpp_samples:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  stage: cpp_samples
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  script:
-    - ci/run_cpp_samples.sh
-  artifacts:
-    when: always
-    reports:
-      junit: result-junit.xml
+  extends:
+    - .cpp_samples:template
 
-"pytest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+"python_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  stage: python_tests
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
   parallel:
     matrix:
@@ -44,30 +32,26 @@ spec:
   script:
     - export PYTHONPATH=build
     - pytest test/python -n 4 --tb=short --junit-xml=result-junit.xml
-  artifacts:
-    when: always
-    reports:
-      junit: result-junit.xml
+  extends:
+    - .python_tests:template
 
 "cpp_tests:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  stage: cpp_tests
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  script:
-    - ci/run_cpp_tests.sh
   artifacts:
     when: always
     reports:
       junit: result-junit.xml
+  extends:
+    - .cpp_tests:template
 
 "pycudnntest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  stage: pycudnnTest
   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
   parallel:
     matrix:
