@@ -334,6 +334,28 @@ PyGraph::create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const& m
 }
 
 void
+PyGraph::create_execution_plan(int64_t const engine_id, std::unordered_map<KnobType_t, int64_t> const& knobs) {
+    auto status = graph.create_execution_plan(engine_id, knobs);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+}
+
+int64_t
+PyGraph::get_engine_count() {
+    int64_t engine_count = 0;
+    auto status          = graph.get_engine_count(engine_count);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+    return engine_count;
+}
+
+std::vector<Knob>
+PyGraph::get_knobs_for_engine(int64_t const engine_id) {
+    std::vector<Knob> knobs;
+    auto status = graph.get_knobs_for_engine(engine_id, knobs);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+    return knobs;
+}
+
+void
 PyGraph::build_plans(BuildPlanPolicy_t const policy) {
     // TODO: Add multithreaded support in python
     auto status = graph.build_plans(handle, policy, false);
@@ -777,6 +799,22 @@ init_pygraph_submodule(py::module_& m) {
         .def("key", &PyGraph::key)
         .def("build_operation_graph", &PyGraph::build_operation_graph)
         .def("create_execution_plans", &PyGraph::create_execution_plans)
+        .def("create_execution_plan",
+             &PyGraph::create_execution_plan,
+             R"pbdoc(
+                Gets the knob configurations available for the given engine.
+                Args:
+                    engine_id (int): The ID of the engine to create the execution plan on.
+                    knobs (dict[Knob, int]): The map of knobs to knob values.
+            )pbdoc")
+        .def("get_engine_count", &PyGraph::get_engine_count)
+        .def("get_knobs_for_engine",
+             &PyGraph::get_knobs_for_engine,
+             R"pbdoc(
+                Gets the knob configurations available for the given engine.
+                Args:
+                    engine_id (int): The ID of the engine to query knob configurations for.
+            )pbdoc")
         .def("check_support", &PyGraph::check_support)
         .def("build_plans",
              &PyGraph::build_plans,
