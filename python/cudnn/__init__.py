@@ -11,6 +11,7 @@ from ._compiled_module import (
     norm_forward_phase,
     reduction_mode,
     behavior_note,
+    knob_type,
     create_handle,
     create_kernel_cache,
     get_stream,
@@ -21,6 +22,7 @@ from ._compiled_module import (
     heur_mode,
     pygraph,
     tensor,
+    knob,
     cudnnGraphNotSupportedError,
     diagonal_alignment,
 )

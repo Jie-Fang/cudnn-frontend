@@ -394,6 +394,15 @@ class PyGraph {
     create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const&);
 
     void
+    create_execution_plan(int64_t const engine_id, std::unordered_map<KnobType_t, int64_t> const& knobs);
+
+    int64_t
+    get_engine_count();
+
+    std::vector<Knob>
+    get_knobs_for_engine(int64_t const engine_id);
+
+    void
     build_plans(BuildPlanPolicy_t const);
 
     void
