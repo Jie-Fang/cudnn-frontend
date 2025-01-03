@@ -35,7 +35,7 @@ deploy:test_bdist_wheels_8.9.7_3.10:
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python -n 4 --tb=short
+        - pytest test/python -n 4
 
 deploy:test_bdist_wheels_ga_cudnn_3.10:
     parallel:
@@ -60,4 +60,4 @@ deploy:test_bdist_wheels_ga_cudnn_3.10:
         - pip install -v --find-links many_linux_wheels/ nvidia_cudnn_frontend
         - pip install -r /tmp/requirements.txt
         - pip uninstall -y nvidia-cudnn-cu12 # Only removing it because the test is meant for 8907
-        - pytest test/python -n 4 --tb=short
+        - pytest test/python -n 4
