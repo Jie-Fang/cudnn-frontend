@@ -1,5 +1,6 @@
 analysis:cudnn_clang_disable_exception:
     extends:
+        - .default_job_template
         - .cudnn_ga_image:template
     needs: []
     stage: analysis
@@ -18,6 +19,7 @@ analysis:cudnn_v9_no_half_conversion:
         - cmake -DCMAKE_CXX_FLAGS="-D__CUDA_NO_HALF_CONVERSIONS__" ../
         - cmake --build . -j16 --verbose
     extends:
+        - .default_job_template
         - .cudnn_ga_image:template
     
 analysis:cudnn_clang:
@@ -30,6 +32,7 @@ analysis:cudnn_clang:
         - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake ../
         - cmake --build . -j16 --verbose
     extends:
+        - .default_job_template
         - .cudnn_ga_image:template
 
 analysis:check-relative-includes:
@@ -39,12 +42,16 @@ analysis:check-relative-includes:
         - echo "#include \"$CI_PROJECT_DIR/include/cudnn_frontend.h\"" > test_build.cpp
         - echo 'int main() { return 0; }' >> test_build.cpp
         - g++ -o test_build test_build.cpp -std=c++17 -I/usr/local/cuda/include/ -L/usr/lib/x86_64-linux-gnu/ -lcudnn
+    extends:
+        - .default_job_template
 
 analysis:check-CUDNN_FRONTEND_SKIP_JSON_LIB:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.1.0.70_12.4.0
     stage: analysis
     script:
         - ci/build_wo_json.sh
+    extends:
+        - .default_job_template
 
 analysis:clang-format:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.5.1.17_12.6.2
@@ -52,3 +59,5 @@ analysis:clang-format:
     allow_failure: true
     script:
         - ci/run_style_check_diff.sh
+    extends:
+        - .default_job_template

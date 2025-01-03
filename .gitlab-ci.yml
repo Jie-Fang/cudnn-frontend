@@ -206,6 +206,8 @@ include:
     inputs:
         cuda_version: "12.6.3"
         cudnn_version: "9.6.0.74"
+    rules:
+        - if: $CI_PIPELINE_SOURCE != "web"
 
 stages:
     - analysis
@@ -222,12 +224,14 @@ stages:
 build:cudnn_dev_latest:
     needs: []
     extends:
+        - .default_job_template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
         - .build:template
 
 cpp_samples:cudnn_dev_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
@@ -236,6 +240,7 @@ cpp_samples:cudnn_dev_latest:
     
 python_tests:cudnn_dev_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
@@ -245,6 +250,7 @@ python_tests:cudnn_dev_latest:
     
 pycudnntest:cudnn_dev_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
@@ -253,6 +259,7 @@ pycudnntest:cudnn_dev_latest:
 
 cpp_tests:cudnn_dev_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
@@ -261,6 +268,7 @@ cpp_tests:cudnn_dev_latest:
     
 L4_graph_runner:cudnn_dev_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_dev_image:template
         - .fetch_cudnn_dev:template
@@ -280,12 +288,14 @@ L4_graph_runner_large:cudnn_dev_latest:
 build:cudnn_rel_latest:
     needs: []
     extends:
+        - .default_job_template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
         - .build:template
 
 cpp_samples:cudnn_rel_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
@@ -294,6 +304,7 @@ cpp_samples:cudnn_rel_latest:
     
 python_tests:cudnn_rel_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
@@ -303,6 +314,7 @@ python_tests:cudnn_rel_latest:
     
 pycudnntest:cudnn_rel_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
@@ -311,6 +323,7 @@ pycudnntest:cudnn_rel_latest:
 
 cpp_tests:cudnn_rel_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
@@ -319,6 +332,7 @@ cpp_tests:cudnn_rel_latest:
     
 L4_graph_runner:cudnn_rel_latest:
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_rel_image:template
         - .fetch_cudnn_rel:template
@@ -370,6 +384,8 @@ build:cudnn_8.9_windows:
         - cd build
         - cmake ../
         - cmake --build . -j16 --verbose
+    extends:
+        - .default_job_template
 
 python_samples:cudnn_dev_latest:
     stage: python_samples
@@ -389,7 +405,9 @@ python_samples:cudnn_8.9.5.29_12.2.2:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .python_samples:template
+  extends:
+    - .default_job_template
+    - .python_samples:template
   needs: []
 
 python_samples:cudnn_9.0.0.312_12.3.1:
@@ -399,5 +417,76 @@ python_samples:cudnn_9.0.0.312_12.3.1:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  extends: .python_samples:template
+  extends:
+    - .default_job_template
+    - .python_samples:template
   needs: []
+
+
+build:cudnn_local_source:
+    needs: []
+    stage: build
+    extends:
+        - .manual_job_template
+        - .cudnn_dev_image:template
+    script:
+        - echo "Nothing to build as using local source at:"
+        - echo $CUDNN_SOURCE_BUILD_DIR
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
+
+cpp_samples:cudnn_local_source:
+    extends:
+        - .manual_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .cpp_samples:template
+    needs: ["build:cudnn_local_source"]
+    before_script:
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
+    
+python_tests:cudnn_local_source:
+    extends:
+        - .manual_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .python_tests:template
+    needs: ["build:cudnn_local_source"]
+    resource_group: memory_heavy_${ARCH}
+    before_script:
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
+    
+pycudnntest:cudnn_local_source:
+    extends:
+        - .manual_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .pycudnntest:template
+    needs: ["build:cudnn_local_source"]
+    before_script:
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
+
+cpp_tests:cudnn_local_source:
+    extends:
+        - .manual_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .cpp_tests:template
+    needs: ["build:cudnn_local_source"]
+    before_script:
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
+    
+L4_graph_runner:cudnn_local_source:
+    extends:
+        - .manual_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .L4_graph_runner:template
+    needs: ["build:cudnn_local_source"]
+    before_script:
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
