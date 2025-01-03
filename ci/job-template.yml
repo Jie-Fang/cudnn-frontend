@@ -29,9 +29,6 @@ spec:
       - ARCH: ["Hopper", "Ampere"]
   tags:
     - ${ARCH}
-  script:
-    - export PYTHONPATH=build
-    - pytest test/python -n 4 --tb=short --junit-xml=result-junit.xml
   extends:
     - .python_tests:template
 

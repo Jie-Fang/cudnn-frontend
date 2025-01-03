@@ -1,12 +1,35 @@
 import pytest
 import cudnn
+import torch
 
 
+# =================== Fixtures =====================
 @pytest.fixture(scope="session", autouse=True)
 def cudnn_handle():
     cudnn_handle = cudnn.create_handle()
     yield cudnn_handle
     cudnn.destroy_handle(cudnn_handle)
+
+
+# =================== PyTest Hooks =====================
+def pytest_load_initial_conftests(args, early_config, parser):
+    if not any(arg.startswith("--tb=") for arg in args):
+        args.append("--tb=short")
+
+
+def pytest_configure(config):
+    assert torch.cuda.is_available()
+
+    print("===== cudnn-frontend conftest.py ====")
+    print(f"cuDNN Frontend Version: {cudnn.__version__}")
+    print(f"cuDNN Frontend Path: {cudnn.__file__}")
+    print(f"cuDNN Backend Version: {cudnn.backend_version()}")
+    print(f"PyTorch Version: {torch.__version__}")
+    print(f"PyTorch Path: {torch.__file__}")
+    print(f"PyTorch GPU Name: {torch.cuda.get_device_name()}")
+    print(f"PyTorch SM Arch Version: {torch.cuda.get_device_capability()}")
+    print(f"PyTorch CUDA Version: {torch.version.cuda}")
+    print(f"PyTorch cuDNN Version: {torch.backends.cudnn.version()}")
 
 
 def pytest_addoption(parser):
