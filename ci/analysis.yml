@@ -1,3 +1,10 @@
+.clang_install:template:
+    before_script:
+        # key rotation required for older ngc images
+        - apt-key del 7fa2af80
+        - apt-get update && apt-get install -y clang
+
+
 analysis:cudnn_clang_disable_exception:
     extends:
         - .default_job_template
@@ -5,7 +12,7 @@ analysis:cudnn_clang_disable_exception:
     needs: []
     stage: analysis
     script:
-        - apt-get update && apt-get install -y clang
+        - !reference [.clang_install:template, before_script]
         - !reference [.fetch_cudnn_dev:template, before_script]
         - mkdir build && cd build
         - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_CXX_FLAGS="-DNV_CUDNN_DISABLE_EXCEPTION" ../
@@ -26,7 +33,7 @@ analysis:cudnn_clang:
     needs: []
     stage: analysis
     script:
-        - apt-get update && apt-get install -y clang
+        - !reference [.clang_install:template, before_script]
         - !reference [.fetch_cudnn_dev:template, before_script]
         - mkdir build && cd build
         - CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake ../

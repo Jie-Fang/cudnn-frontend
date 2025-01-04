@@ -1,6 +1,6 @@
 ARG DLFW_MONTH
 
-FROM gitlab-master.nvidia.com:5005/dl/dgx/pytorch:blackwell-py3-devel-amd64
+FROM gitlab-master.nvidia.com:5005/dl/dgx/pytorch:main-py3-devel
 
 ENV \
     DEBIAN_FRONTEND="noninteractive" \
@@ -9,6 +9,8 @@ ENV \
 SHELL ["/bin/bash", "-c"]
 
 # RUN apt-get purge -y libcudnn9-cuda-12;
+
+ENV PYTORCH_SKIP_CUDNN_COMPATIBILITY_CHECK=1
 
 COPY requirements.txt /tmp/
 RUN pip install -U --no-cache-dir -r /tmp/requirements.txt
