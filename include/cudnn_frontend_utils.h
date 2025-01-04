@@ -602,6 +602,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(HeurMode_t,
                              })
 
 enum class BehaviorNote_t {
+    NOT_SET,
+
     RUNTIME_COMPILATION,
     REQUIRES_FILTER_INT8x32_REORDER,
     REQUIRES_BIAS_INT8x32_REORDER,
@@ -610,6 +612,7 @@ enum class BehaviorNote_t {
 
 NLOHMANN_JSON_SERIALIZE_ENUM(BehaviorNote_t,
                              {
+                                 {BehaviorNote_t::NOT_SET, "NOT_SET"},
                                  {BehaviorNote_t::RUNTIME_COMPILATION, "RUNTIME_COMPILATION"},
                                  {BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER, "REQUIRES_FILTER_INT8x32_REORDER"},
                                  {BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER, "REQUIRES_BIAS_INT8x32_REORDER"},
@@ -1343,8 +1346,36 @@ convert_to_cudnn_type(cudnn_frontend::BehaviorNote_t const mode, cudnnBackendBeh
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
+
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
     }
     return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+}
+
+static inline cudnn_frontend::BehaviorNote_t
+convert_from_cudnn_type(cudnnBackendBehaviorNote_t const cudnn_mode) {
+    switch (cudnn_mode) {
+        case CUDNN_BEHAVIOR_NOTE_RUNTIME_COMPILATION:
+            return BehaviorNote_t::RUNTIME_COMPILATION;
+        case CUDNN_BEHAVIOR_NOTE_REQUIRES_FILTER_INT8x32_REORDER:
+            return BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER;
+        case CUDNN_BEHAVIOR_NOTE_REQUIRES_BIAS_INT8x32_REORDER:
+            return BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER;
+#if (CUDNN_VERSION >= 90500)
+        case CUDNN_BEHAVIOR_NOTE_SUPPORTS_CUDA_GRAPH_NATIVE_API:
+            return BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API;
+#endif
+
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return BehaviorNote_t::NOT_SET;
+            break;
+#endif
+    }
+    return BehaviorNote_t::NOT_SET;
 }
 
 static inline cudnnStatus_t

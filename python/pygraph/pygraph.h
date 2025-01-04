@@ -438,6 +438,12 @@ class PyGraph {
                           int64_t index,
                           std::optional<std::intptr_t>);
 
+    std::vector<BehaviorNote_t>
+    get_behavior_notes();
+
+    std::vector<BehaviorNote_t>
+    get_behavior_notes_for_plan_at_index(int64_t const index);
+
     void
     select_numeric_notes(std::vector<NumericalNote_t> const& notes) {
         graph.select_numeric_notes(notes);

@@ -327,6 +327,22 @@ PyGraph::build_operation_graph() {
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
+std::vector<BehaviorNote_t>
+PyGraph::get_behavior_notes() {
+    std::vector<BehaviorNote_t> notes;
+    auto status = graph.get_behavior_notes(notes);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+    return notes;
+}
+
+std::vector<BehaviorNote_t>
+PyGraph::get_behavior_notes_for_plan_at_index(int64_t const index) {
+    std::vector<BehaviorNote_t> notes;
+    auto status = graph.get_behavior_notes_for_plan_at_index(index, notes);
+    throw_if(status.is_bad(), status.get_code(), status.get_message());
+    return notes;
+}
+
 void
 PyGraph::create_execution_plans(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
     auto status = graph.create_execution_plans(modes);
@@ -789,6 +805,8 @@ init_pygraph_submodule(py::module_& m) {
                 Returns:
                     cudnn_tensor: The result of reshape operation. Please set the dims for the output tensor.
             )pbdoc")
+        .def("get_behavior_notes", &PyGraph::get_behavior_notes)
+        .def("get_behavior_notes_for_plan_at_index", &PyGraph::get_behavior_notes_for_plan_at_index)
         .def("deselect_engines", &PyGraph::deselect_engines)
         .def("deselect_numeric_notes", &PyGraph::deselect_numeric_notes)
         .def("deselect_behavior_notes", &PyGraph::deselect_behavior_notes)
