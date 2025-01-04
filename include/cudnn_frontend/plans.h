@@ -172,7 +172,7 @@ namespace graph {
 class Execution_plan_list {
     std::string operation_tag;
     std::vector<std::vector<cudnnBackendNumericalNote_t>> numeric_notes;
-    std::vector<std::vector<cudnnBackendNumericalNote_t>> behavior_notes;
+    std::vector<std::vector<cudnnBackendBehaviorNote_t>> behavior_notes;
     std::vector<bool> barred_indices;
     std::shared_ptr<KernelCache> kernel_cache;
 
@@ -258,7 +258,7 @@ class Execution_plan_list {
         for (auto& engine_config : engine_configs) {
             int64_t elem_count = 0;
             std::vector<cudnnBackendNumericalNote_t> numerics;
-            std::vector<cudnnBackendNumericalNote_t> behavior;
+            std::vector<cudnnBackendBehaviorNote_t> behavior;
 
             ManagedOpaqueDescriptor extractedEngine   = make_shared_backend_pointer(CUDNN_BACKEND_ENGINE_DESCRIPTOR);
             cudnnBackendDescriptor_t extractedEngine_ = extractedEngine->get_backend_descriptor();
@@ -392,6 +392,10 @@ class Execution_plan_list {
         // Ignore if the engine config was deselected.
         // This usually happens when user deselects by numerical and behavioural notes.
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF((index < 0) || (static_cast<int64_t>(barred_indices.size()) <= index),
+                                       error_code_t::GRAPH_EXECUTION_FAILED,
+                                       "Plan index " + std::to_string(index) + " is invalid.");
+
         if (barred_indices[index] == true) {
             CUDNN_FE_LOG_LABEL_ENDL("Deselecting execution plan at position " << index);
         }
@@ -465,6 +469,19 @@ class Execution_plan_list {
         CUDNN_FE_LOG_LABEL_ENDL("ERROR: No valid engine configs returned from heuristics.\n" << err_msg);
         return {error_code_t::GRAPH_EXECUTION_PLAN_CREATION_FAILED,
                 "[cudnn_frontend] Error: No execution plans support the graph." + err_msg};
+    }
+
+    error_t
+    get_behavior_notes_at_index(int64_t const index, std::vector<BehaviorNote_t>& notes) const {
+        RETURN_CUDNN_FRONTEND_ERROR_IF((index < 0) || (static_cast<int64_t>(behavior_notes.size()) <= index),
+                                       error_code_t::GRAPH_EXECUTION_FAILED,
+                                       "Plan index " + std::to_string(index) + " is invalid.");
+
+        for (auto const& note : behavior_notes[index]) {
+            notes.push_back(detail::convert_from_cudnn_type(note));
+        }
+
+        return {error_code_t::OK, ""};
     }
 
     error_t

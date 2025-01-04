@@ -274,8 +274,17 @@ def test_matmul_bias_relu(param_extract, cudnn_handle):
     graph.validate()
     graph.build_operation_graph()
     graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+
+    # test code to make sure behaviour notes are returned correctly
+    notes = graph.get_behavior_notes_for_plan_at_index(0)
+    assert cudnn.behavior_note.RUNTIME_COMPILATION in notes
+
     graph.check_support()
     graph.build_plans()
+
+    # test code to make sure behaviour notes are returned correctly
+    notes = graph.get_behavior_notes()
+    assert cudnn.behavior_note.RUNTIME_COMPILATION in notes
 
     workspace = torch.empty(
         graph.get_workspace_size(), device="cuda", dtype=torch.uint8

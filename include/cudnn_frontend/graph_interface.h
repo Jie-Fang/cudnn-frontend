@@ -1120,6 +1120,12 @@ class Graph : public ICudnn, public INode {
         return *this;
     }
 
+    error_t
+    get_behavior_notes_for_plan_at_index(int64_t const index, std::vector<BehaviorNote_t> &notes) const;
+
+    error_t
+    get_behavior_notes(std::vector<BehaviorNote_t> &notes) const;
+
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
     virtual void
     serialize(json &j) const override final {
@@ -1384,6 +1390,26 @@ class Graph : public ICudnn, public INode {
 #endif
     }
 };
+
+inline error_t
+Graph::get_behavior_notes_for_plan_at_index(int64_t const index, std::vector<BehaviorNote_t> &notes) const {
+    CHECK_CUDNN_FRONTEND_ERROR(plans.get_behavior_notes_at_index(index, notes));
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+Graph::get_behavior_notes(std::vector<BehaviorNote_t> &notes) const {
+    int64_t const candidate = plans.candidate;
+    RETURN_CUDNN_FRONTEND_ERROR_IF(
+        candidate == -1,
+        error_code_t::INVALID_VALUE,
+        "No candiate plan set for the graph. You can set one by building a plan, which in turn sets the "
+        "candidate internally. Do note that you also query behaviour notes for a created-but-not-built plan by using "
+        "get_behavior_notes_for_plan_at_index API.");
+
+    CHECK_CUDNN_FRONTEND_ERROR(get_behavior_notes_for_plan_at_index(candidate, notes));
+    return {error_code_t::OK, ""};
+}
 
 inline int64_t
 Graph::get_execution_plan_count() const {

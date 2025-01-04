@@ -89,7 +89,45 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
         REQUIRE(status.is_bad());
         SKIP("cudnn versions 9.5 and earlier don't support behavior note of SUPPORTS_CUDA_GRAPH_NATIVE_API.");
     }
+
+    //// Test code
+    // Does not necessarily need to be included in user code, in case you are referring to this sample for your usecase.
+    // START
+    std::vector<cudnn_frontend::BehaviorNote_t> notes;
+    status = graph->get_behavior_notes(notes);
+    REQUIRE(status.is_bad());  // expected to fail as no candidate has been set yet
+
+    notes.clear();
+    status = graph->get_behavior_notes_for_plan_at_index(0, notes);
+    REQUIRE(status.is_good());
+    // Make sure that the note is SUPPORTS_CUDA_GRAPH
+    bool supports_cuda_graph_native_api = false;
+    for (auto note : notes) {
+        if (note == cudnn_frontend::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API) {
+            supports_cuda_graph_native_api = true;
+        }
+    }
+    REQUIRE(supports_cuda_graph_native_api);
+    // END
+
     REQUIRE(graph->build_plans(handle).is_good());
+
+    //// Test code
+    // Does not necessarily need to be included in user code, in case you are referring to this sample for your usecase.
+    // START
+    notes.clear();
+    status = graph->get_behavior_notes(notes);
+    REQUIRE(status.is_good());  // expected to pass now as candidate has been set
+
+    // Make sure that the note is SUPPORTS_CUDA_GRAPH
+    supports_cuda_graph_native_api = false;
+    for (auto note : notes) {
+        if (note == cudnn_frontend::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API) {
+            supports_cuda_graph_native_api = true;
+        }
+    }
+    REQUIRE(supports_cuda_graph_native_api);
+    // END
 
     //// Populate an exisiting cuda graph with cudnn's cuda graph
     cudaGraph_t cudnn_cuda_graph;
