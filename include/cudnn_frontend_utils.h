@@ -620,6 +620,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(BehaviorNote_t,
                              })
 
 enum class NumericalNote_t {
+    NOT_SET,
+
     TENSOR_CORE,
     DOWN_CONVERT_INPUTS,
     REDUCED_PRECISION_REDUCTION,
@@ -634,6 +636,7 @@ enum class NumericalNote_t {
 
 NLOHMANN_JSON_SERIALIZE_ENUM(NumericalNote_t,
                              {
+                                 {NumericalNote_t::NOT_SET, "NOT_SET"},
                                  {NumericalNote_t::TENSOR_CORE, "TENSOR_CORE"},
                                  {NumericalNote_t::DOWN_CONVERT_INPUTS, "DOWN_CONVERT_INPUTS"},
                                  {NumericalNote_t::REDUCED_PRECISION_REDUCTION, "REDUCED_PRECISION_REDUCTION"},
@@ -1322,6 +1325,11 @@ convert_to_cudnn_type(cudnn_frontend::NumericalNote_t const mode, cudnnBackendNu
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
+
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
     }
     return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 }
@@ -1376,6 +1384,41 @@ convert_from_cudnn_type(cudnnBackendBehaviorNote_t const cudnn_mode) {
 #endif
     }
     return BehaviorNote_t::NOT_SET;
+}
+
+static inline cudnn_frontend::NumericalNote_t
+convert_from_cudnn_type(cudnnBackendNumericalNote_t const cudnn_mode) {
+    switch (cudnn_mode) {
+        case CUDNN_NUMERICAL_NOTE_TENSOR_CORE:
+            return NumericalNote_t::TENSOR_CORE;
+        case CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS:
+            return NumericalNote_t::DOWN_CONVERT_INPUTS;
+        case CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION:
+            return NumericalNote_t::REDUCED_PRECISION_REDUCTION;
+        case CUDNN_NUMERICAL_NOTE_FFT:
+            return NumericalNote_t::FFT;
+        case CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC:
+            return NumericalNote_t::NONDETERMINISTIC;
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD:
+            return NumericalNote_t::WINOGRAD;
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_4x4:
+            return NumericalNote_t::WINOGRAD_TILE_4x4;
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_6x6:
+            return NumericalNote_t::WINOGRAD_TILE_6x6;
+        case CUDNN_NUMERICAL_NOTE_WINOGRAD_TILE_13x13:
+            return NumericalNote_t::WINOGRAD_TILE_13x13;
+#if (CUDNN_VERSION >= 90100)
+        case CUDNN_NUMERICAL_NOTE_STRICT_NAN_PROP:
+            return NumericalNote_t::STRICT_NAN_PROP;
+#endif
+
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return NumericalNote_t::NOT_SET;
+            break;
+#endif
+    }
+    return NumericalNote_t::NOT_SET;
 }
 
 static inline cudnnStatus_t
