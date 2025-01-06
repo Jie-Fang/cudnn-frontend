@@ -7,8 +7,8 @@ stream_group_size=16
 
 function display_header() {
     nvidia-smi
-    echo $CUDNN_VERSION
-    echo $CUDA_VERSION
+    echo "Installed cudnn version" $CUDNN_VERSION_
+    echo "Installed cuda version" $CUDA_VERSION_
 }
 
 function run_python_streams() {
