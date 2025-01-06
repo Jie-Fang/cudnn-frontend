@@ -796,6 +796,8 @@ class Graph : public ICudnn, public INode {
             j["variant_pack_uids"]  = variant_pack_uids;
         }
 
+        j["behavior_notes"] = plans.behavior_notes;
+
         std::unordered_map<uid_t, pass_by_values_t> tensor_to_pass_by_value;
         CHECK_CUDNN_FRONTEND_ERROR(collect_pass_by_value_tensors_subtree(tensor_to_pass_by_value));
         j["pass_by_values"] = tensor_to_pass_by_value;
@@ -833,6 +835,8 @@ class Graph : public ICudnn, public INode {
 
         auto serialized_plan = j["cudnn_backend_data"];
         CHECK_CUDNN_FRONTEND_ERROR(plans.build_plans(handle, serialized_plan));
+
+        plans.behavior_notes = j["behavior_notes"].get<std::vector<std::vector<BehaviorNote_t>>>();
 
         variant_pack_uids = j["variant_pack_uids"].get<std::unordered_set<graph::Tensor_attributes::uid_t>>();
 
