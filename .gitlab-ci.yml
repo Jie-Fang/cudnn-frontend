@@ -6,15 +6,9 @@ before_script:
     - echo "CUDA_VERSION=$CUDA_VERSION"
     - echo "CUDNN_VERSION=$CUDNN_VERSION"
 
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: always
-    - when: always
-
 .default_job_template:
   rules:
-    - if: $CI_PIPELINE_SOURCE != "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
 .manual_job_template:
   rules:
@@ -207,7 +201,7 @@ include:
         cuda_version: "12.6.3"
         cudnn_version: "9.6.0.74"
     rules:
-        - if: $CI_PIPELINE_SOURCE != "web"
+        - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
 stages:
     - analysis
@@ -395,6 +389,7 @@ python_samples:cudnn_dev_latest:
         - ci/run_python_samples.sh
     needs: []
     extends:
+        - .default_job_template
         - .device_matrix:template
         - .cudnn_dev_image:template    
 
