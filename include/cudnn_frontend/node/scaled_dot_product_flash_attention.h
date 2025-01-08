@@ -971,6 +971,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Dropout RNG dump is not supported for SM Major version 10");
 
+        // TODO add version check once fixed
+        RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_ragged && (is_dbias || attributes.is_deterministic_algorithm),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Deterministic kernel or dbias with ragged is not supported for SM Major version 10");
+
         // validate that datatype is set for the graph
         RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
