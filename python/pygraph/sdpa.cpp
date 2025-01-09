@@ -520,8 +520,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     name (Optional[str]): The name of the operation.
                 Preferred masking Args:
                     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-                    left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-                    right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+                    left_bround (Optional[int]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+                    right_bound (Optional[int]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
                 Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
                     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
@@ -576,6 +576,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
                     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
                     seq_len_kv (Optional[cudnn_tensor]): The sequence length of the key.
+                    max_total_seq_len_q (Optional[int]): The maximum number of query sequence tokens for all batches, used for workspace allocation,
+                    max_total_seq_len_kv (Optional[int]): The maximum number of key/value sequence tokens for all batches, used for workspace allocation,
                     dropout (Optional[Union[Tuple[(probability: float, seed: cudnn_tensor, offset: cudnn_tensor)], Tuple[mask: cudnn_tensor, scale: cudnn_tensor]]]): Whether to do dropout. Default is None.
                     rng_dump (Optional[cudnn_tensor]): Debug tensor to dump the Philox RNG dropout mask. Default is None.
                     use_deterministic_algorithm (Optional[bool]): Whether to always use deterministic algorithm. Default is False.
@@ -583,8 +585,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     name (Optional[str]): The name of the operation.
                 Preferred masking Args:
                     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-                    left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-                    right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+                    left_bround (Optional[int]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+                    right_bound (Optional[int]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
                 Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
                     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.

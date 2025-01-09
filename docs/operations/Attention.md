@@ -4,6 +4,7 @@
 3. [Scaled Dot Product Attention FP8 Forward](#scaled-dot-product-attention-fp8-forward)
 4. [Scaled Dot Product Attention FP8 Backward](#scaled-dot-product-attention-fp8-backward)
 5. [Supported Tensor Layouts](#supported-tensor-layouts)
+6. [Flex Attention API](#flex-attention-api)
 
 ### Scaled Dot Product Attention FP16/BF16 Forward
 
@@ -64,8 +65,8 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 | (Bias mask) Bias Mask                          | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
 | (Padding mask/Paged Caches) Sequence Length Q  | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
 | (Padding mask/Paged Caches) Sequence Length KV | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Philoc RNG Dropout) Seed                      | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Philoc RNG Dropout) Offset                    | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Seed                      | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Offset                    | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
 | (Custom Dropout Mask) Mask                     | GPU        | FP16 or BF16   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
 | (Custom Dropout Mask) Scale                    | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
 | (Packed Layout) Ragged Offset                  | GPU        | INT32          | $(B + 1, 1, 1, 1)$                                                                                             |
@@ -79,7 +80,7 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 |-------------------------------------|------------|--------------|------------------------------|
 | O                                   | GPU        | FP16 or BF16 | $(B, H_{q}, S_{q}, D_{v})$   |
 | Stats (training only)               | GPU        | FP32         | $(B, H_{q}, S_{q}, 1)$       |
-| (Philoc RNG Dropout) RNG Dump       | GPU        | FP32         | $(B, H_{q}, S_{q}, S_{kv})$  |
+| (Philox RNG Dropout) RNG Dump       | GPU        | FP32         | $(B, H_{q}, S_{q}, S_{kv})$  |
 
 Where,
 
@@ -123,81 +124,65 @@ sdpa(std::shared_ptr<Tensor_attributes> q,
 The `options` parameter of type `SDPA_attributes` is used to control the attributes of the forward operation, as detailed below:
 
 ```cpp
-SDPA_attributes&
-set_is_inference(bool const value);
+SDPA_attributes& set_is_inference(bool const value);
 
-SDPA_attributes&
-set_attn_scale(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_attn_scale(float const value);
 
-SDPA_attributes&
-set_attn_scale(float const value);
+// ========================== BEGIN paged attn options =====================
+SDPA_attributes& set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_paged_attention_v_table(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_paged_attention_max_seq_len_kv(int const value);
+// ==========================  END  paged attn options =====================
 
-SDPA_attributes&
-set_bias(std::shared_ptr<Tensor_attributes> value);
+// ========================== BEGIN    var len options =====================
+SDPA_attributes& set_padding_mask(bool const value);
 
-SDPA_attributes&
-set_alibi_mask(bool const value);
+// integer tensor that specifies the sequence length of each batch
+SDPA_attributes& set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
+// ==========================  END     var len options =====================
 
-SDPA_attributes&
-set_padding_mask(bool const value);
+// ========================== BEGIN score mod options =====================
+SDPA_attributes& set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t)>);
 
-SDPA_attributes&
-set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
-
-SDPA_attributes&
-set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
-
-// calls set_left_bound(value)
-// Deprecated
-SDPA_attributes&
-set_sliding_window_length(int const value);
-
+// Use in combination to set diagonal masking
+SDPA_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
 SDPA_attributes& set_left_bound(int const value);
-
-// Use in combination with set_diagonal_alignment to set (bottom right) causal masking
 SDPA_attributes& set_right_bound(int const value);
 
-SDPA_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
-
+// DEPRECATED
 // Sets the diagonal position to TOP_LEFT
 // calls set_right_bound(0) if no right_bound was specified
-// Deprecated
-SDPA_attributes&
-set_causal_mask(bool const value);
+SDPA_attributes& set_causal_mask(bool const value);
 
+// DEPRECATED
 // Sets the diagonal position to BOTTOM_RIGHT
 // and calls set_right_bound(0) if no right_bound was specified
-// Deprecated
-SDPA_attributes&
-set_causal_mask_bottom_right(bool const value);
+SDPA_attributes& set_causal_mask_bottom_right(bool const value);
 
-SDPA_attributes&
-set_dropout(float const probability,
-            std::shared_ptr<Tensor_attributes> seed,
-            std::shared_ptr<Tensor_attributes> offset);
+// DEPRECATED
+// calls set_left_bound(value)
+SDPA_attributes& set_sliding_window_length(int const value);
 
-// for debugging dropout mask
-SDPA_attributes&
-set_rng_dump(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_bias(std::shared_ptr<Tensor_attributes> value);
 
-SDPA_attributes&
-set_dropout(std::shared_ptr<Tensor_attributes> mask,
-            std::shared_ptr<Tensor_attributes> scale);
+SDPA_attributes& set_alibi_mask(bool const value);
+// ==========================  END  score mod options =====================
 
-SDPA_attributes&
-set_compute_data_type(DataType_t value);
+// ========================== BEGIN   dropout options =====================
+SDPA_attributes& set_dropout(float const probability,
+                             std::shared_ptr<Tensor_attributes> seed,
+                             std::shared_ptr<Tensor_attributes> offset);
 
-SDPA_attributes&
-set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask,
+                             std::shared_ptr<Tensor_attributes> scale);
 
-SDPA_attributes&
-set_paged_attention_v_table(std::shared_ptr<Tensor_attributes> value);
+// for debugging dropout mask with seed and offset
+SDPA_attributes& set_rng_dump(std::shared_ptr<Tensor_attributes> value);
+// ==========================  END    dropout options =====================
 
-SDPA_attributes&
-set_paged_attention_max_seq_len_kv(int const value);
-
-SDPA_attributes&
-set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t)>);
+SDPA_attributes& set_compute_data_type(DataType_t value);
 ```
 
 #### Python API:
@@ -287,76 +272,65 @@ sdpa_backward(std::shared_ptr<Tensor_attributes> q,
 The `options` parameter of type `SDPA_backward_attributes` is used to control the attributes of backward operation, as detailed below:
 
 ```cpp
-SDPA_backward_attributes&
-set_attn_scale(std::shared_ptr<Tensor_attributes> value);
+SDPA_backward_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value);
+SDPA_backward_attributes& set_attn_scale(float const value);
 
-SDPA_backward_attributes&
-set_attn_scale(float const value);
+// ========================== BEGIN    var len options =====================
+SDPA_backward_attributes& set_padding_mask(bool const value);
 
-SDPA_backward_attributes&
-set_bias(std::shared_ptr<Tensor_attributes> value);
+// integer tensor that specifies the sequence length of each batch
+SDPA_backward_attributes& set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
+SDPA_backward_attributes& set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
 
-SDPA_backward_attributes&
-set_dbias(std::shared_ptr<Tensor_attributes> value);
+// the maximum number of sequence tokens for all batches, used for workspace allocation
+SDPA_backward_attributes& set_max_total_seq_len_q(int64_t const value);
+SDPA_backward_attributes& set_max_total_seq_len_kv(int64_t const value);
+// ==========================  END     var len options =====================
 
-SDPA_backward_attributes&
-set_alibi_mask(bool const value);
+// ========================== BEGIN score modoptions =====================
+SDPA_backward_attributes& set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t)>);
 
-SDPA_backward_attributes&
-set_padding_mask(bool const value);
-
-SDPA_backward_attributes&
-set_seq_len_q(std::shared_ptr<Tensor_attributes> value);
-
-SDPA_backward_attributes&
-set_seq_len_kv(std::shared_ptr<Tensor_attributes> value);
-
-// calls set_left_bound(value)
-// Deprecated
-SDPA_backward_attributes&
-set_sliding_window_length(int const value);
-
+// Use in combination to set_diagonal_alignment to set (bottom right) causal masking
+SDPA_backward_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
 SDPA_backward_attributes& set_left_bound(int const value);
-
-// Use in combination with set_diagonal_alignment to set (bottom right) causal masking
 SDPA_backward_attributes& set_right_bound(int const value);
 
-SDPA_backward_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
-
+// DEPRECATED
 // Sets the diagonal position to TOP_LEFT
 // calls set_right_bound(0) if no right_bound was specified
-// Deprecated
-SDPA_backward_attributes&
-set_causal_mask(bool const value);
+SDPA_backward_attributes& set_causal_mask(bool const value);
 
+// DEPRECATED
 // Sets the diagonal position to BOTTOM_RIGHT
 // and calls set_right_bound(0) if no right_bound was specified
-// Deprecated
-SDPA_backward_attributes&
-set_causal_mask_bottom_right(bool const value);
+SDPA_backward_attributes& set_causal_mask_bottom_right(bool const value);
 
-SDPA_backward_attributes&
-set_dropout(float const probability,
-            std::shared_ptr<Tensor_attributes> seed,
-            std::shared_ptr<Tensor_attributes> offset);
+// DEPRECATED
+// calls set_left_bound(value)
+SDPA_backward_attributes& set_sliding_window_length(int const value);
 
-// for debugging dropout mask
-SDPA_backward_attributes&
-set_rng_dump(std::shared_ptr<Tensor_attributes> value);
+SDPA_backward_attributes& set_bias(std::shared_ptr<Tensor_attributes> value);
+SDPA_backward_attributes& set_dbias(std::shared_ptr<Tensor_attributes> value);
 
-SDPA_backward_attributes&
-set_dropout(std::shared_ptr<Tensor_attributes> mask,
-            std::shared_ptr<Tensor_attributes> scale,
-            std::shared_ptr<Tensor_attributes> scale_inv);
+SDPA_backward_attributes& set_alibi_mask(bool const value);
+// ==========================  END  score modoptions =====================
 
-SDPA_backward_attributes&
-set_deterministic_algorithm(bool const value);
+// ========================== BEGIN   dropout options =====================
+SDPA_backward_attributes& set_dropout(float const probability,
+                                      std::shared_ptr<Tensor_attributes> seed,
+                                      std::shared_ptr<Tensor_attributes> offset);
+SDPA_backward_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask,
+                                      std::shared_ptr<Tensor_attributes> scale,
+                                      std::shared_ptr<Tensor_attributes> scale_inv);
 
-SDPA_backward_attributes&
-set_compute_data_type(DataType_t const value);
+// for debugging dropout mask with seed and offset
+SDPA_backward_attributes& set_rng_dump(std::shared_ptr<Tensor_attributes> value);
+// ==========================  END    dropout options =====================
 
-SDPA_backward_attributes&
-set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t)>);
+SDPA_backward_attributes& set_deterministic_algorithm(bool const value);
+
+SDPA_backward_attributes& set_compute_data_type(DataType_t const value);
+
 ```
 
 #### Python API: 
@@ -445,8 +419,8 @@ $O = SV$
 | (Bias mask) Bias Mask               | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
 | (Padding mask) Sequence Length Q    | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
 | (Padding mask) Sequence Length KV   | GPU        | INT32          | $(B, 1, 1, 1)$                                                                                                 |
-| (Philoc RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
-| (Philoc RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Seed           | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
+| (Philox RNG Dropout) Offset         | CPU or GPU | INT32 or INT64 | $(1, 1, 1, 1)$                                                                                                 |
 | (Custom Dropout Mask) Mask          | GPU        | E4M3 or E5M2   | $(1, 1, S_{q}, S_{kv})$, $(1, H_{q}, S_{q}, S_{kv})$, $(B, 1, S_{q}, S_{kv})$, or $(B, H_{q}, S_{q}, S_{kv})$  |
 | (Custom Dropout Mask) Scale         | GPU        | FP32           | $(1, 1, 1, 1)$                                                                                                 |
 | Descale S             | GPU        | FP32         | $(1, 1, 1, 1)$               |
@@ -756,16 +730,19 @@ cuDNN layout support for variable sequence length includes (but is not limited t
     `Q[b=0] = aa000000`\
     `Q[b=1] = bbb00000`\
     dimension = $[B=2, H=1, S=8, D=64]$\
-    stride = $[SHD=512, D=64, HD=64, 1]$\
+    stride = $[S \times H \times D=512, D=64, H \times D=64, 1]$\
     \
     cuDNN reads the data based on the strides.
 
   - Fully packed layout aka. THD, where T = sum(seq_len)\
-    `Q = aabbb000`\
+    `Q = aabbb`\
     dimension = $[B=2, H=1, S=8, D=64]$\
-    stride = $[SHD=512, D=64, HD=64, 1]$\
+    stride = $[S \times H \times D=512, D=64, H \times D=64, 1]$\
     \
-    The strides remain the same but they are incorrect as the second batch begins at 64*2. Therefore, users must set **ragged_offset** tensor using `<tensor>.set_ragged_offset(<ragged_offset_tensor>)` api, which is a $B + 1$ sized integer tensor telling where each batch begins. The b+1 element is where the last batch ends. For this case, ragged_offset should be `[0, 2 * H * D, (2+3) * H * D] = [0, 128, 320]`
+    The strides remain the same but they are incorrect as the second batch begins at 64*2. Therefore, users must set **ragged_offset** tensor using `<tensor>.set_ragged_offset(<ragged_offset_tensor>)` api, which is a $B + 1$ sized integer tensor telling where each batch begins. The b+1 element is where the last batch ends. For this case, ragged_offset should be `[0, 2 * H * D, (2+3) * H * D] = [0, 128, 320]`\
+    \
+    If this layout is used with bprop, it is recommended that users use `set_max_total_seq_len_q` to pass the maximum number of tokens used to calculate the size of the workspace.
+    Otherwise, the maximum number of will be assumed as $B \times S$.
 
   - Valid tokens in a batch are packed together\
     `Q = aa00bbb0`\
@@ -776,6 +753,6 @@ cuDNN layout support for variable sequence length includes (but is not limited t
     Ragged offset is insufficient to represent this. This case is NOT supported.
 
 
-### cudnn Flex Attention API
+### Flex Attention API
 
 SDPA and SDPA_backward ops now accept functors `set_score_mod` and `set_score_mod_bprop`, which allows modification of the attention score matrix. This function can be used to program a sub-graph of pointwise operations that can be subsequently used to program the score modifier. Note that this function usage is exclusive to the usage of ready made options.
