@@ -2,6 +2,7 @@ import argparse
 import re
 import os
 import subprocess
+import time
 
 # should be in pytorch container
 import requests
@@ -54,7 +55,7 @@ def fetch_cudnn(base_url):
         url = f"{base_url}/{version}/debug_cudnn-linux-x86_64-{version}.tar.gz"
 
         if os.path.exists(path):
-            print(f"Skipping {version}: File already exists at {path}")
+            print(f"Fetch skipped for {version}: File already exists at {path}")
             break
 
         try:
@@ -69,6 +70,14 @@ def fetch_cudnn(base_url):
 
     if not os.path.exists(path):
         raise Exception("ERROR: Failed to get any cuDNN build")
+
+    # cleanup downloads older than 7 days
+    current_time = time.time()
+    for filename in os.listdir("downloads"):
+        filepath = os.path.join("downloads", filename)
+        if os.path.isfile(filepath) and current_time - os.path.getmtime(filepath) > 7 * 24 * 60 * 60:
+            print(f"Cleaning up: {filepath}")
+            os.remove(filepath)
 
     # extract
     print(f"Extracting {path}")
