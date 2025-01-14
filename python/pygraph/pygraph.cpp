@@ -556,6 +556,7 @@ init_pygraph_submodule(py::module_& m) {
                       cudnn_frontend::DataType_t,
                       std::optional<std::intptr_t>,
                       py::object,
+                      py::object,
                       std::shared_ptr<KernelCache>>(),
              py::arg_v("name", "test_graph"),
              py::arg_v("io_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -563,6 +564,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("handle", std::nullopt),
              py::arg_v("sm_count", py::none()),
+             py::arg_v("sm_version", py::none()),
              py::arg_v("kernel_cache", nullptr))
         .def("tensor_like",
              py::overload_cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const&, std::string const&>(
