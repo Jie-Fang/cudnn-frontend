@@ -49,6 +49,7 @@ class PyGraph {
             cudnn_frontend::DataType_t compute_data_type,
             std::optional<std::intptr_t> handle_,
             py::object sm_count,
+            py::object sm_version,
             std::shared_ptr<KernelCache> kernel_cache) {
         graph.set_compute_data_type(compute_data_type)
             .set_intermediate_data_type(intermediate_data_type)
@@ -63,6 +64,10 @@ class PyGraph {
 
         if (sm_count.is(py::none()) == false) {
             graph.set_sm_count(sm_count.cast<int32_t>());
+        }
+
+        if (sm_version.is(py::none()) == false) {
+            graph.set_sm_version(sm_version.cast<int32_t>());
         }
 
         if (kernel_cache) {

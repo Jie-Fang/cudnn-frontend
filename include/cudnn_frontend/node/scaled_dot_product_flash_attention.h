@@ -253,11 +253,21 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Bias mask data type cannot be boolean");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && detail::get_backend_version() < 8906, error_code_t::GRAPH_NOT_SUPPORTED, "Bias mask is not  supported below cudnn version  8.9.6");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() >= 8906 && detail::get_backend_version() < 90000) &&
+             (context.get_sm_version() > 0 && context.get_sm_version() < 90), error_code_t::GRAPH_NOT_SUPPORTED,
+            "Post scale Bias mask is not supported below Hopper for cudnn version" + detail::get_backend_version());
+
         // validate options for padding mask
         auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
         bool const has_seq_len_q  = (seq_len_q != attributes.inputs.end()) && (seq_len_q->second != nullptr);
         auto const& seq_len_kv    = attributes.inputs.find(input_names::SEQ_LEN_KV);
         bool const has_seq_len_kv = (seq_len_kv != attributes.inputs.end()) && (seq_len_kv->second != nullptr);
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.padding_mask || attributes.alibi_mask || attributes.has_causal_mask_bottom_right()) && (detail::get_backend_version() < 8906),
+                                         error_code_t::GRAPH_NOT_SUPPORTED,  "Only causal mask is supported in cudnn versions below 8.9.6 ");   
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Padding mask requires seq_len_q and seq_len_kv to be set.");
@@ -266,6 +276,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
         // validate options for bottom right causal mask
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (detail::get_backend_version() < 90300), error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "Causal bottom right masking requires cudnn 9.3.0 and above");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && s_q > s_kv,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Bottom right causal mask does not support s_q > s_kv. Please virtually slice the Q tensor and pass it as s_q == s_kv");
@@ -278,7 +292,16 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
 
+        //  NVTE_SBHD or NVTE_BSHD is only supported for bottom right causal mask and sliding window
+
+        // Combination of mask and bias
+        RETURN_CUDNN_FRONTEND_ERROR_IF((is_bias && (attributes.has_causal_like_masking() || attributes.padding_mask) && (detail::get_backend_version() < 8906)), error_code_t::GRAPH_NOT_SUPPORTED,
+                        "Bias + padding or causal mask is only supported in 8.9.6 and above");
+
         // validate options for sliding window length
+        RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.left_bound.has_value() && detail::get_backend_version() < 90200), error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "sliding window is only supported 9.2.0 and above");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && attributes.left_bound.value() <= 0,
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than zero when set.");
@@ -327,6 +350,17 @@ class SDPANode : public NodeCRTP<SDPANode> {
             error_code_t::GRAPH_NOT_SUPPORTED, "Value set through set_paged_attention_max_seq_len_kv is incompatible with the sequence length of the RNG_DUMP");
         }
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8903, error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "SDPA OP requires cudnn version 8.9.3 and above");
+
+        // If user has set sm_version allow SM specific checks
+        if (context.get_sm_version() > 0) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(80 < context.get_sm_version(), error_code_t::GRAPH_NOT_SUPPORTED,
+                                        "cudnn SDPA operation requires Ampere and above");
+        }
+ 
+        // (cudnn_runtime_version < 8907 && num_attn_heads == num_gqa_groups FIXME
+
         // version specific validation
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -344,6 +378,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.0.0, hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
 
+        // sm_arch_ >= 90 FIXME
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() >= 90000 && ((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "For cuDNN version above 9.0.0, hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90200 && attributes.left_bound.has_value(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.2.0, sliding window attention is not supported");
@@ -352,6 +391,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.5.0, paged caches are not supported");
 
+        if (is_ragged) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((context.get_sm_version() > 0  && context.get_sm_version() < 90), error_code_t::GRAPH_NOT_SUPPORTED, "THD (ragged offset) is only supported in Hopper and above");
+        }
         // TODO add version check once fixed
         RETURN_CUDNN_FRONTEND_ERROR_IF(prop.major == 10 && is_rng,
                                        error_code_t::GRAPH_NOT_SUPPORTED,

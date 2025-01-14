@@ -872,6 +872,8 @@ class Graph : public ICudnn, public INode {
     Graph &
     set_sm_count(int32_t type);
     Graph &
+    set_sm_version(int32_t version);
+    Graph &
     set_kernel_cache(std::shared_ptr<KernelCache> cache);
 
     Graph &
@@ -1537,6 +1539,12 @@ Graph::set_kernel_cache(std::shared_ptr<KernelCache> cache) {
 inline Graph &
 Graph::set_sm_count(int32_t count) {
     context.set_target_sm_count(count);
+    return *this;
+}
+
+inline Graph &
+Graph::set_sm_version(int32_t version) {
+    context.set_sm_version(version);
     return *this;
 }
 

@@ -749,12 +749,14 @@ def test_sdpa(
     stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=cudnn_handle, stream=stream)
 
+    sm_version = torch.cuda.get_device_capability()[0] * 10 + torch.cuda.get_device_capability()[1]
     # cuDNN graph
     graph = cudnn.pygraph(
         io_data_type=convert_to_cudnn_type(input_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
         handle=cudnn_handle,
+        sm_version=sm_version
     )
 
     q = graph.tensor_like(q_gpu)
@@ -1163,12 +1165,14 @@ def test_sdpa_backward(
     stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=cudnn_handle, stream=stream)
 
+    sm_version = torch.cuda.get_device_capability()[0] * 10 + torch.cuda.get_device_capability()[1]
     # forward cuDNN graph
     graph = cudnn.pygraph(
         io_data_type=convert_to_cudnn_type(input_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
         handle=cudnn_handle,
+        sm_version=sm_version
     )
 
     q = graph.tensor_like(q_gpu)
@@ -1268,6 +1272,7 @@ def test_sdpa_backward(
 
     stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=cudnn_handle, stream=stream)
+    sm_version = torch.cuda.get_device_capability()[0] * 10 + torch.cuda.get_device_capability()[1]
 
     # backward cuDNN graph
     graph = cudnn.pygraph(
@@ -1275,6 +1280,7 @@ def test_sdpa_backward(
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
         handle=cudnn_handle,
+        sm_version = sm_version
     )
 
     q = graph.tensor_like(q_gpu)
