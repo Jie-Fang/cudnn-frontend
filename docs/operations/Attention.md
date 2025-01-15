@@ -28,11 +28,12 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 - Bias mask: Applies an additive bias mask to attention scores. Users must pass a bias tensor as specified in the tensors section below. The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
 - Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 - Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. Users must pass a per-batch sequence length as specified in the tensors section below.
-- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity. The diagonal of the matrix starts at the top left. As explained below, this can be set by calling `set_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT)`, or with the deprecated option `set_causal_mask`.
-- Bottom right causal mask: Similar as causal mask, but the diagonal starts from the bottom right. In addition, if variable sequence lengths are used, the diagonal is specified on a "per-batch" basis, depending on the sequence length of the given batch. This can be set by calling `set_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_RIGHT)`, or with the deprecated option `set_causal_mask_bottom_right`.
-- Sliding window length (deprecated)/Left bound (new): Specifies that attention scores up to and including column `row_idx-left_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
-- Right bound: Specifies that attention scores beyond column `row_idx+right_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
-- Diagonal Alignment: Specifies that when using left and/or right bounds, the diagonal starts at the top left ("TOP_LEFT") or at the bottom right aligned with the actual sequence length ("BOTTOM_RIGHT").
+- Causal mask: Fills the upper triangular matrix of attention scores with negative infinity. The diagonal of the matrix starts at the top left. As explained below, this can be set by calling `set_diagonal_band_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT)`, or with the deprecated option `set_causal_mask`.
+- Bottom right causal mask: Similar as causal mask, but the diagonal starts from the bottom right. In addition, if variable sequence lengths are used, the diagonal is specified on a "per-batch" basis, depending on the sequence length of the given batch. This can be set by calling `set_diagonal_band_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_RIGHT)`, or with the deprecated option `set_causal_mask_bottom_right`.
+- Diagonal Band: Anything between the left and right bounds of the diagonal band will be attended to. By default the left and right bounds are considered infinite and everything is attended to.
+ - Diagonal Band Left Bound (new)/Sliding window length (deprecated): Specifies that attention scores up to and including column `row_idx-left_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
+ - Diagonal Band Right Bound: Specifies that attention scores beyond column `row_idx+right_bound` for row index `row_idx` don't get calculated and the associated entries in the score matrix are filled with negative infinity.
+ - Diagonal Alignment: Specifies that when using left and/or right bounds, the diagonal starts at the top left ("TOP_LEFT") or at the bottom right aligned with the actual sequence length ("BOTTOM_RIGHT").
 - Dropout: Randomly zeros some of the attention weights after the softmax as a form of regularization.
   Users can configure dropout in two ways:
   - To use the more performant Philox RNG dropout implementation, users must provide:
@@ -148,21 +149,21 @@ SDPA_attributes& set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t)>);
 
 // Use in combination to set diagonal masking
 SDPA_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
-SDPA_attributes& set_left_bound(int const value);
-SDPA_attributes& set_right_bound(int const value);
+SDPA_attributes& set_diagonal_band_left_bound(int const value);
+SDPA_attributes& set_diagonal_band_right_bound(int const value);
 
 // DEPRECATED
 // Sets the diagonal position to TOP_LEFT
-// calls set_right_bound(0) if no right_bound was specified
+// calls set_diagonal_band_right_bound(0) if no right_bound was specified
 SDPA_attributes& set_causal_mask(bool const value);
 
 // DEPRECATED
 // Sets the diagonal position to BOTTOM_RIGHT
-// and calls set_right_bound(0) if no right_bound was specified
+// and calls set_diagonal_band_right_bound(0) if no right_bound was specified
 SDPA_attributes& set_causal_mask_bottom_right(bool const value);
 
 // DEPRECATED
-// calls set_left_bound(value)
+// calls set_diagonal_band_left_bound(value)
 SDPA_attributes& set_sliding_window_length(int const value);
 
 SDPA_attributes& set_bias(std::shared_ptr<Tensor_attributes> value);
@@ -292,21 +293,21 @@ SDPA_backward_attributes& set_score_mod(std::function<Tensor_t(Graph_t, Tensor_t
 
 // Use in combination to set_diagonal_alignment to set (bottom right) causal masking
 SDPA_backward_attributes& set_diagonal_alignment(DiagonalAlignment_t const alignment);
-SDPA_backward_attributes& set_left_bound(int const value);
-SDPA_backward_attributes& set_right_bound(int const value);
+SDPA_backward_attributes& set_diagonal_band_left_bound(int const value);
+SDPA_backward_attributes& set_diagonal_band_right_bound(int const value);
 
 // DEPRECATED
 // Sets the diagonal position to TOP_LEFT
-// calls set_right_bound(0) if no right_bound was specified
+// calls set_diagonal_band_right_bound(0) if no right_bound was specified
 SDPA_backward_attributes& set_causal_mask(bool const value);
 
 // DEPRECATED
 // Sets the diagonal position to BOTTOM_RIGHT
-// and calls set_right_bound(0) if no right_bound was specified
+// and calls set_diagonal_band_right_bound(0) if no right_bound was specified
 SDPA_backward_attributes& set_causal_mask_bottom_right(bool const value);
 
 // DEPRECATED
-// calls set_left_bound(value)
+// calls set_diagonal_band_left_bound(value)
 SDPA_backward_attributes& set_sliding_window_length(int const value);
 
 SDPA_backward_attributes& set_bias(std::shared_ptr<Tensor_attributes> value);

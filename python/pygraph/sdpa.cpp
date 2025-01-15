@@ -83,7 +83,7 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
     if (!sliding_window.is_none()) {
         if (py::isinstance<py::int_>(sliding_window)) {
             int sliding_window_value = sliding_window.cast<int64_t>();
-            attributes.set_left_bound(sliding_window_value);
+            attributes.set_diagonal_band_left_bound(sliding_window_value);
         } else {
             throw std::runtime_error("sliding window must be an int (or None)");
         }
@@ -91,17 +91,17 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
 
     if (!left_bound.is_none()) {
         if (py::isinstance<py::int_>(left_bound)) {
-            attributes.set_left_bound(left_bound.cast<int64_t>());
+            attributes.set_diagonal_band_left_bound(left_bound.cast<int64_t>());
         } else {
-            throw std::runtime_error("left_bound must be an int (or None)");
+            throw std::runtime_error("diagonal_band_left_bound must be an int (or None)");
         }
     }
 
     if (!right_bound.is_none()) {
         if (py::isinstance<py::int_>(right_bound)) {
-            attributes.set_right_bound(right_bound.cast<int32_t>());
+            attributes.set_diagonal_band_right_bound(right_bound.cast<int32_t>());
         } else {
-            throw std::runtime_error("right_bound must be an int (or None)");
+            throw std::runtime_error("diagonal_band_right_bound must be an int (or None)");
         }
     }
 
@@ -218,7 +218,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     if (!sliding_window.is_none()) {
         if (py::isinstance<py::int_>(sliding_window)) {
             int sliding_window_value = sliding_window.cast<int64_t>();
-            attributes.set_left_bound(sliding_window_value);
+            attributes.set_diagonal_band_left_bound(sliding_window_value);
         } else {
             throw std::runtime_error("sliding window must be an int (or None)");
         }
@@ -226,17 +226,17 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 
     if (!left_bound.is_none()) {
         if (py::isinstance<py::int_>(left_bound)) {
-            attributes.set_left_bound(left_bound.cast<int64_t>());
+            attributes.set_diagonal_band_left_bound(left_bound.cast<int64_t>());
         } else {
-            throw std::runtime_error("left_bound must be an int (or None)");
+            throw std::runtime_error("diagonal_band_left_bound must be an int (or None)");
         }
     }
 
     if (!right_bound.is_none()) {
         if (py::isinstance<py::int_>(right_bound)) {
-            attributes.set_right_bound(right_bound.cast<int64_t>());
+            attributes.set_diagonal_band_right_bound(right_bound.cast<int64_t>());
         } else {
-            throw std::runtime_error("right_bound must be an int (or None)");
+            throw std::runtime_error("diagonal_band_right_bound must be an int (or None)");
         }
     }
 
@@ -488,8 +488,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("diagonal_alignment", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT),
-          py::arg_v("left_bound", py::none()),
-          py::arg_v("right_bound", py::none()),
+          py::arg_v("diagonal_band_left_bound", py::none()),
+          py::arg_v("diagonal_band_right_bound", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
           py::arg_v("paged_attention_k_table", py::none()),
@@ -519,9 +519,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
                 Preferred masking Args:
-                    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-                    left_bround (Optional[int]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-                    right_bound (Optional[int]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+                    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and diagonal_band_right_bound=0. Default is TOP_LEFT.
+                    left_bround (Optional[int]): An integer >= 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+                    diagonal_band_right_bound (Optional[int]): An integer >= 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
                 Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
                     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
@@ -552,8 +552,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("use_causal_mask_bottom_right", false),
           py::arg_v("sliding_window_length", py::none()),
           py::arg_v("diagonal_alignment", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT),
-          py::arg_v("left_bound", py::none()),
-          py::arg_v("right_bound", py::none()),
+          py::arg_v("diagonal_band_left_bound", py::none()),
+          py::arg_v("diagonal_band_right_bound", py::none()),
           py::arg_v("dropout", py::none()),
           py::arg_v("rng_dump", nullptr),
           py::arg_v("use_deterministic_algorithm", false),
@@ -584,9 +584,9 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
                 Preferred masking Args:
-                    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-                    left_bround (Optional[int]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-                    right_bound (Optional[int]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+                    diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and diagonal_band_right_bound=0. Default is TOP_LEFT.
+                    diagonal_band_left_bround (Optional[int]): An integer >= 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+                    diagonal_band_right_bound (Optional[int]): An integer >= 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
                 Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
                     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
                     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
