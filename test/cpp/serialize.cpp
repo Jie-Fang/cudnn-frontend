@@ -449,7 +449,6 @@ TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
                             .set_is_inference(false)
                             .set_attn_scale(attn_scale)
                             .set_alibi_mask(true)
-                            .set_causal_mask(false)
                             .set_dropout(0.1f, seed, offset)
                             .set_bias(bias)
                             .set_padding_mask(true)
@@ -535,7 +534,8 @@ TEST_CASE("sdpa backward graph serialization", "[graph][serialize]") {
 
     auto sdpa_backward_options = fe::graph::SDPA_backward_attributes()
                                      .set_name("flash_attention_backward")
-                                     .set_causal_mask(true)
+                                     .set_diagonal_alignment(cudnn_frontend::DiagonalAlignment_t::TOP_LEFT)
+                                     .set_diagonal_band_right_bound(0)
                                      .set_attn_scale(attn_scale)
                                      .set_bias(bias)
                                      .set_dropout(0.1f, dropout_seed, dropout_offset)

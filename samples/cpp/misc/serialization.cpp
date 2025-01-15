@@ -273,7 +273,11 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         auto sdpa_options = fe::graph::SDPA_attributes().set_name("flash_attention").set_is_inference(is_inference);
 
-        sdpa_options.set_causal_mask(use_causal_mask);
+        if (use_causal_mask) {
+            sdpa_options.set_diagonal_alignment(cudnn_frontend::DiagonalAlignment_t::TOP_LEFT)
+                .set_diagonal_band_right_bound(0);
+        }
+
         sdpa_options.set_alibi_mask(use_alibi_mask);
 
         if (is_attn_scale) {
