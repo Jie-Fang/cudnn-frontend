@@ -248,6 +248,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
+        // validate alibi requirements
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.alibi_mask && !(attributes.right_bound.has_value() && attributes.right_bound.value() == 0),
+                        error_code_t::GRAPH_NOT_SUPPORTED,
+                        "When alibi mask is used, diagonal_band_right_bound needs to be set to 0.");
+
         // validate options for bias mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && (bias_mask->second->get_data_type() == DataType_t::BOOLEAN),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
@@ -913,6 +918,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(has_attn_scale && attributes.attn_scale_value.has_value(),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
+
+        // validate alibi requirements
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.alibi_mask && !(attributes.right_bound.has_value() && attributes.right_bound.value() == 0),
+                        error_code_t::GRAPH_NOT_SUPPORTED,
+                        "When alibi mask is used, diagonal_band_right_bound needs to be set to 0.");
 
         // validate options for bias mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && (bias_mask->second->get_data_type() == DataType_t::BOOLEAN),
