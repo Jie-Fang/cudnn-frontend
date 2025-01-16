@@ -360,7 +360,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // If user has set sm_version allow SM specific checks
         if (context.get_sm_version() > 0) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(80 < context.get_sm_version(), error_code_t::GRAPH_NOT_SUPPORTED,
+            RETURN_CUDNN_FRONTEND_ERROR_IF(80 > context.get_sm_version(), error_code_t::GRAPH_NOT_SUPPORTED,
                                         "cudnn SDPA operation requires Ampere and above");
         }
  
