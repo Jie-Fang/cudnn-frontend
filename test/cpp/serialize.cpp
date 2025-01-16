@@ -449,6 +449,7 @@ TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
                             .set_is_inference(false)
                             .set_attn_scale(attn_scale)
                             .set_alibi_mask(true)
+                            .set_diagonal_band_right_bound(0)
                             .set_dropout(0.1f, seed, offset)
                             .set_bias(bias)
                             .set_padding_mask(true)
