@@ -248,6 +248,11 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
+        // validate alibi requirements
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.alibi_mask && !(attributes.right_bound.has_value() && attributes.right_bound.value() == 0),
+                        error_code_t::GRAPH_NOT_SUPPORTED,
+                        "When alibi mask is used, diagonal_band_right_bound needs to be set to 0.");
+
         // validate options for bias mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && (bias_mask->second->get_data_type() == DataType_t::BOOLEAN),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
@@ -288,9 +293,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (detail::get_backend_version() < 90600) && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
+                                       "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64, for cudnn version below 9.6.0");
 
         //  NVTE_SBHD or NVTE_BSHD is only supported for bottom right causal mask and sliding window
 
@@ -355,7 +360,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // If user has set sm_version allow SM specific checks
         if (context.get_sm_version() > 0) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(80 < context.get_sm_version(), error_code_t::GRAPH_NOT_SUPPORTED,
+            RETURN_CUDNN_FRONTEND_ERROR_IF(80 > context.get_sm_version(), error_code_t::GRAPH_NOT_SUPPORTED,
                                         "cudnn SDPA operation requires Ampere and above");
         }
  
@@ -914,6 +919,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "attn_scale with tensor and value cannot be set at the same time.");
 
+        // validate alibi requirements
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.alibi_mask && !(attributes.right_bound.has_value() && attributes.right_bound.value() == 0),
+                        error_code_t::GRAPH_NOT_SUPPORTED,
+                        "When alibi mask is used, diagonal_band_right_bound needs to be set to 0.");
+
         // validate options for bias mask
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && (bias_mask->second->get_data_type() == DataType_t::BOOLEAN),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
@@ -945,9 +955,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False. Further is_ragged==True is only allowed when padding_mask=True.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (detail::get_backend_version() < 90600) && ((s_q % 64 != 0) || (s_kv % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64");
+                                       "Bottom right causal mask is only supported with s_q multiple of 64, and s_kv multiple of 64, for cudnn version below 9.6.0");
 
         // validate options for sliding window length
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && attributes.left_bound.value() <= 0,

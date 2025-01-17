@@ -1523,14 +1523,14 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     // Sets the diagonal position to top left and
-    // calls set_right_bound(0) if no right_bound was specified
+    // calls set_diagonal_band_right_bound(0) if no right_bound was specified
     // TODO: Deprecate
     SDPA_attributes&
     set_causal_mask(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT);
             if (!right_bound.has_value()) {
-                set_right_bound(0);
+                set_diagonal_band_right_bound(0);
             }
         }
 
@@ -1538,14 +1538,14 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     // Sets the diagonal position to the bottom right (on a per-sequence basis)
-    // and calls set_right_bound(0) if no right_bound was specified
+    // and calls set_diagonal_band_right_bound(0) if no right_bound was specified
     // TODO: Deprecate
     SDPA_attributes&
     set_causal_mask_bottom_right(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::BOTTOM_RIGHT);
             if (!right_bound.has_value()) {
-                set_right_bound(0);
+                set_diagonal_band_right_bound(0);
             }
         }
         return *this;
@@ -1557,21 +1557,21 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         return *this;
     }
 
-    // calls set_left_bound(value)
+    // calls set_diagonal_band_left_bound(value)
     // TODO: Deprecate
     SDPA_attributes&
     set_sliding_window_length(int const value) {
-        return set_left_bound(value);
+        return set_diagonal_band_left_bound(value);
     }
 
     SDPA_attributes&
-    set_left_bound(int const value) {
+    set_diagonal_band_left_bound(int const value) {
         left_bound = value;
         return *this;
     }
 
     SDPA_attributes&
-    set_right_bound(int const value) {
+    set_diagonal_band_right_bound(int const value) {
         right_bound = value;
         return *this;
     }
@@ -1890,48 +1890,48 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     }
 
     // Sets the diagonal position to top left and
-    // calls set_right_bound(0) if no right_bound was specified
+    // calls set_diagonal_band_right_bound(0) if no right_bound was specified
     // TODO: Deprecate
     SDPA_backward_attributes&
     set_causal_mask(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT);
             if (!right_bound.has_value()) {
-                set_right_bound(0);
+                set_diagonal_band_right_bound(0);
             }
         }
         return *this;
     }
 
     // Sets the diagonal position to the bottom right (on a per-sequence basis)
-    // and calls set_right_bound(0) if no right_bound was specified
+    // and calls set_diagonal_band_right_bound(0) if no right_bound was specified
     // TODO: Deprecate
     SDPA_backward_attributes&
     set_causal_mask_bottom_right(bool const value) {
         if (value) {
             set_diagonal_alignment(DiagonalAlignment_t::BOTTOM_RIGHT);
             if (!right_bound.has_value()) {
-                set_right_bound(0);
+                set_diagonal_band_right_bound(0);
             }
         }
         return *this;
     }
 
-    // calls set_left_bound(value)
+    // calls set_diagonal_band_left_bound(value)
     // TODO: Deprecate
     SDPA_backward_attributes&
     set_sliding_window_length(int const value) {
-        return set_left_bound(value);
+        return set_diagonal_band_left_bound(value);
     }
 
     SDPA_backward_attributes&
-    set_left_bound(int const value) {
+    set_diagonal_band_left_bound(int const value) {
         left_bound = value;
         return *this;
     }
 
     SDPA_backward_attributes&
-    set_right_bound(int const value) {
+    set_diagonal_band_right_bound(int const value) {
         right_bound = value;
         return *this;
     }

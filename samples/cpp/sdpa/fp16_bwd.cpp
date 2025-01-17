@@ -118,8 +118,12 @@ create_sdpa_backward_graph(int64_t const b,
     auto sdpa_options = fe::graph::SDPA_backward_attributes()
                             .set_name("flash_attention_backward")
                             .set_alibi_mask(alibi_mask)
-                            .set_causal_mask(causal_mask)
                             .set_attn_scale(attn_scale);
+
+    if (causal_mask) {
+        sdpa_options.set_diagonal_alignment(cudnn_frontend::DiagonalAlignment_t::TOP_LEFT)
+            .set_diagonal_band_right_bound(0);
+    }
 
     // If attention bias is provided, set it
     if (has_attn_bias) {
