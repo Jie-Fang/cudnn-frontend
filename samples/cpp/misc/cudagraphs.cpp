@@ -20,10 +20,26 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <catch2/catch_test_macros.hpp>
 #include "../utils/helpers.h"
+#include <catch2/catch_test_macros.hpp>
 
 #include <cudnn_frontend.h>
+
+/*
+Run this example by using command:
+bin/samples "Cuda graphs with matmul add"
+
+This example shows how to construct a CUDA graph using cuDNN's
+native CUDA graph API (as opposed to using CUDA graph capture),
+using matmul add as the example operation.
+
+In this example, the constructed CUDA graph is embedded as a
+child of a larger CUDA graph (as we expect many users and
+frameworks will want to do).
+
+For a different example showing how to construct a CUDA graph and
+execute it by itself, see ../sdpa/fp16_fwd_with_cudagraphs.cpp.
+*/
 
 #define A_UID 0
 #define B_UID 1
@@ -61,8 +77,14 @@ create_graph(int64_t b, int64_t m, int64_t n, int64_t k, float scale_value) {
 }
 
 TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
+    // cuDNN only supports native CUDA graphs in CUDA 12.0 or above.
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
+
     //// Main graph
-    // This example shows how to add a cudnn cuda graph to an already existing cuda graph.
+    // This example shows how to add a cudnn cuda graph to an already existing
+    // cuda graph.
     cudaGraph_t main_cuda_graph;
     cudaGraphCreate(&main_cuda_graph, 0);
 
@@ -71,11 +93,12 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     float scale_value = .5f;
     auto graph        = create_graph(b, m, n, k, scale_value);
 
-    // Create the execution plan, as that is needed to populate cuda graph with cudnn kernels
+    // Create the execution plan, as that is needed to populate cuda graph with
+    // cudnn kernels
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));
 
-    // Validare the graph and lower the FE graph to BE graph
+    // Validate the graph and lower the FE graph to BE graph
     REQUIRE(graph->validate().is_good());
     REQUIRE(graph->build_operation_graph(handle).is_good());
     REQUIRE(graph->create_execution_plans({cudnn_frontend::HeurMode_t::A}).is_good());
@@ -87,11 +110,14 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
         REQUIRE(status.is_good());
     } else {
         REQUIRE(status.is_bad());
-        SKIP("cudnn versions 9.5 and earlier don't support behavior note of SUPPORTS_CUDA_GRAPH_NATIVE_API.");
+        SKIP(
+            "cudnn versions earlier than 9.5 don't support behavior note of "
+            "SUPPORTS_CUDA_GRAPH_NATIVE_API.");
     }
 
     //// Test code
-    // Does not necessarily need to be included in user code, in case you are referring to this sample for your usecase.
+    // Does not necessarily need to be included in user code, in case you are
+    // referring to this sample for your usecase.
     // START
     std::vector<cudnn_frontend::BehaviorNote_t> notes;
     status = graph->get_behavior_notes(notes);
@@ -113,7 +139,8 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     REQUIRE(graph->build_plans(handle).is_good());
 
     //// Test code
-    // Does not necessarily need to be included in user code, in case you are referring to this sample for your usecase.
+    // Does not necessarily need to be included in user code, in case you are
+    // referring to this sample for your usecase.
     // START
     notes.clear();
     status = graph->get_behavior_notes(notes);
@@ -129,7 +156,7 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     REQUIRE(supports_cuda_graph_native_api);
     // END
 
-    //// Populate an exisiting cuda graph with cudnn's cuda graph
+    //// Populate an existing cuda graph with cudnn's cuda graph
     cudaGraph_t cudnn_cuda_graph;
 
     // Initialize the cudnn cuda graph.
@@ -143,7 +170,7 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     Surface<half> a_gpu(b * m * k, false, starter_value);
     Surface<half> b_gpu(b * k * n, false, starter_value);
     Surface<half> d_gpu(b * m * n, false);
-    std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, void*> variant_pack = {
+    std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, void *> variant_pack = {
         {A_UID, a_gpu.devPtr}, {B_UID, b_gpu.devPtr}, {C_UID, &bias_value}, {D_UID, d_gpu.devPtr}};
 
     REQUIRE(graph->populate_cuda_graph(handle, variant_pack, workspace.devPtr, cudnn_cuda_graph).is_good());
@@ -184,10 +211,11 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     Surface<half> a_gpu_new(b * m * k, false, starter_value_new);
     Surface<half> b_gpu_new(b * k * n, false, starter_value_new);
     Surface<half> d_gpu_new(b * m * n, false);
-    std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, void*> variant_pack_new = {
+    std::unordered_map<cudnn_frontend::graph::Tensor_attributes::uid_t, void *> variant_pack_new = {
         {A_UID, a_gpu_new.devPtr}, {B_UID, b_gpu_new.devPtr}, {C_UID, &bias_value_new}, {D_UID, d_gpu_new.devPtr}};
 
-    // This needs a cudnn cuda graph, which we can query from the cudnn_node in the main graph
+    // This needs a cudnn cuda graph, which we can query from the cudnn_node in
+    // the main graph
     cudaGraph_t cudnn_cuda_graph_new;
     cudaGraphChildGraphNodeGetGraph(cudnn_node_in_main_graph, &cudnn_cuda_graph_new);
 
