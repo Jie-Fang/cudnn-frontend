@@ -323,7 +323,7 @@ struct Surface {
         CUDA_CHECK(cudaDeviceSynchronize());
     }
 
-    Surface(const Surface& other) : n_elems(n_elems) {
+    Surface(const Surface& other) : n_elems(other.n_elems) {
         CUDA_CHECK(cudaMalloc((void**)&(devPtr), (size_t)((n_elems) * sizeof(devPtr[0]))));
         hostPtr = (T_ELEM*)calloc((size_t)n_elems, sizeof(hostPtr[0]));
         std::copy(other.hostPtr, other.hostPtr + n_elems, hostPtr);

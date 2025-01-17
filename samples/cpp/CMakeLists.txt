@@ -10,6 +10,7 @@ add_executable(
     sdpa/fp16_bwd_with_flexible_graphs.cpp
     sdpa/fp16_fwd_with_custom_dropout.cpp
     sdpa/fp16_fwd_with_paged_caches.cpp
+    sdpa/fp16_fwd_with_cudagraphs.cpp
     sdpa/fp8_fwd.cpp
     sdpa/fp8_bwd.cpp
     sdpa/fp8_fwd_bottom_right_causal_mask.cpp

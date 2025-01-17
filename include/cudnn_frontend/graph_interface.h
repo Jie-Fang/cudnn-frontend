@@ -284,22 +284,6 @@ class Graph : public ICudnn, public INode {
         CHECK_CUDNN_FRONTEND_ERROR(
             extend_tensor_map_with_pass_by_value_tensors_(uid_to_device_ptrs, tensor_to_pass_by_value));
 
-        // Make sure device pointer is provided for all uids expected for this plan
-        std::vector<void *> device_ptrs;
-        std::vector<uid_t> uids;
-
-        device_ptrs.reserve(variant_pack_uids.size());
-        uids.reserve(variant_pack_uids.size());
-
-        for (auto const &uid : variant_pack_uids) {
-            auto search = uid_to_device_ptrs.find(uid);
-            RETURN_CUDNN_FRONTEND_ERROR_IF(search == uid_to_device_ptrs.end(),
-                                           error_code_t::INVALID_VARIANT_PACK,
-                                           "Uid " + std::to_string(uid) + " does not exist in variant pack.");
-            device_ptrs.push_back(search->second);
-            uids.push_back(uid);
-        }
-
         ////////////////////////////
         //// WORKSPACE HANDLING ////
         ////////////////////////////
@@ -344,6 +328,22 @@ class Graph : public ICudnn, public INode {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 num_root_nodes != 1, error_code_t::INVALID_VALUE, "cudnn_cuda_graph should have exactly 1 root node.");
             CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, &current_node, &num_root_nodes));
+        }
+
+        // Make sure device pointer is provided for all uids expected for this plan
+        std::vector<void *> device_ptrs;
+        std::vector<uid_t> uids;
+
+        device_ptrs.reserve(variant_pack_uids.size());
+        uids.reserve(variant_pack_uids.size());
+
+        for (auto const &uid : variant_pack_uids) {
+            auto search = uid_to_device_ptrs.find(uid);
+            RETURN_CUDNN_FRONTEND_ERROR_IF(search == uid_to_device_ptrs.end(),
+                                           error_code_t::INVALID_VARIANT_PACK,
+                                           "Uid " + std::to_string(uid) + " does not exist in variant pack.");
+            device_ptrs.push_back(search->second);
+            uids.push_back(uid);
         }
 
         ///////////////////
