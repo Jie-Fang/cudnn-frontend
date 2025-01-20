@@ -1,0 +1,127 @@
+<SmallMatMulShapeK>
+    kv=gemm_K 4:
+    kv=gemm_K 8:
+    kv=gemm_K 16:
+
+<MatmulShapeK>
+    kv=gemm_K 32:
+    kv=gemm_K 64:
+    kv=gemm_K 128:
+    kv=gemm_K 256:
+
+<MatmulShapeB>
+    kv=gemm_B 1:
+    kv=gemm_B 2:
+
+<MatmulShapeMN>
+    kv=gemm_M 1024: * kv=gemm_N 1024:
+    kv=gemm_M 1024: * kv=gemm_N 32:
+
+<MatmulUnfriendylyAlighmentShape>
+    kv=gemm_M 1024: * kv=gemm_N 4:
+    kv=gemm_M 1024: * kv=gemm_N 8:
+    kv=gemm_M 1024: * kv=gemm_N 16:
+
+<MatmulLayout>
+    kv=gemm_layout_A ROW_MAJOR: * kv=gemm_layout_B COL_MAJOR: * kv=gemm_layout_C ROW_MAJOR:
+    kv=gemm_layout_A ROW_MAJOR: * kv=gemm_layout_B ROW_MAJOR: * kv=gemm_layout_C ROW_MAJOR:
+    kv=gemm_layout_A COL_MAJOR: * kv=gemm_layout_B COL_MAJOR: * kv=gemm_layout_C ROW_MAJOR:
+    kv=gemm_layout_A COL_MAJOR: * kv=gemm_layout_B ROW_MAJOR: * kv=gemm_layout_C ROW_MAJOR:
+
+<MatmulFusionDataType>
+    kv=Tin bf16: * kv=Tcomp float: * kv=Tout float: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,16: * cluster_shape=1,1,1:
+    kv=Tin float: * kv=Tcomp float: * kv=Tout float: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,8: * cluster_shape=1,1,1:
+    kv=Tin float: * kv=Tcomp float: * kv=Tout half: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,8: * cluster_shape=1,1,1:
+    kv=Tin half: * kv=Tcomp half: * kv=Tout half: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,16: * cluster_shape=1,1,1:
+    kv=Tin half: * kv=Tcomp float: * kv=Tout half: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,16: * cluster_shape=1,1,1:
+    kv=Tin half: * kv=Tcomp float: * kv=Tout float: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,16: * cluster_shape=1,1,1:
+    kv=Tin bf16: * kv=Tcomp float: * kv=Tout bf16: * atol 2.5e-03: * rtol 2.5e-03: * tile_size=128,128,64: * mma_shape=128,128,16: * cluster_shape=1,1,1:
+
+<Matmul>
+    R:graphRunner * tensor_ir: * jsonTestName=:Matmul * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulBatchBroadcast>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulBatchBroadcast * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogColBroadcast>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogColBroadcast * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogRowBroadcast>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogRowBroadcast * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogBroadcast>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogBroadcast * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogScalarBroadcast>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogScalarBroadcast * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogLoadMultiTensorTin1>
+    kv=Tin1 half:
+
+<MatmulEpilogLoadMultiTensor>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogLoadMultiTensor * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogStoreMultiTensor>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogStoreMultiTensor * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogSameTensorMultiTimes>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogSameTensorMultiTimes * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogPwColReduction>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatMulPwColReduction * backendEngine 0: * engineCfgSweep 0:
+
+<MatmulEpilogPwRowReduction>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatMulPwRowReduction * backendEngine 0: * engineCfgSweep 0:
+
+<MatMulColReduction>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatMulColReduction * backendEngine 0: * engineCfgSweep 0:
+
+<PointwiseDatatype>
+    Tstore=float:
+
+<PointwiseBinary>
+    kv=PW_MODE CUDNN_POINTWISE_ADD:
+    // kv=PW_MODE CUDNN_POINTWISE_ADD_SQUARE:
+    // kv=PW_MODE CUDNN_POINTWISE_MAX:
+    // kv=PW_MODE CUDNN_POINTWISE_MIN:
+    // kv=PW_MODE CUDNN_POINTWISE_MUL:
+    // kv=PW_MODE CUDNN_POINTWISE_SUB:
+    // kv=PW_MODE CUDNN_POINTWISE_DIV:
+    // kv=PW_MODE CUDNN_POINTWISE_MOD:
+    // kv=PW_MODE CUDNN_POINTWISE_POW:
+    // kv=PW_MODE CUDNN_POINTWISE_GELU_BWD:
+    // kv=PW_MODE CUDNN_POINTWISE_ELU_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_SOFTPLUS_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_SWISH_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_SIGMOID_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_TANH_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_GELU_APPROX_TANH_BWD:
+    // kv=PW_MODE CUDNN_POINTWISE_RELU_BWD:
+
+<MatmulEpilogPointwiseBin>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogPointwiseBin * backendEngine 0: * engineCfgSweep 0:
+
+<PointwiseUnary>
+    // kv=PW_MODE CUDNN_POINTWISE_ABS:
+    // kv=PW_MODE CUDNN_POINTWISE_CEIL:
+    // kv=PW_MODE CUDNN_POINTWISE_COS:
+    // kv=PW_MODE CUDNN_POINTWISE_EXP:
+    // kv=PW_MODE CUDNN_POINTWISE_FLOOR:
+    // kv=PW_MODE CUDNN_POINTWISE_LOG:
+    // kv=PW_MODE CUDNN_POINTWISE_NEG:
+    // kv=PW_MODE CUDNN_POINTWISE_RSQRT:
+    // kv=PW_MODE CUDNN_POINTWISE_SIN:
+    // kv=PW_MODE CUDNN_POINTWISE_SQRT:
+    // kv=PW_MODE CUDNN_POINTWISE_TAN:
+    // kv=PW_MODE CUDNN_POINTWISE_ERF:
+    // kv=PW_MODE CUDNN_POINTWISE_IDENTITY:
+    kv=PW_MODE CUDNN_POINTWISE_RELU_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_TANH_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_SIGMOID_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_GELU_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_GELU_APPROX_TANH_FWD:
+    // kv=PW_MODE CUDNN_POINTWISE_GEN_INDEX:
+    // kv=PW_MODE CUDNN_POINTWISE_LOGICAL_NOT:
+
+<MatmulEpilogPointwiseUn>
+    R:graphRunner * tensor_ir: * jsonTestName=:MatmulEpilogPointwiseUn * backendEngine 0: * engineCfgSweep 0:

@@ -5,7 +5,14 @@ from utils import (
     ImplementationError,
     create_nhwc_strides,
 )
+
+from nv_tensor_ir import ir
+from nv_tensor_ir.dialects import nv_tensor_ir, func, arith, scf
+
+import nv_tensor_ir.extras.types as T
+
 import cudnn
+import test_tensor_ir as tti
 
 reportCurrentTime("import_cudnn")
 import json
@@ -191,6 +198,14 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-pad_d", action="store", default=0)
     l_parser.add_argument("-pad_h", action="store", default=0)
     l_parser.add_argument("-pad_w", action="store", default=0)
+
+    # tensorir compilation config
+    l_parser.add_argument("-tensor_ir", action="store_true")
+    l_parser.add_argument("-tile_size", action="store")
+    l_parser.add_argument("-mma_shape", action="store")
+    l_parser.add_argument("-cluster_shape", action="store")
+    l_parser.add_argument("-cta_count", action="store")
+
     l_parser.add_argument("-u", action="store", default=1)
     l_parser.add_argument("-v", action="store", default=1)
     l_parser.add_argument(
@@ -434,7 +449,9 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
             concrete_test_dict, legacy_args.backendEngine
         )
 
-        if legacy_args.timing_loop == 0:
+        if legacy_args.tensor_ir:
+            run_tensor_ir_test_from_json_definition(legacy_args, testGraph, concrete_test_dict)
+        elif legacy_args.timing_loop == 0:
             run_test_from_json_definition(testGraph, concrete_test_dict)
         else:
             testGraph.build_cudnn_graph()
@@ -449,6 +466,15 @@ def run_test_from_legacy_args(parent_args, unparsed_graphRunner_args):
         print("MB Unsupported: ", e.reason)
         raise e
 
+def get_tensorir_compilation_config(legacy_args, concrete_test_dict):
+    if hasattr(legacy_args, 'tile_size'):
+        concrete_test_dict['tile_size'] = list(map(int, legacy_args.tile_size.split(",")))
+    if hasattr(legacy_args, 'cluster_shape'):
+        concrete_test_dict['cluster_shape'] = list(map(int, legacy_args.cluster_shape.split(",")))
+    if hasattr(legacy_args, 'mma_shape'):
+        concrete_test_dict['mma_shape'] = list(map(int, legacy_args.mma_shape.split(",")))
+    if hasattr(legacy_args, 'cta_count'):
+        concrete_test_dict['cta_count'] = int(legacy_args.cta_count)
 
 # @brief: A utility class to help parse graphRunner json graph definitions
 # @details: This is a utility class to extract infomration from a json graph definition (graphRunner json format)
@@ -572,6 +598,7 @@ class Legacy_tensor:
             "value": "value",
             "mean": "mean",
             "std_dev": "std_dev",
+            "isByValue": "isByValue",
         }
     )
 
@@ -804,7 +831,6 @@ def setup_test_graph_from_json(json_dict, backendEngine=-1):
             TGTensors[output_name] = output_tensor
 
         Operations[name] = (test_graph_op, legacy_op)
-
     # Propagate any properties from the json test graph's output tensors
     # At this point TGTensors only contains output tensors.
     # Since output tensors are created in cudnn as a result of adding an operation,
@@ -830,9 +856,14 @@ def setup_test_graph_from_json(json_dict, backendEngine=-1):
 
         t = testGraph.tensor(**legacy_tensor.get_tensor_properties())
         TGTensors[jtensor["name"]] = t
-
     # Finalize the connections by adding inputs and properties to the operation nodes
     for name, (test_graph_op, legacy_op) in Operations.items():
+        for output in test_graph_op.output:
+            for tensor_name, output_info in TGTensors.items():
+                if output.name == output_info.name:
+                    for jtensor in jtensor_dict:
+                        if tensor_name == jtensor['name'] and ('isVirtual' not in jtensor or jtensor['isVirtual'] == False):
+                            test_graph_op.set_output_node(True)
         test_graph_op.set_kwargs(create_kwargs(legacy_op, TGTensors))
 
     return testGraph
@@ -855,6 +886,36 @@ def run_test_from_json_definition(testGraph, json_dict):
     reportCurrentTime("test_setup")
     testGraph.cudnn_execute_and_compare_to_reference(atol=atol, rtol=rtol)
 
+def run_tensor_ir_test_from_json_definition(legacy_args, testGraph, json_dict):
+    get_tensorir_compilation_config(legacy_args, json_dict)
+    testGraph.build_cudnn_graph(False)
+    tensor_ir_tester = tti.test_tensor_ir(testGraph)
+    tensor_ir_module = tensor_ir_tester.build_tensor_ir_module()
+
+    # Read in rtol/atol from json
+    atol = 1e-2
+    rtol = 1e-2
+    if "tolerances" in json_dict:
+        atol = float(json_dict["tolerances"]["abs"])
+        rtol = float(json_dict["tolerances"]["rel"])
+
+    # Do something with tensor_ir_module...
+    reportCurrentTime("test_setup")
+    tensor_ir_module.dump()
+    tile_size = [128, 128, 64]
+    mma_shape = [128, 128, 16]
+    cluster_shape = [1, 1, 1]
+    cta_count = 1
+    if 'tile_size' in json_dict:
+        tile_size = json_dict['tile_size']
+    if 'mma_shape' in json_dict:
+        mma_shape = json_dict['mma_shape']
+    if 'cluster_shape' in json_dict:
+        cluster_shape = json_dict['cluster_shape']
+    if 'cta_count' in json_dict:
+        cta_count = json_dict['cta_count']
+    options = nv_tensor_ir.TensorConversionOptions(tile_size, mma_shape, cluster_shape, cta_count)
+    tensor_ir_tester.run_tensor_ir_module(tensor_ir_module, options)
 
 # @brief: Create a pycudnn node from the legacy_op
 def create_test_graph_node(legacy_op):

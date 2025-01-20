@@ -394,6 +394,12 @@ PyGraph::build(std::vector<cudnn_frontend::HeurMode_t> const& modes) {
 }
 
 void
+PyGraph::build() {
+    validate();
+    build_operation_graph();
+}
+
+void
 PyGraph::check_support() {
     auto status = graph.check_support(handle);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
@@ -598,7 +604,7 @@ init_pygraph_submodule(py::module_& m) {
                 Args:
                     input (cudnn_tensor): The input tensor to be sliced.
                     slices (List[slice]): A list of Python slice objects, one for each dimension.
-                    compute_data_type (Optional[cudnn.data_type]): The data type for computation. 
+                    compute_data_type (Optional[cudnn.data_type]): The data type for computation.
                         Default is NOT_SET.
                     name (Optional[str]): A name for the slice operation.
 
@@ -847,7 +853,8 @@ init_pygraph_submodule(py::module_& m) {
                 Args:
                     index (int): The index of the plan to build.
             )pbdoc")
-        .def("build", &PyGraph::build)
+        .def("build", (void(PyGraph::*)(std::vector<cudnn_frontend::HeurMode_t> const&)) & PyGraph::build)
+        .def("build", (void(PyGraph::*)()) & PyGraph::build)
         .def("get_execution_plan_count",
              &PyGraph::get_execution_plan_count,
              R"pbdoc(

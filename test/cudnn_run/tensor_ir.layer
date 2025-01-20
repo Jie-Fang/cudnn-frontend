@@ -1,0 +1,29 @@
+"matmul" = Matmul * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_batch_broadcast" = MatmulBatchBroadcast * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_pointwise" = MatmulEpilogColBroadcast * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_col_pointwise" = MatmulEpilogColBroadcast * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_row_broadcast" = MatmulEpilogRowBroadcast * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_scalar_broadcast" = MatmulEpilogScalarBroadcast * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_load_multi_tensor" = MatmulEpilogLoadMultiTensor * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulEpilogLoadMultiTensorTin1 * MatmulLayout
+
+"matmul_epilog_store_multi_tensor" = MatmulEpilogStoreMultiTensor * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_same_tensor_multi_times" = MatmulEpilogSameTensorMultiTimes * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_pointwise_binary" = MatmulEpilogPointwiseBin * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * PointwiseDatatype * MatmulLayout * PointwiseBinary
+
+"matmul_epilog_pointwise_binary_unfriendly_alignment" = MatmulEpilogPointwiseBin * MatmulShapeB * MatmulUnfriendylyAlighmentShape * MatmulShapeK * MatmulFusionDataType * PointwiseDatatype * MatmulLayout * PointwiseBinary
+
+"matmul_epilog_pointwise_unary" = MatmulEpilogPointwiseUn * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * PointwiseDatatype * MatmulLayout * PointwiseUnary
+
+"matmul_epilog_pw_col_reduction" = MatmulEpilogPwColReduction * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_pw_row_reduction" = MatmulEpilogPwRowReduction * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
+
+"matmul_epilog_col_reduction" = MatMulColReduction * MatmulShapeB * MatmulShapeMN * MatmulShapeK * MatmulFusionDataType * MatmulLayout
