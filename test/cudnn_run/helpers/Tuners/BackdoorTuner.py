@@ -1,0 +1,185 @@
+# DoorTuner is responsible for creating heuristics based on backdoor values
+# Most importantly, this class does the following:
+#   - run(flags) runs a flag and adds it to the heuristic
+#   - output_heuristic() prints out heuristic to file
+
+from DecisionTreeGen.DecisionTreeGenerator import DecisionTreeGenerator
+
+# Removes backdoor from string of flags
+def scrub_backdoor(flags):
+    backdoor_idx = flags.index('-backdoor')
+
+    if backdoor_idx == -1:
+        raise Exception("[BACKDOOR TUNING] Unable to find -backdoor in %s" % str(flags))
+
+    return flags[:backdoor_idx] + flags[backdoor_idx+2:]
+
+
+def tune_to_case(param_vals_raw, param_names, class_val):
+    param_vals = ''.join(param_vals_raw.split()).split(',')
+
+    case = {name: int(val) for name,val in zip(param_names, param_vals)}
+
+    case["class"] = class_val
+
+    return case 
+
+class BackdoorTuner:
+    def __init__(self, query_info):
+        # Set all class members
+        self.name     = query_info.name
+        self.choosers = ''.join(query_info.choosers.split()).split(',')
+        self.backdoors  = query_info.backdoors
+
+        # Set all changing class members
+        self.flags_run      = {}
+        self.tree           = None
+        self.prev_valid     = False
+
+        self.count = 0
+
+    # Add run to BackdoorTuner
+    def add_run(self, run):
+        self.prev_valid = False
+
+        self.count += 1
+
+        # Early exit if run is invalid (has no time)
+        if( not(run.parsed and run.parsed.time) ):
+            return False
+
+        # Scrub backdoor from flags
+        scrubbed_flags = scrub_backdoor(tuple(run.flags))
+
+        # If this flag doesn't exist, just add it
+        if(scrubbed_flags not in self.flags_run):
+            self.flags_run[scrubbed_flags] = run
+
+        # If flag does exist, insert if faster
+        else:
+            # Check if run is faster than previous
+            if(run.parsed.time.seconds < self.flags_run[scrubbed_flags].parsed.time.seconds):
+                self.flags_run[scrubbed_flags] = run
+
+        return True
+        
+    def generate_heuristic(self):
+        if(self.prev_valid == True):
+            return True
+
+        if(self.name == None):
+            return False
+        
+        cases = []
+
+        for flags in self.flags_run:
+            tuning_info = self.flags_run[flags].parsed.tune
+
+            cases.append(tune_to_case(tuning_info.tuners, self.choosers, tuning_info.tuning))
+
+        tree_generator = DecisionTreeGenerator(cases)
+        self.tree = tree_generator.gen_tree()
+
+        self.prev_valid = True
+
+        return True
+
+    def get_class_list(self):
+        if(self.name != None):
+            result = "//\n//\n"
+
+            # Get best for each tune
+            best_tunes = {}
+
+            for flags in self.flags_run:
+                tune    = self.flags_run[flags].parsed.tune.tuning
+                params  = self.flags_run[flags].parsed.tune.tuners
+
+                if tune in best_tunes:
+                    best_tunes[tune].append((" ".join(flags), params))
+
+                else:
+                    best_tunes[tune] = [(" ".join(flags), params)]
+
+            for tune in best_tunes:
+                result += "// %s (%d)\n" % (tune, len(best_tunes[tune]))
+
+                spacer = max([len(i[0]) for i in best_tunes[tune]])
+
+                spacer_class = max([len(str(case[1])) for case in best_tunes[tune]])
+
+                for case in best_tunes[tune]:
+
+                    space_diff_params = ' '*(spacer-len(case[0]))
+                    space_diff_class  = ' '*(spacer_class-len(str(case[1])))
+
+                    classified = self.classify(case[1])
+
+                    warning = ""
+                    
+                    if(classified != tune):
+                        warning = " -> %s" % str(classified)
+
+                    params_list = ''.join(case[1].split()).split(',')
+
+                    result += "//     %s%s %s%s%s\n" % (case[0], space_diff_params, str(params_list), space_diff_class, warning)
+
+                result += "//\n//\n"
+
+            return result
+
+        return None
+
+    def get_scrubbed_cases(self):
+        result = []
+
+        for flag in self.flags_run:
+            result.append(self.flags_run[flag]._replace(flags = flag))
+
+        return result
+
+    def classify(self, tune):
+        self.generate_heuristic()
+
+        case = tune_to_case(tune, self.choosers, None)
+
+        return self.tree.get_class(case)
+    
+    def output_heuristic(self, path):
+        # Orphan tuners shouldn't run heuristics
+        if(self.name != None):
+            self.generate_heuristic()
+
+            out_file = open("%s/%s.h" % (path, self.name), "w")
+
+            # Some info to add to the output
+            HEADER_TAIL = "/////////////////////////////////////////////////////////////////\n"
+
+            dont_edit = "// DO NOT EDIT THIS FILE!\n"
+
+            auto_gen = "// It was automatically generated by heurcheck (heurgen.py)\n"
+
+
+
+            func_signature = ""
+
+            for chooser in self.choosers:
+                func_signature += "int " + str(chooser) + ", "
+
+            func_signature = func_signature[:-2]
+
+            func_header = "static int %s(%s){\n" % (self.name, func_signature);
+
+            out_file.write(HEADER_TAIL)
+            out_file.write(dont_edit)
+            out_file.write(auto_gen)
+            out_file.write(self.get_class_list())
+            out_file.write(HEADER_TAIL)
+            out_file.write("\n\n");
+
+            out_file.write(func_header)
+            out_file.write(self.tree.get_str())
+            out_file.write("\n    return 0; // Just to ensure all cases have a return\n}\n")
+            out_file.close()
+
+        

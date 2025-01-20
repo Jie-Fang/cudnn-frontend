@@ -83,6 +83,7 @@ def pytest_generate_tests(metafunc):
     if (
         metafunc.function.__name__ == "test_python_graph"
         or metafunc.function.__name__ == "test_negative_graph"
+        or metafunc.function.__name__ == "test_tensor_ir_pygraph"
     ):
         # Find all the functions that define testgraphs in location testPath
         base_path = os.path.dirname(
