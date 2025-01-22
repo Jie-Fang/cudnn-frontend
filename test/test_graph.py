@@ -476,54 +476,11 @@ class random_tensor_generator(test_node):
         self.kwargs = kwargs
 
         self.output = [test_tensor(name + "_out", self)]
-        if "isByValue" in self.kwargs:
-            self.is_by_value = self.kwargs["isByValue"]
-            self.output[0].set_is_by_value(self.is_by_value)
 
         data_type = (
             io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
         )
         self.output[0].set_data_type(data_type)
-
-    def initialize_torch_tensor(self, torch_dtype, device):
-        if torch_dtype == torch.bool:
-            self.output[0].ref_data = torch.randint(
-                0,
-                2,
-                self.kwargs["dim"],
-                requires_grad=False,
-                device=device,
-                dtype=torch_dtype,
-            )
-        elif torch_dtype == torch.int8:
-            self.output[0].ref_data = torch.randint(
-                -2,
-                3,
-                self.kwargs["dim"],
-                requires_grad=False,
-                device=device,
-                dtype=torch_dtype,
-            )
-        elif torch_dtype == torch.int32:
-            self.output[0].ref_data = torch.randint(
-                -2,
-                3,
-                self.kwargs["dim"],
-                requires_grad=False,
-                device=device,
-                dtype=torch_dtype,
-            )
-        else:
-            self.output[0].ref_data = torch.normal(
-                0.5,
-                0.5,
-                self.kwargs["dim"],
-                requires_grad=False,
-                device=device,
-                dtype=torch_dtype,
-            )
-            if "stride" in self.kwargs:
-                self.output[0].ref_data = torch.as_strided(self.output[0].ref_data, self.output[0].ref_data.size(), stride = self.kwargs["stride"])
 
     def initialize_random_tensor(self):
         if self.output[0].ref_data is None:
@@ -531,11 +488,42 @@ class random_tensor_generator(test_node):
             # self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
 
             torch_dtype = convert_to_torch_type(self.output[0].data_type)
-            try:
-                self.initialize_torch_tensor(torch_dtype, "cuda")
-            except Exception as error:
-                self.initialize_torch_tensor(torch_dtype, "cpu")
-
+            if torch_dtype == torch.bool:
+                self.output[0].ref_data = torch.randint(
+                    0,
+                    2,
+                    self.kwargs["dim"],
+                    requires_grad=False,
+                    device="cuda",
+                    dtype=torch_dtype,
+                )
+            elif torch_dtype == torch.int8:
+                self.output[0].ref_data = torch.randint(
+                    -2,
+                    3,
+                    self.kwargs["dim"],
+                    requires_grad=False,
+                    device="cuda",
+                    dtype=torch_dtype,
+                )
+            elif torch_dtype == torch.int32:
+                self.output[0].ref_data = torch.randint(
+                    -2,
+                    3,
+                    self.kwargs["dim"],
+                    requires_grad=False,
+                    device="cuda",
+                    dtype=torch_dtype,
+                )
+            else:
+                self.output[0].ref_data = torch.normal(
+                    0.5,
+                    0.5,
+                    self.kwargs["dim"],
+                    requires_grad=False,
+                    device="cuda",
+                    dtype=torch_dtype,
+                )
 
             if self.get_layout() == "NHWC":
                 size = self.output[0].ref_data.size()
@@ -639,8 +627,6 @@ class test_tensor:
 
         self.parent_op = parent_op
 
-        self.is_by_value = False
-
     @property
     def data_type(self):
         if self._data_type is not None:
@@ -674,9 +660,6 @@ class test_tensor:
 
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_stride(stride)
-
-    def set_is_by_value(self, is_by_value):
-        self.is_by_value = is_by_value
 
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
@@ -830,11 +813,8 @@ class test_graph:
         else:
             name = self.create_unique_name("Tensor")
 
-        if "data_type" in kwargs:
-            data_type = kwargs["data_type"]
-        else:
-            data_type = self.io_data_type
-        test_tensor = random_tensor_generator(kwargs, name, data_type)
+        test_tensor = random_tensor_generator(kwargs, name, self.io_data_type)
+
         self.nodes.append(test_tensor)
         # we are assuming only input tensors are explicitly created
         self.entrance_nodes.append(test_tensor)
@@ -923,7 +903,7 @@ class test_graph:
     # @note: this temporarily modifies the is_visited status of the nodes
     # @return the cudnn graph
     # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
-    def build_cudnn_graph(self, use_heuristic_list=True):
+    def build_cudnn_graph(self):
 
         # Setting up graph
         graph = cudnn.pygraph(
@@ -952,7 +932,8 @@ class test_graph:
         self.mark_implicit_output_nodes()
 
         utils.reportCurrentTime("recursive_tree_build")
-        graph.build(self.heuristics) if use_heuristic_list else graph.build()
+
+        graph.build(self.heuristics)
         utils.reportCurrentTime("graph.build")
 
         # Clear the "is_visited" status of the nodes
@@ -1013,7 +994,7 @@ class test_graph:
     def create_workspace_and_variantpack(self):
         # Creating workspace
         workspace = torch.empty(
-            self.cudnn_graph.get_workspace_size(), device="cpu", dtype=torch.uint8
+            self.cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8
         )
 
         variant_pack = {}
@@ -1029,7 +1010,7 @@ class test_graph:
                         dtype=convert_to_torch_type(
                             output.cudnn_tensor.get_data_type()
                         ),
-                        device="cpu",
+                        device="cuda",
                     )
 
                     output_tensor = convert_strides(output_tensor, output.cudnn_tensor)

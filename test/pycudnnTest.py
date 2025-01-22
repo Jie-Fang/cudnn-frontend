@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import torch
 import utils
 
 utils.reportCurrentTime("Start")
@@ -24,7 +23,7 @@ if __name__ == "__main__":
         prog="pycudnnTest", add_help=False, allow_abbrev=False
     )
 
-    pct_parser.add_argument("--R", "-R", choices=["graphRunner", "grStream", "tensor_ir"])
+    pct_parser.add_argument("--R", "-R", choices=["graphRunner", "grStream"])
 
     # TODO(@mbreughe): move to grStream mode
     pct_parser.add_argument(
@@ -101,7 +100,6 @@ if __name__ == "__main__":
     json_graph_test = os.path.join(base_path, "json_graph_pytest_wrapper.py")
     python_graph_test = os.path.join(base_path, "python_graph_test.py")
     negative_graph_test = os.path.join(base_path, "negative_graph_test.py")
-    tensor_ir_test = os.path.join(base_path, "tensor_ir_test.py")
 
     # Legacy style of calling cudnnTest (from e.g., cudnn_run.py)
     if args.R == "graphRunner":
@@ -152,8 +150,6 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Graphs defined in json file
-    elif args.R == "tensor_ir": #-Rtensor_ir
-        pytest_cmd = [tensor_ir_test]
     elif args.testPath.endswith(".json"):
         pytest_cmd = [json_graph_test]
     # Graphs defined in python file
