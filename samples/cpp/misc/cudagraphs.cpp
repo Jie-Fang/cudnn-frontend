@@ -77,7 +77,11 @@ create_graph(int64_t b, int64_t m, int64_t n, int64_t k, float scale_value) {
 }
 
 TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
-    // cuDNN only supports native CUDA graphs in CUDA 12.0 or above.
+    // cuDNN only supports native CUDA graphs in CUDA 12.0 and above.
+    // We'll enforce this both at compile time and at runtime, for good measure.
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires cuda toolkit 12.0 or above");
+#else
     if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
     }
@@ -241,4 +245,5 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     cudaGraphDestroy(main_cuda_graph);
     cudaGraphDestroy(cudnn_cuda_graph_new);
     cudnnDestroy(handle);
+#endif  // CUDART_VERSION < 12000
 }

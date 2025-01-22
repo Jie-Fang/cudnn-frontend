@@ -172,6 +172,21 @@ class SdpaTestData {
 };
 
 TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudagraph]") {
+    // cuDNN only supports native CUDA graphs in CUDA 12.0 and above.
+    // We'll enforce this both at compile time and at runtime, for good measure.
+#if (CUDART_VERSION < 12000)
+    SKIP("Test requires cuda toolkit 12.0 or above");
+#else
+    if (cudnnGetCudartVersion() < 12000) {
+        SKIP("Test requires cuda toolkit 12.0 or above");
+    }
+
+    // cuDNN only supports native CUDA graphs for sdpa in 9.6 or above.
+    if (cudnnGetVersion() < 90600) {
+        SKIP("Test requires cudnn 9.6.0 or above");
+        return;
+    }
+
     int64_t b          = 3;     // batch size
     int64_t h_q        = 4;     // head dim
     int64_t h_k        = 4;     // head dim
@@ -186,17 +201,6 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
     bool padding_mask  = (cudnnGetVersion() >= 8903);
     bool alibi_mask    = false;  // TODO: (cudnnGetVersion() >= 8904)
     bool has_attn_bias = (cudnnGetVersion() >= 8903);
-
-    // cuDNN only supports native CUDA graphs in CUDA 12.0 or above.
-    if (cudnnGetCudartVersion() < 12000) {
-        SKIP("Test requires cuda toolkit 12.0 or above");
-    }
-
-    // cuDNN only supports native CUDA graphs for sdpa in 9.6 or above.
-    if (cudnnGetVersion() < 90600) {
-        SKIP("Test requires cudnn 9.6.0 or above");
-        return;
-    }
 
     cudnnHandle_t handle;
     CUDNN_CHECK(cudnnCreate(&handle));
@@ -301,4 +305,5 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
     CUDA_CHECK(cudaGraphExecDestroy(cuda_graph_exec));
     CUDA_CHECK(cudaGraphDestroy(cudnn_cuda_graph));
     CUDNN_CHECK(cudnnDestroy(handle));
+#endif  // CUDART_VERSION < 12000
 }
