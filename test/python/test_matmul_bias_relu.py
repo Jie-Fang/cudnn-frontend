@@ -302,7 +302,3 @@ def test_matmul_bias_relu(param_extract, cudnn_handle):
     torch.cuda.synchronize()
 
     torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
-
-
-if __name__ == "__main__":
-    test_matmul_bias_relu(((1, 128, 1600), torch.float16))

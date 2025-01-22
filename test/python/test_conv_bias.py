@@ -491,11 +491,3 @@ def test_conv_int8(cudnn_handle):
 
     if compare_output:
         torch.testing.assert_close(Y_expected, Y_actual, atol=1e-2, rtol=1e-2)
-
-
-if __name__ == "__main__":
-    # test_conv_int8()
-    test_conv_relu(cudnn_handle)
-    # test_conv_bias_relu()
-    # test_conv3d_bias_leaky_relu()
-    # test_leaky_relu_backward()

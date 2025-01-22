@@ -424,7 +424,7 @@ def generate_ragged_offset(
             k_ragged_offset = compute_exclusive_prefix_sum(seq_len_kv) * 2 * h_kv * d
             v_ragged_offset = compute_exclusive_prefix_sum(seq_len_kv) * 2 * h_kv * d
             o_ragged_offset = compute_exclusive_prefix_sum(seq_len_q) * h_q * d
-    else:
+    else:  # sbh3d
         raise ValueError()
 
     q_ragged_offset = q_ragged_offset.to(
@@ -1477,40 +1477,3 @@ def test_sdpa_backward(
         torch.testing.assert_close(
             dBias_ref, dBias_gpu, check_dtype=False, atol=2e-2, rtol=2e-2
         )
-
-
-if __name__ == "__main__":
-    # example usage
-    # ================== forward ==================
-    """
-    pytest \
-      test/python/test_mhas.py::test_sdpa[torch.float16-bshd_bshd_bshd-group_query-paged0-bias0-alibi0-padding0-diagonal_alignment_TOP_LEFT-left_bound0-right_bound0-dropout0-ragged0-infer0] \
-      -s \
-      --mha_b 3 \
-      --mha_s_q 64 \
-      --mha_s_kv 128 \
-      --mha_d_qk 48 \
-      --mha_d_v 32 \
-      --mha_h_q 12 \
-      --mha_h_k 3 \
-      --mha_h_v 4 \
-      --mha_block_size 32 \
-      --mha_deterministic 0
-    """
-    # ================== backward ==================
-    """
-    pytest \
-      test/python/test_mhas.py::test_sdpa_backward[torch.float16-bshd_bshd_bshd-group_query-bias0-alibi0-padding0-diagonal_alignment_TOP_LEFT-left_bound0-right_bound0-dropout0-ragged0] \
-      -s \
-      --mha_b 3 \
-      --mha_s_q 64 \
-      --mha_s_kv 128 \
-      --mha_d_qk 48 \
-      --mha_d_v 32 \
-      --mha_h_q 12 \
-      --mha_h_k 3 \
-      --mha_h_v 4 \
-      --mha_deterministic 0
-    """
-
-    pytest.main([__file__])
