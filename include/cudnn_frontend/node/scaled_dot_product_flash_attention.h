@@ -262,7 +262,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() >= 8906 && detail::get_backend_version() < 90000) &&
              (context.get_sm_version() > 0 && context.get_sm_version() < 90), error_code_t::GRAPH_NOT_SUPPORTED,
-            "Post scale Bias mask is not supported below Hopper for cudnn version" + detail::get_backend_version());
+            "Post scale Bias mask is not supported below Hopper for cudnn version" + std::to_string(detail::get_backend_version()));
 
         // validate options for padding mask
         auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
