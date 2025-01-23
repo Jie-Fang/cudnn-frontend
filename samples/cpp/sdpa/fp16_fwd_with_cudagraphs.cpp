@@ -173,14 +173,16 @@ class SdpaTestData {
 
 TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudagraph]") {
     // cuDNN only supports native CUDA graphs in CUDA 12.0 and above.
-    // We'll enforce this both at compile time and at runtime, for good measure.
+    // Because the below test depends on some CUDA graph APIs that changed
+    // between CUDA 11.x and 12.0, it wouldn't even compile in <12.0 anyway,
+    // so we just disable the whole test by #if in that case.
 #if (CUDART_VERSION < 12000)
     SKIP("Test requires cuda toolkit 12.0 or above");
 #else
+    // Also check the CUDA version at runtime, for good measure.
     if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
     }
-#endif
 
     // cuDNN only supports native CUDA graphs for sdpa in 9.6 or above.
     if (cudnnGetVersion() < 90600) {
@@ -306,4 +308,5 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
     //// Cleanup
     CUDA_CHECK(cudaGraphExecDestroy(cuda_graph_exec));
     CUDA_CHECK(cudaGraphDestroy(cudnn_cuda_graph));
+#endif  // CUDART_VERSION < 12000
 }
