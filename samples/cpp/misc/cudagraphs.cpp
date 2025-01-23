@@ -78,14 +78,16 @@ create_graph(int64_t b, int64_t m, int64_t n, int64_t k, float scale_value) {
 
 TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     // cuDNN only supports native CUDA graphs in CUDA 12.0 and above.
-    // We'll enforce this both at compile time and at runtime, for good measure.
+    // Because the below test depends on some CUDA graph APIs that changed
+    // between CUDA 11.x and 12.0, it wouldn't even compile in <12.0 anyway,
+    // so we just disable the whole test by #if in that case.
 #if (CUDART_VERSION < 12000)
     SKIP("Test requires cuda toolkit 12.0 or above");
 #else
+    // Also check the CUDA version at runtime, for good measure.
     if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
     }
-#endif
 
     //// Main graph
     // This example shows how to add a cudnn cuda graph to an already existing
@@ -246,4 +248,5 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     cudaGraphExecDestroy(cuda_graph_exec);
     cudaGraphDestroy(main_cuda_graph);
     cudaGraphDestroy(cudnn_cuda_graph_new);
+#endif  // CUDART_VERSION < 12000
 }
