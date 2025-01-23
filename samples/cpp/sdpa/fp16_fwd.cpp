@@ -160,8 +160,9 @@ TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
         has_attn_bias = false;
     }
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto graph = create_sdpa_forward_graph(b,
                                            h_q,
