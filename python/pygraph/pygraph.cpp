@@ -306,8 +306,8 @@ std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
 PyGraph::reshape(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input, std::string const& name) {
     auto attributes = cudnn_frontend::graph::Reshape_attributes().set_name(name);
 
-    auto OUT = graph.reshape(input, attributes);
-    return OUT;
+    auto OUT_0 = graph.reshape(input, attributes);
+    return OUT_0;
 }
 
 void
