@@ -227,6 +227,4 @@ TEST_CASE("Toy sdpa forward", "[graph][sdpa][flash][forward]") {
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
     CUDA_CHECK(cudaDeviceSynchronize());
-
-    cudnnDestroy(handle);
 }

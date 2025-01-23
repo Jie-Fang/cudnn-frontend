@@ -30,6 +30,25 @@
         }                                                                                                       \
     }
 
+// Custom deleter for cudnnHandle_t
+struct CudnnHandleDeleter {
+    void
+    operator()(cudnnHandle_t* handle) const {
+        if (handle) {
+            CUDNN_CHECK(cudnnDestroy(*handle));
+            delete handle;
+        }
+    }
+};
+
+// Function to create a unique_ptr for cudnnHandle_t
+inline std::unique_ptr<cudnnHandle_t, CudnnHandleDeleter>
+create_cudnn_handle() {
+    auto handle = std::make_unique<cudnnHandle_t>();
+    CUDNN_CHECK(cudnnCreate(handle.get()));
+    return std::unique_ptr<cudnnHandle_t, CudnnHandleDeleter>(handle.release(), CudnnHandleDeleter());
+}
+
 inline size_t
 get_compute_capability() {
     int current_device;

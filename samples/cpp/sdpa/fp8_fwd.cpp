@@ -90,15 +90,15 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][fp8][forward]") {
         Stats->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     }
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto status = mha_graph.validate();
     if ((cudnnGetVersion() >= 90100) && check_device_arch_newer_than("hopper")) {
         REQUIRE(status.is_good());
     } else {
         REQUIRE(status.get_code() == fe::error_code_t::GRAPH_NOT_SUPPORTED);
-        cudnnDestroy(handle);
         return;
     }
 
@@ -150,6 +150,4 @@ TEST_CASE("sdpa_fp8_fprop", "[graph][sdpa][fp8][forward]") {
     REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     CUDA_CHECK(cudaDeviceSynchronize());
-
-    cudnnDestroy(handle);
 }
