@@ -3637,9 +3637,6 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
         }
     }
 
-    checkCudaErr(cudaMalloc((void**)&(devPtrQKVRaggedOffset), (b + 1) * sizeof(devPtrQKVRaggedOffset[0])));
-    hostPtrQKVRaggedOffset = (int*)calloc(b + 1, sizeof(hostPtrQKVRaggedOffset[0]));  // ragged offset has b+1 elements
-
     int64_t offsetStride = h * d;
     // Variable sequence lengths for QKV and O
     for (int i = 0; i < b + 1; i++) {
