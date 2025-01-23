@@ -180,6 +180,7 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
     if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
     }
+#endif
 
     // cuDNN only supports native CUDA graphs for sdpa in 9.6 or above.
     if (cudnnGetVersion() < 90600) {
@@ -202,8 +203,9 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
     bool alibi_mask    = false;  // TODO: (cudnnGetVersion() >= 8904)
     bool has_attn_bias = (cudnnGetVersion() >= 8903);
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto graph = create_sdpa_forward_graph(b,
                                            h_q,
@@ -304,6 +306,4 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
     //// Cleanup
     CUDA_CHECK(cudaGraphExecDestroy(cuda_graph_exec));
     CUDA_CHECK(cudaGraphDestroy(cudnn_cuda_graph));
-    CUDNN_CHECK(cudnnDestroy(handle));
-#endif  // CUDART_VERSION < 12000
 }

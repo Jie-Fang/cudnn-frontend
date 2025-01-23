@@ -84,8 +84,9 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("MXFP8 requires Blackwell and up");
     }
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     REQUIRE(graph.validate().is_good());
 
@@ -120,8 +121,6 @@ TEST_CASE("LayerNorm Training MXFP8 with reshape", "[layernorm][graph][block_sca
         {mx_col, mx_col_tensor.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    cudnnDestroy(handle);
 }
 
 TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
@@ -174,9 +173,9 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("MXFP8 requires Blackwell and up");
     }
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
-
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
     REQUIRE(graph.validate().is_good());
 
     REQUIRE(graph.build_operation_graph(handle).is_good());
@@ -202,8 +201,6 @@ TEST_CASE("LayerNorm Inference MXFP8", "[layernorm][graph][block_scale]") {
         {mx_scale, mx_scale_tensor.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    cudnnDestroy(handle);
 }
 
 TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
@@ -255,8 +252,9 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("MXFP8 requires Blackwell and up");
     }
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     REQUIRE(graph.validate().is_good());
 
@@ -287,8 +285,6 @@ TEST_CASE("RmsNorm Training MXFP8", "[rmsnorm][graph][block_scale]") {
         {mx_col, mx_col_tensor.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    cudnnDestroy(handle);
 }
 
 TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
@@ -341,8 +337,9 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
     if (check_device_arch_newer_than("blackwell") == false) {
         SKIP("NVFP4 requires Blackwell and up");
     }
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     REQUIRE(graph.validate().is_good());
 
@@ -369,6 +366,4 @@ TEST_CASE("RmsNorm Inference NVFP4", "[rmsnorm][graph][block_scale]") {
         {mx_scale, mx_scale_tensor.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    cudnnDestroy(handle);
 }

@@ -132,15 +132,15 @@ TEST_CASE("sdpa_fp8_bprop_brcm", "[graph][sdpa][fp8][backward][brcm]") {
     Amax_dV->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
     Amax_dP->set_output(true).set_dim({1, 1, 1, 1}).set_stride({1, 1, 1, 1}).set_data_type(fe::DataType_t::FLOAT);
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto status = mha_graph.validate();
     if ((cudnnGetVersion() >= 90700) && check_device_arch_newer_than("blackwell")) {
         REQUIRE(status.is_good());
     } else {
         REQUIRE(status.get_code() == fe::error_code_t::GRAPH_NOT_SUPPORTED);
-        cudnnDestroy(handle);
         return;
     }
 
@@ -221,6 +221,4 @@ TEST_CASE("sdpa_fp8_bprop_brcm", "[graph][sdpa][fp8][backward][brcm]") {
     REQUIRE(mha_graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 
     CUDA_CHECK(cudaDeviceSynchronize());
-
-    cudnnDestroy(handle);
 }

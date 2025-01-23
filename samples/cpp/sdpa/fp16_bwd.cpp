@@ -207,8 +207,9 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
         return;
     }
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     // Create the SDPA backward graph
     auto graph = create_sdpa_backward_graph(b,
@@ -292,6 +293,4 @@ TEST_CASE("Toy sdpa backward", "[graph][sdpa][flash][backward]") {
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
     CUDA_CHECK(cudaDeviceSynchronize());
-
-    cudnnDestroy(handle);
 }

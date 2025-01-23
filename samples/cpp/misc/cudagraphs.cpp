@@ -85,6 +85,7 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     if (cudnnGetCudartVersion() < 12000) {
         SKIP("Test requires cuda toolkit 12.0 or above");
     }
+#endif
 
     //// Main graph
     // This example shows how to add a cudnn cuda graph to an already existing
@@ -99,8 +100,9 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
 
     // Create the execution plan, as that is needed to populate cuda graph with
     // cudnn kernels
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     // Validate the graph and lower the FE graph to BE graph
     REQUIRE(graph->validate().is_good());
@@ -244,6 +246,4 @@ TEST_CASE("Cuda graphs with matmul add", "[cudagraph][graph]") {
     cudaGraphExecDestroy(cuda_graph_exec);
     cudaGraphDestroy(main_cuda_graph);
     cudaGraphDestroy(cudnn_cuda_graph_new);
-    cudnnDestroy(handle);
-#endif  // CUDART_VERSION < 12000
 }

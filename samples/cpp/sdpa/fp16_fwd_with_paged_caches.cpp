@@ -185,8 +185,9 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
         SKIP("Providing paged caches for attention is not supported on Blackwell");
     }
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto graph = create_sdpa_forward_graph_with_paged_caches(b,
                                                              h_q,
@@ -284,6 +285,4 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
 
     CUDA_CHECK(cudaDeviceSynchronize());
-
-    cudnnDestroy(handle);
 }

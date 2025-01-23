@@ -40,9 +40,9 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
     int64_t n = 8, c = 32, h = 16, w = 16, k = 64, r = 3, s = 3;
 
-    cudnnHandle_t handle;  // Handle to use during deserialize and execute
-
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto build_and_validate_graph_helper =
         [](int64_t n, int64_t c, int64_t h, int64_t w, int64_t k, int64_t r, int64_t s)
@@ -103,9 +103,9 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
     auto check_support = [build_and_validate_graph_helper](
                              int64_t n, int64_t c, int64_t h, int64_t w, int64_t k, int64_t r, int64_t s) -> bool {
-        cudnnHandle_t handle;
-
-        CUDNN_CHECK(cudnnCreate(&handle));
+        // Create a unique_ptr for the cuDNN handle
+        auto handle_ptr = create_cudnn_handle();
+        auto handle     = *handle_ptr;
 
         auto graph = build_and_validate_graph_helper(n, c, h, w, k, r, s);
 
@@ -115,8 +115,6 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
         REQUIRE(graph->check_support(handle).is_good());
 
-        cudnnDestroy(handle);
-
         return true;
     };
 
@@ -125,11 +123,10 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
     auto serialize =
         [build_and_validate_graph_helper](
             int64_t n, int64_t c, int64_t h, int64_t w, int64_t k, int64_t r, int64_t s) -> std::vector<uint8_t> {
-        cudnnHandle_t handle;
-
+        // Create a unique_ptr for the cuDNN handle
+        auto handle_ptr = create_cudnn_handle();
+        auto handle     = *handle_ptr;
         std::vector<uint8_t> serialized_data;
-
-        CUDNN_CHECK(cudnnCreate(&handle));
 
         auto graph = build_and_validate_graph_helper(n, c, h, w, k, r, s);
 
@@ -144,8 +141,6 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
         // Insert auto-tuning logic here
 
         REQUIRE(graph->serialize(serialized_data).is_good());
-
-        cudnnDestroy(handle);
 
         return serialized_data;
     };
@@ -189,8 +184,6 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
                                                        {y_tensor, y_device_memory.devPtr}};
 
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    cudnnDestroy(handle);
 }
 
 TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
@@ -331,9 +324,9 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                                            bool use_alibi_mask,
                                                            bool use_dropout_with_rng,
                                                            float dropout_probability) -> bool {
-        cudnnHandle_t handle;
-
-        CUDNN_CHECK(cudnnCreate(&handle));
+        // Create a unique_ptr for the cuDNN handle
+        auto handle_ptr = create_cudnn_handle();
+        auto handle     = *handle_ptr;
 
         auto graph = build_and_validate_graph_helper(b,
                                                      h,
@@ -353,8 +346,6 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         REQUIRE(graph->check_support(handle).is_good());
 
-        cudnnDestroy(handle);
-
         return true;
     };
 
@@ -369,11 +360,10 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                                        bool use_alibi_mask,
                                                        bool use_dropout_with_rng,
                                                        float dropout_probability) -> std::vector<uint8_t> {
-        cudnnHandle_t handle;
-
+        // Create a unique_ptr for the cuDNN handle
+        auto handle_ptr = create_cudnn_handle();
+        auto handle     = *handle_ptr;
         std::vector<uint8_t> serialized_data;
-
-        CUDNN_CHECK(cudnnCreate(&handle));
 
         auto graph = build_and_validate_graph_helper(b,
                                                      h,
@@ -398,8 +388,6 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
         // Insert auto-tuning logic here
 
         REQUIRE(graph->serialize(serialized_data).is_good());
-
-        cudnnDestroy(handle);
 
         return serialized_data;
     };
@@ -439,8 +427,9 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                     use_dropout_with_rng,
                                     dropout_probability);
 
-    cudnnHandle_t handle;
-    CUDNN_CHECK(cudnnCreate(&handle));
+    // Create a unique_ptr for the cuDNN handle
+    auto handle_ptr = create_cudnn_handle();
+    auto handle     = *handle_ptr;
 
     auto graph = deserialize(handle, serialize_data);
 
@@ -472,6 +461,4 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
                                                        {uid_O, devPtrO}};
 
     REQUIRE(graph->execute(handle, variant_pack, workspace.devPtr).is_good());
-
-    CUDNN_CHECK(cudnnDestroy(handle));
 }
