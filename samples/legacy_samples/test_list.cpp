@@ -3467,6 +3467,8 @@ TEST_CASE("FP8 Flash MHA Fprop sample", "[frontend][fusion][fp8flashmhaFprop]") 
 
     if (devPtrActualSeqlenOverride) cudaFree(devPtrActualSeqlenOverride);
     if (hostActualSeqlenOverride) free(hostActualSeqlenOverride);
+    if (hostPtrQKVRaggedOffset) free(hostPtrQKVRaggedOffset);
+    if (hostPtrORaggedOffset) free(hostPtrORaggedOffset);
 
     std::cout << "\n========================================================================================\n";
 }
@@ -3712,6 +3714,8 @@ TEST_CASE("FP8 Flash MHA Bprop sample", "[frontend][fusion][fp8flashmhaBprop]") 
 
     if (devPtrActualSeqlenOverride) cudaFree(devPtrActualSeqlenOverride);
     if (hostActualSeqlenOverride) free(hostActualSeqlenOverride);
+    if (hostPtrQKVRaggedOffset) free(hostPtrQKVRaggedOffset);
+    if (hostPtrORaggedOffset) free(hostPtrORaggedOffset);
 
     std::cout << "\n========================================================================================\n";
 }
