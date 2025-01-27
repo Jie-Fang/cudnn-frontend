@@ -15,13 +15,13 @@ before_script:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 .cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0
 
 .cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_feature_12.8.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.6.0.74_12.6.3
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.7.0.66_12.8.0
 
 .device_matrix:template:
     parallel:
@@ -196,10 +196,17 @@ include:
 #         cuda_version: "12.6.0"
 #         cudnn_version: "9.4.0.58"
 
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.6.3"
+#         cudnn_version: "9.6.0.74"
+#     rules:
+#         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
+
   - local: ci/job-template.yml
     inputs:
-        cuda_version: "12.6.3"
-        cudnn_version: "9.6.0.74"
+        cuda_version: "12.8.0"
+        cudnn_version: "9.7.0.66"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
