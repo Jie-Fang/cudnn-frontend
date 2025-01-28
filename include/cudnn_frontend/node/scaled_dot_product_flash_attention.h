@@ -1385,7 +1385,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                                                      s_kv,
                                                                      s_q_ptr,
                                                                      s_kv_ptr);
-            sub_nodes.emplace_back(node_);
+            sub_nodes.emplace_back(std::move(node_));
         }
 
         // last_output = exp(last_output)
