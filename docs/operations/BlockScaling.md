@@ -2,7 +2,7 @@
 # Block Scaling
 
 (block-scale-quantize)=
-# Block Scale Quantize
+## Block Scale Quantize
 
 The block scale quantize operation computes the quantized output
 and scaling factor tensors from a higher precision tensor.
@@ -13,13 +13,14 @@ and 1 FP8 scaling factor (E8M0). The NVFP4 recipe quantizes across
 16 FP32 elements along the rows to produce 16 FP4 output values (E2M1)
 and 1 FP8 scaling factor (E4M3).
 
-The computation can be mathematically represented as the following:
+The computation can be mathematically represented by the following equation:
 
 $$ scale = quantize\_round\_up(amax(vals) / vmax\_otype) $$
 $$ output = quantize\_round\_to\_even(vals / scale) $$
 
-where vals is a block of elements and vmax_otype is the maximum value
-representable by the output data type.
+Where:
+- vals is a block of elements.
+- vmax_otype is the maximum value representable by the output data type.
 
 ### C++ API
 
@@ -42,17 +43,18 @@ set_transpose(bool const value)
 ```
 
 (block-scale-dequantize)=
-# Block Scale Dequantize
+## Block Scale Dequantize
 
 The block scale dequantize operation computes the dequantized output
 tensor from quantized input and scale tensors.
 
-The computation can be mathematically represented as the following:
+The computation can be mathematically represented by the following equation:
 
 $$ output = dequantize(vals * scale) $$
 
-where vals is a block of elements and scale is broadcasted to the block
-size.
+Where:
+- vals is a block of elements.
+- scale is broadcast to the block size.
 
 ### C++ API
 
