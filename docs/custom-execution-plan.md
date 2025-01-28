@@ -1,39 +1,41 @@
-Here is an example of creating a custom execution plan with hardcoded engine and knobs. Please see coresponding C++ sample in `samples/cpp/misc/custom_plan.cpp`.
+# Custom Execution Plan
 
-### Get engine count
+Here is an example in C++ of creating a custom execution plan with a hard-coded engine and knobs. Refer to the coresponding C++ sample in [samples/cpp/misc/custom_plan.cpp](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/misc/custom_plan.cpp).
+
+## Get the Engine Count
 ```
 inline error_t
 get_engine_count(int64_t &count);
 ```
-#### Parameters
+### Parameters
 
 - `count`: number of engines [out parameter]
 
-#### Return Value
+### Return Value
 - An `error_t` object indicating the success or failure of the function.
 
-### Get knobs supported by an engine
+## Get the Knobs Supported by an Engine
 ```
 inline error_t
 get_knobs_for_engine(int64_t const engine, std::vector<Knob> &);
 ```
-#### Parameters
+### Parameters
 
 - `engine`: engine index
 - `knobs`: list of knobs [out parameter]
 
-#### Return Value
+### Return Value
 - An `error_t` object indicating the success or failure of the function.
 
-### Create a plan with particular engine and knobs
+## Create Plan with a Particular Engine and Knobs
 ```
 error_t
 create_execution_plan(int64_t const engine_id, std::unordered_map<KnobType_t, int64_t> const &knobs);
 ```
-#### Parameters
+### Parameters
 
 - `engine_id`: engine index
 - `knobs`: knobs
 
-#### Return Value
+### Return Value
 - An `error_t` object indicating the success or failure of the function.
