@@ -157,15 +157,15 @@ create_sdpa_forward_graph_with_paged_caches(int64_t const b,
 }
 
 TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][forward]") {
-    int64_t b               = 3;     // batch size
-    int64_t h_q             = 4;     // head dim
-    int64_t h_k             = 4;     // head dim
-    int64_t h_v             = 4;     // head dim
-    int64_t s_q             = 1024;  // q tensor is padded to this seq length
-    int64_t s_kv            = 1024;  // k and v tensor is padded to this seq length
-    int64_t d_qk            = 128;   // hidden dim
-    int64_t d_v             = 128;   // hidden dim
-    int64_t block_size      = 64;    // block size for paged attention
+    int64_t b               = 8;          // batch size
+    int64_t h_q             = 8;          // head dim
+    int64_t h_k             = 1;          // head dim
+    int64_t h_v             = 1;          // head dim
+    int64_t s_q             = 1;          // q tensor is padded to this seq length
+    int64_t s_kv            = 32 * 1024;  // k and v tensor is padded to this seq length
+    int64_t d_qk            = 128;        // hidden dim
+    int64_t d_v             = 128;        // hidden dim
+    int64_t block_size      = 1;          // block size for paged attention
     int64_t num_blocks_k    = ((s_kv + block_size - 1) / block_size) * b;  // Number of blocks in container_k
     int64_t num_blocks_v    = ((s_kv + block_size - 1) / block_size) * b;  // Number of blocks in container_v
     int64_t page_table_size = (s_kv + block_size - 1) / block_size;        // per-batch size of the page tables

@@ -28,12 +28,12 @@ causal_mask_bottom_right(std::shared_ptr<Graph> graph,
     return sliding_window_mask(graph,
                                attention_score,
                                DiagonalAlignment_t::BOTTOM_RIGHT,
-                               {},         // no left bound specified
-                               0,          // right bound = 0
-                               s_q,        // s_q dimension (max Q sequence length)
-                               s_kv,       // s_kv dimension (max KV sequence length)
-                               seq_len_q,  // Actuall Q sequence lengths
-                               seq_len_kv  // Actual KV sequence lengths
+                               {},                    // no left bound specified
+                               0,                     // right bound = 0
+                               s_q,                   // s_q dimension (max Q sequence length)
+                               s_kv,                  // s_kv dimension (max KV sequence length)
+                               std::move(seq_len_q),  // Actuall Q sequence lengths
+                               std::move(seq_len_kv)  // Actual KV sequence lengths
     );
 }
 

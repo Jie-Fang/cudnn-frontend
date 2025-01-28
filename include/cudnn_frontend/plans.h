@@ -316,16 +316,18 @@ class Execution_plan_list {
                                            "Heuristic query Behavior Note failed");
 
             std::vector<NumericalNote_t> numerics;
+            numerics.resize(numeric.size());
             for (auto& note : numeric) {
                 numerics.push_back(detail::convert_from_cudnn_type(note));
             }
-            numeric_notes.emplace_back(numerics);
+            numeric_notes.emplace_back(std::move(numerics));
 
             std::vector<BehaviorNote_t> behaviors;
+            behaviors.reserve(behaviors.size());
             for (auto& note : behavior) {
                 behaviors.push_back(detail::convert_from_cudnn_type(note));
             }
-            behavior_notes.emplace_back(behaviors);
+            behavior_notes.emplace_back(std::move(behaviors));
         }
         return {error_code_t::OK, ""};
     }
