@@ -84,6 +84,7 @@ CUDNN_PATH has the cudnn installation:
 
 For a in-source build,
 ```
+cd cudnn_frontend
 mkdir build
 cd build
 cmake -DCUDNN_PATH=/path/to/cudnn -DCUDAToolkit_ROOT=/path/to/cuda  ../
