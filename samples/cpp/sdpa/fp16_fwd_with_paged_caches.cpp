@@ -267,7 +267,7 @@ TEST_CASE("Toy sdpa forward with paged caches", "[graph][sdpa][flash][paged][for
                 Surface<int32_t> devActualSeqlenQ(b[i], false);
                 Surface<int32_t> devActualSeqlenKV(b[i], false);
                 std::vector<int32_t> hostActualSeqlenQ(b[i], 1);
-                std::vector<int32_t> hostActualSeqlenKV(b[i], s_kv[j]);
+                std::vector<int32_t> hostActualSeqlenKV(b[i], static_cast<int32_t>(s_kv[j]));
 
                 CUDA_CHECK(cudaMemcpy(devActualSeqlenQ.devPtr,
                                       hostActualSeqlenQ.data(),
