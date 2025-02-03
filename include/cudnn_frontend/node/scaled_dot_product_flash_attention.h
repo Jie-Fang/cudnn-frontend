@@ -333,7 +333,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
         // validate options for paged attention
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && is_ragged,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && is_ragged && detail::get_backend_version() < 90700,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Paged caches are not supported in combination with ragged offsets.");
 
