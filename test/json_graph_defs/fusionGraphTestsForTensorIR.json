@@ -1,0 +1,301 @@
+{
+  "Matmul": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=Matmul -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -gemm_B=1 -gemm_M=32 -gemm_N=128 -gemm_K=64 -gemm_layout_A=COL_MAJOR -gemm_layout_B=ROW_MAJOR -gemm_layout_C=ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "abstract_args_examples": [
+      "-RgraphRunner -jsonTestName=Matmul -RgraphRunner -backendEngine8 -jsonTestName=Matmul -kv=gemm_B:1 -kv=gemm_M:64 -kv=gemm_N:64 -kv=gemm_K:64 -kv=gemm_layout_A:ROW_MAJOR -kv=gemm_layout_B:COL_MAJOR -kv=gemm_layout_C:ROW_MAJOR -kv=Tin:half -kv=Tcomp:float -kv=Tstore:half -kv=Tout:half -rtol5e-3 -atol5e-3 -minDevVer700 -b -serialization0 -Dforce_jit_dbg=1 -dumpTensors"
+
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogBatchBroadcast": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":false},
+      {"name":"biasTensor", "dataType":"<Tout>", "dim":[1,"<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"afterBias", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"bias0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"biasTensor", "Y":"afterBias", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogBatchBroadcast -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogPointwise": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"biasTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"afterBias", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"bias0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"biasTensor", "Y":"afterBias", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogPointwise -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogColBroadcast": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":false},
+      {"name":"biasTensor", "dataType":"<Tout>", "dim":["<gemm_B>",1,"<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"afterBias", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"bias0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"biasTensor", "Y":"afterBias", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogColBroadcast -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogRowBroadcast": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":false},
+      {"name":"biasTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>",1], "layout":"<gemm_layout_C>"},
+      {"name":"afterBias", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"bias0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"biasTensor", "Y":"afterBias", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogRowBroadcast -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogScalarBroadcast": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"alpha", "dataType":"<Tout>", "dim":[1, 1, 1], "isByValue":true, "layout":"<gemm_layout_C>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"dTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"beta", "dataType":"<Tout>", "dim":[1, 1, 1], "isByValue":true, "layout":"<gemm_layout_C>"},
+      {"name":"eTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"fTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterBias", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"mul0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X":"cTensor","B":"alpha", "Y":"dTensor", "mathPrec":"float"},
+        {"name":"mul1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X":"beta","B":"eTensor", "Y":"fTensor", "mathPrec":"float"},
+        {"name":"add", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"dTensor","B":"fTensor", "Y":"afterBias", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogScalarBroadcast -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogLoadMultiTensor": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"bias0", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"bias1", "dataType":"<Tin1>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"dTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"fTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"add0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"bias0", "Y":"dTensor", "mathPrec":"float"},
+        {"name":"add1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"bias1","B":"dTensor", "Y":"fTensor", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogLoadMultiTensor -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogStoreMultiTensor": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"bias0", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"bias1", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"dTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"fTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"add0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"bias0", "Y":"dTensor", "mathPrec":"float"},
+        {"name":"add1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"bias1","B":"cTensor", "Y":"fTensor", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogStoreMultiTensor -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogSameTensorMultiTimes": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"bias0", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"dTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"fTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"add0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"bias0", "Y":"dTensor", "mathPrec":"float"},
+        {"name":"add1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"bias0","B":"dTensor", "Y":"fTensor", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogSameTensorMultiTimes -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -kv=gemm_B:1 -kv=gemm_M:32 -kv=gemm_N:128 -kv=gemm_K:64 -kv=gemm_layout_A:COL_MAJOR -kv=gemm_layout_B:ROW_MAJOR -kv=gemm_layout_C:ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogPointwiseBin": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"pwTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"afterPW", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"binary_pointwise_0", "operation":"pointwise", "pointwiseMode":"<PW_MODE>", "X":"cTensor","B":"pwTensor", "Y":"afterPW", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogPointwiseBin -backendEngine0 -x -S -b -d0 -kv=PW_MODE:CUDNN_POINTWISE_ADD -Tin=half -Tcomp=float -Tout=half -Tstore=half -gemm_B=1 -gemm_M=32 -gemm_N=128 -gemm_K=64 -gemm_layout_A=COL_MAJOR -gemm_layout_B=ROW_MAJOR -gemm_layout_C=ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatmulEpilogPointwiseUn": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"unary_pointwise_0", "operation":"pointwise", "pointwiseMode":"<PW_MODE>", "X":"cTensor", "Y":"afterPW", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulEpilogPointwiseUn -backendEngine0 -x -S -b -d0 -kv=PW_MODE:CUDNN_POINTWISE_RELU_FWD -Tin=half -Tcomp=float -Tout=half -Tstore=half -gemm_B=1 -gemm_M=32 -gemm_N=128 -gemm_K=64 -gemm_layout_A=COL_MAJOR -gemm_layout_B=ROW_MAJOR -gemm_layout_C=ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "MatMulColReduction" : {
+    "tensors": [
+        {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+        {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+        {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+        {"name":"afterPW", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+        {"name":"afterReduction", "dataType":"<Tout>", "dim":["<gemm_B>", 1,"<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"unary_pointwise_0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"cTensor", "Y":"afterPW", "mathPrec":"float"},
+        {"name":"reduce0", "operation":"reduction", "X":"cTensor", "Y":"afterReduction", "reductionOp":"CUDNN_REDUCE_TENSOR_ADD", "mathPrec":"<Tcomp>"}
+    ],
+    "tolerances":{"rel":2.5e-3, "abs":2.5e-3}
+  },
+  "MatMulPwColReduction" : {
+    "tensors": [
+        {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+        {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+        {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+        {"name":"afterPW", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+        {"name":"afterReduction", "dataType":"<Tout>", "dim":["<gemm_B>", 1,"<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"unary_pointwise_0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"cTensor", "Y":"afterPW", "mathPrec":"float"},
+        {"name":"reduce0", "operation":"reduction", "X":"afterPW", "Y":"afterReduction", "reductionOp":"CUDNN_REDUCE_TENSOR_ADD", "mathPrec":"<Tcomp>"}
+    ],
+    "tolerances":{"rel":2.5e-3, "abs":2.5e-3}
+  },
+  "MatMulPwRowReduction" : {
+    "tensors": [
+        {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+        {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+        {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+        {"name":"afterPW", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+        {"name":"afterReduction", "dataType":"<Tout>", "dim":["<gemm_B>", "<gemm_M>", 1], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+        {"name":"unary_pointwise_0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"cTensor", "Y":"afterPW", "mathPrec":"float"},
+        {"name":"reduce0", "operation":"reduction", "X":"afterPW", "Y":"afterReduction", "reductionOp":"CUDNN_REDUCE_TENSOR_ADD", "mathPrec":"<Tcomp>"}
+    ],
+    "tolerances":{"rel":2.5e-3, "abs":2.5e-3}
+  },
+  "MatmulRegressionGauntlet_abstract": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"pwTensor_0", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"pwTensor_1", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"pwTensor_2", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"pwTensor_3", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"pwTensor_4", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"pwTensor_6", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"pwTensor_9", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"cTensor", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_0", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_1", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_2", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_3", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_4", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_5", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_6", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_7", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_9", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>", "isVirtual":true},
+      {"name":"afterPW_11", "dataType":"<Tstore>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+  ],
+  "nodes":[
+      {"name":"mm0", "operation":"matmul", "matA":"aTensor", "matB":"bTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"},
+      {"name":"binary_pointwise_0", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"cTensor","B":"pwTensor_0", "Y":"afterPW_0", "mathPrec":"float"},
+      {"name":"binary_pointwise_1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X":"afterPW_0","B":"pwTensor_1", "Y":"afterPW_1", "mathPrec":"float"},
+      {"name":"binary_pointwise_2", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"afterPW_1","B":"pwTensor_2", "Y":"afterPW_2", "mathPrec":"float"},
+      {"name":"binary_pointwise_3", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_DIV", "X":"afterPW_2","B":"pwTensor_3", "Y":"afterPW_3", "mathPrec":"float"},
+      {"name":"binary_pointwise_4", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD_SQUARE", "X":"afterPW_3","B":"pwTensor_4", "Y":"afterPW_4", "mathPrec":"float"},
+      {"name":"binary_pointwise_5", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ERF", "X":"afterPW_4", "Y":"afterPW_5", "mathPrec":"float"},
+      {"name":"binary_pointwise_6", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SUB", "X":"afterPW_5", "B":"pwTensor_6", "Y":"afterPW_6", "mathPrec":"float"},
+      {"name":"binary_pointwise_7", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_COS", "X":"afterPW_6", "Y":"afterPW_7", "mathPrec":"float"},
+      {"name":"binary_pointwise_9", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"afterPW_7","B":"pwTensor_9", "Y":"afterPW_9", "mathPrec":"float"},
+      {"name":"binary_pointwise_11", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_GELU_APPROX_TANH_FWD", "X":"afterPW_9", "Y":"afterPW_11", "mathPrec":"float"}
+  ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=MatmulRegressionGauntlet_abstract -backendEngine0 -x -S -b -d0 -Tin=half -Tcomp=float -Tout=float -Tstore=half -gemm_B=1 -gemm_M=32 -gemm_N=128 -gemm_K=64 -gemm_layout_A=COL_MAJOR -gemm_layout_B=ROW_MAJOR -gemm_layout_C=ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  }
+}

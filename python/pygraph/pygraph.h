@@ -419,6 +419,9 @@ class PyGraph {
     void
     build(std::vector<cudnn_frontend::HeurMode_t> const&);
 
+    void
+    build();
+
     int64_t
     get_workspace_size();
 
