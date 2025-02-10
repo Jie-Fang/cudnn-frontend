@@ -235,7 +235,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // validate basic dimension requirements
         RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8");
+                                        "hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -381,12 +381,12 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90000 && ((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version below 9.0.0, hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+                                       "For cuDNN version below 9.0.0, hidden_dim shoud be less than or equal to 128 and hidden_dim should be multiple of 8");
 
         // sm_arch_ >= 90 FIXME
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() >= 90000 && ((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version above 9.0.0, hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8");
+                                       "For cuDNN version above 9.0.0, hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90200 && attributes.left_bound.has_value(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -552,7 +552,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         }
 
         // There are two cases of applying padding mask
-        // 1. when actual seq_len is less than max_seq_len
+        // 1. when actual seq_len is less than or equal to max_seq_len
         if (attributes.padding_mask) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
@@ -896,12 +896,12 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             // validate basic dimension requirements
             RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "Num hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8");
+                                        "Num hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
         } else {
             // validate basic dimension requirements
             RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "Num hidden_dim shoud be less than 128 and hidden_dim should be multiple of 8");
+                                        "Num hidden_dim shoud be less than or equal to 128 and hidden_dim should be multiple of 8");
         }
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.attention_score_modifier != nullptr) &&
