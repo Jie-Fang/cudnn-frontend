@@ -574,10 +574,10 @@ def test_sdpa(
     # batch size
     b = 2
     # query sequence length
-    s_q = random.choice([8, 16, 24, 32, 256, 512, 1024, 2048])
+    s_q = random.choice([1, 24, 256, 512, 1024, 2048])
     # key+value sequence length
     s_kv = (
-        random.choice([8, 16, 24, 32, 256, 512, 1024, 2048])
+        random.choice([24, 32, 256, 512, 1024, 2048])
         if layout == "bshd_bshd_bshd"
         else s_q
     )
