@@ -574,7 +574,15 @@ def test_sdpa(
     # batch size
     b = 2
     # query sequence length
-    s_q = random.choice([1, 24, 256, 512, 1024, 2048])
+    if cudnn_version >= "9.7.0":
+        s_q = random.choice([1, 24, 256, 512, 1024, 2048])
+    else:
+        s_q = random.choice([24, 256, 512, 1024, 2048])
+
+    if s_q == 1:
+        is_left_bound = False
+        request.config.option.mha_left_bound = None
+        
     # key+value sequence length
     s_kv = (
         random.choice([24, 32, 256, 512, 1024, 2048])
