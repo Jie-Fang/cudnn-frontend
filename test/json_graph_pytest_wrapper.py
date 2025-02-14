@@ -4,6 +4,7 @@ from json_graph_test import (
     run_test_from_json_definition,
     setup_test_graph_from_json,
 )
+from cudnn_test_graph import cudnn_test_graph
 
 
 # A helper function to read json dictionaries
@@ -19,5 +20,5 @@ def json_dict(request):
 # @param test_name: the specific test to be ran
 def test_json_graph(json_dict, test_name):
     assert test_name in json_dict
-    testGraph = setup_test_graph_from_json(json_dict[test_name], -1)
+    testGraph = setup_test_graph_from_json(cudnn_test_graph(), json_dict[test_name], -1)
     run_test_from_json_definition(testGraph, json_dict[test_name])

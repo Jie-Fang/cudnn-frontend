@@ -1,39 +1,119 @@
 import test_graph as tg
 import torch
-import cudnn
 import utils
 
-import nv_tensor_ir
 from nv_tensor_ir import ir
-from nv_tensor_ir.dialects import nv_tensor_ir, func, arith, scf
+from nv_tensor_ir.dialects import nv_tensor_ir
 
 import nv_tensor_ir.extras.types as T
+from data_types import DataType, convert_datatype
+
+
+def cal_shapeK(input_data_type):
+    if input_data_type in [DataType.FLOAT, DataType.INT32]:
+        return 8
+    else:
+        return 16
+
+
+def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
+    kphase = [1, 1, 4]
+
+    kcta_count = [cta_count, 1, 1]
+
+    mma_shapes = [[64, 128, kmmaShapeK], [128, 128, kmmaShapeK], [128, 256, kmmaShapeK]]
+
+    cluster_shapes = [
+        [1, 1, 1],
+        [1, 2, 1],
+        [1, 4, 1],
+        [2, 1, 1],
+        [2, 2, 1],
+        [2, 4, 1],
+        [4, 1, 1],
+        [4, 2, 1],
+        [4, 4, 1],
+    ]
+    configs = []
+
+    for mma_shape in mma_shapes:
+        for cluster_shape in cluster_shapes:
+            tile_size = [
+                int(m * c * k / cta)
+                for m, c, k, cta in zip(mma_shape, cluster_shape, kphase, kcta_count)
+            ]
+            configs.append([tile_size, mma_shape, cluster_shape, cta_count])
+
+    return configs
+
+
+def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
+    tile_size = [128, 128, 64]
+    mma_shape = [128, 128, 16]
+    cluster_shape = [1, 1, 1]
+    cta_count = 1
+
+    if hasattr(tensorir_args, "tile_size") and tensorir_args.tile_size is not None:
+        tile_size = list(map(int, tensorir_args.tile_size.split(",")))
+
+    if (
+        hasattr(tensorir_args, "cluster_shape")
+        and tensorir_args.cluster_shape is not None
+    ):
+        cluster_shape = list(map(int, tensorir_args.cluster_shape.split(",")))
+
+    if hasattr(tensorir_args, "mma_shape") and tensorir_args.mma_shape is not None:
+        mma_shape = list(map(int, tensorir_args.mma_shape.split(",")))
+
+    if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
+        cta_count = int(tensorir_args.cta_count)
+
+    concrete_test_dict["tile_size"] = tile_size
+    concrete_test_dict["cluster_shape"] = cluster_shape
+    concrete_test_dict["mma_shape"] = mma_shape
+    concrete_test_dict["cta_count"] = cta_count
+
+    return [tile_size, mma_shape, cluster_shape, cta_count]
+
+
+def find_mismatches(tensor_a, tensor_b, atol, rtol):
+    close_mask = torch.isclose(tensor_a, tensor_b, atol=atol, rtol=rtol)
+    diff_indices = torch.nonzero(~close_mask)
+    for idx in diff_indices:
+        diff = tensor_a[tuple(idx.tolist())] - tensor_b[tuple(idx.tolist())]
+        print(
+            f"Index: {tuple(idx.tolist())}, Tensor A Value: {tensor_a[tuple(idx.tolist())]}, Tensor B Value: {tensor_b[tuple(idx.tolist())]}, diff = {diff}"
+        )
 
 
 class test_tensor_ir:
     def __init__(self, test_graph):
         self.test_graph = test_graph
+        self.outputs = []
+        self.ref_outputs = None
 
-    # Determine graph input and output types
-    def determine_tensor_ir_inout_tensor_type(self, node, dtype={}):
+    def determine_tensor_ir_inout_tensor_type(self, node, dtype=None):
         assert len(node.output) == 1
         test_tensor = node.output[0]
-        if dtype is self.determine_tensor_ir_inout_tensor_type.__defaults__[0]:
-            dtype = self.determine_tensor_ir_dtype(test_tensor.data_type)
+        if dtype is None:
+            dtype = eval(convert_datatype(test_tensor.data_type, "tensorir"))
         else:
-            dtype = self.determine_tensor_ir_dtype(dtype)
+            dtype = eval(convert_datatype(dtype, "tensorir"))
+
         if hasattr(node, "is_by_value"):
-            return dtype
+            return dtype, [1], [1], dtype
 
         shape = []
         stride = []
         idx = 0
-        if test_tensor.ref_data == None:
-            ori_stride = test_tensor.cudnn_tensor.get_stride()
-            ori_shape = test_tensor.cudnn_tensor.get_dim()
+
+        if test_tensor.ref_data is None:
+            ori_stride = test_tensor.stride
+            ori_shape = test_tensor.dim
         else:
             ori_stride = test_tensor.ref_data.stride()
             ori_shape = test_tensor.ref_data.shape
+
         for s, d in zip(ori_stride, ori_shape):
             if idx > 0 and d == 1:
                 shape.append(-1)  # row broadcast need to set broadcast dim to `?`
@@ -45,61 +125,30 @@ class test_tensor_ir:
                     stride.append(1)
                 shape.append(-1)
             idx += 1
-        # ty = nv_tensor_ir.TensorType.get(
-        #     shape=ori_shape,
-        #     stride=ori_stride,
-        #     datatype=dtype,
-        # )
-        # print("test_tensor.cudnn_tensor stride:", stride, " shape:", shape)
-        # print("test_tensor.cudnn_tensor shape:", test_tensor.cudnn_tensor.get_dim(), " test_tensor.cudnn_tensor.get_stride():", test_tensor.cudnn_tensor.get_stride())
         ty = nv_tensor_ir.TensorType.get(shape=shape, stride=stride, datatype=dtype)
         return ty, shape, stride, dtype
 
-    def determine_tensor_ir_dtype(self, cudnn_datatype):
-        match cudnn_datatype:
-            case cudnn.data_type.INT32:
-                return T.si32()
-            case cudnn.data_type.FLOAT:
-                return T.f32()
-            case cudnn.data_type.HALF:
-                return T.f16()
-            case cudnn.data_type.BFLOAT16:
-                return T.bf16()
-        assert False
-
-    def determine_cask_dtype(self, cudnn_datatype):
-        match cudnn_datatype:
-            case cudnn.data_type.INT32:
-                return nv_tensor_ir.NumericTypeID.kS32
-            case cudnn.data_type.FLOAT:
-                return nv_tensor_ir.NumericTypeID.kF32
-            case cudnn.data_type.HALF:
-                return nv_tensor_ir.NumericTypeID.kF16
-            case cudnn.data_type.BFLOAT16:
-                return nv_tensor_ir.NumericTypeID.kBF16
-        assert False
+    def calc_ref(self):
+        self.ref_outputs = self.test_graph.calc_reference()
 
     def tensorir_compare_to_reference(self, atol=1e-2, rtol=1e-2):
-        # Run the reference
-        print("Computing reference")
-        ref_outputs = self.test_graph.calc_reference()
-        assert len(ref_outputs) == len(self.test_graph.getOutputs())
+        passed = True
+        assert len(self.ref_outputs) == len(self.outputs)
         number_outputs_tested = 0
         output_idx = 0
         # Compare with reference
-        for Y_expected, Y_actual in zip(ref_outputs, self.test_graph.getOutputs()):
+        for Y_expected, Y_actual in zip(self.ref_outputs, self.outputs):
+            if Y_expected.device.type != Y_actual.device.type:
+                if Y_expected.device.type == "cuda":
+                    Y_expected = Y_expected.to("cpu")
+                else:
+                    Y_actual = Y_actual.to("cpu")
             # TODO (@mbreughe): Clean up this assumption:
             # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
             # For now, we can assume that we don't care about this output and just let the reference pass
             # To be on the safe side, we will make sure at least one output was checked
             if Y_expected is None:
                 continue
-            if Y_expected.dtype != Y_actual.dtype:
-                print(
-                    "WARNING: reference and actual output types differ ({} resp., {})".format(
-                        Y_expected.dtype, Y_actual.dtype
-                    )
-                )
 
             if Y_expected.shape != Y_actual.shape:
                 print(
@@ -107,13 +156,24 @@ class test_tensor_ir:
                         Y_expected.shape, Y_actual.shape
                     )
                 )
-            torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+
+            # find_mismatches(Y_expected, Y_actual, atol, rtol)#
+            try:
+                torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+            except Exception as e:
+                passed = False
+                print("Assertion Error:", str(e))
+                print("Stack trace:")
+                import traceback
+
+                traceback.print_exc()
 
             number_outputs_tested += 1
             output_idx += 1
         assert number_outputs_tested >= 1
 
         utils.reportCurrentTime("assert_close")
+        return passed
 
     def run_tensor_ir_module(
         self,
@@ -121,36 +181,32 @@ class test_tensor_ir:
         compile_option=nv_tensor_ir.TensorConversionOptions(
             [128, 128, 64], [128, 128, 16], [1, 1, 1], 1
         ),
+        atol=1e-2,
+        rtol=1e-2,
     ):
-        kernel_name = "graph"
         graph_analysis = nv_tensor_ir.GraphAnalysis(module)
-        a_partition_idx = 0
-        b_partition_idx = 0
-        for i in range(len(self.test_graph.entrance_nodes)):
+        a_partition_idx, b_partition_idx = -1, -1
+        # Determine partition indices for A and B
+        for i, node in enumerate(self.test_graph.entrance_nodes):
+            partition_type = graph_analysis.get_graph_operand_partition(module, i)
             if (
-                nv_tensor_ir.GraphPartitionType.GRAPH_PARTITION_MAINLOOP_A
-                == graph_analysis.get_graph_operand_partition(module, i)
+                partition_type
+                == nv_tensor_ir.GraphPartitionType.GRAPH_PARTITION_MAINLOOP_A
             ):
                 a_partition_idx = i
-            if (
-                nv_tensor_ir.GraphPartitionType.GRAPH_PARTITION_MAINLOOP_B
-                == graph_analysis.get_graph_operand_partition(module, i)
+            elif (
+                partition_type
+                == nv_tensor_ir.GraphPartitionType.GRAPH_PARTITION_MAINLOOP_B
             ):
                 b_partition_idx = i
-        a_tensor_dim = (
-            self.test_graph.entrance_nodes[a_partition_idx]
-            .output[0]
-            .cudnn_tensor.get_dim()
-        )
-        b_tensor_dim = (
-            self.test_graph.entrance_nodes[b_partition_idx]
-            .output[0]
-            .cudnn_tensor.get_dim()
-        )
-        B = a_tensor_dim[0]
-        M = a_tensor_dim[1]
-        N = b_tensor_dim[2]
-        K = a_tensor_dim[2]
+        # Ensure valid partition indices were found
+        assert (
+            a_partition_idx != -1 and b_partition_idx != -1
+        ), "Invalid partition indices."
+
+        a_tensor_dim = self.test_graph.entrance_nodes[a_partition_idx].output[0].dim
+        b_tensor_dim = self.test_graph.entrance_nodes[b_partition_idx].output[0].dim
+        B, M, N, K = a_tensor_dim[0], a_tensor_dim[1], b_tensor_dim[2], a_tensor_dim[2]
         problem_size = nv_tensor_ir.GemmProblemSize(B, M, N, K)
         print("problem_size:", B, M, N, K)
         device = torch.device("cuda:0")
@@ -159,7 +215,8 @@ class test_tensor_ir:
         tensor_desc = nv_tensor_ir.VectorTensorOperandDescriptor()
         inputs_gpu = []
         for node in self.test_graph.entrance_nodes:
-            torch_mem = node.output[0].ref_data
+            torch_mem = node.get_value()
+
             if not node.output[0].is_by_value:
                 gpu_mem = torch.tensor(torch_mem, device=device)
                 inputs_gpu.append(gpu_mem)  # need to save gpu_mem in case of releasing
@@ -177,49 +234,40 @@ class test_tensor_ir:
             else:
                 tensor_operand = nv_tensor_ir.TensorOperandDescriptor(
                     nv_tensor_ir.ScalarDescriptor(
-                        self.determine_cask_dtype(node.output[0].data_type),
+                        eval(convert_datatype(node.output[0].data_type, "cask")),
                         torch_mem[0].data_ptr(),
                     )
                 )
                 tensor_desc.append(tensor_operand)
 
-        workspace, variant_pack = self.test_graph.create_workspace_and_variantpack()
-        outputs = self.test_graph.getOutputs()
-        outputs_gpu = []
-        for output in outputs:
-            torch_gpu = torch.tensor(output, device=device)
-            outputs_gpu.append(torch_gpu)  # need to save torch_gpu in case of releasing
-            tensor_operand = nv_tensor_ir.TensorOperandDescriptor(
-                nv_tensor_ir.TensorDescriptor(
-                    torch_gpu.data_ptr(), nv_tensor_ir.LayoutDescriptor(output.stride())
+        if not self.ref_outputs:
+            self.calc_ref()
+
+        outputs_gpu = [
+            torch.tensor(output, device=device) for output in self.ref_outputs
+        ]
+
+        for torch_gpu in outputs_gpu:
+            tensor_desc.append(
+                nv_tensor_ir.TensorOperandDescriptor(
+                    nv_tensor_ir.TensorDescriptor(
+                        torch_gpu.data_ptr(),
+                        nv_tensor_ir.LayoutDescriptor(torch_gpu.stride()),
+                    )
                 )
             )
-            tensor_desc.append(tensor_operand)
 
         args = nv_tensor_ir.ArgumentsView(problem_size, tensor_desc)
+
         with ir.Context() as ctx, ir.Location.unknown():
             nv_tensor_ir.register_dialect()
-
             cask_context = nv_tensor_ir.create_cask_context()
-
             compiler = nv_tensor_ir.Compiler(cask_context)
             shader = compiler.compile(module, compile_option)
-
-            print("BEFORE EXECUTE")
             nv_tensor_ir.cask_execute_shader_complete(shader, args)
 
-            print("AFTER EXECUTE")
-
-        outputs = self.test_graph.getOutputs()
-        for i in range(len(outputs)):
-            outputs[i].copy_(outputs_gpu[i])
-        self.tensorir_compare_to_reference(atol=1e-2, rtol=1e-2)
-        # try:
-        #     self.tensorir_compare_to_reference(atol=1e-2, rtol=1e-2)
-        # except:
-        #     print("MISMATCH!")
-        # else:
-        #     print("PASSED!")
+        self.outputs.extend(outputs_gpu)
+        return self.tensorir_compare_to_reference(atol, rtol)
 
     def build_tensor_ir_module(self):
         input_tensors = []
@@ -235,9 +283,10 @@ class test_tensor_ir:
         ]
 
         with ir.Context() as ctx, ir.Location.unknown() as loc:
+            ctx.enable_multithreading(False)
             nv_tensor_ir.register_dialect()
 
-            module = ir.Module.create()
+            module = ir.Module.create(loc)
             input_types = list(
                 map(
                     lambda x: next(iter(self.determine_tensor_ir_inout_tensor_type(x))),
@@ -303,8 +352,8 @@ class test_tensor_ir:
                             node_map[node],
                         )
                     result.append(node_map[node])
+
                 nv_tensor_ir.results_(result)
-        print(module)
         module.operation.verify()
 
         return module
@@ -313,11 +362,15 @@ class test_tensor_ir:
         if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
             rsh.type, nv_tensor_ir.TensorType
         ):
-            lsh = nv_tensor_ir.splat(rsh.type, lsh)
+            lsh = nv_tensor_ir.splat(
+                nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type), lsh
+            )
         elif isinstance(rsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
             lsh.type, nv_tensor_ir.TensorType
         ):
-            rsh = nv_tensor_ir.splat(lsh.type, rsh)
+            rsh = nv_tensor_ir.splat(
+                nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type), rsh
+            )
         if out_type != lsh.type:
             convert_value0 = nv_tensor_ir.convert(out_type, lsh)
         else:
@@ -443,28 +496,46 @@ class test_tensor_ir:
                         ),
                     )
                 )
-                match node.cudnn_op.__name__:  # FIXME(@xrouth): Try to match on something less fragile than "__name__"
+                match node.op_name:  # FIXME(@xrouth): Try to match on something less fragile than "__name__"
                     case "reduction":
                         accumulator_type = ir.TypeAttr.get(
-                            self.determine_tensor_ir_dtype(
-                                self.test_graph.compute_data_type
+                            eval(
+                                convert_datatype(
+                                    self.test_graph.compute_data_type, "tensorir"
+                                )
                             )
                         )
 
                         reduction_mode = None
 
-                        match node.kwargs["mode"]:
-                            # FIXME (@xrouth): Support more reduction modes
-                            case cudnn.reduction_mode.ADD:
-                                reduction_mode = nv_tensor_ir.ReductionMode.add
-                            case cudnn.reduction_mode.AMAX:
-                                reduction_mode = nv_tensor_ir.ReductionMode.amax
-                            case cudnn.reduction_mode.MIN:
-                                reduction_mode = nv_tensor_ir.ReductionMode.min
-                            case cudnn.reduction_mode.MAX:
-                                reduction_mode = nv_tensor_ir.ReductionMode.max
-
-                        out_dims = node.output[0].cudnn_tensor.get_dim()
+                        if "reduction_mode.ADD" in node.kwargs["mode"]:
+                            reduction_mode = nv_tensor_ir.ReductionMode.add
+                        elif "reduction_mode.AMAX" in node.kwargs["mode"]:
+                            reduction_mode = nv_tensor_ir.ReductionMode.amax
+                        elif "reduction_mode.MIN" in node.kwargs["mode"]:
+                            reduction_mode = nv_tensor_ir.ReductionMode.min
+                        elif "reduction_mode.MAX" in node.kwargs["mode"]:
+                            reduction_mode = nv_tensor_ir.ReductionMode.max
+                        input_datatype = nv_tensor_ir.get_tensor_datatype(
+                            children[0].type
+                        )
+                        output_datatype = nv_tensor_ir.get_tensor_datatype(out_type)
+                        if input_datatype != output_datatype:
+                            convert_value = nv_tensor_ir.convert(
+                                nv_tensor_ir.TensorType.get(
+                                    shape=out_shape,
+                                    stride=out_stride,
+                                    datatype=output_datatype,
+                                ),
+                                children[0],
+                            )
+                        else:
+                            convert_value = children[0]
+                        reduction_dim = 0
+                        for s in out_stride:
+                            if s == 0:
+                                break
+                            reduction_dim += 1
                         print(
                             "out_type:",
                             out_type,
@@ -480,7 +551,14 @@ class test_tensor_ir:
                             reduction_dim += 1
                         reduction_dimensions = [reduction_dim]
                         mlir_value = nv_tensor_ir.reduce(
-                            out_type, children[0], reduction_dimensions, reduction_mode
+                            nv_tensor_ir.TensorType.get(
+                                shape=out_shape,
+                                stride=out_stride,
+                                datatype=output_datatype,
+                            ),
+                            convert_value,
+                            reduction_dimensions,
+                            reduction_mode,
                         )
                         node_map[node] = mlir_value
                     case "matmul":
@@ -512,7 +590,7 @@ class test_tensor_ir:
                         | "relu_backward"
                     ):
                         self.build_binary_operation(
-                            node.cudnn_op.__name__, node, children, out_type, node_map
+                            node.op_name, node, children, out_type, node_map
                         )
                     case (
                         "tanh"
@@ -526,7 +604,7 @@ class test_tensor_ir:
                         | "log"
                         | "neg"
                         | "rsqrt"
-                        | "ert"
+                        | "erf"
                         | "reciprocal"
                         | "relu"
                         | "sigmoid"
@@ -535,7 +613,7 @@ class test_tensor_ir:
                         | "gelu_approx_tanh"
                     ):
                         self.build_unary_operation(
-                            node.cudnn_op.__name__, node, children, out_type, node_map
+                            node.op_name, node, children, out_type, node_map
                         )
                     case "cmp_lt":
                         comparator = None
@@ -563,12 +641,14 @@ class test_tensor_ir:
                         dy = children[0]
                         w = children[1]
                         accumulator_type_attr = ir.TypeAttr.get(
-                            self.determine_tensor_ir_dtype(
-                                self.test_graph.compute_data_type
+                            eval(
+                                convert_datatype(
+                                    self.test_graph.compute_data_type, "tensorir"
+                                )
                             )
                         )
 
-                        out_dims = node.output[0].cudnn_tensor.get_dim()
+                        out_dims = node.output[0].dim
 
                         pre_padding = node.kwargs["padding"]
                         post_padding = node.kwargs[
@@ -591,12 +671,14 @@ class test_tensor_ir:
                         dy = children[0]
                         w = children[1]
                         accumulator_type_attr = ir.TypeAttr.get(
-                            self.determine_tensor_ir_dtype(
-                                self.test_graph.compute_data_type
+                            eval(
+                                convert_datatype(
+                                    self.test_graph.compute_data_type, "tensorir"
+                                )
                             )
                         )
 
-                        out_dims = node.output[0].cudnn_tensor.get_dim()
+                        out_dims = node.output[0].dim
 
                         pre_padding = node.kwargs["padding"]
                         post_padding = node.kwargs[
@@ -619,8 +701,10 @@ class test_tensor_ir:
                         x = children[0]
                         w = children[1]
                         accumulator_type_attr = ir.TypeAttr.get(
-                            self.determine_tensor_ir_dtype(
-                                self.test_graph.compute_data_type
+                            eval(
+                                convert_datatype(
+                                    self.test_graph.compute_data_type, "tensorir"
+                                )
                             )
                         )
 
@@ -644,7 +728,7 @@ class test_tensor_ir:
                     case _:
                         print(
                             "Unimplemented Operation in Lowering to Tensor IR: ",
-                            node.cudnn_op.__name__,
+                            node.op_name,
                         )
             else:
                 print("not an op")
