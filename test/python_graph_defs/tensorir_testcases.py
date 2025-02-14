@@ -1,20 +1,16 @@
-import cudnn
 import pytest
 from looseversion import LooseVersion
+from data_types import DataType
 
 
 def test_gemm(jparams, testgraph):
     B, M, N, K = jparams["in_dim"]
 
-    tensor_a = testgraph.tensor(
-        name="image", dim=[B, M, K], data_type=cudnn.data_type.HALF
-    )
-    tensor_b = testgraph.tensor(
-        name="weight", dim=[B, K, N], data_type=cudnn.data_type.HALF
-    )
+    tensor_a = testgraph.tensor(name="image", dim=[B, M, K], data_type=DataType.HALF)
+    tensor_b = testgraph.tensor(name="weight", dim=[B, K, N], data_type=DataType.HALF)
 
     gemm_output = testgraph.matmul(
-        name="mb_matmul", A=tensor_a, B=tensor_b, compute_data_type=cudnn.data_type.HALF
+        name="mb_matmul", A=tensor_a, B=tensor_b, compute_data_type=DataType.HALF
     )
     gemm_output.set_stride([M * N, N, 1])
 
@@ -22,15 +18,11 @@ def test_gemm(jparams, testgraph):
 def test_gemm_relu(jparams, testgraph):
     B, M, N, K = jparams["in_dim"]
 
-    image = testgraph.tensor(
-        name="image", dim=[B, M, K], data_type=cudnn.data_type.HALF
-    )
-    weight = testgraph.tensor(
-        name="weight", dim=[B, K, N], data_type=cudnn.data_type.HALF
-    )
+    image = testgraph.tensor(name="image", dim=[B, M, K], data_type=DataType.HALF)
+    weight = testgraph.tensor(name="weight", dim=[B, K, N], data_type=DataType.HALF)
 
     gemm_output = testgraph.matmul(
-        name="mb_matmul", A=image, B=weight, compute_data_type=cudnn.data_type.FLOAT
+        name="mb_matmul", A=image, B=weight, compute_data_type=DataType.FLOAT
     )
     # Make intermediate tensor output row-major:
     gemm_output.set_stride([M * N, N, 1])
@@ -40,18 +32,12 @@ def test_gemm_relu(jparams, testgraph):
 def test_gemm_bias_relu(jparams, testgraph):
     B, M, N, K = jparams["in_dim"]
 
-    image = testgraph.tensor(
-        name="image", dim=[B, M, K], data_type=cudnn.data_type.HALF
-    )
-    weight = testgraph.tensor(
-        name="weight", dim=[B, K, N], data_type=cudnn.data_type.HALF
-    )
-    bias = testgraph.tensor(
-        name="weight", dim=[B, M, N], data_type=cudnn.data_type.HALF
-    )
+    image = testgraph.tensor(name="image", dim=[B, M, K], data_type=DataType.HALF)
+    weight = testgraph.tensor(name="weight", dim=[B, K, N], data_type=DataType.HALF)
+    bias = testgraph.tensor(name="weight", dim=[B, M, N], data_type=DataType.HALF)
 
     gemm_output = testgraph.matmul(
-        name="mb_matmul", A=image, B=weight, compute_data_type=cudnn.data_type.FLOAT
+        name="mb_matmul", A=image, B=weight, compute_data_type=DataType.FLOAT
     )
     # Make intermediate tensor output row-major:
     gemm_output.set_stride([M * N, N, 1])

@@ -1,5 +1,5 @@
 import utils
-import cudnn
+import sys
 
 utils.reportCurrentTime("import_cudnn")
 import torch
@@ -7,7 +7,8 @@ import torch
 utils.reportCurrentTime("import_torch")
 from typing import Any
 from dataclasses import dataclass, asdict, field
-import copy
+from data_types import DataType, convert_datatype, convert_to_torch_type_wrapper
+import utils
 
 utils.reportCurrentTime("import_test_graph_deps")
 
@@ -31,8 +32,7 @@ class PytorchReference:
 
         # Need WAR for int8 conv2d kernels. PyT does not supported them.
         # https://github.com/pytorch/pytorch/issues/63518
-
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
 
         if len(kwargs["image"].shape) == 4:
             output = torch.nn.functional.conv2d(
@@ -59,7 +59,7 @@ class PytorchReference:
 
     @staticmethod
     def conv_dgrad(kwargs, test_tensor_out_list):
-        input_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        input_size = test_tensor_out_list[0].dim
         dX = torch.nn.grad.conv2d_input(
             input_size,
             kwargs["filter"],
@@ -68,12 +68,12 @@ class PytorchReference:
             stride=kwargs["stride"],
             dilation=kwargs["dilation"],
         )
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [dX.to(dtype=dtype)]
 
     @staticmethod
     def conv_wgrad(kwargs, test_tensor_out_list):
-        filter_dim_size = test_tensor_out_list[0].cudnn_tensor.get_dim()
+        filter_dim_size = test_tensor_out_list[0].dim
         dW = torch.nn.grad.conv2d_weight(
             kwargs["image"],
             filter_dim_size,
@@ -85,34 +85,34 @@ class PytorchReference:
         return [dW]
 
     def identity(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [kwargs["input"].to(dtype=dtype)]
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
     @staticmethod
     def relu(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [torch.nn.functional.relu(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
     def elu(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [torch.nn.functional.elu(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
     def gelu(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [torch.nn.functional.gelu(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
     def gelu_approx_tanh(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [torch.nn.functional.gelu(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
     def sigmoid(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [torch.nn.functional.sigmoid(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
@@ -150,7 +150,7 @@ class PytorchReference:
 
     @staticmethod
     def matmul(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         output = torch.bmm(kwargs["A"], kwargs["B"]).to(dtype=dtype)
         return [output]
 
@@ -171,7 +171,7 @@ class PytorchReference:
 
     @staticmethod
     def mul(kwargs, test_tensor_out_list):
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         output = torch.mul(kwargs["a"], kwargs["b"]).to(dtype=dtype)
         return [output]
 
@@ -302,24 +302,23 @@ class PytorchReference:
 
     @staticmethod
     def reduction(kwargs, test_tensor_out_list):
-        pycudnn_out_tensor = test_tensor_out_list[0].cudnn_tensor
         # todo(@mbreughe): set default data types for output tensors based on pygraph settings
-        dtype = convert_to_torch_type(test_tensor_out_list[0].data_type)
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
 
-        out_dims = pycudnn_out_tensor.get_dim()
+        out_dims = test_tensor_out_list[0].dim
 
         axis = []
         for dim_idx, dim_val in enumerate(out_dims):
             if dim_val == 1:
                 axis.append(dim_idx)
 
-        if kwargs["mode"] == cudnn.reduction_mode.MAX:
+        if "reduction_mode.MAX" in kwargs["mode"]:
             output = kwargs["input"].amax(dim=tuple(axis), keepdim=True).to(dtype=dtype)
-        elif kwargs["mode"] == cudnn.reduction_mode.MIN:
+        elif "reduction_mode.MIN" in kwargs["mode"]:
             output = kwargs["input"].amin(dim=tuple(axis), keepdim=True).to(dtype=dtype)
-        elif kwargs["mode"] == cudnn.reduction_mode.AMAX:
+        elif "reduction_mode.AMAX" in kwargs["mode"]:
             output = kwargs["input"].amax(dim=tuple(axis)).to(dtype=dtype)
-        elif kwargs["mode"] == cudnn.reduction_mode.ADD:
+        elif "reduction_mode.ADD" in kwargs["mode"]:
             output = kwargs["input"].sum(dim=tuple(axis)).to(dtype=dtype)
         else:
             raise ValueError(f"Unhanlded reduction mode")
@@ -332,7 +331,9 @@ class PytorchReference:
     @staticmethod
     def relu_backward(kwargs, test_tensor_out_list):
         dX = torch.where(kwargs["input"] > 0, kwargs["loss"], 0)
-        dX = dX.to(convert_to_torch_type(test_tensor_out_list[0].data_type))
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
         return [dX]
 
 
@@ -395,14 +396,16 @@ class test_node:
 
 class operation(test_node):
 
-    # @param pyCuddnOp: cudnn.pygraph operation (e.g., cudnn.pygraph.conv)
+    # @param pyCudnnOp: cudnn.pygraph operation (e.g., cudnn.pygraph.conv)
     # @param ref_func: reference function for the associated cudnn_op
     # @param name: name for this operation (could be passed by kwargs as well)
-    def __init__(self, cudnn_op, ref_func, name, num_outputs=1):
+    def __init__(self, cudnn_op, ref_func, name, num_outputs=1, opName=None):
         super().__init__(name)
 
         self.cudnn_op = cudnn_op
         self.ref_func = ref_func
+        if opName is not None:
+            self.op_name = opName
 
         self.output = []
 
@@ -426,10 +429,15 @@ class operation(test_node):
     # @brief: Run the cudnn node
     # TODO(@mbreughe): extended to multiple output tensors
     def run_cudnn_code(self, cudnn_graph):
+
         # Besides input tensors, all kwargs can just be passed through to the cudnn method.
         # For the input tensor we need to extract the test_tensor's cudnn tensor.
         # Therefore: copy all kwargs, except for test_tensors
         # TODO(@mbreughe) Avoid copying these kwargs twice (ref and cudnn). Let's do this in the init function once
+        if self.cudnn_op is None:
+            return
+        import cudnn
+
         new_kwargs = {
             x: self.kwargs[x]
             for x in self.kwargs
@@ -439,9 +447,24 @@ class operation(test_node):
             if isinstance(self.kwargs[x], test_tensor):
                 new_kwargs[x] = self.kwargs[x].cudnn_tensor
 
+        if "compute_data_type" in new_kwargs and isinstance(
+            new_kwargs["compute_data_type"], DataType
+        ):
+            new_kwargs["compute_data_type"] = eval(
+                convert_datatype(new_kwargs["compute_data_type"], "cudnn")
+            )
         if new_kwargs.get("compute_data_type", None) == cudnn.data_type.INT8:
             new_kwargs["compute_data_type"] = cudnn.data_type.INT32
+
+        if (
+            self.cudnn_op.__name__ == "reduction"
+            and "mode" in new_kwargs
+            and isinstance(new_kwargs["mode"], str)
+        ):
+            new_kwargs["mode"] = eval(new_kwargs["mode"])
         cudnn_res = self.cudnn_op(cudnn_graph, **new_kwargs)
+        if self.cudnn_op.__name__ == "reduction" and "mode" in new_kwargs:
+            self.kwargs["mode"] = str(new_kwargs["mode"])
 
         # in case we have multiple outputs
         if isinstance(cudnn_res, list):
@@ -484,12 +507,18 @@ class random_tensor_generator(test_node):
             io_data_type if not "data_type" in self.kwargs else self.kwargs["data_type"]
         )
         self.output[0].set_data_type(data_type)
+        self.dist_mean = None
+        self.dist_sd = None
+
+    def set_dist_mean_sd(self, mean, sd):
+        self.dist_mean = mean
+        self.dist_sd = sd
 
     def initialize_torch_tensor(self, torch_dtype, device):
         if torch_dtype == torch.bool:
             self.output[0].ref_data = torch.randint(
-                0,
-                2,
+                0 if self.dist_mean is None else self.dist_mean,
+                2 if self.dist_sd is None else self.dist_sd,
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,
@@ -497,8 +526,8 @@ class random_tensor_generator(test_node):
             )
         elif torch_dtype == torch.int8:
             self.output[0].ref_data = torch.randint(
-                -2,
-                3,
+                -2 if self.dist_mean is None else self.dist_mean,
+                3 if self.dist_sd is None else self.dist_sd,
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,
@@ -506,8 +535,8 @@ class random_tensor_generator(test_node):
             )
         elif torch_dtype == torch.int32:
             self.output[0].ref_data = torch.randint(
-                -2,
-                3,
+                -2 if self.dist_mean is None else self.dist_mean,
+                3 if self.dist_sd is None else self.dist_sd,
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,
@@ -515,19 +544,29 @@ class random_tensor_generator(test_node):
             )
         else:
             self.output[0].ref_data = torch.normal(
-                0.5,
-                0.5,
+                0.5 if self.dist_mean is None else self.dist_mean,
+                0.5 if self.dist_sd is None else self.dist_sd,
                 self.kwargs["dim"],
                 requires_grad=False,
                 device=device,
                 dtype=torch_dtype,
             )
 
+            if (
+                "stride" in self.kwargs
+                and "is_tensor_ir" in self.kwargs
+                and self.kwargs["is_tensor_ir"]
+            ):
+                self.output[0].ref_data = torch.as_strided(
+                    self.output[0].ref_data,
+                    self.output[0].ref_data.size(),
+                    stride=self.kwargs["stride"],
+                )
+
     def initialize_random_tensor(self):
         if self.output[0].ref_data is None:
             # The default random generator results in numerical issues
-            # self.output[0].ref_data = torch.randn(self.kwargs["dim"], requires_grad=False, device="cuda", dtype=convert_to_torch_type(self.output[0].data_type))
-            torch_dtype = convert_to_torch_type(self.output[0].data_type)
+            torch_dtype = eval(convert_to_torch_type_wrapper(self.output[0].data_type))
             try:
                 self.initialize_torch_tensor(torch_dtype, "cuda")
             except Exception as error:
@@ -557,12 +596,21 @@ class random_tensor_generator(test_node):
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
     def run_cudnn_code(self, cudnn_graph):
+        if "cudnn" not in sys.modules:
+            print("Skip run_cudnn_code()")
+            return
+        import cudnn
+
         self.initialize_random_tensor()
         self.output[0].cudnn_tensor = cudnn_graph.tensor(
             name=self.name,
             dim=self.output[0].ref_data.size(),
             stride=self.output[0].ref_data.stride(),
-            data_type=self.output[0].data_type,
+            data_type=(
+                eval(convert_datatype(self.output[0].data_type, "cudnn"))
+                if isinstance(self.output[0].data_type, DataType)
+                else self.output[0].data_type
+            ),
         )
 
     def run_ref(self):
@@ -592,7 +640,7 @@ class ConstantTensor(test_node):
                 self.value,
                 requires_grad=False,
                 device="cpu",
-                dtype=convert_to_torch_type(self.output[0].data_type),
+                dtype=eval(convert_to_torch_type_wrapper(self.output[0].data_type)),
             )
 
             if self.get_layout == "NHWC":
@@ -609,12 +657,21 @@ class ConstantTensor(test_node):
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
 
     def run_cudnn_code(self, cudnn_graph):
+        if "cudnn" not in sys.modules:
+            print("Skip run_cudnn_code()")
+            return
+        import cudnn
+
         self.instantiate()
         self.output[0].cudnn_tensor = cudnn_graph.tensor(
             name=self.name,
             dim=self.output[0].ref_data.size(),
             stride=self.output[0].ref_data.stride(),
-            data_type=self.output[0].data_type,
+            data_type=(
+                eval(convert_datatype(self.output[0].data_type, "cudnn"))
+                if isinstance(self.output[0].data_type, DataType)
+                else self.output[0].data_type
+            ),
         )
 
     def run_ref(self):
@@ -637,6 +694,8 @@ class test_tensor:
 
         self.is_by_value = False
 
+        self.is_virtual = True
+
     @property
     def data_type(self):
         if self._data_type is not None:
@@ -653,6 +712,9 @@ class test_tensor:
         # Apply it immediately if a cudnn tensor was already created
         if self.cudnn_tensor is not None:
             self.cudnn_tensor.set_data_type(dtype)
+
+    def set_is_virtual(self, is_virtual):
+        self.is_virtual = is_virtual
 
     # Convenience wrapper-function to mimic cudnn.tensor.set_data_type
     def set_data_type(self, dtype):
@@ -677,13 +739,19 @@ class test_tensor:
     # TODO(@mbreughe): refactor this to avoid looking up strings
     def apply_modifiers(self):
         # If we ever specified a data type, apply it
-        if self.data_type is not None:
-            self.cudnn_tensor.set_data_type(self.data_type)
+        if self.data_type is not None and self.cudnn_tensor is not None:
+            import cudnn
 
-        if "dim" in dir(self):
+            self.cudnn_tensor.set_data_type(
+                eval(convert_datatype(self.data_type, "cudnn"))
+                if isinstance(self.data_type, DataType)
+                else self.data_type
+            )
+
+        if "dim" in dir(self) and self.cudnn_tensor is not None:
             self.cudnn_tensor.set_dim(self.dim)
 
-        if "stride" in dir(self):
+        if "stride" in dir(self) and self.cudnn_tensor is not None:
             self.cudnn_tensor.set_stride(self.stride)
 
     def __repr__(self):
@@ -700,59 +768,19 @@ class test_tensor:
         return rep
 
 
-def convert_to_torch_type(cudnn_type):
-    if cudnn_type == cudnn.data_type.HALF:
-        return torch.float16
-    elif cudnn_type == cudnn.data_type.BFLOAT16:
-        return torch.bfloat16
-    elif cudnn_type == cudnn.data_type.FLOAT:
-        return torch.float32
-    elif cudnn_type == cudnn.data_type.BOOLEAN:
-        return torch.bool
-    elif cudnn_type == cudnn.data_type.INT8:
-        return torch.int8
-    elif cudnn_type == cudnn.data_type.INT32:
-        return torch.int32
-    else:
-        raise ValueError("Unsupported tensor data type.", cudnn_type)
-
-    return
-
-
-def is_column_major(cudnn_tensor):
-    strides = cudnn_tensor.get_stride()
-    assert len(strides) == 3
-    return strides[2] > strides[1]
-
-
-# @brief convert the strides of a torch_tensor to the ones of cudnn_tensor
-# @param torch_tensor: tensor created by torch
-# @param cudnn_tensor: tensor created by cudnn
-def convert_strides(torch_tensor, cudnn_tensor):
-    cudnn_stride = tuple(cudnn_tensor.get_stride())
-    # Ensure we setup the correct strides
-    torch_tensor = torch.as_strided(
-        torch_tensor, torch_tensor.size(), tuple(cudnn_stride)
-    )
-
-    return torch_tensor
-
-
-# @brief: test_graph that mirrors cudnn.pygraph
-# @details: this contains functionality to run both cudnn code as well as a reference
 class test_graph:
     __test__ = False
 
     # Add data types, custom test name ,etc.
     def __init__(
         self,
-        io_data_type=cudnn.data_type.HALF,
-        intermediate_data_type=cudnn.data_type.FLOAT,
-        compute_data_type=cudnn.data_type.FLOAT,
+        io_data_type=DataType.HALF,
+        intermediate_data_type=DataType.FLOAT,
+        compute_data_type=DataType.FLOAT,
+        is_tensor_ir=False,
     ):
         # TODO(@barretw): ensure output is deterministic and reproducible for L4 tests
         torch.manual_seed(0)
-
         self.uid_counter = 0
         self.nodes = []
         self.entrance_nodes = []
@@ -761,64 +789,15 @@ class test_graph:
         self.io_data_type = io_data_type
         self.intermediate_data_type = intermediate_data_type
         self.compute_data_type = compute_data_type
-        self.set_backend_engine(-1)
-        self.handle = cudnn.create_handle()
-
-    def set_backend_engine(self, backendEngine):
-        self.heuristics = []
-        # Some backendEngines are ints, some are strings. Make them all string.
-        engine = str(backendEngine)
-        if engine == "-1":
-            self.set_heuristics([cudnn.heur_mode.A])
-        elif engine == "-2":
-            self.set_heuristics([cudnn.heur_mode.B])
-        elif engine == "-3":
-            self.set_heuristics([cudnn.heur_mode.FALLBACK])
-        else:
-            print(
-                "MB Unkown heuristic for backendEngine {} (type {}), trying A and FALLBACK".format(
-                    engine, type(engine)
-                )
-            )
-            self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-
-    def set_heuristics(self, heuristics):
-        self.heuristics = heuristics
+        self.is_tensor_ir = is_tensor_ir
 
     def getOutputs(self):
         return self.output_tensors
 
     # @brief: Add a convolution node to the graph
-    def conv_fprop(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_fprop)
-
-    def conv_dgrad(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_dgrad)
-
-    def conv_wgrad(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.conv_wgrad)
-
-    # @brief: Add a relu to the graph
-    def relu(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.relu)
-
-    def batchnorm(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.batchnorm)
-
-    def matmul(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.matmul)
-
-    def add(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.add)
-
-    def bias(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.bias)
-
-    def reduction(self, **kwargs):
-        return self.create_and_add_operation(kwargs, cudnn.pygraph.reduction)
 
     # @brief: Add an input tensor to the graph
-    def tensor(self, **kwargs):
+    def test_tensor(self, **kwargs):
         # Create a name if none provided
         if "name" in kwargs:
             name = kwargs["name"]
@@ -829,23 +808,16 @@ class test_graph:
             data_type = kwargs["data_type"]
         else:
             data_type = self.io_data_type
+        if self.is_tensor_ir:
+            kwargs["is_tensor_ir"] = self.is_tensor_ir
         test_tensor = random_tensor_generator(kwargs, name, data_type)
         self.nodes.append(test_tensor)
         # we are assuming only input tensors are explicitly created
         self.entrance_nodes.append(test_tensor)
-        return test_tensor.output[0]
+        return test_tensor
 
-    def tensor_cpu_constant(self, value, **kwargs):
-        # Create a name if none provided
-        if "name" in kwargs:
-            name = kwargs["name"]
-        else:
-            name = self.create_unique_name("Tensor")
-
-        node = ConstantTensor(kwargs, name, self.io_data_type, value)
-        self.nodes.append(node)
-        self.entrance_nodes.append(node)
-        return node.output[0]
+    def tensor(self, **kwargs):
+        return self.test_tensor(**kwargs).output[0]
 
     # @brief: utility function to create unique names for the graph
     def create_unique_name(self, prefix):
@@ -853,18 +825,47 @@ class test_graph:
         self.uid_counter += 1
         return name
 
+    def conv_fprop(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "conv_fprop")
+
+    def conv_dgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "conv_dgrad")
+
+    def conv_wgrad(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "conv_wgrad")
+
+    # @brief: Add a relu to the graph
+    def relu(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "relu")
+
+    def batchnorm(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "batchnorm")
+
+    def matmul(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "matmul")
+
+    def add(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "add")
+
+    def bias(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "bias")
+
+    def reduction(self, **kwargs):
+        return self.create_and_add_operation(kwargs, "reduction")
+
     # @brief: Create an operation, pass through the kwargs and set up dependencies
     # @param kwargs: the named arguments passed to a cudnn function
-    # @param cudnn_op: the cudnn operation (e.g., cudnn.pygraph.conv)
+    # @param opName: the operation name, this is used to build the pytorch reference graph,
+    #                e.g. "conv_fprop", this should be the same as the PyTorch reference function name
     # @return: test_tensor (the output from the added operation)
-    def create_and_add_operation(self, kwargs, cudnn_op):
+    def create_and_add_operation(self, kwargs, opName=None, op=None):
+        opName = opName if opName is not None else op.__name__
         if "name" in kwargs:
             name = kwargs["name"]
         else:
-            cudnn_opName = cudnn_op.__name__
-            name = self.create_unique_name(cudnn_opName)
+            name = self.create_unique_name(opName)
 
-        node = test_graph.create_operation(cudnn_op, name)
+        node = test_graph.create_operation(opName, name, op)
         node.set_kwargs(kwargs)
         self.nodes.append(node)
 
@@ -881,20 +882,25 @@ class test_graph:
     # it builds an operation by:
     #   * discovering the reference function based on the name of the cudnn op
     @staticmethod
-    def create_operation(cudnn_op, name):
-        cudnn_opName = cudnn_op.__name__
+    def create_operation(opName, name, op=None):
         # Fetch the reference function from the reference framework
         # Note that we use PytorchReference here, but we can make this arbitrary
         # TODO(@mbreughe): Add error handling code in case the function is not found
-        ref_func = getattr(PytorchReference, cudnn_opName)
+        ref_func = getattr(PytorchReference, opName)
 
         # TODO(@mbreughe): automate this
         num_outputs = 1
-        if cudnn_opName == "batchnorm":
+        if opName == "batchnorm":
             num_outputs = 5
 
-        node = operation(cudnn_op, ref_func, name, num_outputs)
+        node = operation(op, ref_func, name, num_outputs, opName)
         return node
+
+    # @brief: Create a pycudnn node from the legacy_op
+    def create_test_graph_node(self, legacy_op):
+        name = legacy_op.get_name()
+        opName = legacy_op.get_pycudnn_operation_name()
+        return test_graph.create_operation(opName, name)
 
     # @brief: Utility function
     def clear_node_meta_data(self):
@@ -902,77 +908,11 @@ class test_graph:
             node.clear_meta_data()
 
     # @brief: Utility function to discover output nodes
-    def mark_implicit_output_nodes(self):
-        for node in self.nodes:
-            if node.is_output_node():
-                print("Setting {} as output".format(node.name))
-                for output in node.output:
-                    output.cudnn_tensor.set_output(True)
 
     def apply_modifiers_to_node_output_tensors(self):
         for node in self.nodes:
             for tensor in node.output:
                 tensor.apply_modifiers()
-
-    # @brief: Build the cudnn graph
-    # @note: this temporarily modifies the is_visited status of the nodes
-    # @return the cudnn graph
-    # @note we are relying on the user not the alter the graph. We can instead return them a copy, but this would be at a cost
-    def build_cudnn_graph(self, use_heuristic_list=True):
-
-        # Setting up graph
-        graph = cudnn.pygraph(
-            self.graph_name,
-            io_data_type=self.io_data_type,
-            intermediate_data_type=self.intermediate_data_type,
-            compute_data_type=self.compute_data_type,
-            handle=self.handle,
-        )
-        utils.reportCurrentTime("cudnn.pygraph")
-
-        # TODO(@mbreughe): Change this. We don't want to invoke cudnn calls this way since we change the order
-        # a developer may have intended. It is useful when building from json graphs, but not when
-        # manually setting up graphs. This is like building a house of cards.
-        self.clear_node_meta_data()
-        for node in self.entrance_nodes:
-            node.build_cudnntree_recursive(graph)
-
-        # Once we constructed the cudnn graph, it's time to apply any explicit modifiers to each node's output tensors
-        # test_graph creates dummy output tensors to allow constructing of a graph.
-        # However, the actual output tensors are created once we call build_cudnntree_recursive. This means any modifications
-        # such as Y.set_data_type(FLOAT) actually happened on the dummy tensors. Here we propogate this to the real tensors
-        self.apply_modifiers_to_node_output_tensors()
-
-        # Setting implicit output nodes"
-        self.mark_implicit_output_nodes()
-
-        utils.reportCurrentTime("recursive_tree_build")
-        graph.build(self.heuristics) if use_heuristic_list else graph.build()
-        utils.reportCurrentTime("graph.build")
-
-        # Clear the "is_visited" status of the nodes
-        self.clear_node_meta_data()
-
-        self.cudnn_graph = graph
-
-        utils.reportCurrentTime("post_build")
-        return graph
-
-    # @brief: check whether correct shape inferencing took place
-    # @pre: build_cudnn_graph needs to have been invoked first
-    def frontend_check(self, expected_dims):
-        # Create a mapping of output names and their dimensions
-        node_dim_mapping = {}
-        for node in self.nodes:
-            for output_tensor in node.output:
-                node_dim_mapping[output_tensor.name] = (
-                    output_tensor.cudnn_tensor.get_dim()
-                )
-
-        # For every output we wish to check, check it
-        for name in expected_dims:
-            assert name in node_dim_mapping
-            assert expected_dims[name] == node_dim_mapping[name]
 
     def set_io_data_type(self, data_type):
         self.io_data_type = data_type
@@ -1004,123 +944,3 @@ class test_graph:
         self.clear_node_meta_data()
         utils.reportCurrentTime("calc_reference")
         return output
-
-    def create_workspace_and_variantpack(self):
-        # Creating workspace
-        try:
-            workspace = torch.empty(
-                self.cudnn_graph.get_workspace_size(), device="cuda", dtype=torch.uint8
-            )
-        except Exception as error:
-            workspace = torch.empty(
-                self.cudnn_graph.get_workspace_size(), device="cpu", dtype=torch.uint8
-            )
-
-        variant_pack = {}
-        for node in self.entrance_nodes:
-            for output in node.output:
-                variant_pack[output.cudnn_tensor] = node.get_value()
-
-        for node in self.nodes:
-            if node.is_output_node():
-                for output in node.output:
-                    try:
-                        output_tensor = torch.zeros(
-                            *output.cudnn_tensor.get_dim(),
-                            dtype=convert_to_torch_type(
-                                output.cudnn_tensor.get_data_type()
-                            ),
-                            device="cuda",
-                        )
-                    except Exception as error:
-                        output_tensor = torch.zeros(
-                            *output.cudnn_tensor.get_dim(),
-                            dtype=convert_to_torch_type(
-                                output.cudnn_tensor.get_data_type()
-                            ),
-                            device="cpu",
-                        )
-
-                    output_tensor = convert_strides(output_tensor, output.cudnn_tensor)
-
-                    self.output_tensors.append(output_tensor)
-                    variant_pack[output.cudnn_tensor] = self.output_tensors[-1]
-
-        utils.reportCurrentTime("create_workspace_and_variantpack")
-
-        return (workspace, variant_pack)
-
-    def cudnn_execute(self, timingLoop=1):
-        # Set the random seed here: all random tensors that are entry nodes
-        # are created by create_workspace_and_variantpack().
-        # TODO(@mbreughe): verify the above statement and move seed initialization
-        # to variantpack creation routine
-        # TODO(@mbreughe): allow dialing in any seed
-        torch.manual_seed(0)
-        workspace, variant_pack = self.create_workspace_and_variantpack()
-
-        # Run the cudnn graph
-        print("Executing graph through cudnn")
-
-        # TODO(@mbreughe): modify so that every run has cold caches
-        # warm the caches
-        self.cudnn_graph.execute(variant_pack, workspace)
-
-        # TODO(@mbreughe:) Handle the case for -T1. Right now, -T1 and -T0 both run the graph only once, without timing
-        if timingLoop > 1:
-            # TODO(@mbreughe): Support cold caches by using multiple variant_packs
-            (min_rt, avg_rt, max_rt) = utils.measure_gpu_runtime(
-                self.cudnn_graph, variant_pack, workspace, timingLoop
-            )
-
-        utils.reportCurrentTime("graph.execute")
-
-        torch.cuda.synchronize()
-
-        cudnn.destroy_handle(self.handle)
-
-    # @brief: Run the cudnn implementation and the reference, and compare
-    # @note: This assumes build_cudnn_graph has already been run
-    # @pre: build_cudnn_graph needs to be called first
-    def cudnn_execute_and_compare_to_reference(self, atol=1e-2, rtol=1e-2):
-        # Set up workspace and variant pack, then execute.
-        self.cudnn_execute(timingLoop=1)
-
-        # Run the reference
-        print("Computing reference")
-        ref_outputs = self.calc_reference()
-
-        assert len(ref_outputs) == len(self.getOutputs())
-
-        number_outputs_tested = 0
-        # Compare with reference
-        for Y_expected, Y_actual in zip(ref_outputs, self.getOutputs()):
-            # TODO (@mbreughe): Clean up this assumption:
-            # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
-            # For now, we can assume that we don't care about this output and just let the reference pass
-            # To be on the safe side, we will make sure at least one output was checked
-            if Y_expected is None:
-                continue
-
-            if Y_expected.dtype != Y_actual.dtype:
-                print(
-                    "WARNING: reference and actual output types differ ({} resp., {})".format(
-                        Y_expected.dtype, Y_actual.dtype
-                    )
-                )
-
-            if Y_expected.shape != Y_actual.shape:
-                print(
-                    "WARNING: reference and actual output shapes differ ({} resp., {})".format(
-                        Y_expected.shape, Y_actual.shape
-                    )
-                )
-
-            torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
-
-            number_outputs_tested += 1
-
-        assert number_outputs_tested >= 1
-        print("PASSED: cudnn and reference match")
-
-        utils.reportCurrentTime("assert_close")

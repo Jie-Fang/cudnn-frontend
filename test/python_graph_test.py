@@ -1,11 +1,11 @@
-from test_graph import test_graph
+from cudnn_test_graph import cudnn_test_graph
 
 
 # @param graph_builder_fptr is set through conftest.py
 # @param jparams is set through conftest.py
 def test_python_graph(graph_builder_fptr, jparams):
     EXPECTED_KEY = "expected_dim"
-    testgraph = test_graph()
+    testgraph = cudnn_test_graph()
     graph_builder_fptr(jparams, testgraph)
     graph = testgraph.build_cudnn_graph()
 

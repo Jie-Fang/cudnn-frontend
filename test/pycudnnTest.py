@@ -5,10 +5,10 @@ import utils
 
 utils.reportCurrentTime("Start")
 import argparse
-import os, sys
+import os, sys, traceback
 
 utils.reportCurrentTime("import_python_modules")
-from json_graph_test import run_test_from_legacy_args
+from json_graph_test import run_test_from_legacy_args, run_tensor_ir_from_legacy_args
 
 utils.reportCurrentTime("import_json_graph_test")
 
@@ -16,6 +16,8 @@ utils.reportCurrentTime("import_json_graph_test")
 def reportError(e, repro_cmd):
     print(e)
     print("FAILED: {}".format(repro_cmd))
+    print("Stack trace:")
+    traceback.print_exc()
 
 
 if __name__ == "__main__":
@@ -155,7 +157,14 @@ if __name__ == "__main__":
 
     # Graphs defined in json file
     elif args.R == "tensor_ir":  # -Rtensor_ir
-        pytest_cmd = [tensor_ir_test]
+        try:
+            run_tensor_ir_from_legacy_args(args, unknown_args)
+        except Exception as e:
+            reportError(e, cmd)
+            sys.exit(1)
+        utils.reportCurrentTime("done")
+        sys.exit(0)
+
     elif args.testPath.endswith(".json"):
         pytest_cmd = [json_graph_test]
     # Graphs defined in python file

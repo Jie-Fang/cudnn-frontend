@@ -1,4 +1,4 @@
-from test_graph import test_graph
+from cudnn_test_graph import cudnn_test_graph
 import pytest
 import re
 import cudnn
@@ -23,7 +23,7 @@ def check_log(log_str):
 
 def test_negative_graph(graph_builder_fptr, jparams):
     def tester():
-        testgraph = test_graph()
+        testgraph = cudnn_test_graph()
         with pytest.raises(Exception) as e:
             # For negative tests, we expect some sort of exception should be thrown. Otherwise, we should fail the test.
             graph_builder_fptr(problem_size, testgraph)
