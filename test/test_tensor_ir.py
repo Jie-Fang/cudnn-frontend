@@ -216,7 +216,6 @@ class test_tensor_ir:
         inputs_gpu = []
         for node in self.test_graph.entrance_nodes:
             torch_mem = node.get_value()
-
             if not node.output[0].is_by_value:
                 gpu_mem = torch.tensor(torch_mem, device=device)
                 inputs_gpu.append(gpu_mem)  # need to save gpu_mem in case of releasing
@@ -242,9 +241,9 @@ class test_tensor_ir:
 
         if not self.ref_outputs:
             self.calc_ref()
-
         outputs_gpu = [
-            torch.tensor(output, device=device) for output in self.ref_outputs
+            torch.empty(output.shape, dtype=output.dtype, device=device)
+            for output in self.ref_outputs
         ]
 
         for torch_gpu in outputs_gpu:
@@ -507,7 +506,6 @@ class test_tensor_ir:
                         )
 
                         reduction_mode = None
-
                         if "reduction_mode.ADD" in node.kwargs["mode"]:
                             reduction_mode = nv_tensor_ir.ReductionMode.add
                         elif "reduction_mode.AMAX" in node.kwargs["mode"]:
@@ -531,25 +529,12 @@ class test_tensor_ir:
                             )
                         else:
                             convert_value = children[0]
+                        reduction_dimensions = []
                         reduction_dim = 0
                         for s in out_stride:
                             if s == 0:
-                                break
+                                reduction_dimensions.append(reduction_dim)
                             reduction_dim += 1
-                        print(
-                            "out_type:",
-                            out_type,
-                            "out_shape:",
-                            out_shape,
-                            " out_stride:",
-                            out_stride,
-                        )
-                        reduction_dim = 0
-                        for s in out_stride:
-                            if s == 0:
-                                break
-                            reduction_dim += 1
-                        reduction_dimensions = [reduction_dim]
                         mlir_value = nv_tensor_ir.reduce(
                             nv_tensor_ir.TensorType.get(
                                 shape=out_shape,
