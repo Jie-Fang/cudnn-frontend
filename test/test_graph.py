@@ -150,9 +150,30 @@ class PytorchReference:
 
     @staticmethod
     def matmul(kwargs, test_tensor_out_list):
-        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        output = torch.bmm(kwargs["A"], kwargs["B"]).to(dtype=dtype)
-        return [output]
+        lsh_str = "A"
+        rsh_str = "B"
+        compute_type = eval(
+            convert_to_torch_type_wrapper(
+                kwargs["compute_data_type"]
+                if "compute_data_type" in kwargs
+                else test_tensor_out_list[0].data_type
+            )
+        )
+        out_type = eval(
+            convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
+        )
+
+        # Do computation in compute precision
+        compute_result = torch.bmm(
+            kwargs[lsh_str].to(dtype=compute_type),
+            kwargs[rsh_str].to(dtype=compute_type),
+        )
+
+        # Store both compute and output precision results
+        test_tensor_out_list[0].compute_data = compute_result
+        test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
+
+        return [test_tensor_out_list[0].ref_data]
 
     @staticmethod
     def bias(kwargs, test_tensor_out_list):
@@ -161,8 +182,29 @@ class PytorchReference:
 
     @staticmethod
     def add(kwargs, test_tensor_out_list):
-        output = torch.add(kwargs["a"], kwargs["b"])
-        return [output]
+        lsh_str = "a"
+        rsh_str = "b"
+        compute_type = eval(
+            convert_to_torch_type_wrapper(
+                kwargs["compute_data_type"]
+                if "compute_data_type" in kwargs
+                else test_tensor_out_list[0].data_type
+            )
+        )
+        if kwargs[lsh_str].dtype != compute_type:
+            kwargs[lsh_str] = kwargs[lsh_str].to(dtype=compute_type)
+        if kwargs[rsh_str].dtype != compute_type:
+            kwargs[rsh_str] = kwargs[rsh_str].to(dtype=compute_type)
+        out_type = eval(
+            convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
+        )
+        compute_result = torch.add(kwargs[lsh_str], kwargs[rsh_str]).to(
+            dtype=compute_type
+        )
+
+        test_tensor_out_list[0].compute_data = compute_result
+        test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
+        return [test_tensor_out_list[0].ref_data]
 
     @staticmethod
     def sub(kwargs, test_tensor_out_list):
@@ -171,9 +213,29 @@ class PytorchReference:
 
     @staticmethod
     def mul(kwargs, test_tensor_out_list):
-        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        output = torch.mul(kwargs["a"], kwargs["b"]).to(dtype=dtype)
-        return [output]
+        lsh_str = "a"
+        rsh_str = "b"
+        compute_type = eval(
+            convert_to_torch_type_wrapper(
+                kwargs["compute_data_type"]
+                if "compute_data_type" in kwargs
+                else test_tensor_out_list[0].data_type
+            )
+        )
+        if kwargs[lsh_str].dtype != compute_type:
+            kwargs[lsh_str] = kwargs[lsh_str].to(dtype=compute_type)
+        if kwargs[rsh_str].dtype != compute_type:
+            kwargs[rsh_str] = kwargs[rsh_str].to(dtype=compute_type)
+        out_type = eval(
+            convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
+        )
+        compute_result = torch.mul(kwargs[lsh_str], kwargs[rsh_str]).to(
+            dtype=compute_type
+        )
+
+        test_tensor_out_list[0].compute_data = compute_result
+        test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
+        return [test_tensor_out_list[0].ref_data]
 
     @staticmethod
     def max(kwargs, test_tensor_out_list):
@@ -482,7 +544,12 @@ class operation(test_node):
         }
         for x in self.kwargs:
             if isinstance(self.kwargs[x], test_tensor):
-                new_kwargs[x] = self.kwargs[x].ref_data
+                tensor_data = (
+                    self.kwargs[x].compute_data
+                    if self.kwargs[x].compute_data is not None
+                    else self.kwargs[x].ref_data
+                )
+                new_kwargs[x] = tensor_data
         # Note: we could choose to have the ref func set the output
         ref_output = self.ref_func(new_kwargs, self.output)
 
@@ -687,6 +754,8 @@ class test_tensor:
         self.cudnn_tensor = None
         # The reference data for this tensor
         self.ref_data = None
+        # The compute data for this tensor
+        self.compute_data = None
         # Initialize no data type is specified
         self._data_type = None
 
