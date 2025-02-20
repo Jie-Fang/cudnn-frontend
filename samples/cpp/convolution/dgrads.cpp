@@ -201,8 +201,8 @@ TEST_CASE("Dgrad Drelu DBNweight Graph", "[dgrad][graph]") {
     eq_scale_x->set_output(true);
     eq_bias->set_output(true);
 
-#if (CUDNN_VERSION < 8900)
-    SKIP("DgradDreluBNBwdWeight requires cudnn 8.9 and up");
+#if (CUDNN_VERSION < 8900 || CUDNN_VERSION >= 90800)
+    SKIP("DgradDreluBNBwdWeight requires cudnn 8.9 and up and has a bug in the backend in 9.8 and up");
 #endif
     if (!is_ampere_arch() && !is_hopper_arch()) {
         SKIP("DgradDreluBNBwdWeight requires ampere or hopper architecture.");
