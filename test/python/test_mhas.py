@@ -575,7 +575,7 @@ def test_sdpa(
     b = 2
     # query sequence length
     if cudnn_version >= "9.7.0":
-        s_q = random.choice([1, 24, 256, 512, 1024, 2048])
+        s_q = random.choice([24, 256, 512, 1024, 2048]) # Need to add s_q = 1 to the harness
     else:
         s_q = random.choice([24, 256, 512, 1024, 2048])
 
@@ -586,7 +586,7 @@ def test_sdpa(
     # key+value sequence length
     s_kv = (
         random.choice([24, 32, 256, 512, 1024, 2048])
-        if layout == "bshd_bshd_bshd"
+        if layout == "bshd_bshd_bshd" or s_q == 1
         else s_q
     )
     # query+key embedding dimension per head
@@ -618,8 +618,8 @@ def test_sdpa(
     assert (request.config.option.mha_left_bound is None) or is_left_bound
     assert (request.config.option.mha_right_bound is None) or is_right_bound
 
-    # If bounds are requested: randomly pick between 0 and s_kv/4
-    left_bound = random.choice([1, s_kv//4]) if is_left_bound else None
+    # If bounds are requested: randomly pick between 1/0 and s_kv/4
+    left_bound = max(1, random.choice([1, s_kv//4])) if is_left_bound else None
     right_bound = random.choice([0, s_kv//4]) if is_right_bound else None
 
     # -------------------------- override test parameters if args are provided ----------------
@@ -634,6 +634,10 @@ def test_sdpa(
     block_size = int(request.config.option.mha_block_size) if request.config.option.mha_block_size != None else block_size
     left_bound = int(request.config.option.mha_left_bound) if request.config.option.mha_left_bound != None else left_bound
     right_bound = int(request.config.option.mha_right_bound) if request.config.option.mha_right_bound != None else right_bound
+
+    if s_q == 1:
+        is_dropout = False
+        request.config.option.mha_dropout = None
 
     if d_qk != d_v and cudnn_version < "8.9.6":
         pytest.skip("d_qk != d_v is only supported on 8.9.6 onwards.")
@@ -1039,8 +1043,8 @@ def test_sdpa_backward(
     assert (request.config.option.mha_left_bound is None) or is_left_bound
     assert (request.config.option.mha_right_bound is None) or is_right_bound
 
-    # If bounds are requested: randomly pick between 0 and s_kv/4
-    left_bound = random.choice([1, s_kv//4]) if is_left_bound else None
+    # If bounds are requested: randomly pick between 1/0 and s_kv/4
+    left_bound = max(1, random.choice([1, s_kv//4])) if is_left_bound else None
     right_bound = random.choice([0, s_kv//4]) if is_right_bound else None
 
     # -------------------------- override test parameters if args are provided ----------------
