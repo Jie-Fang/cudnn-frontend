@@ -123,6 +123,8 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-cluster_shape", action="store")
     tensorir_parser.add_argument("-cta_count", action="store")
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
+    tensorir_parser.add_argument("-dump_ir_path", action="store")
+    tensorir_parser.add_argument("-mlir_timing", action="store_true")
     tensorir_args, unparsed_args = tensorir_parser.parse_known_args(unknown_args)
     concrete_test_dict, legacy_args = parse_legacy_args(parent_args, unparsed_args)
     testGraph = setup_test_graph_from_json(
@@ -974,9 +976,15 @@ def run_tensor_ir_test_from_json_definition(
         f"Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}"
     )
 
-    options = nv_tensor_ir.TensorConversionOptions(
-        tile_size, mma_shape, cluster_shape, cta_count
+    options = nv_tensor_ir.TensorIRCompilationOption(
+        10,  # FIXME: hardcoded for blackwell
+        nv_tensor_ir.GraphCategory.kGemm,
+        nv_tensor_ir.TensorConversionOptions(
+            tile_size, mma_shape, cluster_shape, cta_count
+        ),
+        nv_tensor_ir.DebugOptions(json_dict["dump_ir_path"], json_dict["mlir_timing"]),
     )
+
     passed = tensor_ir_tester.run_tensor_ir_module(
         tensor_ir_module, options, atol, rtol
     )
