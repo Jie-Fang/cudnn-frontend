@@ -52,6 +52,8 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     mma_shape = [128, 128, 16]
     cluster_shape = [1, 1, 1]
     cta_count = 1
+    dump_ir_path = ""
+    mlir_timing = False
 
     if hasattr(tensorir_args, "tile_size") and tensorir_args.tile_size is not None:
         tile_size = list(map(int, tensorir_args.tile_size.split(",")))
@@ -68,10 +70,21 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
         cta_count = int(tensorir_args.cta_count)
 
+    if (
+        hasattr(tensorir_args, "dump_ir_path")
+        and tensorir_args.dump_ir_path is not None
+    ):
+        dump_ir_path = tensorir_args.dump_ir_path
+
+    if hasattr(tensorir_args, "mlir_timing") and tensorir_args.mlir_timing is not None:
+        mlir_timing = bool(tensorir_args.mlir_timing)
+
     concrete_test_dict["tile_size"] = tile_size
     concrete_test_dict["cluster_shape"] = cluster_shape
     concrete_test_dict["mma_shape"] = mma_shape
     concrete_test_dict["cta_count"] = cta_count
+    concrete_test_dict["dump_ir_path"] = dump_ir_path
+    concrete_test_dict["mlir_timing"] = mlir_timing
 
     return [tile_size, mma_shape, cluster_shape, cta_count]
 
@@ -178,8 +191,13 @@ class test_tensor_ir:
     def run_tensor_ir_module(
         self,
         module,
-        compile_option=nv_tensor_ir.TensorConversionOptions(
-            [128, 128, 64], [128, 128, 16], [1, 1, 1], 1
+        compile_option=nv_tensor_ir.TensorIRCompilationOption(
+            10,
+            nv_tensor_ir.GraphCategory.kGemm,
+            nv_tensor_ir.TensorConversionOptions(
+                [128, 128, 64], [128, 128, 16], [1, 1, 1], 1
+            ),
+            nv_tensor_ir.DebugOptions("", False),  # dumpIRPath, mlir-timing
         ),
         atol=1e-2,
         rtol=1e-2,
