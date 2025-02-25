@@ -276,7 +276,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Padding mask requires seq_len_q and seq_len_kv to be set.");
-        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
+        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask && !attributes.attention_score_modifier) && (has_seq_len_q || has_seq_len_kv),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
@@ -337,7 +337,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Paged caches are not supported in combination with ragged offsets.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (!has_seq_len_q || !has_seq_len_kv || !attributes.padding_mask),
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (!has_seq_len_q || !has_seq_len_kv),
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Paged caches can only be used in combination with padding mask and variable sequence lengths for both Q and KV.");
 
@@ -937,7 +937,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.padding_mask && (!has_seq_len_q || !has_seq_len_kv),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Padding mask requires seq_len_q and seq_len_kv to be set.");
-        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask) && (has_seq_len_q || has_seq_len_kv),
+        RETURN_CUDNN_FRONTEND_ERROR_IF((!attributes.padding_mask && !attributes.attention_score_modifier) && (has_seq_len_q || has_seq_len_kv),
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 

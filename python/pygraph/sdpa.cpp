@@ -35,7 +35,8 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& paged_attention_v_table,
               py::object const& paged_attention_max_seq_len_kv,
               cudnn_frontend::DataType_t const& compute_data_type,
-              std::string const& name) {
+              std::string const& name,
+              std::optional<PyCallback> fn) {
     auto attributes =
         cudnn_frontend::graph::SDPA_attributes()
             .set_is_inference(is_inference)
@@ -143,7 +144,12 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
         }
     }
 
-    auto [O, Stats] = graph.sdpa(q, k, v, attributes);
+    if (fn.has_value()) {
+        attributes.set_score_mod(wrapper_function);
+        callback_fn = fn;
+    }
+
+    auto [O, Stats] = graph->sdpa(q, k, v, attributes);
     return {O, Stats};
 }
 
@@ -276,7 +282,7 @@ PyGraph::sdpa_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
         }
     }
 
-    auto [dQ, dK, dV] = graph.sdpa_backward(q, k, v, o, dO, stats, attributes);
+    auto [dQ, dK, dV] = graph->sdpa_backward(q, k, v, o, dO, stats, attributes);
     return {dQ, dK, dV};
 }
 
@@ -359,7 +365,7 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
     }
 
     auto [o, stats, amax_s, amax_o] =
-        graph.sdpa_fp8(q, k, v, descale_q, descale_k, descale_v, descale_s, scale_s, scale_o, attributes);
+        graph->sdpa_fp8(q, k, v, descale_q, descale_k, descale_v, descale_s, scale_s, scale_o, attributes);
     return {o, stats, amax_s, amax_o};
 }
 
@@ -448,25 +454,25 @@ PyGraph::sdpa_fp8_backward(std::shared_ptr<cudnn_frontend::graph::Tensor_attribu
         }
     }
 
-    auto [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP] = graph.sdpa_fp8_backward(q,
-                                                                                    k,
-                                                                                    v,
-                                                                                    o,
-                                                                                    dO,
-                                                                                    stats,
-                                                                                    descale_q,
-                                                                                    descale_k,
-                                                                                    descale_v,
-                                                                                    descale_o,
-                                                                                    descale_dO,
-                                                                                    descale_s,
-                                                                                    descale_dP,
-                                                                                    scale_s,
-                                                                                    scale_dQ,
-                                                                                    scale_dK,
-                                                                                    scale_dV,
-                                                                                    scale_dP,
-                                                                                    attributes);
+    auto [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP] = graph->sdpa_fp8_backward(q,
+                                                                                     k,
+                                                                                     v,
+                                                                                     o,
+                                                                                     dO,
+                                                                                     stats,
+                                                                                     descale_q,
+                                                                                     descale_k,
+                                                                                     descale_v,
+                                                                                     descale_o,
+                                                                                     descale_dO,
+                                                                                     descale_s,
+                                                                                     descale_dP,
+                                                                                     scale_s,
+                                                                                     scale_dQ,
+                                                                                     scale_dK,
+                                                                                     scale_dV,
+                                                                                     scale_dP,
+                                                                                     attributes);
     return {dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP};
 }
 
@@ -497,6 +503,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("paged_attention_max_seq_len_kv", py::none()),
           py::arg_v("compute_data_type", cudnn_frontend::DataType_t::NOT_SET),
           py::arg_v("name", ""),
+          py::arg_v("score_mod", std::nullopt),
           R"pbdoc(
                 Perform scaled dot product attention.
 
