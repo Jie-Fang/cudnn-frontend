@@ -2671,9 +2671,7 @@ TEST_CASE("Dgrad Descale Descale Amax Scale sample", "[frontend][fusion][ConvSca
 TEST_CASE("BN BWD Weights sample", "[frontend][fusion][BnBwdWeight]") {
     std::cout << "TEST_CASE :: BN BWD Weights sample" << std::endl;
     INFO("TEST_CASE :: Sample BN BWD Weights sample");
-#if (CUDNN_VERSION < 8900 || CUDNN_VERSION >= 90800)
-    SKIP("DgradDreluBNBwdWeight requires cudnn 8.9 and up and has a bug in the backend in 9.8 and up");
-#endif
+
     constexpr int64_t C = 8;
     constexpr int64_t N = 2;
     constexpr int64_t H = 56;

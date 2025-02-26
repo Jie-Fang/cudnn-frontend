@@ -739,6 +739,7 @@ class ConstantTensor(test_node):
                 if isinstance(self.output[0].data_type, DataType)
                 else self.output[0].data_type
             ),
+            is_pass_by_value=True,
         )
 
     def run_ref(self):
