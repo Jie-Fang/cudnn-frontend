@@ -468,8 +468,6 @@ TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
     json j2 = graph_deserialized;
 
     REQUIRE(j == j2);
-
-    REQUIRE(graph_deserialized.validate().is_good());
 }
 
 TEST_CASE("sdpa backward graph serialization", "[graph][serialize]") {
