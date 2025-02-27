@@ -744,8 +744,15 @@ def test_sdpa(
         reshaped = torch.cat((cat_tensor.clone()).chunk(blocks_per_batch, dim=2), dim=0)
 
         table_size = math.ceil(S/block_size)
-        page_table = torch.linspace(0, B*table_size-1, B*table_size, device='cuda', dtype=torch.int32).reshape(table_size,1,B,1)
-        page_table = torch.transpose(page_table,0,2)
+        page_table_temp = torch.linspace(0, B*table_size-1, B*table_size, device='cuda', dtype=torch.int32).reshape(table_size,1,B,1)
+        page_table_temp = torch.transpose(page_table_temp,0,2)
+
+        alt_stride = (blocks_per_batch, blocks_per_batch, 1, 1)
+
+        # Make batch size outer dimension (required for SM100 kernel)
+        page_table_dims = (B, 1, blocks_per_batch, 1)
+        page_table = torch.randn(blocks_per_batch * B).int().cuda().as_strided(page_table_dims, alt_stride)
+        page_table.copy_(page_table_temp)
 
         return(reshaped, page_table)
 

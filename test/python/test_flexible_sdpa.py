@@ -10,24 +10,38 @@ from test_utils import torch_fork_set_rng
 # Helper function to create a non contiguous container in blocks of block_size from a contiguous tensor
 def create_container_and_page_table(tensor, block_size):
     B, H, S, D = tensor.shape
+    # num_blocks = math.ceil(S/block_size) * B
     blocks_per_batch = math.ceil(S / block_size)
 
-    # This assertion keeps the helper function of this example simple, but is not a requirement for paged attention.
-    assert (blocks_per_batch * block_size) == S
+    # Only needed if S is not a multiple of block_size
+    padding_seq = (blocks_per_batch * block_size) - S
+    if padding_seq > 0:
+        zeros = torch.zeros(B, H, padding_seq, D, device="cuda", dtype=tensor.dtype)
+        cat_tensor = torch.cat((tensor, zeros), axis=2)
+    else:
+        cat_tensor = tensor
 
     # Create a container by splitting on the S dimension and concatenating at the block dimension
     # Its dimensions are [num_blocks, H, block_size, D] with num_blocks = B * blocks_per_batch
-    container = torch.cat((tensor.clone()).chunk(blocks_per_batch, dim=2), dim=0)
+    container = torch.cat((cat_tensor.clone()).chunk(blocks_per_batch, dim=2), dim=0)
 
     # Create the page table
-    page_table = torch.linspace(
-        0,
-        B * blocks_per_batch - 1,
-        B * blocks_per_batch,
-        device="cuda",
-        dtype=torch.int32,
-    ).reshape(blocks_per_batch, 1, B, 1)
-    page_table = torch.transpose(page_table, 0, 2)
+    table_size = math.ceil(S / block_size)
+    page_table_temp = torch.linspace(
+        0, B * table_size - 1, B * table_size, device="cuda", dtype=torch.int32
+    ).reshape(table_size, 1, B, 1)
+    page_table_temp = torch.transpose(page_table_temp, 0, 2)
+
+    # Make batch size outer dimension (cuDNN backend requirement)
+    page_table = (
+        torch.randn(blocks_per_batch * B)
+        .int()
+        .cuda()
+        .as_strided(
+            (B, 1, blocks_per_batch, 1), (blocks_per_batch, blocks_per_batch, 1, 1)
+        )
+    )
+    page_table.copy_(page_table_temp)
 
     return (container, page_table)
 
