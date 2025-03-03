@@ -5,6 +5,7 @@ from functools import partial
 import math
 
 from test_utils import torch_fork_set_rng
+from looseversion import LooseVersion
 
 
 # Helper function to create a non contiguous container in blocks of block_size from a contiguous tensor
@@ -163,6 +164,11 @@ def test_sdpa_with_flexible_graph(cudnn_handle):
     k_gpu = torch.randn(b * s_kv * h_k * d).half().cuda().as_strided(k_dims, k_strides)
     v_gpu = torch.randn(b * s_kv * h_v * d).half().cuda().as_strided(v_dims, v_strides)
     o_gpu = torch.empty(b * s_q * h_q * d).half().cuda().as_strided(q_dims, q_strides)
+
+    cudnn_version = LooseVersion(cudnn.backend_version_string())
+
+    if cudnn_version < "9.6.0":
+        pytest.skip("SDPA fprop with paged attention requires cudnn 9.6.0 or higher")
 
     graph = cudnn.pygraph(
         io_data_type=cudnn.data_type.HALF,
