@@ -261,8 +261,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && detail::get_backend_version() < 8906, error_code_t::GRAPH_NOT_SUPPORTED, "Bias mask is not  supported below cudnn version  8.9.6");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() >= 8906 && detail::get_backend_version() < 90000) &&
-             (context.get_sm_version() > 0 && context.get_sm_version() < 90), error_code_t::GRAPH_NOT_SUPPORTED,
-            "Post scale Bias mask is not supported below Hopper for cudnn version" + std::to_string(detail::get_backend_version()));
+                                       (context.get_sm_version() > 0 && context.get_sm_version() < 90), error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Post scale Bias mask is not supported below Hopper for cudnn version" + std::to_string(detail::get_backend_version()));
 
         // validate options for padding mask
         auto const& seq_len_q     = attributes.inputs.find(input_names::SEQ_LEN_Q);
@@ -285,9 +285,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (detail::get_backend_version() < 90300), error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Causal bottom right masking requires cudnn 9.3.0 and above");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && s_q > s_kv,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (!attributes.padding_mask) && s_q > s_kv,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask does not support s_q > s_kv. Please virtually slice the Q tensor and pass it as s_q == s_kv");
+                                       "Bottom right causal mask does not support max_s_q > max_s_kv. Please virtually slice the Q tensor and pass it as max_s_q == max_s_kv");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (is_bias || attributes.alibi_mask || (is_ragged && !attributes.padding_mask) || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -311,9 +311,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than zero when set.");
                                        
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && s_q > s_kv,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (!attributes.padding_mask) && s_q > s_kv,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Sliding window attention is only supported with s_q <= s_kv.");
+                                       "Sliding window attention is only supported with max_s_q <= max_s_kv.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (! attributes.has_causal_like_masking() || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -947,9 +947,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        "max_total_seq_len_q is only supported with packed layout");
 
         // validate options for bottom right causal mask
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && s_q > s_kv,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (!attributes.padding_mask) && s_q > s_kv,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Bottom right causal mask does not support s_q > s_kv. Please virtually slice the Q tensor and pass it as s_q == s_kv");
+                                       "Bottom right causal mask does not support max_s_q > max_s_kv. Please virtually slice the Q tensor and pass it as max_s_q == max_s_kv");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.has_causal_mask_bottom_right() && (is_bias || attributes.alibi_mask || (is_ragged && !attributes.padding_mask) || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -964,9 +964,9 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than or equals to zero when set.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && s_q > s_kv,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (!attributes.padding_mask) && s_q > s_kv,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "Sliding window attention is only supported with s_q <= s_kv.");
+                                       "Sliding window attention is only supported with max_s_q <= max_s_kv.");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value()&& (! attributes.has_causal_like_masking() || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
