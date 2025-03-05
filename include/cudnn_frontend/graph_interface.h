@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <string>
 
 #include "../cudnn_frontend_version.h"
 #include "node/batchnorm.h"
@@ -25,6 +26,7 @@
 #include "node/sdpa_fp8_bwd.h"
 #include "node/block_scale_quantize.h"
 #include "node/block_scale_dequantize.h"
+#include "node/concatenate.h"
 
 #include "backend/backend_descriptor.h"
 #include "plans.h"
@@ -1019,6 +1021,9 @@ class Graph : public ICudnn, public INode {
                                                               std::shared_ptr<Tensor_attributes>,
                                                               Block_scale_dequantize_attributes);
 
+    std::shared_ptr<Tensor_attributes> concatenate(std::vector<std::shared_ptr<Tensor_attributes>>,
+                                                   Concatenate_attributes);
+
     [[deprecated]] std::array<std::shared_ptr<Tensor_attributes>, 2>
     scaled_dot_product_flash_attention(std::shared_ptr<Tensor_attributes> q,
                                        std::shared_ptr<Tensor_attributes> k,
@@ -1168,11 +1173,23 @@ class Graph : public ICudnn, public INode {
             short_node["inputs"]  = {};
             short_node["outputs"] = {};
 
+            auto node_name = sub_node["tag"].get<std::string>();
+            auto i         = 0;
             // Process node inputs
             for (const auto &input : sub_node["inputs"]) {
-                // Extract port_name and tensor_name
-                auto port_name   = input[0].get<std::string>();
-                auto tensor_info = input[1];
+                std::string port_name;
+                json tensor_info;
+
+                if (node_name == "CONCATENATE") {
+                    // Extract port_name and tensor_name
+                    port_name   = std::to_string(i);
+                    tensor_info = input;
+                    i++;
+                } else {
+                    // Extract port_name and tensor_name
+                    port_name   = input[0].get<std::string>();
+                    tensor_info = input[1];
+                }
 
                 if (tensor_info.is_null()) {
                     continue;
@@ -2157,6 +2174,25 @@ Graph::block_scale_dequantize(std::shared_ptr<Tensor_attributes> x,
     attributes.inputs[Block_scale_dequantize_attributes::input_names::scale] = scale;
 
     sub_nodes.emplace_back(std::make_unique<BlockScaleDequantizeNode>(std::move(attributes), context));
+
+    return Y;
+}
+
+inline std::shared_ptr<Tensor_attributes>
+Graph::concatenate(std::vector<std::shared_ptr<Tensor_attributes>> x, Concatenate_attributes attributes) {
+    if (attributes.name.empty()) {
+        attributes.name += std::to_string(sub_nodes.size());
+    }
+
+    // Set outputs
+    auto Y = attributes.outputs[Concatenate_attributes::output_names::Y] = output_tensor(attributes.name + "::Y");
+
+    // Set inputs
+    for (auto &element : x) {
+        attributes.inputs.push_back(element);
+    }
+
+    sub_nodes.emplace_back(std::make_unique<ConcatenateNode>(std::move(attributes), context));
 
     return Y;
 }
