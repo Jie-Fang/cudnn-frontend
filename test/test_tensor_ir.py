@@ -52,8 +52,6 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     mma_shape = [128, 128, 16]
     cluster_shape = [1, 1, 1]
     cta_count = 1
-    dump_ir_path = ""
-    mlir_timing = False
 
     if hasattr(tensorir_args, "tile_size") and tensorir_args.tile_size is not None:
         tile_size = list(map(int, tensorir_args.tile_size.split(",")))
@@ -70,21 +68,10 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
         cta_count = int(tensorir_args.cta_count)
 
-    if (
-        hasattr(tensorir_args, "dump_ir_path")
-        and tensorir_args.dump_ir_path is not None
-    ):
-        dump_ir_path = tensorir_args.dump_ir_path
-
-    if hasattr(tensorir_args, "mlir_timing") and tensorir_args.mlir_timing is not None:
-        mlir_timing = bool(tensorir_args.mlir_timing)
-
     concrete_test_dict["tile_size"] = tile_size
     concrete_test_dict["cluster_shape"] = cluster_shape
     concrete_test_dict["mma_shape"] = mma_shape
     concrete_test_dict["cta_count"] = cta_count
-    concrete_test_dict["dump_ir_path"] = dump_ir_path
-    concrete_test_dict["mlir_timing"] = mlir_timing
 
     return [tile_size, mma_shape, cluster_shape, cta_count]
 
@@ -191,14 +178,11 @@ class test_tensor_ir:
     def run_tensor_ir_module(
         self,
         module,
-        compile_option=nv_tensor_ir.TensorIRCompilationOption(
-            10,
-            nv_tensor_ir.GraphCategory.kGemm,
-            nv_tensor_ir.TensorConversionOptions(
-                [128, 128, 64], [128, 128, 16], [1, 1, 1], 1
-            ),
-            nv_tensor_ir.DebugOptions("", False),  # dumpIRPath, mlir-timing
-        ),
+        kernel_configs,
+        dump_ir_path,
+        mlir_timing,
+        host_jitting,
+        timing_loop=1,
         atol=1e-2,
         rtol=1e-2,
     ):
@@ -257,43 +241,92 @@ class test_tensor_ir:
                 )
                 tensor_desc.append(tensor_operand)
 
-        if not self.ref_outputs:
-            self.calc_ref()
-        outputs_gpu = [
-            torch.empty(output.shape, dtype=output.dtype, device=device)
-            for output in self.ref_outputs
-        ]
+        outputs_gpu = []
+        for node in self.test_graph.nodes:
+            if node.is_output_node():
+                output_tensor = node.output[0]
 
-        for torch_gpu in outputs_gpu:
-            tensor_desc.append(
-                nv_tensor_ir.TensorOperandDescriptor(
-                    nv_tensor_ir.TensorDescriptor(
-                        torch_gpu.data_ptr(),
-                        nv_tensor_ir.LayoutDescriptor(torch_gpu.stride()),
+                gpu_mem = torch.empty(
+                    output_tensor.dim,
+                    dtype=eval(convert_datatype(output_tensor.data_type, "torch")),
+                    device=device,
+                )
+                outputs_gpu.append(gpu_mem)
+                tensor_desc.append(
+                    nv_tensor_ir.TensorOperandDescriptor(
+                        nv_tensor_ir.TensorDescriptor(
+                            gpu_mem.data_ptr(),
+                            nv_tensor_ir.LayoutDescriptor(gpu_mem.stride()),
+                        )
                     )
                 )
-            )
 
         args = nv_tensor_ir.ArgumentsView(problem_size, tensor_desc)
 
         with ir.Context() as ctx, ir.Location.unknown():
             nv_tensor_ir.register_dialect()
-            cask_context = nv_tensor_ir.create_cask_context()
-            compiler = nv_tensor_ir.Compiler(cask_context)
-            shader = compiler.compile(module, compile_option)
-            nv_tensor_ir.cask_execute_shader_complete(shader, args)
 
-        self.outputs.extend(outputs_gpu)
-        return self.tensorir_compare_to_reference(atol, rtol)
+            best_perf = float("inf")
+            best_config = dict(
+                tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[]
+            )
+            for tile_size, mma_shape, cluster_shape, cta_count in kernel_configs:
+                cloned_module = ir.Module.parse(str(module))
+                cask_context = nv_tensor_ir.create_cask_context()
+                compiler = nv_tensor_ir.Compiler(cask_context)
 
-    def build_tensor_ir_module(self):
+                compile_option = nv_tensor_ir.TensorIRCompilationOption(
+                    10,  # Hardcoded for blackwell
+                    nv_tensor_ir.GraphCategory.kGemm,  # Hardcode for Gemm
+                    nv_tensor_ir.TensorConversionOptions(
+                        tile_size, mma_shape, cluster_shape, cta_count
+                    ),
+                    nv_tensor_ir.DebugOptions(dump_ir_path, mlir_timing),
+                    host_jitting,
+                )
+
+                print(
+                    f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}"
+                )
+                shader = compiler.compile(cloned_module, compile_option)
+                execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
+                execution_plan.initialize()
+                # TODO: Do we need to dump the launch config for debugging?
+                # execution_plan.dump_launch_config()
+                if timing_loop == 0:
+                    execution_plan.launch()
+                    self.outputs = outputs_gpu
+                    if not self.ref_outputs:
+                        self.calc_ref()
+                    passed = self.tensorir_compare_to_reference(atol, rtol)
+                    assert passed, "Mismatch between TensorIR and reference"
+                elif timing_loop == 1:
+                    execution_plan.launch()
+                else:
+                    # warm the caches
+                    execution_plan.launch()
+                    import utils
+
+                    # TODO: Shall we use median instead of average?
+                    (_, avg_rt, _) = utils.measure_gpu_runtime(
+                        lambda: execution_plan.launch(), timing_loop
+                    )
+                    if avg_rt < best_perf:
+                        best_perf = avg_rt
+                        best_config = {
+                            "tile_size": tile_size,
+                            "mma_shape": mma_shape,
+                            "cluster_shape": cluster_shape,
+                            "cta_count": cta_count,
+                        }
+
+            print(
+                f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}"
+            )
+
+    def build_tensor_ir_module(self, json_test_name="graph"):
         input_tensors = []
         for node in self.test_graph.entrance_nodes:
-            node.output[0].ref_data = torch.as_strided(
-                node.output[0].ref_data,
-                node.output[0].ref_data.size(),
-                stride=node.kwargs["stride"],
-            )
             input_tensors.append(node)
         output_tensors = [
             node for node in self.test_graph.nodes if node.is_output_node()
@@ -321,7 +354,7 @@ class test_tensor_ir:
             function_type = ir.TypeAttr.get(
                 T.function(inputs=input_types, results=output_types)
             )
-            function_name = "graph"  # FIXME: Get this better
+            function_name = json_test_name
 
             # Create tensor ir graph
             graph = nv_tensor_ir.graph(

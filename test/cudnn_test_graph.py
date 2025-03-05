@@ -255,7 +255,7 @@ class cudnn_test_graph(test_graph):
         if timingLoop > 1:
             # TODO(@mbreughe): Support cold caches by using multiple variant_packs
             (min_rt, avg_rt, max_rt) = utils.measure_gpu_runtime(
-                self.cudnn_graph, variant_pack, workspace, timingLoop
+                lambda: self.cudnn_graph.execute(variant_pack, workspace), timingLoop
             )
 
         utils.reportCurrentTime("graph.execute")
