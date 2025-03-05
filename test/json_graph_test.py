@@ -123,8 +123,9 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-cluster_shape", action="store")
     tensorir_parser.add_argument("-cta_count", action="store")
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
-    tensorir_parser.add_argument("-dump_ir_path", action="store")
+    tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
+    tensorir_parser.add_argument("-host_jitting", action="store_true")
     tensorir_args, unparsed_args = tensorir_parser.parse_known_args(unknown_args)
     concrete_test_dict, legacy_args = parse_legacy_args(parent_args, unparsed_args)
     testGraph = setup_test_graph_from_json(
@@ -133,31 +134,22 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         -1,
     )
     input_data_types = get_input_dataTypes(concrete_test_dict)
+
     if tensorir_args.sweep_tile_configs:
         kmmaShapeK = cal_shapeK(input_data_types[0])
-        all_tile_configs = generate_tensorir_compilation_configs(
-            kmmaShapeK, cta_count=1
-        )
+        kernel_config = generate_tensorir_compilation_configs(kmmaShapeK, cta_count=1)
     else:
-        all_tile_configs = [
+        kernel_config = [
             get_tensorir_compilation_config(tensorir_args, concrete_test_dict)
         ]
-    passed_configs = 0
-    ref_output = testGraph.calc_reference()
-    for tile_size, mma_shape, cluster_shape, cta_count in all_tile_configs:
-        passed = run_tensor_ir_test_from_json_definition(
-            ref_output,
-            testGraph,
-            concrete_test_dict,
-            tile_size,
-            mma_shape,
-            cluster_shape,
-            cta_count,
-        )
-        if passed:
-            passed_configs += 1
-    print(f"Passed configs: {passed_configs}/{len(all_tile_configs)}")
-    assert passed_configs == len(all_tile_configs)
+
+    run_tensor_ir_test_from_json_definition(
+        testGraph,
+        kernel_config,
+        tensorir_args,
+        concrete_test_dict,
+        legacy_args,
+    )
     assert "cudnn" not in sys.modules
 
 
@@ -951,51 +943,33 @@ def run_test_from_json_definition(testGraph, json_dict):
 
 
 def run_tensor_ir_test_from_json_definition(
-    ref_outputs, testGraph, json_dict, tile_size, mma_shape, cluster_shape, cta_count
+    testGraph, kernel_config, tensorir_args, concrete_test_dict, legacy_args
 ):
-    from nv_tensor_ir.dialects import nv_tensor_ir
     import test_tensor_ir as tti
 
     tensor_ir_tester = tti.test_tensor_ir(testGraph)
-    tensor_ir_tester.ref_outputs = ref_outputs
-    tensor_ir_module = tensor_ir_tester.build_tensor_ir_module()
-    global dumped
-    if not dumped:
-        tensor_ir_module.dump()
-        dumped = True
+    tensor_ir_module = tensor_ir_tester.build_tensor_ir_module(legacy_args.jsonTestName)
+    tensor_ir_module.dump()
     # Read in rtol/atol from json
     atol = 1e-2
     rtol = 1e-2
-    if "tolerances" in json_dict:
-        atol = float(json_dict["tolerances"]["abs"])
-        rtol = float(json_dict["tolerances"]["rel"])
+    if "tolerances" in concrete_test_dict:
+        atol = float(concrete_test_dict["tolerances"]["abs"])
+        rtol = float(concrete_test_dict["tolerances"]["rel"])
 
     # Do something with tensor_ir_module...
     reportCurrentTime("test_setup")
-    print(
-        f"Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}"
-    )
-
-    options = nv_tensor_ir.TensorIRCompilationOption(
-        10,  # FIXME: hardcoded for blackwell
-        nv_tensor_ir.GraphCategory.kGemm,
-        nv_tensor_ir.TensorConversionOptions(
-            tile_size, mma_shape, cluster_shape, cta_count
-        ),
-        nv_tensor_ir.DebugOptions(json_dict["dump_ir_path"], json_dict["mlir_timing"]),
-    )
 
     passed = tensor_ir_tester.run_tensor_ir_module(
-        tensor_ir_module, options, atol, rtol
+        tensor_ir_module,
+        kernel_config,
+        tensorir_args.dump_ir_path,
+        tensorir_args.mlir_timing,
+        tensorir_args.host_jitting,
+        legacy_args.timing_loop,
+        atol,
+        rtol,
     )
-    if passed:
-        print(
-            f"Passed tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}"
-        )
-    else:
-        print(
-            f"Failed tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}"
-        )
     return passed
 
 

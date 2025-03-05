@@ -111,15 +111,14 @@ def create_nhwc_strides(dims):
     return stride
 
 
-# TODO: update with multiple variant_pack/workspaces to support cold caches
-def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
+def measure_gpu_runtime(execution_callback, timingLoop):
     import torch
 
     # If CUPTI is disabled, still run the graph timingLoop times, just don't profile it here
     # This can be useful in case we want to run through nsys
     if DISABLE_CUPTI:
         for i in range(timingLoop):
-            cudnn_graph.execute(variant_pack, workspace)
+            execution_callback()
         return (-1, -1, -1)
 
     cupti_runtimes = []
@@ -183,7 +182,7 @@ def measure_gpu_runtime(cudnn_graph, variant_pack, workspace, timingLoop):
         on_trace_ready=process_profile,
     ) as prof:
         for i in range(total_runs):
-            cudnn_graph.execute(variant_pack, workspace)
+            execution_callback()
             prof.step()
 
     # lambda function for quick stats
