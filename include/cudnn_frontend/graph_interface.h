@@ -295,8 +295,8 @@ class Graph : public ICudnn, public INode {
         CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
 
         for (auto const &[uid, data] : workspace_modifications) {
-            (void)uid;
             const auto &[operation_type, offset, vec_data] = data;
+            uid_to_device_ptrs[uid]                        = static_cast<char *>(workspace) + offset;
 
             // 0 means memcpy
             if (operation_type == 0) {
@@ -306,7 +306,6 @@ class Graph : public ICudnn, public INode {
                                                                      vec_data.data(),
                                                                      vec_data.size() * sizeof(float),
                                                                      cudaMemcpyHostToDevice));
-                uid_to_device_ptrs[uid] = static_cast<char *>(workspace) + offset;
             }
             // 1 means memset
             else if (operation_type == 1) {
@@ -324,12 +323,19 @@ class Graph : public ICudnn, public INode {
 
                 CHECK_CUDA_ERROR(detail::cuda_graph_add_memset_node_set_params(current_node, &params));
             }
-            // Other values do not correspond to cuda APIs
+            // Other values do not correspond to CUDA graph nodes
+            else {
+                continue;
+            }
 
-            CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_root_nodes));
+            size_t num_dependent_nodes;
+            CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_dependent_nodes));
             RETURN_CUDNN_FRONTEND_ERROR_IF(
-                num_root_nodes != 1, error_code_t::INVALID_VALUE, "cudnn_cuda_graph should have exactly 1 root node.");
-            CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, &current_node, &num_root_nodes));
+                num_dependent_nodes != 1,
+                error_code_t::INVALID_VALUE,
+                "Each node of cudnn_cuda_graph before the backend graph node should have exactly 1 dependent node.");
+            CHECK_CUDA_ERROR(
+                detail::cuda_graph_node_get_dependent_nodes(current_node, &current_node, &num_dependent_nodes));
         }
 
         // Make sure device pointer is provided for all uids expected for this plan
@@ -359,7 +365,10 @@ class Graph : public ICudnn, public INode {
                                        error_code_t::CUDNN_BACKEND_API_FAILED,
                                        "Failed to create variant pack's backend descriptor.");
 
-        CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack_descriptor, device_ptrs, uids, workspace));
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+        CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack_descriptor, device_ptrs, uids, cudnn_workspace));
 
         int64_t candidate = plans.candidate;
         CHECK_CUDNN_FRONTEND_ERROR(plans.is_plan_index_executable(candidate));
@@ -369,8 +378,9 @@ class Graph : public ICudnn, public INode {
                                                     backend_cuda_graph));
 
         // There should be nothing after the backend graph
-        CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_root_nodes));
-        RETURN_CUDNN_FRONTEND_ERROR_IF(num_root_nodes != 0,
+        size_t num_dependent_nodes;
+        CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_dependent_nodes));
+        RETURN_CUDNN_FRONTEND_ERROR_IF(num_dependent_nodes != 0,
                                        error_code_t::INVALID_VALUE,
                                        "cudnn_cuda_graph should have no graph nodes after the backend graph node.");
 
@@ -433,8 +443,8 @@ class Graph : public ICudnn, public INode {
         CHECK_CUDNN_FRONTEND_ERROR(collect_tensors_in_workspace_subtree(workspace_modifications, workspace_offset));
 
         for (auto const &[uid, data] : workspace_modifications) {
-            (void)uid;
             const auto &[operation_type, offset, vec_data] = data;
+            uid_to_device_ptrs[uid]                        = static_cast<char *>(workspace) + offset;
 
             cudaGraphNode_t node = nullptr;
 
@@ -448,7 +458,6 @@ class Graph : public ICudnn, public INode {
                                                                        vec_data.data(),
                                                                        vec_data.size() * sizeof(float),
                                                                        cudaMemcpyHostToDevice));
-                uid_to_device_ptrs[uid] = static_cast<char *>(workspace) + offset;
             }
             // 1 means memset
             else if (operation_type == 1) {
@@ -467,7 +476,10 @@ class Graph : public ICudnn, public INode {
                 CHECK_CUDA_ERROR(detail::cuda_graph_add_memset_node(
                     &node, cudnn_cuda_graph, &last_node, last_node != nullptr, &params));
             }
-            // Other values do not correspond to cuda APIs
+            // Other values do not correspond to CUDA graph nodes
+            else {
+                continue;
+            }
 
             last_node = node;
         }
@@ -497,7 +509,11 @@ class Graph : public ICudnn, public INode {
         RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack_descriptor.get_status() != CUDNN_STATUS_SUCCESS,
                                        error_code_t::CUDNN_BACKEND_API_FAILED,
                                        "Failed to create variant pack's backend descriptor.");
-        CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack_descriptor, device_ptrs, uids, workspace));
+
+        // offset workspace by the already used fe graph workspace
+        // this is where cudnn backend can start using workspace for its execution plans
+        void *cudnn_workspace = static_cast<char *>(workspace) + fe_workspace_size;
+        CHECK_CUDNN_FRONTEND_ERROR(create_variant_pack(variant_pack_descriptor, device_ptrs, uids, cudnn_workspace));
 
         // Get the plan candidate. It only makes to sense to make cuda graph after execution plan has been built.
         // And in that case the candidate would have been set.
