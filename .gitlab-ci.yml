@@ -21,7 +21,7 @@ before_script:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.7.0.66_12.8.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.8.0.87_12.8.0
 
 .device_matrix:template:
     parallel:
