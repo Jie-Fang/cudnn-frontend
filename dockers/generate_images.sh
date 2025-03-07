@@ -17,6 +17,7 @@ docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_front
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.5.1.17_12.6.2 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.6.2 --build-arg CUDNN_VERSION_=9.5.1.17 --build-arg DLFW_MONTH=24.10 .
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.6.0.74_12.6.3 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.6.3 --build-arg CUDNN_VERSION_=9.6.0.74 --build-arg DLFW_MONTH=24.11 .
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.7.0.66_12.8.0 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.8.0 --build-arg CUDNN_VERSION_=9.7.0.66 --build-arg DLFW_MONTH=25.01 .
+docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.8.0.87_12.8.0 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.8.0 --build-arg CUDNN_VERSION_=9.8.0.87 --build-arg DLFW_MONTH=25.02 .
 
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.8.0 --build-arg CUDNN_VERSION_=9.7.0.66 --build-arg SKIP_CUDNN=true --build-arg DLFW_MONTH=25.01 .
 
@@ -39,5 +40,6 @@ docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.4.0.58_12
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.5.1.17_12.6.2
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.6.0.74_12.6.3
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.7.0.66_12.8.0
+docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.8.0.87_12.8.0
 
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0
