@@ -233,9 +233,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
                      attributes.left_bound.has_value()),error_code_t::GRAPH_NOT_SUPPORTED, "Attention score mod enabled and hence other subgraphs are disabled.");
 
         // validate basic dimension requirements
-        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
+        RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk % 8 != 0) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
+                                        "hidden_dim should be multiple of 8");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((h_q % h_k != 0) || (h_q % h_v != 0),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -367,6 +367,18 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // (cudnn_runtime_version < 8907 && num_attn_heads == num_gqa_groups FIXME
 
         // version specific validation
+        if(prop.major < 10) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_v > 256),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "hidden_dim should be less than or equal to 256");
+        }
+        if((detail::get_backend_version() < 90900) && (prop.major == 10)) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_v > 128),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "hidden_dim should be less than or equal to 128");
+        }
+
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 8.9.6, s_kv not a multiple of 64 or d not a multiple of 64 is not supported");

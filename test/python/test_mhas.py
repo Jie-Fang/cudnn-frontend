@@ -589,11 +589,16 @@ def test_sdpa(
         if layout == "bshd_bshd_bshd" or s_q == 1
         else s_q
     )
+
+    d_choices = [32, 56, 64, 128]
+    if cudnn_version >= "9.9.0":
+        d_choices.extend([192, 256, 512])
+
     # query+key embedding dimension per head
-    d_qk = random.choice([32, 56, 64, 128])
+    d_qk = random.choice(d_choices)
     # value embedding dimension per head
     d_v = (
-        random.choice([64, 96, 128])
+        random.choice(d_choices)
         if (layout == "bshd_bshd_bshd" and not is_ragged)
         else d_qk
     )
