@@ -743,6 +743,9 @@ TEST_CASE("Convolution fprop concatenate", "[conv][graph][caching]") {
     if (is_arch_supported_by_cudnn() == false) {
         SKIP("Architecture is not supported by currend cudnn version");
     }
+#if (CUDNN_VERSION < 90800)
+    SKIP("fprop concatenate fusion requires cudnn 9.8.0 and up.");
+#endif
 
     int64_t n = 16, c = 128, h = 64, w = 64, k = 256, r = 1, s = 1;
 
