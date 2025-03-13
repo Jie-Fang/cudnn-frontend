@@ -370,7 +370,7 @@ thunder:pjnl_latest:
     only:
         - schedules
    
-build:cudnn_8.9_windows:
+build:cudnn_GA_windows:
     tags:
         - Windows
     needs: []
@@ -380,7 +380,7 @@ build:cudnn_8.9_windows:
         # Otherwise just use already downloaded cudnn_8.9.5.29
         # - wget https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v8.9_cuda_12.2/8.9.5.29/cudnn-windows-x86_64-8.9.5.29.zip -O cudnn.zip
         # - Expand-Archive .\cudnn.zip
-        - $Env:CUDNN_PATH = "C:\Users\Public\Downloads\cudnn"
+        - $Env:CUDNN_PATH = "C:\Users\Public\Downloads\cudnn-9.8.0.87"
         - mkdir build
         - cd build
         - cmake ../
