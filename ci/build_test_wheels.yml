@@ -28,9 +28,9 @@ deploy:build_bdist_wheels:
         - conda deactivate
         - $wheel = Get-ChildItem -Path "./wheels/py${PYTHON_VERSION}/*${version}*.whl" | Select-Object -ExpandProperty Name
         - $DATE_FOLDER = Get-Date -Format "yyyy-MM-dd"
-        - if ($CI_COMMIT_BRANCH -eq "main") { Write-Host "main branch" Invoke-WebRequest -Uri "https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/main/${DATE_FOLDER}/${wheel_name}" ` -Method Put ` -InFile "./wheels/py${PYTHON_VERSION}/${wheel}" ` -Headers @{Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("agopal:${JFROG_API_KEY}"))}} elseif ($CI_COMMIT_BRANCH -eq "develop") { Write-Host "develop branch" Invoke-WebRequest -Uri "https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/develop/latest/${wheel_name}" ` -Method Put ` -InFile "./wheels/py${PYTHON_VERSION}/${wheel}" ` -Headers @{Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("agopal:${JFROG_API_KEY}"))}} else { Write-Host $CI_COMMIT_BRANCH Write-Host "Not posting ${wheel} to artifactory"}
+        - if ($CI_COMMIT_BRANCH -eq "main") { echo "main branch ${DATE_FOLDER}"; curl -u agopal:${JFROG_API_KEY} -T ./wheels/py${PYTHON_VERSION}/${wheel} https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/main/${DATE_FOLDER}/${wheel} } elseif (${CI_COMMIT_BRANCH} -eq "develop") {echo "develop branch ${DATE_FOLDER}"; curl -u agopal:${JFROG_API_KEY} -T ./wheels/py${PYTHON_VERSION}/${wheel} https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/cudnn_frontend/develop/latest/${wheel} } else { echo "${CI_COMMIT_BRANCH}"; echo "Not posting ${wheel} to artifactory"}
     rules:
-        # - if: $CI_PIPELINE_SOURCE == "schedule"
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     artifacts:
         paths:
             - wheels/py${PYTHON_VERSION}/*.whl
