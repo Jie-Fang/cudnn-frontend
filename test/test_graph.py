@@ -84,9 +84,20 @@ class PytorchReference:
         )
         return [dW]
 
+    @staticmethod
     def identity(kwargs, test_tensor_out_list):
         dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [kwargs["input"].to(dtype=dtype)]
+
+    @staticmethod
+    def reciprocal(kwargs, test_tensor_out_list):
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        return [torch.reciprocal(kwargs["input"]).to(dtype=dtype)]
+
+    @staticmethod
+    def atan2(kwargs, test_tensor_out_list):
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        return [torch.atan2(kwargs["a"], kwargs["b"]).to(dtype=dtype)]
 
     # @brief: run relu
     # @details: unpack the cudnn.pygraph.relu parameters and pass them to the pytorch equivalent
@@ -96,9 +107,43 @@ class PytorchReference:
         return [torch.nn.functional.relu(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
+    def relu_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        input_tensor.requires_grad_(True)
+        relu_output = torch.nn.functional.relu(input_tensor)
+        relu_output.backward(loss_tensor)
+        dX = input_tensor.grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
+
+    @staticmethod
     def elu(kwargs, test_tensor_out_list):
         dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        return [torch.nn.functional.elu(kwargs["input"]).to(dtype=dtype)]
+        input_tensor = kwargs["input"]
+        alpha_tensor = kwargs["b"] if "b" in kwargs else 1.0
+        if isinstance(alpha_tensor, torch.Tensor) and alpha_tensor.numel() == 1:
+            alpha_tensor = alpha_tensor.item()
+        elu_output = torch.nn.functional.elu(input_tensor, alpha=alpha_tensor)
+        return [elu_output.to(dtype=dtype)]
+
+    @staticmethod
+    def elu_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        alpha_tensor = kwargs["b"] if "b" in kwargs else 1.0
+        if isinstance(alpha_tensor, torch.Tensor) and alpha_tensor.numel() == 1:
+            alpha_tensor = alpha_tensor.item()
+        input_tensor.requires_grad_(True)
+        elu_output = torch.nn.functional.elu(input_tensor, alpha=alpha_tensor)
+        elu_output.backward(loss_tensor)
+        dX = input_tensor.grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
 
     @staticmethod
     def gelu(kwargs, test_tensor_out_list):
@@ -106,14 +151,92 @@ class PytorchReference:
         return [torch.nn.functional.gelu(kwargs["input"]).to(dtype=dtype)]
 
     @staticmethod
+    def gelu_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        input_tensor.requires_grad_(True)
+        gelu_output = torch.nn.functional.gelu(input_tensor)
+        gelu_output.backward(loss_tensor)
+        dX = input_tensor.grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
+
+    @staticmethod
     def gelu_approx_tanh(kwargs, test_tensor_out_list):
-        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
-        return [torch.nn.functional.gelu(kwargs["input"]).to(dtype=dtype)]
+        return PytorchReference.gelu(kwargs, test_tensor_out_list)
+
+    @staticmethod
+    def gelu_approx_tanh_backward(kwargs, test_tensor_out_list):
+        return PytorchReference.gelu_backward(kwargs, test_tensor_out_list)
 
     @staticmethod
     def sigmoid(kwargs, test_tensor_out_list):
         dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
         return [torch.nn.functional.sigmoid(kwargs["input"]).to(dtype=dtype)]
+
+    @staticmethod
+    def sigmoid_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        input_tensor.requires_grad_(True)
+        sigmoid_output = torch.nn.functional.sigmoid(input_tensor)
+        sigmoid_output.backward(loss_tensor)
+        dX = input_tensor.grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
+
+    @staticmethod
+    def swish(kwargs, test_tensor_out_list):
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        beta = kwargs["b"] if "b" in kwargs else 1.0
+        input_tensor = kwargs["a"]
+        swish_output = input_tensor * torch.sigmoid(beta * input_tensor)
+        return [swish_output.to(dtype=dtype)]
+
+    @staticmethod
+    def swish_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        beta = kwargs["b"] if "b" in kwargs else 1.0
+        sigmoid_beta_x = torch.sigmoid(beta * input_tensor)
+        # Compute derivative of Swish: sigma(beta * x) + beta * x * sigma(beta * x) * (1 - sigma(beta * x))
+        swish_grad = sigmoid_beta_x + beta * input_tensor * sigmoid_beta_x * (
+            1 - sigmoid_beta_x
+        )
+        dX = loss_tensor * swish_grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
+
+    @staticmethod
+    def softplus(kwargs, test_tensor_out_list):
+        dtype = eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        beta = kwargs["b"] if "b" in kwargs else 1.0
+        input_tensor = kwargs["a"]
+        # First compute log(1 + exp(β*x))
+        softplus_output = torch.nn.functional.softplus(beta * input_tensor)
+        # Then divide by β
+        softplus_output = softplus_output / beta
+        return [softplus_output.to(dtype=dtype)]
+
+    @staticmethod
+    def softplus_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        beta = kwargs["b"] if "b" in kwargs else 1.0
+        input_tensor.requires_grad_(True)
+        softplus_output = torch.nn.functional.softplus(beta * input_tensor) / beta
+        softplus_output.backward(loss_tensor)
+        dX = input_tensor.grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
 
     @staticmethod
     def batchnorm(kwargs, test_tensor_out_list):
@@ -273,6 +396,19 @@ class PytorchReference:
         return [output]
 
     @staticmethod
+    def tanh_backward(kwargs, test_tensor_out_list):
+        input_tensor = kwargs["input"]
+        loss_tensor = kwargs["loss"]
+        input_tensor.requires_grad_(True)
+        tanh_output = torch.tanh(input_tensor)
+        tanh_output.backward(loss_tensor)
+        dX = input_tensor.grad
+        dX = dX.to(
+            eval(convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type))
+        )
+        return [dX]
+
+    @staticmethod
     def abs(kwargs, test_tensor_out_list):
         output = torch.abs(kwargs["input"])
         return [output]
@@ -334,7 +470,7 @@ class PytorchReference:
 
     @staticmethod
     def cmp_lt(kwargs, test_tensor_out_list):
-        output = torch.lt(kwargs["input"])
+        output = torch.lt(kwargs["input"], kwargs["comparison"])
         return [output]
 
     @staticmethod
@@ -345,6 +481,21 @@ class PytorchReference:
     @staticmethod
     def cmp_ge(kwargs, test_tensor_out_list):
         output = torch.ge(kwargs["input"], kwargs["comparison"])
+        return [output]
+
+    @staticmethod
+    def cmp_le(kwargs, test_tensor_out_list):
+        output = torch.le(kwargs["input"], kwargs["comparison"])
+        return [output]
+
+    @staticmethod
+    def cmp_eq(kwargs, test_tensor_out_list):
+        output = torch.eq(kwargs["input"], kwargs["comparison"])
+        return [output]
+
+    @staticmethod
+    def cmp_ne(kwargs, test_tensor_out_list):
+        output = torch.ne(kwargs["input"], kwargs["comparison"])
         return [output]
 
     @staticmethod
@@ -360,6 +511,11 @@ class PytorchReference:
     @staticmethod
     def logical_or(kwargs, test_tensor_out_list):
         output = torch.logical_or(kwargs["a"], kwargs["b"])
+        return [output]
+
+    @staticmethod
+    def binary_select(kwargs, test_tensor_out_list):
+        output = torch.where(kwargs["selector"], kwargs["a"], kwargs["b"])
         return [output]
 
     @staticmethod
@@ -576,10 +732,12 @@ class random_tensor_generator(test_node):
         self.output[0].set_data_type(data_type)
         self.dist_mean = None
         self.dist_sd = None
+        self.init_int = False
 
-    def set_dist_mean_sd(self, mean, sd):
+    def set_dist_mean_sd(self, mean, sd, init_int=False):
         self.dist_mean = mean
         self.dist_sd = sd
+        self.init_int = init_int
 
     def initialize_torch_tensor(self, torch_dtype, device):
         if torch_dtype == torch.bool:
@@ -610,14 +768,34 @@ class random_tensor_generator(test_node):
                 dtype=torch_dtype,
             )
         else:
-            self.output[0].ref_data = torch.normal(
-                0.5 if self.dist_mean is None else self.dist_mean,
-                0.5 if self.dist_sd is None else self.dist_sd,
-                self.kwargs["dim"],
-                requires_grad=False,
-                device=device,
-                dtype=torch_dtype,
-            )
+            if self.init_int:
+                min_value = -2 if self.dist_mean is None else int(self.dist_mean)
+                max_value = 3 if self.dist_sd is None else int(self.dist_sd)
+
+                # Ensure min_value is less than max_value
+                if min_value >= max_value:
+                    min_value, max_value = (
+                        min(min_value, max_value),
+                        max(min_value, max_value) + 1,
+                    )
+
+                self.output[0].ref_data = torch.randint(
+                    min_value,
+                    max_value,
+                    self.kwargs["dim"],
+                    requires_grad=False,
+                    device=device,
+                    dtype=torch_dtype,
+                )
+            else:
+                self.output[0].ref_data = torch.normal(
+                    0.5 if self.dist_mean is None else self.dist_mean,
+                    0.5 if self.dist_sd is None else self.dist_sd,
+                    self.kwargs["dim"],
+                    requires_grad=False,
+                    device=device,
+                    dtype=torch_dtype,
+                )
 
             if (
                 "stride" in self.kwargs
