@@ -38,7 +38,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.9_cuda_12.9/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.10_cuda_12.9/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -51,7 +51,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.8_cuda_12.8/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.9_cuda_12.9/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
