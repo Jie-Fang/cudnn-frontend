@@ -77,12 +77,37 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
 
 
 def find_mismatches(tensor_a, tensor_b, atol, rtol):
-    close_mask = torch.isclose(tensor_a, tensor_b, atol=atol, rtol=rtol)
+    # Use isclose with equal_nan=True: this will consider NaNs as equal.
+    close_mask = torch.isclose(tensor_a, tensor_b, atol=atol, rtol=rtol, equal_nan=True)
+    # Get indices where the tensors do not match
     diff_indices = torch.nonzero(~close_mask)
+
+    mismatches = []
     for idx in diff_indices:
-        diff = tensor_a[tuple(idx.tolist())] - tensor_b[tuple(idx.tolist())]
+        index_tuple = tuple(idx.tolist())
+        a_val = tensor_a[index_tuple]
+        b_val = tensor_b[index_tuple]
+
+        # Compute the absolute difference. Note: if one value is NaN (and the other is not),
+        # the result will be NaN, so we handle that by assigning it an infinite diff.
+        diff_val = torch.abs(a_val - b_val)
+        if torch.isnan(diff_val):
+            diff_val = float("inf")
+        else:
+            diff_val = diff_val.item()  # Convert tensor to a Python number for sorting
+
+        # Also convert a_val and b_val to Python scalars if possible
+        a_num = a_val.item() if hasattr(a_val, "item") else a_val
+        b_num = b_val.item() if hasattr(b_val, "item") else b_val
+        mismatches.append((index_tuple, a_num, b_num, diff_val))
+
+    # Sort mismatches by the absolute difference in descending order.
+    mismatches.sort(key=lambda x: x[3], reverse=True)
+
+    # Print the largest 10 mismatches to reduce output length.
+    for idx, a_num, b_num, diff_val in mismatches[:10]:
         print(
-            f"Index: {tuple(idx.tolist())}, Tensor A Value: {tensor_a[tuple(idx.tolist())]}, Tensor B Value: {tensor_b[tuple(idx.tolist())]}, diff = {diff}"
+            f"Index: {idx}, Tensor A Value: {a_num}, Tensor B Value: {b_num}, diff = {diff_val}"
         )
 
 
@@ -100,7 +125,7 @@ class test_tensor_ir:
         else:
             dtype = eval(convert_datatype(dtype, "tensorir"))
 
-        if hasattr(node, "is_by_value"):
+        if hasattr(node, "is_by_value") and node.is_by_value:
             return dtype, [1], [1], dtype
 
         shape = []
@@ -113,6 +138,22 @@ class test_tensor_ir:
         else:
             ori_stride = test_tensor.ref_data.stride()
             ori_shape = test_tensor.ref_data.shape
+
+        # Check if tensor is a scalar tensor (all strides 0 and all dims 1 in json definition)
+        isScalarTensor = all(s == 0 for s in ori_stride) and all(
+            d == 1 for d in ori_shape
+        )
+
+        if isScalarTensor:
+            # If tensor is scalar in json definition, convert to dense memref with shape to [-1] and stride to [0]
+            shape = [-1] * len(ori_shape)
+            stride = [0] * len(ori_stride)
+            return (
+                nv_tensor_ir.TensorType.get(shape=shape, stride=stride, datatype=dtype),
+                shape,
+                stride,
+                dtype,
+            )
 
         for s, d in zip(ori_stride, ori_shape):
             if idx > 0 and d == 1:
@@ -143,6 +184,9 @@ class test_tensor_ir:
                     Y_expected = Y_expected.to("cpu")
                 else:
                     Y_actual = Y_actual.to("cpu")
+            if Y_expected.dtype != Y_actual.dtype:
+                Y_expected = Y_expected.to(Y_actual.dtype)
+
             # TODO (@mbreughe): Clean up this assumption:
             # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
             # For now, we can assume that we don't care about this output and just let the reference pass
@@ -157,9 +201,29 @@ class test_tensor_ir:
                     )
                 )
 
-            # find_mismatches(Y_expected, Y_actual, atol, rtol)#
             try:
-                torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
+                print("Y_EXPECTED:", Y_expected)
+                print("Y_ACTUAL:", Y_actual)
+                if Y_expected.dtype == torch.bool and Y_actual.dtype == torch.bool:
+                    assert torch.equal(
+                        Y_expected, Y_actual
+                    ), "Boolean tensors do not match"
+                else:
+                    # Handle FP8 tensors which aren't supported by torch.testing.assert_close
+                    if (
+                        Y_expected.dtype == torch.float8_e4m3fn
+                        or Y_actual.dtype == torch.float8_e4m3fn
+                    ):
+                        # Convert FP8 tensors to float32 for comparison
+                        Y_expected_float = Y_expected.to(torch.float32)
+                        Y_actual_float = Y_actual.to(torch.float32)
+                        torch.testing.assert_close(
+                            Y_expected_float, Y_actual_float, atol=atol, rtol=rtol
+                        )
+                    else:
+                        torch.testing.assert_close(
+                            Y_expected, Y_actual, atol=atol, rtol=rtol
+                        )
             except Exception as e:
                 passed = False
                 print("Assertion Error:", str(e))
@@ -211,7 +275,7 @@ class test_tensor_ir:
         B, M, N, K = a_tensor_dim[0], a_tensor_dim[1], b_tensor_dim[2], a_tensor_dim[2]
         problem_size = nv_tensor_ir.GemmProblemSize(B, M, N, K)
         print("problem_size:", B, M, N, K)
-        device = torch.device("cuda:0")
+        device = torch.device("cuda")
 
         # iterate all kernel inputs automatically
         tensor_desc = nv_tensor_ir.VectorTensorOperandDescriptor()
@@ -219,7 +283,7 @@ class test_tensor_ir:
         for node in self.test_graph.entrance_nodes:
             torch_mem = node.get_value()
             if not node.output[0].is_by_value:
-                gpu_mem = torch.tensor(torch_mem, device=device)
+                gpu_mem = torch_mem.to(device=device)
                 inputs_gpu.append(gpu_mem)  # need to save gpu_mem in case of releasing
                 strides = []
                 for i, (shape, stride) in enumerate(
@@ -233,10 +297,11 @@ class test_tensor_ir:
                 )
                 tensor_desc.append(tensor_operand)
             else:
+                cpu_mem = torch_mem.to("cpu")
                 tensor_operand = nv_tensor_ir.TensorOperandDescriptor(
                     nv_tensor_ir.ScalarDescriptor(
                         eval(convert_datatype(node.output[0].data_type, "cask")),
-                        torch_mem[0].data_ptr(),
+                        cpu_mem[0].data_ptr(),
                     )
                 )
                 tensor_desc.append(tensor_operand)
@@ -409,27 +474,45 @@ class test_tensor_ir:
         return module
 
     def convert_and_splat_for_binary_pointwise(self, lsh, rsh, out_type):
-        if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
-            rsh.type, nv_tensor_ir.TensorType
-        ):
-            lsh = nv_tensor_ir.splat(
-                nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type), lsh
-            )
-        elif isinstance(rsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
-            lsh.type, nv_tensor_ir.TensorType
-        ):
-            rsh = nv_tensor_ir.splat(
-                nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type), rsh
-            )
-        if out_type != lsh.type:
+        if lsh is not None and rsh is not None:
+            if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
+                rsh.type, nv_tensor_ir.TensorType
+            ):
+                lsh = nv_tensor_ir.splat(
+                    nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type),
+                    lsh,
+                )
+            elif isinstance(rsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
+                lsh.type, nv_tensor_ir.TensorType
+            ):
+                rsh = nv_tensor_ir.splat(
+                    nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type),
+                    rsh,
+                )
+        convert_value0 = None
+        convert_value1 = None
+        if lsh is not None and out_type != lsh.type:
             convert_value0 = nv_tensor_ir.convert(out_type, lsh)
         else:
             convert_value0 = lsh
-        if out_type != rsh.type:
+        if rsh is not None and out_type != rsh.type:
             convert_value1 = nv_tensor_ir.convert(out_type, rsh)
         else:
             convert_value1 = rsh
         return convert_value0, convert_value1
+
+    def convert_scalar_tensor(self, scalar_tensor, target_type):
+        if nv_tensor_ir.get_tensor_datatype(
+            target_type
+        ) != nv_tensor_ir.get_tensor_datatype(scalar_tensor.type):
+            return nv_tensor_ir.convert(
+                nv_tensor_ir.TensorType.get_from_tensor_type(
+                    scalar_tensor.type, nv_tensor_ir.get_tensor_datatype(target_type)
+                ),
+                scalar_tensor,
+            )
+        else:
+            return scalar_tensor
 
     def build_binary_operation(self, op_name, node, children, out_type, node_map):
         lsh, rsh = self.convert_and_splat_for_binary_pointwise(
@@ -454,14 +537,24 @@ class test_tensor_ir:
                 node_map[node] = nv_tensor_ir.mod(out_type, lsh, rsh)
             case "add_square":
                 node_map[node] = nv_tensor_ir.add_square(out_type, lsh, rsh)
+            case "atan2":
+                node_map[node] = nv_tensor_ir.atan2(out_type, lsh, rsh)
+            case "pow":
+                node_map[node] = nv_tensor_ir.pow(out_type, lsh, rsh)
             case "logical_or":
-                node_map[node] = nv_tensor_ir.or_(out_type, lsh, rsh)
+                node_map[node] = nv_tensor_ir.or_(lsh, rsh)
             case "logical_and":
-                node_map[node] = nv_tensor_ir.and_(out_type, lsh, rsh)
-            case "logical_not":
-                node_map[node] = nv_tensor_ir.not_(out_type, lsh, rsh)
+                node_map[node] = nv_tensor_ir.and_(lsh, rsh)
             case "relu_backward":
                 node_map[node] = nv_tensor_ir.relu_bwd(out_type, lsh, rsh)
+            case "tanh_backward":
+                node_map[node] = nv_tensor_ir.tanh_bwd(out_type, lsh, rsh)
+            case "sigmoid_backward":
+                node_map[node] = nv_tensor_ir.sigmoid_bwd(out_type, lsh, rsh)
+            case "gelu_backward":
+                node_map[node] = nv_tensor_ir.gelu_bwd(out_type, lsh, rsh)
+            case "gelu_approx_tanh_backward":
+                node_map[node] = nv_tensor_ir.gelu_approx_tanh_bwd(out_type, lsh, rsh)
             case _:
                 print(
                     "Unimplemented binary Operation in Lowering to Tensor IR: ", op_name
@@ -505,12 +598,12 @@ class test_tensor_ir:
                 node_map[node] = nv_tensor_ir.relu_fwd(convert_value)
             case "sigmoid":
                 node_map[node] = nv_tensor_ir.sigmoid_fwd(convert_value)
-            case "elu":
-                node_map[node] = nv_tensor_ir.elu_fwd(convert_value)
             case "gelu":
                 node_map[node] = nv_tensor_ir.gelu_fwd(convert_value)
             case "gelu_approx_tanh":
                 node_map[node] = nv_tensor_ir.gelu_approx_tanh_fwd(convert_value)
+            case "logical_not":
+                node_map[node] = nv_tensor_ir.not_(convert_value)
             case _:
                 print(
                     "Unimplemented unary Operation in Lowering to Tensor IR: ", op_name
@@ -619,11 +712,17 @@ class test_tensor_ir:
                         | "min"
                         | "div"
                         | "mod"
+                        | "atan2"
+                        | "pow"
                         | "add_square"
                         | "logical_or"
                         | "logical_and"
                         | "logical_not"
                         | "relu_backward"
+                        | "tanh_backward"
+                        | "sigmoid_backward"
+                        | "gelu_backward"
+                        | "gelu_approx_tanh_backward"
                     ):
                         self.build_binary_operation(
                             node.op_name, node, children, out_type, node_map
@@ -640,11 +739,12 @@ class test_tensor_ir:
                         | "log"
                         | "neg"
                         | "rsqrt"
+                        | "sqrt"
                         | "erf"
+                        | "logical_not"
                         | "reciprocal"
                         | "relu"
                         | "sigmoid"
-                        | "elu"
                         | "gelu"
                         | "gelu_approx_tanh"
                     ):
@@ -652,24 +752,104 @@ class test_tensor_ir:
                             node.op_name, node, children, out_type, node_map
                         )
                     case "cmp_lt":
-                        comparator = None
-                        node_map[node] = nv_tensor_ir.cmp(
-                            out_type, comparator, children[0], children[1]
+                        comparator = nv_tensor_ir.FloatComparator.olt
+                        node_map[node] = nv_tensor_ir.cmpf(
+                            comparator, children[0], children[1]
                         )
                     case "cmp_ge":
-                        comparator = None
-                        node_map[node] = nv_tensor_ir.cmp(
-                            out_type, comparator, children[0], children[1]
+                        comparator = nv_tensor_ir.FloatComparator.oge
+                        node_map[node] = nv_tensor_ir.cmpf(
+                            comparator, children[0], children[1]
                         )
                     case "cmp_gt":
-                        comparator = None
-                        node_map[node] = nv_tensor_ir.cmp(
-                            out_type, comparator, children[0], children[1]
+                        comparator = nv_tensor_ir.FloatComparator.ogt
+                        node_map[node] = nv_tensor_ir.cmpf(
+                            comparator, children[0], children[1]
                         )
-                    case "pow":
-                        # Is pow really vec-vec?
-                        node_map[node] = nv_tensor_ir.pow(
-                            out_type, children[0], children[1]
+                    case "cmp_le":
+                        comparator = nv_tensor_ir.FloatComparator.ole
+                        node_map[node] = nv_tensor_ir.cmpf(
+                            comparator, children[0], children[1]
+                        )
+                    case "cmp_eq":
+                        comparator = nv_tensor_ir.FloatComparator.oeq
+                        node_map[node] = nv_tensor_ir.cmpf(
+                            comparator, children[0], children[1]
+                        )
+                    case "cmp_ne":
+                        comparator = nv_tensor_ir.FloatComparator.one
+                        node_map[node] = nv_tensor_ir.cmpf(
+                            comparator, children[0], children[1]
+                        )
+                    case "binary_select":
+                        node_map[node] = nv_tensor_ir.binary_select(
+                            children[0], children[1], children[2]
+                        )
+                    case "swish":
+                        converted_x, _ = self.convert_and_splat_for_binary_pointwise(
+                            children[0], None, out_type
+                        )
+                        converted_beta = self.convert_scalar_tensor(
+                            children[1], out_type
+                        )
+                        node_map[node] = nv_tensor_ir.swish_fwd(
+                            converted_x, converted_beta
+                        )
+                    case "softplus":
+                        converted_x, _ = self.convert_and_splat_for_binary_pointwise(
+                            children[0], None, out_type
+                        )
+                        converted_beta = self.convert_scalar_tensor(
+                            children[1], out_type
+                        )
+                        node_map[node] = nv_tensor_ir.softplus_fwd(
+                            converted_x, converted_beta
+                        )
+                    case "elu":
+                        converted_x, _ = self.convert_and_splat_for_binary_pointwise(
+                            children[0], None, out_type
+                        )
+                        converted_beta = self.convert_scalar_tensor(
+                            children[1], out_type
+                        )
+                        node_map[node] = nv_tensor_ir.elu_fwd(
+                            converted_x, converted_beta
+                        )
+                    case "swish_backward":
+                        converted_x, converted_grad = (
+                            self.convert_and_splat_for_binary_pointwise(
+                                children[0], children[1], out_type
+                            )
+                        )
+                        converted_beta = self.convert_scalar_tensor(
+                            children[2], out_type
+                        )
+                        node_map[node] = nv_tensor_ir.swish_bwd(
+                            converted_x, converted_grad, converted_beta
+                        )
+                    case "softplus_backward":
+                        converted_x, converted_grad = (
+                            self.convert_and_splat_for_binary_pointwise(
+                                children[0], children[1], out_type
+                            )
+                        )
+                        converted_beta = self.convert_scalar_tensor(
+                            children[2], out_type
+                        )
+                        node_map[node] = nv_tensor_ir.softplus_bwd(
+                            converted_x, converted_grad, converted_beta
+                        )
+                    case "elu_backward":
+                        converted_x, converted_grad = (
+                            self.convert_and_splat_for_binary_pointwise(
+                                children[0], children[1], out_type
+                            )
+                        )
+                        converted_beta = self.convert_scalar_tensor(
+                            children[2], out_type
+                        )
+                        node_map[node] = nv_tensor_ir.elu_bwd(
+                            converted_x, converted_grad, converted_beta
                         )
                     case "identity":
                         node_map[node] = node

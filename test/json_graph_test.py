@@ -169,6 +169,7 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
         "bool",
         "bf16",
         "i",
+        "fp8_e4m3",
     ]
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -226,6 +227,9 @@ def parse_legacy_args(parent_args, unparsed_graphRunner_args):
     l_parser.add_argument("-groupCount", default=1, type=int)
     l_parser.add_argument("-atol", default=0.1, type=float)
     l_parser.add_argument("-rtol", default=0.1, type=float)
+    l_parser.add_argument("-mean", default=0.5, type=float)
+    l_parser.add_argument("-std_dev", default=0.5, type=float)
+    l_parser.add_argument("-init_int", default=False, action="store_true")
     # Convolution related params (TODO(@mbreughe): add grouping)
     l_parser.add_argument(
         "-x",
@@ -600,7 +604,10 @@ class Legacy_operation:
         for leg_input, pycudnn_input in self.operation_mapping[
             Legacy_operation.INPUT
         ].items():
-            input_map[pycudnn_input] = self.jnode[leg_input]
+            if leg_input in self.jnode:
+                input_map[pycudnn_input] = self.jnode[leg_input]
+            else:
+                print(f"Warning: Input {leg_input} not found in jnode")
 
         return input_map
 
@@ -630,6 +637,7 @@ class Legacy_tensor:
             "mean": "mean",
             "std_dev": "std_dev",
             "isByValue": "isByValue",
+            "init_int": "init_int",
         }
     )
 
@@ -716,6 +724,7 @@ class Legacy_value:
             "int32": DataType.INT32,
             "bf16": DataType.BFLOAT16,
             "i": DataType.INT32,
+            "fp8_e4m3": DataType.FP8_E4M3,
         }
     }
     indirection = {"mathPrec": "dataType"}
@@ -908,7 +917,8 @@ def setup_test_graph_from_json(testGraph, json_dict, backendEngine=-1):
             t = testGraph.test_tensor(**legacy_tensor.get_tensor_properties())
             tensor_mean = jtensor["mean"] if "mean" in jtensor else None
             tensor_sd = jtensor["std_dev"] if "std_dev" in jtensor else None
-            t.set_dist_mean_sd(tensor_mean, tensor_sd)
+            tensor_init_int = jtensor["init_int"] if "init_int" in jtensor else False
+            t.set_dist_mean_sd(tensor_mean, tensor_sd, tensor_init_int)
             t.output[0].set_data_type(legacy_tensor.get_data_type())
             t.output[0].set_dim(legacy_tensor.get_dim())
             t.output[0].set_stride(legacy_tensor.get_stride())

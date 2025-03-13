@@ -10,6 +10,7 @@ class DataType(Enum):
     HALF = "float16"
     BFLOAT16 = "bfloat16"
     BOOL = "boolean"
+    FP8_E4M3 = "fp8_e4m3"
 
 
 pytorch_mapping = {
@@ -21,6 +22,7 @@ pytorch_mapping = {
     DataType.HALF: "torch.float16",
     DataType.BFLOAT16: "torch.bfloat16",
     DataType.BOOL: "torch.bool",
+    DataType.FP8_E4M3: "torch.float8_e4m3fn",
 }
 
 cudnn_mapping = {
@@ -32,6 +34,7 @@ cudnn_mapping = {
     DataType.HALF: "cudnn.data_type.HALF",
     DataType.BFLOAT16: "cudnn.data_type.BFLOAT16",
     DataType.BOOL: "cudnn.data_type.BOOLEAN",
+    DataType.FP8_E4M3: "cudnn.data_type.FP8_E4M3",
 }
 
 tensorir_mapping = {
@@ -43,6 +46,7 @@ tensorir_mapping = {
     DataType.HALF: "T.f16()",
     DataType.BFLOAT16: "T.bf16()",
     DataType.BOOL: "T.bool()",
+    DataType.FP8_E4M3: "T.f8E4M3FN()",
 }
 
 cask_mapping = {
@@ -54,6 +58,7 @@ cask_mapping = {
     DataType.HALF: "nv_tensor_ir.NumericTypeID.kF16",
     DataType.BFLOAT16: "nv_tensor_ir.NumericTypeID.kBF16",
     DataType.BOOL: "nv_tensor_ir.NumericTypeID.kB1",
+    DataType.FP8_E4M3: "nv_tensor_ir.NumericTypeID.kE4M3",
 }
 
 
