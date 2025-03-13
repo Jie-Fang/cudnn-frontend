@@ -1484,9 +1484,11 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         last_output->set_dim({b, h_q, s_q, s_kv}).set_stride({h_q * s_q * s_kv, s_q * s_kv, s_kv, 1});
 
         // last_output = last_output(dP) * mask
-        last_output = pointwise(last_output,
-                                (is_dropout_prob || is_dropout_mask) ? rng_output : one_tensor,
-                                Pointwise_attributes().set_name("dP_dropout_mask").set_mode(PointwiseMode_t::MUL));
+        if (is_dropout_prob || is_dropout_mask) {
+            last_output = pointwise(last_output,
+                                    rng_output,
+                                    Pointwise_attributes().set_name("dP_dropout_mask").set_mode(PointwiseMode_t::MUL));
+        }
 
         // last_output = last_output - softmax_sum
         last_output = pointwise(last_output,
