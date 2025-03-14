@@ -340,6 +340,55 @@ def test_sdpa_with_flexible_graph(cudnn_handle):
     torch.cuda.synchronize()
 
 
+def document_mask(sdpa_graph, q_kt_tensor, document_tensor, document_tensor_t, neg_inf):
+
+    col_index = sdpa_graph.gen_index(
+        input=q_kt_tensor,
+        axis=3,
+        name="col_index",
+        compute_data_type=cudnn.data_type.INT32,
+    )
+    col_index.set_data_type(cudnn.data_type.INT32)
+
+    all_1_mask = sdpa_graph.cmp_le(
+        input=col_index,
+        comparison=col_index,
+        compute_data_type=cudnn.data_type.FLOAT,
+        name="all_1_mask",
+    )
+    all_1_mask.set_data_type(cudnn.data_type.INT32)
+
+    row_bcast = sdpa_graph.scale(
+        input=all_1_mask,
+        scale=document_tensor,
+        compute_data_type=cudnn.data_type.FLOAT,
+        name="row_bcast",
+    )
+    row_bcast.set_data_type(cudnn.data_type.INT32)
+
+    col_bcast = sdpa_graph.scale(
+        input=all_1_mask,
+        scale=document_tensor_t,
+        compute_data_type=cudnn.data_type.FLOAT,
+        name="col_bcast",
+    )
+    col_bcast.set_data_type(cudnn.data_type.INT32)
+
+    document_mask = sdpa_graph.cmp_eq(
+        input=row_bcast,
+        comparison=col_bcast,
+        compute_data_type=cudnn.data_type.FLOAT,
+        name="document_mask",
+    )
+    document_mask.set_data_type(cudnn.data_type.INT32)
+
+    out = sdpa_graph.binary_select(
+        input0=q_kt_tensor, input1=neg_inf, mask=document_mask, name="binary_select"
+    )
+
+    return out
+
+
 @torch_fork_set_rng(seed=0)
 def test_sdpa_with_arrow_mask(cudnn_handle):
 
@@ -455,6 +504,97 @@ def test_sdpa_with_arrow_mask(cudnn_handle):
         col_bound: col_bound_cpu,
         diag_bound_0: diag_bound_0_cpu,
         diag_bound_1: diag_bound_1_cpu,
+    }
+
+    workspace = torch.empty(
+        graph.get_workspace_size(), device="cuda", dtype=torch.uint8
+    )
+    graph.execute(variant_pack, workspace)
+    torch.cuda.synchronize()
+
+
+@torch_fork_set_rng(seed=0)
+def test_sdpa_with_document_mask(cudnn_handle):
+
+    b = 1  # batch size
+    h_q = 1  # query number of heads
+    h_k = 1  # key number of heads
+    h_v = 1  # value number of heads
+    s_q = 16  # maximum sequence length
+    s_kv = 16  # maximum sequence length
+    d = 128  # embedding dimension per head
+
+    q_dims = (b, h_q, s_q, d)
+    q_strides = (s_q * h_q * d, d, h_q * d, 1)
+    k_dims = (b, h_k, s_kv, d)
+    k_strides = (s_kv * h_k * d, d, h_k * d, 1)
+    v_dims = (b, h_v, s_kv, d)
+    v_strides = (s_kv * h_v * d, d, h_v * d, 1)
+
+    q_gpu = torch.randn(b * s_q * h_q * d).half().cuda().as_strided(q_dims, q_strides)
+    k_gpu = torch.randn(b * s_kv * h_k * d).half().cuda().as_strided(k_dims, k_strides)
+    v_gpu = torch.randn(b * s_kv * h_v * d).half().cuda().as_strided(v_dims, v_strides)
+    o_gpu = torch.empty(b * s_q * h_q * d).half().cuda().as_strided(q_dims, q_strides)
+
+    document_tensor_gpu = (
+        torch.randint(0, s_q, (1, 1, s_q, 1), device="cuda", dtype=torch.int32)
+        .sort(dim=2)
+        .values
+    )
+    document_tensor_gpu_t = document_tensor_gpu.reshape(1, 1, 1, s_q)
+
+    graph = cudnn.pygraph(
+        io_data_type=cudnn.data_type.HALF,
+        intermediate_data_type=cudnn.data_type.FLOAT,
+        compute_data_type=cudnn.data_type.FLOAT,
+    )
+
+    q = graph.tensor_like(q_gpu)
+    k = graph.tensor_like(k_gpu)
+    v = graph.tensor_like(v_gpu)
+
+    document_tensor = graph.tensor_like(document_tensor_gpu)
+    document_tensor_t = graph.tensor_like(document_tensor_gpu_t)
+
+    attn_scale = 1.0 / math.sqrt(d)
+    neg_inf_scalar_value = -1e9
+    neg_inf_tensor_cpu = torch.full((1, 1, 1, 1), neg_inf_scalar_value)
+
+    neg_inf_tensor = graph.tensor(
+        name="neg_inf_scalar",
+        dim=neg_inf_tensor_cpu.size(),
+        stride=neg_inf_tensor_cpu.stride(),
+        is_pass_by_value=True,
+        data_type=neg_inf_tensor_cpu.dtype,
+    )
+
+    o, _ = graph.sdpa(
+        name="sdpa",
+        q=q,
+        k=k,
+        v=v,
+        is_inference=True,
+        attn_scale=attn_scale,
+        score_mod=partial(
+            document_mask,
+            document_tensor=document_tensor,
+            document_tensor_t=document_tensor_t,
+            neg_inf=neg_inf_tensor,
+        ),
+    )
+
+    o.set_output(True).set_dim(q_dims).set_stride(q_strides)
+
+    graph.build([cudnn.heur_mode.A])
+
+    variant_pack = {
+        q: q_gpu,
+        k: k_gpu,
+        v: v_gpu,
+        o: o_gpu,
+        document_tensor: document_tensor_gpu,
+        document_tensor_t: document_tensor_gpu_t,
+        neg_inf_tensor: neg_inf_tensor_cpu,
     }
 
     workspace = torch.empty(
