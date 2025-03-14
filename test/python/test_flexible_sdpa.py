@@ -536,6 +536,11 @@ def test_sdpa_with_document_mask(cudnn_handle):
     v_gpu = torch.randn(b * s_kv * h_v * d).half().cuda().as_strided(v_dims, v_strides)
     o_gpu = torch.empty(b * s_q * h_q * d).half().cuda().as_strided(q_dims, q_strides)
 
+    if cudnn_version < "9.9.0":
+        pytest.skip(
+            "SDPA fprop with document style mask requires cudnn 9.9.0 or higher"
+        )
+
     document_tensor_gpu = (
         torch.randint(0, s_q, (1, 1, s_q, 1), device="cuda", dtype=torch.int32)
         .sort(dim=2)
