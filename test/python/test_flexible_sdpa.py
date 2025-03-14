@@ -135,6 +135,83 @@ def causal_mask(sdpa_graph, q_kt_tensor):
     return out
 
 
+def constant_bound_mask(score_mod_graph, index, bound):
+    is_less_than_bound = score_mod_graph.cmp_lt(
+        input=index, comparison=bound, compute_data_type=cudnn.data_type.BOOLEAN
+    )
+    is_less_than_bound.set_data_type(cudnn.data_type.INT32)
+
+    return is_less_than_bound
+
+
+def diag_bound_mask(score_mod_graph, row_index, col_index, diag_bound_0, diag_bound_1):
+    row_minus_col = score_mod_graph.sub(
+        a=row_index, b=col_index, compute_data_type=cudnn.data_type.INT32
+    )
+    row_minus_col.set_data_type(cudnn.data_type.INT32)
+    is_larger_or_equal_to_diag_bound_0 = score_mod_graph.cmp_ge(
+        input=row_minus_col,
+        comparison=diag_bound_0,
+        compute_data_type=cudnn.data_type.BOOLEAN,
+    )
+    is_larger_or_equal_to_diag_bound_0.set_data_type(cudnn.data_type.INT32)
+
+    is_less_than_or_equal_to_diag_bound_1 = score_mod_graph.cmp_le(
+        input=row_minus_col,
+        comparison=diag_bound_1,
+        compute_data_type=cudnn.data_type.BOOLEAN,
+    )
+    is_less_than_or_equal_to_diag_bound_1.set_data_type(cudnn.data_type.INT32)
+
+    is_within_diag_bound = score_mod_graph.logical_and(
+        is_larger_or_equal_to_diag_bound_0,
+        is_less_than_or_equal_to_diag_bound_1,
+        compute_data_type=cudnn.data_type.BOOLEAN,
+    )
+    is_within_diag_bound.set_data_type(cudnn.data_type.INT32)
+
+    return is_within_diag_bound
+
+
+def arrow_mask(
+    score_mod_graph,
+    q_kt_tensor,
+    row_bound,
+    col_bound,
+    diag_bound_0,
+    diag_bound_1,
+    neg_inf,
+):
+    row_index = score_mod_graph.gen_index(input=q_kt_tensor, axis=2)
+    row_index.set_data_type(cudnn.data_type.INT32)
+
+    col_index = score_mod_graph.gen_index(input=q_kt_tensor, axis=3)
+    col_index.set_data_type(cudnn.data_type.INT32)
+
+    is_less_than_row_bound = constant_bound_mask(score_mod_graph, row_index, row_bound)
+    is_less_than_col_bound = constant_bound_mask(score_mod_graph, col_index, col_bound)
+
+    is_within_diag_bound = diag_bound_mask(
+        score_mod_graph, row_index, col_index, diag_bound_0, diag_bound_1
+    )
+
+    mask = score_mod_graph.logical_or(
+        is_less_than_row_bound,
+        is_less_than_col_bound,
+        compute_data_type=cudnn.data_type.BOOLEAN,
+    )
+    mask.set_data_type(cudnn.data_type.INT32)
+
+    mask = score_mod_graph.logical_or(
+        mask, is_within_diag_bound, compute_data_type=cudnn.data_type.BOOLEAN
+    )
+    mask.set_data_type(cudnn.data_type.INT32)
+
+    out = score_mod_graph.binary_select(input0=q_kt_tensor, input1=neg_inf, mask=mask)
+
+    return out
+
+
 @torch_fork_set_rng(seed=0)
 def test_sdpa_with_flexible_graph(cudnn_handle):
 
@@ -254,6 +331,130 @@ def test_sdpa_with_flexible_graph(cudnn_handle):
         neg_inf_tensor: neg_inf_tensor_cpu,
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
+    }
+
+    workspace = torch.empty(
+        graph.get_workspace_size(), device="cuda", dtype=torch.uint8
+    )
+    graph.execute(variant_pack, workspace)
+    torch.cuda.synchronize()
+
+
+@torch_fork_set_rng(seed=0)
+def test_sdpa_with_arrow_mask(cudnn_handle):
+
+    b = 4  # batch size
+    h_q = 12  # query number of heads
+    h_k = 12  # key number of heads
+    h_v = 12  # value number of heads
+    s_q = 256  # maximum sequence length
+    s_kv = 256  # maximum sequence length
+    d = 128  # embedding dimension per head
+
+    attn_scale = 1.0 / math.sqrt(d)
+
+    row_bound_val = 2
+    col_bound_val = 2
+    diag_bound_0_val = 1
+    diag_bound_1_val = 1
+
+    neg_inf_scalar_value = -1e9
+
+    q_dims = (b, h_q, s_q, d)
+    q_strides = (s_q * h_q * d, d, h_q * d, 1)
+    k_dims = (b, h_k, s_kv, d)
+    k_strides = (s_kv * h_k * d, d, h_k * d, 1)
+    v_dims = (b, h_v, s_kv, d)
+    v_strides = (s_kv * h_v * d, d, h_v * d, 1)
+
+    q_gpu = torch.randn(b * s_q * h_q * d).half().cuda().as_strided(q_dims, q_strides)
+    k_gpu = torch.randn(b * s_kv * h_k * d).half().cuda().as_strided(k_dims, k_strides)
+    v_gpu = torch.randn(b * s_kv * h_v * d).half().cuda().as_strided(v_dims, v_strides)
+    o_gpu = torch.empty(b * s_q * h_q * d).half().cuda().as_strided(q_dims, q_strides)
+
+    graph = cudnn.pygraph(
+        io_data_type=cudnn.data_type.HALF,
+        intermediate_data_type=cudnn.data_type.FLOAT,
+        compute_data_type=cudnn.data_type.FLOAT,
+    )
+
+    q = graph.tensor_like(q_gpu)
+
+    k = graph.tensor_like(k_gpu)
+    v = graph.tensor_like(v_gpu)
+
+    neg_inf_tensor_cpu = torch.full((1, 1, 1, 1), neg_inf_scalar_value)
+    row_bound_cpu = torch.full((1, 1, 1, 1), row_bound_val, dtype=torch.int32)
+    col_bound_cpu = torch.full((1, 1, 1, 1), col_bound_val, dtype=torch.int32)
+    diag_bound_0_cpu = torch.full((1, 1, 1, 1), diag_bound_0_val, dtype=torch.int32)
+    diag_bound_1_cpu = torch.full((1, 1, 1, 1), diag_bound_1_val, dtype=torch.int32)
+    row_bound = graph.tensor(
+        name="row_bound",
+        dim=row_bound_cpu.size(),
+        stride=row_bound_cpu.stride(),
+        is_pass_by_value=True,
+        data_type=row_bound_cpu.dtype,
+    )
+    col_bound = graph.tensor(
+        name="col_bound",
+        dim=col_bound_cpu.size(),
+        stride=col_bound_cpu.stride(),
+        is_pass_by_value=True,
+        data_type=col_bound_cpu.dtype,
+    )
+    diag_bound_0 = graph.tensor(
+        name="diag_bound_0",
+        dim=diag_bound_0_cpu.size(),
+        stride=diag_bound_0_cpu.stride(),
+        is_pass_by_value=True,
+        data_type=diag_bound_0_cpu.dtype,
+    )
+    diag_bound_1 = graph.tensor(
+        name="diag_bound_1",
+        dim=diag_bound_1_cpu.size(),
+        stride=diag_bound_1_cpu.stride(),
+        is_pass_by_value=True,
+        data_type=diag_bound_1_cpu.dtype,
+    )
+    neg_inf_tensor = graph.tensor(
+        name="neg_inf_scalar",
+        dim=neg_inf_tensor_cpu.size(),
+        stride=neg_inf_tensor_cpu.stride(),
+        is_pass_by_value=True,
+        data_type=neg_inf_tensor_cpu.dtype,
+    )
+
+    o, _ = graph.sdpa(
+        name="sdpa",
+        q=q,
+        k=k,
+        v=v,
+        is_inference=True,
+        attn_scale=attn_scale,
+        score_mod=partial(
+            arrow_mask,
+            row_bound=row_bound,
+            col_bound=col_bound,
+            diag_bound_0=diag_bound_0,
+            diag_bound_1=diag_bound_1,
+            neg_inf=neg_inf_tensor,
+        ),
+    )
+
+    o.set_output(True).set_dim(q_dims).set_stride(q_strides)
+
+    graph.build([cudnn.heur_mode.A])
+
+    variant_pack = {
+        q: q_gpu,
+        k: k_gpu,
+        v: v_gpu,
+        o: o_gpu,
+        neg_inf_tensor: neg_inf_tensor_cpu,
+        row_bound: row_bound_cpu,
+        col_bound: col_bound_cpu,
+        diag_bound_0: diag_bound_0_cpu,
+        diag_bound_1: diag_bound_1_cpu,
     }
 
     workspace = torch.empty(
