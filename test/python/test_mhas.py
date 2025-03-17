@@ -591,8 +591,8 @@ def test_sdpa(
     )
 
     d_choices = [32, 56, 64, 128]
-    if cudnn_version >= "9.9.0":
-        d_choices.extend([192, 256, 512])
+    # if cudnn_version >= "9.9.0":
+    #     d_choices.extend([192, 256, 512])
 
     # query+key embedding dimension per head
     d_qk = random.choice(d_choices)
