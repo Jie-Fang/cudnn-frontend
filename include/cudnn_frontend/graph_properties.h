@@ -1460,7 +1460,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     using Tensor_t = std::shared_ptr<Tensor_attributes>;
     using Graph_t  = std::shared_ptr<Graph>;
 
-    using AttentionScoreModifier_t = std::function<Tensor_t(Graph_t, Tensor_t)>;
+    using AttentionScoreModifier_t =
+        std::function<Tensor_t(std::shared_ptr<Graph>, std::shared_ptr<Tensor_attributes>)>;
 
     std::optional<bool> is_inference;
     bool alibi_mask   = false;
@@ -1795,7 +1796,8 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     using Tensor_t = std::shared_ptr<Tensor_attributes>;
     using Graph_t  = std::shared_ptr<Graph>;
 
-    using AttentionScoreModifier_t = std::function<Tensor_t(Graph_t, Tensor_t)>;
+    using AttentionScoreModifier_t =
+        std::function<Tensor_t(std::shared_ptr<Graph>, std::shared_ptr<Tensor_attributes>)>;
 
     bool alibi_mask   = false;
     bool padding_mask = false;
