@@ -132,13 +132,14 @@ class test_tensor_ir:
         stride = []
         idx = 0
 
-        if test_tensor.ref_data is None:
-            ori_stride = test_tensor.stride
-            ori_shape = test_tensor.dim
-        else:
-            ori_stride = test_tensor.ref_data.stride()
-            ori_shape = test_tensor.ref_data.shape
+        ori_stride = test_tensor.stride
+        ori_shape = test_tensor.dim
 
+        shape_div = []
+        stride_div = []
+        divisibility = 8
+        stride_div_flag = True
+        has_stride_zero = False
         # Check if tensor is a scalar tensor (all strides 0 and all dims 1 in json definition)
         isScalarTensor = all(s == 0 for s in ori_stride) and all(
             d == 1 for d in ori_shape
@@ -154,19 +155,37 @@ class test_tensor_ir:
                 stride,
                 dtype,
             )
-
         for s, d in zip(ori_stride, ori_shape):
             if idx > 0 and d == 1:
                 shape.append(-1)  # row broadcast need to set broadcast dim to `?`
                 stride.append(0)
+                shape_div.append(1)
+                stride_div.append(1)
+                has_stride_zero = True
             else:
                 if s != 1:
                     stride.append(-1)
+                    shape_div.append(1)
+                    if stride_div_flag and has_stride_zero:
+                        stride_div.append(divisibility)
+                        stride_div_flag = False
+                    else:
+                        stride_div.append(1)
                 else:
                     stride.append(1)
+                    shape_div.append(divisibility)
+                    stride_div.append(1)
                 shape.append(-1)
             idx += 1
-        ty = nv_tensor_ir.TensorType.get(shape=shape, stride=stride, datatype=dtype)
+        if has_stride_zero:
+            stride_div[0] = divisibility
+        ty = nv_tensor_ir.TensorType.get(
+            shape=shape,
+            stride=stride,
+            datatype=dtype,
+            shape_divisibility=shape_div,
+            stride_divisibility=stride_div,
+        )
         return ty, shape, stride, dtype
 
     def calc_ref(self):
@@ -251,28 +270,13 @@ class test_tensor_ir:
         rtol=1e-2,
     ):
         graph_analysis = nv_tensor_ir.GraphAnalysis(module)
-        a_partition_idx, b_partition_idx = -1, -1
-        # Determine partition indices for A and B
-        for i, node in enumerate(self.test_graph.entrance_nodes):
-            partition_type = graph_analysis.get_graph_operand_partition(module, i)
-            if (
-                partition_type
-                == nv_tensor_ir.GraphPartitionType.GRAPH_PARTITION_MAINLOOP_A
-            ):
-                a_partition_idx = i
-            elif (
-                partition_type
-                == nv_tensor_ir.GraphPartitionType.GRAPH_PARTITION_MAINLOOP_B
-            ):
-                b_partition_idx = i
-        # Ensure valid partition indices were found
-        assert (
-            a_partition_idx != -1 and b_partition_idx != -1
-        ), "Invalid partition indices."
-
-        a_tensor_dim = self.test_graph.entrance_nodes[a_partition_idx].output[0].dim
-        b_tensor_dim = self.test_graph.entrance_nodes[b_partition_idx].output[0].dim
-        B, M, N, K = a_tensor_dim[0], a_tensor_dim[1], b_tensor_dim[2], a_tensor_dim[2]
+        m_idx = graph_analysis.get_matmul_m_index()
+        n_idx = graph_analysis.get_matmul_n_index()
+        k_idx = graph_analysis.get_matmul_k_index()
+        B = self.test_graph.entrance_nodes[m_idx[0]].output[0].dim[0]
+        M = self.test_graph.entrance_nodes[m_idx[0]].output[0].dim[m_idx[1]]
+        N = self.test_graph.entrance_nodes[n_idx[0]].output[0].dim[n_idx[1]]
+        K = self.test_graph.entrance_nodes[k_idx[0]].output[0].dim[k_idx[1]]
         problem_size = nv_tensor_ir.GemmProblemSize(B, M, N, K)
         print("problem_size:", B, M, N, K)
         device = torch.device("cuda")
@@ -305,26 +309,30 @@ class test_tensor_ir:
                     )
                 )
                 tensor_desc.append(tensor_operand)
-
-        outputs_gpu = []
-        for node in self.test_graph.nodes:
-            if node.is_output_node():
-                output_tensor = node.output[0]
-
-                gpu_mem = torch.empty(
-                    output_tensor.dim,
-                    dtype=eval(convert_datatype(output_tensor.data_type, "torch")),
+        if not self.ref_outputs:
+            self.calc_ref()
+        outputs_gpu = [
+            torch.as_strided(
+                torch.empty(
+                    tuple(node.output[0].dim),
+                    dtype=eval(convert_datatype(node.output[0].data_type, "torch")),
                     device=device,
-                )
-                outputs_gpu.append(gpu_mem)
-                tensor_desc.append(
-                    nv_tensor_ir.TensorOperandDescriptor(
-                        nv_tensor_ir.TensorDescriptor(
-                            gpu_mem.data_ptr(),
-                            nv_tensor_ir.LayoutDescriptor(gpu_mem.stride()),
-                        )
+                ),
+                size=tuple(node.output[0].dim),
+                stride=tuple(node.output[0].stride),
+            )
+            for node in self.test_graph.nodes
+            if node.is_output_node()
+        ]
+        for torch_gpu in outputs_gpu:
+            tensor_desc.append(
+                nv_tensor_ir.TensorOperandDescriptor(
+                    nv_tensor_ir.TensorDescriptor(
+                        torch_gpu.data_ptr(),
+                        nv_tensor_ir.LayoutDescriptor(torch_gpu.stride()),
                     )
                 )
+            )
 
         args = nv_tensor_ir.ArgumentsView(problem_size, tensor_desc)
 
@@ -489,14 +497,27 @@ class test_tensor_ir:
                     nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type),
                     rsh,
                 )
-        convert_value0 = None
-        convert_value1 = None
-        if lsh is not None and out_type != lsh.type:
-            convert_value0 = nv_tensor_ir.convert(out_type, lsh)
+        out_type_datatype = nv_tensor_ir.get_tensor_datatype(out_type)
+        if lsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(
+            lsh.type
+        ):
+            convert_value0 = nv_tensor_ir.convert(
+                nv_tensor_ir.TensorType.get_from_tensor_type(
+                    lsh.type, out_type_datatype
+                ),
+                lsh,
+            )
         else:
             convert_value0 = lsh
-        if rsh is not None and out_type != rsh.type:
-            convert_value1 = nv_tensor_ir.convert(out_type, rsh)
+        if rsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(
+            rsh.type
+        ):
+            convert_value1 = nv_tensor_ir.convert(
+                nv_tensor_ir.TensorType.get_from_tensor_type(
+                    rsh.type, out_type_datatype
+                ),
+                rsh,
+            )
         else:
             convert_value1 = rsh
         return convert_value0, convert_value1
@@ -692,15 +713,32 @@ class test_tensor_ir:
                         node_map[node] = mlir_value
                     case "matmul":
                         compute_data_type = node.kwargs["compute_data_type"]
-                        node_output = node.output[0]
                         compute_type, _, _, _ = (
                             self.determine_tensor_ir_inout_tensor_type(
                                 node, compute_data_type
                             )
                         )
-                        matmul_value = nv_tensor_ir.matmul(
-                            compute_type, children[0], children[1]
-                        )
+                        lsh = children[0]
+                        rsh = children[1]
+                        if nv_tensor_ir.get_tensor_datatype(
+                            lsh.type
+                        ) != nv_tensor_ir.get_tensor_datatype(rsh.type):
+                            datatype = nv_tensor_ir.get_tensor_datatype(compute_type)
+                            if datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
+                                lsh = nv_tensor_ir.convert(
+                                    nv_tensor_ir.TensorType.get_from_tensor_type(
+                                        lsh.type, datatype
+                                    ),
+                                    lsh,
+                                )
+                            if datatype != nv_tensor_ir.get_tensor_datatype(rsh.type):
+                                rsh = nv_tensor_ir.convert(
+                                    nv_tensor_ir.TensorType.get_from_tensor_type(
+                                        rsh.type, datatype
+                                    ),
+                                    rsh,
+                                )
+                        matmul_value = nv_tensor_ir.matmul(compute_type, lsh, rsh)
                         node_map[node] = matmul_value
                     # POINTWISE:
                     case (
@@ -852,7 +890,10 @@ class test_tensor_ir:
                             converted_x, converted_grad, converted_beta
                         )
                     case "identity":
-                        node_map[node] = node
+                        node_map[node] = nv_tensor_ir.convert(
+                            out_type,
+                            children[0],
+                        )
                     case "conv_wgrad":
                         dy = children[0]
                         w = children[1]

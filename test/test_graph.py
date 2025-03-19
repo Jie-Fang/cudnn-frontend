@@ -287,6 +287,10 @@ class PytorchReference:
         )
 
         # Do computation in compute precision
+        # except for fp8
+        compute_type = (
+            compute_type if not compute_type == torch.float8_e4m3fn else torch.float
+        )
         compute_result = torch.bmm(
             kwargs[lsh_str].to(dtype=compute_type),
             kwargs[rsh_str].to(dtype=compute_type),
@@ -767,6 +771,14 @@ class random_tensor_generator(test_node):
                 device=device,
                 dtype=torch_dtype,
             )
+        elif torch_dtype == torch.float8_e4m3fn:
+            self.output[0].ref_data = torch.randint(
+                -2 if self.dist_mean is None else self.dist_mean,
+                3 if self.dist_sd is None else self.dist_sd,
+                self.kwargs["dim"],
+                requires_grad=False,
+                device=device,
+            ).to(dtype=torch.float8_e4m3fn)
         else:
             if self.init_int:
                 min_value = -2 if self.dist_mean is None else int(self.dist_mean)
@@ -796,17 +808,16 @@ class random_tensor_generator(test_node):
                     device=device,
                     dtype=torch_dtype,
                 )
-
-            if (
-                "stride" in self.kwargs
-                and "is_tensor_ir" in self.kwargs
-                and self.kwargs["is_tensor_ir"]
-            ):
-                self.output[0].ref_data = torch.as_strided(
-                    self.output[0].ref_data,
-                    self.output[0].ref_data.size(),
-                    stride=self.kwargs["stride"],
-                )
+        if (
+            "stride" in self.kwargs
+            and "is_tensor_ir" in self.kwargs
+            and self.kwargs["is_tensor_ir"]
+        ):
+            self.output[0].ref_data = torch.as_strided(
+                self.output[0].ref_data,
+                self.output[0].ref_data.size(),
+                stride=self.kwargs["stride"],
+            )
 
     def initialize_random_tensor(self):
         if self.output[0].ref_data is None:
