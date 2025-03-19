@@ -204,6 +204,84 @@ set_compute_data_type(DataType_t value)
     - compute_data_type
     - name
 
+
+(adalayernorm-forward)=
+## Adaptive Layernorm Forward
+
+The adaptive layernorm operation computes
+
+$$ output = scale*{input - mean \over \sqrt{variance + epsilon}} + bias $$
+
+where the scale and bias vary across samples in a batch.
+
+Normalization happens across features, independently for each sample.
+
+### C++ API
+
+```
+std::array<std::shared_ptr<Tensor_attributes>, 3> adalayernorm(std::shared_ptr<Tensor_attributes>& input,
+                                                            std::shared_ptr<Tensor_attributes>& scale,
+                                                            std::shared_ptr<Tensor_attributes>& bias,
+                                                            Layernorm_attributes attributes); 
+```
+The output array has tensors in order of: `[output, mean, variance]`
+
+AdaLayernorm_attributes is a lightweight structure with setters for providing optional input tensors and other operation attributes:  
+```
+AdaLayernorm_attributes&
+set_name(std::string const&)
+
+AdaLayernorm_attributes&
+set_compute_data_type(DataType_t value)
+```
+
+### Python API
+
+- adalayernorm
+    - norm_forward_phase
+    - input
+    - scale
+    - bias
+    - epsilon
+    - compute_data_type
+    - name
+
+
+## Adaptive Layernorm Backward (DADALN)
+
+The DADALN operation computes data gradient, scale gradient, and bias gradient during backpropagation of an adaptive layernorm forward operation.
+
+### C++ API
+
+```
+std::array<std::shared_ptr<Tensor_attributes>, 3>
+            adalayernorm_backward(std::shared_ptr<Tensor_attributes> dy,
+                          std::shared_ptr<Tensor_attributes> x,
+                          std::shared_ptr<Tensor_attributes> scale,
+                          AdaLayernorm_backward_attributes options);
+```
+The output array has tensors in order of: `[input gradient, scale gradient, bias gradient]`.
+
+AdaLayernorm_backward_attributes is a lightweight structure with setters for providing optional input tensors and other operation attributes:  
+```
+AdaLayernorm_backward_attributes&
+set_name(std::string const&)
+
+AdaLayernorm_backward_attributes&
+set_compute_data_type(DataType_t value)
+```
+
+### Python API
+
+- adalayernorm_backward
+    - dy
+    - x
+    - scale
+    - mean
+    - inv_variance
+    - compute_data_type
+    - name
+
 ## Instancenorm Forward
 
 The instancenorm operation computes

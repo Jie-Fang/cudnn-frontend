@@ -75,7 +75,10 @@ def fetch_cudnn(base_url):
     current_time = time.time()
     for filename in os.listdir("downloads"):
         filepath = os.path.join("downloads", filename)
-        if os.path.isfile(filepath) and current_time - os.path.getmtime(filepath) > 7 * 24 * 60 * 60:
+        if (
+            os.path.isfile(filepath)
+            and current_time - os.path.getmtime(filepath) > 7 * 24 * 60 * 60
+        ):
             print(f"Cleaning up: {filepath}")
             os.remove(filepath)
 
