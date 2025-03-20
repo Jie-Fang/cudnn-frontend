@@ -599,7 +599,7 @@ def test_sdpa(
     # value embedding dimension per head
     d_v = (
         random.choice(d_choices)
-        if (layout == "bshd_bshd_bshd" and not is_ragged)
+        if (layout == "bshd_bshd_bshd")
         else d_qk
     )
     # number of heads
@@ -1028,7 +1028,7 @@ def test_sdpa_backward(
     # value embedding dimension per head
     d_v = (
         random.choice([64, 96, 128])
-        if (layout == "bshd_bshd_bshd" and not is_ragged)
+        if (layout == "bshd_bshd_bshd")
         else d_qk
     )
     # number of heads
