@@ -333,6 +333,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
         // validate options for paged attention
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (d_qk > 128 || d_v > 128), error_code_t::GRAPH_NOT_SUPPORTED, "Paged attention only supported with d_qk and d_v <= 128");
+        
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && is_ragged && detail::get_backend_version() < 90700,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "Paged caches are not supported in combination with ragged offsets.");
@@ -368,11 +370,16 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // version specific validation
         if(prop.major < 10) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_v > 128),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "hidden_dim should be less than or equal to 128");
+        }
+        else if(prop.major == 9) {
             RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_v > 256),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "hidden_dim should be less than or equal to 256");
         }
-        if((detail::get_backend_version() < 90900) && (prop.major == 10)) {
+        else if((detail::get_backend_version() < 90900) && (prop.major == 10)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_v > 128),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "hidden_dim should be less than or equal to 128");
