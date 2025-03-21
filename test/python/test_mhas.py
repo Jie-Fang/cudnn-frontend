@@ -586,7 +586,7 @@ def test_sdpa(
     # key+value sequence length
     s_kv = (
         random.choice([24, 32, 256, 512, 1024, 2048])
-        if layout == "bshd_bshd_bshd" or s_q == 1
+        if layout == "bshd_bshd_bshd"
         else s_q
     )
 
