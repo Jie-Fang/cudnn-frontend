@@ -591,8 +591,9 @@ def test_sdpa(
     )
 
     d_choices = [32, 56, 64, 128]
-    # if cudnn_version >= "9.9.0":
-    #     d_choices.extend([192, 256, 512])
+    # TODO: enable 9.10+
+    if cudnn_version == "9.9.0" and (not is_paged_attention):
+        d_choices.extend([192, 256, 512])
 
     # query+key embedding dimension per head
     d_qk = random.choice(d_choices)
