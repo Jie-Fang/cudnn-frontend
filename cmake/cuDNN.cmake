@@ -12,17 +12,11 @@ string(REGEX MATCH "#define CUDNN_MAJOR [1-9]+" macrodef "${cudnn_version_header
 string(REGEX MATCH "[1-9]+" CUDNN_MAJOR_VERSION "${macrodef}")
 
 function(find_cudnn_library NAME)
-    if(NOT "${ARGV1}" STREQUAL "OPTIONAL")
-        set(_cudnn_required "REQUIRED")
-    else()
-        set(_cudnn_required "")
-    endif()
-
     find_library(
         ${NAME}_LIBRARY ${NAME} "lib${NAME}.so.${CUDNN_MAJOR_VERSION}"
         HINTS $ENV{CUDNN_LIBRARY_PATH} ${CUDNN_LIBRARY_PATH} $ENV{CUDNN_PATH} ${CUDNN_PATH} ${Python_SITEARCH}/nvidia/cudnn ${CUDAToolkit_LIBRARY_DIR}
         PATH_SUFFIXES lib64 lib/x64 lib
-        ${_cudnn_required}
+        REQUIRED
     )
     
     if(${NAME}_LIBRARY)
@@ -36,6 +30,8 @@ function(find_cudnn_library NAME)
     else()
         message(STATUS "${NAME} not found.")
     endif()
+
+
 endfunction()
 
 find_cudnn_library(cudnn)
@@ -91,22 +87,22 @@ if(CUDNN_MAJOR_VERSION EQUAL 8)
         CUDNN::cudnn_ops_infer
     )
 elseif(CUDNN_MAJOR_VERSION EQUAL 9)
+    find_cudnn_library(cudnn_cnn)
+    find_cudnn_library(cudnn_adv)
     find_cudnn_library(cudnn_graph)
+    find_cudnn_library(cudnn_ops)
     find_cudnn_library(cudnn_engines_runtime_compiled)
-    find_cudnn_library(cudnn_ops OPTIONAL)
-    find_cudnn_library(cudnn_cnn OPTIONAL)
-    find_cudnn_library(cudnn_adv OPTIONAL)
-    find_cudnn_library(cudnn_engines_precompiled OPTIONAL)
-    find_cudnn_library(cudnn_heuristic OPTIONAL)
+    find_cudnn_library(cudnn_engines_precompiled)
+    find_cudnn_library(cudnn_heuristic)
 
     target_link_libraries(
         CUDNN::cudnn_all
         INTERFACE
-        CUDNN::cudnn_graph
-        CUDNN::cudnn_engines_runtime_compiled
+        CUDNN::cudnn_adv
         CUDNN::cudnn_ops
         CUDNN::cudnn_cnn
-        CUDNN::cudnn_adv
+        CUDNN::cudnn_graph
+        CUDNN::cudnn_engines_runtime_compiled
         CUDNN::cudnn_engines_precompiled
         CUDNN::cudnn_heuristic
     )
