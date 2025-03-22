@@ -197,7 +197,12 @@ test_case(phase_t phase) {
     bool has_attn_bias      = false;
 
     bool is_ragged = (phase == phase_t::prefill);
-    if (cudnnGetVersion() < 90500) {
+    if (cudnnGetVersion() < 90700 && is_ragged) {
+        SKIP("Test requires cudnn 9.7.0 or above");
+        return;
+    }
+
+    else if (cudnnGetVersion() < 90500) {
         SKIP("Test requires cudnn 9.5.0 or above");
         return;
     }

@@ -315,6 +315,10 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with max_s_q <= max_s_kv.");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (s_q * attributes.left_bound.value() == s_kv * attributes.left_bound.value()) && (detail::get_backend_version() <= 90900) && (prop.major == 9) && attributes.has_causal_mask_bottom_right(),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "On Hopper architecture, this specific combination of s_q, s_kv, and left_bound + right_bound + bottom right diagonal alignment is not supported for backend version 9.9 or below");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (! attributes.has_causal_like_masking() || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Left and right bounds are only supported with is_dropout=False, is_bias=False. Further is_ragged==True is only allowed when padding_mask=True. Lastly the diagonal alignment must be set.");
@@ -982,6 +986,10 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && attributes.left_bound.value() <= 0,
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than or equals to zero when set.");
+
+         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (s_q * attributes.left_bound.value() == s_kv * attributes.left_bound.value()) && (detail::get_backend_version() <= 90900) && (prop.major == 9) && attributes.has_causal_mask_bottom_right(),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "On Hopper architecture, this specific combination of s_q, s_kv, and left_bound + right_bound + bottom right diagonal alignment is not supported for backend version 9.9 or below");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && (!attributes.padding_mask) && s_q > s_kv,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
