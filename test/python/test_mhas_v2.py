@@ -20,7 +20,6 @@ import math
 import os
 import sys
 from looseversion import LooseVersion
-from test_utils import torch_fork_set_rng
 
 # fmt: off
 
@@ -46,7 +45,7 @@ def tname_hash(tname):
         hash = (hash * 65599 + ord(chr)) & (2**31 - 1)
     return hash
 
-def get_layout_strides(shape, indices, gaps = [0, 0, 0, 0]):
+def get_layout_strides(shape, indices = [0, 1, 2, 3], gaps = [0, 0, 0, 0]):
     assert len(shape) == len(gaps) == 4 and sorted(indices) == [0, 1, 2, 3], "wrong input"
     strides = [0, 0, 0, 0]
     curr_stride = 1
@@ -114,7 +113,7 @@ def convert_to_cudnn_type(torch_type):
     else:
         assert False, "unsupported tensor data type"
 
-def approx_equal(actual, expected, rtol, atol, tag, disp_elems):
+def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
     mismatches = torch.where(torch.isclose(actual.float(), expected, rtol=rtol, atol=atol) == False)
     mismatch_cnt = mismatches[0].numel()
     num_elements = torch.numel(actual)
@@ -132,8 +131,61 @@ def approx_equal(actual, expected, rtol, atol, tag, disp_elems):
         else:
             print(f"Total {mismatch_cnt} mismatches in {num_elements} elements when validating '{tag}' results")
     else:
-        print(f"No mismatches found in '{tag}' results")
+        print(f"Numerical divergence of '{tag}' is within limits")
+
+    # Check if areas before and after the tensor were overwritten (treated as one numerical mismatch).
+    if sepbuf is not None and not torch.all(torch.isnan(sepbuf)).item():
+        print(f"ERROR: buffer '{tag}' overwritten outside its boundaries")
+        mismatch_cnt += 1
+
+    # Check if unused elements of the tensor were overwritten (treated as one numerical mismatch).
+    # Note that this check destroys computed data (overwrites them with NaN-s).
+    if rawbuf is not None:
+        actual.fill_(float('nan'))
+        if not torch.all(torch.isnan(rawbuf)).item():
+            print(f"ERROR: unused gaps of '{tag}' tensor were overwritten")
+            mismatch_cnt += 1
+
     return mismatch_cnt
+
+def alloc_tensor(shape, data_type, *, elems=None, strides=None, rng=None, mean=0.0, std=1.0, margins=512):
+    # Arguments elems/strides must be both specified or both None.
+    if elems is None and strides is None:
+        if hasattr(shape, '__iter__'):
+            strides = []
+            prod = 1
+            for dim in reversed(shape):
+                strides.insert(0, prod)
+                prod *= int(dim)
+            elems = prod
+        else:
+            elems = int(shape)
+            strides = (1,)
+            shape = (shape,)
+    else:
+        assert elems is not None and strides is not None, "wrong input"
+
+    assert margins >= 0 and type(margins) == int, "wrong input"
+
+    rawbuf = torch.empty(elems+2*margins, dtype=data_type, device="cuda")
+    if torch.is_floating_point(rawbuf):
+        rawbuf.fill_(float('nan'))
+    else:
+        rawbuf.fill_(-1)
+
+    tensor = torch.as_strided(rawbuf, shape, strides, storage_offset=margins)
+    sepbuf = (torch.as_strided(rawbuf, (2, margins), (elems+margins, 1), storage_offset=0) if margins > 0 else None)
+
+    # Use this initialization for floating point types only.
+    if rng is not None:
+        tensor.normal_(mean=mean, std=std, generator=rng)
+
+    # Not returning the raw buffer, if the data tensor has no gaps between valid elements.
+    # If there are unused gaps, then we want to check that those gaps were not overwritten.
+    if math.prod(shape) == elems:
+        rawbuf = None
+
+    return tensor, sepbuf, rawbuf
 
 def bool_cli_option(org_val, request, cli_opt):
     bool_map = {"True": True, "False": False}
@@ -143,19 +195,23 @@ def bool_cli_option(org_val, request, cli_opt):
 
 class testConfig:
     # To prevent creation of misspelled variables, listing all local variables of the class.
-    __slots__ = ['rng_geom', 'geom_seed', 'gpu_info', 'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 
-                 'max_s_kv', 'min_d_qk', 'max_d_qk', 'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 
-                 'max_blk_sz', 'head_group', 'is_infer', 'is_causal', 'is_alibi', 'is_paged', 'is_bias', 'is_padding', 
-                 'is_causal_br', 'is_sliding_w', 'is_dropout', 'is_ragged', 'is_determin', 'data_type', 'batches', 
-                 'd_qk', 'd_v', 's_q', 's_kv', 'h_q', 'h_k', 'h_v', 'block_size', 'in_layout', 'out_layout',
-                 'shape_q', 'gaps_q', 'stride_q', 'offset_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k',
-                 'offset_k', 'elems_k', 'shape_v', 'gaps_v', 'stride_v', 'offset_v', 'elems_v', 'shape_o',
-                 'gaps_o', 'stride_o', 'elems_o']
+    __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_info', 'min_batches', 'max_batches', 
+                 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 'min_d_v', 'max_d_v', 
+                 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 'is_infer', 'is_causal', 
+                 'is_alibi', 'is_paged', 'is_bias', 'is_padding', 'is_causal_br', 'is_sliding_w', 'is_dropout', 
+                 'is_ragged', 'is_determin', 'data_type', 'batches', 'd_qk', 'd_v', 's_q', 's_kv', 
+                 'h_q', 'h_k', 'h_v', 'block_size', 'in_layout', 'out_layout', 'shape_q', 'gaps_q', 
+                 'stride_q', 'offset_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'offset_k', 'elems_k', 
+                 'shape_v', 'gaps_v', 'stride_v', 'offset_v', 'elems_v', 'shape_o', 'gaps_o', 'stride_o', 'elems_o']
 
-    # Keyword-only arguments after "self".
     def __init__(self):
+        assert torch.cuda.is_available(), "no CUDA device"
+
         self.rng_geom    = random.Random()
         self.geom_seed   = None
+
+        self.rng_data    = torch.Generator(device="cuda")
+        self.data_seed   = None
 
         try:
             gpu_name = torch.cuda.get_device_name()
@@ -256,12 +312,14 @@ class testConfig:
             if v == None and not (k.startswith("max") or k.startswith("min")):
                 assert False, f"ERROR: config value '{k}' not set"
 
+    # Keyword-only arguments after "self".
     def setBatches(self, *, min_batches=1, max_batches=8):
         assert type(min_batches) == int and type(max_batches) == int, "wrong arg types"
         assert min_batches > 0 and max_batches > 0 and min_batches <= max_batches, "invalid range"
         self.min_batches = min_batches
         self.max_batches = max_batches
 
+    # Keyword-only arguments after "self".
     def setSequences(self, *, min_s_q=1, max_s_q=16, min_s_kv=1, max_s_kv=16):
         arg_list = [min_s_q, max_s_q, min_s_kv, max_s_kv]
         assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
@@ -271,6 +329,7 @@ class testConfig:
         self.min_s_kv = min_s_kv
         self.max_s_kv = max_s_kv
 
+    # Keyword-only arguments after "self".
     def setVectors(self, *, min_d_qk=1, max_d_qk=64, min_d_v=1, max_d_v=64):
         arg_list = [min_d_qk, max_d_qk, min_d_v, max_d_v]
         assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
@@ -280,12 +339,14 @@ class testConfig:
         self.min_d_v  = min_d_v
         self.max_d_v  = max_d_v
 
+    # Keyword-only arguments after "self".
     def setHeads(self, *, min_h_qkv=1, max_h_qkv=16):
         assert type(min_h_qkv) == int and type(max_h_qkv) == int, "wrong arg types"
         assert min_h_qkv > 0 and max_h_qkv > 0 and min_h_qkv <= max_h_qkv, "invalid range"
         self.min_h_qkv = min_h_qkv
         self.max_h_qkv = max_h_qkv
 
+    # Keyword-only arguments after "self".
     def setBlockSize(self, *, min_blk_sz=1, max_blk_sz=128):
         assert type(min_blk_sz) == int and type(max_blk_sz) == int, "wrong arg types"
         assert min_blk_sz > 0 and max_blk_sz > 0 and min_blk_sz <= max_blk_sz, "invalid range"
@@ -298,6 +359,7 @@ class testConfig:
             print(f"\nTest #{test_no[0]} of {test_no[1]}")
             print(f"test_name    = {request.node.name}")
             print(f"geom_seed    = {self.geom_seed}")
+            print(f"data_seed    = {self.data_seed}")
             print(f"gpu_info     = {self.gpu_info}")
             print(f"head_group   = {self.head_group}")
             print(f"layout       = {self.in_layout}->{self.out_layout}")
@@ -320,8 +382,7 @@ class testConfig:
             print(f"is_infer     = {self.is_infer}")
             print(f"is_causal    = {self.is_causal}")
             print(f"is_alibi     = {self.is_alibi}")
-            print(f"is_paged     = {self.is_paged}")
-            print(f"block_size   = {self.block_size}")
+            print(f"is_paged     = {self.is_paged} (block_size={self.block_size})")
             print(f"is_bias      = {self.is_bias}")
             print(f"is_padding   = {self.is_padding}")
             print(f"is_ragged    = {self.is_ragged}")
@@ -331,11 +392,12 @@ class testConfig:
             print(f"is_determin  = {self.is_determin}")
             print(f"data_type    = {self.data_type}")
             if reg_run:
-                print(f"repro_cmd    = {request.node.path.name}::{request.node.name} --geom_seed {self.geom_seed}")
+                cmd_opts = f"--geom_seed {self.geom_seed} --data_seed {self.data_seed}"
+                print(f"repro_cmd    = {request.node.path.name}::{request.node.name} {cmd_opts}")
         elif request.config.option.dryrun == 1:
-            print(f"\npytest -vv -s -ra --tb=short {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed}")
+            print(f"\npytest -vv -s -rA --tb=short {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 2:
-            print(f"\npytest -vv -s -ra --tb=short {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
+            print(f"\npytest -vv -s -rA --tb=short {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
         else:
             assert False, "wrong --dryrun command line option"
 
@@ -346,11 +408,14 @@ class testConfig:
 
         # Get the initial seed from the 'test_no' sequence. Add to it the test name hash to generate unique RNG seed.
         self.geom_seed = test_no[2] + tname_hash(request.node.name)
+        self.data_seed = test_no[2]
 
         # Overwrite RNG seed from the command line.
         self.geom_seed = int(request.config.option.geom_seed) if request.config.option.geom_seed != None else self.geom_seed
+        self.data_seed = int(request.config.option.data_seed) if request.config.option.data_seed != None else self.data_seed
 
         self.rng_geom.seed(self.geom_seed)
+        self.rng_data.manual_seed(self.data_seed)
 
         self.head_group   = head_group
         self.data_type    = data_type
@@ -572,11 +637,14 @@ class testConfig:
 
         # Get the initial seed from the 'test_no' sequence. Add to it the test name hash to generate unique RNG seed.
         self.geom_seed = test_no[2] + tname_hash(request.node.name)
+        self.data_seed = test_no[2]
 
-        # Overwrite RNG seed from the command line.
+        # Overwrite RNG seeds from the command line.
         self.geom_seed = int(request.config.option.geom_seed) if request.config.option.geom_seed != None else self.geom_seed
+        self.data_seed = int(request.config.option.data_seed) if request.config.option.data_seed != None else self.data_seed
 
         self.rng_geom.seed(self.geom_seed)
+        self.rng_data.manual_seed(self.data_seed)
 
         self.head_group     = head_group
         self.data_type      = data_type
@@ -1112,6 +1180,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     head_group   = cfg.head_group
     data_type    = cfg.data_type
+    rng_data     = cfg.rng_data
 
     is_causal    = cfg.is_causal
     is_alibi     = cfg.is_alibi
@@ -1213,19 +1282,34 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     qkv_num_elems = elems_q + elems_k + elems_v
 
-    qkv_gpu = torch.randn(qkv_num_elems, dtype=data_type, device="cuda") - 0.5
-    q_gpu = torch.as_strided(qkv_gpu, shape_q, stride_q, storage_offset=offset_q)
-    k_gpu = torch.as_strided(qkv_gpu, shape_k, stride_k, storage_offset=offset_k)
-    v_gpu = torch.as_strided(qkv_gpu, shape_v, stride_v, storage_offset=offset_v)
-    bias_gpu = (torch.randn(1, h_q, s_q, s_kv, device="cuda", dtype=data_type) if is_bias else None)
+    if offset_q + offset_k + offset_v == 0:
+        q_gpu = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q, rng=rng_data, mean=-0.5, std=1.0)
+        k_gpu = alloc_tensor(shape_k, data_type, elems=elems_k, strides=stride_k, rng=rng_data, mean=-0.5, std=1.0)
+        v_gpu = alloc_tensor(shape_v, data_type, elems=elems_v, strides=stride_v, rng=rng_data, mean=-0.5, std=1.0)
+        bias_gpu = (alloc_tensor((1, h_q, s_q, s_kv), data_type, rng=rng_data, mean=0.0, std=1.0) if is_bias else None)
+    else:
+        qkv_gpu = torch.randn(qkv_num_elems, dtype=data_type, generator=rng_data, device="cuda") - 0.5
+        q_gpu = torch.as_strided(qkv_gpu, shape_q, stride_q, storage_offset=offset_q)
+        k_gpu = torch.as_strided(qkv_gpu, shape_k, stride_k, storage_offset=offset_k)
+        v_gpu = torch.as_strided(qkv_gpu, shape_v, stride_v, storage_offset=offset_v)
+        bias_gpu = (torch.randn(1, h_q, s_q, s_kv, dtype=data_type, generator=rng_data, device="cuda") if is_bias else None)
 
     if not is_infer:
-        dQKV_gpu = torch.empty(qkv_num_elems, dtype=data_type, device="cuda")
-        dQ_gpu = torch.as_strided(dQKV_gpu, shape_q, stride_q, storage_offset=offset_q)
-        dK_gpu = torch.as_strided(dQKV_gpu, shape_k, stride_k, storage_offset=offset_k)
-        dV_gpu = torch.as_strided(dQKV_gpu, shape_v, stride_v, storage_offset=offset_v)
-        dO_gpu = 0.1 * torch.randn(elems_o, dtype=data_type, device="cuda").as_strided(shape_o, stride_o)
-        dBias_gpu = (torch.randn(1, h_q, s_q, s_kv, device="cuda", dtype=data_type) if is_bias else None)
+        if offset_q + offset_k + offset_v == 0:
+            (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q)
+            (dK_gpu, dK_sep, dK_raw) = alloc_tensor(shape_k, data_type, elems=elems_k, strides=stride_k)
+            (dV_gpu, dV_sep, dV_raw) = alloc_tensor(shape_v, data_type, elems=elems_v, strides=stride_v)
+            (dBias_gpu, dBias_sep, dBias_raw) = (alloc_tensor((1, h_q, s_q, s_kv), data_type) if is_bias else (None, None, None))
+            dO_gpu = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o, rng=rng_data, mean=0.0, std=0.1)
+        else:
+            dQKV_gpu = torch.empty(qkv_num_elems, dtype=data_type, device="cuda")
+            dQ_gpu = torch.as_strided(dQKV_gpu, shape_q, stride_q, storage_offset=offset_q)
+            dK_gpu = torch.as_strided(dQKV_gpu, shape_k, stride_k, storage_offset=offset_k)
+            dV_gpu = torch.as_strided(dQKV_gpu, shape_v, stride_v, storage_offset=offset_v)
+            dBias_gpu = (torch.empty((1, h_q, s_q, s_kv), dtype=data_type, device="cuda") if is_bias else None)
+            dO_gpu = 0.1 * torch.randn(elems_o, dtype=data_type, generator=rng_data, device="cuda").as_strided(shape_o, stride_o)
+            dQ_sep = dK_sep = dV_sep = dBias_sep = None
+            dQ_raw = dK_raw = dV_raw = dBias_raw = None
 
     seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(batches, s_q, s_kv, layout, head_group, is_padding, is_sliding_w or is_causal_br)
 
@@ -1256,9 +1340,8 @@ def exec_sdpa(cfg, request, cudnn_handle):
             seq_len_kv_gpu,
         )
 
-    o_gpu = torch.empty(elems_o, dtype=data_type, device="cuda").as_strided(shape_o, stride_o)
-
-    stats_gpu = (torch.empty(batches, h_q, s_q, 1, dtype=torch.float32, device="cuda") if not is_infer else None)
+    (o_gpu, o_sep, o_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o)
+    (stats_gpu, stats_sep, stats_raw) = (alloc_tensor((batches, h_q, s_q, 1), torch.float32) if not is_infer else (None, None, None))
 
     container_k_gpu = None
     container_v_gpu = None
@@ -1348,10 +1431,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
-        print("ERROR: not supported forward graph.", e)
+        print(f"ERROR: not supported forward graph. {e}")
         pytest.xfail("not supported forward graph")
     except Exception as e:
-        print("ERROR: unexpected exception during forward graph validate.", e)
+        print(f"ERROR: unexpected '{e.__class__.__name__}' exception during forward graph validate. {e}")
         pytest.fail("unexpected exception during forward graph validate", pytrace=False)
 
     try:
@@ -1360,10 +1443,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
         graph.check_support()
         graph.build_plans()
     except cudnn.cudnnGraphNotSupportedError as e:
-        print("ERROR: not supported forward graph after validate.", e)
+        print(f"ERROR: not supported forward graph after validate. {e}")
         pytest.xfail("not supported forward graph after validate")
     except Exception as e:
-        print("ERROR: Unexpected exception after forward validate.", e)
+        print(f"ERROR: Unexpected '{e.__class__.__name__}' exception after forward validate. {e}")
         pytest.fail("unexpected exception after forward validate", pytrace=False)
 
     variant_pack = {
@@ -1389,9 +1472,14 @@ def exec_sdpa(cfg, request, cudnn_handle):
         variant_pack[offset] = offset_gpu
 
     # Execute forward cuDNN graph
-    workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+    (workspace, ws_sep, _) = alloc_tensor(graph.get_workspace_size(), torch.uint8)
     graph.execute(variant_pack, workspace, handle=cudnn_handle)
     torch.cuda.synchronize()
+
+    if not torch.all(ws_sep==-1).item():
+        print("ERROR: forward workspace overwritten outside its boundaries")
+        print(ws_sep)
+        pytest.fail("forward workspace overwritten outside boundaries", pytrace=False)
 
     if not is_infer:
         if cudnn_version < "8.9.6" and is_padding:
@@ -1474,10 +1562,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
         try:
             graph.validate()
         except cudnn.cudnnGraphNotSupportedError as e:
-            print("ERROR: not supported backward graph.", e)
+            print(f"ERROR: not supported backward graph. {e}")
             pytest.xfail("not supported backward graph")
         except Exception as e:
-            print("ERROR: unexpected exception during backward graph validate.", e)
+            print(f"ERROR: unexpected '{e.__class__.__name__}' exception during backward graph validate. {e}")
             pytest.fail("unexpected exception during backward graph validate", pytrace=False)
 
         try:
@@ -1486,10 +1574,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
             graph.check_support()
             graph.build_plans()
         except cudnn.cudnnGraphNotSupportedError as e:
-            print("ERROR: not supported backward graph after validate.", e)
+            print(f"ERROR: not supported backward graph after validate. {e}")
             pytest.xfail("not supported backward graph after validate")
         except Exception as e:
-            print("ERROR: unexpected exception after backward validate.", e)
+            print(f"ERROR: unexpected '{e.__class__.__name__}' exception after backward validate. {e}")
             pytest.fail("unexpected exception after backward validate", pytrace=False)
 
         variant_pack = {
@@ -1517,9 +1605,14 @@ def exec_sdpa(cfg, request, cudnn_handle):
             variant_pack[offset] = offset_gpu
 
         # Execute backward cuDNN graph
-        workspace = torch.empty(graph.get_workspace_size(), device="cuda", dtype=torch.uint8)
+        (workspace, ws_sep, _) = alloc_tensor(graph.get_workspace_size(), torch.uint8)
         graph.execute(variant_pack, workspace, handle=cudnn_handle)
         torch.cuda.synchronize()
+
+        if not torch.all(ws_sep==-1).item():
+            print("ERROR: backward workspace overwritten outside its boundaries")
+            print(ws_sep)
+            pytest.fail("backward workspace overwritten outside boundaries", pytrace=False)
 
     bias_ref = None
     rng_dump_ref = None
@@ -1593,10 +1686,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     diffs = request.config.option.diffs
 
-    err_count += approx_equal(o_gpu, o_ref, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
+    err_count += approx_equal(o_gpu, o_ref, o_sep, o_raw, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
 
     if not is_infer:
-        err_count += approx_equal(stats_gpu, stats_ref, atol=2e-2, rtol=2e-2, tag="stats", disp_elems=diffs)
+        err_count += approx_equal(stats_gpu, stats_ref, stats_sep, stats_raw, atol=2e-2, rtol=2e-2, tag="stats", disp_elems=diffs)
 
         inputs_ref = [q_ref, k_ref, v_ref]
         if is_bias:
@@ -1626,18 +1719,18 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
         torch.cuda.synchronize()
 
-        err_count += approx_equal(dQ_gpu, dQ_ref, atol=2e-2, rtol=2e-2, tag="dQ", disp_elems=diffs)
-        err_count += approx_equal(dK_gpu, dK_ref, atol=2e-2 if data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dK", disp_elems=diffs)
-        err_count += approx_equal(dV_gpu, dV_ref, atol=2e-2 if data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dV", disp_elems=diffs)
+        err_count += approx_equal(dQ_gpu, dQ_ref, dQ_sep, dQ_raw, atol=2e-2, rtol=2e-2, tag="dQ", disp_elems=diffs)
+        err_count += approx_equal(dK_gpu, dK_ref, dK_sep, dK_raw, atol=2e-2 if data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dK", disp_elems=diffs)
+        err_count += approx_equal(dV_gpu, dV_ref, dV_sep, dV_raw, atol=2e-2 if data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dV", disp_elems=diffs)
         if is_bias:
-            err_count += approx_equal(dBias_gpu, dBias_ref, atol=2e-2, rtol=2e-2, tag="dBias", disp_elems=diffs)
+            err_count += approx_equal(dBias_gpu, dBias_ref, dBias_sep, dBias_raw, atol=2e-2, rtol=2e-2, tag="dBias", disp_elems=diffs)
 
     if err_count != 0:
-        print(f"ERROR: disallowed mismatches")
+        print("ERROR: disallowed mismatches")
         pytest.fail("disallowed mismatches", pytrace=False)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def config0():
     cfg = testConfig()
     cfg.setBatches(min_batches=2, max_batches=2)
@@ -1659,7 +1752,6 @@ def config0():
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-@torch_fork_set_rng(seed=0)
 def test_sdpa_fixed_fwd(config0, test_no, data_type, is_infer, head_group, in_layout, is_causal, request, cudnn_handle):
     config0.fixed_layout(test_no, is_infer, data_type, head_group, in_layout, is_causal, request)
     exec_sdpa(config0, request, cudnn_handle)
@@ -1676,12 +1768,11 @@ def test_sdpa_fixed_fwd(config0, test_no, data_type, is_infer, head_group, in_la
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [False], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-@torch_fork_set_rng(seed=0)
 def test_sdpa_fixed_bwd(config0, test_no, data_type, is_infer, head_group, in_layout, is_causal, request, cudnn_handle):
     config0.fixed_layout(test_no, is_infer, data_type, head_group, in_layout, is_causal, request)
     exec_sdpa(config0, request, cudnn_handle)
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def config1():
     cfg = testConfig()
     cfg.setBatches(max_batches=8)
@@ -1703,7 +1794,6 @@ def config1():
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-@torch_fork_set_rng(seed=0)
 def test_sdpa_random_fwd(config1, test_no, data_type, is_infer, head_group, layout, is_causal, request, cudnn_handle):
     config1.random_layout(test_no, is_infer, data_type, head_group, layout, is_causal, request)
     exec_sdpa(config1, request, cudnn_handle)
@@ -1720,7 +1810,6 @@ def test_sdpa_random_fwd(config1, test_no, data_type, is_infer, head_group, layo
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [False], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-@torch_fork_set_rng(seed=0)
 def test_sdpa_random(config1, test_no, data_type, is_infer, head_group, layout, is_causal, request, cudnn_handle):
     config1.random_layout(test_no, is_infer, data_type, head_group, layout, is_causal, request)
     exec_sdpa(config1, request, cudnn_handle)
