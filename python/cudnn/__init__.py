@@ -196,3 +196,5 @@ if is_windows():
     load_cudnn()
 else:
     _dlopen_cudnn()
+
+from .graph import graph, jit, graph_cache
