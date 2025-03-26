@@ -12,8 +12,12 @@ from data_types import DataType, convert_datatype
 def cal_shapeK(input_data_type):
     if input_data_type in [DataType.FLOAT, DataType.INT32]:
         return 8
-    else:
+    elif input_data_type in [DataType.FP8_E4M3]:
+        return 32
+    elif input_data_type in [DataType.HALF, DataType.BFLOAT16]:
         return 16
+    else:
+        raise ValueError(f"Unsupported data type: {input_data_type}")
 
 
 def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
@@ -111,6 +115,44 @@ def find_mismatches(tensor_a, tensor_b, atol, rtol):
         )
 
 
+def calculate_divisibility(out_stride):
+    """Calculate shape and stride divisibility for tensor operations.
+
+    Args:
+        out_stride: List of stride values
+
+    Returns:
+        Tuple of (shape_div, stride_div) lists containing divisibility values
+    """
+    shape_div = []
+    stride_div = []
+    divisibility = 1
+    stride_div_flag = True
+    has_stride_zero = False
+
+    for s in out_stride:
+        if s == 0:
+            shape_div.append(1)
+            stride_div.append(1)
+            has_stride_zero = True
+        else:
+            if s != 1:
+                shape_div.append(1)
+                if stride_div_flag and has_stride_zero:
+                    stride_div.append(divisibility)
+                    stride_div_flag = False
+                else:
+                    stride_div.append(1)
+            else:
+                shape_div.append(divisibility)
+                stride_div.append(1)
+
+    if has_stride_zero:
+        stride_div[0] = divisibility
+
+    return shape_div, stride_div
+
+
 class test_tensor_ir:
     def __init__(self, test_graph):
         self.test_graph = test_graph
@@ -135,11 +177,6 @@ class test_tensor_ir:
         ori_stride = test_tensor.stride
         ori_shape = test_tensor.dim
 
-        shape_div = []
-        stride_div = []
-        divisibility = 8
-        stride_div_flag = True
-        has_stride_zero = False
         # Check if tensor is a scalar tensor (all strides 0 and all dims 1 in json definition)
         isScalarTensor = all(s == 0 for s in ori_stride) and all(
             d == 1 for d in ori_shape
@@ -159,26 +196,16 @@ class test_tensor_ir:
             if idx > 0 and d == 1:
                 shape.append(-1)  # row broadcast need to set broadcast dim to `?`
                 stride.append(0)
-                shape_div.append(1)
-                stride_div.append(1)
-                has_stride_zero = True
             else:
                 if s != 1:
                     stride.append(-1)
-                    shape_div.append(1)
-                    if stride_div_flag and has_stride_zero:
-                        stride_div.append(divisibility)
-                        stride_div_flag = False
-                    else:
-                        stride_div.append(1)
                 else:
                     stride.append(1)
-                    shape_div.append(divisibility)
-                    stride_div.append(1)
                 shape.append(-1)
             idx += 1
-        if has_stride_zero:
-            stride_div[0] = divisibility
+
+        shape_div, stride_div = calculate_divisibility(stride)
+
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
             stride=stride,
@@ -683,12 +710,17 @@ class test_tensor_ir:
                             children[0].type
                         )
                         output_datatype = nv_tensor_ir.get_tensor_datatype(out_type)
+
+                        shape_div, stride_div = calculate_divisibility(out_stride)
+
                         if input_datatype != output_datatype:
                             convert_value = nv_tensor_ir.convert(
                                 nv_tensor_ir.TensorType.get(
                                     shape=out_shape,
                                     stride=out_stride,
                                     datatype=output_datatype,
+                                    shape_divisibility=shape_div,
+                                    stride_divisibility=stride_div,
                                 ),
                                 children[0],
                             )
@@ -705,6 +737,8 @@ class test_tensor_ir:
                                 shape=out_shape,
                                 stride=out_stride,
                                 datatype=output_datatype,
+                                shape_divisibility=shape_div,
+                                stride_divisibility=stride_div,
                             ),
                             convert_value,
                             reduction_dimensions,
