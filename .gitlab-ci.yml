@@ -87,6 +87,17 @@ before_script:
             junit: result-junit.xml
         expire_in: 1 week
 
+.mha_v2_tests:template:
+    stage: mha_v2_tests
+    script:
+        - ci/run_test_mhas_v2.sh
+    # Upload test report to gitlab
+    artifacts:
+        when: always
+        reports:
+            junit: result-junit.xml
+        expire_in: 1 week
+
 .pycudnntest:template:
     stage: pycudnnTest
     script:
@@ -217,6 +228,7 @@ stages:
     - cpp_tests
     - python_samples
     - python_tests
+    - mha_v2_tests
     - pycudnnTest
     - L4_graph_runner
     - thunder
@@ -238,7 +250,17 @@ cpp_samples:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .cpp_samples:template
     needs: ["build:cudnn_dev_latest"]
-    
+
+mha_v2_tests:cudnn_dev_latest:
+    extends:
+        - .default_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .fetch_cudnn_dev:template
+        - .mha_v2_tests:template
+    needs: ["build:cudnn_dev_latest"]
+    resource_group: memory_heavy_${ARCH}
+
 python_tests:cudnn_dev_latest:
     extends:
         - .default_job_template
@@ -302,7 +324,17 @@ cpp_samples:cudnn_rel_latest:
         - .fetch_cudnn_rel:template
         - .cpp_samples:template
     needs: ["build:cudnn_rel_latest"]
-    
+
+mha_v2_tests:cudnn_rel_latest:
+    extends:
+        - .default_job_template
+        - .device_matrix:template
+        - .cudnn_rel_image:template
+        - .fetch_cudnn_rel:template
+        - .mha_v2_tests:template
+    needs: ["build:cudnn_rel_latest"]
+    resource_group: memory_heavy_${ARCH}
+
 python_tests:cudnn_rel_latest:
     extends:
         - .default_job_template
@@ -448,6 +480,18 @@ cpp_samples:cudnn_local_source:
         - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
         - echo $LD_LIBRARY_PATH
     
+mha_v2_tests:cudnn_local_source:
+    extends:
+        - .manual_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .fetch_cudnn_dev:template
+        - .mha_v2_tests:template
+    needs: ["build:cudnn_local_source"]
+    before_script:
+        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
+        - echo $LD_LIBRARY_PATH
+
 python_tests:cudnn_local_source:
     extends:
         - .manual_job_template
