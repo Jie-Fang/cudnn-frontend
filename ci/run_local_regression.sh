@@ -8,9 +8,13 @@
 # Function to display help message
 show_help() {
     echo "Usage: "
+    echo ""
     echo "export CUDNN_PATH=/path/to/cudnn  eg. export CUDNN_PATH=/home/scratch.agopal_sw/cudnn_frontend_0.9/debug_cudnn"
     echo "export CUDA_PATH=/path/to/cuda  eg. export CUDA_PATH=/home/scratch.agopal_sw/cuda_12.8"
+    echo ""
     echo "source ci/run_local_regression.sh [--help] --build_fe=true|false (default=false)"
+    echo ""
+    echo ""
     echo ""
     echo "This script takes one argument:"
     echo "Options:"
