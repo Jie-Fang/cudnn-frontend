@@ -1,6 +1,7 @@
 import test_graph as tg
 import torch
 import utils
+from dataclasses import dataclass
 
 from nv_tensor_ir import ir
 from nv_tensor_ir.dialects import nv_tensor_ir
@@ -115,6 +116,16 @@ def find_mismatches(tensor_a, tensor_b, atol, rtol):
         )
 
 
+@dataclass
+class TensorInfo:
+    tensor_type: nv_tensor_ir.TensorType
+    dtype: ir.Type
+    shape: list[int]
+    shape_div: list[int]
+    stride: list[int]
+    stride_div: list[int]
+
+
 def calculate_divisibility(out_stride):
     """Calculate shape and stride divisibility for tensor operations.
 
@@ -126,7 +137,7 @@ def calculate_divisibility(out_stride):
     """
     shape_div = []
     stride_div = []
-    divisibility = 1
+    divisibility = 8
     stride_div_flag = True
     has_stride_zero = False
 
@@ -168,7 +179,14 @@ class test_tensor_ir:
             dtype = eval(convert_datatype(dtype, "tensorir"))
 
         if hasattr(node, "is_by_value") and node.is_by_value:
-            return dtype, [1], [1], dtype
+            return TensorInfo(
+                tensor_type=dtype,
+                dtype=dtype,
+                shape=[1],
+                shape_div=[],
+                stride=[1],
+                stride_div=[],
+            )
 
         shape = []
         stride = []
@@ -185,12 +203,16 @@ class test_tensor_ir:
         if isScalarTensor:
             # If tensor is scalar in json definition, convert to dense memref with shape to [-1] and stride to [0]
             shape = [-1] * len(ori_shape)
+            shape_div = [1] * len(ori_shape)
             stride = [0] * len(ori_stride)
-            return (
-                nv_tensor_ir.TensorType.get(shape=shape, stride=stride, datatype=dtype),
-                shape,
-                stride,
-                dtype,
+            stride_div = [1] * len(ori_stride)
+            return TensorInfo(
+                tensor_type=nv_tensor_ir.TensorType.get(shape=shape, datatype=dtype),
+                dtype=dtype,
+                shape=shape,
+                shape_div=shape_div,
+                stride=stride,
+                stride_div=stride_div,
             )
         for s, d in zip(ori_stride, ori_shape):
             if idx > 0 and d == 1:
@@ -205,19 +227,24 @@ class test_tensor_ir:
             idx += 1
 
         shape_div, stride_div = calculate_divisibility(stride)
-
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
-            stride=stride,
             datatype=dtype,
             shape_divisibility=shape_div,
-            stride_divisibility=stride_div,
         )
-        return ty, shape, stride, dtype
+        return TensorInfo(
+            tensor_type=ty,
+            dtype=dtype,
+            shape=shape,
+            shape_div=shape_div,
+            stride=stride,
+            stride_div=stride_div,
+        )
 
     def calc_ref(self):
         self.ref_outputs = self.test_graph.calc_reference()
 
+    # TODO(CL-16596): refactor this code for scalability
     def tensorir_compare_to_reference(self, atol=1e-2, rtol=1e-2):
         passed = True
         assert len(self.ref_outputs) == len(self.outputs)
@@ -432,23 +459,92 @@ class test_tensor_ir:
             node for node in self.test_graph.nodes if node.is_output_node()
         ]
 
+        align_name = "nv_tensor_ir.alignment"
+        stride_name = "nv_tensor_ir.stride"
         with ir.Context() as ctx, ir.Location.unknown() as loc:
             ctx.enable_multithreading(False)
             nv_tensor_ir.register_dialect()
 
             module = ir.Module.create(loc)
-            input_types = list(
+
+            # Convert a stride list to string format, replacing -1 with '?'.
+            # E.g. stride =[1, -1, 1] and stride_div = [1, 8, 1] -> "(1,?{div=8},1)"
+            def stride_list_to_string(stride, stride_div):
+                stride_elements = [
+                    "?{div=" + str(div) + "}" if s == -1 else str(s)
+                    for s, div in zip(stride, stride_div)
+                ]
+                return f"({','.join(stride_elements)})"
+
+            # Get alignment in bytes based on the data type
+            def get_alignment(dtype):
+                # TODO: check if this is correct
+                # Usually GMEM address must be 16B aligned for tma
+                if dtype.width >= 8:
+                    return 16
+                # But 4-bit and 6-bit must 32B aligned
+                else:
+                    return 32
+
+            input_tensor_infos = list(
                 map(
-                    lambda x: next(iter(self.determine_tensor_ir_inout_tensor_type(x))),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(x),
                     input_tensors,
                 )
             )
-            output_types = list(
+
+            arg_attrs = []
+            input_types = []
+            for tensor_info in input_tensor_infos:
+                input_types.append(tensor_info.tensor_type)
+                # Add stride and alignment attributes if it's a tensor not a scalar passed by value
+                if tensor_info.tensor_type != tensor_info.dtype:
+                    stride_str = ir.StringAttr.get(
+                        stride_list_to_string(
+                            tensor_info.stride, tensor_info.stride_div
+                        )
+                    )
+                    align_attr = ir.IntegerAttr.get(
+                        ir.IntegerType.get_signless(64),
+                        get_alignment(tensor_info.dtype),
+                    )
+                    arg_attrs.append(
+                        ir.DictAttr.get(
+                            {stride_name: stride_str, align_name: align_attr}
+                        )
+                    )
+                else:
+                    arg_attrs.append(ir.DictAttr.get({}))
+
+            output_tensor_infos = list(
                 map(
-                    lambda x: next(iter(self.determine_tensor_ir_inout_tensor_type(x))),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(x),
                     output_tensors,
                 )
             )
+
+            res_attrs = []
+            output_types = []
+            for tensor_info in output_tensor_infos:
+                output_types.append(tensor_info.tensor_type)
+                # Add stride and alignment attributes if it's a tensor not a scalar passed by value
+                if tensor_info.tensor_type != tensor_info.dtype:
+                    stride_str = ir.StringAttr.get(
+                        stride_list_to_string(
+                            tensor_info.stride, tensor_info.stride_div
+                        )
+                    )
+                    align_attr = ir.IntegerAttr.get(
+                        ir.IntegerType.get_signless(64),
+                        get_alignment(tensor_info.dtype),
+                    )
+                    res_attrs.append(
+                        ir.DictAttr.get(
+                            {stride_name: stride_str, align_name: align_attr}
+                        )
+                    )
+                else:
+                    res_attrs.append(ir.DictAttr.get({}))
 
             # Create a mlir function signature for the kernel.
             function_type = ir.TypeAttr.get(
@@ -460,6 +556,8 @@ class test_tensor_ir:
             graph = nv_tensor_ir.graph(
                 function_name,
                 function_type=function_type,
+                arg_attrs=arg_attrs,
+                res_attrs=res_attrs,
                 ip=ir.InsertionPoint(module.body),
             )
 
@@ -491,14 +589,11 @@ class test_tensor_ir:
                         and node.output[0]._data_type
                         != node.kwargs["compute_data_type"]
                     ):
+                        tensor_info = self.determine_tensor_ir_inout_tensor_type(
+                            node, node.output[0]._data_type
+                        )
                         node_map[node] = nv_tensor_ir.convert(
-                            next(
-                                iter(
-                                    self.determine_tensor_ir_inout_tensor_type(
-                                        node, node.output[0]._data_type
-                                    )
-                                )
-                            ),
+                            tensor_info.tensor_type,
                             node_map[node],
                         )
                     result.append(node_map[node])
@@ -677,16 +772,15 @@ class test_tensor_ir:
                     new_children.append(node_map[child])
 
                 children = new_children
-                out_type, out_shape, out_stride, _ = (
-                    self.determine_tensor_ir_inout_tensor_type(
-                        node,
-                        (
-                            node.kwargs["compute_data_type"]
-                            if "compute_data_type" in node.kwargs
-                            else node.output[0].data_type
-                        ),
-                    )
+                output_tensor_info = self.determine_tensor_ir_inout_tensor_type(
+                    node,
+                    (
+                        node.kwargs["compute_data_type"]
+                        if "compute_data_type" in node.kwargs
+                        else node.output[0].data_type
+                    ),
                 )
+                # TODO(CL-16596): refactor this code for scalability
                 match node.op_name:  # FIXME(@xrouth): Try to match on something less fragile than "__name__"
                     case "reduction":
                         accumulator_type = ir.TypeAttr.get(
@@ -709,18 +803,20 @@ class test_tensor_ir:
                         input_datatype = nv_tensor_ir.get_tensor_datatype(
                             children[0].type
                         )
-                        output_datatype = nv_tensor_ir.get_tensor_datatype(out_type)
+                        output_datatype = nv_tensor_ir.get_tensor_datatype(
+                            output_tensor_info.tensor_type
+                        )
 
-                        shape_div, stride_div = calculate_divisibility(out_stride)
+                        shape_div, stride_div = calculate_divisibility(
+                            output_tensor_info.stride
+                        )
 
                         if input_datatype != output_datatype:
                             convert_value = nv_tensor_ir.convert(
                                 nv_tensor_ir.TensorType.get(
-                                    shape=out_shape,
-                                    stride=out_stride,
+                                    shape=output_tensor_info.shape,
                                     datatype=output_datatype,
                                     shape_divisibility=shape_div,
-                                    stride_divisibility=stride_div,
                                 ),
                                 children[0],
                             )
@@ -728,17 +824,15 @@ class test_tensor_ir:
                             convert_value = children[0]
                         reduction_dimensions = []
                         reduction_dim = 0
-                        for s in out_stride:
+                        for s in output_tensor_info.stride:
                             if s == 0:
                                 reduction_dimensions.append(reduction_dim)
                             reduction_dim += 1
                         mlir_value = nv_tensor_ir.reduce(
                             nv_tensor_ir.TensorType.get(
-                                shape=out_shape,
-                                stride=out_stride,
+                                shape=output_tensor_info.shape,
                                 datatype=output_datatype,
                                 shape_divisibility=shape_div,
-                                stride_divisibility=stride_div,
                             ),
                             convert_value,
                             reduction_dimensions,
@@ -747,7 +841,7 @@ class test_tensor_ir:
                         node_map[node] = mlir_value
                     case "matmul":
                         compute_data_type = node.kwargs["compute_data_type"]
-                        compute_type, _, _, _ = (
+                        compute_tensor_info = (
                             self.determine_tensor_ir_inout_tensor_type(
                                 node, compute_data_type
                             )
@@ -757,7 +851,9 @@ class test_tensor_ir:
                         if nv_tensor_ir.get_tensor_datatype(
                             lsh.type
                         ) != nv_tensor_ir.get_tensor_datatype(rsh.type):
-                            datatype = nv_tensor_ir.get_tensor_datatype(compute_type)
+                            datatype = nv_tensor_ir.get_tensor_datatype(
+                                compute_tensor_info.tensor_type
+                            )
                             if datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
                                 lsh = nv_tensor_ir.convert(
                                     nv_tensor_ir.TensorType.get_from_tensor_type(
@@ -772,7 +868,9 @@ class test_tensor_ir:
                                     ),
                                     rsh,
                                 )
-                        matmul_value = nv_tensor_ir.matmul(compute_type, lsh, rsh)
+                        matmul_value = nv_tensor_ir.matmul(
+                            compute_tensor_info.tensor_type, lsh, rsh
+                        )
                         node_map[node] = matmul_value
                     # POINTWISE:
                     case (
@@ -797,7 +895,11 @@ class test_tensor_ir:
                         | "gelu_approx_tanh_backward"
                     ):
                         self.build_binary_operation(
-                            node.op_name, node, children, out_type, node_map
+                            node.op_name,
+                            node,
+                            children,
+                            output_tensor_info.tensor_type,
+                            node_map,
                         )
                     case (
                         "tanh"
@@ -821,7 +923,11 @@ class test_tensor_ir:
                         | "gelu_approx_tanh"
                     ):
                         self.build_unary_operation(
-                            node.op_name, node, children, out_type, node_map
+                            node.op_name,
+                            node,
+                            children,
+                            output_tensor_info.tensor_type,
+                            node_map,
                         )
                     case "cmp_lt":
                         comparator = nv_tensor_ir.FloatComparator.olt
@@ -859,30 +965,30 @@ class test_tensor_ir:
                         )
                     case "swish":
                         converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                            children[0], None, out_type
+                            children[0], None, output_tensor_info.tensor_type
                         )
                         converted_beta = self.convert_scalar_tensor(
-                            children[1], out_type
+                            children[1], output_tensor_info.tensor_type
                         )
                         node_map[node] = nv_tensor_ir.swish_fwd(
                             converted_x, converted_beta
                         )
                     case "softplus":
                         converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                            children[0], None, out_type
+                            children[0], None, output_tensor_info.tensor_type
                         )
                         converted_beta = self.convert_scalar_tensor(
-                            children[1], out_type
+                            children[1], output_tensor_info.tensor_type
                         )
                         node_map[node] = nv_tensor_ir.softplus_fwd(
                             converted_x, converted_beta
                         )
                     case "elu":
                         converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                            children[0], None, out_type
+                            children[0], None, output_tensor_info.tensor_type
                         )
                         converted_beta = self.convert_scalar_tensor(
-                            children[1], out_type
+                            children[1], output_tensor_info.tensor_type
                         )
                         node_map[node] = nv_tensor_ir.elu_fwd(
                             converted_x, converted_beta
@@ -890,11 +996,11 @@ class test_tensor_ir:
                     case "swish_backward":
                         converted_x, converted_grad = (
                             self.convert_and_splat_for_binary_pointwise(
-                                children[0], children[1], out_type
+                                children[0], children[1], output_tensor_info.tensor_type
                             )
                         )
                         converted_beta = self.convert_scalar_tensor(
-                            children[2], out_type
+                            children[2], output_tensor_info.tensor_type
                         )
                         node_map[node] = nv_tensor_ir.swish_bwd(
                             converted_x, converted_grad, converted_beta
@@ -902,11 +1008,11 @@ class test_tensor_ir:
                     case "softplus_backward":
                         converted_x, converted_grad = (
                             self.convert_and_splat_for_binary_pointwise(
-                                children[0], children[1], out_type
+                                children[0], children[1], output_tensor_info.tensor_type
                             )
                         )
                         converted_beta = self.convert_scalar_tensor(
-                            children[2], out_type
+                            children[2], output_tensor_info.tensor_type
                         )
                         node_map[node] = nv_tensor_ir.softplus_bwd(
                             converted_x, converted_grad, converted_beta
@@ -914,18 +1020,18 @@ class test_tensor_ir:
                     case "elu_backward":
                         converted_x, converted_grad = (
                             self.convert_and_splat_for_binary_pointwise(
-                                children[0], children[1], out_type
+                                children[0], children[1], output_tensor_info.tensor_type
                             )
                         )
                         converted_beta = self.convert_scalar_tensor(
-                            children[2], out_type
+                            children[2], output_tensor_info.tensor_type
                         )
                         node_map[node] = nv_tensor_ir.elu_bwd(
                             converted_x, converted_grad, converted_beta
                         )
                     case "identity":
                         node_map[node] = nv_tensor_ir.convert(
-                            out_type,
+                            output_tensor_info.tensor_type,
                             children[0],
                         )
                     case "conv_wgrad":
@@ -949,7 +1055,7 @@ class test_tensor_ir:
                         dilation = node.kwargs["dilation"]
 
                         node_map[node] = nv_tensor_ir.conv_dgrad(
-                            out_type,
+                            output_tensor_info.tensor_type,
                             dy,
                             w,
                             accumulator_type_attr,
@@ -979,7 +1085,7 @@ class test_tensor_ir:
                         dilation = node.kwargs["dilation"]
 
                         node_map[node] = nv_tensor_ir.conv_dgrad(
-                            out_type,
+                            output_tensor_info.tensor_type,
                             dy,
                             w,
                             accumulator_type_attr,
@@ -1007,7 +1113,7 @@ class test_tensor_ir:
                         dilation = node.kwargs["dilation"]
 
                         node_map[node] = nv_tensor_ir.conv_fprop(
-                            out_type,
+                            output_tensor_info.tensor_type,
                             x,
                             w,
                             accumulator_type_attr,
