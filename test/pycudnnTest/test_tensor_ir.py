@@ -312,6 +312,18 @@ class test_tensor_ir:
         utils.reportCurrentTime("assert_close")
         return passed
 
+    def get_beta_attr(self):
+        for node in self.test_graph.entrance_nodes:
+            if node.name == "beta":
+                beta_tensor = node.get_value()
+                # Handle beta tensor of any dimension by accessing the first element
+                return (
+                    beta_tensor.item()
+                    if beta_tensor.numel() == 1
+                    else beta_tensor.flatten()[0].item()
+                )
+        return None
+
     def run_tensor_ir_module(
         self,
         module,
@@ -780,6 +792,16 @@ class test_tensor_ir:
                         else node.output[0].data_type
                     ),
                 )
+                beta = self.get_beta_attr()
+                if node.op_name in [
+                    "swish",
+                    "softplus",
+                    "elu",
+                    "swish_backward",
+                    "softplus_backward",
+                    "elu_backward",
+                ]:
+                    assert beta is not None, "Beta attribute not found"
                 # TODO(CL-16596): refactor this code for scalability
                 match node.op_name:  # FIXME(@xrouth): Try to match on something less fragile than "__name__"
                     case "reduction":
@@ -967,43 +989,25 @@ class test_tensor_ir:
                         converted_x, _ = self.convert_and_splat_for_binary_pointwise(
                             children[0], None, output_tensor_info.tensor_type
                         )
-                        converted_beta = self.convert_scalar_tensor(
-                            children[1], output_tensor_info.tensor_type
-                        )
-                        node_map[node] = nv_tensor_ir.swish_fwd(
-                            converted_x, converted_beta
-                        )
+                        node_map[node] = nv_tensor_ir.swish_fwd(converted_x, beta)
                     case "softplus":
                         converted_x, _ = self.convert_and_splat_for_binary_pointwise(
                             children[0], None, output_tensor_info.tensor_type
                         )
-                        converted_beta = self.convert_scalar_tensor(
-                            children[1], output_tensor_info.tensor_type
-                        )
-                        node_map[node] = nv_tensor_ir.softplus_fwd(
-                            converted_x, converted_beta
-                        )
+                        node_map[node] = nv_tensor_ir.softplus_fwd(converted_x, beta)
                     case "elu":
                         converted_x, _ = self.convert_and_splat_for_binary_pointwise(
                             children[0], None, output_tensor_info.tensor_type
                         )
-                        converted_beta = self.convert_scalar_tensor(
-                            children[1], output_tensor_info.tensor_type
-                        )
-                        node_map[node] = nv_tensor_ir.elu_fwd(
-                            converted_x, converted_beta
-                        )
+                        node_map[node] = nv_tensor_ir.elu_fwd(converted_x, beta)
                     case "swish_backward":
                         converted_x, converted_grad = (
                             self.convert_and_splat_for_binary_pointwise(
                                 children[0], children[1], output_tensor_info.tensor_type
                             )
                         )
-                        converted_beta = self.convert_scalar_tensor(
-                            children[2], output_tensor_info.tensor_type
-                        )
                         node_map[node] = nv_tensor_ir.swish_bwd(
-                            converted_x, converted_grad, converted_beta
+                            converted_x, converted_grad, beta
                         )
                     case "softplus_backward":
                         converted_x, converted_grad = (
@@ -1011,11 +1015,8 @@ class test_tensor_ir:
                                 children[0], children[1], output_tensor_info.tensor_type
                             )
                         )
-                        converted_beta = self.convert_scalar_tensor(
-                            children[2], output_tensor_info.tensor_type
-                        )
                         node_map[node] = nv_tensor_ir.softplus_bwd(
-                            converted_x, converted_grad, converted_beta
+                            converted_x, converted_grad, beta
                         )
                     case "elu_backward":
                         converted_x, converted_grad = (
@@ -1023,11 +1024,8 @@ class test_tensor_ir:
                                 children[0], children[1], output_tensor_info.tensor_type
                             )
                         )
-                        converted_beta = self.convert_scalar_tensor(
-                            children[2], output_tensor_info.tensor_type
-                        )
                         node_map[node] = nv_tensor_ir.elu_bwd(
-                            converted_x, converted_grad, converted_beta
+                            converted_x, converted_grad, beta
                         )
                     case "identity":
                         node_map[node] = nv_tensor_ir.convert(
