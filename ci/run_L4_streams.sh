@@ -21,7 +21,7 @@ function run_python_streams() {
     #     ./test/pycudnnTest.py -RgrStream --stream_start "$i" --stream_group_size "$stream_group_size" < "$input_file"
     #done
     # This command runs a single process for all tests (this ensures all tests are run even if errors are encountered)
-    ./test/pycudnnTest.py -RgrStream < "$input_file"
+    ./test/pycudnnTest/pycudnnTest.py -RgrStream < "$input_file"
 }
 
 display_header
