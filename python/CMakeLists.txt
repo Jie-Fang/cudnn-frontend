@@ -4,11 +4,12 @@ Include(FetchContent)
 
 # Fetch and build dlpack
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.18)
 set(BUILD_MOCK OFF)
 FetchContent_Declare(
   dlpack
   GIT_REPOSITORY https://github.com/dmlc/dlpack
-  GIT_TAG        v0.8
+  GIT_TAG        v1.1
 )
 FetchContent_MakeAvailable(dlpack)
 

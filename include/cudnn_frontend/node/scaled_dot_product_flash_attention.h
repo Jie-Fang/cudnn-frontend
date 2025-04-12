@@ -307,7 +307,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.left_bound.has_value() && detail::get_backend_version() < 90200), error_code_t::GRAPH_NOT_SUPPORTED,
                                         "sliding window is only supported 9.2.0 and above");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && attributes.left_bound.value() <= 0,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value() && attributes.left_bound.value() <= 0 && detail::get_backend_version() < 91000,
                                        error_code_t::INVALID_VALUE,
                                        "Left bound (Sliding window length) should be greater than zero when set.");
                                        
