@@ -230,12 +230,6 @@ TEST_CASE("Toy sdpa backward as CUDA graph", "[graph][sdpa][flash][backward][cud
     bool alibi_mask    = false;  // TODO: (cudnnGetVersion() >= 8904)
     bool has_attn_bias = (cudnnGetVersion() >= 90500);
 
-    // switch off certain features on blackwell
-    if (is_blackwell_arch()) {
-        alibi_mask    = false;
-        has_attn_bias = false;
-    }
-
     // Create a unique_ptr for the cuDNN handle
     auto handle_ptr = create_cudnn_handle();
     auto handle     = *handle_ptr;
