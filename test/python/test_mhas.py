@@ -651,9 +651,6 @@ def test_sdpa(
     if d_qk != d_v and is_ragged and cudnn_version < "9.1":
         pytest.skip("d_qk != d_v is not supported with ragged offset")
 
-    if s_q > s_kv and is_left_bound:
-        pytest.skip("s_q > s_kv is not supported with sliding window attention")
-
     print("\n=============== TEST CMD TO REPRODUCE ===============")
     cmd = f"pytest {request.node.nodeid} --mha_b={b} --mha_s_q={s_q} --mha_s_kv={s_kv} --mha_d_qk={d_qk} --mha_d_v={d_v} --mha_h_q={h_q} --mha_h_k={h_k} --mha_h_v={h_v} --mha_block_size={block_size}"
     if left_bound is not None:
