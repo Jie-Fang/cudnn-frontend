@@ -68,7 +68,66 @@ class KernelCache : public detail::backend_descriptor {
             return {error_code_t::CUDNN_BACKEND_API_FAILED,
                     "CUDNN_BACKEND_KERNEL_CACHE_DESCRIPTOR: Check CUDNN_VERSION >= 9.4"};
         }
-        return {error_code_t::OK, ""};
+        return {};
+    }
+
+    error_t
+    to_json(std::string &str_json) const {
+        str_json.clear();
+#if (CUDNN_VERSION >= 91000)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 91000,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       "CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION is only available starting 9.10.");
+
+        int64_t serializationSize;
+        std::vector<char> serialization_buf;
+        CHECK_CUDNN_ERROR(detail::get_attribute(
+            get_ptr(), CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION, CUDNN_TYPE_CHAR, 0, &serializationSize, nullptr));
+        serialization_buf.resize(static_cast<size_t>(serializationSize));
+
+        CHECK_CUDNN_ERROR(detail::get_attribute(get_ptr(),
+                                                CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION,
+                                                CUDNN_TYPE_CHAR,
+                                                serializationSize,
+                                                &serializationSize,
+                                                serialization_buf.data()));
+        std::string json_string(serialization_buf.begin(), serialization_buf.end());
+        str_json = json_string;
+        return {};
+#else
+        (void)str_json;
+        return {error_code_t::CUDNN_BACKEND_API_FAILED,
+                "CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION is only available starting 9.10."};
+#endif
+    }
+
+    error_t
+    from_json(const std::string &json_cache) {
+#if (CUDNN_VERSION >= 91000)
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 91000,
+                                       error_code_t::CUDNN_BACKEND_API_FAILED,
+                                       "CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION is only available starting 9.10.");
+
+        // Check if the kernel cache is already initialized
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            get_ptr() != nullptr, error_code_t::CUDNN_BACKEND_API_FAILED, "Kernel cache is already initialized.");
+
+        // // Initialize the kernel cache descriptor
+        CHECK_CUDNN_FRONTEND_ERROR(initialize(CUDNN_BACKEND_KERNEL_CACHE_DESCRIPTOR));
+
+        std::vector<char> serialization_buf;
+        serialization_buf.assign(json_cache.begin(), json_cache.end());
+        CHECK_CUDNN_ERROR(detail::set_attribute(get_ptr(),
+                                                CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION,
+                                                CUDNN_TYPE_CHAR,
+                                                serialization_buf.size(),
+                                                serialization_buf.data()));
+        return {};
+#else
+        (void)json_cache;
+        return {error_code_t::CUDNN_BACKEND_API_FAILED,
+                "CUDNN_ATTR_KERNEL_CACHE_JSON_REPRESENTATION is only available starting 9.10."};
+#endif
     }
 
    private:
@@ -80,7 +139,9 @@ class KernelCache : public detail::backend_descriptor {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90400,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "CUDNN_BACKEND_KERNEL_CACHE_DESCRIPTOR is only available starting 9.4.");
-        CHECK_CUDNN_FRONTEND_ERROR(initialize(CUDNN_BACKEND_KERNEL_CACHE_DESCRIPTOR));
+        if (get_ptr() == nullptr) {
+            CHECK_CUDNN_FRONTEND_ERROR(initialize(CUDNN_BACKEND_KERNEL_CACHE_DESCRIPTOR));
+        }
 #if (CUDNN_VERSION >= 90500)
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
@@ -92,7 +153,7 @@ class KernelCache : public detail::backend_descriptor {
 #endif
         CHECK_CUDNN_FRONTEND_ERROR(finalize());
         finalized = true;
-        return {error_code_t::OK, ""};
+        return {};
 #else
         (void)op_graph;
         return {error_code_t::CUDNN_BACKEND_API_FAILED,
