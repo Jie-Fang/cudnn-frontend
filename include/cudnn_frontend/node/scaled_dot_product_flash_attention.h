@@ -18,39 +18,55 @@ namespace cudnn_frontend::graph {
 
 namespace attn::score_modifiers {
 
-std::shared_ptr<Tensor_attributes> causal_mask(std::shared_ptr<Graph>, std::shared_ptr<Tensor_attributes>);
+// clang-format off
+inline float get_negative_inf_value();
 
-std::shared_ptr<Tensor_attributes> bias(std::shared_ptr<Graph>,
-                                        std::shared_ptr<Tensor_attributes>,
-                                        std::shared_ptr<Tensor_attributes>);
+inline std::shared_ptr<Tensor_attributes> causal_mask(
+    std::shared_ptr<Graph> graph,
+    std::shared_ptr<Tensor_attributes> attention_score
+);
 
-std::shared_ptr<Tensor_attributes> causal_mask_bottom_right(std::shared_ptr<Graph>,
-                                                            std::shared_ptr<Tensor_attributes>,
-                                                            std::shared_ptr<Tensor_attributes>,
-                                                            std::shared_ptr<Tensor_attributes>);
+inline std::shared_ptr<Tensor_attributes> bias(
+    std::shared_ptr<Graph> graph,
+    std::shared_ptr<Tensor_attributes> attention_score,
+    std::shared_ptr<Tensor_attributes> bias_tensor
+);
 
-std::shared_ptr<Tensor_attributes> padding_mask(std::shared_ptr<Graph>,
-                                                std::shared_ptr<Tensor_attributes>,
-                                                std::shared_ptr<Tensor_attributes>,
-                                                std::shared_ptr<Tensor_attributes>);
+inline std::shared_ptr<Tensor_attributes> causal_mask_bottom_right(
+    std::shared_ptr<Graph> graph,
+    std::shared_ptr<Tensor_attributes> attention_score,
+    std::shared_ptr<Tensor_attributes> seq_len_q,
+    std::shared_ptr<Tensor_attributes> seq_len_kv
+);
 
-std::shared_ptr<Tensor_attributes>
-sliding_window_mask(std::shared_ptr<Graph> graph,
-                    std::shared_ptr<Tensor_attributes> attention_score,
-                    DiagonalAlignment_t diagonal_alignment,
-                    std::optional<int64_t> left_window,
-                    std::optional<int64_t> right_window,
-                    int64_t s_q,
-                    int64_t s_kv,
-                    std::shared_ptr<Tensor_attributes> s_q_ptr,
-                    std::shared_ptr<Tensor_attributes> s_kv_ptr);
+inline std::shared_ptr<Tensor_attributes> padding_mask(
+    std::shared_ptr<Graph> graph,
+    std::shared_ptr<Tensor_attributes> attention_score,
+    std::shared_ptr<Tensor_attributes> seq_len_kv,
+    std::shared_ptr<Tensor_attributes> seq_len_q
+);
 
-std::shared_ptr<Tensor_attributes>
-alibi_mask(std::shared_ptr<Graph>,
-           std::shared_ptr<Tensor_attributes>,
-           std::shared_ptr<Tensor_attributes>&,
-           int64_t,
-           int64_t&);
+inline std::shared_ptr<Tensor_attributes> sliding_window_mask(
+    std::shared_ptr<Graph> graph,
+    std::shared_ptr<Tensor_attributes> attention_score,
+    DiagonalAlignment_t diagonal_alignment,
+    std::optional<int64_t> left_window,
+    std::optional<int64_t> right_window,
+    int64_t s_q,
+    int64_t s_kv,
+    std::shared_ptr<Tensor_attributes> s_q_ptr,
+    std::shared_ptr<Tensor_attributes> s_kv_ptr
+);
+
+inline std::shared_ptr<Tensor_attributes> alibi_mask(
+    std::shared_ptr<Graph> graph,
+    std::shared_ptr<Tensor_attributes> attention_score,
+    std::shared_ptr<Tensor_attributes>& alibi_slopes,
+    int64_t h_q,
+    int64_t& alibi_slopes_size
+);
+// clang-format on
+
 }  // namespace attn::score_modifiers
 
 class SDPANode : public NodeCRTP<SDPANode> {
@@ -602,7 +618,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
                 pointwise(col_index_output, WAR_scalar_max_seq_kv, col_less_seq_kv_attributes);
 
             // Lower attributes to binary select attributes
-            auto negative_inf_padding = std::make_shared<Tensor_attributes>(std::numeric_limits<float>::lowest());
+            auto negative_inf_padding =
+                std::make_shared<Tensor_attributes>(attn::score_modifiers::get_negative_inf_value());
             auto binary_select_attributes =
                 Pointwise_attributes().set_name("binary_select").set_mode(PointwiseMode_t::BINARY_SELECT);
             auto padding_mask_output =
@@ -1341,7 +1358,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                 Pointwise_attributes().set_name("sub_s_m").set_mode(PointwiseMode_t::SUB));
 
         // WAR for bug 4475073 by explicitly putting the padding value again after the stats have been loaded
-        if (attributes.padding_mask && detail::get_backend_version() >= 90000) {
+        if (attributes.padding_mask && detail::get_backend_version() >= 90000 &&
+            detail::get_backend_version() < 91000) {
             auto row_idx_output = pointwise(last_output,
                                             Pointwise_attributes()
                                                 .set_name("gen_row_idx_2nd_padding")
@@ -1381,7 +1399,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                                      .set_mode(PointwiseMode_t::LOGICAL_AND)
                                                      .set_compute_data_type(DataType_t::BOOLEAN));
             padding_mask_output->set_data_type(DataType_t::BOOLEAN);
-            auto negative_inf_padding = std::make_shared<Tensor_attributes>(std::numeric_limits<float>::lowest());
+            auto negative_inf_padding =
+                std::make_shared<Tensor_attributes>(attn::score_modifiers::get_negative_inf_value());
 
             last_output = pointwise(
                 last_output,
