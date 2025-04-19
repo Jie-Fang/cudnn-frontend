@@ -35,6 +35,7 @@ def create_conv_reduce_graph(handle, X_gpu, W_gpu):
     return g, [X, W, Y]  # Return raw graph and tensors
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_reduction(cudnn_handle):
 

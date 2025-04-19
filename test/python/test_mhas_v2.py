@@ -1032,10 +1032,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     qkv_num_elems = elems_q + elems_k + elems_v
 
-    (q_gpu, q_sep, q_raw) = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q, rng=rng_data, mean=-0.5, std=1.0)
-    (k_gpu, k_sep, k_raw) = alloc_tensor(shape_k, data_type, elems=elems_k, strides=stride_k, rng=rng_data, mean=-0.5, std=1.0)
-    (v_gpu, v_sep, v_raw) = alloc_tensor(shape_v, data_type, elems=elems_v, strides=stride_v, rng=rng_data, mean=-0.5, std=1.0)
-    (bias_gpu, bias_sep, bias_raw) = (alloc_tensor((1, h_q, s_q, s_kv), data_type, rng=rng_data, mean=0.0, std=1.0) if is_bias else (None, None, None))
+    (q_gpu, _, _) = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q, rng=rng_data, mean=-0.5, std=1.0)
+    (k_gpu, _, _) = alloc_tensor(shape_k, data_type, elems=elems_k, strides=stride_k, rng=rng_data, mean=-0.5, std=1.0)
+    (v_gpu, _, _) = alloc_tensor(shape_v, data_type, elems=elems_v, strides=stride_v, rng=rng_data, mean=-0.5, std=1.0)
+    (bias_gpu, _, _) = (alloc_tensor((1, h_q, s_q, s_kv), data_type, rng=rng_data, mean=0.0, std=1.0) if is_bias else (None, None, None))
 
     if not is_infer:
         (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q)
@@ -1209,7 +1209,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
     graph.execute(variant_pack, workspace, handle=cudnn_handle)
     torch.cuda.synchronize()
 
-    if not torch.all(ws_sep==-1).item():
+    if ws_sep is not None and not torch.all(ws_sep==-1).item():
         print("ERROR: forward workspace overwritten outside its boundaries")
         print(ws_sep)
         pytest.fail("forward workspace overwritten outside boundaries", pytrace=False)
@@ -1342,7 +1342,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         graph.execute(variant_pack, workspace, handle=cudnn_handle)
         torch.cuda.synchronize()
 
-        if not torch.all(ws_sep==-1).item():
+        if ws_sep is not None and not torch.all(ws_sep==-1).item():
             print("ERROR: backward workspace overwritten outside its boundaries")
             print(ws_sep)
             pytest.fail("backward workspace overwritten outside boundaries", pytrace=False)
@@ -1496,7 +1496,7 @@ def test_sdpa_random_fwd(test_no, data_type, is_infer, head_group, layout, is_ca
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [False], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-def test_sdpa_random(test_no, data_type, is_infer, head_group, layout, is_causal, request, cudnn_handle):
+def test_sdpa_random_bwd(test_no, data_type, is_infer, head_group, layout, is_causal, request, cudnn_handle):
     cfg = testConfig()
     cfg.setBatches(max_batches=8)
     cfg.setSequences(max_s_q=512, max_s_kv=512)
