@@ -514,6 +514,7 @@ def generate_actual_seq_lens(
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
+@pytest.mark.L0
 # fmt: on
 @torch_fork_set_rng(seed=0)
 def test_sdpa(
@@ -954,6 +955,7 @@ def test_sdpa(
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("layout", layout_options)
 @pytest.mark.parametrize("input_type", input_type_options, ids=lambda p: str(p))
+@pytest.mark.L0
 # fmt: on
 @torch_fork_set_rng(seed=0)
 def test_sdpa_backward(

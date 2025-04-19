@@ -76,6 +76,7 @@ def create_rope_graph(handle, x1_gpu, x2_gpu, cos1_gpu, cos2_gpu, sin1_gpu, sin2
         return g, [x1, x2, sin1, sin2, cos1, cos2, Y1, Y2]
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_apply_rope(cudnn_handle):
     B, nh, T, hs = 8, 32, 4096, 128

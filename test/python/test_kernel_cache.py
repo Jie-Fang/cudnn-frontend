@@ -65,6 +65,7 @@ def build_cudnn_graph(handle, cache, shape):
     LooseVersion(cudnn.backend_version_string()) < "9.5",
     reason="requires cudnn 9.5 or higher",
 )
+@pytest.mark.L0
 def test_kernel_cache(cudnn_handle):
 
     cache = cudnn.create_kernel_cache()

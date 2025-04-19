@@ -91,6 +91,7 @@ def create_conv_relu_graph(
         return g, [X, W, Y]
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_conv_bias_relu(cudnn_handle):
     # Reference code
@@ -145,6 +146,7 @@ def test_conv_bias_relu(cudnn_handle):
     torch.testing.assert_close(Y_expected, Y_actual, atol=0.05, rtol=1e-2)
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_conv_relu(cudnn_handle):
     # Reference code
@@ -189,6 +191,7 @@ def test_conv_relu(cudnn_handle):
     torch.testing.assert_close(Y_expected, Y_actual, atol=1e-3, rtol=1e-3)
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_conv_relu_execution_plan_creation(cudnn_handle):
     # Reference code
@@ -298,6 +301,7 @@ def create_conv3d_bias_leaky_relu_graph(
         return g, [X, W, B, Y]
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_conv3d_bias_leaky_relu(cudnn_handle):
     N, C, D, H, W = 4, 16, 52, 54, 56
@@ -373,6 +377,7 @@ def create_leaky_relu_backward_graph(handle, loss_gpu, input_gpu, negative_slope
         return g, [loss, input, Y]
 
 
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_leaky_relu_backward(cudnn_handle):
     N, C, H, W = 4, 16, 56, 56
@@ -436,6 +441,7 @@ def create_conv_int8_graph(handle, X_gpu, W_gpu, padding, stride, dilation):
     LooseVersion(cudnn.backend_version_string()) < "8.6",
     reason="requires cudnn 8.6.0 or higher",
 )
+@pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_conv_int8(cudnn_handle):
     N, C, H, W = 2, 64, 32, 32
