@@ -36,7 +36,6 @@
 #include <dlfcn.h>
 #define HMODULE void *
 #endif
-#include <functional>
 #include <mutex>
 #include <stdexcept>
 #endif
@@ -229,17 +228,33 @@ cuda_graph_child_graph_node_get_graph(cudaGraphNode_t hNode, cudaGraph_t *phGrap
     NV_FE_CALL_TO_CUDA(cuda_graph_child_graph_node_get_graph, cudaGraphChildGraphNodeGetGraph, hNode, phGraph);
 }
 
+// 4-parameter shim for cudaGraphNodeGetDependentNodes.
+// The underlying CUDA feature was introduced in CUDA 12.3, but
+// for simplicity we support this in 13.0+ only.
+#if (CUDART_VERSION >= 13000)
+inline cudaError_t
+cuda_graph_node_get_dependent_nodes_v2(cudaGraphNode_t node,
+                                       cudaGraphNode_t *pDependentNodes,
+                                       cudaGraphEdgeData *edgeData,
+                                       size_t *pNumDependentNodes) {
+    NV_FE_CALL_TO_CUDA(cuda_graph_node_get_dependent_nodes_v2,
+                       cudaGraphNodeGetDependentNodes,
+                       node,
+                       pDependentNodes,
+                       edgeData,
+                       pNumDependentNodes);
+}
+#endif
+
+// 3-parameter shim for cudaGraphNodeGetDependentNodes.
 inline cudaError_t
 cuda_graph_node_get_dependent_nodes(cudaGraphNode_t node,
                                     cudaGraphNode_t *pDependentNodes,
                                     size_t *pNumDependentNodes) {
 #if (CUDART_VERSION >= 13000)
-    NV_FE_CALL_TO_CUDA(std::function<cudaError_t(cudaGraphNode_t, cudaGraphNode_t *, cudaGraphEdgeData *, size_t *)>(),
-                       cudaGraphNodeGetDependentNodes,
-                       node,
-                       pDependentNodes,
-                       /*edgeData=*/nullptr,
-                       pNumDependentNodes);
+    // The 3-parameter version of cudaGraphNodeGetDependentNodes was removed in CUDA 13.0,
+    // so call the other shim.
+    return cuda_graph_node_get_dependent_nodes_v2(node, pDependentNodes, /*edgeData=*/nullptr, pNumDependentNodes);
 #else
     NV_FE_CALL_TO_CUDA(
         cuda_graph_node_get_dependent_nodes, cudaGraphNodeGetDependentNodes, node, pDependentNodes, pNumDependentNodes);
