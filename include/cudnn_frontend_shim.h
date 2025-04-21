@@ -36,6 +36,7 @@
 #include <dlfcn.h>
 #define HMODULE void *
 #endif
+#include <functional>
 #include <mutex>
 #include <stdexcept>
 #endif
@@ -232,8 +233,17 @@ inline cudaError_t
 cuda_graph_node_get_dependent_nodes(cudaGraphNode_t node,
                                     cudaGraphNode_t *pDependentNodes,
                                     size_t *pNumDependentNodes) {
+#if (CUDART_VERSION >= 13000)
+    NV_FE_CALL_TO_CUDA(std::function<cudaError_t(cudaGraphNode_t, cudaGraphNode_t *, cudaGraphEdgeData *, size_t *)>(),
+                       cudaGraphNodeGetDependentNodes,
+                       node,
+                       pDependentNodes,
+                       /*edgeData=*/nullptr,
+                       pNumDependentNodes);
+#else
     NV_FE_CALL_TO_CUDA(
         cuda_graph_node_get_dependent_nodes, cudaGraphNodeGetDependentNodes, node, pDependentNodes, pNumDependentNodes);
+#endif
 }
 
 inline cudaError_t
