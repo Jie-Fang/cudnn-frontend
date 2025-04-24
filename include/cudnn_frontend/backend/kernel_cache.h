@@ -130,7 +130,6 @@ class KernelCache : public detail::backend_descriptor {
 #endif
     }
 
-   private:
     // Responsible for initializing, setting operation graph attribute, and finalizing kernel cache
     // Check for both compile-time and runtime cuDNN version
     error_t
@@ -146,8 +145,10 @@ class KernelCache : public detail::backend_descriptor {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90500,
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "CUDNN_ATTR_KERNEL_CACHE_OPERATION_GRAPH is only available starting 9.5.");
-        CHECK_CUDNN_ERROR(detail::set_attribute(
-            get_ptr(), CUDNN_ATTR_KERNEL_CACHE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &op_graph));
+        if (op_graph) {
+            CHECK_CUDNN_ERROR(detail::set_attribute(
+                get_ptr(), CUDNN_ATTR_KERNEL_CACHE_OPERATION_GRAPH, CUDNN_TYPE_BACKEND_DESCRIPTOR, 1, &op_graph));
+        }
 #else
         (void)op_graph;
 #endif
@@ -161,6 +162,7 @@ class KernelCache : public detail::backend_descriptor {
 #endif
     }
 
+   private:
     bool finalized = false;
 };
 }  // namespace cudnn_frontend
