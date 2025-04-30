@@ -575,10 +575,13 @@ def test_sdpa(
     # batch size
     b = 2
     # query sequence length
-    if cudnn_version >= "9.7.0":
-        s_q = random.choice([24, 256, 512, 1024, 2048]) # Need to add s_q = 1 to the harness
-    else:
-        s_q = random.choice([24, 256, 512, 1024, 2048])
+
+    s_q_choices = [ 24, 256, 512, 1024, 2048]
+
+    if cudnn_version >= "9.7.0" and layout == "bshd_bshd_bshd":
+        s_q_choices.extend([1])
+
+    s_q = random.choice(s_q_choices)
 
     if s_q == 1:
         is_left_bound = False
@@ -592,9 +595,13 @@ def test_sdpa(
     )
 
     d_choices = [32, 56, 64, 128]
-    # TODO: enable 9.10+
-    if cudnn_version == "9.9.0" and (not is_paged_attention):
-        d_choices.extend([192, 256, 512])
+
+    # for hopper always extend d_choices to 256
+    if cudnn_version >= "9.5":
+        d_choices.extend([192, 256])
+
+    if cudnn_version >= "9.9.0":
+        d_choices.extend([200, 264, 520])
 
     # query+key embedding dimension per head
     d_qk = random.choice(d_choices)

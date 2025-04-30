@@ -352,8 +352,17 @@ class SDPANode : public NodeCRTP<SDPANode> {
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
 
+        // Validate options for s_q == 1
+        const bool is_decode_only = (s_q == 1);
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_decode_only && (prop.major == 10) && (d_qk > 128 || d_v > 128) && (detail::get_backend_version() <= 90900), error_code_t::GRAPH_NOT_SUPPORTED, "decode only mode, i.e. s_q == 1 not supported for blackwell architecture with d_qk or d_v > 128 for backend version 9.9 or below");
+        
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_decode_only && (detail::get_backend_version() <= 90900) && (attributes.right_bound.has_value()), error_code_t::GRAPH_NOT_SUPPORTED, "decode only mode, i.e. s_q == 1, not supported with masking (right_bound is set) for backend version 9.9 or below");
+        
+        // Validate other large head dim restrictions
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && ((d_qk > 128) || (d_v > 128)), error_code_t::GRAPH_NOT_SUPPORTED, "Bias is not supported with d_qk or d_v > 128");
+
         // validate options for paged attention
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (d_qk > 128 || d_v > 128), error_code_t::GRAPH_NOT_SUPPORTED, "Paged attention only supported with d_qk and d_v <= 128");
+        RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (d_qk > 128 || d_v > 128) && detail::get_backend_version() <= 90900, error_code_t::GRAPH_NOT_SUPPORTED, "Paged attention only supported with d_qk and d_v <= 128 for backend version 9.9 or below");
         
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && is_ragged && detail::get_backend_version() < 90700,
             error_code_t::GRAPH_NOT_SUPPORTED,
@@ -389,20 +398,20 @@ class SDPANode : public NodeCRTP<SDPANode> {
         // (cudnn_runtime_version < 8907 && num_attn_heads == num_gqa_groups FIXME
 
         // version specific validation
-        if(prop.major < 10) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_v > 128),
+        if(prop.major == 8) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() <= 90900 && ((d_qk > 128) || (d_v > 128)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "hidden_dim should be less than or equal to 128");
+                                       "head_dim should be less than or equal to 128 for backend version 9.9 or below on ampere architecture");
         }
-        else if(prop.major == 9) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_v > 256),
+        if(prop.major == 9) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() <= 90900 && ((d_qk > 256) || (d_v > 256)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "hidden_dim should be less than or equal to 256");
+                                       "head_dim should be less than or equal to 256 for backend version 9.9 or below on hopper architecture");
         }
-        else if((detail::get_backend_version() < 90900) && (prop.major == 10)) {
-            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_v > 128),
+        if(prop.major == 10) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((detail::get_backend_version() < 90900) && ((d_qk > 128) || (d_v > 128)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "hidden_dim should be less than or equal to 128");
+                                       "head_dim should be less than or equal to 128 for backend version 9.8 or below on blackwell architecture");
         }
 
 
@@ -417,15 +426,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90000 && ((s_q % 64 != 0) || (s_kv % 64 != 0)) && (attributes.padding_mask || is_dropout),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "For cuDNN version below 9.0.0, s_q/s_kv not a multiple of 64 with padding/dropout mask is not supported");
-
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90000 && ((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0)),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version below 9.0.0, hidden_dim shoud be less than or equal to 128 and hidden_dim should be multiple of 8");
-
-        // sm_arch_ >= 90 FIXME
-        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() >= 90000 && ((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0)),
-                                       error_code_t::GRAPH_NOT_SUPPORTED,
-                                       "For cuDNN version above 9.0.0, hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 90200 && attributes.left_bound.has_value(),
                                        error_code_t::GRAPH_NOT_SUPPORTED,

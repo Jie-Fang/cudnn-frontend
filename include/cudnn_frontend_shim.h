@@ -63,19 +63,17 @@ get_symbol(const char *function_name) {
 
 enum class CudaLibrary { CUDART, CUDA };
 
-
 inline HMODULE
 load_cuda_so() {
     // Clear any existing error
     dlerror();
 
     // Attempt to open the cuda library
-    HMODULE handle = dlopen("libcuda.so", RTLD_NOW);
+    HMODULE handle    = dlopen("libcuda.so", RTLD_NOW);
     const char *error = reinterpret_cast<const char *>(dlerror());
     if (!handle || error) {
         // If opening the library fails, throw an exception with the error message
-        throw std::runtime_error("Unable to dlopen libcuda.so : " +
-                                    std::string(error ? error : "Unknown error"));
+        throw std::runtime_error("Unable to dlopen libcuda.so : " + std::string(error ? error : "Unknown error"));
     }
 
     return handle;
@@ -86,26 +84,25 @@ load_cudart_so() {
     // Clear any existing error
     dlerror();
 
-    // List of potential libcudart libraries
-    constexpr const char* libs[] = {"libcudart.so.12", "libcudart.so.13"};
-    constexpr size_t num_libs = sizeof(libs) / sizeof(libs[0]);
+    // List of potential libcudart libraries (Adding major version to support python package)
+    constexpr const char *libs[] = {"libcudart.so.12", "libcudart.so.13"};
+    constexpr size_t num_libs    = sizeof(libs) / sizeof(libs[0]);
 
     HMODULE lib_handle = nullptr;
-    int loaded_index = -1;
+    int loaded_index   = -1;
 
     for (size_t i = 0; i < num_libs; ++i) {
-        HMODULE handle = dlopen(libs[i], RTLD_NOW);
+        HMODULE handle    = dlopen(libs[i], RTLD_NOW);
         const char *error = reinterpret_cast<const char *>(dlerror());
 
         if (handle && !error) {
             if (lib_handle) {
                 // Already loaded one -> multiple found
                 dlclose(handle);
-                throw std::runtime_error("Multiple libcudart libraries found: " +
-                                         std::string(libs[loaded_index]) + " and " +
-                                         std::string(libs[i]));
+                throw std::runtime_error("Multiple libcudart libraries found: " + std::string(libs[loaded_index]) +
+                                         " and " + std::string(libs[i]));
             }
-            lib_handle = handle;
+            lib_handle   = handle;
             loaded_index = static_cast<int>(i);
         }
     }
