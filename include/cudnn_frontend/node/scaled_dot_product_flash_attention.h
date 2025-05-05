@@ -358,9 +358,6 @@ class SDPANode : public NodeCRTP<SDPANode> {
         
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_decode_only && (detail::get_backend_version() <= 90900) && (attributes.right_bound.has_value()), error_code_t::GRAPH_NOT_SUPPORTED, "decode only mode, i.e. s_q == 1, not supported with masking (right_bound is set) for backend version 9.9 or below");
         
-        // Validate other large head dim restrictions
-        RETURN_CUDNN_FRONTEND_ERROR_IF(is_bias && ((d_qk > 128) || (d_v > 128)), error_code_t::GRAPH_NOT_SUPPORTED, "Bias is not supported with d_qk or d_v > 128");
-
         // validate options for paged attention
         RETURN_CUDNN_FRONTEND_ERROR_IF(is_paged && (d_qk > 128 || d_v > 128) && detail::get_backend_version() <= 90900, error_code_t::GRAPH_NOT_SUPPORTED, "Paged attention only supported with d_qk and d_v <= 128 for backend version 9.9 or below");
         
