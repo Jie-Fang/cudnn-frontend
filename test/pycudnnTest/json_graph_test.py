@@ -124,6 +124,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-cta_count", action="store")
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
+    tensorir_parser.add_argument("-load_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
     tensorir_parser.add_argument("-host_jitting", action="store_true")
     tensorir_args, unparsed_args = tensorir_parser.parse_known_args(unknown_args)
@@ -974,6 +975,7 @@ def run_tensor_ir_test_from_json_definition(
         tensor_ir_module,
         kernel_config,
         tensorir_args.dump_ir_path,
+        tensorir_args.load_ir_path,
         tensorir_args.mlir_timing,
         tensorir_args.host_jitting,
         legacy_args.timing_loop,
