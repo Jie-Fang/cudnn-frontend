@@ -2,6 +2,8 @@ import test_graph as tg
 import torch
 import utils
 from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from collections import namedtuple
 
 from nv_tensor_ir import ir
 from nv_tensor_ir.dialects import nv_tensor_ir
@@ -164,11 +166,562 @@ def calculate_divisibility(out_stride):
     return shape_div, stride_div
 
 
+class TensorIRNode(ABC):
+    """Base class for all Tensor IR operation nodes."""
+
+    def __init__(self, node, node_map, ip, tensor_ir_test):
+        self.node = node
+        self.node_map = node_map
+        self.ip = ip
+        self.tensor_ir_test = tensor_ir_test
+        self.children = [node_map[child] for child in node.producer_nodes]
+
+        # Get output tensor info with compute data type from node kwargs or output data type
+        self.output_tensor_info = (
+            self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
+                node,
+                (
+                    node.kwargs["compute_data_type"]
+                    if "compute_data_type" in node.kwargs
+                    else node.output[0].data_type
+                ),
+            )
+        )
+
+    @abstractmethod
+    def run(self):
+        """Run the operation and store the result in node_map"""
+        pass
+
+    def convert_and_splat_for_binary_pointwise(self, lsh, rsh, out_type):
+        """Helper method for binary operations to handle input type conversions"""
+        return self.tensor_ir_test.convert_and_splat_for_binary_pointwise(
+            lsh, rsh, out_type
+        )
+
+    def convert_scalar_tensor(self, scalar_tensor, target_type):
+        """Helper method to convert scalar tensors"""
+        return self.tensor_ir_test.convert_scalar_tensor(scalar_tensor, target_type)
+
+    def is_float(self, value):
+        if isinstance(nv_tensor_ir.get_value_datatype(value), ir.FloatType):
+            return True
+        else:
+            return False
+
+    def is_integer(self, value):
+        if isinstance(nv_tensor_ir.get_value_datatype(value), ir.IntegerType):
+            return True
+        else:
+            return False
+
+
+class ReductionNode(TensorIRNode):
+    """Node for reduction operations"""
+
+    def run(self):
+        with self.ip:
+            accumulator_type = ir.TypeAttr.get(
+                eval(
+                    convert_datatype(
+                        self.tensor_ir_test.test_graph.compute_data_type, "tensorir"
+                    )
+                )
+            )
+
+            reduction_mode = None
+            if "reduction_mode.ADD" in self.node.kwargs["mode"]:
+                reduction_mode = nv_tensor_ir.ReductionMode.add
+            elif "reduction_mode.AMAX" in self.node.kwargs["mode"]:
+                reduction_mode = nv_tensor_ir.ReductionMode.amax
+            elif "reduction_mode.MIN" in self.node.kwargs["mode"]:
+                reduction_mode = nv_tensor_ir.ReductionMode.min
+            elif "reduction_mode.MAX" in self.node.kwargs["mode"]:
+                reduction_mode = nv_tensor_ir.ReductionMode.max
+
+            input_datatype = nv_tensor_ir.get_tensor_datatype(self.children[0].type)
+            output_datatype = nv_tensor_ir.get_tensor_datatype(
+                self.output_tensor_info.tensor_type
+            )
+
+            shape_div, _ = calculate_divisibility(self.output_tensor_info.stride)
+
+            if input_datatype != output_datatype:
+                convert_value = nv_tensor_ir.convert(
+                    nv_tensor_ir.TensorType.get(
+                        shape=self.output_tensor_info.shape,
+                        datatype=output_datatype,
+                        shape_divisibility=shape_div,
+                    ),
+                    self.children[0],
+                )
+            else:
+                convert_value = self.children[0]
+
+            reduction_dimensions = []
+            reduction_dim = 0
+            for s in self.output_tensor_info.stride:
+                if s == 0:
+                    reduction_dimensions.append(reduction_dim)
+                reduction_dim += 1
+
+            mlir_value = nv_tensor_ir.reduce(
+                nv_tensor_ir.TensorType.get(
+                    shape=self.output_tensor_info.shape,
+                    datatype=output_datatype,
+                    shape_divisibility=shape_div,
+                ),
+                convert_value,
+                reduction_dimensions,
+                reduction_mode,
+            )
+
+            self.node_map[self.node] = mlir_value
+
+
+class MatmulNode(TensorIRNode):
+    """Node for matmul operations"""
+
+    def run(self):
+        with self.ip:
+            compute_data_type = self.node.kwargs["compute_data_type"]
+            compute_tensor_info = (
+                self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
+                    self.node, compute_data_type
+                )
+            )
+
+            lsh = self.children[0]
+            rsh = self.children[1]
+
+            if nv_tensor_ir.get_tensor_datatype(
+                lsh.type
+            ) != nv_tensor_ir.get_tensor_datatype(rsh.type):
+                datatype = nv_tensor_ir.get_tensor_datatype(
+                    compute_tensor_info.tensor_type
+                )
+                if datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
+                    lsh = nv_tensor_ir.convert(
+                        nv_tensor_ir.TensorType.get_from_tensor_type(
+                            lsh.type, datatype
+                        ),
+                        lsh,
+                    )
+                if datatype != nv_tensor_ir.get_tensor_datatype(rsh.type):
+                    rsh = nv_tensor_ir.convert(
+                        nv_tensor_ir.TensorType.get_from_tensor_type(
+                            rsh.type, datatype
+                        ),
+                        rsh,
+                    )
+
+            matmul_value = nv_tensor_ir.matmul(
+                compute_tensor_info.tensor_type, lsh, rsh
+            )
+            self.node_map[self.node] = matmul_value
+
+
+class BinaryOperationNode(TensorIRNode):
+    """Node for binary operations"""
+
+    # Map operation names to unified tensor operation functions
+    BINARY_OP_MAP = {
+        "add": nv_tensor_ir.add,
+        "bias": nv_tensor_ir.add,
+        "sub": nv_tensor_ir.sub,
+        "mul": nv_tensor_ir.mul,
+        "max": nv_tensor_ir.max,
+        "min": nv_tensor_ir.min,
+        "div": nv_tensor_ir.div,
+        "mod": nv_tensor_ir.mod,
+        "pow": nv_tensor_ir.pow,
+        "add_square": nv_tensor_ir.add_square,
+        "atan2": nv_tensor_ir.atan2,
+        "relu_backward": nv_tensor_ir.relu_bwd,
+        "tanh_backward": nv_tensor_ir.tanh_bwd,
+        "sigmoid_backward": nv_tensor_ir.sigmoid_bwd,
+        "gelu_backward": nv_tensor_ir.gelu_bwd,
+        "gelu_approx_tanh_backward": nv_tensor_ir.gelu_approx_tanh_bwd,
+        "logical_or": nv_tensor_ir.or_,
+        "logical_and": nv_tensor_ir.and_,
+    }
+
+    def run(self):
+        with self.ip:
+            lsh, rsh = self.convert_and_splat_for_binary_pointwise(
+                self.children[0], self.children[1], self.output_tensor_info.tensor_type
+            )
+
+            op_name = self.node.op_name
+            if op_name not in self.BINARY_OP_MAP:
+                print(
+                    f"Unimplemented binary Operation in Lowering to Tensor IR: {op_name}"
+                )
+                return
+
+            # Get the unified operation function
+            op_func = self.BINARY_OP_MAP[op_name]
+
+            # Handle operations with special calling conventions
+            if op_name in ["logical_or", "logical_and", "pow"]:
+                self.node_map[self.node] = op_func(lsh, rsh)
+            else:
+                self.node_map[self.node] = op_func(
+                    self.output_tensor_info.tensor_type, lsh, rsh
+                )
+
+
+class UnaryOperationNode(TensorIRNode):
+    """Node for unary operations"""
+
+    # Map operation names to unified tensor operation functions
+    UNARY_OP_MAP = {
+        "abs": nv_tensor_ir.abs,
+        "tanh": nv_tensor_ir.tanh_fwd,
+        "ceil": nv_tensor_ir.ceil,
+        "floor": nv_tensor_ir.floor,
+        "cos": nv_tensor_ir.cos,
+        "sin": nv_tensor_ir.sin,
+        "tan": nv_tensor_ir.tan,
+        "exp": nv_tensor_ir.exp,
+        "log": nv_tensor_ir.log,
+        "neg": nv_tensor_ir.neg,
+        "rsqrt": nv_tensor_ir.rsqrt,
+        "sqrt": nv_tensor_ir.sqrt,
+        "erf": nv_tensor_ir.erf,
+        "reciprocal": nv_tensor_ir.reciprocal,
+        "relu": nv_tensor_ir.relu_fwd,
+        "sigmoid": nv_tensor_ir.sigmoid_fwd,
+        "gelu": nv_tensor_ir.gelu_fwd,
+        "gelu_approx_tanh": nv_tensor_ir.gelu_approx_tanh_fwd,
+        "logical_not": nv_tensor_ir.not_,
+    }
+
+    def run(self):
+        with self.ip:
+            if self.output_tensor_info.tensor_type != self.children[0].type:
+                convert_value = nv_tensor_ir.convert(
+                    self.output_tensor_info.tensor_type, self.children[0]
+                )
+            else:
+                convert_value = self.children[0]
+
+            op_name = self.node.op_name
+            if op_name not in self.UNARY_OP_MAP:
+                print(
+                    f"Unimplemented unary Operation in Lowering to Tensor IR: {op_name}"
+                )
+                return
+
+            # Get the unified operation function
+            op_func = self.UNARY_OP_MAP[op_name]
+
+            # Execute the operation - all unary ops use the same calling convention
+            self.node_map[self.node] = op_func(convert_value)
+
+
+class ComparatorNode(TensorIRNode):
+    """Node for comparison operations"""
+
+    # Map operation names to comparator types
+    COMPARATOR_MAP = {
+        "cmp_lt": nv_tensor_ir.Comparator.olt,
+        "cmp_ge": nv_tensor_ir.Comparator.oge,
+        "cmp_gt": nv_tensor_ir.Comparator.ogt,
+        "cmp_le": nv_tensor_ir.Comparator.ole,
+        "cmp_eq": nv_tensor_ir.Comparator.oeq,
+        "cmp_ne": nv_tensor_ir.Comparator.one,
+    }
+
+    def run(self):
+        with self.ip:
+            op_name = self.node.op_name
+            if op_name not in self.COMPARATOR_MAP:
+                print(f"Unimplemented comparator operation: {op_name}")
+                return
+
+            # Ensure we have float tensors for comparisons
+            if not self.is_float(self.children[0]) or not self.is_float(
+                self.children[1]
+            ):
+                raise ValueError(f"Comparator {op_name} requires float tensors")
+
+            self.node_map[self.node] = nv_tensor_ir.cmpf(
+                self.COMPARATOR_MAP[op_name], self.children[0], self.children[1]
+            )
+
+
+class IdentityNode(TensorIRNode):
+    """Node for identity operations"""
+
+    def run(self):
+        with self.ip:
+            self.node_map[self.node] = nv_tensor_ir.convert(
+                self.output_tensor_info.tensor_type,
+                self.children[0],
+            )
+
+
+class ConvolutionNode(TensorIRNode):
+    """Base node for convolution operations"""
+
+    def _prepare_common_params(self):
+        accumulator_type_attr = ir.TypeAttr.get(
+            eval(
+                convert_datatype(
+                    self.tensor_ir_test.test_graph.compute_data_type, "tensorir"
+                )
+            )
+        )
+        pre_padding = self.node.kwargs["padding"]
+        post_padding = self.node.kwargs["padding"]  # FIXME: what should this be?
+        stride = self.node.kwargs["stride"]
+        dilation = self.node.kwargs["dilation"]
+
+        return accumulator_type_attr, pre_padding, post_padding, stride, dilation
+
+
+class ConvFpropNode(ConvolutionNode):
+    """Node for forward convolution"""
+
+    def run(self):
+        with self.ip:
+            x = self.children[0]
+            w = self.children[1]
+
+            accumulator_type_attr, pre_padding, post_padding, stride, dilation = (
+                self._prepare_common_params()
+            )
+
+            self.node_map[self.node] = nv_tensor_ir.conv_fprop(
+                self.output_tensor_info.tensor_type,
+                x,
+                w,
+                accumulator_type_attr,
+                pre_padding,
+                post_padding,
+                stride,
+                dilation,
+            )
+
+
+class ConvDgradNode(ConvolutionNode):
+    """Node for gradient w.r.t. data convolution"""
+
+    def run(self):
+        with self.ip:
+            dy = self.children[0]
+            w = self.children[1]
+
+            accumulator_type_attr, pre_padding, post_padding, stride, dilation = (
+                self._prepare_common_params()
+            )
+
+            self.node_map[self.node] = nv_tensor_ir.conv_dgrad(
+                self.output_tensor_info.tensor_type,
+                dy,
+                w,
+                accumulator_type_attr,
+                pre_padding,
+                post_padding,
+                stride,
+                dilation,
+            )
+
+
+class ConvWgradNode(ConvolutionNode):
+    """Node for gradient w.r.t. weight convolution"""
+
+    def run(self):
+        with self.ip:
+            dy = self.children[0]
+            w = self.children[1]
+
+            accumulator_type_attr, pre_padding, post_padding, stride, dilation = (
+                self._prepare_common_params()
+            )
+
+            self.node_map[self.node] = nv_tensor_ir.conv_dgrad(
+                self.output_tensor_info.tensor_type,
+                dy,
+                w,
+                accumulator_type_attr,
+                pre_padding,
+                post_padding,
+                stride,
+                dilation,
+            )
+
+
+class ActivationForwardNode(TensorIRNode):
+    """Node for activation forward operations that take beta parameter"""
+
+    # Map operation names to activation functions
+    ACTIVATION_MAP = {
+        "swish": nv_tensor_ir.swish_fwd,
+        "softplus": nv_tensor_ir.softplus_fwd,
+        "elu": nv_tensor_ir.elu_fwd,
+    }
+
+    def run(self):
+        with self.ip:
+            beta = self.tensor_ir_test.get_beta_attr()
+            if beta is None:
+                raise ValueError(f"Beta attribute not found for {self.node.op_name}")
+
+            converted_x, _ = self.convert_and_splat_for_binary_pointwise(
+                self.children[0], None, self.output_tensor_info.tensor_type
+            )
+
+            # Ensure we have float tensors for activations
+            if not self.is_float(converted_x):
+                raise ValueError(
+                    f"Activation operation {self.node.op_name} requires float tensors"
+                )
+
+            op_name = self.node.op_name
+            if op_name in self.ACTIVATION_MAP:
+                self.node_map[self.node] = self.ACTIVATION_MAP[op_name](
+                    converted_x, beta
+                )
+            else:
+                print(f"Unimplemented activation forward operation: {op_name}")
+
+
+class ActivationBackwardNode(TensorIRNode):
+    """Node for activation backward operations that take beta parameter"""
+
+    # Map operation names to activation backward functions
+    ACTIVATION_BWD_MAP = {
+        "swish_backward": nv_tensor_ir.swish_bwd,
+        "softplus_backward": nv_tensor_ir.softplus_bwd,
+        "elu_backward": nv_tensor_ir.elu_bwd,
+    }
+
+    def run(self):
+        with self.ip:
+            beta = self.tensor_ir_test.get_beta_attr()
+            if beta is None:
+                raise ValueError(f"Beta attribute not found for {self.node.op_name}")
+
+            converted_x, converted_grad = self.convert_and_splat_for_binary_pointwise(
+                self.children[0], self.children[1], self.output_tensor_info.tensor_type
+            )
+
+            # Ensure we have float tensors for activation gradients
+            if not self.is_float(converted_x) or not self.is_float(converted_grad):
+                raise ValueError(
+                    f"Activation gradient operation {self.node.op_name} requires float tensors"
+                )
+
+            op_name = self.node.op_name
+            if op_name in self.ACTIVATION_BWD_MAP:
+                self.node_map[self.node] = self.ACTIVATION_BWD_MAP[op_name](
+                    converted_x, converted_grad, beta
+                )
+            else:
+                print(f"Unimplemented activation backward operation: {op_name}")
+
+
+class BinarySelectNode(TensorIRNode):
+    """Node for binary select operations"""
+
+    def run(self):
+        with self.ip:
+            condition = self.children[0]
+            true_value = self.children[1]
+            false_value = self.children[2]
+
+            # Type checking: condition must be integer/boolean, true/false values must be float
+            if not self.is_integer(condition):
+                raise ValueError(
+                    f"binary_select condition (first operand) must be an integer tensor, got {condition.type}"
+                )
+
+            if not self.is_float(true_value) or not self.is_float(false_value):
+                raise ValueError(
+                    f"binary_select true and false values (second and third operands) must be float tensors"
+                )
+
+            self.node_map[self.node] = nv_tensor_ir.binary_select(
+                condition, true_value, false_value
+            )
+
+
 class test_tensor_ir:
+    # Group operations by their handler class for cleaner lookup
+    OPERATION_GROUPS = {
+        ReductionNode: ["reduction"],
+        MatmulNode: ["matmul"],
+        BinaryOperationNode: [
+            "add",
+            "bias",
+            "sub",
+            "mul",
+            "max",
+            "min",
+            "div",
+            "mod",
+            "atan2",
+            "pow",
+            "add_square",
+            "logical_or",
+            "logical_and",
+            "relu_backward",
+            "tanh_backward",
+            "sigmoid_backward",
+            "gelu_backward",
+            "gelu_approx_tanh_backward",
+        ],
+        UnaryOperationNode: [
+            "tanh",
+            "abs",
+            "ceil",
+            "floor",
+            "cos",
+            "sin",
+            "tan",
+            "exp",
+            "log",
+            "neg",
+            "rsqrt",
+            "sqrt",
+            "erf",
+            "logical_not",
+            "reciprocal",
+            "relu",
+            "sigmoid",
+            "gelu",
+            "gelu_approx_tanh",
+        ],
+        ComparatorNode: ["cmp_lt", "cmp_ge", "cmp_gt", "cmp_le", "cmp_eq", "cmp_ne"],
+        BinarySelectNode: ["binary_select"],
+        ActivationForwardNode: ["swish", "softplus", "elu"],
+        ActivationBackwardNode: ["swish_backward", "softplus_backward", "elu_backward"],
+        IdentityNode: ["identity"],
+        ConvWgradNode: ["conv_wgrad"],
+        ConvDgradNode: ["conv_dgrad"],
+        ConvFpropNode: ["conv_fprop"],
+    }
+
+    # Map of operation names to node classes - built from the operation groups
+    NODE_CLASS_MAP = {}
+
+    # Build the NODE_CLASS_MAP from the operation groups
+    @classmethod
+    def _init_node_class_map(cls):
+        for node_class, op_names in cls.OPERATION_GROUPS.items():
+            for op_name in op_names:
+                cls.NODE_CLASS_MAP[op_name] = node_class
+
     def __init__(self, test_graph):
         self.test_graph = test_graph
         self.outputs = []
         self.ref_outputs = None
+
+        # Initialize the node class map if it's empty
+        if not self.NODE_CLASS_MAP:
+            self._init_node_class_map()
 
     def determine_tensor_ir_inout_tensor_type(self, node, dtype=None):
         assert len(node.output) == 1
@@ -244,73 +797,13 @@ class test_tensor_ir:
     def calc_ref(self):
         self.ref_outputs = self.test_graph.calc_reference()
 
-    # TODO(CL-16596): refactor this code for scalability
     def tensorir_compare_to_reference(self, atol=1e-2, rtol=1e-2):
-        passed = True
         assert len(self.ref_outputs) == len(self.outputs)
-        number_outputs_tested = 0
-        output_idx = 0
-        # Compare with reference
-        for Y_expected, Y_actual in zip(self.ref_outputs, self.outputs):
-            if Y_expected.device.type != Y_actual.device.type:
-                if Y_expected.device.type == "cuda":
-                    Y_expected = Y_expected.to("cpu")
-                else:
-                    Y_actual = Y_actual.to("cpu")
-            if Y_expected.dtype != Y_actual.dtype:
-                Y_expected = Y_expected.to(Y_actual.dtype)
 
-            # TODO (@mbreughe): Clean up this assumption:
-            # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
-            # For now, we can assume that we don't care about this output and just let the reference pass
-            # To be on the safe side, we will make sure at least one output was checked
-            if Y_expected is None:
-                continue
-
-            if Y_expected.shape != Y_actual.shape:
-                print(
-                    "WARNING: reference and actual output shapes differ ({} resp., {})".format(
-                        Y_expected.shape, Y_actual.shape
-                    )
-                )
-
-            try:
-                print("Y_EXPECTED:", Y_expected)
-                print("Y_ACTUAL:", Y_actual)
-                if Y_expected.dtype == torch.bool and Y_actual.dtype == torch.bool:
-                    assert torch.equal(
-                        Y_expected, Y_actual
-                    ), "Boolean tensors do not match"
-                else:
-                    # Handle FP8 tensors which aren't supported by torch.testing.assert_close
-                    if (
-                        Y_expected.dtype == torch.float8_e4m3fn
-                        or Y_actual.dtype == torch.float8_e4m3fn
-                    ):
-                        # Convert FP8 tensors to float32 for comparison
-                        Y_expected_float = Y_expected.to(torch.float32)
-                        Y_actual_float = Y_actual.to(torch.float32)
-                        torch.testing.assert_close(
-                            Y_expected_float, Y_actual_float, atol=atol, rtol=rtol
-                        )
-                    else:
-                        torch.testing.assert_close(
-                            Y_expected, Y_actual, atol=atol, rtol=rtol
-                        )
-            except Exception as e:
-                passed = False
-                print("Assertion Error:", str(e))
-                print("Stack trace:")
-                import traceback
-
-                traceback.print_exc()
-
-            number_outputs_tested += 1
-            output_idx += 1
-        assert number_outputs_tested >= 1
-
-        utils.reportCurrentTime("assert_close")
-        return passed
+        # Use the base class method for comparison
+        return tg.test_graph.compare_to_reference(
+            self.ref_outputs, self.outputs, atol=atol, rtol=rtol
+        )
 
     def get_beta_attr(self):
         for node in self.test_graph.entrance_nodes:
@@ -329,6 +822,7 @@ class test_tensor_ir:
         module,
         kernel_configs,
         dump_ir_path,
+        load_ir_path,
         mlir_timing,
         host_jitting,
         timing_loop=1,
@@ -420,7 +914,7 @@ class test_tensor_ir:
                     nv_tensor_ir.TensorConversionOptions(
                         tile_size, mma_shape, cluster_shape, cta_count
                     ),
-                    nv_tensor_ir.DebugOptions(dump_ir_path, mlir_timing),
+                    nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, mlir_timing),
                     host_jitting,
                 )
 
@@ -669,462 +1163,30 @@ class test_tensor_ir:
         else:
             return scalar_tensor
 
-    def build_binary_operation(self, op_name, node, children, out_type, node_map):
-        lsh, rsh = self.convert_and_splat_for_binary_pointwise(
-            children[0], children[1], out_type
-        )
-        match op_name:
-            case "add":
-                node_map[node] = nv_tensor_ir.add(out_type, lsh, rsh)
-            case "sub":
-                node_map[node] = nv_tensor_ir.sub(out_type, lsh, rsh)
-            case "mul":
-                node_map[node] = nv_tensor_ir.mul(out_type, lsh, rsh)
-            case "bias":
-                node_map[node] = nv_tensor_ir.add(out_type, lsh, rsh)
-            case "max":
-                node_map[node] = nv_tensor_ir.max(out_type, lsh, rsh)
-            case "min":
-                node_map[node] = nv_tensor_ir.min(out_type, lsh, rsh)
-            case "div":
-                node_map[node] = nv_tensor_ir.div(out_type, lsh, rsh)
-            case "mod":
-                node_map[node] = nv_tensor_ir.mod(out_type, lsh, rsh)
-            case "add_square":
-                node_map[node] = nv_tensor_ir.add_square(out_type, lsh, rsh)
-            case "atan2":
-                node_map[node] = nv_tensor_ir.atan2(out_type, lsh, rsh)
-            case "pow":
-                node_map[node] = nv_tensor_ir.pow(out_type, lsh, rsh)
-            case "logical_or":
-                node_map[node] = nv_tensor_ir.or_(lsh, rsh)
-            case "logical_and":
-                node_map[node] = nv_tensor_ir.and_(lsh, rsh)
-            case "relu_backward":
-                node_map[node] = nv_tensor_ir.relu_bwd(out_type, lsh, rsh)
-            case "tanh_backward":
-                node_map[node] = nv_tensor_ir.tanh_bwd(out_type, lsh, rsh)
-            case "sigmoid_backward":
-                node_map[node] = nv_tensor_ir.sigmoid_bwd(out_type, lsh, rsh)
-            case "gelu_backward":
-                node_map[node] = nv_tensor_ir.gelu_bwd(out_type, lsh, rsh)
-            case "gelu_approx_tanh_backward":
-                node_map[node] = nv_tensor_ir.gelu_approx_tanh_bwd(out_type, lsh, rsh)
-            case _:
-                print(
-                    "Unimplemented binary Operation in Lowering to Tensor IR: ", op_name
-                )
-
-    def build_unary_operation(self, op_name, node, children, out_type, node_map):
-        if out_type != children[0].type:
-            convert_value = nv_tensor_ir.convert(out_type, children[0])
-        else:
-            convert_value = children[0]
-        match op_name:
-            case "tanh":
-                node_map[node] = nv_tensor_ir.tanh_fwd(convert_value)
-            case "abs":
-                node_map[node] = nv_tensor_ir.abs(convert_value)
-            case "ceil":
-                node_map[node] = nv_tensor_ir.ceil(convert_value)
-            case "floor":
-                node_map[node] = nv_tensor_ir.floor(convert_value)
-            case "cos":
-                node_map[node] = nv_tensor_ir.cos(convert_value)
-            case "sin":
-                node_map[node] = nv_tensor_ir.sin(convert_value)
-            case "tan":
-                node_map[node] = nv_tensor_ir.tan(convert_value)
-            case "exp":
-                node_map[node] = nv_tensor_ir.exp(convert_value)
-            case "log":
-                node_map[node] = nv_tensor_ir.log(convert_value)
-            case "neg":
-                node_map[node] = nv_tensor_ir.neg(convert_value)
-            case "rsqrt":
-                node_map[node] = nv_tensor_ir.rsqrt(convert_value)
-            case "sqrt":
-                node_map[node] = nv_tensor_ir.sqrt(convert_value)
-            case "erf":
-                node_map[node] = nv_tensor_ir.erf(convert_value)
-            case "reciprocal":
-                node_map[node] = nv_tensor_ir.reciprocal(convert_value)
-            case "relu":
-                node_map[node] = nv_tensor_ir.relu_fwd(convert_value)
-            case "sigmoid":
-                node_map[node] = nv_tensor_ir.sigmoid_fwd(convert_value)
-            case "gelu":
-                node_map[node] = nv_tensor_ir.gelu_fwd(convert_value)
-            case "gelu_approx_tanh":
-                node_map[node] = nv_tensor_ir.gelu_approx_tanh_fwd(convert_value)
-            case "logical_not":
-                node_map[node] = nv_tensor_ir.not_(convert_value)
-            case _:
-                print(
-                    "Unimplemented unary Operation in Lowering to Tensor IR: ", op_name
-                )
-
     def build_tensor_ir_recursive(self, node, node_map, ip):
+        """Build tensor IR representation recursively for the given node."""
+        # Skip if node is already processed
         if node in node_map.keys():
             return
-        # map nodes -> tensor_ir values
-        children = node.producer_nodes
 
-        # Get children's values.
-        for child in children:
+        # Process all children first
+        for child in node.producer_nodes:
             self.build_tensor_ir_recursive(child, node_map, ip)
-        with ip as InsertionPoint:
-            # No inheritance, just switch.
-            if isinstance(node, tg.operation):
-                # Cast children to math precision
 
-                new_children = []
-                # : Also if output data type is different from compute data type, cast output.
-                for child in children:
-                    new_children.append(node_map[child])
+        # Only process operation nodes
+        if not isinstance(node, tg.operation):
+            print("not an op")
+            return
 
-                children = new_children
-                output_tensor_info = self.determine_tensor_ir_inout_tensor_type(
-                    node,
-                    (
-                        node.kwargs["compute_data_type"]
-                        if "compute_data_type" in node.kwargs
-                        else node.output[0].data_type
-                    ),
-                )
-                beta = self.get_beta_attr()
-                if node.op_name in [
-                    "swish",
-                    "softplus",
-                    "elu",
-                    "swish_backward",
-                    "softplus_backward",
-                    "elu_backward",
-                ]:
-                    assert beta is not None, "Beta attribute not found"
-                # TODO(CL-16596): refactor this code for scalability
-                match node.op_name:  # FIXME(@xrouth): Try to match on something less fragile than "__name__"
-                    case "reduction":
-                        accumulator_type = ir.TypeAttr.get(
-                            eval(
-                                convert_datatype(
-                                    self.test_graph.compute_data_type, "tensorir"
-                                )
-                            )
-                        )
+        op_name = node.op_name
 
-                        reduction_mode = None
-                        if "reduction_mode.ADD" in node.kwargs["mode"]:
-                            reduction_mode = nv_tensor_ir.ReductionMode.add
-                        elif "reduction_mode.AMAX" in node.kwargs["mode"]:
-                            reduction_mode = nv_tensor_ir.ReductionMode.amax
-                        elif "reduction_mode.MIN" in node.kwargs["mode"]:
-                            reduction_mode = nv_tensor_ir.ReductionMode.min
-                        elif "reduction_mode.MAX" in node.kwargs["mode"]:
-                            reduction_mode = nv_tensor_ir.ReductionMode.max
-                        input_datatype = nv_tensor_ir.get_tensor_datatype(
-                            children[0].type
-                        )
-                        output_datatype = nv_tensor_ir.get_tensor_datatype(
-                            output_tensor_info.tensor_type
-                        )
+        # Get the node class for this operation
+        node_class = self.NODE_CLASS_MAP.get(op_name)
 
-                        shape_div, stride_div = calculate_divisibility(
-                            output_tensor_info.stride
-                        )
+        if node_class is None:
+            print(f"Unimplemented Operation in Lowering to Tensor IR: {op_name}")
+            return
 
-                        if input_datatype != output_datatype:
-                            convert_value = nv_tensor_ir.convert(
-                                nv_tensor_ir.TensorType.get(
-                                    shape=output_tensor_info.shape,
-                                    datatype=output_datatype,
-                                    shape_divisibility=shape_div,
-                                ),
-                                children[0],
-                            )
-                        else:
-                            convert_value = children[0]
-                        reduction_dimensions = []
-                        reduction_dim = 0
-                        for s in output_tensor_info.stride:
-                            if s == 0:
-                                reduction_dimensions.append(reduction_dim)
-                            reduction_dim += 1
-                        mlir_value = nv_tensor_ir.reduce(
-                            nv_tensor_ir.TensorType.get(
-                                shape=output_tensor_info.shape,
-                                datatype=output_datatype,
-                                shape_divisibility=shape_div,
-                            ),
-                            convert_value,
-                            reduction_dimensions,
-                            reduction_mode,
-                        )
-                        node_map[node] = mlir_value
-                    case "matmul":
-                        compute_data_type = node.kwargs["compute_data_type"]
-                        compute_tensor_info = (
-                            self.determine_tensor_ir_inout_tensor_type(
-                                node, compute_data_type
-                            )
-                        )
-                        lsh = children[0]
-                        rsh = children[1]
-                        if nv_tensor_ir.get_tensor_datatype(
-                            lsh.type
-                        ) != nv_tensor_ir.get_tensor_datatype(rsh.type):
-                            datatype = nv_tensor_ir.get_tensor_datatype(
-                                compute_tensor_info.tensor_type
-                            )
-                            if datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
-                                lsh = nv_tensor_ir.convert(
-                                    nv_tensor_ir.TensorType.get_from_tensor_type(
-                                        lsh.type, datatype
-                                    ),
-                                    lsh,
-                                )
-                            if datatype != nv_tensor_ir.get_tensor_datatype(rsh.type):
-                                rsh = nv_tensor_ir.convert(
-                                    nv_tensor_ir.TensorType.get_from_tensor_type(
-                                        rsh.type, datatype
-                                    ),
-                                    rsh,
-                                )
-                        matmul_value = nv_tensor_ir.matmul(
-                            compute_tensor_info.tensor_type, lsh, rsh
-                        )
-                        node_map[node] = matmul_value
-                    # POINTWISE:
-                    case (
-                        "bias"
-                        | "add"
-                        | "sub"
-                        | "mul"
-                        | "max"
-                        | "min"
-                        | "div"
-                        | "mod"
-                        | "atan2"
-                        | "pow"
-                        | "add_square"
-                        | "logical_or"
-                        | "logical_and"
-                        | "logical_not"
-                        | "relu_backward"
-                        | "tanh_backward"
-                        | "sigmoid_backward"
-                        | "gelu_backward"
-                        | "gelu_approx_tanh_backward"
-                    ):
-                        self.build_binary_operation(
-                            node.op_name,
-                            node,
-                            children,
-                            output_tensor_info.tensor_type,
-                            node_map,
-                        )
-                    case (
-                        "tanh"
-                        | "abs"
-                        | "ceil"
-                        | "floor"
-                        | "cos"
-                        | "sin"
-                        | "tan"
-                        | "exp"
-                        | "log"
-                        | "neg"
-                        | "rsqrt"
-                        | "sqrt"
-                        | "erf"
-                        | "logical_not"
-                        | "reciprocal"
-                        | "relu"
-                        | "sigmoid"
-                        | "gelu"
-                        | "gelu_approx_tanh"
-                    ):
-                        self.build_unary_operation(
-                            node.op_name,
-                            node,
-                            children,
-                            output_tensor_info.tensor_type,
-                            node_map,
-                        )
-                    case "cmp_lt":
-                        comparator = nv_tensor_ir.FloatComparator.olt
-                        node_map[node] = nv_tensor_ir.cmpf(
-                            comparator, children[0], children[1]
-                        )
-                    case "cmp_ge":
-                        comparator = nv_tensor_ir.FloatComparator.oge
-                        node_map[node] = nv_tensor_ir.cmpf(
-                            comparator, children[0], children[1]
-                        )
-                    case "cmp_gt":
-                        comparator = nv_tensor_ir.FloatComparator.ogt
-                        node_map[node] = nv_tensor_ir.cmpf(
-                            comparator, children[0], children[1]
-                        )
-                    case "cmp_le":
-                        comparator = nv_tensor_ir.FloatComparator.ole
-                        node_map[node] = nv_tensor_ir.cmpf(
-                            comparator, children[0], children[1]
-                        )
-                    case "cmp_eq":
-                        comparator = nv_tensor_ir.FloatComparator.oeq
-                        node_map[node] = nv_tensor_ir.cmpf(
-                            comparator, children[0], children[1]
-                        )
-                    case "cmp_ne":
-                        comparator = nv_tensor_ir.FloatComparator.one
-                        node_map[node] = nv_tensor_ir.cmpf(
-                            comparator, children[0], children[1]
-                        )
-                    case "binary_select":
-                        node_map[node] = nv_tensor_ir.binary_select(
-                            children[0], children[1], children[2]
-                        )
-                    case "swish":
-                        converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                            children[0], None, output_tensor_info.tensor_type
-                        )
-                        node_map[node] = nv_tensor_ir.swish_fwd(converted_x, beta)
-                    case "softplus":
-                        converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                            children[0], None, output_tensor_info.tensor_type
-                        )
-                        node_map[node] = nv_tensor_ir.softplus_fwd(converted_x, beta)
-                    case "elu":
-                        converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                            children[0], None, output_tensor_info.tensor_type
-                        )
-                        node_map[node] = nv_tensor_ir.elu_fwd(converted_x, beta)
-                    case "swish_backward":
-                        converted_x, converted_grad = (
-                            self.convert_and_splat_for_binary_pointwise(
-                                children[0], children[1], output_tensor_info.tensor_type
-                            )
-                        )
-                        node_map[node] = nv_tensor_ir.swish_bwd(
-                            converted_x, converted_grad, beta
-                        )
-                    case "softplus_backward":
-                        converted_x, converted_grad = (
-                            self.convert_and_splat_for_binary_pointwise(
-                                children[0], children[1], output_tensor_info.tensor_type
-                            )
-                        )
-                        node_map[node] = nv_tensor_ir.softplus_bwd(
-                            converted_x, converted_grad, beta
-                        )
-                    case "elu_backward":
-                        converted_x, converted_grad = (
-                            self.convert_and_splat_for_binary_pointwise(
-                                children[0], children[1], output_tensor_info.tensor_type
-                            )
-                        )
-                        node_map[node] = nv_tensor_ir.elu_bwd(
-                            converted_x, converted_grad, beta
-                        )
-                    case "identity":
-                        node_map[node] = nv_tensor_ir.convert(
-                            output_tensor_info.tensor_type,
-                            children[0],
-                        )
-                    case "conv_wgrad":
-                        dy = children[0]
-                        w = children[1]
-                        accumulator_type_attr = ir.TypeAttr.get(
-                            eval(
-                                convert_datatype(
-                                    self.test_graph.compute_data_type, "tensorir"
-                                )
-                            )
-                        )
-
-                        out_dims = node.output[0].dim
-
-                        pre_padding = node.kwargs["padding"]
-                        post_padding = node.kwargs[
-                            "padding"
-                        ]  #  [] # FIXME(@xrouth): what should this be?
-                        stride = node.kwargs["stride"]
-                        dilation = node.kwargs["dilation"]
-
-                        node_map[node] = nv_tensor_ir.conv_dgrad(
-                            output_tensor_info.tensor_type,
-                            dy,
-                            w,
-                            accumulator_type_attr,
-                            pre_padding,
-                            post_padding,
-                            stride,
-                            dilation,
-                        )
-                    case "conv_dgrad":
-                        dy = children[0]
-                        w = children[1]
-                        accumulator_type_attr = ir.TypeAttr.get(
-                            eval(
-                                convert_datatype(
-                                    self.test_graph.compute_data_type, "tensorir"
-                                )
-                            )
-                        )
-
-                        out_dims = node.output[0].dim
-
-                        pre_padding = node.kwargs["padding"]
-                        post_padding = node.kwargs[
-                            "padding"
-                        ]  # [] # FIXME(@xrouth): what should this be?
-                        stride = node.kwargs["stride"]
-                        dilation = node.kwargs["dilation"]
-
-                        node_map[node] = nv_tensor_ir.conv_dgrad(
-                            output_tensor_info.tensor_type,
-                            dy,
-                            w,
-                            accumulator_type_attr,
-                            pre_padding,
-                            post_padding,
-                            stride,
-                            dilation,
-                        )
-                    case "conv_fprop":
-                        x = children[0]
-                        w = children[1]
-                        accumulator_type_attr = ir.TypeAttr.get(
-                            eval(
-                                convert_datatype(
-                                    self.test_graph.compute_data_type, "tensorir"
-                                )
-                            )
-                        )
-
-                        pre_padding = node.kwargs["padding"]
-                        post_padding = node.kwargs[
-                            "padding"
-                        ]  # [] # FIXME(@xrouth): what should this be?
-                        stride = node.kwargs["stride"]
-                        dilation = node.kwargs["dilation"]
-
-                        node_map[node] = nv_tensor_ir.conv_fprop(
-                            output_tensor_info.tensor_type,
-                            x,
-                            w,
-                            accumulator_type_attr,
-                            pre_padding,
-                            post_padding,
-                            stride,
-                            dilation,
-                        )
-                    case _:
-                        print(
-                            "Unimplemented Operation in Lowering to Tensor IR: ",
-                            node.op_name,
-                        )
-            else:
-                print("not an op")
-                # Nothing
+        # Create and run the node
+        ir_node = node_class(node, node_map, ip, self)
+        ir_node.run()

@@ -272,9 +272,7 @@ class PytorchReference:
         return output
 
     @staticmethod
-    def matmul(kwargs, test_tensor_out_list):
-        lsh_str = "A"
-        rsh_str = "B"
+    def _get_computation_types(kwargs, test_tensor_out_list):
         compute_type = eval(
             convert_to_torch_type_wrapper(
                 kwargs["compute_data_type"]
@@ -282,122 +280,149 @@ class PytorchReference:
                 else test_tensor_out_list[0].data_type
             )
         )
+
+        # Fall back to float32 for computation if type is FP8
+        compute_type = (
+            compute_type if compute_type != torch.float8_e4m3fn else torch.float
+        )
+
+        # Get output type
         out_type = eval(
             convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
         )
 
-        # Do computation in compute precision
-        # except for fp8
-        compute_type = (
-            compute_type if not compute_type == torch.float8_e4m3fn else torch.float
-        )
-        compute_result = torch.bmm(
-            kwargs[lsh_str].to(dtype=compute_type),
-            kwargs[rsh_str].to(dtype=compute_type),
-        )
+        return compute_type, out_type
 
-        # Store both compute and output precision results
+    @staticmethod
+    def _store_results(test_tensor_out_list, compute_result, out_type):
         test_tensor_out_list[0].compute_data = compute_result
         test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
-
         return [test_tensor_out_list[0].ref_data]
 
     @staticmethod
-    def bias(kwargs, test_tensor_out_list):
-        output = torch.add(kwargs["input"], kwargs["bias"])
-        return [output]
+    def _handle_unary_op(kwargs, test_tensor_out_list, op_func, input_key="input"):
+        compute_type, out_type = PytorchReference._get_computation_types(
+            kwargs, test_tensor_out_list
+        )
+
+        # Convert input tensor to computation type
+        input_tensor = kwargs[input_key].to(dtype=compute_type)
+
+        # Apply operation
+        compute_result = op_func(input_tensor).to(dtype=compute_type)
+
+        return PytorchReference._store_results(
+            test_tensor_out_list, compute_result, out_type
+        )
+
+    @staticmethod
+    def _handle_binary_op(
+        kwargs, test_tensor_out_list, op_func, lhs_key="a", rhs_key="b"
+    ):
+        compute_type, out_type = PytorchReference._get_computation_types(
+            kwargs, test_tensor_out_list
+        )
+
+        # Convert input tensors to computation type
+        lhs = kwargs[lhs_key].to(dtype=compute_type)
+        rhs = kwargs[rhs_key].to(dtype=compute_type)
+
+        compute_type, out_type = PytorchReference._get_computation_types(
+            kwargs, test_tensor_out_list
+        )
+
+        # Apply operation
+        compute_result = op_func(lhs, rhs).to(dtype=compute_type)
+
+        return PytorchReference._store_results(
+            test_tensor_out_list, compute_result, out_type
+        )
+
+    @staticmethod
+    def matmul(kwargs, test_tensor_out_list):
+        lhs, rhs = kwargs["A"], kwargs["B"]
+
+        # Efficiently handle batch size broadcasting
+        if lhs.size(0) != rhs.size(0):
+            batch_size = max(lhs.size(0), rhs.size(0))
+            if lhs.size(0) == 1:
+                lhs = lhs.expand(batch_size, *lhs.shape[1:])
+            elif rhs.size(0) == 1:
+                rhs = rhs.expand(batch_size, *rhs.shape[1:])
+
+        # Update kwargs in-place with the potentially expanded tensors
+        kwargs.update({"A": lhs, "B": rhs})
+
+        # Use the binary operation handler with torch.bmm
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.bmm, "A", "B"
+        )
 
     @staticmethod
     def add(kwargs, test_tensor_out_list):
-        lsh_str = "a"
-        rsh_str = "b"
-        compute_type = eval(
-            convert_to_torch_type_wrapper(
-                kwargs["compute_data_type"]
-                if "compute_data_type" in kwargs
-                else test_tensor_out_list[0].data_type
-            )
-        )
-        if kwargs[lsh_str].dtype != compute_type:
-            kwargs[lsh_str] = kwargs[lsh_str].to(dtype=compute_type)
-        if kwargs[rsh_str].dtype != compute_type:
-            kwargs[rsh_str] = kwargs[rsh_str].to(dtype=compute_type)
-        out_type = eval(
-            convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
-        )
-        compute_result = torch.add(kwargs[lsh_str], kwargs[rsh_str]).to(
-            dtype=compute_type
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.add
         )
 
-        test_tensor_out_list[0].compute_data = compute_result
-        test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
-        return [test_tensor_out_list[0].ref_data]
+    @staticmethod
+    def bias(kwargs, test_tensor_out_list):
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.add, "input", "bias"
+        )
 
     @staticmethod
     def sub(kwargs, test_tensor_out_list):
-        output = torch.sub(kwargs["a"], kwargs["b"])
-        return [output]
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.sub
+        )
 
     @staticmethod
     def mul(kwargs, test_tensor_out_list):
-        lsh_str = "a"
-        rsh_str = "b"
-        compute_type = eval(
-            convert_to_torch_type_wrapper(
-                kwargs["compute_data_type"]
-                if "compute_data_type" in kwargs
-                else test_tensor_out_list[0].data_type
-            )
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.mul
         )
-        if kwargs[lsh_str].dtype != compute_type:
-            kwargs[lsh_str] = kwargs[lsh_str].to(dtype=compute_type)
-        if kwargs[rsh_str].dtype != compute_type:
-            kwargs[rsh_str] = kwargs[rsh_str].to(dtype=compute_type)
-        out_type = eval(
-            convert_to_torch_type_wrapper(test_tensor_out_list[0].data_type)
-        )
-        compute_result = torch.mul(kwargs[lsh_str], kwargs[rsh_str]).to(
-            dtype=compute_type
-        )
-
-        test_tensor_out_list[0].compute_data = compute_result
-        test_tensor_out_list[0].ref_data = compute_result.to(dtype=out_type)
-        return [test_tensor_out_list[0].ref_data]
-
-    @staticmethod
-    def max(kwargs, test_tensor_out_list):
-        output = torch.max(kwargs["input0"], kwargs["input1"])
-        return [output]
-
-    @staticmethod
-    def min(kwargs, test_tensor_out_list):
-        output = torch.min(kwargs["input0"], kwargs["input1"])
-        return [output]
-
-    @staticmethod
-    def pow(kwargs, test_tensor_out_list):
-        output = torch.pow(kwargs["input0"], kwargs["input1"])
-        return [output]
-
-    @staticmethod
-    def mod(kwargs, test_tensor_out_list):
-        output = torch.fmod(kwargs["input0"], kwargs["input1"])
-        return [output]
 
     @staticmethod
     def div(kwargs, test_tensor_out_list):
-        output = torch.div(kwargs["a"], kwargs["b"])
-        return [output]
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.div
+        )
+
+    @staticmethod
+    def max(kwargs, test_tensor_out_list):
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.max, "input0", "input1"
+        )
+
+    @staticmethod
+    def min(kwargs, test_tensor_out_list):
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.min, "input0", "input1"
+        )
+
+    @staticmethod
+    def pow(kwargs, test_tensor_out_list):
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.pow, "input0", "input1"
+        )
+
+    @staticmethod
+    def mod(kwargs, test_tensor_out_list):
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, torch.fmod, "input0", "input1"
+        )
 
     @staticmethod
     def add_square(kwargs, test_tensor_out_list):
-        output = torch.add(kwargs["a"], torch.square(kwargs["b"]))
-        return [output]
+        return PytorchReference._handle_binary_op(
+            kwargs, test_tensor_out_list, lambda a, b: torch.add(a, torch.square(b))
+        )
 
     @staticmethod
     def tanh(kwargs, test_tensor_out_list):
-        output = torch.tanh(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.tanh
+        )
 
     @staticmethod
     def tanh_backward(kwargs, test_tensor_out_list):
@@ -414,63 +439,75 @@ class PytorchReference:
 
     @staticmethod
     def abs(kwargs, test_tensor_out_list):
-        output = torch.abs(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.abs
+        )
 
     @staticmethod
     def ceil(kwargs, test_tensor_out_list):
-        output = torch.ceil(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.ceil
+        )
 
     @staticmethod
     def floor(kwargs, test_tensor_out_list):
-        output = torch.floor(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.floor
+        )
 
     @staticmethod
     def cos(kwargs, test_tensor_out_list):
-        output = torch.cos(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.cos
+        )
 
     @staticmethod
     def sin(kwargs, test_tensor_out_list):
-        output = torch.sin(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.sin
+        )
 
     @staticmethod
     def tan(kwargs, test_tensor_out_list):
-        output = torch.tan(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.tan
+        )
 
     @staticmethod
     def exp(kwargs, test_tensor_out_list):
-        output = torch.exp(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.exp
+        )
 
     @staticmethod
     def log(kwargs, test_tensor_out_list):
-        output = torch.log(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.log
+        )
 
     @staticmethod
     def neg(kwargs, test_tensor_out_list):
-        output = torch.neg(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.neg
+        )
 
     @staticmethod
     def sqrt(kwargs, test_tensor_out_list):
-        output = torch.sqrt(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.sqrt
+        )
 
     @staticmethod
     def rsqrt(kwargs, test_tensor_out_list):
-        output = torch.rsqrt(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.rsqrt
+        )
 
     @staticmethod
     def erf(kwargs, test_tensor_out_list):
-        output = torch.erf(kwargs["input"])
-        return [output]
+        return PytorchReference._handle_unary_op(
+            kwargs, test_tensor_out_list, torch.erf
+        )
 
     @staticmethod
     def cmp_lt(kwargs, test_tensor_out_list):
@@ -1203,3 +1240,103 @@ class test_graph:
         self.clear_node_meta_data()
         utils.reportCurrentTime("calc_reference")
         return output
+
+    @staticmethod
+    def compare_to_reference(ref_outputs, outputs, atol=1e-2, rtol=1e-2):
+        """
+        Compare the reference outputs with actual outputs.
+
+        Args:
+            ref_outputs: List of expected tensors from reference implementation
+            outputs: List of actual tensors from cudnn implementation
+            atol: Absolute tolerance for comparison
+            rtol: Relative tolerance for comparison
+
+        Returns:
+            bool: True if all comparisons pass, False otherwise
+        """
+        assert len(ref_outputs) == len(outputs)
+        passed = True
+        number_outputs_tested = 0
+        output_idx = 0
+
+        # Compare with reference
+        for Y_expected, Y_actual in zip(ref_outputs, outputs):
+            # Handle device differences
+            if (
+                hasattr(Y_expected, "device")
+                and hasattr(Y_actual, "device")
+                and Y_expected.device.type != Y_actual.device.type
+            ):
+                if Y_expected.device.type == "cuda":
+                    Y_expected = Y_expected.to("cpu")
+                else:
+                    Y_actual = Y_actual.to("cpu")
+
+            # TODO (@mbreughe): Clean up this assumption:
+            # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
+            # For now, we can assume that we don't care about this output and just let the reference pass
+            # To be on the safe side, we will make sure at least one output was checked
+            if Y_expected is None:
+                continue
+
+            if Y_expected.dtype != Y_actual.dtype:
+                print(
+                    "WARNING: reference and actual output types differ ({} resp., {})".format(
+                        Y_expected.dtype, Y_actual.dtype
+                    )
+                )
+                # For comparison purposes, convert expected to actual's dtype
+                Y_expected = Y_expected.to(Y_actual.dtype)
+
+            if Y_expected.shape != Y_actual.shape:
+                print(
+                    "WARNING: reference and actual output shapes differ ({} resp., {})".format(
+                        Y_expected.shape, Y_actual.shape
+                    )
+                )
+
+            try:
+                print("Y_EXPECTED:", Y_expected)
+                print("Y_ACTUAL:", Y_actual)
+
+                # Special handling for boolean tensors
+                if Y_expected.dtype == torch.bool and Y_actual.dtype == torch.bool:
+                    assert torch.equal(
+                        Y_expected, Y_actual
+                    ), "Boolean tensors do not match"
+                # Special handling for FP8 tensors
+                elif (
+                    Y_expected.dtype == torch.float8_e4m3fn
+                    or Y_actual.dtype == torch.float8_e4m3fn
+                ):
+                    # Convert FP8 tensors to float32 for comparison
+                    Y_expected_float = Y_expected.to(torch.float32)
+                    Y_actual_float = Y_actual.to(torch.float32)
+                    torch.testing.assert_close(
+                        Y_expected_float, Y_actual_float, atol=atol, rtol=rtol
+                    )
+                else:
+                    torch.testing.assert_close(
+                        Y_expected, Y_actual, atol=atol, rtol=rtol
+                    )
+            except Exception as e:
+                passed = False
+                print("Assertion Error:", str(e))
+                print("Stack trace:")
+                import traceback
+
+                traceback.print_exc()
+
+            number_outputs_tested += 1
+            output_idx += 1
+
+        assert number_outputs_tested >= 1
+
+        if passed:
+            print("PASSED: test and reference match")
+        else:
+            print("FAILED: test and reference mismatch")
+
+        utils.reportCurrentTime("assert_close")
+        return passed

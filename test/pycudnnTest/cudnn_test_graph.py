@@ -273,40 +273,8 @@ class cudnn_test_graph(test_graph):
 
         # Run the reference
         print("Computing reference")
-        ref_outputs = self.calc_reference()
 
-        assert len(ref_outputs) == len(self.getOutputs())
-
-        number_outputs_tested = 0
-
-        # Compare with reference
-        for Y_expected, Y_actual in zip(ref_outputs, self.getOutputs()):
-            # TODO (@mbreughe): Clean up this assumption:
-            # If there are None's in the output, it's because the reference didn't provide actual output (eg batchnorm)
-            # For now, we can assume that we don't care about this output and just let the reference pass
-            # To be on the safe side, we will make sure at least one output was checked
-            if Y_expected is None:
-                continue
-
-            if Y_expected.dtype != Y_actual.dtype:
-                print(
-                    "WARNING: reference and actual output types differ ({} resp., {})".format(
-                        Y_expected.dtype, Y_actual.dtype
-                    )
-                )
-
-            if Y_expected.shape != Y_actual.shape:
-                print(
-                    "WARNING: reference and actual output shapes differ ({} resp., {})".format(
-                        Y_expected.shape, Y_actual.shape
-                    )
-                )
-
-            torch.testing.assert_close(Y_expected, Y_actual, atol=atol, rtol=rtol)
-
-            number_outputs_tested += 1
-
-        assert number_outputs_tested >= 1
-        print("PASSED: cudnn and reference match")
-
-        utils.reportCurrentTime("assert_close")
+        # Use the static method from the base class
+        test_graph.compare_to_reference(
+            self.calc_reference(), self.getOutputs(), atol=atol, rtol=rtol
+        )
