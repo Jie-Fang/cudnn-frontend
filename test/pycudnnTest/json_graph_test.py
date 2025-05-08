@@ -126,7 +126,6 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
     tensorir_parser.add_argument("-load_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
-    tensorir_parser.add_argument("-host_jitting", action="store_true")
     tensorir_args, unparsed_args = tensorir_parser.parse_known_args(unknown_args)
     concrete_test_dict, legacy_args = parse_legacy_args(parent_args, unparsed_args)
     testGraph = setup_test_graph_from_json(
@@ -977,7 +976,6 @@ def run_tensor_ir_test_from_json_definition(
         tensorir_args.dump_ir_path,
         tensorir_args.load_ir_path,
         tensorir_args.mlir_timing,
-        tensorir_args.host_jitting,
         legacy_args.timing_loop,
         atol,
         rtol,
