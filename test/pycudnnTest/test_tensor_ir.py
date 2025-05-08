@@ -59,6 +59,7 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     mma_shape = [128, 128, 16]
     cluster_shape = [1, 1, 1]
     cta_count = 1
+    stream_k = False
 
     if hasattr(tensorir_args, "tile_size") and tensorir_args.tile_size is not None:
         tile_size = list(map(int, tensorir_args.tile_size.split(",")))
@@ -75,12 +76,16 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
         cta_count = int(tensorir_args.cta_count)
 
+    if hasattr(tensorir_args, "stream_k") and tensorir_args.stream_k is not None:
+        stream_k = bool(tensorir_args.stream_k)
+
     concrete_test_dict["tile_size"] = tile_size
     concrete_test_dict["cluster_shape"] = cluster_shape
     concrete_test_dict["mma_shape"] = mma_shape
     concrete_test_dict["cta_count"] = cta_count
+    concrete_test_dict["stream_k"] = stream_k
 
-    return [tile_size, mma_shape, cluster_shape, cta_count]
+    return [tile_size, mma_shape, cluster_shape, cta_count, stream_k]
 
 
 def find_mismatches(tensor_a, tensor_b, atol, rtol):
@@ -903,7 +908,13 @@ class test_tensor_ir:
             best_config = dict(
                 tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[]
             )
-            for tile_size, mma_shape, cluster_shape, cta_count in kernel_configs:
+            for (
+                tile_size,
+                mma_shape,
+                cluster_shape,
+                cta_count,
+                stream_k,
+            ) in kernel_configs:
                 cloned_module = ir.Module.parse(str(module))
                 cask_context = nv_tensor_ir.create_cask_context()
                 compiler = nv_tensor_ir.Compiler(cask_context)
@@ -912,37 +923,47 @@ class test_tensor_ir:
                     10,  # Hardcoded for blackwell
                     nv_tensor_ir.GraphCategory.kGemm,  # Hardcode for Gemm
                     nv_tensor_ir.TensorConversionOptions(
-                        tile_size, mma_shape, cluster_shape, cta_count
+                        tile_size, mma_shape, cluster_shape, cta_count, stream_k
                     ),
                     nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, mlir_timing),
                     host_jitting,
                 )
 
                 print(
-                    f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}"
+                    f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
                 )
                 shader = compiler.compile(cloned_module, compile_option)
                 execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
                 execution_plan.initialize()
+                device_workspace_size = execution_plan.query_max_device_workspace_size()
+                device_workspace_mem_cpu = torch.zeros(
+                    device_workspace_size, dtype=torch.int8, device="cpu"
+                )
+                device_workspace_mem_gpu = (
+                    device_workspace_mem_cpu.clone().detach().to("cuda")
+                )
+                device_workspace = nv_tensor_ir.DeviceWorkspace(
+                    device_workspace_mem_gpu.data_ptr(), device_workspace_size
+                )
                 # TODO: Do we need to dump the launch config for debugging?
                 # execution_plan.dump_launch_config()
                 if timing_loop == 0:
-                    execution_plan.launch()
+                    execution_plan.launch(device_workspace)
                     self.outputs = outputs_gpu
                     if not self.ref_outputs:
                         self.calc_ref()
                     passed = self.tensorir_compare_to_reference(atol, rtol)
                     assert passed, "Mismatch between TensorIR and reference"
                 elif timing_loop == 1:
-                    execution_plan.launch()
+                    execution_plan.launch(device_workspace)
                 else:
                     # warm the caches
-                    execution_plan.launch()
+                    execution_plan.launch(device_workspace)
                     import utils
 
                     # TODO: Shall we use median instead of average?
                     (_, avg_rt, _) = utils.measure_gpu_runtime(
-                        lambda: execution_plan.launch(), timing_loop
+                        lambda: execution_plan.launch(device_workspace), timing_loop
                     )
                     if avg_rt < best_perf:
                         best_perf = avg_rt
