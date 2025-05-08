@@ -753,8 +753,8 @@ class test_tensor_ir:
         ori_stride = test_tensor.stride
         ori_shape = test_tensor.dim
 
-        # Check if tensor is a scalar tensor (all strides 0 and all dims 1 in json definition)
-        isScalarTensor = all(s == 0 for s in ori_stride) and all(
+        # Check if tensor is a scalar tensor (all strides 1 and all dims 1 in json definition)
+        isScalarTensor = all(s == 1 for s in ori_stride) and all(
             d == 1 for d in ori_shape
         )
 
@@ -829,7 +829,6 @@ class test_tensor_ir:
         dump_ir_path,
         load_ir_path,
         mlir_timing,
-        host_jitting,
         timing_loop=1,
         atol=1e-2,
         rtol=1e-2,
@@ -926,7 +925,6 @@ class test_tensor_ir:
                         tile_size, mma_shape, cluster_shape, cta_count, stream_k
                     ),
                     nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, mlir_timing),
-                    host_jitting,
                 )
 
                 print(
