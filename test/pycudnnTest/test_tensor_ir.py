@@ -829,16 +829,6 @@ class test_tensor_ir:
         atol=1e-2,
         rtol=1e-2,
     ):
-        graph_analysis = nv_tensor_ir.GraphAnalysis(module)
-        m_idx = graph_analysis.get_matmul_m_index()
-        n_idx = graph_analysis.get_matmul_n_index()
-        k_idx = graph_analysis.get_matmul_k_index()
-        B = self.test_graph.entrance_nodes[m_idx[0]].output[0].dim[0]
-        M = self.test_graph.entrance_nodes[m_idx[0]].output[0].dim[m_idx[1]]
-        N = self.test_graph.entrance_nodes[n_idx[0]].output[0].dim[n_idx[1]]
-        K = self.test_graph.entrance_nodes[k_idx[0]].output[0].dim[k_idx[1]]
-        problem_size = nv_tensor_ir.GemmProblemSize(B, M, N, K)
-        print("problem_size:", B, M, N, K)
         device = torch.device("cuda")
 
         # iterate all kernel inputs automatically
@@ -857,7 +847,8 @@ class test_tensor_ir:
                 tensor_operand = nv_tensor_ir.TensorOperandDescriptor(
                     nv_tensor_ir.TensorDescriptor(
                         gpu_mem.data_ptr(), nv_tensor_ir.LayoutDescriptor(strides)
-                    )
+                    ),
+                    nv_tensor_ir.ShapeDescriptor(torch_mem.shape),
                 )
                 tensor_desc.append(tensor_operand)
             else:
@@ -890,11 +881,12 @@ class test_tensor_ir:
                     nv_tensor_ir.TensorDescriptor(
                         torch_gpu.data_ptr(),
                         nv_tensor_ir.LayoutDescriptor(torch_gpu.stride()),
-                    )
+                    ),
+                    nv_tensor_ir.ShapeDescriptor(torch_gpu.shape),
                 )
             )
 
-        args = nv_tensor_ir.ArgumentsView(problem_size, tensor_desc)
+        args = nv_tensor_ir.ArgumentsView(tensor_desc)
 
         with ir.Context() as ctx, ir.Location.unknown():
             nv_tensor_ir.register_dialect()
