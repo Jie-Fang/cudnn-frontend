@@ -180,6 +180,13 @@ def _dlopen_cudnn():
         )
     )
 
+    if lib_path is None:
+        lib_path = glob.glob(
+            os.path.join(
+                sysconfig.get_path("purelib"), "nvidia/cudnn_jit/lib/libcudnn.so.*[0-9]"
+            )
+        )
+
     if lib_path:
         assert (
             len(lib_path) == 1
