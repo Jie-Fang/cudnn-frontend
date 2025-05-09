@@ -383,6 +383,12 @@ class SDPANode : public NodeCRTP<SDPANode> {
             error_code_t::GRAPH_NOT_SUPPORTED, "Value set through set_paged_attention_max_seq_len_kv is incompatible with the sequence length of the RNG_DUMP");
         }
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            ((is_paged_k() && attributes.inputs.at(input_names::Page_table_K)->get_ragged_offset()) 
+         || (is_paged_v() && attributes.inputs.at(input_names::Page_table_V)->get_ragged_offset())) &&
+            detail::get_backend_version() < 91002,
+            error_code_t::GRAPH_NOT_SUPPORTED, "Paged attention with packed page tables only supported with cudnn version 9.10.2 and above");
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8903, error_code_t::GRAPH_NOT_SUPPORTED,
                                         "SDPA OP requires cudnn version 8.9.3 and above");
 
