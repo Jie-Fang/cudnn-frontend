@@ -24,6 +24,8 @@ def cal_shapeK(input_data_type):
 
 
 def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
+    stream_k = False
+
     kphase = [1, 1, 4]
 
     kcta_count = [cta_count, 1, 1]
@@ -49,7 +51,7 @@ def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
                 int(m * c * k / cta)
                 for m, c, k, cta in zip(mma_shape, cluster_shape, kphase, kcta_count)
             ]
-            configs.append([tile_size, mma_shape, cluster_shape, cta_count])
+            configs.append([tile_size, mma_shape, cluster_shape, cta_count, stream_k])
 
     return configs
 
