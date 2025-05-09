@@ -1,7 +1,7 @@
 """
 This test harness allows for testing the various options of the attention operator. See example usage under "main" below.
 
-The full documentation on the attention operator can be found in: https://github.com/NVIDIA/cudnn-frontend/blob/main/docs/operations/Attention.md#scaled-dot-product-attention
+The full documentation on the attention operator can be found in: https://docs.nvidia.com/deeplearning/cudnn/frontend/latest/operations/Attention.html
 
 Notebooks that demonstrate the attention operator can be found here:
 - Introductory example: https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/50_scaled_dot_product_attention.ipynb

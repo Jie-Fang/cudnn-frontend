@@ -929,8 +929,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
         CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
-        if (prop.major >= 9) { 
-            // validate basic dimension requirements
+        if (prop.major != 9) { 
+            // validate basic dimension hquirements
             RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
                                         "Num hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
@@ -1009,9 +1009,15 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Sliding window attention is only supported with max_s_q <= max_s_kv.");
 
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value()&& (! attributes.has_causal_like_masking() || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
+        if (detail::get_backend_version() >= 91000) {
+            RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.left_bound.has_value() || attributes.right_bound.has_value()) && (is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
                                        error_code_t::GRAPH_NOT_SUPPORTED,
                                        "Left and right bounds are only supported with is_dropout=False, is_bias=False. Further is_ragged==True is only allowed when padding_mask=True. Lastly the diagonal alignment must be set.");
+        } else {
+            RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.left_bound.has_value()&& (!attributes.has_causal_like_masking() || is_dropout || is_bias || (is_ragged && !attributes.padding_mask)),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Left and right bounds are only supported with is_dropout=False, is_bias=False. Further is_ragged==True is only allowed when padding_mask=True. Lastly the diagonal alignment must be set.");
+        }
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.right_bound.has_value() && attributes.right_bound.value() < 0,
                                        error_code_t::INVALID_VALUE,
