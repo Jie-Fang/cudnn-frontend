@@ -1297,9 +1297,6 @@ class test_graph:
                 )
 
             try:
-                print("Y_EXPECTED:", Y_expected)
-                print("Y_ACTUAL:", Y_actual)
-
                 # Special handling for boolean tensors
                 if Y_expected.dtype == torch.bool and Y_actual.dtype == torch.bool:
                     assert torch.equal(
@@ -1322,6 +1319,8 @@ class test_graph:
                     )
             except Exception as e:
                 passed = False
+                print("Y_EXPECTED:", Y_expected)
+                print("Y_ACTUAL:", Y_actual)
                 print("Assertion Error:", str(e))
                 print("Stack trace:")
                 import traceback
