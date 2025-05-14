@@ -243,8 +243,8 @@ TEST_CASE("AdaLayerNorm Backward", "[adalayernorm][graph]") {
     Surface<float> Mean_tensor(batch_size * seq_length, false);
     Surface<float> Inv_variance_tensor(batch_size * seq_length, false);
     Surface<float> Scale_tensor(batch_size * hidden_size, false);
-    Surface<float> Dscale_tensor(hidden_size, false);
-    Surface<float> Dbias_tensor(hidden_size, false);
+    Surface<float> Dscale_tensor(batch_size * hidden_size, false);
+    Surface<float> Dbias_tensor(batch_size * hidden_size, false);
     Surface<half> DX_tensor(batch_size * seq_length * hidden_size, false);
 
     int64_t workspace_size;
