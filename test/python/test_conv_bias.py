@@ -92,6 +92,10 @@ def create_conv_relu_graph(
 
 
 @pytest.mark.L0
+@pytest.mark.skipif(
+    LooseVersion(cudnn.backend_version_string()) < "9.5.0",
+    reason="requires cudnn 9.5.0 or higher",
+)
 @torch_fork_set_rng(seed=0)
 def test_conv_bias_relu(cudnn_handle):
     # Reference code
@@ -302,6 +306,10 @@ def create_conv3d_bias_leaky_relu_graph(
 
 
 @pytest.mark.L0
+@pytest.mark.skipif(
+    LooseVersion(cudnn.backend_version_string()) < "9.5.0",
+    reason="requires cudnn 9.5.0 or higher",
+)
 @torch_fork_set_rng(seed=0)
 def test_conv3d_bias_leaky_relu(cudnn_handle):
     N, C, D, H, W = 4, 16, 52, 54, 56
