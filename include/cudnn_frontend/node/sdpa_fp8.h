@@ -39,6 +39,11 @@ class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
                                        "sdpa fp8 forward operation is only supported starting cudnn 9.1.0. Please "
                                        "consider upgrading your current version.");
 
+        RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() == 91000,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "sdpa fp8 forward operation is not supported on cudnn 9.10.0. Please "
+                                       "consider upgrading your current version.");
+
         cudaDeviceProp prop;
         int device;
         CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
