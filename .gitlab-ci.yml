@@ -15,13 +15,13 @@ before_script:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 .cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.0
 
 .cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.8.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.8.0.87_12.8.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.9.0.52_12.9.0
 
 .device_matrix:template:
     parallel:
@@ -217,8 +217,8 @@ include:
 
   - local: ci/job-template.yml
     inputs:
-        cuda_version: "12.8.0"
-        cudnn_version: "9.7.0.66"
+        cuda_version: "12.9.0"
+        cudnn_version: "9.9.0.52"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
@@ -433,8 +433,8 @@ python_samples:cudnn_dev_latest:
         - .device_matrix:template
         - .cudnn_dev_image:template    
 
-python_samples:cudnn_8.9.5.29_12.2.2:
-  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_8.9.5.29_12.2.2"
+python_samples:cudnn_9.0.0.312_12.3.1:
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
   parallel:
     matrix:
       - ARCH: ["Hopper", "Ampere"]
@@ -445,11 +445,11 @@ python_samples:cudnn_8.9.5.29_12.2.2:
     - .python_samples:template
   needs: []
 
-python_samples:cudnn_9.0.0.312_12.3.1:
-  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
+python_samples:cudnn_9.9.0.52_12.9.0:
+  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.9.0.52_12.9.0"
   parallel:
     matrix:
-      - ARCH: ["Hopper", "Ampere"]
+      - ARCH: ["Hopper", "Ampere", "Blackwell"]
   tags:
     - ${ARCH}
   extends:
