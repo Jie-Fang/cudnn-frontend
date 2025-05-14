@@ -416,7 +416,9 @@ class testConfig:
         self.is_causal_br = self.rng_geom.choice([True, False])
         self.is_sliding_w = self.rng_geom.choice([True, False])
         self.is_dropout   = self.rng_geom.choice([True, False])
-        self.is_determin  = self.rng_geom.choice([True, False]) if not self.is_infer else True  # TODO: what is this
+        # self.is_determin  = self.rng_geom.choice([True, False]) if not self.is_infer else True  # TODO: what is this
+        # Only allow non-deterministic bprop 5279174
+        self.is_determin  = False
 
         # Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False.
         if self.is_causal_br and (self.is_bias != False or self.is_alibi != False or self.is_dropout != False):
