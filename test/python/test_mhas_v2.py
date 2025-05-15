@@ -1264,6 +1264,9 @@ def exec_sdpa(cfg, request, cudnn_handle):
             o.set_ragged_offset(o_ragged_offset)
             dO.set_ragged_offset(o_ragged_offset)
 
+        if is_causal_br:
+            pytest.skip("skipping backward pass bug https://nvbugspro.nvidia.com/bug/5279917")
+
         dQ, dK, dV = graph.sdpa_backward(
             name="sdpa_backward",
             q=q,
