@@ -21,7 +21,7 @@ before_script:
     image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.9.0.52_12.9.0
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.10.1.4_12.9.0
 
 .device_matrix:template:
     parallel:
@@ -218,7 +218,7 @@ include:
   - local: ci/job-template.yml
     inputs:
         cuda_version: "12.9.0"
-        cudnn_version: "9.9.0.52"
+        cudnn_version: "9.10.1.4"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
