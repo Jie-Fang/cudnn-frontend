@@ -912,7 +912,7 @@ class test_tensor_ir:
                 cask_context = nv_tensor_ir.create_cask_context()
                 compiler = nv_tensor_ir.Compiler(cask_context)
 
-                compile_option = nv_tensor_ir.TensorIRCompilationOption(
+                compile_options = nv_tensor_ir.TensorIRCompilationOptions(
                     10,  # Hardcoded for blackwell
                     nv_tensor_ir.GraphCategory.kGemm,  # Hardcode for Gemm
                     nv_tensor_ir.TensorConversionOptions(
@@ -924,7 +924,7 @@ class test_tensor_ir:
                 print(
                     f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
                 )
-                shader = compiler.compile(cloned_module, compile_option)
+                shader = compiler.compile(cloned_module, compile_options)
                 execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
                 execution_plan.initialize()
                 device_workspace_size = execution_plan.query_max_device_workspace_size()
