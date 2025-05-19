@@ -1,0 +1,688 @@
+{
+  "Sigmoid_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"sigmoid_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SIGMOID_FWD", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Sigmoid_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Tanh_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"tanh_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_TANH_FWD", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Tanh_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Relu_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"relu_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RELU_FWD", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Relu_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Abs": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"abs_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ABS", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Abs -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Ceil": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"ceil_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CEIL", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Ceil -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Floor": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"floor_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_FLOOR", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Floor -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Cos": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"cos_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_COS", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Cos -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Sin": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"sin_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SIN", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Sin -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Tan": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"tan_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_TAN", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Tan -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Exp": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"exp_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_EXP", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Exp -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Log": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"log_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_LOG", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Log -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Neg": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"neg_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_NEG", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Neg -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Rsqrt": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"rsqrt_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RSQRT", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Rsqrt -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Sqrt": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"sqrt_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SQRT", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Sqrt -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Erf": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"erf_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ERF", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Erf -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Reciprocal": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"reciprocal_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_RECIPROCAL", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Reciprocal -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Gelu_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"gelu_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_GELU_FWD", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Gelu_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Gelu_approx_tanh_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"gelu_approx_tanh_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_GELU_APPROX_TANH_FWD", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Gelu_approx_tanh_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "LogicalNot": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"logical_not_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_LOGICAL_NOT", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=LogicalNot -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Add": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"add_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Add -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Mul": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"mul_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Mul -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Div": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"div_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_DIV", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Div -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Max": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"max_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MAX", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Max -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Min": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"min_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MIN", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Min -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "LogicalAnd": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"logical_and_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_LOGICAL_AND", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=LogicalAnd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "LogicalOr": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"logical_or_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_LOGICAL_OR", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=LogicalOr -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Equal": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"equal_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CMP_EQ", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Equal -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "NotEqual": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"not_equal_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CMP_NEQ", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=NotEqual -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Less": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"less_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CMP_LT", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Less -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "LessEqual": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"less_equal_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CMP_LE", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=LessEqual -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Greater": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"greater_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CMP_GT", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Greater -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "GreaterEqual": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"greater_equal_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_CMP_GE", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=GreaterEqual -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Power": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"power_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_POW", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Power -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Subtract": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"subtract_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SUB", "X":"inputA", "B":"inputB", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Subtract -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Elu_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"elu_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ELU_FWD", "X":"input", "Y":"output", "alpha":1.0, "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Elu_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Swish_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"swish_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SWISH_FWD", "X":"input", "Y":"output", "alpha":1.0, "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Swish_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Softplus_fwd": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"softplus_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SOFTPLUS_FWD", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Softplus_fwd -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  
+  "Identity": {
+    "tensors": [
+      {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"identity_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_IDENTITY", "X":"input", "Y":"output", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=Identity -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+  "TensorAddition": {
+    "tensors": [
+      {"name":"inputA", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"inputB", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+      {"name":"outputTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"add_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"inputA", "B":"inputB", "Y":"outputTensor", "mathPrec":"float"}
+    ],
+    "Usage_examples":[
+      "pycudnnTest.py -Rtensor_ir -jsonTestName=TensorAddition -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsForTensorIR.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
+
+"ComplexFusionPattern": {
+  "tensors": [
+    {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"scale", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"bias", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp1", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp2", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp3", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp4", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp5", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+  ],
+  "nodes":[
+      {"name":"gelu_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_GELU_FWD", "X":"input", "Y":"temp1", "mathPrec":"float"},
+      {"name":"mul_op1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X":"temp1", "B":"scale", "Y":"temp2", "mathPrec":"float"},
+      {"name":"add_op1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"temp2", "B":"bias", "Y":"temp3", "mathPrec":"float"},
+      {"name":"tanh_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_TANH_FWD", "X":"temp3", "Y":"temp4", "mathPrec":"float"},
+      {"name":"exp_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_EXP", "X":"temp3", "Y":"temp5", "mathPrec":"float"},
+      {"name":"max_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MAX", "X":"temp4", "B":"temp5", "Y":"output", "mathPrec":"float"}
+  ],
+  "Usage_examples":[
+    "pycudnnTest.py -Rtensor_ir -jsonTestName=ComplexFusionPattern -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsTensorIRMemBound.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+  ],
+  "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+  "minDeviceVersion":"<minDevVer>"
+},
+
+"ResidualGELUNetwork": {
+  "tensors": [
+    {"name":"input", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"residual", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp1", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp2", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"temp3", "dataType":"<Tcomp>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"},
+    {"name":"output", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+  ],
+  "nodes":[
+      {"name":"add_op1", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X":"input", "B":"residual", "Y":"temp1", "mathPrec":"float"},
+      {"name":"gelu_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_GELU_FWD", "X":"temp1", "Y":"temp2", "mathPrec":"float"},
+      {"name":"sqrt_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_SQRT", "X":"temp2", "Y":"temp3", "mathPrec":"float"},
+      {"name":"mul_op", "operation":"pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X":"temp3", "B":"input", "Y":"output", "mathPrec":"float"}
+  ],
+  "Usage_examples":[
+    "pycudnnTest.py -Rtensor_ir -jsonTestName=ResidualGELUNetwork -kv=Tin float -kv=Tcomp float -kv=Tout float -tile_size=1,4,4 -cluster_shape=1,1,1 -jsonPath=./test/pycudnnTest/json_graph_defs/fusionGraphTestsTensorIRMemBound.json -kv=Tstore float -b -kv=gemm_B 1 -kv=gemm_M 4 -kv=gemm_N 4 -kv=gemm_layout_C ROW_MAJOR --staticShapesOnly -graph_category=kMemBound"
+  ],
+  "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+  "minDeviceVersion":"<minDevVer>"
+},
+
+"LayerNorm_decomposed_abstract":{
+  "tensors": [
+    {"name": "xTensor", "dataType": "<t_elem_in>", "dim": ["<n>","<c>",1,1], "layout": "<layout>", "isVirtual": false},
+    {"name": "invCol", "dataType": "double", "dim": [1,1,1,1], "layout": "<layout>", "isByValue": true, "fill" : "CONSTANT", "value": "<1/c>"},
+    {"name": "epsilon", "dataType": "double", "dim": [1,1,1,1], "layout": "<layout>", "isByValue": true, "fill" : "CONSTANT", "value": 0.00001},
+    {"name": "sumXTensor", "dataType": "<t_math>", "dim": ["<n>",1,1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "meanTensor", "dataType": "<t_math>", "dim": ["<n>",1,1,1], "layout": "<layout>", "isVirtual": "<inference>"},
+    {"name": "xCenteredTensor", "dataType": "<t_math>", "dim": ["<n>","<c>",1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "centeredSqTensor", "dataType": "<t_math>", "dim": ["<n>","<c>",1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "sumSqTensor", "dataType": "<t_math>", "dim": ["<n>",1,1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "varTensor", "dataType": "<t_math>", "dim": ["<n>",1,1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "varEpsTensor", "dataType": "<t_math>", "dim": ["<n>",1,1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "invStdDevTensor", "dataType": "<t_math>", "dim": ["<n>",1,1,1], "layout": "<layout>", "isVirtual": "<inference>"},
+    {"name": "xNormTensor", "dataType": "<t_math>", "dim": ["<n>","<c>",1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "scaleTensor", "dataType": "<t_elem_weight>", "dim": [1,"<c>",1,1], "layout": "<layout>", "isVirtual": false},
+    {"name": "xNormScaledTensor", "dataType": "<t_math>", "dim": ["<n>","<c>",1,1], "layout": "<layout>", "isVirtual": true},
+    {"name": "biasTensor", "dataType": "<t_elem_weight>", "dim": [1,"<c>",1,1], "layout": "<layout>", "isVirtual": false},
+    {"name": "yTensor", "dataType": "<t_elem_out>", "dim": ["<n>","<c>",1,1], "layout": "<layout>", "isVirtual": false}
+  ],
+  "nodes": [
+    {"name": "sumX", "operation": "reduction", "X": "xTensor", "Y": "sumXTensor", "reductionOp": "CUDNN_REDUCE_TENSOR_ADD", "mathPrec": "float"},
+    {"name": "mean", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X": "sumXTensor", "B": "invCol", "Y": "meanTensor", "mathPrec": "float"},
+    {"name": "centered", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_SUB", "X": "xTensor", "B": "meanTensor", "Y": "xCenteredTensor", "mathPrec": "float"},
+    {"name": "squared", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X": "xCenteredTensor", "B": "xCenteredTensor", "Y": "centeredSqTensor", "mathPrec": "float"},
+    {"name": "sumSquared", "operation": "reduction", "X": "centeredSqTensor", "Y": "sumSqTensor", "reductionOp": "CUDNN_REDUCE_TENSOR_ADD", "mathPrec": "float"},
+    {"name": "variance", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X": "sumSqTensor", "B": "invCol", "Y": "varTensor", "mathPrec": "float"},
+    {"name": "varEps", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X": "varTensor", "B": "epsilon", "Y": "varEpsTensor", "mathPrec": "float"},
+    {"name": "invStddev", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_RSQRT", "X": "varEpsTensor", "Y": "invStdDevTensor", "mathPrec": "float"},
+    {"name": "norm", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X": "xCenteredTensor", "B": "invStdDevTensor", "Y": "xNormTensor", "mathPrec": "float"},
+    {"name": "normScale", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_MUL", "X": "xNormTensor", "B": "scaleTensor", "Y": "xNormScaledTensor", "mathPrec": "float"},
+    {"name": "normBias", "operation": "pointwise", "pointwiseMode":"CUDNN_POINTWISE_ADD", "X": "xNormScaledTensor", "B": "biasTensor", "Y": "yTensor", "mathPrec": "float"}
+  ],
+  "tolerances": {"rel": "<rtol>", "abs": "<atol>"},
+  "Usage Examples" : [
+    "./cudnnTest -RgraphRunner -dimA16,32,1,1 -kv=layout:NCHW -kv=t_elem_in:bfloat16 -kv=t_elem_out:bfloat16 -kv=t_elem_weight:float -kv=t_math:float -kv=1/c:0.03125 -kv=inference:false -jsonTestName=LayerNorm_decomposed_abstract -atol0.005 -rtol0.005"
+  ]
+}
+}

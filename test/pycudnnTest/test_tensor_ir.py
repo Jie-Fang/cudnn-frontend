@@ -721,10 +721,11 @@ class test_tensor_ir:
             for op_name in op_names:
                 cls.NODE_CLASS_MAP[op_name] = node_class
 
-    def __init__(self, test_graph):
+    def __init__(self, test_graph, static_shapes_only):
         self.test_graph = test_graph
         self.outputs = []
         self.ref_outputs = None
+        self.static_shapes_only = static_shapes_only
 
         # Initialize the node class map if it's empty
         if not self.NODE_CLASS_MAP:
@@ -762,7 +763,8 @@ class test_tensor_ir:
 
         if isScalarTensor:
             # If tensor is scalar in json definition, convert to dense memref with shape to [-1] and stride to [0]
-            shape = [-1] * len(ori_shape)
+            scalar_dim = 1 if self.static_shapes_only else -1
+            shape = [scalar_dim] * len(ori_shape)
             shape_div = [1] * len(ori_shape)
             stride = [0] * len(ori_stride)
             stride_div = [1] * len(ori_stride)
@@ -774,19 +776,30 @@ class test_tensor_ir:
                 stride=stride,
                 stride_div=stride_div,
             )
+
+        # Keep track of divisibility constraints if needed
+        shape_div = []
+        stride_div = []
+        divisibility = 8
+        stride_div_flag = True
+        has_stride_zero = False
+
         for s, d in zip(ori_stride, ori_shape):
             if idx > 0 and d == 1:
-                shape.append(-1)  # row broadcast need to set broadcast dim to `?`
+                # Use concrete dimension 'd' if static_shapes_only is True, otherwise use -1
+                shape.append(d if self.static_shapes_only else -1)
+                # row broadcast need to set broadcast dim to `?`
                 stride.append(0)
             else:
                 if s != 1:
-                    stride.append(-1)
+                    stride.append(s if self.static_shapes_only else -1)
                 else:
                     stride.append(1)
-                shape.append(-1)
+                shape.append(d if self.static_shapes_only else -1)
             idx += 1
 
         shape_div, stride_div = calculate_divisibility(stride)
+
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
             datatype=dtype,
@@ -827,6 +840,7 @@ class test_tensor_ir:
     def run_tensor_ir_module(
         self,
         module,
+        graph_category,
         kernel_configs,
         dump_ir_path,
         load_ir_path,
@@ -901,70 +915,138 @@ class test_tensor_ir:
             best_config = dict(
                 tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[]
             )
-            for (
-                tile_size,
-                mma_shape,
-                cluster_shape,
-                cta_count,
-                stream_k,
-            ) in kernel_configs:
-                cloned_module = ir.Module.parse(str(module))
-                cask_context = nv_tensor_ir.create_cask_context()
-                compiler = nv_tensor_ir.Compiler(cask_context)
+            if graph_category == "kGemm":
+                for (
+                    tile_size,
+                    mma_shape,
+                    cluster_shape,
+                    cta_count,
+                    stream_k,
+                ) in kernel_configs:
+                    cloned_module = ir.Module.parse(str(module))
+                    cask_context = nv_tensor_ir.create_cask_context()
+                    compiler = nv_tensor_ir.Compiler(cask_context)
 
-                compile_options = nv_tensor_ir.TensorIRCompilationOptions(
-                    10,  # Hardcoded for blackwell
-                    nv_tensor_ir.GraphCategory.kGemm,  # Hardcode for Gemm
-                    nv_tensor_ir.TensorConversionOptions(
-                        tile_size, mma_shape, cluster_shape, cta_count, stream_k
-                    ),
-                    nv_tensor_ir.DebugOptions(dump_ir_path, load_ir_path, mlir_timing),
-                )
-
-                print(
-                    f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
-                )
-                shader = compiler.compile(cloned_module, compile_options)
-                execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
-                execution_plan.initialize()
-                device_workspace_size = execution_plan.query_max_device_workspace_size()
-                device_workspace_mem_cpu = torch.zeros(
-                    device_workspace_size, dtype=torch.int8, device="cpu"
-                )
-                device_workspace_mem_gpu = (
-                    device_workspace_mem_cpu.clone().detach().to("cuda")
-                )
-                device_workspace = nv_tensor_ir.DeviceWorkspace(
-                    device_workspace_mem_gpu.data_ptr(), device_workspace_size
-                )
-                # TODO: Do we need to dump the launch config for debugging?
-                # execution_plan.dump_launch_config()
-                if timing_loop == 0:
-                    execution_plan.launch(device_workspace)
-                    self.outputs = outputs_gpu
-                    if not self.ref_outputs:
-                        self.calc_ref()
-                    passed = self.tensorir_compare_to_reference(atol, rtol)
-                    assert passed, "Mismatch between TensorIR and reference"
-                elif timing_loop == 1:
-                    execution_plan.launch(device_workspace)
-                else:
-                    # warm the caches
-                    execution_plan.launch(device_workspace)
-                    import utils
-
-                    # TODO: Shall we use median instead of average?
-                    (_, avg_rt, _) = utils.measure_gpu_runtime(
-                        lambda: execution_plan.launch(device_workspace), timing_loop
+                    compile_options = nv_tensor_ir.TensorIRCompilationOptions(
+                        10,  # Hardcoded for blackwell
+                        nv_tensor_ir.GraphCategory.kGemm,  # Hardcode for Gemm
+                        nv_tensor_ir.TensorConversionOptions(
+                            tile_size, mma_shape, cluster_shape, cta_count, stream_k
+                        ),
+                        nv_tensor_ir.DebugOptions(
+                            dump_ir_path, load_ir_path, mlir_timing
+                        ),
                     )
-                    if avg_rt < best_perf:
-                        best_perf = avg_rt
-                        best_config = {
-                            "tile_size": tile_size,
-                            "mma_shape": mma_shape,
-                            "cluster_shape": cluster_shape,
-                            "cta_count": cta_count,
-                        }
+
+                    print(
+                        f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
+                    )
+                    shader = compiler.compile(cloned_module, compile_options)
+                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
+                    execution_plan.initialize()
+                    device_workspace_size = (
+                        execution_plan.query_max_device_workspace_size()
+                    )
+                    device_workspace_mem_cpu = torch.zeros(
+                        device_workspace_size, dtype=torch.int8, device="cpu"
+                    )
+                    device_workspace_mem_gpu = (
+                        device_workspace_mem_cpu.clone().detach().to("cuda")
+                    )
+                    device_workspace = nv_tensor_ir.DeviceWorkspace(
+                        device_workspace_mem_gpu.data_ptr(), device_workspace_size
+                    )
+                    # TODO: Do we need to dump the launch config for debugging?
+                    # execution_plan.dump_launch_config()
+                    if timing_loop == 0:
+                        execution_plan.launch(device_workspace)
+                        self.outputs = outputs_gpu
+                        if not self.ref_outputs:
+                            self.calc_ref()
+                        passed = self.tensorir_compare_to_reference(atol, rtol)
+                        assert passed, "Mismatch between TensorIR and reference"
+                    elif timing_loop == 1:
+                        execution_plan.launch(device_workspace)
+                    else:
+                        # warm the caches
+                        execution_plan.launch(device_workspace)
+                        import utils
+
+                        # TODO: Shall we use median instead of average?
+                        (_, avg_rt, _) = utils.measure_gpu_runtime(
+                            lambda: execution_plan.launch(device_workspace), timing_loop
+                        )
+                        if avg_rt < best_perf:
+                            best_perf = avg_rt
+                            best_config = {
+                                "tile_size": tile_size,
+                                "mma_shape": mma_shape,
+                                "cluster_shape": cluster_shape,
+                                "cta_count": cta_count,
+                            }
+            else:
+                for config in kernel_configs:
+                    tile_size = config[0]  # Extract first value from the config list
+                    cloned_module = ir.Module.parse(str(module))
+                    cask_context = nv_tensor_ir.create_cask_context()
+                    compiler = nv_tensor_ir.Compiler(cask_context)
+                    conversion_options = nv_tensor_ir.TensorConversionOptions()
+                    conversion_options.tileSize = tile_size
+
+                    dump_ir_path = ""  # Set this to dump intermediate IR
+                    load_ir_path = ""
+                    enable_timing = False
+
+                    compile_options = nv_tensor_ir.TensorIRCompilationOptions(
+                        10,  # Hardcoded for blackwell
+                        nv_tensor_ir.GraphCategory.kMemBound,
+                        conversion_options,
+                        nv_tensor_ir.DebugOptions(
+                            dump_ir_path, load_ir_path, enable_timing
+                        ),
+                    )
+                    print(
+                        f"#### Running tile_size={conversion_options.tileSize}, graph_category={graph_category}"
+                    )
+                    shader = compiler.compile(cloned_module, compile_options)
+                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
+                    execution_plan.initialize()
+                    device_workspace_size = (
+                        execution_plan.query_max_device_workspace_size()
+                    )
+                    device_workspace_mem_cpu = torch.zeros(
+                        device_workspace_size, dtype=torch.int8, device="cpu"
+                    )
+                    device_workspace_mem_gpu = (
+                        device_workspace_mem_cpu.clone().detach().to("cuda")
+                    )
+                    device_workspace = nv_tensor_ir.DeviceWorkspace(
+                        device_workspace_mem_gpu.data_ptr(), device_workspace_size
+                    )
+                    if timing_loop == 0:
+                        execution_plan.launch(device_workspace)
+                        self.outputs = outputs_gpu
+                        if not self.ref_outputs:
+                            self.calc_ref()
+                        passed = self.tensorir_compare_to_reference(atol, rtol)
+                        assert passed, "Mismatch between TensorIR and reference"
+                    elif timing_loop == 1:
+                        execution_plan.launch(device_workspace)
+                    else:
+                        # warm the caches
+                        execution_plan.launch(device_workspace)
+                        import utils
+
+                        (_, avg_rt, _) = utils.measure_gpu_runtime(
+                            lambda: execution_plan.launch(device_workspace), timing_loop
+                        )
+                        if avg_rt < best_perf:
+                            best_perf = avg_rt
+                            best_config = {
+                                "tile_size": tile_size,
+                                "cluster_shape": cluster_shape,
+                                "cta_count": cta_count,
+                            }
 
             print(
                 f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}"
