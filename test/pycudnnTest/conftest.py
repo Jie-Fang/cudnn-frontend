@@ -7,6 +7,13 @@ def pytest_addoption(parser):
     parser.addoption("--testName", action="append", default=[])
     parser.addoption("--testPath", action="store", default=None)
     parser.addoption("--testInput", action="store", default=None)
+    parser.addoption(
+        "--graph_category",
+        action="store",
+        default="kGemm",
+        choices=["kGemm", "kMemBound"],
+        help="Graph category type (kGemm or kMemBound)",
+    )
 
 
 def get_python_graph_defs(path, module_name):
@@ -78,6 +85,7 @@ def pytest_generate_tests(metafunc):
     JSON_DICT_PATH = "json_dict"
     GRAPH_PYTHON_FPTR = "graph_builder_fptr"
     TEST_NAME_PARAM = "test_name"
+    GRAPH_CATEGORY_PARAM = "graph_category"
 
     # Dynamically create tests for python_graph_test by identifying all test defs in a test directory
     if (
@@ -103,6 +111,12 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize(
             GRAPH_PYTHON_FPTR + "," + JSON_TEST_LIST_PARAM, param_tuples, ids=test_ids
         )
+
+        # Add graph_category parameter fixture for tensor_ir_pygraph
+        if metafunc.function.__name__ == "test_tensor_ir_pygraph":
+            metafunc.parametrize(
+                GRAPH_CATEGORY_PARAM, [metafunc.config.getoption("graph_category")]
+            )
 
     # Run a test from a json dictionary
     elif metafunc.function.__name__ == "test_json_graph":

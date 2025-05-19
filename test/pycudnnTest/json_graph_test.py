@@ -127,6 +127,18 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
     tensorir_parser.add_argument("-load_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
+    tensorir_parser.add_argument(
+        "-graph_category",
+        action="store",
+        default="kGemm",
+        choices=["kGemm", "kMemBound"],
+        help="Graph category type (kGemm or kMemBound)",
+    )
+    tensorir_parser.add_argument(
+        "--staticShapesOnly",
+        action="store_true",
+        help="Generate TensorIR module with static shapes instead of placeholders.",
+    )
     tensorir_args, unparsed_args = tensorir_parser.parse_known_args(unknown_args)
     concrete_test_dict, legacy_args = parse_legacy_args(parent_args, unparsed_args)
     testGraph = setup_test_graph_from_json(
@@ -956,9 +968,17 @@ def run_test_from_json_definition(testGraph, json_dict):
 def run_tensor_ir_test_from_json_definition(
     testGraph, kernel_config, tensorir_args, concrete_test_dict, legacy_args
 ):
-    import test_tensor_ir as tti
 
-    tensor_ir_tester = tti.test_tensor_ir(testGraph)
+    static_shapes_only = (
+        tensorir_args.staticShapesOnly if tensorir_args.staticShapesOnly else False
+    )
+    graph_category = (
+        tensorir_args.graph_category if tensorir_args.graph_category else "kGemm"
+    )
+
+    from test_tensor_ir import test_tensor_ir
+
+    tensor_ir_tester = test_tensor_ir(testGraph, static_shapes_only)
     tensor_ir_module = tensor_ir_tester.build_tensor_ir_module(legacy_args.jsonTestName)
     tensor_ir_module.dump()
     # Read in rtol/atol from json
@@ -973,6 +993,7 @@ def run_tensor_ir_test_from_json_definition(
 
     passed = tensor_ir_tester.run_tensor_ir_module(
         tensor_ir_module,
+        graph_category,
         kernel_config,
         tensorir_args.dump_ir_path,
         tensorir_args.load_ir_path,
