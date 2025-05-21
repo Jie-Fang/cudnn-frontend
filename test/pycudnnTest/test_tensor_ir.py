@@ -929,7 +929,6 @@ class test_tensor_ir:
 
                     compile_options = nv_tensor_ir.TensorIRCompilationOptions(
                         10,  # Hardcoded for blackwell
-                        nv_tensor_ir.GraphCategory.kGemm,  # Hardcode for Gemm
                         nv_tensor_ir.TensorConversionOptions(
                             tile_size, mma_shape, cluster_shape, cta_count, stream_k
                         ),
