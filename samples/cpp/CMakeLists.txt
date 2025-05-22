@@ -30,6 +30,7 @@ add_executable(
     matmul/int8_matmul.cpp
     matmul/mixed_matmul.cpp
     matmul/nvfp4_mxfp8_matmul.cpp
+    matmul/int4_woq_matmul.cpp
 
     norm/batchnorm.cpp
     norm/layernorm.cpp

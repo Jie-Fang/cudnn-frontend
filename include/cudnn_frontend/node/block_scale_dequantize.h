@@ -34,21 +34,27 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
         auto scale = attributes.inputs.at(Block_scale_dequantize_attributes::input_names::scale);
         auto Y     = attributes.outputs.at(Block_scale_dequantize_attributes::output_names::Y);
 
+        constexpr std::array<DataType_t, 3> fp_input_dtypes = {
+            DataType_t::FP4_E2M1, DataType_t::FP8_E4M3, DataType_t::FP8_E5M2};
+        auto const is_fp_input_dtype =
+            std::find(fp_input_dtypes.begin(), fp_input_dtypes.end(), X->get_data_type()) != fp_input_dtypes.end();
+
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             !(X->get_data_type() == DataType_t::FP4_E2M1 || X->get_data_type() == DataType_t::FP8_E4M3 ||
-              X->get_data_type() == DataType_t::FP8_E5M2),
+              X->get_data_type() == DataType_t::FP8_E5M2 || X->get_data_type() == DataType_t::INT4),
             error_code_t::INVALID_VALUE,
-            "Input datatype to dequantize node should be among E2M1, E4M3, E5M2\n");
+            "Input datatype to dequantize node should be among E2M1, E4M3, E5M2, INT4\n");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            !(scale->get_data_type() == DataType_t::FP8_E4M3 || scale->get_data_type() == DataType_t::FP8_E8M0),
+            is_fp_input_dtype &&
+                !(scale->get_data_type() == DataType_t::FP8_E4M3 || scale->get_data_type() == DataType_t::FP8_E8M0),
             error_code_t::INVALID_VALUE,
-            "Scale datatype to dequantize node should be either E4M3 or E8M0\n");
+            "Scale datatype to dequantize node should be either E4M3 or E8M0 for E2M1, E4M3, E5M2 input\n");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
-            !(attributes.block_size.value() == 16 || attributes.block_size.value() == 32),
+            X->get_data_type() == DataType_t::INT4 && !(scale->get_data_type() == DataType_t::HALF),
             error_code_t::INVALID_VALUE,
-            "Block size for dequantize node should be 16 for nvfp4 - e2m1 or 32 for mxfp8 - e4m3, e5m2\n");
+            "Scale datatype to dequantize node should be HALF for INT4 input\n");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (X->get_data_type() == DataType_t::FP4_E2M1 && attributes.block_size.value() != 16),
@@ -60,6 +66,11 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
              attributes.block_size.value() != 32),
             error_code_t::INVALID_VALUE,
             "Block size for dequantize node should be 32 for e3m4 or e5m2 datatypes\n");
+
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (X->get_data_type() == DataType_t::INT4 && attributes.block_size.value() % 16 != 0),
+            error_code_t::INVALID_VALUE,
+            "Block size for dequantize node should be divisible by 16 for INT4 input\n");
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             (X->get_data_type() == DataType_t::FP4_E2M1 && scale->get_data_type() != DataType_t::FP8_E4M3),
