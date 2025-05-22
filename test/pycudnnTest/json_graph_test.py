@@ -128,11 +128,11 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-load_ir_path", action="store", default="")
     tensorir_parser.add_argument("-mlir_timing", action="store_true")
     tensorir_parser.add_argument(
-        "-graph_category",
+        "-compiler_backend",
         action="store",
-        default="kGemm",
-        choices=["kGemm", "kMemBound"],
-        help="Graph category type (kGemm or kMemBound)",
+        default="Tile",
+        choices=["Tile", "Cuda"],
+        help="Compiler backend type (Tile or Cuda)",
     )
     tensorir_parser.add_argument(
         "--staticShapesOnly",
@@ -972,8 +972,8 @@ def run_tensor_ir_test_from_json_definition(
     static_shapes_only = (
         tensorir_args.staticShapesOnly if tensorir_args.staticShapesOnly else False
     )
-    graph_category = (
-        tensorir_args.graph_category if tensorir_args.graph_category else "kGemm"
+    compiler_backend = (
+        tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
     )
 
     from test_tensor_ir import test_tensor_ir
@@ -993,7 +993,7 @@ def run_tensor_ir_test_from_json_definition(
 
     passed = tensor_ir_tester.run_tensor_ir_module(
         tensor_ir_module,
-        graph_category,
+        compiler_backend,
         kernel_config,
         tensorir_args.dump_ir_path,
         tensorir_args.load_ir_path,

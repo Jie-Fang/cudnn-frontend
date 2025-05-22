@@ -840,7 +840,7 @@ class test_tensor_ir:
     def run_tensor_ir_module(
         self,
         module,
-        graph_category,
+        compiler_backend,
         kernel_configs,
         dump_ir_path,
         load_ir_path,
@@ -915,7 +915,7 @@ class test_tensor_ir:
             best_config = dict(
                 tile_size=[], mma_shape=[], cluster_shape=[], cta_count=[]
             )
-            if graph_category == "kGemm":
+            if compiler_backend == "Collective":
                 for (
                     tile_size,
                     mma_shape,
@@ -998,14 +998,14 @@ class test_tensor_ir:
 
                     compile_options = nv_tensor_ir.TensorIRCompilationOptions(
                         10,  # Hardcoded for blackwell
-                        nv_tensor_ir.GraphCategory.kMemBound,
+                        nv_tensor_ir.CompilerBackend.Tile,
                         conversion_options,
                         nv_tensor_ir.DebugOptions(
                             dump_ir_path, load_ir_path, enable_timing
                         ),
                     )
                     print(
-                        f"#### Running tile_size={conversion_options.tileSize}, graph_category={graph_category}"
+                        f"#### Running tile_size={conversion_options.tileSize}, compiler_backend={compiler_backend}"
                     )
                     shader = compiler.compile(cloned_module, compile_options)
                     execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
