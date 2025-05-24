@@ -1,15 +1,7 @@
 """
-This test harness allows for testing the various options of the attention operator. See example usage under "main" below.
-
-The full documentation on the attention operator can be found in: https://github.com/NVIDIA/cudnn-frontend/blob/main/docs/operations/Attention.md#scaled-dot-product-attention
-
-Notebooks that demonstrate the attention operator can be found here:
-- Introductory example: https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/50_scaled_dot_product_attention.ipynb
-- Example with paged caches: https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/samples/python/52_scaled_dot_product_attention_with_paged_caches.ipynb
-- Work in progress
-
-The recommended way to run those tests:
-> pytest -vv -s -rA --tb=short this_file.py
+This script tests cuDNN front-end attention.
+The recommended way to run tests:
+> pytest -vv -s -rA --tb=short test_mhas_v2.py
 """
 
 import cudnn
@@ -22,6 +14,9 @@ import sys
 from looseversion import LooseVersion
 from datetime import datetime
 
+# Invalid left/right attention bound (negative values may be used in the future).
+INVALID_BOUND = 99999
+
 # fmt: off
 
 if __name__ == "__main__":
@@ -31,6 +26,8 @@ if __name__ == "__main__":
 data_type_options      = [torch.float16, torch.bfloat16]
 head_group_options     = ["MHA", "GQA", "MQA"]
 random_layout_options  = ["edge_random", "inner_random"]
+diag_alignment_options = [cudnn.diagonal_alignment.TOP_LEFT, cudnn.diagonal_alignment.BOTTOM_RIGHT]
+diag_alignment_names   = ['cudnn.diagonal_alignment.TOP_LEFT', 'cudnn.diagonal_alignment.BOTTOM_RIGHT']
 
 def tlist(*, num_tests, rng_seed):
     assert num_tests >= 1 and type(num_tests) == int, "wrong input"
@@ -131,7 +128,7 @@ def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
         else:
             print(f"Total {mismatch_cnt} mismatches in {num_elements} elements when validating '{tag}' results")
     else:
-        print(f"Numerical divergence of '{tag}' is within limits")
+        print(f"Numerical divergence of '{tag}' within limits")
 
     # Check if areas before and after the tensor were overwritten (treated as one numerical mismatch).
     if sepbuf is not None and not torch.all(torch.isnan(sepbuf)).item():
@@ -188,38 +185,86 @@ def alloc_tensor(shape, data_type, *, elems=None, strides=None, rng=None, mean=0
     return tensor, sepbuf, rawbuf
 
 def bool_cli_option(org_val, request, cli_opt):
-    bool_map = {"True": True, "False": False}
+    bool_map = {"False": False, "True": True}
     str_val = request.config.getoption(cli_opt)
     val = bool_map.get(str_val)
     return val if type(val) == bool else org_val
 
+def int_cli_option(org_val, request, cli_opt):
+    val = request.config.getoption(cli_opt)
+    return val if type(val) == int else org_val
+
+def diag_cli_option(org_val, request, cli_opt):
+    diag_map = {False : cudnn.diagonal_alignment.TOP_LEFT, True : cudnn.diagonal_alignment.BOTTOM_RIGHT}
+    val = request.config.getoption(cli_opt)
+    return diag_map.get(bool(val)) if type(val) == int else org_val
+
+def fetch_blocked_tests(file_path):
+    blocked_map = {}
+    try:
+        line_number = None
+        with open(file_path, 'r') as file:
+            for line_number, line_buf in enumerate(file, 1):
+                line_buf = line_buf.split('#', 1)[0]  # remove comments
+                line_buf = "".join(line_buf.split())  # remove whitespaces
+                if line_buf:
+                    test,sms,libs = (line_buf+"::").split(':')[:3]
+                    if not test:
+                        raise ValueError("missing test name")
+                    if test in blocked_map:
+                        raise ValueError("duplicate test name")
+                    sms  = sms.split(',') if sms else None
+                    libs = libs.split(',') if libs else None
+                    blocked_map[test] = (sms, libs)
+    except Exception as e:
+        blocked_map = {}
+        if line_number != None:
+            print(f"\n\nWARNING: {e} in {file_path}:{line_number}")
+        else:
+            print(f"\n\nWARNING: {e}")
+    return blocked_map
+
+def show_blocked_tests(blocked_map):
+    print("\n\nBlocked tests:")
+    if blocked_map:
+        for test, values in blocked_map.items():
+            blocked_sms  = ",".join(map(str, values[0])) if values[0] != None else ""
+            blocked_libs = ",".join(map(str, values[1])) if values[1] != None else ""
+            print(f"{test} : {blocked_sms} : {blocked_libs}")
+    else:
+        print("[empty]")
+
+def is_test_blocked(test, gpu_arch, cudnn_ver, blocked_map):
+    assert type(test) == type(gpu_arch) == type(cudnn_ver) == str, "expecting strings"
+    values = blocked_map.get(test)
+    if values is not None:
+        blocked_sms, blocked_libs = values
+        if (blocked_sms == None or gpu_arch in blocked_sms) and (blocked_libs == None or cudnn_ver in blocked_libs):
+            return True
+    return False
+
 class testConfig:
     # To prevent creation of misspelled variables, listing all local variables of the class.
-    __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_info', 'min_batches', 'max_batches', 
-                 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 'min_d_v', 'max_d_v', 
-                 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 'is_infer', 'is_causal', 
-                 'is_alibi', 'is_paged', 'is_bias', 'is_padding', 'is_causal_br', 'is_sliding_w', 'is_dropout', 
-                 'is_ragged', 'is_determin', 'data_type', 'batches', 'd_qk', 'd_v', 's_q', 's_kv', 
-                 'h_q', 'h_k', 'h_v', 'block_size', 'in_layout', 'out_layout', 'shape_q', 'gaps_q', 
-                 'stride_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'elems_k', 
+    __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_map',
+                 'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 
+                 'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 
+                 'diag_align', 'left_bound', 'right_bound', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
+                 'is_padding', 'is_dropout', 'is_ragged', 'is_determin', 'data_type', 'batches', 
+                 'd_qk', 'd_v', 's_q', 's_kv', 'h_q', 'h_k', 'h_v', 'block_size', 'in_layout', 'out_layout', 
+                 'shape_q', 'gaps_q', 'stride_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'elems_k', 
                  'shape_v', 'gaps_v', 'stride_v', 'elems_v', 'shape_o', 'gaps_o', 'stride_o', 'elems_o']
 
-    def __init__(self):
-        assert torch.cuda.is_available(), "no CUDA device"
+    def __init__(self, *, gpu_arch, gpu_info, cudnn_ver, blocked_map):
+        self.gpu_arch    = str(gpu_arch)
+        self.gpu_info    = str(gpu_info)
+        self.cudnn_ver   = str(cudnn_ver)
+        self.blocked_map = blocked_map
 
         self.rng_geom    = random.Random()
         self.geom_seed   = None
 
         self.rng_data    = torch.Generator(device="cuda")
         self.data_seed   = None
-
-        try:
-            gpu_name = torch.cuda.get_device_name()
-            gpu_type = torch.cuda.get_device_capability()
-            sm_count = torch.cuda.get_device_properties().multi_processor_count
-            self.gpu_info = f"SM_{gpu_type[0]}{gpu_type[1]} ({sm_count} SM-s, {gpu_name})"
-        except Exception as e:
-            self.gpu_info = f"{e}"
 
         self.min_batches = self.max_batches = 1
         self.min_s_q     = self.max_s_q     = 1
@@ -229,54 +274,56 @@ class testConfig:
         self.min_h_qkv   = self.max_h_qkv   = 1
         self.min_blk_sz  = self.max_blk_sz  = 1
 
-        self.head_group   = None
-        self.is_causal    = None
-        self.is_alibi     = None
-        self.is_infer     = None
-        self.is_paged     = None
-        self.is_bias      = None
-        self.is_padding   = None
-        self.is_causal_br = None
-        self.is_sliding_w = None
-        self.is_dropout   = None
-        self.is_ragged    = None
-        self.is_determin  = None
-        self.data_type    = None
+        self.head_group  = None
+        self.data_type   = None
 
-        self.batches    = None
-        self.d_qk       = None
-        self.d_v        = None
-        self.s_q        = None
-        self.s_kv       = None
-        self.h_q        = None
-        self.h_k        = None
-        self.h_v        = None
-        self.block_size = None
-        self.in_layout  = None
-        self.out_layout = None
+        self.diag_align  = None
+        self.left_bound  = None
+        self.right_bound = None
 
-        self.shape_q    = None
-        self.gaps_q     = None
-        self.stride_q   = None
-        self.elems_q    = None
+        self.is_alibi    = None
+        self.is_infer    = None
+        self.is_paged    = None
+        self.is_bias     = None
+        self.is_padding  = None
+        self.is_dropout  = None
+        self.is_ragged   = None
+        self.is_determin = None
 
-        self.shape_k    = None
-        self.gaps_k     = None
-        self.stride_k   = None
-        self.elems_k    = None
+        self.batches     = None
+        self.d_qk        = None
+        self.d_v         = None
+        self.s_q         = None
+        self.s_kv        = None
+        self.h_q         = None
+        self.h_k         = None
+        self.h_v         = None
+        self.block_size  = None
+        self.in_layout   = None
+        self.out_layout  = None
 
-        self.shape_v    = None
-        self.gaps_v     = None
-        self.stride_v   = None
-        self.elems_v    = None
+        self.shape_q     = None
+        self.gaps_q      = None
+        self.stride_q    = None
+        self.elems_q     = None
 
-        self.shape_o    = None
-        self.gaps_o     = None
-        self.stride_o   = None
-        self.elems_o    = None
+        self.shape_k     = None
+        self.gaps_k      = None
+        self.stride_k    = None
+        self.elems_k     = None
+
+        self.shape_v     = None
+        self.gaps_v      = None
+        self.stride_v    = None
+        self.elems_v     = None
+
+        self.shape_o     = None
+        self.gaps_o      = None
+        self.stride_o    = None
+        self.elems_o     = None
 
     def config_str(self):
-        banned = ("max_", "min_", "gpu_", "rng_")
+        banned = ("max_", "min_", "gpu_", "rng_", "blocked_map", "cudnn_ver")
         stg = ""
         for k in self.__slots__:
             if k.startswith(banned):
@@ -285,6 +332,8 @@ class testConfig:
             if type(v) == str:
                 assert len(v) > 0, f"ERROR: empty string in {k}='{v}'"
                 stg += f"{k}='{v}':"
+            elif type(v) == cudnn._compiled_module.diagonal_alignment:
+                stg += f"{k}={diag_alignment_names[int(v)]}:"
             else:
                 assert v != None, f"ERROR: invalid value in '{k}={v}'"
                 stg += f"{k}={v}:"
@@ -293,7 +342,7 @@ class testConfig:
         return stg
 
     def load_config(self, code):
-        print(f"Loading config: '{code}'")
+        print(f"\nLoading config: '{code}'")
         code = "".join(code.split())  # remove whitespaces
         for assign in filter(None, code.split(":")):
             code_to_run = "self." + assign
@@ -301,7 +350,7 @@ class testConfig:
                 exec(code_to_run)
             except Exception as e:
                 assert False, f"ERROR: {e} in '{assign}'"
-        banned = ("max_", "min_", "gpu_", "rng_")
+        banned = ("max_", "min_", "gpu_", "rng_", "blocked_map", "cudnn_ver")
         for k in self.__slots__:
             if k.startswith(banned):
                 continue
@@ -353,33 +402,33 @@ class testConfig:
 
     def showConfig(self, test_no, request, reg_run=True):
         if request.config.option.dryrun == 0:
-            print("\n==========================================================================================")
+            print("\n" + "=" * 90)
             print(f"Test #{test_no[0]} of {test_no[1]} at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print(f"test_name        = {request.node.name}")
             print(f"geom_seed        = {self.geom_seed}")
             print(f"data_seed        = {self.data_seed}")
-            print(f"gpu_info         = {self.gpu_info}")
+            print(f"platform_info    = {self.gpu_arch} ({self.gpu_info}), cudnn_ver={self.cudnn_ver}")
             print(f"head_group       = {self.head_group}")
             print(f"layout           = {self.in_layout}->{self.out_layout}")
-            print(f"shape_q(b,h,s,d) = {self.shape_q} @ {self.stride_q}, gaps_q={self.gaps_q}, elems={self.elems_q:,}")
-            print(f"shape_k(b,h,s,d) = {self.shape_k} @ {self.stride_k}, gaps_k={self.gaps_k}, elems={self.elems_k:,}")
-            print(f"shape_v(b,h,s,d) = {self.shape_v} @ {self.stride_v}, gaps_v={self.gaps_v}, elems={self.elems_v:,}")
-            print(f"shape_o(b,h,s,d) = {self.shape_o} @ {self.stride_o}, gaps_o={self.gaps_o}, elems={self.elems_o:,}")
+            print(f"shape_q(b,h,s,d) = {self.shape_q}, strides={self.stride_q}, gaps={self.gaps_q}, elems={self.elems_q:,}")
+            print(f"shape_k(b,h,s,d) = {self.shape_k}, strides={self.stride_k}, gaps={self.gaps_k}, elems={self.elems_k:,}")
+            print(f"shape_v(b,h,s,d) = {self.shape_v}, strides={self.stride_v}, gaps={self.gaps_v}, elems={self.elems_v:,}")
+            print(f"shape_o(b,h,s,d) = {self.shape_o}, strides={self.stride_o}, gaps={self.gaps_o}, elems={self.elems_o:,}")
             print(f"is_infer         = {self.is_infer}")
-            print(f"is_causal        = {self.is_causal}")
             print(f"is_alibi         = {self.is_alibi}")
             print(f"is_paged         = {self.is_paged} (block_size={self.block_size})")
             print(f"is_bias          = {self.is_bias}")
             print(f"is_padding       = {self.is_padding}")
             print(f"is_ragged        = {self.is_ragged}")
-            print(f"is_causal_br     = {self.is_causal_br}")
-            print(f"is_sliding_w     = {self.is_sliding_w}")
             print(f"is_dropout       = {self.is_dropout}")
             print(f"is_determin      = {self.is_determin}")
+            print(f"diag_align       = {diag_alignment_names[int(self.diag_align)]} ({int(self.diag_align)})")
+            print(f"left_bound       = {self.left_bound}", '(NO BOUND)' if self.left_bound == INVALID_BOUND else '')
+            print(f"right_bound      = {self.right_bound}", '(NO BOUND)' if self.right_bound == INVALID_BOUND else '')
             print(f"data_type        = {self.data_type}")
             if reg_run:
                 cmd_opts = f"--geom_seed {self.geom_seed} --data_seed {self.data_seed}"
-                print(f"repro_cmd    = {request.node.path.name}::{request.node.name} {cmd_opts}")
+                print(f"repro_cmd        = {request.node.path.name}::{request.node.name} {cmd_opts}")
         elif request.config.option.dryrun == 1:
             print(f"\npytest -vv -s -rA --tb=short {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 2:
@@ -387,7 +436,7 @@ class testConfig:
         else:
             assert False, "wrong --dryrun command line option"
 
-    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, is_causal, request):
+    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, request):
         assert data_type in data_type_options, "wrong data type"
         assert head_group in head_group_options, "wrong head group"
         assert layout_type in random_layout_options, "wrong layout type"
@@ -397,49 +446,37 @@ class testConfig:
         self.data_seed = test_no[2]
 
         # Overwrite RNG seeds from the command line.
-        self.geom_seed = int(request.config.option.geom_seed) if request.config.option.geom_seed != None else self.geom_seed
-        self.data_seed = int(request.config.option.data_seed) if request.config.option.data_seed != None else self.data_seed
+        self.geom_seed = int_cli_option(self.geom_seed, request, "--geom_seed")
+        self.data_seed = int_cli_option(self.data_seed, request, "--data_seed")
 
         self.rng_geom.seed(self.geom_seed)
         self.rng_data.manual_seed(self.data_seed)
 
-        self.head_group     = head_group
-        self.data_type      = data_type
+        self.head_group   = head_group
+        self.data_type    = data_type
 
         self.is_infer     = is_infer
-        self.is_causal    = is_causal
-        self.is_alibi     = self.rng_geom.choice([True, False]) if self.is_causal else False  # ALiBi mask requires is_causal
-        self.is_paged     = self.rng_geom.choice([True, False]) if self.is_infer else False
+        self.is_alibi     = self.rng_geom.choice([True, False])
+        self.is_paged     = self.rng_geom.choice([True, False])
         self.is_bias      = self.rng_geom.choice([True, False])
         self.is_padding   = False
         self.is_ragged    = False
-        self.is_causal_br = self.rng_geom.choice([True, False])
-        self.is_sliding_w = self.rng_geom.choice([True, False])
         self.is_dropout   = self.rng_geom.choice([True, False])
-        self.is_determin  = self.rng_geom.choice([True, False]) if not self.is_infer else True  # TODO: what is this
+        self.is_determin  = self.rng_geom.choice([True, False])
 
-        # Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False.
-        if self.is_causal_br and (self.is_bias != False or self.is_alibi != False or self.is_dropout != False):
-            self.is_causal_br = False
+        # LIMIT: always is_determin=True in inference.
+        if self.is_infer:
+            self.is_determin = True
 
-        # Sliding window attention is only supported with is_causal=True, is_dropout=False, is_bias=False.
-        if self.is_sliding_w and (self.is_causal != True or self.is_dropout != False or self.is_bias != False):
-            self.is_sliding_w = False
+        # LIMIT: Paged attention only in inference.
+        if not self.is_infer:
+            self.is_paged = False
 
-        # The is_causal_br=True and is_causal=True settings cannot be both enabled.
-        if self.is_causal and self.is_causal_br:
-            self.is_causal_br = False
-
-        # TODO: Ragged mode (packed variable sequence length) is only tested with some layouts.
-        # TODO: need to figure out which layouts out of 216 choices are supported.
-        # if self.is_ragged and not (self.in_layout == "bshd_bshd_bshd"):
-        #     self.is_ragged = False
-
-        # Paged caches can only be used in combination with padding mask (variable sequence length).
+        # LIMIT: Paged caches can only be used in combination with padding mask (variable sequence length).
         if self.is_paged and not self.is_padding:
             self.is_paged = False
 
-        # Paged caches cannot be used with ragged offsets (packed variable sequence lengths).
+        # LIMIT: Paged caches cannot be used with ragged offsets (packed variable sequence lengths).
         if self.is_paged and self.is_ragged:
             self.is_paged = False
 
@@ -448,16 +485,18 @@ class testConfig:
         # if self.is_paged and not self.in_layout == "bshd_bshd_bshd":
         #     self.is_paged = False
 
+        # TODO: Ragged mode (packed variable sequence length) is only tested with some layouts.
+        # TODO: need to figure out which layouts out of 216 choices are supported.
+        # if self.is_ragged and not (self.in_layout == "bshd_bshd_bshd"):
+        #     self.is_ragged = False
+
         # Overwrite all boolean varaibles from the command line including 'is_infer' and 'is_causal'.
         self.is_infer     = bool_cli_option(self.is_infer, request, "--mha_is_infer")
-        self.is_causal    = bool_cli_option(self.is_causal, request, "--mha_is_causal")
         self.is_alibi     = bool_cli_option(self.is_alibi, request, "--mha_is_alibi")
         self.is_paged     = bool_cli_option(self.is_paged, request, "--mha_is_paged")
         self.is_bias      = bool_cli_option(self.is_bias, request, "--mha_is_bias")
         self.is_padding   = bool_cli_option(self.is_padding, request, "--mha_is_padding")
         self.is_ragged    = bool_cli_option(self.is_ragged, request, "--mha_is_ragged")
-        self.is_causal_br = bool_cli_option(self.is_causal_br, request, "--mha_is_causal_br")
-        self.is_sliding_w = bool_cli_option(self.is_sliding_w, request, "--mha_is_sliding_w")
         self.is_dropout   = bool_cli_option(self.is_dropout, request, "--mha_is_dropout")
         self.is_determin  = bool_cli_option(self.is_determin, request, "--mha_is_determin")
 
@@ -479,25 +518,66 @@ class testConfig:
         else:
             assert False, "wrong layout type"
 
-        # Sliding window attention is not supported with s_q > s_kv.
-        if self.is_sliding_w and (self.s_q > self.s_kv):
-            self.is_sliding_w = False
-
-        # When is_causal_br=True, s_q and s_kv have to be multiple of 64 and s_q <= s_kv.
-        if self.is_causal_br and (self.s_q > self.s_kv or self.s_q % 64 != 0 or self.s_kv % 64 != 0):
-            range_lo = max(self.min_s_q, self.min_s_kv)
-            range_lo = (range_lo + 63) // 64 * 64  # include first multiple of 64
-            range_hi = min(self.max_s_q, self.max_s_kv)
-            if range_lo <= range_hi and layout_type == "inner_random":
-                self.s_kv = self.rng_geom.choice(get_multiples_of(64, range_lo, range_hi))
-                self.s_q  = self.rng_geom.choice(get_multiples_of(64, range_lo, self.s_kv))
-            else:
-                self.is_causal_br = False
-
         # Overwrite batches, s_q, s_kv from command line arguments.
-        self.batches = int(request.config.option.mha_batches) if request.config.option.mha_batches != None else self.batches
-        self.s_q = int(request.config.option.mha_s_q) if request.config.option.mha_s_q != None else self.s_q
-        self.s_kv = int(request.config.option.mha_s_kv) if request.config.option.mha_s_kv != None else self.s_kv
+        self.batches = int_cli_option(self.batches, request, "--mha_batches")
+        self.s_q     = int_cli_option(self.s_q, request, "--mha_s_q")
+        self.s_kv    = int_cli_option(self.s_kv, request, "--mha_s_kv")
+
+        # To avoid 'diag_align' being None we always assign TOP_LEFT or BOTTOM_RIGHT.
+        self.diag_align = self.rng_geom.choice(diag_alignment_options)
+
+        # left_bound must be >= 1 or None
+        draw = self.rng_geom.random()
+        if draw < 0.75:
+            self.left_bound = self.rng_geom.randint(1, max(1, self.s_kv//2))
+        else:
+            self.left_bound = INVALID_BOUND
+
+        # right_bound must be >= 0 or None. right_bound=0 is a very common case.
+        draw = self.rng_geom.random()
+        if draw < 0.5:
+            self.right_bound = self.rng_geom.randint(1, max(1, self.s_kv//2))
+        elif draw < 0.75:
+            self.right_bound = 0
+        else:
+            self.right_bound = INVALID_BOUND
+
+        # TODO: remove this workaround for bug https://nvbugs/5279917.
+        # if self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND and not self.is_infer:
+            self.right_bound = INVALID_BOUND
+
+        # Handle command line options to overwrite diagonal alignment, left bound, and righ tbound.
+        self.diag_align  = diag_cli_option(self.diag_align, request, "--mha_diag_align")
+        self.left_bound  = int_cli_option(self.left_bound, request, "--mha_left_bound")
+        self.right_bound = int_cli_option(self.right_bound, request, "--mha_right_bound")
+
+        # LIMIT: left and right bounds are only supported with is_dropout=False, is_bias=False.
+        if self.left_bound != INVALID_BOUND and self.right_bound != INVALID_BOUND:
+            self.is_dropout = False
+            self.is_bias = False
+
+        # LIMIT: when alibi mask is used, diagonal_band_right_bound needs to be exactly 0 (not INVALID_BOUND).
+        if self.is_alibi and self.right_bound != 0:
+            self.is_alibi = False
+
+        # LIMIT: bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False.
+        if self.diag_align == self.diag_align.BOTTOM_RIGHT and (self.left_bound != INVALID_BOUND or self.right_bound != INVALID_BOUND):
+            self.is_bias    = False
+            self.is_alibi   = False
+            self.is_dropout = False
+
+        # LIMIT: Left or right bounds are only supported with is_dropout=False, is_bias=False.
+        if self.left_bound != INVALID_BOUND or self.right_bound != INVALID_BOUND:
+            self.is_dropout = False
+            self.is_bias    = False
+
+        # LIMIT: Left bound (a.k.a sliding window) does not support s_q > s_kv
+        if self.left_bound != INVALID_BOUND and self.s_q > self.s_kv:
+            self.left_bound = INVALID_BOUND
+
+        # LIMIT: Bottom right causal mask does not support s_q > s_kv. 
+        if self.s_q > self.s_kv and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND:
+            self.right_bound = INVALID_BOUND
 
         # Make sure all Q,K,V vectors in a tensor are aliagned to 16 bytes.
         # For dense tensors, vectors should be divisible into 16B chunks.
@@ -523,8 +603,8 @@ class testConfig:
             assert False, "wrong layout type"
 
         # Overwrite d_qk, d_v from command line arguments.
-        self.d_qk = int(request.config.option.mha_d_qk) if request.config.option.mha_d_qk != None else self.d_qk
-        self.d_v = int(request.config.option.mha_d_v) if request.config.option.mha_d_v != None else self.d_v
+        self.d_qk = int_cli_option(self.d_qk, request, "--mha_d_qk")
+        self.d_v  = int_cli_option(self.d_v, request, "--mha_d_v")
 
         if (layout_type == "edge_random"):
             self.h_q = self.max_h_qkv
@@ -548,9 +628,9 @@ class testConfig:
             assert False, "wrong layout type"
 
         # Overwrite h_q, h_k, h_v from command line arguments.
-        self.h_q = int(request.config.option.mha_h_q) if request.config.option.mha_h_q != None else self.h_q
-        self.h_k = int(request.config.option.mha_h_k) if request.config.option.mha_h_k != None else self.h_k
-        self.h_v = int(request.config.option.mha_h_v) if request.config.option.mha_h_v != None else self.h_v
+        self.h_q = int_cli_option(self.h_q, request, "--mha_h_q")
+        self.h_k = int_cli_option(self.h_k, request, "--mha_h_k")
+        self.h_v = int_cli_option(self.h_v, request, "--mha_h_v")
 
         # Block size for paged attention in fprop (must be power of 2 and minimum 1).
         if self.is_infer and self.is_paged:
@@ -559,7 +639,7 @@ class testConfig:
             self.block_size = 0
 
         # Overwrite block_size from command line.
-        self.block_size = int(request.config.option.mha_block_size) if request.config.option.mha_block_size != None else self.block_size
+        self.block_size = int_cli_option(self.block_size, request, "--mha_block_size")
 
         # Using the 'bhsd' order for shape.
         self.shape_q = (self.batches, self.h_q, self.s_q, self.d_qk)
@@ -635,9 +715,9 @@ def compute_ref(
     bias=None,
     is_alibi=False,
     padding=None,
-    is_causal=False,
-    is_causal_br=False,
-    sliding_window_length=None,
+    diag_align=cudnn.diagonal_alignment.TOP_LEFT,
+    left_bound=INVALID_BOUND,
+    right_bound=INVALID_BOUND,
     dropout_prob=0.0,
     dropout_mask=None,
     compute_stats=False,
@@ -667,15 +747,9 @@ def compute_ref(
         v = v.expand(-1, -1, h_q // h_v, -1, -1)
         v = v.reshape(v.size(0), -1, v.size(3), v.size(4))
 
-    if is_causal_br:
-        causal_mask_bottom_right_zero = torch.ones(
-            1, 1, s_q, 1, dtype=torch.bool, device=device
-        )
-        causal_mask_bottom_right_zero[:, :, : s_q - s_kv, :] = False
-
-    if sliding_window_length is not None:
+    if left_bound != INVALID_BOUND:
         swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
-        swa_mask_zero[:, :, s_kv + sliding_window_length - 1 :, :] = False
+        swa_mask_zero[:, :, s_kv + left_bound - 1 :, :] = False
         q = q * swa_mask_zero
 
     # generate masks to compute reference values for padding mask (also called variable sequence length)
@@ -732,13 +806,15 @@ def compute_ref(
 
         alibi_mask = distance.to(dtype=torch.float32) * m
         s = s + alibi_mask
+
     if padding is not None:
         s = s.masked_fill(s_mask, float("-inf"))
-    if is_causal:
+
+    if diag_align == diag_align.TOP_LEFT and right_bound != INVALID_BOUND:
         causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
-        causal_mask.triu_(diagonal=1)
+        causal_mask.triu_(diagonal=1 + right_bound)
         s = s.masked_fill(causal_mask, float("-inf"))
-    if is_causal_br:
+    elif (diag_align == diag_align.BOTTOM_RIGHT and right_bound != INVALID_BOUND):
         causal_mask_bottom_right = None
         if padding:
             causal_mask_bottom_right = torch.ones(
@@ -747,24 +823,39 @@ def compute_ref(
             seq_len_q, seq_len_kv = padding
             for i in range(b):
                 causal_mask_bottom_right[i, :, :, :].triu_(
-                    diagonal=seq_len_kv[i] - seq_len_q[i] + 1
+                    diagonal=seq_len_kv[i] - seq_len_q[i] + 1 + right_bound
                 )
         else:
             causal_mask_bottom_right = torch.ones(
                 s_q, s_kv, dtype=torch.bool, device=device
             )
-            causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1)
+            causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1 + right_bound)
         s = s.masked_fill(causal_mask_bottom_right, float("-inf"))
-    if sliding_window_length is not None:
-        assert is_causal == True
-        swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
-        swa_mask.tril_(diagonal=-1 * sliding_window_length)
+
+    if left_bound != INVALID_BOUND:
+        assert diag_align is not None
+        if diag_align == diag_align.TOP_LEFT:
+            swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+            swa_mask.tril_(diagonal=-1 * left_bound)
+        elif diag_align == diag_align.BOTTOM_RIGHT:
+            # BRCM + SWA for variable sequence lengths
+            if padding:
+                swa_mask = torch.ones(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
+                seq_len_q, seq_len_kv = padding
+                for i in range(b):
+                    swa_mask[i, :, :, :].tril_(
+                        diagonal=seq_len_kv[i] - seq_len_q[i] - left_bound
+                    )
+            # BRCM + SWA for fixed sequence lengths
+            else:
+                swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+                swa_mask.tril_(diagonal=-1 * left_bound + (s_kv - s_q))
         swa_mask &= swa_mask_zero.view(s_q, 1)
         s = s.masked_fill(swa_mask, float("-inf"))
 
     p = torch.softmax(s, dim=-1)
 
-    if sliding_window_length is not None:
+    if left_bound != INVALID_BOUND:
         p = p * swa_mask_zero
     if padding is not None:
         p = p.masked_fill(p_mask, 0.0)
@@ -790,7 +881,7 @@ def compute_ref(
     return o
 
 
-def generate_ragged_offset(layout, head_group, shape_q, shape_k, shape_v, shape_o, seq_len_q, seq_len_kv):
+def generate_ragged_offset(layout, head_group, shape_q, shape_k, shape_v, shape_o, seq_len_q, seq_len_kv, cudnn_version):
     b, h_q, s_q, d_qk = shape_q
     b, h_k, s_kv, d_qk = shape_k
     b, h_v, s_kv, d_v = shape_v
@@ -839,13 +930,13 @@ def generate_ragged_offset(layout, head_group, shape_q, shape_k, shape_v, shape_
             k_ragged_offset = compute_exclusive_prefix_sum(seq_len_kv) * 2 * h_kv * d
             v_ragged_offset = compute_exclusive_prefix_sum(seq_len_kv) * 2 * h_kv * d
             o_ragged_offset = compute_exclusive_prefix_sum(seq_len_q) * h_q * d
-    else:
+    else:  # sbh3d
         assert False, "wrong layout"
 
-    q_ragged_offset = q_ragged_offset.to(dtype=seq_len_q.dtype)
-    k_ragged_offset = k_ragged_offset.to(dtype=seq_len_kv.dtype)
-    v_ragged_offset = v_ragged_offset.to(dtype=seq_len_kv.dtype)
-    o_ragged_offset = o_ragged_offset.to(dtype=seq_len_q.dtype)
+    q_ragged_offset = q_ragged_offset.to( dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32)
+    k_ragged_offset = k_ragged_offset.to( dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32)
+    v_ragged_offset = v_ragged_offset.to( dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32)
+    o_ragged_offset = o_ragged_offset.to( dtype=torch.int64 if cudnn_version >= "9.6.0" else torch.int32)
 
     return q_ragged_offset, k_ragged_offset, v_ragged_offset, o_ragged_offset
 
@@ -929,23 +1020,29 @@ def create_container_and_page_table(tensor, block_size):
 def exec_sdpa(cfg, request, cudnn_handle):
     # Do not run any test when --dryrn option is provided.
     if request.config.option.dryrun:
-        return
+        pytest.skip("dry run mode")
+
+    # Check if the test is temporarily blocked.
+    if is_test_blocked(request.node.name, cfg.gpu_arch, cfg.cudnn_ver, cfg.blocked_map):
+        print(f"\nWARNING: test '{request.node.name}' is blocked on {cfg.gpu_arch} and cuDNN {cfg.cudnn_ver}")
+        pytest.skip("test blocked")
 
     head_group   = cfg.head_group
     data_type    = cfg.data_type
     rng_data     = cfg.rng_data
 
-    is_causal    = cfg.is_causal
     is_alibi     = cfg.is_alibi
     is_infer     = cfg.is_infer
     is_paged     = cfg.is_paged
     is_bias      = cfg.is_bias
     is_padding   = cfg.is_padding
     is_ragged    = cfg.is_ragged
-    is_causal_br = cfg.is_causal_br
-    is_sliding_w = cfg.is_sliding_w
     is_dropout   = cfg.is_dropout
     is_determin  = cfg.is_determin
+
+    diag_align   = cfg.diag_align
+    left_bound   = cfg.left_bound
+    right_bound  = cfg.right_bound
 
     batches      = cfg.batches
     d_qk         = cfg.d_qk
@@ -1044,7 +1141,12 @@ def exec_sdpa(cfg, request, cudnn_handle):
         (dBias_gpu, dBias_sep, dBias_raw) = (alloc_tensor((1, h_q, s_q, s_kv), data_type) if is_bias else (None, None, None))
         (dO_gpu, dO_sep, dO_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o, rng=rng_data, mean=0.0, std=0.1)
 
-    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(batches, s_q, s_kv, layout, head_group, is_padding, is_sliding_w or is_causal_br)
+    force_sq_less_equal_skv = (left_bound != INVALID_BOUND) or (right_bound != INVALID_BOUND and diag_align == diag_align.BOTTOM_RIGHT)
+    seq_len_q_gpu, seq_len_kv_gpu = generate_actual_seq_lens(batches, s_q, s_kv, layout, head_group, is_padding, force_sq_less_equal_skv)
+
+    # maxT = next_multiple_of_64(sum(seq_len))
+    max_t_q = ((torch.sum(seq_len_q_gpu).item() + 63) // 64) * 64 if is_ragged else None
+    max_t_kv = ((torch.sum(seq_len_kv_gpu).item() + 63) // 64) * 64 if is_ragged else None
 
     if is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
@@ -1071,6 +1173,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
             shape_o,
             seq_len_q_gpu,
             seq_len_kv_gpu,
+            cudnn_version
         )
 
     (o_gpu, o_sep, o_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o)
@@ -1126,14 +1229,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
         k.set_ragged_offset(k_ragged_offset)
         v.set_ragged_offset(v_ragged_offset)
 
-    sliding_window_length = None
-    if is_sliding_w:
-        sliding_window_length = s_kv // 4
-
     attn_scale = 0.125
     
     o, stats = graph.sdpa(
-        name="sdpa",
+        name="sdpa_forward",
         q=q,
         k=k,
         v=v,
@@ -1144,9 +1243,9 @@ def exec_sdpa(cfg, request, cudnn_handle):
         use_padding_mask=is_padding,
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
-        use_causal_mask=is_causal,
-        use_causal_mask_bottom_right=is_causal_br,
-        sliding_window_length=sliding_window_length,
+        diagonal_band_left_bound=left_bound if left_bound != INVALID_BOUND else None,
+        diagonal_band_right_bound=right_bound if right_bound != INVALID_BOUND else None,
+        diagonal_alignment=diag_align,
         dropout=dropout_tuple if is_dropout else None,
         rng_dump=rng_dump,
         paged_attention_k_table=page_table_k,
@@ -1204,8 +1303,15 @@ def exec_sdpa(cfg, request, cudnn_handle):
         variant_pack[seed] = seed_gpu
         variant_pack[offset] = offset_gpu
 
-    # Execute forward cuDNN graph
+    # Allocate workspace for the forward call.
     (workspace, ws_sep, _) = alloc_tensor(graph.get_workspace_size(), torch.uint8)
+
+    # Display available memory.
+    # torch.cuda.empty_cache()
+    # free_mem, total_mem = torch.cuda.mem_get_info()
+    # print(f"Free GPU memory (before forward): {free_mem / (1024**3):.4f} GB of {total_mem / (1024**3):.4f} GB")
+
+    # Execute forward cuDNN graph.
     graph.execute(variant_pack, workspace, handle=cudnn_handle)
     torch.cuda.synchronize()
 
@@ -1223,6 +1329,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
         stream = torch.cuda.current_stream().cuda_stream  #2
         cudnn.set_stream(handle=cudnn_handle, stream=stream)
+        sm_version = torch.cuda.get_device_capability()[0] * 10 + torch.cuda.get_device_capability()[1]
 
         # Backward cuDNN graph
         graph = cudnn.pygraph(
@@ -1230,6 +1337,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
             intermediate_data_type=cudnn.data_type.FLOAT,
             compute_data_type=cudnn.data_type.FLOAT,
             handle=cudnn_handle,
+            sm_version = sm_version
         )
 
         q = graph.tensor_like(q_gpu)
@@ -1277,9 +1385,11 @@ def exec_sdpa(cfg, request, cudnn_handle):
             use_padding_mask=is_padding,
             seq_len_q=seq_len_q,
             seq_len_kv=seq_len_kv,
-            use_causal_mask=is_causal,
-            use_causal_mask_bottom_right=is_causal_br,
-            sliding_window_length=sliding_window_length,
+            max_total_seq_len_q=max_t_q,
+            max_total_seq_len_kv=max_t_kv,
+            diagonal_band_left_bound=left_bound if left_bound != INVALID_BOUND else None,
+            diagonal_band_right_bound=right_bound if right_bound != INVALID_BOUND else None,
+            diagonal_alignment=diag_align,
             dropout=dropout_tuple if is_dropout else None,
             use_deterministic_algorithm=is_determin,
         )
@@ -1337,8 +1447,15 @@ def exec_sdpa(cfg, request, cudnn_handle):
             variant_pack[seed] = seed_gpu
             variant_pack[offset] = offset_gpu
 
-        # Execute backward cuDNN graph
+        # Allocate workspace for the backward call.
         (workspace, ws_sep, _) = alloc_tensor(graph.get_workspace_size(), torch.uint8)
+
+        # Display available memory.
+        # torch.cuda.empty_cache()
+        # free_mem, total_mem = torch.cuda.mem_get_info()
+        # print(f"Free GPU memory (before backward): {free_mem / (1024**3):.4f} GB of {total_mem / (1024**3):.4f} GB")
+
+        # Execute backward cuDNN graph.
         graph.execute(variant_pack, workspace, handle=cudnn_handle)
         torch.cuda.synchronize()
 
@@ -1390,9 +1507,9 @@ def exec_sdpa(cfg, request, cudnn_handle):
         bias=bias_ref,
         is_alibi=is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
-        is_causal=is_causal,
-        is_causal_br=is_causal_br,
-        sliding_window_length=sliding_window_length,
+        left_bound=left_bound,
+        right_bound=right_bound,
+        diag_align=diag_align,
         dropout_prob=dropout_prob,
         dropout_mask=rng_dump_ref,
         compute_stats=(is_infer == False),
@@ -1417,7 +1534,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
                 stats_ref[i, :, m:, :] = 0
                 stats_gpu[i, :, m:, :] = 0
 
-    diffs = request.config.option.diffs
+    diffs = int_cli_option(10, request, "--diffs")
 
     err_count += approx_equal(o_gpu, o_ref, o_sep, o_raw, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
 
@@ -1462,26 +1579,45 @@ def exec_sdpa(cfg, request, cudnn_handle):
         print("ERROR: disallowed mismatches")
         pytest.fail("disallowed mismatches", pytrace=False)
 
+@pytest.fixture(scope="package")
+def env_info(request):
+    assert torch.cuda.is_available(), "no CUDA device"
+
+    gpu_type = torch.cuda.get_device_capability()
+    gpu_name = torch.cuda.get_device_name()
+    sm_count = torch.cuda.get_device_properties().multi_processor_count
+
+    gpu_arch     = f"SM_{gpu_type[0]}{gpu_type[1]}"
+    gpu_info     = f"{sm_count} SM-s, {gpu_name}"
+    cudnn_ver    = torch.backends.cudnn.version()
+    blocked_file = str(request.path)
+    blocked_file = blocked_file[:-3] + ".block"
+    blocked_map  = fetch_blocked_tests(blocked_file)
+
+    show_blocked_tests(blocked_map)
+
+    return {"gpu_arch": gpu_arch, "gpu_info": gpu_info, "cudnn_ver": cudnn_ver, "blocked_map": blocked_map}
+
+
 # ==================================
 # L0 fprop tests (new randomization)
 # ==================================
 
 @pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
-@pytest.mark.parametrize("test_no", tlist(num_tests=32, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=888), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("is_causal", [False, True], ids=lambda p: "causal" if p else "noncausal")
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-def test_sdpa_random_fwd(test_no, data_type, is_infer, head_group, layout, is_causal, request, cudnn_handle):
-    cfg = testConfig()
+def test_sdpa_random_fwd(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+    cfg = testConfig(**env_info)
     cfg.setBatches(max_batches=8)
     cfg.setSequences(max_s_q=1024, max_s_kv=1024)
     cfg.setVectors(max_d_v=128, max_d_qk=128)
     cfg.setHeads(max_h_qkv=8)
     cfg.setBlockSize(max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, is_causal, request)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
@@ -1489,21 +1625,20 @@ def test_sdpa_random_fwd(test_no, data_type, is_infer, head_group, layout, is_ca
 # ==================================
 
 @pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
-@pytest.mark.parametrize("test_no", tlist(num_tests=32, rng_seed=123), ids=lambda p: f"test{p[0]}")
+@pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=123), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("is_causal", [False, True], ids=lambda p: "causal" if p else "noncausal")
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [False], ids=lambda p: "FWD" if p else "BWD")
 @pytest.mark.L0
-def test_sdpa_random_bwd(test_no, data_type, is_infer, head_group, layout, is_causal, request, cudnn_handle):
-    cfg = testConfig()
+def test_sdpa_random_bwd(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+    cfg = testConfig(**env_info)
     cfg.setBatches(max_batches=8)
     cfg.setSequences(max_s_q=512, max_s_kv=512)
     cfg.setVectors(max_d_v=160, max_d_qk=160)
     cfg.setHeads(max_h_qkv=8)
     cfg.setBlockSize(max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, is_causal, request)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ===================
@@ -1511,9 +1646,14 @@ def test_sdpa_random_bwd(test_no, data_type, is_infer, head_group, layout, is_ca
 # ===================
 
 @pytest.mark.skipif("not config.getoption('--repro')", reason="used with '--repro' only")
-def test_repro(request, cudnn_handle):
+@pytest.mark.L0
+@pytest.mark.L1
+@pytest.mark.L2
+@pytest.mark.L3
+@pytest.mark.L4
+def test_repro(env_info, request, cudnn_handle):
     repro_str = request.config.getoption("--repro")
-    cfg = testConfig()
+    cfg = testConfig(**env_info)
     cfg.load_config(repro_str)
     cfg.showConfig((1,1), request, False)
     exec_sdpa(cfg, request, cudnn_handle)
