@@ -1043,8 +1043,6 @@ class test_tensor_ir:
                             best_perf = avg_rt
                             best_config = {
                                 "tile_size": tile_size,
-                                "cluster_shape": cluster_shape,
-                                "cta_count": cta_count,
                             }
 
             print(

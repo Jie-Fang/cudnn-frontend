@@ -141,10 +141,10 @@ def measure_gpu_runtime(execution_callback, timingLoop):
                 trace_started = True
             if not trace_started:
                 continue
-            if event.cuda_time > 0:
+            if event.device_time > 0:
                 if not event.name in kernel_times:
                     kernel_times[event.name] = []
-                kernel_times[event.name].append(event.cuda_time)
+                kernel_times[event.name].append(event.device_time)
                 if event.time_range.end > end_time:
                     end_time = event.time_range.end
                 if event.time_range.start < start_time:
