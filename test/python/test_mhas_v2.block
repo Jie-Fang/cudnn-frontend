@@ -12,65 +12,6 @@
 # test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test68] # always block this test
 # -----------------------------------------------------------------------------------------------------------------
 
-# Disallowed mismatches on Blackwell (with left bound but no right bound)
-# https://jirasw.nvidia.com/browse/CL-17299
-# Same failures on Ampere (cuDNN 91100 and 91002)
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test21]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test29]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test45]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test60]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test62]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test28]  : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test50]  : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test62]  : SM_80, SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test22]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test27]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test56]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.bfloat16-test4]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.bfloat16-test11]  : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.float16-test34]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.float16-test35]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.float16-test55]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test6]   : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test32]  : SM_80, SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test54]  : SM_80, SM_100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test19]   : SM_80, SM_100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test27]   : SM_80, SM_100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test59]  : SM_80, SM_100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test52]  : SM_80, SM_100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test12]  : SM_80, SM_100
-
-# Additional Blackwell failures with left bound and no right bound (cuDNN 91100 and 91002)
-# https://jirasw.nvidia.com/browse/CL-17299
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test29]   : SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test48]   : SM_100
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.bfloat16-test40]  : SM_100
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.float16-test29]   : SM_100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test17]   : SM_100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test19]  : SM_100
-
-# Other disallowed mismatches on Blackwell
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test22]  : SM_100
-
-# Additional Ampere falures with left bound but no right bound (cuDNN 91100 and 91002)
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test16]   : SM_80
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test49]   : SM_80
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test11]  : SM_80
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test22]  : SM_80
-test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test32]  : SM_80
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test47]   : SM_80
-test_sdpa_random_fwd[FWD-GQA-inner_random-torch.bfloat16-test37]  : SM_80
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test16]   : SM_80
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test33]   : SM_80
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test22]  : SM_80
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test34]   : SM_80
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test37]   : SM_80
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test63]   : SM_80
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test31]  : SM_80
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test29]  : SM_80
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test43]  : SM_80
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test58]  : SM_80
-
 # 26 disallowed mismatches on Hopper
 test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test28]  : SM_90 : 91100
 test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test29]  : SM_90 : 91100
