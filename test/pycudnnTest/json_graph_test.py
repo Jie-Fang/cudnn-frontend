@@ -130,9 +130,9 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument(
         "-compiler_backend",
         action="store",
-        default="Tile",
-        choices=["Tile", "Cuda"],
-        help="Compiler backend type (Tile or Cuda)",
+        default="Collective",
+        choices=["Tile", "Collective"],
+        help="Compiler backend type (Tile or Collective)",
     )
     tensorir_parser.add_argument(
         "--staticShapesOnly",
