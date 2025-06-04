@@ -4,6 +4,7 @@ import utils
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from collections import namedtuple
+import inspect
 
 from nv_tensor_ir import ir
 from nv_tensor_ir.dialects import nv_tensor_ir
@@ -370,7 +371,8 @@ class BinaryOperationNode(TensorIRNode):
             op_func = self.BINARY_OP_MAP[op_name]
 
             # Handle operations with special calling conventions
-            if op_name in ["logical_or", "logical_and", "pow"]:
+            params = inspect.signature(op_func).parameters
+            if not "output" in params.keys():
                 self.node_map[self.node] = op_func(lsh, rsh)
             else:
                 self.node_map[self.node] = op_func(
