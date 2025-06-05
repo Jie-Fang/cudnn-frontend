@@ -12,31 +12,12 @@
 # test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test68] # always block this test
 # -----------------------------------------------------------------------------------------------------------------
 
-# 26 disallowed mismatches on Hopper
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test28]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test29]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test39]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test6]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test35] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test36] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test49] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test64] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test12]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test20]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test33]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test39]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test49]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test4]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test33] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test49] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test56] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test10]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test32]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test41]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test54]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test9]  : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test13] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test40] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test42] : SM_90 : 91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test57] : SM_90 : 91100
+test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test22] : SM_100 : 91100 # CL-17789
+
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test2]   : SM_90  : 91100 # CL-17144
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test56]  : SM_90  : 91100 # CL-17144
+test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test13]  : SM_90  : 91100 # CL-17144
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test21] : SM_90  : 91100 # CL-17144
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test24] : SM_90  : 91100 # CL-17144 
+test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test25] : SM_90  : 91100 # CL-17144 
 
