@@ -42,7 +42,7 @@ def tname_hash(tname):
         hash = (hash * 65599 + ord(chr)) & (2**31 - 1)
     return hash
 
-def get_layout_strides(shape, indices = [0, 1, 2, 3], gaps = [0, 0, 0, 0]):
+def get_layout_strides(shape, indices = [0, 1, 2, 3], gaps = [0, 0, 0, 0], rng_geom = None):
     assert len(shape) == len(gaps) == 4 and sorted(indices) == [0, 1, 2, 3], "wrong input"
     strides = [0, 0, 0, 0]
     curr_stride = 1
@@ -52,7 +52,11 @@ def get_layout_strides(shape, indices = [0, 1, 2, 3], gaps = [0, 0, 0, 0]):
         j = indices[i]
         curr_stride = (shape[j] + gaps[j]) * curr_stride
         j = indices[i-1]
-        strides[j] = curr_stride
+
+        # screw up the strides intentionally for singleton dims
+        if rng_geom is not None:
+            strides[j] = rng_geom.randint(0, 5) if (shape[j] == 1) else curr_stride
+
     total_size = shape[j] * curr_stride
     return tuple(strides), tuple(gaps), total_size
 
@@ -132,7 +136,7 @@ def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
 
     # Check if areas before and after the tensor were overwritten (treated as one numerical mismatch).
     if sepbuf is not None and not torch.all(torch.isnan(sepbuf)).item():
-        print(f"ERROR: buffer '{tag}' overwritten outside its boundaries")
+        print(f"@@@@ Overall result: buffer '{tag}' overwritten outside its boundaries")
         mismatch_cnt += 1
 
     # Check if unused elements of the tensor were overwritten (treated as one numerical mismatch).
@@ -140,7 +144,7 @@ def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
     if rawbuf is not None:
         actual.fill_(float('nan'))
         if not torch.all(torch.isnan(rawbuf)).item():
-            print(f"ERROR: unused gaps of '{tag}' tensor were overwritten")
+            print(f"@@@@ Overall result: unused gaps of '{tag}' tensor were overwritten")
             mismatch_cnt += 1
 
     return mismatch_cnt
@@ -400,10 +404,16 @@ class testConfig:
         self.min_blk_sz  = min_blk_sz
         self.max_blk_sz  = max_blk_sz
 
+    def draw(self):
+        return self.rng_geom.random()
+
     def showConfig(self, test_no, request, reg_run=True):
-        if request.config.option.dryrun == 0:
-            print("\n" + "=" * 90)
-            print(f"Test #{test_no[0]} of {test_no[1]} at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        if request.config.option.dryrun == 0 or request.config.option.dryrun == 1:
+            if request.config.option.dryrun == 0:
+                print("\n" + "=" * 90)
+            else:
+                print("\n" + "=" * 40 + "Dry-RUN" + "=" * 40)
+            print(f"@@@@ Test #{test_no[0]} of {test_no[1]} at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "\n")
             print(f"test_name        = {request.node.name}")
             print(f"geom_seed        = {self.geom_seed}")
             print(f"data_seed        = {self.data_seed}")
@@ -427,14 +437,12 @@ class testConfig:
             print(f"right_bound      = {self.right_bound}", '(NO BOUND)' if self.right_bound == INVALID_BOUND else '')
             print(f"data_type        = {self.data_type}")
             if reg_run:
-                cmd_opts = f"--geom_seed {self.geom_seed} --data_seed {self.data_seed}"
-                print(f"repro_cmd        = {request.node.path.name}::{request.node.name} {cmd_opts}")
-        elif request.config.option.dryrun == 1:
-            print(f"\npytest -vv -s -rA --tb=short {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
+                print(f"repro_cmd        = pytest -vv -s -rA --tb=short {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed} --unlock")
         elif request.config.option.dryrun == 2:
-            print(f"\npytest -vv -s -rA --tb=short {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
+            print(f"\npytest -vv -s -rA --tb=short {request.module.__file__}::test_repro --repro \"{self.config_str()}\" --unlock")
         else:
             assert False, "wrong --dryrun command line option"
+        print(" ", flush=True) # make sure to showConfigflush everything out
 
     def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, request):
         assert data_type in data_type_options, "wrong data type"
@@ -509,12 +517,13 @@ class testConfig:
             self.s_kv = self.max_s_kv
         elif layout_type == "inner_random":
             self.batches = self.rng_geom.randint(1, self.max_batches)
-            self.s_q = self.rng_geom.randint(1, self.max_s_q)
-            draw = self.rng_geom.random()
-            if (draw < 0.707 and self.s_q <= self.max_s_kv):
+
+            # force singleton dim with small probability
+            self.s_q = 1 if (self.draw() < 0.05) else self.rng_geom.randint(1, self.max_s_q)
+            self.s_kv = 1 if (self.draw() < 0.05) else self.rng_geom.randint(1, self.max_s_kv)
+                
+            if (self.draw() < 0.707 and self.s_q <= self.max_s_kv):
                 self.s_kv = self.s_q
-            else:
-                self.s_kv = self.rng_geom.randint(1, self.max_s_kv)
         else:
             assert False, "wrong layout type"
 
@@ -593,8 +602,7 @@ class testConfig:
         elif layout_type == "inner_random":
             self.d_qk = self.rng_geom.randint(elem_align, self.max_d_qk)
             self.d_qk = round_down(self.d_qk, elem_align)
-            draw = self.rng_geom.random()
-            if (draw < 0.5 and self.d_qk <= self.max_d_v):
+            if (self.draw() < 0.5 and self.d_qk <= self.max_d_v):
                 self.d_v = self.d_qk
             else:
                 self.d_v = self.rng_geom.randint(elem_align, self.max_d_v)
@@ -652,57 +660,50 @@ class testConfig:
         self.rng_geom.shuffle(base_indices)
         base_indices.append(3)
         gaps = [0, 0, 0, 0]
-        draw = self.rng_geom.random()
-        if (draw < 0.5):
+        if (self.draw() < 0.5):
             gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
             gaps.append(elem_align * self.rng_geom.randint(0, 2))
-        (self.stride_q, self.gaps_q, self.elems_q) = get_layout_strides(self.shape_q, base_indices, gaps)
+        (self.stride_q, self.gaps_q, self.elems_q) = get_layout_strides(self.shape_q, base_indices, gaps, self.rng_geom)
         self.in_layout = get_layout_name("bhsd", base_indices) + '_'
 
         # For K strides, decide with some probability if a new layout should be used.
         indices = base_indices
-        draw = self.rng_geom.random()
-        if (draw < 0.707):
+        if (self.draw() < 0.707):
             indices = [0, 1, 2]
             self.rng_geom.shuffle(indices)
             indices.append(3)
         gaps = [0, 0, 0, 0]
-        draw = self.rng_geom.random()
-        if (draw < 0.5):
+        if (self.draw() < 0.5):
             gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
             gaps.append(elem_align * self.rng_geom.randint(0, 2))
-        (self.stride_k, self.gaps_k, self.elems_k) = get_layout_strides(self.shape_k, indices, gaps)
+        (self.stride_k, self.gaps_k, self.elems_k) = get_layout_strides(self.shape_k, indices, gaps, self.rng_geom)
         self.in_layout += get_layout_name("bhsd", indices) + '_'
 
         # For V strides, decide with some probability if a new layout should be used.
         indices = base_indices
-        draw = self.rng_geom.random()
-        if (draw < 0.707):
+        if (self.draw() < 0.707):
             indices = [0, 1, 2]
             self.rng_geom.shuffle(indices)
             indices.append(3)
         gaps = [0, 0, 0, 0]
-        draw = self.rng_geom.random()
-        if (draw < 0.5):
+        if (self.draw() < 0.5):
             gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
             gaps.append(elem_align * self.rng_geom.randint(0, 2))
-        (self.stride_v, self.gaps_v, self.elems_v) = get_layout_strides(self.shape_v, indices, gaps)
+        (self.stride_v, self.gaps_v, self.elems_v) = get_layout_strides(self.shape_v, indices, gaps, self.rng_geom)
         self.in_layout += get_layout_name("bhsd", indices)
 
         # Q, K, V buffers are not interleaved.
         # For O strides, decide with some probability if a new layout should be used
         indices = base_indices
-        draw = self.rng_geom.random()
-        if (draw < 0.5):
+        if (self.draw() < 0.5):
             indices = [0, 1, 2]
             self.rng_geom.shuffle(indices)
             indices.append(3)
         gaps = [0, 0, 0, 0]
-        draw = self.rng_geom.random()
-        if (draw < 0.5):
+        if (self.draw() < 0.5):
             gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
             gaps.append(elem_align * self.rng_geom.randint(0, 2))
-        (self.stride_o, self.gaps_o, self.elems_o) = get_layout_strides(self.shape_o, indices, gaps)
+        (self.stride_o, self.gaps_o, self.elems_o) = get_layout_strides(self.shape_o, indices, gaps, self.rng_geom)
         self.out_layout = get_layout_name("bhsd", indices)
 
         self.showConfig(test_no, request)
@@ -1074,58 +1075,63 @@ def exec_sdpa(cfg, request, cudnn_handle):
     cudnn_version = LooseVersion(cudnn.backend_version_string())
 
     if cudnn_version < "8.9.3":
-        pytest.fail("SDPA function requires cudnn 8.9.3 or higher")
+        print("@@@@ Overall result: WAIVED: dBias is only supported 8.9.6 onwards.")
+        pytest.skip("SDPA function requires cudnn 8.9.3 or higher")
 
     if not is_infer:
         assert is_paged == False and block_size == 0, "wrong input for backward pass"
 
         if is_bias and cudnn_version < "8.9.6":
-            print("ERROR: dBias is only supported 8.9.6 onwards.")
+            print("@@@@ Overall result: WAIVED: dBias is only supported 8.9.6 onwards.")
             pytest.skip("insufficient cuDNN version")
 
         if is_bias and cudnn_version < "9" and torch.cuda.get_device_capability()[0] < 9:
-            print("ERROR: dBias is only supported on hopper before v9.")
+            print("@@@@ Overall result: WAIVED: dBias is only supported on hopper before v9.")
             pytest.skip("insufficient cuDNN version")
 
     if head_group != "MHA" and cudnn_version < "8.9.7":
-        print("ERROR: GQA and MQA is only supported 8.9.7 onwards.")
+        print("@@@@ Overall result: WAIVED: GQA and MQA is only supported 8.9.7 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if is_alibi and cudnn_version < "8.9.4":
-        print("ERROR: ALiBi mask is only supported 8.9.4 onwards.")
+        print("@@@@ Overall result: WAIVED: ALiBi mask is only supported 8.9.4 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if is_padding and cudnn_version < "8.9.3":
-        print("ERROR: Padding mask is only supported 8.9.3 onwards.")
+        print("@@@@ Overall result: WAIVED: Padding mask is only supported 8.9.3 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if is_dropout and cudnn_version < "8.9.6":
-        print("ERROR: Dropout reference is only supported on 8.9.6 onwards.")
+        print("@@@@ Overall result: WAIVED: Dropout reference is only supported on 8.9.6 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if is_ragged and cudnn_version < "9":
-        print("ERROR: Ragged tensor is only supported 9.0.0 onwards.")
+        print("@@@@ Overall result: WAIVED: Ragged tensor is only supported 9.0.0 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if is_ragged and layout == "bs3hd" and cudnn_version < "9.1.0":
-        print("ERROR: t3hd is only supported on 9.1.0 onwards.")
+        print("@@@@ Overall result: WAIVED: t3hd is only supported on 9.1.0 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if is_paged and cudnn_version < "9.5":
-        print("ERROR: Paged attention only tested with cuDNNv9.5 or greater.")
+        print("@@@@ Overall result: WAIVED: Paged attention only tested with cuDNNv9.5 or greater.")
         pytest.skip("insufficient cuDNN version")
 
     if d_qk != d_v and cudnn_version < "8.9.6":
-        print("ERROR: d_qk != d_v is only supported on 8.9.6 onwards.")
+        print("@@@@ Overall result: WAIVED: d_qk != d_v is only supported on 8.9.6 onwards.")
         pytest.skip("insufficient cuDNN version")
 
     if d_qk != d_v and is_ragged and cudnn_version < "9.1":
-        print("ERROR: d_qk != d_v is not supported with ragged offset.")
+        print("@@@@ Overall result: WAIVED: d_qk != d_v is not supported with ragged offset.")
         pytest.skip("insufficient cuDNN version")
 
     if is_ragged and torch.cuda.get_device_capability()[0] < 9:
-        print("ERROR: Ragged tensor is only supported hopper.")
+        print("@@@@ Overall result: WAIVED: ragged tensor is only supported hopper.")
         pytest.skip("insufficient GPU version")
+
+    if s_q == s_kv == 1:
+        print("@@@@ Overall result: WAIVED: skipping known issue of s_q == s_kv == 1.")
+        pytest.skip("skipping known issue of s_q == s_kv == 1")
 
     qkv_num_elems = elems_q + elems_k + elems_v
 
@@ -1263,10 +1269,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
-        print(f"ERROR: not supported forward graph. {e}")
+        print(f"@@@@ Overall result: WAIVED: not supported forward graph. {e}")
         pytest.xfail("not supported forward graph")
     except Exception as e:
-        print(f"ERROR: unexpected '{e.__class__.__name__}' exception during forward graph validate. {e}")
+        print(f"@@@@ Overall result: FAILED: unexpected '{e.__class__.__name__}' exception during forward graph validate. {e}")
         pytest.fail("unexpected exception during forward graph validate", pytrace=False)
 
     try:
@@ -1275,10 +1281,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
         graph.check_support()
         graph.build_plans()
     except cudnn.cudnnGraphNotSupportedError as e:
-        print(f"ERROR: not supported forward graph after validate. {e}")
+        print(f"@@@@ Overall result: WAIVED: not supported forward graph after validate. {e}")
         pytest.xfail("not supported forward graph after validate")
     except Exception as e:
-        print(f"ERROR: Unexpected '{e.__class__.__name__}' exception after forward validate. {e}")
+        print(f"@@@@ Overall result: FAILED: Unexpected '{e.__class__.__name__}' exception after forward validate. {e}")
         pytest.fail("unexpected exception after forward validate", pytrace=False)
 
     variant_pack = {
@@ -1316,7 +1322,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
     torch.cuda.synchronize()
 
     if ws_sep is not None and not torch.all(ws_sep==-1).item():
-        print("ERROR: forward workspace overwritten outside its boundaries")
+        print("@@@@ Overall result: FAILED: forward workspace overwritten outside its boundaries")
         print(ws_sep)
         pytest.fail("forward workspace overwritten outside boundaries", pytrace=False)
 
@@ -1405,10 +1411,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
         try:
             graph.validate()
         except cudnn.cudnnGraphNotSupportedError as e:
-            print(f"ERROR: not supported backward graph. {e}")
+            print(f"@@@@ Overall result: WAIVED: not supported backward graph. {e}")
             pytest.xfail("not supported backward graph")
         except Exception as e:
-            print(f"ERROR: unexpected '{e.__class__.__name__}' exception during backward graph validate. {e}")
+            print(f"@@@@ Overall result: FAILED: unexpected '{e.__class__.__name__}' exception during backward graph validate. {e}")
             pytest.fail("unexpected exception during backward graph validate", pytrace=False)
 
         try:
@@ -1417,10 +1423,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
             graph.check_support()
             graph.build_plans()
         except cudnn.cudnnGraphNotSupportedError as e:
-            print(f"ERROR: not supported backward graph after validate. {e}")
+            print(f"@@@@ Overall result: WAIVED: not supported backward graph after validate. {e}")
             pytest.xfail("not supported backward graph after validate")
         except Exception as e:
-            print(f"ERROR: unexpected '{e.__class__.__name__}' exception after backward validate. {e}")
+            print(f"@@@@ Overall result: FAILED: unexpected '{e.__class__.__name__}' exception after backward validate. {e}")
             pytest.fail("unexpected exception after backward validate", pytrace=False)
 
         variant_pack = {
@@ -1460,7 +1466,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         torch.cuda.synchronize()
 
         if ws_sep is not None and not torch.all(ws_sep==-1).item():
-            print("ERROR: backward workspace overwritten outside its boundaries")
+            print("@@@@ Overall result: FAILED: backward workspace overwritten outside its boundaries")
             print(ws_sep)
             pytest.fail("backward workspace overwritten outside boundaries", pytrace=False)
 
@@ -1576,8 +1582,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
             err_count += approx_equal(dBias_gpu, dBias_ref, dBias_sep, dBias_raw, atol=2e-2, rtol=2e-2, tag="dBias", disp_elems=diffs)
 
     if err_count != 0:
-        print("ERROR: disallowed mismatches")
+        print("@@@@ Overall result: FAILED: disallowed mismatches")
         pytest.fail("disallowed mismatches", pytrace=False)
+    else:
+        print("@@@@ Overall result: PASSED: everything looks good!")
 
 @pytest.fixture(scope="package")
 def env_info(request):
