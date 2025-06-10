@@ -2171,6 +2171,56 @@ convert_from_cudnn_type(cudnnDataType_t const cudnn_mode) {
     return DataType_t::NOT_SET;
 }
 
+static size_t
+get_element_size_in_bits(cudnn_frontend::DataType_t datatype) {
+    switch (datatype) {
+        case DataType_t::INT8x32:
+            return 256;
+            break;
+        case DataType_t::DOUBLE:
+        case DataType_t::INT64:
+            return 64;
+            break;
+        case DataType_t::FLOAT:
+        case DataType_t::INT32:
+        case DataType_t::INT8x4:
+        case DataType_t::UINT8x4:
+            return 32;
+            break;
+        case DataType_t::HALF:
+        case DataType_t::BFLOAT16:
+            return 16;
+            break;
+        case DataType_t::INT8:
+        case DataType_t::UINT8:
+#if (CUDNN_VERSION >= 8600)
+        case DataType_t::FP8_E4M3:
+        case DataType_t::FP8_E5M2:
+#endif
+#if (CUDNN_VERSION >= 8700)
+        case DataType_t::FAST_FLOAT_FOR_FP8:
+#endif
+#if (CUDNN_VERSION >= 90700)
+        case DataType_t::FP8_E8M0:
+#endif
+            return 8;
+            break;
+#if (CUDNN_VERSION >= 90700)
+        case DataType_t::FP4_E2M1:
+#if (CUDNN_VERSION >= 91100)
+        case DataType_t::INT4:
+#endif
+            return 4;
+#endif
+        case DataType_t::BOOLEAN:
+            return 1;
+            break;
+        default:
+            return 0;
+            break;
+    }
+}
+
 // To be deprecated. Only exists as setReductionOp(cudnnReduceTensorOp_t mode) requires it.
 static inline cudnn_frontend::ReductionMode_t
 convert_from_cudnn_type(cudnnReduceTensorOp_t const cudnn_mode) {

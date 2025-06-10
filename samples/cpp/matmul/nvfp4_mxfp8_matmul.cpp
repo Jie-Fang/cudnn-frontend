@@ -30,12 +30,12 @@
 
 #include <cudnn_frontend.h>
 
-int64_t
+static int64_t
 round_up_to_multiple(int64_t x, int64_t multiple) {
     return ((x + multiple - 1) / multiple) * multiple;
 }
 
-size_t
+static size_t
 bytes_for_n_elems(size_t n_elems, cudnn_frontend::DataType_t datatype) {
     switch (datatype) {
         case cudnn_frontend::DataType_t::FLOAT:
