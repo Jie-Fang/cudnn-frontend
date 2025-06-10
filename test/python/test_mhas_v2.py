@@ -721,7 +721,7 @@ def compute_ref(
     right_bound=INVALID_BOUND,
     dropout_prob=0.0,
     dropout_mask=None,
-    compute_stats=False,
+    generate_stats=False,
     device="cuda",
 ):
     b, h_q, s_q, d_qk = q.shape
@@ -871,7 +871,7 @@ def compute_ref(
     o = torch.einsum("bhqk,bhkd->bhqd", p, v)
 
     # softmax stats is used for backwards computation
-    if compute_stats:
+    if generate_stats:
         # amax (NOT absolute max) is used here to evenly distribute gradient
         row_max = torch.amax(s, -1, True)
         row_exp = torch.exp(s - row_max)
@@ -1242,7 +1242,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         q=q,
         k=k,
         v=v,
-        is_inference=is_infer,
+        generate_stats=not is_infer,
         attn_scale=attn_scale,
         bias=bias,
         use_alibi_mask=is_alibi,
@@ -1518,7 +1518,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         diag_align=diag_align,
         dropout_prob=dropout_prob,
         dropout_mask=rng_dump_ref,
-        compute_stats=(is_infer == False),
+        generate_stats=(is_infer == False),
     )
 
     if not is_infer:

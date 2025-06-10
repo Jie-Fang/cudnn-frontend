@@ -197,12 +197,12 @@ class SDPANode : public NodeCRTP<SDPANode> {
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::O, attributes.outputs);
 
-        // validate options for is_inference and stats tensor
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.is_inference.has_value() == false,
+        // validate options for generate_stats and stats tensor
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.generate_stats.has_value() == false,
                                        error_code_t::ATTRIBUTE_NOT_SET,
-                                       "is_inference attribute not set");
+                                       "generate_stats attribute not set");
 
-        if (attributes.is_inference.value() == false) {
+        if (attributes.generate_stats.value() == true) {
             CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::Stats);
         }
 
@@ -462,7 +462,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
     error_t
     infer_properties_node() override final {
-        if (attributes.is_inference.value() == false) {
+        if (attributes.generate_stats.value() == true) {
             auto stats     = attributes.outputs.at(output_names::Stats);
             auto stats_dim = stats->get_dim();
 
@@ -667,7 +667,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // Create a virtual output for stats if inference step otherwise output.Stats is already set
         auto softmax_stats = attributes.outputs[output_names::Stats];
-        if (attributes.is_inference.value() == true) {
+        if (attributes.generate_stats.value() == false) {
             softmax_stats = std::make_shared<Tensor_attributes>();
             softmax_stats->set_is_virtual(true);
         }
