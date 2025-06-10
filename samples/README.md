@@ -135,6 +135,10 @@ Showcases normalization with block scale quantize epilogue fusion.
 
 Showcases layer normalization with zero centered gamma usage.
 
+- [Layer norm with bitmask relu](cpp/norm/layernorm_bitmask_relu.cpp)
+
+Showcases layer normalization and relu with bitmask.
+
 ### Miscellaneous examples
 
 ##### [Misc](cpp/misc/) Miscellaneous samples

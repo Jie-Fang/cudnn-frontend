@@ -38,6 +38,7 @@ add_executable(
     norm/norm_zero_centered_gamma.cpp
     norm/rmsnorm.cpp
     norm/norm_block_scale.cpp
+    norm/layernorm_bitmask_relu.cpp
 
     misc/serialization.cpp
     misc/autotuning.cpp
