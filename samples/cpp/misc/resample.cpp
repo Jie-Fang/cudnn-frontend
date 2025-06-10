@@ -45,7 +45,7 @@ TEST_CASE("Resample Max Pooling NHWC Inference", "[resample][pooling][max][graph
 
     auto [Y, Index] = graph.resample(X,
                                      fe::graph::Resample_attributes()
-                                         .set_is_inference(true)
+                                         .set_generate_index(false)
                                          .set_resampling_mode(fe::ResampleMode_t::MAXPOOL)
                                          .set_padding_mode(fe::PaddingMode_t::NEG_INF_PAD)
                                          .set_window({2, 3})
@@ -99,7 +99,7 @@ TEST_CASE("Resample Max Pooling NHWC Training", "[resample][pooling][max][graph]
 
     auto [Y, Index] = graph.resample(X,
                                      fe::graph::Resample_attributes()
-                                         .set_is_inference(false)
+                                         .set_generate_index(true)
                                          .set_resampling_mode(fe::ResampleMode_t::MAXPOOL)
                                          .set_padding_mode(fe::PaddingMode_t::NEG_INF_PAD)
                                          .set_window({2, 3})
@@ -160,7 +160,7 @@ TEST_CASE("Resample Avg Pooling", "[resample][pooling][average][graph]") {
 
     auto [Y, Index] = graph.resample(X,
                                      fe::graph::Resample_attributes()
-                                         .set_is_inference(false)
+                                         .set_generate_index(true)
                                          .set_resampling_mode(fe::ResampleMode_t::AVGPOOL_INCLUDE_PADDING)
                                          .set_padding_mode(fe::PaddingMode_t::ZERO_PAD)
                                          .set_window({2, 3})

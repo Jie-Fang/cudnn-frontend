@@ -127,10 +127,16 @@ sdpa(std::shared_ptr<Tensor_attributes> q,
 The `options` parameter of type `SDPA_attributes` is used to control the attributes of the forward operation, as detailed below:
 
 ```cpp
-SDPA_attributes& set_is_inference(bool const value);
+// Indicates that softmax_stats should be generated (useful during training).
+// If false, the softmax_stats output will be nullptr.
+SDPA_attributes& set_generate_stats(bool const value);
 
 SDPA_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value);
 SDPA_attributes& set_attn_scale(float const value);
+
+// DEPRECATED
+// Calls set_generate_stats(!value) (note the negation of `value`).
+SDPA_attributes& set_is_inference(bool const value);
 
 // ========================== BEGIN paged attn options =====================
 SDPA_attributes& set_paged_attention_k_table(std::shared_ptr<Tensor_attributes> value);
@@ -195,7 +201,6 @@ Args:
     q (cudnn_tensor): The query data.
     k (cudnn_tensor): The key data. When page_table_k is provided, 'k' is a container of non-contiguous key data.
     v (cudnn_tensor): The value data. When page_table_v is provided, 'v' is a container of non-contiguous value data.
-    is_inference (bool): Whether it is an inference step or training step.
     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
@@ -209,6 +214,7 @@ Args:
     paged_attention_max_seq_len_kv (Optional[integer]): The maximum sequence length for k/v caches when paged attention is active.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
+    generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.
 Preferred masking Args:
     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
     left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
@@ -217,10 +223,12 @@ Deprecated masking Args (can cause undetermined behavior when combined with the 
     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
     use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
+Other deprecated Args:
+    is_inference (Optional[bool]): If false, compute and output softmax stats. Prefer generate_stats instead (NOTE: generate_stats takes the negation of the argument to is_inference).
 
 Returns:
     o (cudnn_tensor): The output data.
-    stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
+    stats (Optional[cudnn_tensor]): The softmax statistics in case generate_stats is true.
 ```
 
 (scaled-dot-product-attention-fp16bf16-backward)=
@@ -479,10 +487,11 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
 
 The `options` parameter of type `SDPA_fp8_attributes` is used to control the attributes of the forward operation, as detailed below:
 
-
 ```cpp
+// Indicates that softmax_stats should be generated (useful during training).
+// If false, the softmax_stats output will be nullptr.
 SDPA_fp8_attributes&
-set_is_inference(bool const value);
+set_generate_stats(bool const value);
 
 SDPA_fp8_attributes&
 set_attn_scale(std::shared_ptr<Tensor_attributes> value);
@@ -513,6 +522,11 @@ set_dropout(float const probability,
 SDPA_fp8_attributes&
 set_dropout(std::shared_ptr<Tensor_attributes> mask,
             std::shared_ptr<Tensor_attributes> scale);
+
+// DEPRECATED
+// Calls set_generate_stats(!value) (note the negation of `value`).
+SDPA_fp8_attributes&
+set_is_inference(bool const value);
 ```
 
 
@@ -528,15 +542,17 @@ Args:
     descale_s (cudnn_tensor): Descale factor for S tensor.
     scale_s (cudnn_tensor): Scale factor for S tensor.
     scale_o (cudnn_tensor): Scale factor for output.
-    is_inference (bool): Whether it is an inference step or training step.
     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
     name (Optional[str]): The name of the operation.
+    generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.
+Deprecated Args:
+    is_inference (Optional[bool]): If false, compute and output softmax stats. Prefer generate_stats instead (NOTE: generate_stats takes the negation of the argument to is_inference).
 
 Returns:
     o (cudnn_tensor): The output data.
-    stats (Optional[cudnn_tensor]): The softmax statistics in case the operation is in a training step.
+    stats (Optional[cudnn_tensor]): The softmax statistics, if generate_stats is true.
     amax_s (cudnn_tensor): The absolute maximum of S tensor.
     amax_o (cudnn_tensor): The absolute maximum of output tensor.
 ```

@@ -322,7 +322,7 @@ class PyGraph {
     sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& k,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& v,
-         bool const is_inference,
+         py::object const& is_inference,
          py::object const& attn_scale,
          std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& bias,
          bool const use_alibi_mask,
@@ -342,7 +342,8 @@ class PyGraph {
          py::object const& paged_attention_max_seq_len_kv,
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name,
-         std::optional<PyCallback> fn);
+         std::optional<PyCallback> fn,
+         py::object const& generate_stats);
 
     // return [dQ, dK, dV]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
@@ -384,7 +385,7 @@ class PyGraph {
              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale_s,
              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_s,
              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& scale_o,
-             bool const is_inference,
+             py::object const& is_inference,
              py::object const& attn_scale,
              bool const use_padding_mask,
              std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& seq_len_q,
@@ -393,7 +394,8 @@ class PyGraph {
              bool const use_causal_mask_bottom_right,
              py::object const& dropout,
              cudnn_frontend::DataType_t const& compute_data_type,
-             std::string const& name);
+             std::string const& name,
+             py::object const& generate_stats);
 
     // return [dQ, dK, dV, amax_dQ, amax_dK, amax_dV, amax_dP]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 7>

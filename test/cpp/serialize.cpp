@@ -446,7 +446,7 @@ TEST_CASE("sdpa graph serialization", "[graph][serialize]") {
 
     auto sdpa_options = fe::graph::SDPA_attributes()
                             .set_name("flash_attention")
-                            .set_is_inference(false)
+                            .set_generate_stats(true)
                             .set_attn_scale(attn_scale)
                             .set_alibi_mask(true)
                             .set_diagonal_band_right_bound(0)

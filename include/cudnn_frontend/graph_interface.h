@@ -2062,7 +2062,7 @@ Graph::sdpa(std::shared_ptr<Tensor_attributes> q,
     auto O = attributes.outputs[SDPA_attributes::output_names::O] = output_tensor(attributes.name + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (attributes.is_inference == false) {
+    if (attributes.generate_stats == true) {
         Stats = attributes.outputs[SDPA_attributes::output_names::Stats] = output_tensor(attributes.name + "::Stats");
     }
 
@@ -2091,7 +2091,7 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
     auto O = attributes.outputs[SDPA_fp8_attributes::output_names::O] = output_tensor(attributes.name + "::O");
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (attributes.is_inference == false) {
+    if (attributes.generate_stats == true) {
         Stats = attributes.outputs[SDPA_fp8_attributes::output_names::Stats] =
             output_tensor(attributes.name + "::Stats");
     }

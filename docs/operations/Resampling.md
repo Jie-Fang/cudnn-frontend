@@ -39,7 +39,12 @@ auto set_pre_padding(std::vector<cudnnFraction_t> const& value) -> Resample_attr
 auto set_post_padding(std::vector<int64_t> const& value) -> Resample_attributes&;
 auto set_post_padding(std::vector<cudnnFraction_t> const& value) -> Resample_attributes&;
 
-# A flag indicating whether the resampling is being performed during inference. 
+# Indicates that index should be generated (such as during training).
+# If false, the index output will be nullptr.
+auto set_generate_index(bool const value) -> Resample_attributes&;
+
+# DEPRECATED.
+# Calls set_generate_index(!value) (note the negation of `value`).
 auto set_is_inference(bool const value) -> Resample_attributes&;
 ```
 
