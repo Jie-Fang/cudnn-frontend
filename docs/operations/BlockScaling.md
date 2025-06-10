@@ -67,5 +67,8 @@ std::shared_ptr<Tensor_attributes> block_scale_dequantize(std::shared_ptr<Tensor
 Block_scale_dequantize_attributes is a lightweight structure with setters:
 ```
 Block_scale_dequantize_attributes&
-set_block_size(int32_t const value)
+set_block_size(int32_t const value, int32_t idx = 0)
+
+Block_scale_dequantize_attributes&
+set_block_size(const int32_t* values, int32_t len = 1)
 ```

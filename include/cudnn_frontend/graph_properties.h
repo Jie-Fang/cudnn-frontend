@@ -2416,7 +2416,7 @@ class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequanti
     friend class BlockScaleDequantizeNode;
     friend class Graph;
 
-    std::optional<int32_t> block_size;
+    std::vector<int32_t> block_size;
 
    public:
     enum class input_names { X, scale };
@@ -2431,8 +2431,26 @@ class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequanti
                                    block_size)
 
     Block_scale_dequantize_attributes&
-    set_block_size(int32_t const value) {
-        block_size = value;
+    set_block_size(int32_t const value, int32_t idx = 0) {
+        if (idx < 0) {
+            return *this;
+        }
+        if (static_cast<int32_t>(block_size.size()) < idx + 1) {
+            block_size.resize(idx + 1, 1);
+        }
+        block_size[idx] = value;
+        return *this;
+    }
+
+    Block_scale_dequantize_attributes&
+    set_block_size(const int32_t* values, int32_t len = 1) {
+        if (len < 1) {
+            return *this;
+        }
+        if (static_cast<int32_t>(block_size.size()) < len) {
+            block_size.resize(len);
+        }
+        std::copy(values, values + len, block_size.begin());
         return *this;
     }
 };
