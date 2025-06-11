@@ -1074,13 +1074,20 @@ class Reduction_attributes : public Attributes<Reduction_attributes> {
     friend class INode;
 
     std::optional<ReductionMode_t> mode;
+    bool is_deterministic = false;
 
    public:
     enum class input_names { X };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Y };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes, name, compute_data_type, inputs, outputs, mode)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Reduction_attributes,
+                                   name,
+                                   compute_data_type,
+                                   inputs,
+                                   outputs,
+                                   mode,
+                                   is_deterministic)
 
     std::optional<ReductionMode_t>
     get_mode() const {
@@ -1090,6 +1097,17 @@ class Reduction_attributes : public Attributes<Reduction_attributes> {
     Reduction_attributes&
     set_mode(ReductionMode_t value) {
         mode = value;
+        return *this;
+    }
+
+    bool
+    get_is_deterministic() const {
+        return is_deterministic;
+    }
+
+    Reduction_attributes&
+    set_is_deterministic(bool value) {
+        is_deterministic = value;
         return *this;
     }
 };
