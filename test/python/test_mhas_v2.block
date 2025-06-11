@@ -22,8 +22,8 @@ test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test24] : SM_90  : 9110
 test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test25] : SM_90  : 91100 # CL-17144 
 
 # CL-17144
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test50] : SM_90 : 91002,91100
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test44] : SM_90 : 91002,91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test13] : SM_90 : 91002,91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test7] : SM_90 : 91002,91100
-test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test45] : SM_90 : 91002,91100
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test50] : SM_90 : 91002,91100,91200
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test44] : SM_90 : 91002,91100,91200
+test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test13] : SM_90 : 91002,91100,91200
+test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test7] : SM_90 : 91002,91100,91200
+test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test45] : SM_90 : 91002,91100,91200
