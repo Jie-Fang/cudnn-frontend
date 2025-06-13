@@ -95,9 +95,8 @@ struct TestParams {
 TEST_CASE("General Block Scale Matmul", "[matmul][graph]") {
     namespace fe = cudnn_frontend;
 
-// temporarily set to 9.12 as MR has not be integrated to 9.11 yet
-#if (CUDNN_VERSION < 91200)
-    SKIP("General matmul with block scaling is not supported in cudnn versions prior to 9.12.0");
+#if (CUDNN_VERSION < 91100)
+    SKIP("General matmul with block scaling is not supported in cudnn versions prior to 9.11.0");
 #endif
 
     if (cudnnGetCudartVersion() < 12000) {
@@ -105,7 +104,7 @@ TEST_CASE("General Block Scale Matmul", "[matmul][graph]") {
     }
 
     auto test_params = GENERATE(
-        // General fp16 block scale matmul
+        // General fp16 block scale matmul with 1x128 & 128x128 block size
         TestParams(2,
                    512,
                    512,
@@ -122,7 +121,7 @@ TEST_CASE("General Block Scale Matmul", "[matmul][graph]") {
                    cudnn_frontend::DataType_t::HALF,
                    cudnn_frontend::DataType_t::HALF,
                    cudnn_frontend::DataType_t::HALF),
-        // Int4 WoQ Matmul
+        // Int4 WoQ Matmul with 1x128 & 128x1 block size
         TestParams(2,
                    512,
                    512,
@@ -138,7 +137,24 @@ TEST_CASE("General Block Scale Matmul", "[matmul][graph]") {
                    cudnn_frontend::DataType_t::HALF,
                    cudnn_frontend::DataType_t::HALF,
                    cudnn_frontend::DataType_t::HALF,
-                   cudnn_frontend::DataType_t::HALF));
+                   cudnn_frontend::DataType_t::HALF),
+        // fp8 block scale matmul with non-classical block size
+        TestParams(2,
+                   512,
+                   512,
+                   512,
+                   47,
+                   32,
+                   32,
+                   17,
+                   cudnn_frontend::DataType_t::BFLOAT16,
+                   cudnn_frontend::DataType_t::BFLOAT16,
+                   cudnn_frontend::DataType_t::FLOAT,
+                   cudnn_frontend::DataType_t::FLOAT,
+                   cudnn_frontend::DataType_t::BFLOAT16,
+                   cudnn_frontend::DataType_t::BFLOAT16,
+                   cudnn_frontend::DataType_t::FLOAT,
+                   cudnn_frontend::DataType_t::FLOAT));
 
     auto b = test_params.b;
     auto m = test_params.m;
@@ -219,15 +235,13 @@ TEST_CASE("General Block Scale Matmul", "[matmul][graph]") {
                          .set_stride({block_scale_dim_b_k * block_scale_dim_b_n, 1, block_scale_dim_b_k}));
 
     auto dequantize_attr_a = fe::graph::Block_scale_dequantize_attributes()
-                                 .set_block_size(block_size_a_m, 0)
-                                 .set_block_size(block_size_a_k, 1)
+                                 .set_block_size({block_size_a_m, block_size_a_k})
                                  .set_compute_data_type(compute_math_precision);
 
     auto dequant_tensor_a = graph.block_scale_dequantize(tensor_a, block_descale_a, dequantize_attr_a);
 
     auto dequantize_attr_b = fe::graph::Block_scale_dequantize_attributes()
-                                 .set_block_size(block_size_b_k, 0)
-                                 .set_block_size(block_size_b_n, 1)
+                                 .set_block_size({block_size_b_k, block_size_b_n})
                                  .set_compute_data_type(compute_math_precision);
 
     auto dequant_tensor_b = graph.block_scale_dequantize(tensor_b, block_descale_b, dequantize_attr_b);

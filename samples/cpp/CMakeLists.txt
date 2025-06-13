@@ -29,7 +29,7 @@ add_executable(
     matmul/fp8_matmul.cpp
     matmul/int8_matmul.cpp
     matmul/mixed_matmul.cpp
-    matmul/nvfp4_mxfp8_matmul.cpp
+    matmul/blackwell_nvfp4_mxfp8_block_scale_matmul.cpp
     matmul/general_block_scale_matmul.cpp
 
     norm/batchnorm.cpp
