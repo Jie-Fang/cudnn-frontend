@@ -24,38 +24,12 @@
 
 #include <catch2/generators/catch_generators.hpp>
 
-#include <random>
-
 #include "../utils/helpers.h"
 
 #include <cudnn_frontend.h>
+#include <cudnn_frontend_utils.h>
 
-static int64_t
-round_up_to_multiple(int64_t x, int64_t multiple) {
-    return ((x + multiple - 1) / multiple) * multiple;
-}
-
-static size_t
-bytes_for_n_elems(size_t n_elems, cudnn_frontend::DataType_t datatype) {
-    switch (datatype) {
-        case cudnn_frontend::DataType_t::FLOAT:
-            return n_elems * 4;
-            break;
-        case cudnn_frontend::DataType_t::HALF:
-        case cudnn_frontend::DataType_t::BFLOAT16:
-            return n_elems * 2;
-            break;
-        case cudnn_frontend::DataType_t::FP8_E4M3:
-        case cudnn_frontend::DataType_t::FP8_E5M2:
-        case cudnn_frontend::DataType_t::FP8_E8M0:
-            return n_elems;
-        case cudnn_frontend::DataType_t::FP4_E2M1:
-            return round_up_to_multiple(n_elems, 2) / 2;
-        default:
-            return 0;
-            break;
-    }
-}
+namespace BlackwellNVFP4MXFP8BlockScaleMatmul {
 
 struct TestParams {
     int64_t b = -1;
@@ -95,25 +69,15 @@ struct TestParams {
     }
 };
 
-TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
+TEST_CASE("Blackwell Block Scale Matmul", "[matmul][graph][FP4]") {
     namespace fe = cudnn_frontend;
 
 #if (CUDNN_VERSION < 90700)
     SKIP("Matmul with block scaling is not supported in cudnn versions prior to 9.7.0");
 #endif
     if (check_device_arch_newer_than("blackwell") == false) {
-        SKIP("block scale requires Blackwell and up");
+        SKIP("Hardware accelerated NVFP4/MXFP8 block scale matmul requires Blackwell and up");
     }
-
-    // auto test_params = GENERATE(TestParams(1,
-    //                                        128,
-    //                                        128,
-    //                                        64,
-    //                                        16,
-    //                                        cudnn_frontend::DataType_t::FP4_E2M1,
-    //                                        cudnn_frontend::DataType_t::FP4_E2M1,
-    //                                        cudnn_frontend::DataType_t::FP8_E4M3,
-    //                                        cudnn_frontend::DataType_t::FLOAT));
 
     auto test_params = GENERATE(TestParams(1,
                                            128,
@@ -346,22 +310,31 @@ TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
 
     auto datatype_d = test_params.datatype_d;
 
-    Surface<int8_t> tensor_a_gpu(bytes_for_n_elems(b * m * k, datatype_a), false);
-    Surface<int8_t> tensor_b_gpu(bytes_for_n_elems(b * k * n, datatype_b), false);
+    Surface<int8_t> tensor_a_gpu(div_up(b * m * k * cudnn_frontend::detail::get_element_size_in_bits(datatype_a), 8),
+                                 false);
+    Surface<int8_t> tensor_b_gpu(div_up(b * k * n * cudnn_frontend::detail::get_element_size_in_bits(datatype_b), 8),
+                                 false);
 
-    static constexpr int indestructible_128x4_block_128 = 128;
-    static constexpr int indestructible_128x4_block_4   = 4;
+    static constexpr int indestructible_128x4_block_m_n = 128;
+    static constexpr int indestructible_128x4_block_k   = 4;
 
-    int64_t rounded_m             = round_up_to_multiple(m, indestructible_128x4_block_128);
-    int64_t rounded_n             = round_up_to_multiple(n, indestructible_128x4_block_128);
-    int64_t rounded_block_scale_k = round_up_to_multiple(k / block_size, indestructible_128x4_block_4);
+    int64_t block_scale_dim_m = div_up(m, indestructible_128x4_block_m_n) * indestructible_128x4_block_m_n;
+    int64_t block_scale_dim_n = div_up(n, indestructible_128x4_block_m_n) * indestructible_128x4_block_m_n;
+    int64_t block_scale_dim_k = div_up(k, indestructible_128x4_block_k) * indestructible_128x4_block_k;
 
-    Surface<int8_t> block_descale_a_gpu(bytes_for_n_elems(b * rounded_m * rounded_block_scale_k, datatype_block_scale),
-                                        false);
-    Surface<int8_t> block_descale_b_gpu(bytes_for_n_elems(b * rounded_block_scale_k * rounded_n, datatype_block_scale),
-                                        false);
+    Surface<int8_t> block_descale_a_gpu(
+        div_up(b * block_scale_dim_m * block_scale_dim_k *
+                   cudnn_frontend::detail::get_element_size_in_bits(datatype_block_scale),
+               8),
+        false);
+    Surface<int8_t> block_descale_b_gpu(
+        div_up(b * block_scale_dim_n * block_scale_dim_k *
+                   cudnn_frontend::detail::get_element_size_in_bits(datatype_block_scale),
+               8),
+        false);
 
-    Surface<int8_t> tensor_d_gpu(bytes_for_n_elems(b * m * n, datatype_d), false);
+    Surface<int8_t> tensor_d_gpu(div_up(b * m * n * cudnn_frontend::detail::get_element_size_in_bits(datatype_d), 8),
+                                 false);
 
     fe::graph::Graph graph{};
 
@@ -383,22 +356,24 @@ TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
     auto block_descale_a = graph.tensor(fe::graph::Tensor_attributes()
                                             .set_name("block_descale_a")
                                             .set_data_type(datatype_block_scale)
-                                            .set_dim({b, rounded_m, rounded_block_scale_k})
-                                            .set_stride({rounded_m * rounded_block_scale_k, rounded_block_scale_k, 1})
+                                            .set_dim({b, block_scale_dim_m, block_scale_dim_k})
+                                            .set_stride({block_scale_dim_m * block_scale_dim_k, block_scale_dim_k, 1})
                                             .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
     auto block_descale_b = graph.tensor(fe::graph::Tensor_attributes()
                                             .set_name("block_descale_b")
                                             .set_data_type(datatype_block_scale)
-                                            .set_dim({b, rounded_block_scale_k, rounded_n})
-                                            .set_stride({rounded_n * rounded_block_scale_k, 1, rounded_block_scale_k})
+                                            .set_dim({b, block_scale_dim_k, block_scale_dim_n})
+                                            .set_stride({block_scale_dim_m * block_scale_dim_k, 1, block_scale_dim_k})
                                             .set_reordering_type(cudnn_frontend::TensorReordering_t::F8_128x4));
 
-    auto nvfp4_dequantize_attr = fe::graph::Block_scale_dequantize_attributes().set_block_size(block_size);
+    auto dequantize_attr_a = fe::graph::Block_scale_dequantize_attributes().set_block_size({1, block_size});
 
-    auto dequan_tensor_a = graph.block_scale_dequantize(tensor_a, block_descale_a, nvfp4_dequantize_attr);
+    auto dequan_tensor_a = graph.block_scale_dequantize(tensor_a, block_descale_a, dequantize_attr_a);
 
-    auto dequan_tensor_b = graph.block_scale_dequantize(tensor_b, block_descale_b, nvfp4_dequantize_attr);
+    auto dequantize_attr_b = fe::graph::Block_scale_dequantize_attributes().set_block_size({block_size, 1});
+
+    auto dequan_tensor_b = graph.block_scale_dequantize(tensor_b, block_descale_b, dequantize_attr_b);
 
     auto matmul_attributes =
         fe::graph::Matmul_attributes().set_name("GEMM").set_compute_data_type(fe::DataType_t::FLOAT);
@@ -436,3 +411,5 @@ TEST_CASE("Matmul block scale", "[matmul][graph][FP4]") {
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 }
+
+};  // namespace BlackwellNVFP4MXFP8BlockScaleMatmul

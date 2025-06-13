@@ -71,4 +71,7 @@ set_block_size(int32_t const value, int32_t idx = 0)
 
 Block_scale_dequantize_attributes&
 set_block_size(const int32_t* values, int32_t len = 1)
+
+Block_scale_dequantize_attributes&
+set_block_size(const std::vector<int32_t>& values)
 ```

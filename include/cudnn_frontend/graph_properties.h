@@ -2489,6 +2489,12 @@ class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequanti
         std::copy(values, values + len, block_size.begin());
         return *this;
     }
+
+    Block_scale_dequantize_attributes&
+    set_block_size(const std::vector<int32_t>& values) {
+        block_size = values;
+        return *this;
+    }
 };
 
 #if 0
