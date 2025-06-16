@@ -12,8 +12,6 @@
 # test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test68] # always block this test
 # -----------------------------------------------------------------------------------------------------------------
 
-test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test22] : SM_100 : 91100 # CL-17789
-
 test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test2]   : SM_90  : 91100 # CL-17144
 test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test56]  : SM_90  : 91100 # CL-17144
 test_sdpa_random_bwd[BWD-GQA-inner_random-torch.float16-test13]  : SM_90  : 91100 # CL-17144
