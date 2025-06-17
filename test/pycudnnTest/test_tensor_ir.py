@@ -6,10 +6,10 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 import inspect
 
-from nv_tensor_ir import ir
-from nv_tensor_ir.dialects import nv_tensor_ir
+from nv_tensor_ir._mlir import ir
+from nv_tensor_ir._mlir.dialects import nv_tensor_ir
 
-import nv_tensor_ir.extras.types as T
+import nv_tensor_ir._mlir.extras.types as T
 from data_types import DataType, convert_datatype
 
 
@@ -290,43 +290,44 @@ class ReductionNode(TensorIRNode):
 class MatmulNode(TensorIRNode):
     """Node for matmul operations"""
 
+    def _convert_input_to_original_type(self, input_value, producer_node_idx):
+        """Convert input to its original JSON-defined tensor type if needed."""
+        producer_node = self.node.producer_nodes[producer_node_idx]
+        original_type = producer_node.output[0].data_type
+
+        tensor_info = self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
+            producer_node, original_type
+        )
+
+        # Only convert if datatypes differ
+        if nv_tensor_ir.get_tensor_datatype(
+            input_value.type
+        ) != nv_tensor_ir.get_tensor_datatype(tensor_info.tensor_type):
+            return nv_tensor_ir.convert(tensor_info.tensor_type, input_value)
+
+        return input_value
+
+    def _get_matmul_output_type(self):
+        """Determine the appropriate output tensor type for matmul operation."""
+        if "compute_data_type" in self.node.kwargs:
+            compute_data_type = self.node.kwargs["compute_data_type"]
+            return self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
+                self.node, compute_data_type
+            ).tensor_type
+
+        return self.output_tensor_info.tensor_type
+
     def run(self):
         with self.ip:
-            compute_data_type = self.node.kwargs["compute_data_type"]
-            compute_tensor_info = (
-                self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
-                    self.node, compute_data_type
-                )
-            )
+            # Convert inputs to their original JSON-defined tensor types
+            lsh = self._convert_input_to_original_type(self.children[0], 0)
+            rsh = self._convert_input_to_original_type(self.children[1], 1)
 
-            lsh = self.children[0]
-            rsh = self.children[1]
+            # Get the appropriate output tensor type
+            output_type = self._get_matmul_output_type()
 
-            if nv_tensor_ir.get_tensor_datatype(
-                lsh.type
-            ) != nv_tensor_ir.get_tensor_datatype(rsh.type):
-                datatype = nv_tensor_ir.get_tensor_datatype(
-                    compute_tensor_info.tensor_type
-                )
-                if datatype != nv_tensor_ir.get_tensor_datatype(lsh.type):
-                    lsh = nv_tensor_ir.convert(
-                        nv_tensor_ir.TensorType.get_from_tensor_type(
-                            lsh.type, datatype
-                        ),
-                        lsh,
-                    )
-                if datatype != nv_tensor_ir.get_tensor_datatype(rsh.type):
-                    rsh = nv_tensor_ir.convert(
-                        nv_tensor_ir.TensorType.get_from_tensor_type(
-                            rsh.type, datatype
-                        ),
-                        rsh,
-                    )
-
-            matmul_value = nv_tensor_ir.matmul(
-                compute_tensor_info.tensor_type, lsh, rsh
-            )
-            self.node_map[self.node] = matmul_value
+            # Perform matmul operation
+            self.node_map[self.node] = nv_tensor_ir.matmul(output_type, lsh, rsh)
 
 
 class BinaryOperationNode(TensorIRNode):
@@ -853,37 +854,30 @@ class test_tensor_ir:
     ):
         device = torch.device("cuda")
 
-        # iterate all kernel inputs automatically
-        tensor_desc = nv_tensor_ir.VectorTensorOperandDescriptor()
+        # Prepare inputs - scalars stay on CPU, tensors go to GPU
+        desc_inputs = []
         inputs_gpu = []
+
         for node in self.test_graph.entrance_nodes:
             torch_mem = node.get_value()
             if not node.output[0].is_by_value:
-                gpu_mem = torch_mem.to(device=device)
+                # Tensor operand - move to GPU
+                gpu_mem = torch.as_strided(
+                    torch_mem.to(device=device),
+                    size=torch_mem.shape,
+                    stride=torch_mem.stride(),
+                )
                 inputs_gpu.append(gpu_mem)  # need to save gpu_mem in case of releasing
-                strides = []
-                for i, (shape, stride) in enumerate(
-                    zip(torch_mem.shape, torch_mem.stride())
-                ):
-                    strides.append(0) if shape == 1 else strides.append(stride)
-                tensor_operand = nv_tensor_ir.TensorOperandDescriptor(
-                    nv_tensor_ir.TensorDescriptor(
-                        gpu_mem.data_ptr(), nv_tensor_ir.LayoutDescriptor(strides)
-                    ),
-                    nv_tensor_ir.ShapeDescriptor(torch_mem.shape),
-                )
-                tensor_desc.append(tensor_operand)
+                desc_inputs.append(nv_tensor_ir.TensorIRTensorDescriptor(gpu_mem))
             else:
+                # Scalar operand - keep on CPU for automatic detection
                 cpu_mem = torch_mem.to("cpu")
-                tensor_operand = nv_tensor_ir.TensorOperandDescriptor(
-                    nv_tensor_ir.ScalarDescriptor(
-                        eval(convert_datatype(node.output[0].data_type, "cask")),
-                        cpu_mem[0].data_ptr(),
-                    )
-                )
-                tensor_desc.append(tensor_operand)
+                desc_inputs.append(nv_tensor_ir.TensorIRTensorDescriptor(cpu_mem))
+
         if not self.ref_outputs:
             self.calc_ref()
+
+        # Create output tensors on GPU
         outputs_gpu = [
             torch.as_strided(
                 torch.empty(
@@ -897,18 +891,13 @@ class test_tensor_ir:
             for node in self.test_graph.nodes
             if node.is_output_node()
         ]
-        for torch_gpu in outputs_gpu:
-            tensor_desc.append(
-                nv_tensor_ir.TensorOperandDescriptor(
-                    nv_tensor_ir.TensorDescriptor(
-                        torch_gpu.data_ptr(),
-                        nv_tensor_ir.LayoutDescriptor(torch_gpu.stride()),
-                    ),
-                    nv_tensor_ir.ShapeDescriptor(torch_gpu.shape),
-                )
-            )
 
-        args = nv_tensor_ir.ArgumentsView(tensor_desc)
+        # Add output tensors to DLPack inputs
+        desc_outputs = [
+            nv_tensor_ir.TensorIRTensorDescriptor(gpu_tensor)
+            for gpu_tensor in outputs_gpu
+        ]
+        all_desc = desc_inputs + desc_outputs
 
         with ir.Context() as ctx, ir.Location.unknown():
             nv_tensor_ir.register_dialect()
@@ -943,8 +932,7 @@ class test_tensor_ir:
                         f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
                     )
                     shader = compiler.compile(cloned_module, compile_options)
-                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
-                    execution_plan.initialize()
+                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
                     )
@@ -1010,8 +998,7 @@ class test_tensor_ir:
                         f"#### Running tile_size={conversion_options.tileSize}, compiler_backend={compiler_backend}"
                     )
                     shader = compiler.compile(cloned_module, compile_options)
-                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, args)
-                    execution_plan.initialize()
+                    execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
                     )
