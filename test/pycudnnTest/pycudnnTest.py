@@ -20,6 +20,35 @@ def reportError(e, repro_cmd):
     traceback.print_exc()
 
 
+def processTestFileLine_TensorIR(args, unknown_args, line_count, line):
+    error_count = 0
+    status = "CUDNNBATCH_PASSED"
+    try:
+        print(f"$$$$ Processing line {line_count}: {line.strip()}")
+        run_tensor_ir_from_legacy_args(args, unknown_args)
+    except Exception as e:
+        error_count += 1
+        repro_cmd = "{} {}".format(sys.argv[0], line.strip())
+        reportError(e, repro_cmd)
+        status = "CUDNNBATCH_FAILED"
+
+    print(f"$$$$ Test on line {line_count} returned status {status}")
+    utils.reportCurrentTime("done")
+    return error_count
+
+
+def processTestFileLine_graphRunner(args, unknown_args, line_count, line):
+    error_count = 0
+    try:
+        run_test_from_legacy_args(args, unknown_args)
+    except Exception as e:
+        error_count += 1
+        repro_cmd = "{} {}".format(sys.argv[0], line.strip())
+        reportError(e, repro_cmd)
+    utils.reportCurrentTime("done")
+    return error_count
+
+
 if __name__ == "__main__":
     # We disable help here, as each specific mode has it's own set of options and associated help
     pct_parser = argparse.ArgumentParser(
@@ -27,7 +56,7 @@ if __name__ == "__main__":
     )
 
     pct_parser.add_argument(
-        "--R", "-R", choices=["graphRunner", "grStream", "tensor_ir"]
+        "--R", "-R", choices=["graphRunner", "grStream", "tensor_ir", "irStream"]
     )
 
     # TODO(@mbreughe): move to grStream mode
@@ -118,11 +147,13 @@ if __name__ == "__main__":
         utils.reportCurrentTime("done")
         sys.exit(0)
 
-    elif args.R == "grStream":
+    elif args.R == "grStream" or args.R == "irStream":
         import shlex
 
         error_count = 0
         line_count = 0
+        if args.R == "irStream":
+            print("$$$$ Reading from stdin")
 
         # Process each line in stdin, and run as a graphRunner command
         for line in sys.stdin:
@@ -141,14 +172,15 @@ if __name__ == "__main__":
             args_stream, unknown_args_stream = pct_parser.parse_known_args(
                 shlex.split(line)
             )
-            try:
-                run_test_from_legacy_args(args_stream, unknown_args_stream)
-            except Exception as e:
-                error_count += 1
-                repro_cmd = "{} {}".format(sys.argv[0], line.strip())
-                reportError(e, repro_cmd)
 
-            utils.reportCurrentTime("done")
+            if args.R == "irStream":
+                error_count += processTestFileLine_TensorIR(
+                    args_stream, unknown_args_stream, line_count, line
+                )
+            elif args.R == "grStream":
+                error_count += processTestFileLine_graphRunner(
+                    args_stream, unknown_args_stream, line_count, line
+                )
 
         if error_count > 0:
             print("ERROR: {} failed tests.".format(error_count))
