@@ -172,12 +172,12 @@ include:
 #     rules:
 #       - if: $CI_PIPELINE_SOURCE == "schedule"
 
-  - local: ci/job-template.yml
-    inputs:
-        cuda_version: "12.2.2"
-        cudnn_version: "8.9.7.29"
-    rules:
-      - if: $CI_PIPELINE_SOURCE == "schedule"
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.2.2"
+#         cudnn_version: "8.9.7.29"
+#     rules:
+#       - if: $CI_PIPELINE_SOURCE == "schedule"
 
   - local: ci/job-template.yml
     inputs:

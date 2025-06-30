@@ -47,15 +47,15 @@ spec:
   extends:
     - .cpp_tests:template
 
-"pycudnntest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
-  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
-  needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
-  parallel:
-    matrix:
-      - ARCH: ["Hopper", "Ampere"]
-  tags:
-    - ${ARCH}
-  extends: .pycudnntest:template
+# "pycudnntest:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
+#   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
+#   needs: ["build:$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"]
+#   parallel:
+#     matrix:
+#       - ARCH: ["Hopper", "Ampere"]
+#   tags:
+#     - ${ARCH}
+#   extends: .pycudnntest:template
 
 # "L4_graph_runner:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]":
 #   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_$[[inputs.cudnn_version]]_$[[inputs.cuda_version]]"
