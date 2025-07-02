@@ -25,3 +25,29 @@ test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test44] : SM_90 : 91002,
 test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test13] : SM_90 : 91002,91100,91200
 test_sdpa_random_bwd[BWD-MQA-inner_random-torch.float16-test7] : SM_90 : 91002,91100,91200
 test_sdpa_random_bwd[BWD-MQA-inner_random-torch.bfloat16-test45] : SM_90 : 91002,91100,91200
+
+# Bug https://nvbugs/5342881, Some variable sequence length tests hang on Blackwell
+test_sdpa_random_fwd[FWD-MHA-edge_random-torch.float16-test43]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-edge_random-torch.float16-test54]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-edge_random-torch.float16-test56]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-edge_random-torch.bfloat16-test7]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-edge_random-torch.bfloat16-test20]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-edge_random-torch.bfloat16-test54]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test7]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test10]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test15]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test34]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-inner_random-torch.float16-test62]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MHA-inner_random-torch.bfloat16-test46] : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-GQA-edge_random-torch.float16-test35]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-GQA-edge_random-torch.bfloat16-test1]   : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-GQA-inner_random-torch.float16-test55 ] : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-GQA-inner_random-torch.bfloat16-test30] : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-GQA-inner_random-torch.bfloat16-test44] : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MQA-inner_random-torch.float16-test13]  : SM_100 : 91100,91200
+test_sdpa_random_fwd[FWD-MQA-inner_random-torch.bfloat16-test39] : SM_100 : 91100,91200
+
+# Segmentation fault, https://nvbugs/5364384
+test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test22]                : SM_100 : 91100,91200
+test_sdpa_random_bwd_rgged[BWD_RAGGED_-GQA-inner_random-torch.bfloat16-test11] : SM_100 : 91100,91200
+

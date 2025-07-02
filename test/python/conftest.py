@@ -36,7 +36,7 @@ def pytest_configure(config):
 def pytest_addoption(parser):
     # Generic options that may be used by all scripts.
     parser.addoption(
-        "--dryrun", action="store", nargs="?", const=1, type=int, default=0, help="show repro commands when 1 or 2 (use with '-s')",
+        "--dryrun", action="store", nargs="?", const=1, type=int, default=0, help="show repro commands when 1, 2, or 3 (use with '-s')",
     )
     parser.addoption(
         "--diffs", action="store", type=int, default=10, help="set number of numerical mismatches to display",
