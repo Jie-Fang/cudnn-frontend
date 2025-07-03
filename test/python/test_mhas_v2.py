@@ -1672,7 +1672,7 @@ def test_sdpa_random_bwd(env_info, test_no, data_type, is_infer, head_group, lay
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=lambda p: "FWD_SQ1" if p else "BWD_SQ1")
 @pytest.mark.L0
-def test_sdpa_random_bwd_sq1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+def test_sdpa_random_sq1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
     cfg.setBatches(max_batches=32)
     cfg.setSequences(max_s_q=1, max_s_kv=512)
