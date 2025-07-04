@@ -1,3 +1,4 @@
+from typing import Optional
 import test_graph as tg
 import torch
 import utils
@@ -134,24 +135,94 @@ class TensorInfo:
     shape_div: list[int]
     stride: list[int]
     stride_div: list[int]
+    alignment: Optional[int] = None  # alignment in bytes
 
 
-def calculate_divisibility(out_stride):
-    """Calculate shape and stride divisibility for tensor operations.
+def gcd(a, b):
+    while b:
+        a, b = b, a % b
+    return a
+
+
+def find_leading_dimension(stride, shape):
+    """Find the leading dimension index using a priority-based approach.
+
+    Priority order:
+    1. stride == 1 and shape != 1 (meaningful leading dimensions)
+    2. Last dimension satisfying stride == 1 (fallback)
+    3. None (invalid)
 
     Args:
-        out_stride: List of stride values
+        stride_list: List of stride values to search through
+        shape_list: List of shape values for priority-based selection
+
+    Returns:
+        int or None: Index of the leading dimension, or None if not found
+    """
+    if len(shape) != len(stride):
+        raise ValueError("stride and shape must have the same length")
+
+    # First priority: stride == 1 and shape != 1
+    for i in range(len(stride) - 1, -1, -1):
+        if stride[i] == 1 and shape[i] != 1:
+            return i
+
+    # Second priority: last dimension satisfying stride == 1
+    for i in range(len(stride) - 1, -1, -1):
+        if stride[i] == 1:
+            return i
+
+    # Invalid: no dimension with stride == 1
+    return None
+
+
+def calculate_divisibility_from_alignment(
+    stride_dynamic,
+    stride,
+    shape,
+    alignment,
+    dtype_width,
+):
+    """Calculate shape and stride divisibility from pre-calculated alignment.
+
+    Args:
+        stride_dynamic: List of stride placeholders (0 for broadcast, 1 for leading, etc.)
+        stride: List of actual stride values
+        alignment: Pre-calculated alignment in bytes
+        dtype_width: Data type width in bits
+        shape: List of shape values for priority-based leading dimension selection
 
     Returns:
         Tuple of (shape_div, stride_div) lists containing divisibility values
     """
+
+    # Helper function for stride divisibility calculation (optimized with bit manipulation)
+    def calculate_actual_divisibility(value):
+        if value <= 0:
+            return 1
+        else:
+            temp_value = abs(value)
+            # Find highest power of 2 that divides the value using bit manipulation
+            # x & (-x) gives the lowest set bit, which is the highest power of 2 divisor
+            divisibility = temp_value & (-temp_value)
+            # Cap at 32 for practical limits
+            return min(max(1, divisibility), 32)
+
     shape_div = []
     stride_div = []
-    divisibility = 8
+    tma_requirement_in_bits = 128
     stride_div_flag = True
     has_stride_zero = False
 
-    for s in out_stride:
+    # Find the leading dimension
+    leading_dim_idx = find_leading_dimension(stride_dynamic, shape)
+
+    # Calculate divisibility from alignment for the leading dimension
+    leading_divisibility = (
+        alignment * 8 // dtype_width if leading_dim_idx is not None else 1
+    )
+
+    for idx, s in enumerate(stride_dynamic):
         if s == 0:
             shape_div.append(1)
             stride_div.append(1)
@@ -160,16 +231,24 @@ def calculate_divisibility(out_stride):
             if s != 1:
                 shape_div.append(1)
                 if stride_div_flag and has_stride_zero:
-                    stride_div.append(divisibility)
+                    actual_stride_div = calculate_actual_divisibility(stride[idx])
+                    final_stride_div = (
+                        gcd(actual_stride_div * dtype_width, tma_requirement_in_bits)
+                        // dtype_width
+                    )
+                    stride_div.append(final_stride_div)
                     stride_div_flag = False
                 else:
                     stride_div.append(1)
             else:
-                shape_div.append(divisibility)
+                # Use the divisibility calculated from alignment
+                shape_div.append(leading_divisibility)
                 stride_div.append(1)
 
     if has_stride_zero:
-        stride_div[0] = divisibility
+        stride_div[0] = (
+            gcd(stride[0] * dtype_width, tma_requirement_in_bits) // dtype_width
+        )
 
     return shape_div, stride_div
 
@@ -252,7 +331,24 @@ class ReductionNode(TensorIRNode):
                 self.output_tensor_info.tensor_type
             )
 
-            shape_div, _ = calculate_divisibility(self.output_tensor_info.stride)
+            # Get original stride and shape from the node
+            original_stride = self.node.output[0].stride
+            original_shape = self.node.output[0].dim
+
+            # Use the pre-calculated alignment from output_tensor_info
+            alignment = self.output_tensor_info.alignment
+            dtype_width = (
+                output_datatype.width if hasattr(output_datatype, "width") else 16
+            )
+
+            # Calculate divisibility from stored alignment
+            shape_div, _ = calculate_divisibility_from_alignment(
+                self.output_tensor_info.stride,
+                original_stride,
+                self.output_tensor_info.shape,
+                alignment,
+                dtype_width,
+            )
 
             if input_datatype != output_datatype:
                 convert_value = nv_tensor_ir.convert(
@@ -763,6 +859,17 @@ class test_tensor_ir:
         isScalarTensor = all(s == 1 for s in ori_stride) and all(
             d == 1 for d in ori_shape
         )
+        # Calculate alignment first using the corrected approach
+        dtype_width = (
+            dtype.width if hasattr(dtype, "width") else 16
+        )  # fallback to 16 for compatibility
+
+        # Get TMA alignment
+        def get_tma_alignment(dtype_width):
+            if dtype_width >= 8:
+                return 16  # bytes
+            else:
+                return 32  # bytes
 
         if isScalarTensor:
             # If tensor is scalar in json definition, convert to dense memref with shape to [-1] and stride to [0]
@@ -778,14 +885,12 @@ class test_tensor_ir:
                 shape_div=shape_div,
                 stride=stride,
                 stride_div=stride_div,
+                alignment=get_tma_alignment(dtype_width),
             )
 
         # Keep track of divisibility constraints if needed
         shape_div = []
         stride_div = []
-        divisibility = 8
-        stride_div_flag = True
-        has_stride_zero = False
 
         for s, d in zip(ori_stride, ori_shape):
             if idx > 0 and d == 1:
@@ -801,7 +906,26 @@ class test_tensor_ir:
                 shape.append(d if self.static_shapes_only else -1)
             idx += 1
 
-        shape_div, stride_div = calculate_divisibility(stride)
+        # Find leading dimension and calculate alignment
+        leading_dim_idx = find_leading_dimension(stride, ori_shape)
+
+        if leading_dim_idx is not None:
+            leading_dim_size = ori_shape[leading_dim_idx]
+            tma_requirement_bytes = get_tma_alignment(dtype_width)
+            tma_requirement_bits = tma_requirement_bytes * 8
+            alignment_bits = gcd(leading_dim_size * dtype_width, tma_requirement_bits)
+            alignment = alignment_bits // 8  # convert to bytes
+        else:
+            alignment = get_tma_alignment(dtype_width)
+
+        # Calculate divisibility from alignment
+        shape_div, stride_div = calculate_divisibility_from_alignment(
+            stride,
+            ori_stride,
+            ori_shape,
+            alignment,
+            dtype_width,
+        )
 
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
@@ -815,6 +939,7 @@ class test_tensor_ir:
             shape_div=shape_div,
             stride=stride,
             stride_div=stride_div,
+            alignment=alignment,
         )
 
     def calc_ref(self):
@@ -1063,16 +1188,6 @@ class test_tensor_ir:
                 ]
                 return f"({','.join(stride_elements)})"
 
-            # Get alignment in bytes based on the data type
-            def get_alignment(dtype):
-                # TODO: check if this is correct
-                # Usually GMEM address must be 16B aligned for tma
-                if dtype.width >= 8:
-                    return 16
-                # But 4-bit and 6-bit must 32B aligned
-                else:
-                    return 32
-
             input_tensor_infos = list(
                 map(
                     lambda x: self.determine_tensor_ir_inout_tensor_type(x),
@@ -1091,9 +1206,12 @@ class test_tensor_ir:
                             tensor_info.stride, tensor_info.stride_div
                         )
                     )
+                    assert (
+                        tensor_info.alignment is not None
+                    ), "Alignment is required for tensor inputs"
                     align_attr = ir.IntegerAttr.get(
                         ir.IntegerType.get_signless(64),
-                        get_alignment(tensor_info.dtype),
+                        tensor_info.alignment,  # use stored alignment
                     )
                     arg_attrs.append(
                         ir.DictAttr.get(
@@ -1123,7 +1241,7 @@ class test_tensor_ir:
                     )
                     align_attr = ir.IntegerAttr.get(
                         ir.IntegerType.get_signless(64),
-                        get_alignment(tensor_info.dtype),
+                        tensor_info.alignment,  # use stored alignment
                     )
                     res_attrs.append(
                         ir.DictAttr.get(

@@ -40,9 +40,9 @@ cudnn_mapping = {
 tensorir_mapping = {
     DataType.FLOAT: "T.f32()",
     DataType.DOUBLE: "T.f64()",
-    DataType.INT8: "T.i8()",
-    DataType.INT32: "T.i32()",
-    DataType.INT64: "T.i64()",
+    DataType.INT8: "T.si8()",
+    DataType.INT32: "T.si32()",
+    DataType.INT64: "T.si64()",
     DataType.HALF: "T.f16()",
     DataType.BFLOAT16: "T.bf16()",
     DataType.BOOL: "T.bool()",
