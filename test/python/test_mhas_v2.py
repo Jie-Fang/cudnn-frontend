@@ -491,9 +491,9 @@ class testConfig:
             print(f"seq_len_kv       = {truncated_list(20, 3, self.seq_len_kv)}")
             print(f"data_type        = {self.data_type}")
             if reg_run:
-                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
+                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed} --unlock")
         elif request.config.option.dryrun == 2:
-            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
+            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed} --unlock")
         elif request.config.option.dryrun == 3:
             print(f"\npytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
         else:
@@ -1626,6 +1626,7 @@ def env_info(request):
 # L0 fprop tests
 # ==================================
 
+@pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
 @pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=888), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
@@ -1646,6 +1647,7 @@ def test_sdpa_random_fwd(env_info, test_no, data_type, is_infer, head_group, lay
 # L0 bprop tests
 # ==================================
 
+@pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
 @pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=123), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
@@ -1666,6 +1668,7 @@ def test_sdpa_random_bwd(env_info, test_no, data_type, is_infer, head_group, lay
 # L0 fprop tests with s_q=1
 # ==================================
 
+@pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
 @pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=741), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
