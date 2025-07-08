@@ -26,14 +26,13 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][graph][clamped_relu_bitmask]") {
-    // Compatibility checks 
-    if (CUDNN_VERSION < 91100) {
-        SKIP("LayerNorm with relu using bitmask is not supported in cudnn versions prior to 9.11.0"); 
+    // Compatibility checks
+    if constexpr (CUDNN_VERSION < 91100) {
+        SKIP("LayerNorm with relu using bitmask is not supported in cudnn versions prior to 9.11.0");
     }
     if (check_device_arch_newer_than("ampere") == false) {
         SKIP("LayerNorm requires Ampere and up");
     }
-
 
     namespace fe = cudnn_frontend;
 
@@ -46,7 +45,7 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
     auto seq_length  = 1024;
     auto hidden_size = 128;
 
-    auto X                   = graph.tensor(fe::graph::Tensor_attributes()
+    auto X     = graph.tensor(fe::graph::Tensor_attributes()
                               .set_name("X")
                               .set_dim({batch_size * seq_length, hidden_size, 1, 1})
                               .set_stride({hidden_size, 1, hidden_size, hidden_size}));
@@ -55,13 +54,13 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
                                   .set_dim({1, hidden_size, 1, 1})
                                   .set_stride({hidden_size, 1, hidden_size, hidden_size})
                                   .set_data_type(fe::DataType_t::FLOAT));
-    auto bias                = graph.tensor(fe::graph::Tensor_attributes()
+    auto bias  = graph.tensor(fe::graph::Tensor_attributes()
                                  .set_name("bias")
                                  .set_dim({1, hidden_size, 1, 1})
                                  .set_stride({hidden_size, 1, hidden_size, hidden_size})
                                  .set_data_type(fe::DataType_t::FLOAT));
 
-    float scalar_epsilon     = 1e-05f;
+    float scalar_epsilon = 1e-05f;
     fe::graph::Tensor_attributes s_epsilon(scalar_epsilon);
     auto epsilon = graph.tensor(s_epsilon.set_name("epsilon"));
 
@@ -69,8 +68,8 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
     float upper_clip = 6.0f;
     fe::graph::Tensor_attributes s_lower_clip(lower_clip);
     fe::graph::Tensor_attributes s_upper_clip(upper_clip);
-    auto relu_lower_bound = graph.tensor(s_lower_clip.set_name("relu_lower_bound"));  
-    auto relu_upper_bound = graph.tensor(s_upper_clip.set_name("relu_upper_bound")); 
+    auto relu_lower_bound = graph.tensor(s_lower_clip.set_name("relu_lower_bound"));
+    auto relu_upper_bound = graph.tensor(s_upper_clip.set_name("relu_upper_bound"));
 
     // Apply LayerNorm
     auto layernorm_options =
@@ -81,32 +80,32 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
 
     // Apply clamped ReLU to the LayerNorm output
     auto relu_attributes = fe::graph::Pointwise_attributes()
-                                 .set_mode(fe::PointwiseMode_t::RELU_FWD)
-                                 .set_compute_data_type(fe::DataType_t::FLOAT)
-                                 .set_relu_lower_clip(lower_clip)
-                                 .set_relu_upper_clip(upper_clip);
+                               .set_mode(fe::PointwiseMode_t::RELU_FWD)
+                               .set_compute_data_type(fe::DataType_t::FLOAT)
+                               .set_relu_lower_clip(lower_clip)
+                               .set_relu_upper_clip(upper_clip);
     auto Y = graph.pointwise(ln_output, relu_attributes);
     Y->set_output(true);
     Y->set_name("ReLU(Y)");
 
     // Generate bitmask for clamped ReLU
     auto relu_lower_clip_mask_attr = fe::graph::Pointwise_attributes()
-                                 .set_mode(fe::PointwiseMode_t::CMP_GT)
-                                 .set_compute_data_type(fe::DataType_t::FLOAT);
+                                         .set_mode(fe::PointwiseMode_t::CMP_GT)
+                                         .set_compute_data_type(fe::DataType_t::FLOAT);
     auto lower_mask = graph.pointwise(Y, relu_lower_bound, relu_lower_clip_mask_attr);
     lower_mask->set_data_type(fe::DataType_t::BOOLEAN);
     lower_mask->set_name("lower_mask");
 
     auto relu_upper_clip_mask_attr = fe::graph::Pointwise_attributes()
-                                 .set_mode(fe::PointwiseMode_t::CMP_LT)
-                                 .set_compute_data_type(fe::DataType_t::FLOAT);
+                                         .set_mode(fe::PointwiseMode_t::CMP_LT)
+                                         .set_compute_data_type(fe::DataType_t::FLOAT);
     auto upper_mask = graph.pointwise(Y, relu_upper_bound, relu_upper_clip_mask_attr);
     upper_mask->set_data_type(fe::DataType_t::BOOLEAN);
     upper_mask->set_name("upper_mask");
-    
+
     auto logical_and_attr = fe::graph::Pointwise_attributes()
-                               .set_mode(fe::PointwiseMode_t::LOGICAL_AND)
-                               .set_compute_data_type(fe::DataType_t::BOOLEAN);
+                                .set_mode(fe::PointwiseMode_t::LOGICAL_AND)
+                                .set_compute_data_type(fe::DataType_t::BOOLEAN);
     auto bitmask = graph.pointwise(lower_mask, upper_mask, logical_and_attr);
     bitmask->set_data_type(fe::DataType_t::BOOLEAN);
     bitmask->set_name("relu_bitmask");
@@ -116,7 +115,7 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
     auto handle_ptr = create_cudnn_handle();
     auto handle     = *handle_ptr;
 
-    // Print the graph 
+    // Print the graph
     std::cout << graph << std::endl;
 
     REQUIRE(graph.validate().is_good());
@@ -128,7 +127,6 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
     REQUIRE(graph.check_support(handle).is_good());
 
     REQUIRE(graph.build_plans(handle).is_good());
-
 
     Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Mean_tensor(batch_size * seq_length, false);
@@ -149,21 +147,19 @@ TEST_CASE("Forward Training LayerNorm and Bitmask Clamped ReLU", "[layernorm][gr
         {scale, Scale_tensor.devPtr},
         {bias, Bias_tensor.devPtr},
         {Y, Y_tensor.devPtr},
-        {bitmask, Relu_Bitmask_tensor.devPtr}
-        };
+        {bitmask, Relu_Bitmask_tensor.devPtr}};
 
     REQUIRE(graph.execute(handle, variant_pack, workspace.devPtr).is_good());
 }
 
 TEST_CASE("Clamped DReLU using Bitmask and Backward LayerNorm", "[layernorm][graph][DRelu_bitmask_DLN]") {
-    // Compatibility checks 
-    if (CUDNN_VERSION < 91100) {
-        SKIP("LayerNorm with relu using bitmask is not supported in cudnn versions prior to 9.11.0"); 
+    // Compatibility checks
+    if constexpr (CUDNN_VERSION < 91100) {
+        SKIP("LayerNorm with relu using bitmask is not supported in cudnn versions prior to 9.11.0");
     }
     if (check_device_arch_newer_than("ampere") == false) {
         SKIP("LayerNorm requires Ampere and up");
     }
-
 
     namespace fe = cudnn_frontend;
     fe::graph::Graph graph;
@@ -199,15 +195,14 @@ TEST_CASE("Clamped DReLU using Bitmask and Backward LayerNorm", "[layernorm][gra
                                          .set_dim({batch_size * seq_length, 1, 1, 1})
                                          .set_stride({1, 1, 1, 1})
                                          .set_data_type(fe::DataType_t::FLOAT));
-    auto mask                = graph.tensor(fe::graph::Tensor_attributes()
+    auto mask         = graph.tensor(fe::graph::Tensor_attributes()
                                  .set_name("mask")
                                  .set_dim({batch_size * seq_length, hidden_size, 1, 1})
                                  .set_stride({hidden_size, 1, hidden_size, hidden_size})
                                  .set_data_type(fe::DataType_t::BOOLEAN));
 
-
-    auto mul_options = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
-    auto applied_bitmask_DY_output  = graph.pointwise(DY, mask, mul_options);
+    auto mul_options               = fe::graph::Pointwise_attributes().set_mode(fe::PointwiseMode_t::MUL);
+    auto applied_bitmask_DY_output = graph.pointwise(DY, mask, mul_options);
 
     auto DLN_options = fe::graph::Layernorm_backward_attributes().set_saved_mean_and_inv_variance(mean, inv_variance);
     auto [DX, dscale, dbias] = graph.layernorm_backward(applied_bitmask_DY_output, X, scale, DLN_options);
@@ -219,7 +214,7 @@ TEST_CASE("Clamped DReLU using Bitmask and Backward LayerNorm", "[layernorm][gra
     auto handle_ptr = create_cudnn_handle();
     auto handle     = *handle_ptr;
 
-    // Print the graph 
+    // Print the graph
     std::cout << graph << std::endl;
 
     REQUIRE(graph.validate().is_good());

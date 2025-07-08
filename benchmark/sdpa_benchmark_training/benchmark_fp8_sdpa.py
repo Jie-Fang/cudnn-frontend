@@ -19,11 +19,11 @@ import seaborn as sns
 ###### SDPA Benchmark -- Setup ######
 ## Define constants for benchmarking
 verbose = True
-num_iters = 10    # Number of iterations to run for each config; take median time
-dry_run_iters = 5 # Number of iterations to dry run for warmup
+num_iters = 10  # Number of iterations to run for each config; take median time
+dry_run_iters = 5  # Number of iterations to dry run for warmup
 is_causal = True
 enable_gqa = True
-precisions = ['fp8', 'bf16']
+precisions = ["fp8", "bf16"]
 
 total_iters = num_iters + dry_run_iters
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,16 +47,55 @@ sdpa_configs = [
 
 ## Define various SDPA functions for each backend
 
+
 # Util functions for calculating flops and tflops/s achieved
-def flops(batch_size, q_seqlen, kv_seqlen, head_dim, num_q_heads, num_kv_heads, causal, mode="fwd"):
+def flops(
+    batch_size,
+    q_seqlen,
+    kv_seqlen,
+    head_dim,
+    num_q_heads,
+    num_kv_heads,
+    causal,
+    mode="fwd",
+):
     assert mode in ["fwd", "bwd", "fwd_bwd"]
-    f = 4 * batch_size * q_seqlen * kv_seqlen * num_q_heads * head_dim // (2 if causal else 1)
+    f = (
+        4
+        * batch_size
+        * q_seqlen
+        * kv_seqlen
+        * num_q_heads
+        * head_dim
+        // (2 if causal else 1)
+    )
     return f if mode == "fwd" else (2.5 * f if mode == "bwd" else 3.5 * f)
 
-def tflops_per_sec(batch_size, q_seqlen, kv_seqlen, head_dim, num_q_heads, num_kv_heads, causal, time, mode="fwd"):
+
+def tflops_per_sec(
+    batch_size,
+    q_seqlen,
+    kv_seqlen,
+    head_dim,
+    num_q_heads,
+    num_kv_heads,
+    causal,
+    time,
+    mode="fwd",
+):
     assert mode in ["fwd", "bwd", "fwd_bwd"]
-    f = flops(batch_size, q_seqlen, kv_seqlen, head_dim, num_q_heads, num_kv_heads, causal, mode)
-    return f / time / 1e9 if not math.isnan(time) else 0.0 # Assume time is in msec
+    f = flops(
+        batch_size,
+        q_seqlen,
+        kv_seqlen,
+        head_dim,
+        num_q_heads,
+        num_kv_heads,
+        causal,
+        mode,
+    )
+    return f / time / 1e9 if not math.isnan(time) else 0.0  # Assume time is in msec
+
 
 ## Set up cuDNN Graph
 try:
@@ -84,10 +123,25 @@ start_event = torch.cuda.Event(enable_timing=True)
 end_event = torch.cuda.Event(enable_timing=True)
 
 # Define dataframe to store results
-data_df = pd.DataFrame(columns=['batch_size', 'q_seqlen', 'kv_seqlen', 'num_q_heads', 'num_kv_heads', 'head_dim', 'is_causal', 'precision', 'forward_time', 'backward_time'])
+data_df = pd.DataFrame(
+    columns=[
+        "batch_size",
+        "q_seqlen",
+        "kv_seqlen",
+        "num_q_heads",
+        "num_kv_heads",
+        "head_dim",
+        "is_causal",
+        "precision",
+        "forward_time",
+        "backward_time",
+    ]
+)
 
 if verbose:
-    print(f"[INFO] Begin benchmark for layers (batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim)")
+    print(
+        f"[INFO] Begin benchmark for layers (batch_size,q_seqlen,kv_seqlen,num_q_heads,num_kv_heads,head_dim)"
+    )
     print(f"[INFO] {sdpa_configs = }")
 
 # Iterate over each SDPA config
@@ -99,21 +153,43 @@ for sdpa_config in sdpa_configs:
     # Iterate over each backend
     for cur_precision in precisions:
         print(f"[INFO]   Benchmarking data type {cur_precision}")
-    
+
         fwd_times = []
         bwd_times = []
 
-        is_dropout = False # Hard coded
-        dropout_prob = dropout_p if is_dropout else 0.0 # Hard coded to 0
-        is_infer = False # Hard coded
+        is_dropout = False  # Hard coded
+        dropout_prob = dropout_p if is_dropout else 0.0  # Hard coded to 0
+        is_infer = False  # Hard coded
         attn_scale = head_dim ** (-0.5)
 
         ## Will define tensors to set up cuDNN graph once.
-        if cur_precision == 'fp8':
-            query = torch.randint(256, (batch_size, num_q_heads, q_seqlen, head_dim), dtype=torch.uint8, device=device)
-            key = torch.randint(256, (batch_size, num_kv_heads, kv_seqlen, head_dim), dtype=torch.uint8, device=device)
-            value = torch.randint(256, (batch_size, num_kv_heads, kv_seqlen, head_dim), dtype=torch.uint8, device=device)
-            output = torch.empty(batch_size, num_q_heads, q_seqlen, head_dim, dtype=torch.uint8, device=device)
+        if cur_precision == "fp8":
+            query = torch.randint(
+                256,
+                (batch_size, num_q_heads, q_seqlen, head_dim),
+                dtype=torch.uint8,
+                device=device,
+            )
+            key = torch.randint(
+                256,
+                (batch_size, num_kv_heads, kv_seqlen, head_dim),
+                dtype=torch.uint8,
+                device=device,
+            )
+            value = torch.randint(
+                256,
+                (batch_size, num_kv_heads, kv_seqlen, head_dim),
+                dtype=torch.uint8,
+                device=device,
+            )
+            output = torch.empty(
+                batch_size,
+                num_q_heads,
+                q_seqlen,
+                head_dim,
+                dtype=torch.uint8,
+                device=device,
+            )
 
             descale_q_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
             descale_k_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
@@ -134,26 +210,62 @@ for sdpa_config in sdpa_configs:
             amax_dK_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dV_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
             amax_dP_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-        elif cur_precision == 'bf16':
-            query = torch.randn(batch_size, num_q_heads, q_seqlen, head_dim, dtype=torch.bfloat16, device=device)
-            key = torch.randn(batch_size, num_kv_heads, kv_seqlen, head_dim, dtype=torch.bfloat16, device=device)
-            value = torch.randn(batch_size, num_kv_heads, kv_seqlen, head_dim, dtype=torch.bfloat16, device=device)
-            output = torch.empty(batch_size, num_q_heads, q_seqlen, head_dim, dtype=torch.bfloat16, device=device)
+        elif cur_precision == "bf16":
+            query = torch.randn(
+                batch_size,
+                num_q_heads,
+                q_seqlen,
+                head_dim,
+                dtype=torch.bfloat16,
+                device=device,
+            )
+            key = torch.randn(
+                batch_size,
+                num_kv_heads,
+                kv_seqlen,
+                head_dim,
+                dtype=torch.bfloat16,
+                device=device,
+            )
+            value = torch.randn(
+                batch_size,
+                num_kv_heads,
+                kv_seqlen,
+                head_dim,
+                dtype=torch.bfloat16,
+                device=device,
+            )
+            output = torch.empty(
+                batch_size,
+                num_q_heads,
+                q_seqlen,
+                head_dim,
+                dtype=torch.bfloat16,
+                device=device,
+            )
 
         dQuery = torch.empty_like(query)
         dKey = torch.empty_like(key)
         dValue = torch.empty_like(value)
         dOutput = torch.empty_like(output)
-        stats = torch.empty(batch_size, num_q_heads, q_seqlen, 1, dtype=torch.float32, device=device)
+        stats = torch.empty(
+            batch_size, num_q_heads, q_seqlen, 1, dtype=torch.float32, device=device
+        )
         if is_dropout:
             dropout_seed = torch.full(
                 (1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda"
             )
-            dropout_offset = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
+            dropout_offset = torch.full(
+                (1, 1, 1, 1), 789, dtype=torch.int64, device="cuda"
+            )
 
         # cuDNN graph forward
         graph_fwd = cudnn.pygraph(
-            io_data_type=cudnn.data_type.FP8_E4M3 if cur_precision == 'fp8' else cudnn.data_type.BFLOAT16,
+            io_data_type=(
+                cudnn.data_type.FP8_E4M3
+                if cur_precision == "fp8"
+                else cudnn.data_type.BFLOAT16
+            ),
             intermediate_data_type=cudnn.data_type.FLOAT,
             compute_data_type=cudnn.data_type.FLOAT,
         )
@@ -162,7 +274,7 @@ for sdpa_config in sdpa_configs:
             seed_fwd = graph_fwd.tensor_like(dropout_seed)
             offset_fwd = graph_fwd.tensor_like(dropout_offset)
             dropout_tuple = (dropout_prob, seed_fwd, offset_fwd)
-        
+
         if cur_precision == "fp8":
             q_fwd = graph_fwd.tensor_like(query).set_data_type(cudnn.data_type.FP8_E4M3)
             k_fwd = graph_fwd.tensor_like(key).set_data_type(cudnn.data_type.FP8_E4M3)
@@ -208,9 +320,9 @@ for sdpa_config in sdpa_configs:
                 dropout=dropout_tuple if is_dropout else None,
             )
 
-        
         if cur_precision == "fp8":
-            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()
+            o_fwd.set_output(True).set_dim(output.size()).set_stride(
+                output.stride()
             ).set_data_type(cudnn.data_type.FP8_E4M3)
             (
                 stats_fwd.set_output(True)
@@ -221,8 +333,7 @@ for sdpa_config in sdpa_configs:
                 else None
             )
         elif cur_precision == "bf16":
-            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride()
-            )
+            o_fwd.set_output(True).set_dim(output.size()).set_stride(output.stride())
             (
                 stats_fwd.set_output(True)
                 .set_dim(stats.size())
@@ -239,7 +350,7 @@ for sdpa_config in sdpa_configs:
             amax_o_fwd.set_output(True).set_dim(amax_o_gpu.size()).set_stride(
                 amax_o_gpu.stride()
             ).set_data_type(cudnn.data_type.FLOAT)
-        
+
         graph_fwd.validate()
         graph_fwd.build_operation_graph()
         graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
@@ -248,7 +359,11 @@ for sdpa_config in sdpa_configs:
 
         # Now BWD
         graph_bwd = cudnn.pygraph(
-            io_data_type=cudnn.data_type.FP8_E4M3 if cur_precision == 'fp8' else cudnn.data_type.HALF,
+            io_data_type=(
+                cudnn.data_type.FP8_E4M3
+                if cur_precision == "fp8"
+                else cudnn.data_type.HALF
+            ),
             intermediate_data_type=cudnn.data_type.FLOAT,
             compute_data_type=cudnn.data_type.FLOAT,
         )
@@ -259,13 +374,16 @@ for sdpa_config in sdpa_configs:
             offset_bwd = graph_bwd.tensor_like(dropout_offset)
             dropout_tuple = (dropout_prob, seed_bwd, offset_bwd)
 
-            
         if cur_precision == "fp8":
             q_bwd = graph_bwd.tensor_like(query).set_data_type(cudnn.data_type.FP8_E4M3)
             k_bwd = graph_bwd.tensor_like(key).set_data_type(cudnn.data_type.FP8_E4M3)
             v_bwd = graph_bwd.tensor_like(value).set_data_type(cudnn.data_type.FP8_E4M3)
-            o_bwd = graph_bwd.tensor_like(output).set_data_type(cudnn.data_type.FP8_E4M3)
-            dO_bwd = graph_bwd.tensor_like(dOutput).set_data_type(cudnn.data_type.FP8_E4M3)
+            o_bwd = graph_bwd.tensor_like(output).set_data_type(
+                cudnn.data_type.FP8_E4M3
+            )
+            dO_bwd = graph_bwd.tensor_like(dOutput).set_data_type(
+                cudnn.data_type.FP8_E4M3
+            )
 
             descale_q_bwd = graph_bwd.tensor_like(descale_q_gpu)
             descale_k_bwd = graph_bwd.tensor_like(descale_k_gpu)
@@ -280,31 +398,37 @@ for sdpa_config in sdpa_configs:
             scale_dV_bwd = graph_bwd.tensor_like(scale_dV_gpu)
             scale_dP_bwd = graph_bwd.tensor_like(scale_dP_gpu)
 
-            dQ_bwd, dK_bwd, dV_bwd, amax_dQ_bwd, amax_dK_bwd, amax_dV_bwd, amax_dP_bwd = (
-                graph_bwd.sdpa_fp8_backward(
-                    q=q_bwd,
-                    k=k_bwd,
-                    v=v_bwd,
-                    o=o_bwd,
-                    dO=dO_bwd,
-                    stats=stats_bwd,
-                    descale_q=descale_q_bwd,
-                    descale_k=descale_k_bwd,
-                    descale_v=descale_v_bwd,
-                    descale_o=descale_o_bwd,
-                    descale_dO=descale_dO_bwd,
-                    descale_s=descale_s_bwd,
-                    descale_dP=descale_dP_bwd,
-                    scale_s=scale_s_bwd,
-                    scale_dQ=scale_dQ_bwd,
-                    scale_dK=scale_dK_bwd,
-                    scale_dV=scale_dV_bwd,
-                    scale_dP=scale_dP_bwd,
-                    attn_scale=attn_scale,
-                    use_causal_mask=is_causal,
-                    use_causal_mask_bottom_right=False,
-                    dropout=dropout_tuple if is_dropout else None,
-                )
+            (
+                dQ_bwd,
+                dK_bwd,
+                dV_bwd,
+                amax_dQ_bwd,
+                amax_dK_bwd,
+                amax_dV_bwd,
+                amax_dP_bwd,
+            ) = graph_bwd.sdpa_fp8_backward(
+                q=q_bwd,
+                k=k_bwd,
+                v=v_bwd,
+                o=o_bwd,
+                dO=dO_bwd,
+                stats=stats_bwd,
+                descale_q=descale_q_bwd,
+                descale_k=descale_k_bwd,
+                descale_v=descale_v_bwd,
+                descale_o=descale_o_bwd,
+                descale_dO=descale_dO_bwd,
+                descale_s=descale_s_bwd,
+                descale_dP=descale_dP_bwd,
+                scale_s=scale_s_bwd,
+                scale_dQ=scale_dQ_bwd,
+                scale_dK=scale_dK_bwd,
+                scale_dV=scale_dV_bwd,
+                scale_dP=scale_dP_bwd,
+                attn_scale=attn_scale,
+                use_causal_mask=is_causal,
+                use_causal_mask_bottom_right=False,
+                dropout=dropout_tuple if is_dropout else None,
             )
         elif cur_precision == "bf16":
             q_bwd = graph_bwd.tensor_like(query)
@@ -324,12 +448,18 @@ for sdpa_config in sdpa_configs:
                 use_causal_mask=is_causal,
                 use_causal_mask_bottom_right=False,
                 dropout=dropout_tuple if is_dropout else None,
-            )  
+            )
 
         if cur_precision == "fp8":
-            dQ_bwd.set_output(True).set_dim(dQuery.size()).set_stride(dQuery.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
-            dK_bwd.set_output(True).set_dim(dKey.size()).set_stride(dKey.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
-            dV_bwd.set_output(True).set_dim(dValue.size()).set_stride(dValue.stride()).set_data_type(cudnn.data_type.FP8_E4M3)
+            dQ_bwd.set_output(True).set_dim(dQuery.size()).set_stride(
+                dQuery.stride()
+            ).set_data_type(cudnn.data_type.FP8_E4M3)
+            dK_bwd.set_output(True).set_dim(dKey.size()).set_stride(
+                dKey.stride()
+            ).set_data_type(cudnn.data_type.FP8_E4M3)
+            dV_bwd.set_output(True).set_dim(dValue.size()).set_stride(
+                dValue.stride()
+            ).set_data_type(cudnn.data_type.FP8_E4M3)
             amax_dQ_bwd.set_output(True).set_dim(amax_dQ_gpu.size()).set_stride(
                 amax_dQ_gpu.stride()
             ).set_data_type(cudnn.data_type.FLOAT)
@@ -422,14 +552,18 @@ for sdpa_config in sdpa_configs:
                 dK_bwd: dKey,
                 dV_bwd: dValue,
             }
-            workspace = torch.empty(max(graph_fwd.get_workspace_size(), graph_bwd.get_workspace_size()), device="cuda", dtype=torch.uint8)
+            workspace = torch.empty(
+                max(graph_fwd.get_workspace_size(), graph_bwd.get_workspace_size()),
+                device="cuda",
+                dtype=torch.uint8,
+            )
 
         if is_dropout:
             variant_pack_fwd[seed_fwd] = dropout_seed
             variant_pack_fwd[offset_fwd] = dropout_offset
             variant_pack_bwd[seed_bwd] = dropout_seed
             variant_pack_bwd[offset_bwd] = dropout_offset
-        
+
         if cur_precision == "fp8":
             del query, key, value, output, dQuery, dKey, dValue, dOutput, stats
         elif cur_precision == "bf16":
@@ -442,44 +576,137 @@ for sdpa_config in sdpa_configs:
 
             if True:
                 if cur_precision == "fp8":
-                    query = torch.randint(256, (batch_size, num_q_heads, q_seqlen, head_dim), dtype=torch.uint8, device=device)
-                    key = torch.randint(256, (batch_size, num_kv_heads, kv_seqlen, head_dim), dtype=torch.uint8, device=device)
-                    value = torch.randint(256, (batch_size, num_kv_heads, kv_seqlen, head_dim), dtype=torch.uint8, device=device)
-                    descale_q_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    descale_k_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    descale_v_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    descale_s_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    descale_o_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    descale_dO_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    descale_dP_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    scale_s_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    scale_o_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    scale_dQ_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    scale_dK_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    scale_dV_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    scale_dP_gpu = torch.ones(1, 1, 1, 1, dtype=torch.float, device=device)
-                    amax_s_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-                    amax_o_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-                    amax_dQ_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-                    amax_dK_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-                    amax_dV_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
-                    amax_dP_gpu = torch.zeros(1, 1, 1, 1, dtype=torch.float, device=device)
+                    query = torch.randint(
+                        256,
+                        (batch_size, num_q_heads, q_seqlen, head_dim),
+                        dtype=torch.uint8,
+                        device=device,
+                    )
+                    key = torch.randint(
+                        256,
+                        (batch_size, num_kv_heads, kv_seqlen, head_dim),
+                        dtype=torch.uint8,
+                        device=device,
+                    )
+                    value = torch.randint(
+                        256,
+                        (batch_size, num_kv_heads, kv_seqlen, head_dim),
+                        dtype=torch.uint8,
+                        device=device,
+                    )
+                    descale_q_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    descale_k_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    descale_v_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    descale_s_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    descale_o_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    descale_dO_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    descale_dP_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    scale_s_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    scale_o_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    scale_dQ_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    scale_dK_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    scale_dV_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    scale_dP_gpu = torch.ones(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    amax_s_gpu = torch.zeros(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    amax_o_gpu = torch.zeros(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    amax_dQ_gpu = torch.zeros(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    amax_dK_gpu = torch.zeros(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    amax_dV_gpu = torch.zeros(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
+                    amax_dP_gpu = torch.zeros(
+                        1, 1, 1, 1, dtype=torch.float, device=device
+                    )
                 elif cur_precision == "bf16":
-                    query = torch.randn(batch_size, num_q_heads, q_seqlen, head_dim, dtype=torch.bfloat16, device=device, requires_grad=True)
-                    key = torch.randn(batch_size, num_kv_heads, kv_seqlen, head_dim, dtype=torch.bfloat16, device=device, requires_grad=True)
-                    value = torch.randn(batch_size, num_kv_heads, kv_seqlen, head_dim, dtype=torch.bfloat16, device=device, requires_grad=True)
+                    query = torch.randn(
+                        batch_size,
+                        num_q_heads,
+                        q_seqlen,
+                        head_dim,
+                        dtype=torch.bfloat16,
+                        device=device,
+                        requires_grad=True,
+                    )
+                    key = torch.randn(
+                        batch_size,
+                        num_kv_heads,
+                        kv_seqlen,
+                        head_dim,
+                        dtype=torch.bfloat16,
+                        device=device,
+                        requires_grad=True,
+                    )
+                    value = torch.randn(
+                        batch_size,
+                        num_kv_heads,
+                        kv_seqlen,
+                        head_dim,
+                        dtype=torch.bfloat16,
+                        device=device,
+                        requires_grad=True,
+                    )
 
-                output = torch.empty(batch_size, num_q_heads, q_seqlen, head_dim, dtype=torch.uint8 if cur_precision == "fp8" else torch.bfloat16, device=device)
+                output = torch.empty(
+                    batch_size,
+                    num_q_heads,
+                    q_seqlen,
+                    head_dim,
+                    dtype=torch.uint8 if cur_precision == "fp8" else torch.bfloat16,
+                    device=device,
+                )
                 dQuery = torch.empty_like(query)
                 dKey = torch.empty_like(key)
                 dValue = torch.empty_like(value)
                 dOutput = torch.empty_like(output)
-                stats = torch.empty(batch_size, num_q_heads, q_seqlen, 1, dtype=torch.float32, device=device)
+                stats = torch.empty(
+                    batch_size,
+                    num_q_heads,
+                    q_seqlen,
+                    1,
+                    dtype=torch.float32,
+                    device=device,
+                )
                 if is_dropout:
                     dropout_seed = torch.full(
                         (1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda"
                     )
-                    dropout_offset = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
+                    dropout_offset = torch.full(
+                        (1, 1, 1, 1), 789, dtype=torch.int64, device="cuda"
+                    )
 
                 if cur_precision == "fp8":
                     variant_pack_fwd = {
@@ -543,7 +770,11 @@ for sdpa_config in sdpa_configs:
                         dK_bwd: dKey,
                         dV_bwd: dValue,
                     }
-                workspace = torch.empty(max(graph_fwd.get_workspace_size(), graph_bwd.get_workspace_size()), device="cuda", dtype=torch.uint8)
+                workspace = torch.empty(
+                    max(graph_fwd.get_workspace_size(), graph_bwd.get_workspace_size()),
+                    device="cuda",
+                    dtype=torch.uint8,
+                )
 
                 if is_dropout:
                     variant_pack_fwd[seed_fwd] = dropout_seed
@@ -569,7 +800,7 @@ for sdpa_config in sdpa_configs:
                     sleep_time = 0.01
                 time.sleep(sleep_time)
 
-                # Run backward pass 
+                # Run backward pass
                 if cur_precision == "fp8":
                     grad_output = torch.empty_like(output)
                 elif cur_precision == "bf16":
@@ -605,128 +836,184 @@ for sdpa_config in sdpa_configs:
             if i >= dry_run_iters:
                 fwd_times.append(fwd_time)
                 bwd_times.append(bwd_time)
-        
+
         # Append data to table
         data_df.loc[len(data_df)] = {
-            'batch_size': batch_size,
-            'q_seqlen': q_seqlen,
-            'kv_seqlen': kv_seqlen,
-            'num_q_heads': num_q_heads,
-            'num_kv_heads': num_kv_heads,
-            'head_dim': head_dim,
-            'is_causal': is_causal,
-            'precision': cur_precision,
-            'forward_time': np.median(np.array(fwd_times)), # Median fwd pass time
-            'backward_time': np.median(np.array(bwd_times)), # Median bwd pass time
+            "batch_size": batch_size,
+            "q_seqlen": q_seqlen,
+            "kv_seqlen": kv_seqlen,
+            "num_q_heads": num_q_heads,
+            "num_kv_heads": num_kv_heads,
+            "head_dim": head_dim,
+            "is_causal": is_causal,
+            "precision": cur_precision,
+            "forward_time": np.median(np.array(fwd_times)),  # Median fwd pass time
+            "backward_time": np.median(np.array(bwd_times)),  # Median bwd pass time
         }
 
 # Compute TFLOPs/sec achieved for each row in data_df
-data_df['fwd_tflops_per_sec'] = data_df.apply(lambda row: tflops_per_sec(
-    batch_size=row['batch_size'],
-    q_seqlen=row['q_seqlen'],
-    kv_seqlen=row['kv_seqlen'],
-    head_dim=row['head_dim'],
-    num_q_heads=row['num_q_heads'],
-    num_kv_heads=row['num_kv_heads'],
-    causal=row['is_causal'],
-    time=row['forward_time'],
-    mode='fwd'),
-    axis=1)
+data_df["fwd_tflops_per_sec"] = data_df.apply(
+    lambda row: tflops_per_sec(
+        batch_size=row["batch_size"],
+        q_seqlen=row["q_seqlen"],
+        kv_seqlen=row["kv_seqlen"],
+        head_dim=row["head_dim"],
+        num_q_heads=row["num_q_heads"],
+        num_kv_heads=row["num_kv_heads"],
+        causal=row["is_causal"],
+        time=row["forward_time"],
+        mode="fwd",
+    ),
+    axis=1,
+)
 
-data_df['bwd_tflops_per_sec'] = data_df.apply(lambda row: tflops_per_sec(
-    batch_size=row['batch_size'],
-    q_seqlen=row['q_seqlen'],
-    kv_seqlen=row['kv_seqlen'],
-    head_dim=row['head_dim'],
-    num_q_heads=row['num_q_heads'],
-    num_kv_heads=row['num_kv_heads'],
-    causal=row['is_causal'],
-    time=row['backward_time'],
-    mode='bwd'),
-    axis=1)
+data_df["bwd_tflops_per_sec"] = data_df.apply(
+    lambda row: tflops_per_sec(
+        batch_size=row["batch_size"],
+        q_seqlen=row["q_seqlen"],
+        kv_seqlen=row["kv_seqlen"],
+        head_dim=row["head_dim"],
+        num_q_heads=row["num_q_heads"],
+        num_kv_heads=row["num_kv_heads"],
+        causal=row["is_causal"],
+        time=row["backward_time"],
+        mode="bwd",
+    ),
+    axis=1,
+)
 
 ## Save results to a csv file
-gpu_name = torch.cuda.get_device_name(torch.cuda.current_device()).replace(' ', '_')
-output_file_name = f'./artifacts/sdpa_fp8_benchmark_results_{gpu_name}.csv'
+gpu_name = torch.cuda.get_device_name(torch.cuda.current_device()).replace(" ", "_")
+output_file_name = f"./artifacts/sdpa_fp8_benchmark_results_{gpu_name}.csv"
 if verbose:
     print(f"[INFO] Saving results to {output_file_name}")
 try:
-    data_df.to_csv(output_file_name, float_format='%.3f', index=False)
+    data_df.to_csv(output_file_name, float_format="%.3f", index=False)
 except Exception as e:
     print(f"[ERROR] Failed to save results to {output_file_name}: {e}")
     print(f"[INFO] Printing results to console instead")
-    print(data_df.to_csv(float_format='%.3f', index=False))
+    print(data_df.to_csv(float_format="%.3f", index=False))
     print(f"[INFO] Printing results to console done")
 
 ###### SDPA Benchmark -- Plot ######
 ## Generate plots for (num_q_heads=128, num_kv_heads=8, head_dim=128, is_causal=True)
-baseline_df = data_df[(data_df['precision'] == 'bf16') & (data_df['q_seqlen'] >= 4000)].copy()
-baseline_df.drop(columns=['precision', 'fwd_tflops_per_sec', 'bwd_tflops_per_sec',], inplace=True)
-baseline_df.rename(columns={'forward_time': 'baseline_forward_time', 'backward_time': 'baseline_backward_time'}, inplace=True)
+baseline_df = data_df[
+    (data_df["precision"] == "bf16") & (data_df["q_seqlen"] >= 4000)
+].copy()
+baseline_df.drop(
+    columns=[
+        "precision",
+        "fwd_tflops_per_sec",
+        "bwd_tflops_per_sec",
+    ],
+    inplace=True,
+)
+baseline_df.rename(
+    columns={
+        "forward_time": "baseline_forward_time",
+        "backward_time": "baseline_backward_time",
+    },
+    inplace=True,
+)
 
-merged_df = baseline_df.merge(data_df, on=['batch_size', 'q_seqlen', 'kv_seqlen', 'num_q_heads', 'num_kv_heads', 'head_dim', 'is_causal'])
-merged_df['fwd_speedup'] = merged_df['baseline_forward_time'] / merged_df['forward_time']
-merged_df['bwd_speedup'] = merged_df['baseline_backward_time'] / merged_df['backward_time']
+merged_df = baseline_df.merge(
+    data_df,
+    on=[
+        "batch_size",
+        "q_seqlen",
+        "kv_seqlen",
+        "num_q_heads",
+        "num_kv_heads",
+        "head_dim",
+        "is_causal",
+    ],
+)
+merged_df["fwd_speedup"] = (
+    merged_df["baseline_forward_time"] / merged_df["forward_time"]
+)
+merged_df["bwd_speedup"] = (
+    merged_df["baseline_backward_time"] / merged_df["backward_time"]
+)
 
 
 # Configurations for bar plots
-precision_ordering ={'bf16': 0, 'fp8': 1}
-precision_name ={'bf16': 'BFloat16', 'fp8': 'FP8'}
+precision_ordering = {"bf16": 0, "fp8": 1}
+precision_name = {"bf16": "BFloat16", "fp8": "FP8"}
 precision_barplot_color = {
-    precision_name['bf16']: '#76b900',
-    precision_name['fp8']: 'darkgreen',
+    precision_name["bf16"]: "#76b900",
+    precision_name["fp8"]: "darkgreen",
 }
 LABEL_FONT_SIZE = 8
 LEGEND_FONT_SIZE = 6
 TITLE_FONT_SIZE = 9
 # Select desired cases
-plot_df = merged_df[(merged_df['is_causal'] == True) &
-                  (merged_df['num_q_heads'] == 128) &
-                  (merged_df['num_kv_heads'] == 8) &
-                  (merged_df['q_seqlen'] == merged_df['kv_seqlen']) &
-                  (merged_df['head_dim'] == 128)].copy()
+plot_df = merged_df[
+    (merged_df["is_causal"] == True)
+    & (merged_df["num_q_heads"] == 128)
+    & (merged_df["num_kv_heads"] == 8)
+    & (merged_df["q_seqlen"] == merged_df["kv_seqlen"])
+    & (merged_df["head_dim"] == 128)
+].copy()
 
-plot_df['precision_rank'] = plot_df['precision'].map(precision_ordering)
-plot_df['precision_name'] = plot_df['precision'].map(precision_name)
-plot_df.sort_values(['q_seqlen', 'precision_rank'], inplace=True)
+plot_df["precision_rank"] = plot_df["precision"].map(precision_ordering)
+plot_df["precision_name"] = plot_df["precision"].map(precision_name)
+plot_df.sort_values(["q_seqlen", "precision_rank"], inplace=True)
 
 # Generate plots: forward on left subplot and backward on right subplot
-YLIM_MAX = np.max([plot_df['fwd_speedup'].max(), plot_df['bwd_speedup'].max()]) * 1.1
-                   
-plt.figure(figsize=(10, 4), dpi=200)
-plt.subplot(1,2,1)
-cur_plot_df = plot_df[plot_df.fwd_tflops_per_sec > 0]
-ax =  sns.barplot(data=cur_plot_df, x='q_seqlen', y='fwd_speedup', hue='precision_name', edgecolor='black', linewidth=0.5, palette=precision_barplot_color, width=0.6)
-ax.legend_.set_title(None)
-for container in ax.containers:
-    ax.bar_label(container, fmt='%.2fx', fontsize=6)
-plt.xticks(rotation=45)
-plt.xlabel('Sequence Length', fontsize=LABEL_FONT_SIZE)
-plt.ylabel('Speedup', fontsize=LABEL_FONT_SIZE)
-plt.title('SDPA Forward', fontsize=TITLE_FONT_SIZE)
-plt.tick_params(axis='y', which='major', labelsize=LABEL_FONT_SIZE)
-plt.tick_params(axis='x', which='major', labelsize=LABEL_FONT_SIZE)
-plt.ylim(0.5, YLIM_MAX)
-plt.legend(fontsize=LEGEND_FONT_SIZE, loc='upper left')
+YLIM_MAX = np.max([plot_df["fwd_speedup"].max(), plot_df["bwd_speedup"].max()]) * 1.1
 
-plt.subplot(1,2,2)
-cur_plot_df = plot_df[plot_df.bwd_tflops_per_sec > 0]
-ax =  sns.barplot(data=cur_plot_df, x='q_seqlen', y='bwd_speedup', hue='precision_name', edgecolor='black', linewidth=0.5, palette=precision_barplot_color, width=0.6)
+plt.figure(figsize=(10, 4), dpi=200)
+plt.subplot(1, 2, 1)
+cur_plot_df = plot_df[plot_df.fwd_tflops_per_sec > 0]
+ax = sns.barplot(
+    data=cur_plot_df,
+    x="q_seqlen",
+    y="fwd_speedup",
+    hue="precision_name",
+    edgecolor="black",
+    linewidth=0.5,
+    palette=precision_barplot_color,
+    width=0.6,
+)
 ax.legend_.set_title(None)
 for container in ax.containers:
-    ax.bar_label(container, fmt='%.2fx', fontsize=6)
+    ax.bar_label(container, fmt="%.2fx", fontsize=6)
 plt.xticks(rotation=45)
-plt.xlabel('Sequence Length', fontsize=LABEL_FONT_SIZE)
-plt.ylabel('Speedup', fontsize=LABEL_FONT_SIZE)
-plt.title('SDPA Backward', fontsize=TITLE_FONT_SIZE)
-plt.tick_params(axis='y', which='major', labelsize=LABEL_FONT_SIZE)
-plt.tick_params(axis='x', which='major', labelsize=LABEL_FONT_SIZE)
+plt.xlabel("Sequence Length", fontsize=LABEL_FONT_SIZE)
+plt.ylabel("Speedup", fontsize=LABEL_FONT_SIZE)
+plt.title("SDPA Forward", fontsize=TITLE_FONT_SIZE)
+plt.tick_params(axis="y", which="major", labelsize=LABEL_FONT_SIZE)
+plt.tick_params(axis="x", which="major", labelsize=LABEL_FONT_SIZE)
 plt.ylim(0.5, YLIM_MAX)
-plt.legend(fontsize=LEGEND_FONT_SIZE, loc='upper left')
+plt.legend(fontsize=LEGEND_FONT_SIZE, loc="upper left")
+
+plt.subplot(1, 2, 2)
+cur_plot_df = plot_df[plot_df.bwd_tflops_per_sec > 0]
+ax = sns.barplot(
+    data=cur_plot_df,
+    x="q_seqlen",
+    y="bwd_speedup",
+    hue="precision_name",
+    edgecolor="black",
+    linewidth=0.5,
+    palette=precision_barplot_color,
+    width=0.6,
+)
+ax.legend_.set_title(None)
+for container in ax.containers:
+    ax.bar_label(container, fmt="%.2fx", fontsize=6)
+plt.xticks(rotation=45)
+plt.xlabel("Sequence Length", fontsize=LABEL_FONT_SIZE)
+plt.ylabel("Speedup", fontsize=LABEL_FONT_SIZE)
+plt.title("SDPA Backward", fontsize=TITLE_FONT_SIZE)
+plt.tick_params(axis="y", which="major", labelsize=LABEL_FONT_SIZE)
+plt.tick_params(axis="x", which="major", labelsize=LABEL_FONT_SIZE)
+plt.ylim(0.5, YLIM_MAX)
+plt.legend(fontsize=LEGEND_FONT_SIZE, loc="upper left")
 
 # Save plot
 plt.tight_layout()
-png_file_name = f'./artifacts/sdpa_fp8_benchmark_results_{gpu_name}.png'
+png_file_name = f"./artifacts/sdpa_fp8_benchmark_results_{gpu_name}.png"
 if verbose:
     print(f"[INFO] Saving plot to {png_file_name}")
 try:
