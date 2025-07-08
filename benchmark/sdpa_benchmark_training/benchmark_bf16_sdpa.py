@@ -52,7 +52,6 @@ sdpa_configs = [
     (1, 32768, 32768, 128, 8, 128),
     (1, 65536, 65536, 128, 8, 128),
     (1, 131072, 131072, 128, 8, 128),
-    (2, 131072, 131072, 128, 8, 128),
 ]
 
 ## Define various SDPA functions for each backend
@@ -264,7 +263,7 @@ data_df['bwd_tflops_per_sec'] = data_df.apply(lambda row: tflops_per_sec(
 
 ## Save results to a csv file
 gpu_name = torch.cuda.get_device_name(torch.cuda.current_device()).replace(' ', '_')
-output_file_name = f'./artifacts/sdpa_benchmark_results_{gpu_name}.csv'
+output_file_name = f'./artifacts/sdpa_bf16_benchmark_results_{gpu_name}.csv'
 if verbose:
     print(f"[INFO] Saving results to {output_file_name}")
 try:
@@ -308,8 +307,7 @@ plot_df = data_df[(data_df['is_causal'] == True) &
 
 plot_df['backend_rank'] = plot_df['backend'].map(backend_ordering)
 plot_df['backend_name'] = plot_df['backend'].map(backend_name)
-plot_df['batch_seqlen'] = plot_df['batch_size'].astype(str) + ',' + plot_df['q_seqlen'].astype(str)
-plot_df.sort_values(['batch_size', 'q_seqlen', 'backend_rank'], inplace=True)
+plot_df.sort_values(['q_seqlen', 'backend_rank'], inplace=True)
 
 # Generate plots: forward on left subplot and backward on right subplot
 YLIM_MAX = np.max([plot_df['fwd_tflops_per_sec'].max(), 
@@ -318,12 +316,12 @@ YLIM_MAX = np.max([plot_df['fwd_tflops_per_sec'].max(),
 plt.figure(figsize=(10, 4), dpi=200)
 plt.subplot(1,2,1)
 cur_plot_df = plot_df[plot_df.fwd_tflops_per_sec > 0]
-ax =  sns.barplot(data=cur_plot_df, x='batch_seqlen', y='fwd_tflops_per_sec', hue='backend_name', edgecolor='black', linewidth=0.5, palette=backend_barplot_color)
+ax =  sns.barplot(data=cur_plot_df, x='q_seqlen', y='fwd_tflops_per_sec', hue='backend_name', edgecolor='black', linewidth=0.5, palette=backend_barplot_color)
 ax.legend_.set_title(None)
 for container in ax.containers:
     ax.bar_label(container, fmt='%.f', fontsize=6)
 plt.xticks(rotation=45)
-plt.xlabel('BatchSize, SequenceLength', fontsize=LABEL_FONT_SIZE)
+plt.xlabel('Sequence Length', fontsize=LABEL_FONT_SIZE)
 plt.ylabel('Speed (TFLOPs/sec)', fontsize=LABEL_FONT_SIZE)
 plt.title('SDPA Forward', fontsize=TITLE_FONT_SIZE)
 plt.tick_params(axis='y', which='major', labelsize=LABEL_FONT_SIZE)
@@ -333,12 +331,12 @@ plt.legend(fontsize=LEGEND_FONT_SIZE, loc='upper left')
 
 plt.subplot(1,2,2)
 cur_plot_df = plot_df[plot_df.bwd_tflops_per_sec > 0]
-ax =  sns.barplot(data=cur_plot_df, x='batch_seqlen', y='bwd_tflops_per_sec', hue='backend_name', edgecolor='black', linewidth=0.5, palette=backend_barplot_color)
+ax =  sns.barplot(data=cur_plot_df, x='q_seqlen', y='bwd_tflops_per_sec', hue='backend_name', edgecolor='black', linewidth=0.5, palette=backend_barplot_color)
 ax.legend_.set_title(None)
 for container in ax.containers:
     ax.bar_label(container, fmt='%.f', fontsize=6)
 plt.xticks(rotation=45)
-plt.xlabel('BatchSize, SequenceLength', fontsize=LABEL_FONT_SIZE)
+plt.xlabel('SequenceLength', fontsize=LABEL_FONT_SIZE)
 plt.ylabel('Speed (TFLOPs/sec)', fontsize=LABEL_FONT_SIZE)
 plt.title('SDPA Backward', fontsize=TITLE_FONT_SIZE)
 plt.tick_params(axis='y', which='major', labelsize=LABEL_FONT_SIZE)
@@ -348,7 +346,7 @@ plt.legend(fontsize=LEGEND_FONT_SIZE, loc='upper left')
 
 # Save plot
 plt.tight_layout()
-png_file_name = f'./artifacts/sdpa_benchmark_results_{gpu_name}.png'
+png_file_name = f'./artifacts/sdpa_bf16_benchmark_results_{gpu_name}.png'
 if verbose:
     print(f"[INFO] Saving plot to {png_file_name}")
 try:
