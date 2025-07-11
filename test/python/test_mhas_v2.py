@@ -127,18 +127,37 @@ def approx_equal(actual, expected, sepbuf, rawbuf, rtol, atol, tag, disp_elems):
     mismatch_cnt = mismatches[0].numel()
     num_elements = torch.numel(actual)
     if mismatch_cnt != 0:
+        percentage = 100 * mismatch_cnt / num_elements
         if disp_elems > 0:
             print(f"Comparing '{tag}' using rtol={rtol:.4e}, atol={atol:.4e}")
             combined = torch.stack(mismatches, dim=-1).tolist()
             count = 0
             for index in combined:
-                print(f"idx{index}: {tag}_gpu={actual[tuple(index)]:+.6e}, {tag}_ref={expected[tuple(index)]:+.6e}")
+                diff = actual[tuple(index)] - expected[tuple(index)]
+                if math.isfinite(diff):
+                    print(f"idx{index}: {tag}_gpu={actual[tuple(index)]:+.6e}, {tag}_ref={expected[tuple(index)]:+.6e}, diff={diff:+.2e}")
+                else:
+                    print(f"idx{index}: {tag}_gpu={actual[tuple(index)]:+.6e}, {tag}_ref={expected[tuple(index)]:+.6e}")
                 count += 1
                 if count >= disp_elems:
                     break
-            print(f"%%%% Total {mismatch_cnt} mismatches in {num_elements} elements when validating '{tag}' (first {count} mismatches displayed)")
+            print(f"%%%% Total {mismatch_cnt:,} mismatches ({percentage:.1f}%) when validating '{tag}' results (first {count} mismatches displayed)")
         else:
-            print(f"%%%% Total {mismatch_cnt} mismatches in {num_elements} elements when validating '{tag}' results")
+            print(f"%%%% Total {mismatch_cnt:,} mismatches ({percentage:.1f}%) when validating '{tag}' results")
+
+        num_nans       = torch.isnan(actual).sum().item()
+        num_infs       = torch.isinf(actual).sum().item()
+        num_zeros      = num_elements - torch.count_nonzero(actual)
+        num_finites_nz = num_elements - num_nans - num_infs - num_zeros
+
+        print(f"%%%% {tag}_gpu overview: elements={num_elements:,}, finites_nz={num_finites_nz:,}, zeros={num_zeros:,}, nans={num_nans:,}, infs={num_infs:,}")
+
+        num_nans       = torch.isnan(expected).sum().item()
+        num_infs       = torch.isinf(expected).sum().item()
+        num_zeros      = num_elements - torch.count_nonzero(expected)
+        num_finites_nz = num_elements - num_nans - num_infs - num_zeros
+
+        print(f"%%%% {tag}_ref overview: elements={num_elements:,}, finites_nz={num_finites_nz:,}, zeros={num_zeros:,}, nans={num_nans:,}, infs={num_infs:,}")
     else:
         print(f"%%%% Numerical divergence of '{tag}' within limits")
 
@@ -591,10 +610,6 @@ class testConfig:
                 self.s_kv = self.s_q
         else:
             assert False, "wrong layout type"
-
-        # BUG: ragged, variable sequence length tests fail with batch size one, https://nvbugs/5335066
-        if self.is_ragged and self.batches == 1:
-            self.batches = 2
 
         # Overwrite batches, s_q, s_kv from the command line.
         self.batches = int_cli_option(self.batches, request, "--mha_batches")
@@ -1200,10 +1215,11 @@ def exec_sdpa(cfg, request, cudnn_handle):
     (o_gpu, o_sep, o_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o)
     (stats_gpu, stats_sep, stats_raw) = (alloc_tensor((batches, h_q, s_q, 1), torch.float32) if not is_infer else (None, None, None))
 
-    container_k_gpu = None
-    container_v_gpu = None
+    container_k_gpu  = None
+    container_v_gpu  = None
     page_table_k_gpu = None
     page_table_v_gpu = None
+
     if is_paged:
         container_k_gpu, page_table_k_gpu = create_container_and_page_table(k_gpu, block_size)
         container_v_gpu, page_table_v_gpu = create_container_and_page_table(v_gpu, block_size)
@@ -1686,16 +1702,16 @@ def test_sdpa_random_sq1(env_info, test_no, data_type, is_infer, head_group, lay
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
-# L1 bprop ragged tests
+# L0 ragged tests
 # ==================================
 
 @pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=555), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [False], ids=lambda p: "FWD_RAGGED_" if p else "BWD_RAGGED_")
-@pytest.mark.L1
-def test_sdpa_random_bwd_ragged(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+@pytest.mark.parametrize("is_infer", [True, False], ids=lambda p: "FWD_RAGGED" if p else "BWD_RAGGED")
+@pytest.mark.L0
+def test_sdpa_random_ragged(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
     cfg.setBatches(max_batches=8)
     cfg.setSequences(max_s_q=512, max_s_kv=512)
