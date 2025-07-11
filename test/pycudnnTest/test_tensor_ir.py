@@ -280,10 +280,10 @@ class TensorIRNode(ABC):
         """Run the operation and store the result in node_map"""
         pass
 
-    def convert_and_splat_for_binary_pointwise(self, lsh, rsh, out_type):
+    def convert_and_splat_for_binary_pointwise(self, lsh, rsh, tensor_info):
         """Helper method for binary operations to handle input type conversions"""
         return self.tensor_ir_test.convert_and_splat_for_binary_pointwise(
-            lsh, rsh, out_type
+            lsh, rsh, tensor_info
         )
 
     def convert_scalar_tensor(self, scalar_tensor, target_type):
@@ -454,7 +454,7 @@ class BinaryOperationNode(TensorIRNode):
     def run(self):
         with self.ip:
             lsh, rsh = self.convert_and_splat_for_binary_pointwise(
-                self.children[0], self.children[1], self.output_tensor_info.tensor_type
+                self.children[0], self.children[1], self.output_tensor_info
             )
 
             op_name = self.node.op_name
@@ -676,7 +676,7 @@ class ActivationForwardNode(TensorIRNode):
                 raise ValueError(f"Beta attribute not found for {self.node.op_name}")
 
             converted_x, _ = self.convert_and_splat_for_binary_pointwise(
-                self.children[0], None, self.output_tensor_info.tensor_type
+                self.children[0], None, self.output_tensor_info
             )
 
             # Ensure we have float tensors for activations
@@ -711,7 +711,7 @@ class ActivationBackwardNode(TensorIRNode):
                 raise ValueError(f"Beta attribute not found for {self.node.op_name}")
 
             converted_x, converted_grad = self.convert_and_splat_for_binary_pointwise(
-                self.children[0], self.children[1], self.output_tensor_info.tensor_type
+                self.children[0], self.children[1], self.output_tensor_info
             )
 
             # Ensure we have float tensors for activation gradients
@@ -1308,7 +1308,7 @@ class test_tensor_ir:
 
         return module
 
-    def convert_and_splat_for_binary_pointwise(self, lsh, rsh, out_type):
+    def convert_and_splat_for_binary_pointwise(self, lsh, rsh, tensor_info):
         if lsh is not None and rsh is not None:
             if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
                 rsh.type, nv_tensor_ir.TensorType
@@ -1324,13 +1324,15 @@ class test_tensor_ir:
                     nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type),
                     rsh,
                 )
-        out_type_datatype = nv_tensor_ir.get_tensor_datatype(out_type)
+        out_type_datatype = nv_tensor_ir.get_tensor_datatype(tensor_info.tensor_type)
         if lsh is not None and out_type_datatype != nv_tensor_ir.get_tensor_datatype(
             lsh.type
         ):
             convert_value0 = nv_tensor_ir.convert(
-                nv_tensor_ir.TensorType.get_from_tensor_type(
-                    lsh.type, out_type_datatype
+                nv_tensor_ir.TensorType.get(
+                    shape=tensor_info.shape,
+                    datatype=out_type_datatype,
+                    shape_divisibility=tensor_info.shape_div,
                 ),
                 lsh,
             )
@@ -1340,8 +1342,10 @@ class test_tensor_ir:
             rsh.type
         ):
             convert_value1 = nv_tensor_ir.convert(
-                nv_tensor_ir.TensorType.get_from_tensor_type(
-                    rsh.type, out_type_datatype
+                nv_tensor_ir.TensorType.get(
+                    shape=tensor_info.shape,
+                    datatype=out_type_datatype,
+                    shape_divisibility=tensor_info.shape_div,
                 ),
                 rsh,
             )
