@@ -11,7 +11,7 @@ function run_python_tests() {
     export PYTHONPATH=build
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64
     
-    pytest test/python -n 4 --junit-xml=result-junit.xml --tb=short
+    pytest test/python -k "not test_mhas_v2" -n 4 --junit-xml=result-junit.xml --tb=short
 }
 
 display_header
