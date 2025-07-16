@@ -109,6 +109,7 @@ class PyGraph {
            bool const& is_virtual,
            bool const& is_pass_by_value,
            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& ragged_offset,
+           cudnn_frontend::TensorReordering_t const reordering_type,
            std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
@@ -237,6 +238,13 @@ class PyGraph {
          std::optional<float> const& upper_clip,
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name);
+
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    block_scale_dequantize(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+                           std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale,
+                           std::vector<int32_t> const& block_size,
+                           cudnn_frontend::DataType_t const& compute_data_type,
+                           std::string const& name);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     gen_index(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
