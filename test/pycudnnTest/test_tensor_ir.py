@@ -453,8 +453,27 @@ class BinaryOperationNode(TensorIRNode):
 
     def run(self):
         with self.ip:
+            lsh, rsh = self.children[0], self.children[1]
+
+            def broadcast_if_needed(tensor, output_tensor_info):
+                if not isinstance(tensor.type, nv_tensor_ir.TensorType):
+                    return tensor
+                transformed_tensor = nv_tensor_ir.TensorType.get_from_tensor_type(
+                    output_tensor_info.tensor_type,
+                    nv_tensor_ir.get_tensor_datatype(tensor.type),
+                )
+                if transformed_tensor != tensor.type:
+                    return nv_tensor_ir.broadcast(
+                        transformed_tensor,
+                        tensor,
+                    )
+                return tensor
+
+            lsh = broadcast_if_needed(lsh, self.output_tensor_info)
+            rsh = broadcast_if_needed(rsh, self.output_tensor_info)
+
             lsh, rsh = self.convert_and_splat_for_binary_pointwise(
-                self.children[0], self.children[1], self.output_tensor_info
+                lsh, rsh, self.output_tensor_info
             )
 
             op_name = self.node.op_name
