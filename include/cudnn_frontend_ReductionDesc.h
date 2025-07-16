@@ -180,12 +180,19 @@ class ReductionDescBuilder_v8 {
         }
 
 #if (CUDNN_VERSION >= 91100)
-        if (detail::get_backend_version() < 91100 && m_reductionDesc.is_deterministic) {
-            set_error_and_throw_exception(
-                &m_reductionDesc,
-                CUDNN_STATUS_NOT_SUPPORTED,
-                "CUDNN_BACKEND_REDUCTION_DESCRIPTOR: DETERMINISTIC mode is not supported in cudnn version < 9.11.0");
-            return std::move(m_reductionDesc);
+        // If backend version is less then 9.11.0, then determinisitc mode is not even supported.
+        // But in the default case which exists in current implementations, is_deterministic is false, and should be
+        // ignored.
+        if (detail::get_backend_version() < 91100) {
+            if (m_reductionDesc.is_deterministic) {
+                set_error_and_throw_exception(&m_reductionDesc,
+                                              CUDNN_STATUS_NOT_SUPPORTED,
+                                              "CUDNN_BACKEND_REDUCTION_DESCRIPTOR: DETERMINISTIC mode is not supported "
+                                              "in cudnn version < 9.11.0");
+                return std::move(m_reductionDesc);
+            } else {
+                // Do nothing.
+            }
         } else {
             status = detail::set_attribute(m_reductionDesc.pointer->get_backend_descriptor(),
                                            CUDNN_ATTR_REDUCTION_IS_DETERMINISTIC,
