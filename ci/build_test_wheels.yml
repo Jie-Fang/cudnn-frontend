@@ -1,5 +1,5 @@
 deploy:build_bdist_wheels:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.9_cudnn_9.10.1
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:pip_wheels_cuda_12.9_cudnn_9.11.0
     tags:
         - wheel_builder
     needs: []
