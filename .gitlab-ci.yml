@@ -217,8 +217,8 @@ include:
 
   - local: ci/job-template.yml
     inputs:
-        cuda_version: "12.9.0"
-        cudnn_version: "9.10.1.4"
+        cuda_version: "12.9.1"
+        cudnn_version: "9.11.0.98"
     rules:
         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 

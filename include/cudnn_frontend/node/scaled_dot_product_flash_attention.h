@@ -933,14 +933,38 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         if (prop.major == 9) { 
             // validate basic dimension hquirements
-            RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
+            if (d_qk == d_v) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
+                                            error_code_t::GRAPH_NOT_SUPPORTED,
+                                            "Num hidden_dim should be less than or equal to 256 and hidden_dim should be multiple of 8");
+            } else {
+                if (d_qk == 192) { // special case for 192 hidden dim
+                    RETURN_CUDNN_FRONTEND_ERROR_IF( (d_v != 128),
+                                            error_code_t::GRAPH_NOT_SUPPORTED,
+                                            "Num hidden_dim d_v should be equal to 128 if d_qk is 192");
+                } else {
+                    RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                            error_code_t::GRAPH_NOT_SUPPORTED,
+                            "Num hidden_dim should be less than or equal to 128 and hidden_dim should be multiple of 8 when d_qk != d_v");
+                }
+            }
+
+        } else if (prop.major == 10 && detail::get_backend_version() >= 91100) {
+            // validate basic dimension requirements
+            if (d_qk == 192) { // special case for 192 hidden dim
+                RETURN_CUDNN_FRONTEND_ERROR_IF( (d_v != 128),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "Num hidden_dim shoud be less than or equal to 256 and hidden_dim should be multiple of 8");
+                                        "Num hidden_dim d_v should be equal to 128 if d_qk is 192");
+            } else {
+                RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
+                                            error_code_t::GRAPH_NOT_SUPPORTED,
+                                            "Num hidden_dim should be less than or equal to 128 and hidden_dim should be multiple of 8 when d_qk != d_v");
+            }
         } else {
             // validate basic dimension requirements
             RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 128) || (d_qk % 8 != 0) || (d_v > 128) || (d_v % 8 != 0),
                                         error_code_t::GRAPH_NOT_SUPPORTED,
-                                        "Num hidden_dim shoud be less than or equal to 128 and hidden_dim should be multiple of 8");
+                                        "Num hidden_dim should be less than or equal to 128 and hidden_dim should be multiple of 8");
         }
 
         RETURN_CUDNN_FRONTEND_ERROR_IF((attributes.attention_score_modifier != nullptr) &&
