@@ -50,6 +50,7 @@ add_executable(
     misc/slice.cpp
     misc/sm_carveout.cpp
     misc/cudagraphs.cpp
+    misc/deviceless_aot_compilation.cpp
 )
 
 # target flags

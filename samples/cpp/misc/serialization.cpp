@@ -113,7 +113,7 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
         REQUIRE(graph->create_execution_plans({cudnn_frontend::HeurMode_t::A}).is_good());
 
-        REQUIRE(graph->check_support(handle).is_good());
+        REQUIRE(graph->check_support().is_good());
 
         return true;
     };
@@ -134,9 +134,9 @@ TEST_CASE("CSBR Graph with serialization", "[conv][graph][serialization]") {
 
         REQUIRE(graph->create_execution_plans({cudnn_frontend::HeurMode_t::A}).is_good());
 
-        REQUIRE(graph->check_support(handle).is_good());
+        REQUIRE(graph->check_support().is_good());
 
-        REQUIRE(graph->build_plans(handle).is_good());
+        REQUIRE(graph->build_plans().is_good());
 
         // Insert auto-tuning logic here
 
@@ -344,7 +344,7 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         REQUIRE(graph->create_execution_plans({cudnn_frontend::HeurMode_t::A}).is_good());
 
-        REQUIRE(graph->check_support(handle).is_good());
+        REQUIRE(graph->check_support().is_good());
 
         return true;
     };
@@ -381,9 +381,9 @@ TEST_CASE("SDPA Graph with serialization", "[sdpa][graph][serialization]") {
 
         REQUIRE(graph->create_execution_plans({cudnn_frontend::HeurMode_t::A}).is_good());
 
-        REQUIRE(graph->check_support(handle).is_good());
+        REQUIRE(graph->check_support().is_good());
 
-        REQUIRE(graph->build_plans(handle).is_good());
+        REQUIRE(graph->build_plans().is_good());
 
         // Insert auto-tuning logic here
 

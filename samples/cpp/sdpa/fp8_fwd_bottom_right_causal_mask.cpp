@@ -106,8 +106,8 @@ TEST_CASE("sdpa_fp8_fprop_brcm", "[graph][sdpa][fp8][forward][brcm]") {
 
     REQUIRE(mha_graph.build_operation_graph(handle).is_good());
     auto plans = mha_graph.create_execution_plans({fe::HeurMode_t::A});
-    REQUIRE(mha_graph.check_support(handle).is_good());
-    REQUIRE(mha_graph.build_plans(handle).is_good());
+    REQUIRE(mha_graph.check_support().is_good());
+    REQUIRE(mha_graph.build_plans().is_good());
 
     //// Build variant pack
     Surface<int8_t> qTensor(b * s_q * h * d, false);

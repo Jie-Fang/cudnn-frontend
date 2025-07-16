@@ -374,13 +374,13 @@ PyGraph::get_knobs_for_engine(int64_t const engine_id) {
 void
 PyGraph::build_plans(BuildPlanPolicy_t const policy) {
     // TODO: Add multithreaded support in python
-    auto status = graph->build_plans(handle, policy, false);
+    auto status = graph->build_plans(policy, false);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
 void
 PyGraph::build_plan_at_index(int64_t const index) {
-    auto status = graph->build_plan_at_index(handle, index);
+    auto status = graph->build_plan_at_index(index);
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
@@ -401,7 +401,7 @@ PyGraph::build() {
 
 void
 PyGraph::check_support() {
-    auto status = graph->check_support(handle);
+    auto status = graph->check_support();
     throw_if(status.is_bad(), status.get_code(), status.get_message());
 }
 
