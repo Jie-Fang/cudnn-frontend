@@ -231,8 +231,9 @@ def diag_cli_option(org_val, request, cli_opt):
     val = request.config.getoption(cli_opt)
     return diag_map.get(bool(val)) if type(val) == int else org_val
 
-def fetch_blocked_tests(file_path):
-    blocked_map = {}
+def fetch_blocked_tests(file_path, gpu_arch, cudnn_ver):
+    assert type(gpu_arch) == type(cudnn_ver) == str, "expecting strings"
+    blocked_tests = []
     try:
         line_number = None
         with open(file_path, 'r') as file:
@@ -243,37 +244,32 @@ def fetch_blocked_tests(file_path):
                     test,sms,libs = (line_buf+"::").split(':')[:3]
                     if not test:
                         raise ValueError("missing test name")
-                    if test in blocked_map:
-                        raise ValueError("duplicate test name")
                     sms  = sms.split(',') if sms else None
                     libs = libs.split(',') if libs else None
-                    blocked_map[test] = (sms, libs)
+                    if (test not in blocked_tests) and (sms == None or gpu_arch in sms) and (libs == None or cudnn_ver in libs):
+                        blocked_tests.append(test)
     except Exception as e:
-        blocked_map = {}
+        blocked_tests = []
         if line_number != None:
             print(f"\n\nWARNING: {e} in {file_path}:{line_number}")
         else:
             print(f"\n\nWARNING: {e}")
-    return blocked_map
+    return blocked_tests
 
-def show_blocked_tests(blocked_map):
-    print("\n\nBlocked tests:")
-    if blocked_map:
-        for test, values in blocked_map.items():
-            blocked_sms  = ",".join(map(str, values[0])) if values[0] != None else ""
-            blocked_libs = ",".join(map(str, values[1])) if values[1] != None else ""
-            print(f"{test} : {blocked_sms} : {blocked_libs}")
+def show_blocked_tests(blocked_tests, gpu_arch, cudnn_ver):
+    print(f"\n\nBlocked tests on {gpu_arch} and cudnn_ver={cudnn_ver}:")
+    if blocked_tests:
+        for index, test in enumerate(blocked_tests):
+            assert type(test) == str, "test name must be string"
+            print(f"{index+1:<4} : {test}")
     else:
         print("[empty]")
 
-def is_test_blocked(test, gpu_arch, cudnn_ver, blocked_map):
-    assert type(test) == type(gpu_arch) == type(cudnn_ver) == str, "expecting strings"
-    values = blocked_map.get(test)
-    if values is not None:
-        blocked_sms, blocked_libs = values
-        if (blocked_sms == None or gpu_arch in blocked_sms) and (blocked_libs == None or cudnn_ver in blocked_libs):
-            return True
-    return False
+def is_test_blocked(test, blocked_tests):
+    assert type(test) == str, "test name must be string"
+    if not blocked_tests:
+        return False
+    return True if test in blocked_tests else False
 
 def truncated_list(beg, end, arr):
     if len(arr) >= beg + 3 + end:
@@ -296,7 +292,7 @@ class knobNA(IntEnum):
 
 class testConfig:
     # To prevent creation of misspelled variables, listing all local variables of the class.
-    __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_map',
+    __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_tests',
                  'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 
                  'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 
                  'diag_align', 'left_bound', 'right_bound', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
@@ -306,11 +302,14 @@ class testConfig:
                  'shape_v', 'gaps_v', 'stride_v', 'elems_v', 'shape_o', 'gaps_o', 'stride_o', 'elems_o',
                  'seq_len_q', 'seq_len_kv']
 
-    def __init__(self, *, gpu_arch, gpu_info, cudnn_ver, blocked_map):
-        self.gpu_arch    = str(gpu_arch)
-        self.gpu_info    = str(gpu_info)
-        self.cudnn_ver   = str(cudnn_ver)
-        self.blocked_map = blocked_map
+    def __init__(self, *, gpu_arch, gpu_info, cudnn_ver, blocked_tests):
+        assert type(gpu_arch) == type(gpu_info) == type(cudnn_ver) == str, "expecting strings as arguments"
+        assert isinstance(blocked_tests, list), "argument 'blocked_tests' must be list"
+
+        self.gpu_arch      = gpu_arch
+        self.gpu_info      = gpu_info
+        self.cudnn_ver     = cudnn_ver
+        self.blocked_tests = blocked_tests
 
         self.rng_geom    = random.Random()
         self.geom_seed   = None
@@ -378,7 +377,7 @@ class testConfig:
         self.elems_o     = None
 
     def config_str(self):
-        banned = ("max_", "min_", "gpu_", "rng_", "blocked_map", "cudnn_ver", "shape_", "stride_", "elems_")
+        banned = ("max_", "min_", "gpu_", "rng_", "blocked_tests", "cudnn_ver", "shape_", "stride_", "elems_")
         stg = ""
         for k in self.__slots__:
             if k.startswith(banned):
@@ -406,7 +405,7 @@ class testConfig:
             except Exception as e:
                 assert False, f"ERROR: {e} in '{assign}'"
 
-        banned = ("max_", "min_", "gpu_", "rng_", "blocked_map", "cudnn_ver", "shape_", "stride_", "elems_")
+        banned = ("max_", "min_", "gpu_", "rng_", "blocked_tests", "cudnn_ver", "shape_", "stride_", "elems_")
         for k in self.__slots__:
             if k.startswith(banned):
                 continue
@@ -1071,7 +1070,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         pytest.skip("dry run mode")
 
     # Check if the test is temporarily blocked.
-    if is_test_blocked(request.node.name, cfg.gpu_arch, cfg.cudnn_ver, cfg.blocked_map):
+    if is_test_blocked(request.node.name, cfg.blocked_tests):
         print(f"\nWARNING: test '{request.node.name}' is blocked on {cfg.gpu_arch} and cuDNN {cfg.cudnn_ver}")
         pytest.skip("test blocked")
 
@@ -1624,18 +1623,19 @@ def env_info(request):
 
     gpu_type = torch.cuda.get_device_capability()
     gpu_name = torch.cuda.get_device_name()
-    sm_count = torch.cuda.get_device_properties().multi_processor_count
+    device   = torch.device('cuda:0')
+    sm_count = torch.cuda.get_device_properties(device).multi_processor_count
 
     gpu_arch     = f"SM_{gpu_type[0]}{gpu_type[1]}"
     gpu_info     = f"{sm_count} SM-s, {gpu_name}"
-    cudnn_ver    = torch.backends.cudnn.version()
+    cudnn_ver    = str(torch.backends.cudnn.version())
     blocked_file = str(request.path)
     blocked_file = blocked_file[:-3] + ".block"
-    blocked_map  = fetch_blocked_tests(blocked_file)
 
-    show_blocked_tests(blocked_map)
+    blocked_tests = fetch_blocked_tests(blocked_file, gpu_arch, cudnn_ver)
+    show_blocked_tests(blocked_tests, gpu_arch, cudnn_ver)
 
-    return {"gpu_arch": gpu_arch, "gpu_info": gpu_info, "cudnn_ver": cudnn_ver, "blocked_map": blocked_map}
+    return {"gpu_arch": gpu_arch, "gpu_info": gpu_info, "cudnn_ver": cudnn_ver, "blocked_tests": blocked_tests}
 
 
 # ==================================
