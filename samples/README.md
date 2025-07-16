@@ -167,5 +167,9 @@ Shows how to use the native cuda graph API. The samples show how to create cudnn
 
 Showcases a Batch norm example, where only a partial number of SMs participate in executing the kernel.
 
+- [Deviceless ahead-of-time compilation](cpp/misc/deviceless_aot_compilation.cpp)
+
+Showcases how to do deviceless ahead-of-time compilation with the device property descriptor (instead of a cuDNN handle).
+
 ## [Deprecated] C++ v0.x Interface Samples
 Samples leveraging FE's C++ 0.x interface are located in [samples/legacy_samples](legacy_samples/).

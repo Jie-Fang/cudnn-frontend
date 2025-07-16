@@ -231,8 +231,8 @@ TEST_CASE("Toy sdpa forward as CUDA graph", "[graph][sdpa][flash][forward][cudag
 
     // Make sure the selected execution plan supports cuda graph
     graph->select_behavior_notes({cudnn_frontend::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API});
-    REQUIRE(graph->check_support(handle).is_good());
-    REQUIRE(graph->build_plans(handle).is_good());
+    REQUIRE(graph->check_support().is_good());
+    REQUIRE(graph->build_plans().is_good());
 
     int64_t workspace_size = 0;
     REQUIRE(graph->get_workspace_size(workspace_size).is_good());

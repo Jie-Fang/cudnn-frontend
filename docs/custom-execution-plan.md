@@ -1,6 +1,6 @@
 # Custom Execution Plan
 
-Here is an example in C++ of creating a custom execution plan with a hard-coded engine and knobs. Refer to the coresponding C++ sample in [samples/cpp/misc/custom_plan.cpp](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/misc/custom_plan.cpp).
+Here is an example in C++ of creating a custom execution plan with a hard-coded engine and knobs. Refer to the corresponding C++ sample in [samples/cpp/misc/custom_plan.cpp](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/misc/custom_plan.cpp).
 
 ## Get the Engine Count
 ```
