@@ -17,63 +17,6 @@ test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test22]                :
 test_sdpa_random_bwd_rgged[BWD_RAGGED_-GQA-inner_random-torch.bfloat16-test11] : SM_100 : 91100,91200
 test_sdpa_random_bwd_ragged[BWD_RAGGED_-GQA-inner_random-torch.bfloat16-test11] : SM_100 : 91100,91200
 
-# Bug https://nvbugs/5385050, Nan-s or zeros in dK/dV GPU buffers in 27 bprop ragged tests (Blackwell and Hopper)
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.float16-test9]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.bfloat16-test5]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.bfloat16-test12] : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.bfloat16-test14] : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test2]    : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test3]    : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test5]    : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test8]    : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test9]    : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test11]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test13]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test14]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test3]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test6]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test8]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test9]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test15]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.bfloat16-test7]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.bfloat16-test10] : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.bfloat16-test6]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test10]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test15]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test16]   : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test11]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test12]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test11]  : SM_90,SM_100 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test13]  : SM_90,SM_100 : 91100,91200
-
-# Bug https://nvbugs/5387285, 26 bprop ragged tests fail with disallowed mismatches on Hopper only
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.float16-test2]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.float16-test5]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.bfloat16-test7]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-GQA-inner_random-torch.bfloat16-test16] : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test1]    : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test4]    : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test6]    : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test7]    : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.float16-test12]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test1]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test2]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test4]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test5]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test7]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test10]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test13]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test14]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-edge_random-torch.bfloat16-test16]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test2]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test3]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test4]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test8]   : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.float16-test10]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.bfloat16-test1]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.bfloat16-test8]  : SM_90 : 91100,91200
-test_sdpa_random_ragged[BWD_RAGGED-MQA-inner_random-torch.bfloat16-test15] : SM_90 : 91100,91200
-
 # Bug https://nvbugs/5359342, Backward workspace overwritten outside its boundaries on Hopper
 test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test44] : SM_90 : 91100,91200
 
