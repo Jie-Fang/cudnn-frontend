@@ -123,7 +123,7 @@ TEST_CASE("sdpa_fp8_fprop_current_scaling", "[graph][sdpa][fp8][forward]") {
     Surface<int8_t> qkvTensor(b * s * 3 * h * d, false);
 
     assert((output_data_type == fe::DataType_t::BFLOAT16) || (output_data_type == fe::DataType_t::HALF));
-    Surface<int8_t> oTensor(b * s * h * d, false);
+    Surface<half> oTensor(b * s * h * d, false);
 
     void* devPtrQ = qkvTensor.devPtr;
     void* devPtrK = (qkvTensor.devPtr + h * d);
@@ -134,8 +134,6 @@ TEST_CASE("sdpa_fp8_fprop_current_scaling", "[graph][sdpa][fp8][forward]") {
     Surface<float> descale_K_Tensor(1, false);
     Surface<float> descale_V_Tensor(1, false);
     Surface<float> descale_S_Tensor(1, false);
-    Surface<float> scale_S_Tensor(1, false);
-    Surface<float> scale_O_Tensor(1, false);
     Surface<float> Amax_S_Tensor(1, false);
     Surface<float> Amax_O_Tensor(1, false);
 
