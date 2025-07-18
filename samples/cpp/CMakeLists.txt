@@ -15,6 +15,7 @@ add_executable(
     sdpa/fp16_bwd_with_cudagraphs.cpp
     sdpa/fp8_fwd.cpp
     sdpa/fp8_fwd_current_scaling.cpp
+    sdpa/fp8_bwd_with_current_scaling.cpp
     sdpa/fp8_bwd.cpp
     sdpa/fp8_fwd_bottom_right_causal_mask.cpp
     sdpa/fp8_bwd_bottom_right_causal_mask.cpp
