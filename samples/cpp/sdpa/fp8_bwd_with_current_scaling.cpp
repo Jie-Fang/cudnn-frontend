@@ -145,7 +145,7 @@ TEST_CASE("sdpa_fp8_bprop_current_scaling", "[graph][sdpa][fp8][backward]") {
 
     // Supported only on B100 starting 9.13+
     auto status = mha_graph.validate();
-    if ((cudnnGetVersion() >= 90130) && check_device_arch_newer_than("blackwell")) {
+    if ((cudnnGetVersion() >= 91300) && check_device_arch_newer_than("blackwell")) {
         REQUIRE(status.is_good());
     } else {
         REQUIRE(status.get_code() == fe::error_code_t::GRAPH_NOT_SUPPORTED);
