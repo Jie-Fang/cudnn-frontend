@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from collections import namedtuple
 import inspect
+import random
+import string
+from tensor_ir_utils import CompilerWithKernelCacheSingleton
 
 from nv_tensor_ir._mlir import ir
 from nv_tensor_ir._mlir.dialects import nv_tensor_ir
@@ -849,6 +852,8 @@ class test_tensor_ir:
         if not self.NODE_CLASS_MAP:
             self._init_node_class_map()
 
+        self.compiler_with_kernel_cache = CompilerWithKernelCacheSingleton()
+
     def determine_tensor_ir_inout_tensor_type(self, node, dtype=None):
         assert len(node.output) == 1
         test_tensor = node.output[0]
@@ -1059,8 +1064,6 @@ class test_tensor_ir:
                     stream_k,
                 ) in kernel_configs:
                     cloned_module = ir.Module.parse(str(module))
-                    cask_context = nv_tensor_ir.create_cask_context()
-                    compiler = nv_tensor_ir.Compiler(cask_context)
 
                     compile_options = nv_tensor_ir.TensorIRCompilationOptions(
                         10,  # Hardcoded for blackwell
@@ -1075,7 +1078,9 @@ class test_tensor_ir:
                     print(
                         f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
                     )
-                    shader = compiler.compile(cloned_module, compile_options)
+                    shader = self.compiler_with_kernel_cache.compile(
+                        cloned_module, compile_options
+                    )
                     execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
@@ -1121,8 +1126,6 @@ class test_tensor_ir:
                 for config in kernel_configs:
                     tile_size = config[0]  # Extract first value from the config list
                     cloned_module = ir.Module.parse(str(module))
-                    cask_context = nv_tensor_ir.create_cask_context()
-                    compiler = nv_tensor_ir.Compiler(cask_context)
                     conversion_options = nv_tensor_ir.TensorConversionOptions()
                     conversion_options.tileSize = tile_size
 
@@ -1141,7 +1144,9 @@ class test_tensor_ir:
                     print(
                         f"#### Running tile_size={conversion_options.tileSize}, compiler_backend={compiler_backend}"
                     )
-                    shader = compiler.compile(cloned_module, compile_options)
+                    shader = self.compiler_with_kernel_cache.compile(
+                        cloned_module, compile_options
+                    )
                     execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
@@ -1275,6 +1280,13 @@ class test_tensor_ir:
                 T.function(inputs=input_types, results=output_types)
             )
             function_name = json_test_name
+            # Add a random string to the function name to avoid module collision
+            function_name += "_" + str(
+                "".join(
+                    random.choice(string.ascii_letters + string.digits)
+                    for _ in range(20)
+                )
+            )
 
             # Create tensor ir graph
             graph = nv_tensor_ir.graph(
