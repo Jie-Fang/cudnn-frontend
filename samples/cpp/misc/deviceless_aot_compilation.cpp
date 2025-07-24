@@ -26,8 +26,8 @@
 #include <cudnn_frontend.h>
 
 TEST_CASE("Deviceless compilation", "[conv][graph][serialization]") {
-#if (CUDNN_VERSION < 90800)
-    SKIP("Device property serialization requires cudnn 9.8.0 and up.");
+#if (CUDNN_VERSION < 91100)
+    SKIP("Device property serialization requires cudnn 9.11.0 and up.");
 #endif
 
     if (!is_arch_supported_by_cudnn()) {
