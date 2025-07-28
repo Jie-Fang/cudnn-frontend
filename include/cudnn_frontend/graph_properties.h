@@ -1523,10 +1523,10 @@ class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attribute
 //         return *this;
 //     }
 // };
-
 class SDPA_attributes : public Attributes<SDPA_attributes> {
     friend class Attributes<SDPA_attributes>;
     friend class SDPANode;
+    friend class SDPAFP8Node;  // Required for backward compatibility with FP8 node
     friend class Graph;
 
     using Tensor_t = std::shared_ptr<Tensor_attributes>;
@@ -1545,6 +1545,11 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     std::optional<float> attn_scale_value;
     std::optional<int> max_seq_len_kv;
     AttentionScoreModifier_t attention_score_modifier = nullptr;
+    DataType_t mma_core_mode                          = DataType_t::NOT_SET;
+
+    // Deprecated fields for backward compatibility with SDPA_fp8_attributes
+    bool causal_mask              = false;
+    bool causal_mask_bottom_right = false;
 
     bool
     has_causal_like_masking() const {
@@ -1570,11 +1575,28 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Dropout_mask,
         Dropout_scale,
         Page_table_K,
-        Page_table_V
+        Page_table_V,
+        // FP8-specific scaling inputs
+        Descale_Q,
+        Descale_K,
+        Descale_V,
+        Descale_S,
+        Scale_S,
+        Scale_O,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-    enum class output_names { O, Stats, RNG_DUMP };
+    enum class output_names { O, Stats, RNG_DUMP, Amax_S, Amax_O };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    // Convenience struct for named access to SDPA outputs
+    struct SDPA_outputs {
+        std::shared_ptr<Tensor_attributes> O;         ///< Main attention output tensor
+        std::shared_ptr<Tensor_attributes> Stats;     ///< Statistics/softmax output (when generate_stats=true)
+        std::shared_ptr<Tensor_attributes> RNG_DUMP;  ///< Random number generator dump for dropout
+                                                      ///< check why we don't return RNG_DUMP this way
+        std::shared_ptr<Tensor_attributes> Amax_S;    ///< FP8 absolute maximum for attention scores
+        std::shared_ptr<Tensor_attributes> Amax_O;    ///< FP8 absolute maximum for output tensor
+    };
+
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_attributes,
                                    name,
                                    inputs,
@@ -1585,9 +1607,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                                    dropout_probability,
                                    attn_scale_value,
                                    max_seq_len_kv,
+                                   mma_core_mode,
                                    left_bound,
                                    right_bound,
-                                   diagonal_alignment)
+                                   diagonal_alignment,
+                                   causal_mask,
+                                   causal_mask_bottom_right)
 
     SDPA_attributes&
     set_generate_stats(bool const value) {
@@ -1631,6 +1656,13 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         return *this;
     }
 
+    // Internal function - do not use directly in application code
+    SDPA_attributes&
+    _set_mma_core_mode(DataType_t const value) {
+        mma_core_mode = value;
+        return *this;
+    }
+
     SDPA_attributes&
     set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_attributes::input_names::SEQ_LEN_Q] = std::move(value);
@@ -1660,7 +1692,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                 set_diagonal_band_right_bound(0);
             }
         }
-
+        causal_mask = value;
         return *this;
     }
 
@@ -1675,6 +1707,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                 set_diagonal_band_right_bound(0);
             }
         }
+        causal_mask_bottom_right = value;
         return *this;
     }
 
@@ -1744,134 +1777,15 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         max_seq_len_kv = value;
         return *this;
     }
+
+    // Implementation is in sdpa_support_surface.h
+    error_t
+    validate_sdpa_support_surface(const detail::Context& context, int64_t s_kv, bool is_paged_k, bool is_paged_v) const;
 };
 
-class SDPA_fp8_attributes : public Attributes<SDPA_fp8_attributes> {
-    friend class Attributes<SDPA_fp8_attributes>;
-    friend class SDPAFP8Node;
-    friend class Graph;
-
-    std::optional<bool> generate_stats;
-    bool padding_mask             = false;
-    bool causal_mask              = false;
-    bool causal_mask_bottom_right = false;
-    std::optional<float> dropout_probability;
-    std::optional<float> attn_scale_value;
-
-   public:
-    enum class input_names {
-        Q,
-        K,
-        V,
-        Attn_scale,
-        Bias,
-        SEQ_LEN_Q,
-        SEQ_LEN_KV,
-        Seed,
-        Offset,
-        Dropout_mask,
-        Dropout_scale,
-
-        Descale_Q,
-        Descale_K,
-        Descale_V,
-        Descale_S,
-        Scale_S,
-        Scale_O,
-    };
-    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-
-    enum class output_names { O, Stats, Amax_S, Amax_O };
-    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_fp8_attributes,
-                                   name,
-                                   inputs,
-                                   outputs,
-                                   generate_stats,
-                                   padding_mask,
-                                   causal_mask,
-                                   causal_mask_bottom_right,
-                                   dropout_probability,
-                                   attn_scale_value)
-
-    SDPA_fp8_attributes&
-    set_generate_stats(bool const value) {
-        generate_stats = value;
-        return *this;
-    }
-
-    [[deprecated]]
-    SDPA_fp8_attributes&
-    set_is_inference(bool const value) {
-        return set_generate_stats(!value);
-    }
-
-    SDPA_fp8_attributes&
-    set_attn_scale(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_fp8_attributes::input_names::Attn_scale] = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_attn_scale(float const value) {
-        attn_scale_value = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_bias(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_fp8_attributes::input_names::Bias] = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_padding_mask(bool const value) {
-        padding_mask = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_seq_len_q(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_fp8_attributes::input_names::SEQ_LEN_Q] = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_seq_len_kv(std::shared_ptr<Tensor_attributes> value) {
-        inputs[SDPA_fp8_attributes::input_names::SEQ_LEN_KV] = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_causal_mask(bool const value) {
-        causal_mask = value;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_dropout(float const probability,
-                std::shared_ptr<Tensor_attributes> seed,
-                std::shared_ptr<Tensor_attributes> offset) {
-        dropout_probability                              = probability;
-        inputs[SDPA_fp8_attributes::input_names::Seed]   = seed;
-        inputs[SDPA_fp8_attributes::input_names::Offset] = offset;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_dropout(std::shared_ptr<Tensor_attributes> mask, std::shared_ptr<Tensor_attributes> scale) {
-        inputs[SDPA_fp8_attributes::input_names::Dropout_mask]  = mask;
-        inputs[SDPA_fp8_attributes::input_names::Dropout_scale] = scale;
-        return *this;
-    }
-
-    SDPA_fp8_attributes&
-    set_causal_mask_bottom_right(bool const value) {
-        causal_mask_bottom_right = value;
-        return *this;
-    }
-};
+// Type alias for backward compatibility - SDPA_fp8_attributes is now an alias to SDPA_attributes
+// All FP8 functionality is unified in SDPA_attributes with the mma_core_mode field
+using SDPA_fp8_attributes = SDPA_attributes;
 
 class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     friend class Attributes<SDPA_backward_attributes>;

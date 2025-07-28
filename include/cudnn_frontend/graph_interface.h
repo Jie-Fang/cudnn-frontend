@@ -238,6 +238,50 @@ class Graph : public ICudnn, public INode {
 #endif
     }
 
+    // Private unified sdpa method - internal implementation for both FP16 and FP8 modes
+    inline SDPA_attributes::SDPA_outputs
+    sdpa_internal(std::shared_ptr<Tensor_attributes> q,
+                  std::shared_ptr<Tensor_attributes> k,
+                  std::shared_ptr<Tensor_attributes> v,
+                  SDPA_attributes attributes) {
+        // Set inputs
+        attributes.inputs[SDPA_attributes::input_names::Q] = q;
+        attributes.inputs[SDPA_attributes::input_names::K] = k;
+        attributes.inputs[SDPA_attributes::input_names::V] = v;
+
+        // Make required output tensors
+        SDPA_attributes::SDPA_outputs sdpa_outputs;
+
+        sdpa_outputs.O = attributes.outputs[SDPA_attributes::output_names::O] = output_tensor(attributes.name + "::O");
+
+        if (attributes.generate_stats == true) {
+            sdpa_outputs.Stats = attributes.outputs[SDPA_attributes::output_names::Stats] =
+                output_tensor(attributes.name + "::Stats");
+        }
+
+        // Dropout mask dump (created conditionally based on dropout parameters)
+        if (attributes.outputs.find(SDPA_attributes::output_names::RNG_DUMP) != attributes.outputs.end() &&
+            attributes.outputs.at(SDPA_attributes::output_names::RNG_DUMP) != nullptr) {
+            sdpa_outputs.RNG_DUMP = attributes.outputs[SDPA_attributes::output_names::RNG_DUMP];
+        }
+
+        // FP8-specific outputs (created conditionally based on FP8 scaling parameters)
+        if (attributes.inputs.find(SDPA_attributes::input_names::Descale_S) != attributes.inputs.end() &&
+            attributes.inputs.at(SDPA_attributes::input_names::Descale_S) != nullptr) {
+            sdpa_outputs.Amax_S = attributes.outputs[SDPA_attributes::output_names::Amax_S] =
+                output_tensor(attributes.name + "::Amax_S");
+        }
+        if (attributes.inputs.find(SDPA_attributes::input_names::Scale_O) != attributes.inputs.end() &&
+            attributes.inputs.at(SDPA_attributes::input_names::Scale_O) != nullptr) {
+            sdpa_outputs.Amax_O = attributes.outputs[SDPA_attributes::output_names::Amax_O] =
+                output_tensor(attributes.name + "::Amax_O");
+        }
+
+        sub_nodes.emplace_back(std::make_unique<SDPANode>(std::move(attributes), context));
+
+        return sdpa_outputs;
+    }
+
    public:
     Graph() : INode(detail::Context{}) {}
 
@@ -2121,22 +2165,13 @@ Graph::sdpa(std::shared_ptr<Tensor_attributes> q,
             std::shared_ptr<Tensor_attributes> k,
             std::shared_ptr<Tensor_attributes> v,
             SDPA_attributes attributes) {
-    // Make required output tensors
-    auto O = attributes.outputs[SDPA_attributes::output_names::O] = output_tensor(attributes.name + "::O");
-
-    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (attributes.generate_stats == true) {
-        Stats = attributes.outputs[SDPA_attributes::output_names::Stats] = output_tensor(attributes.name + "::Stats");
+    if (attributes.mma_core_mode == DataType_t::NOT_SET) {
+        attributes._set_mma_core_mode(DataType_t::HALF);
     }
 
-    // Set inputs
-    attributes.inputs[SDPA_attributes::input_names::Q] = q;
-    attributes.inputs[SDPA_attributes::input_names::K] = k;
-    attributes.inputs[SDPA_attributes::input_names::V] = v;
-
-    sub_nodes.emplace_back(std::make_unique<SDPANode>(std::move(attributes), context));
-
-    return {O, Stats};
+    // Call internal implementation and return only the O and Stats outputs for backward compatibility
+    auto internal_result = sdpa_internal(q, k, v, attributes);
+    return {internal_result.O, internal_result.Stats};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 4>
@@ -2150,25 +2185,11 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
                 std::shared_ptr<Tensor_attributes> scale_s,
                 std::shared_ptr<Tensor_attributes> scale_o,
                 SDPA_fp8_attributes attributes) {
-    // Make required output tensors
-    auto O = attributes.outputs[SDPA_fp8_attributes::output_names::O] = output_tensor(attributes.name + "::O");
-
-    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> Stats = nullptr;
-    if (attributes.generate_stats == true) {
-        Stats = attributes.outputs[SDPA_fp8_attributes::output_names::Stats] =
-            output_tensor(attributes.name + "::Stats");
+    if (attributes.mma_core_mode == DataType_t::NOT_SET) {
+        attributes._set_mma_core_mode(DataType_t::FP8_E4M3);
     }
 
-    auto Amax_S = attributes.outputs[SDPA_fp8_attributes::output_names::Amax_S] =
-        output_tensor(attributes.name + "::Amax_S");
-    auto Amax_O = attributes.outputs[SDPA_fp8_attributes::output_names::Amax_O] =
-        output_tensor(attributes.name + "::Amax_O");
-
-    // Set inputs
-    attributes.inputs[SDPA_fp8_attributes::input_names::Q] = q;
-    attributes.inputs[SDPA_fp8_attributes::input_names::K] = k;
-    attributes.inputs[SDPA_fp8_attributes::input_names::V] = v;
-
+    // Set FP8 scaling inputs
     attributes.inputs[SDPA_fp8_attributes::input_names::Descale_Q] = descale_q;
     attributes.inputs[SDPA_fp8_attributes::input_names::Descale_K] = descale_k;
     attributes.inputs[SDPA_fp8_attributes::input_names::Descale_V] = descale_v;
@@ -2176,9 +2197,9 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
     attributes.inputs[SDPA_fp8_attributes::input_names::Scale_S]   = scale_s;
     attributes.inputs[SDPA_fp8_attributes::input_names::Scale_O]   = scale_o;
 
-    sub_nodes.emplace_back(std::make_unique<SDPAFP8Node>(std::move(attributes), context));
-
-    return {O, Stats, Amax_S, Amax_O};
+    // Call internal implementation and return {Output, Stats, Amax_S, Amax_O} as array for backward compatibility
+    auto internal_result = sdpa_internal(q, k, v, attributes);
+    return {internal_result.O, internal_result.Stats, internal_result.Amax_S, internal_result.Amax_O};
 }
 
 inline std::array<std::shared_ptr<Tensor_attributes>, 7>
