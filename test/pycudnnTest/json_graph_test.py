@@ -639,6 +639,7 @@ class Legacy_tensor:
         "dim": "dim",
         "name": "name",
         "stride": "stride",
+        "reordering": "reordering",
     }
     # TODO(@mbreughe): implement the following fill related properties
     mapping.update(
@@ -738,6 +739,8 @@ class Legacy_value:
             "bf16": DataType.BFLOAT16,
             "i": DataType.INT32,
             "fp8_e4m3": DataType.FP8_E4M3,
+            "fp8_e5m2": DataType.FP8_E5M2,
+            "fp8_e8m0": DataType.FP8_E8M0,
         }
     }
     indirection = {"mathPrec": "dataType"}

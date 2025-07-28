@@ -417,5 +417,14 @@
             "properties": {
                 "mathPrec": "compute_data_type"
             }
+        },
+        "scaled_matmul":
+        {
+            "operation": "scaled_matmul",
+            "input": {"matA": "A", "sfA": "sfA", "matB": "B", "sfB": "sfB"},
+            "output": ["matC"],
+            "properties": {
+                "mathPrec": "compute_data_type"
+            }
         }
 }
