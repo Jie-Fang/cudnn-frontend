@@ -28,6 +28,9 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                            inputs.at(SDPA_attributes::input_names::V)->get_ragged_offset() ||
                            outputs.at(SDPA_attributes::output_names::O)->get_ragged_offset();
 
+    auto const& output_tensor    = outputs.at(SDPA_attributes::output_names::O);
+    auto const& output_data_type = output_tensor->get_data_type();
+
     auto const& bias_mask = inputs.find(SDPA_attributes::input_names::Bias);
     bool const is_bias    = (bias_mask != inputs.end() && bias_mask->second != nullptr);
 
@@ -173,6 +176,14 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             error_code_t::GRAPH_NOT_SUPPORTED,
             "sdpa fp8 forward operation is only supported on Blackwell architecture and newer. Please "
             "consider using a newer architecture.");
+
+        // if output data type is half or bfloat16, and version is below 9.13 or is not blackwell, return NOT_SUPPORTED
+        RETURN_CUDNN_FRONTEND_ERROR_IF(
+            (output_data_type == DataType_t::HALF || output_data_type == DataType_t::BFLOAT16) &&
+                (detail::get_backend_version() < 91300 || prop.major < 10),
+            error_code_t::GRAPH_NOT_SUPPORTED,
+            "sdpa fp8 forward operation is only supported on cuDNN version 9.13.0 and newer. Please "
+            "consider upgrading your current version.");
     } else if (mma_core_mode == DataType_t::HALF) {
         // FP16 specific validation
 
