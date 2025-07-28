@@ -149,6 +149,7 @@ TEST_CASE("sdpa_fp8_bprop_current_scaling", "[graph][sdpa][fp8][backward]") {
         REQUIRE(status.is_good());
     } else {
         REQUIRE(status.get_code() == fe::error_code_t::GRAPH_NOT_SUPPORTED);
+        SKIP("Test requires cuDNN version 9.13.0 or above and Blackwell architecture or newer.");
         return;
     }
 
