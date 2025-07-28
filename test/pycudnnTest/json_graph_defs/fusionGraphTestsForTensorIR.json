@@ -18,6 +18,23 @@
     "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
     "minDeviceVersion":"<minDevVer>"
   },
+  "ScaledMatmul": {
+    "tensors": [
+      {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},
+      {"name":"sfATensor", "dataType":"<Tsf>", "dim":["<gemm_B>", "<gemm_M>", "<scale_K>"], "layout":"<gemm_layout_A>", "reordering": "CUDNN_TENSOR_REORDERING_F8_128x4"},
+      {"name":"bTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_K>","<gemm_N>"], "layout":"<gemm_layout_B>"},
+      {"name":"sfBTensor", "dataType":"<Tsf>", "dim":["<gemm_B>","<scale_K>","<gemm_N>"], "layout":"<gemm_layout_B>", "reordering": "CUDNN_TENSOR_REORDERING_F8_128x4"},
+      {"name":"cTensor", "dataType":"<Tout>", "dim":["<gemm_B>","<gemm_M>","<gemm_N>"], "layout":"<gemm_layout_C>"}
+    ],
+    "nodes":[
+        {"name":"scaled_mm0", "operation":"scaled_matmul", "matA":"aTensor", "sfA":"sfATensor", "matB":"bTensor", "sfB":"sfBTensor", "matC":"cTensor", "mathPrec":"<Tcomp>"}
+    ],
+    "Usage_examples":[
+      "cudnnTest -RgraphRunner -jsonTestName=ScaledMatmul -backendEngine0 -x -S -b -d0 -kv=Tin:half -kv=Tcomp:float -kv=Tout:half -gemm_B=1 -gemm_M=32 -gemm_N=128 -gemm_K=64 -gemm_layout_A=COL_MAJOR -gemm_layout_B=ROW_MAJOR -gemm_layout_C=ROW_MAJOR -atol5e-3 -rtol5e-3"
+    ],
+    "tolerances":{"rel":"<rtol>", "abs":"<atol>"},
+    "minDeviceVersion":"<minDevVer>"
+  },
   "MatmulEpilogBatchBroadcast": {
     "tensors": [
       {"name":"aTensor", "dataType":"<Tin>", "dim":["<gemm_B>","<gemm_M>","<gemm_K>"], "layout":"<gemm_layout_A>"},

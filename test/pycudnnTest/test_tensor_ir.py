@@ -429,6 +429,26 @@ class MatmulNode(TensorIRNode):
             self.node_map[self.node] = nv_tensor_ir.matmul(output_type, lsh, rsh)
 
 
+class ScaledMatmulNode(MatmulNode):
+    """Node for scaled matmul operations, which inherits from `MatmulNode`"""
+
+    def run(self):
+        with self.ip:
+            # Convert inputs to their original JSON-defined tensor types
+            A = self._convert_input_to_original_type(self.children[0], 0)
+            sfA = self._convert_input_to_original_type(self.children[1], 1)
+            B = self._convert_input_to_original_type(self.children[2], 2)
+            sfB = self._convert_input_to_original_type(self.children[3], 3)
+
+            # Get the appropriate output tensor type
+            output_type = self._get_matmul_output_type()
+
+            # Perform scaled matmul operation
+            self.node_map[self.node] = nv_tensor_ir.scaled_matmul(
+                output_type, A, sfA, B, sfB
+            )
+
+
 class BinaryOperationNode(TensorIRNode):
     """Node for binary operations"""
 
@@ -781,6 +801,7 @@ class test_tensor_ir:
     OPERATION_GROUPS = {
         ReductionNode: ["reduction"],
         MatmulNode: ["matmul"],
+        ScaledMatmulNode: ["scaled_matmul"],
         BinaryOperationNode: [
             "add",
             "bias",
@@ -847,6 +868,7 @@ class test_tensor_ir:
         self.outputs = []
         self.ref_outputs = None
         self.static_shapes_only = static_shapes_only
+        self.node_overwrite_stride_func_map = {}
 
         # Initialize the node class map if it's empty
         if not self.NODE_CLASS_MAP:
@@ -951,10 +973,13 @@ class test_tensor_ir:
             dtype_width,
         )
 
+        reorder_mode = self.get_reorder_mode(node)
+
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
             datatype=dtype,
             shape_divisibility=shape_div,
+            reorder_mode=reorder_mode,
         )
         return TensorInfo(
             tensor_type=ty,
@@ -1007,6 +1032,8 @@ class test_tensor_ir:
         desc_inputs = []
         inputs_gpu = []
 
+        node_overwrite_stride_tensor_map = {}
+
         for node in self.test_graph.entrance_nodes:
             torch_mem = node.get_value()
             if not node.output[0].is_by_value:
@@ -1018,6 +1045,8 @@ class test_tensor_ir:
                 )
                 inputs_gpu.append(gpu_mem)  # need to save gpu_mem in case of releasing
                 desc_inputs.append(nv_tensor_ir.TensorIRTensorDescriptor(gpu_mem))
+                if node in self.node_overwrite_stride_func_map:
+                    node_overwrite_stride_tensor_map[node] = desc_inputs[-1]
             else:
                 # Scalar operand - keep on CPU for automatic detection
                 cpu_mem = torch_mem.to("cpu")
@@ -1081,6 +1110,14 @@ class test_tensor_ir:
                     shader = self.compiler_with_kernel_cache.compile(
                         cloned_module, compile_options
                     )
+
+                    for node, tensor_desc in node_overwrite_stride_tensor_map.items():
+                        overwrite_stride_func = self.node_overwrite_stride_func_map[
+                            node
+                        ]
+                        overwrite_stride = overwrite_stride_func(tile_size)
+                        tensor_desc.overwrite_strides(overwrite_stride)
+
                     execution_plan = nv_tensor_ir.ExecutionPlan(shader, *all_desc)
                     device_workspace_size = (
                         execution_plan.query_max_device_workspace_size()
@@ -1421,6 +1458,33 @@ class test_tensor_ir:
             print(f"Unimplemented Operation in Lowering to Tensor IR: {op_name}")
             return
 
+        # For scaled matmul, we need to rewrite the tensor descriptor stride for the scaling factors to represent the
+        # 128x4 interleave layout that meets the tensor-core instruction requirement.
+        if op_name == "scaled_matmul":
+            sfA_node, sfB_node = node.producer_nodes[1], node.producer_nodes[3]
+
+            sfA_shape, sfA_stride = sfA_node.output[0].dim, sfA_node.output[0].stride
+            sfB_shape, sfB_stride = sfB_node.output[0].dim, sfB_node.output[0].stride
+
+            # Rewrite the M/N stride of SF tensor descriptors to:
+            #   (elements per 128x4_interleave_block) * (number of 128x4_interleave_blocks)
+            #   i.e.,                       (128 * 4) * (shape_K / tile_size_K)
+            self.node_overwrite_stride_func_map[sfA_node] = (
+                lambda tile_size: sfA_stride[:1]
+                + [128 * 4 * ((sfA_shape[2] * 32) // tile_size[2])]
+                + sfA_stride[2:]
+            )
+            self.node_overwrite_stride_func_map[sfB_node] = (
+                lambda tile_size: sfB_stride[:2]
+                + [128 * 4 * ((sfB_shape[1] * 32) // tile_size[2])]
+            )
+
         # Create and run the node
         ir_node = node_class(node, node_map, ip, self)
         ir_node.run()
+
+    def get_reorder_mode(self, node):
+        if hasattr(node, "get_reordering") and callable(node.get_reordering):
+            if node.get_reordering() == "CUDNN_TENSOR_REORDERING_F8_128x4":
+                return nv_tensor_ir.ReorderMode.f8_128x4
+        return nv_tensor_ir.ReorderMode.none

@@ -283,7 +283,9 @@ class PytorchReference:
 
         # Fall back to float32 for computation if type is FP8
         compute_type = (
-            compute_type if compute_type != torch.float8_e4m3fn else torch.float
+            compute_type
+            if compute_type not in (torch.float8_e4m3fn, torch.float8_e5m2)
+            else torch.float
         )
 
         # Get output type
@@ -357,6 +359,68 @@ class PytorchReference:
         return PytorchReference._handle_binary_op(
             kwargs, test_tensor_out_list, torch.bmm, "A", "B"
         )
+
+    @staticmethod
+    def scaled_matmul(kwargs, test_tensor_out_list):
+        from nv_tensor_ir._mlir._mlir_libs import (
+            _nv_tensor_narrow_precision as narrow_precision,
+        )
+
+        # Use CPU reference by leveraging NarrowPrecision utilities in tensor-ir for now
+        # TODO: in the long term, we should translate it to PyTorch reference
+        A, sfA, B, sfB = (
+            kwargs["A"].to(device="cpu"),
+            kwargs["sfA"].to(device="cpu"),
+            kwargs["B"].to(device="cpu"),
+            kwargs["sfB"].to(device="cpu"),
+        )
+
+        comp_type, ref_type = PytorchReference._get_computation_types(
+            kwargs, test_tensor_out_list
+        )
+
+        test_tensor_out_list[0].compute_data = torch.empty(
+            test_tensor_out_list[0].dim, dtype=comp_type, device=A.device
+        )
+
+        M, N, K, L = A.shape[1], B.shape[2], A.shape[2], A.shape[0]
+        batch_stride = 1
+
+        if A.dtype == torch.float8_e5m2 and B.dtype == torch.float8_e5m2:
+            narrow_precision.ref_f8e5m2_f8e5m2_f32_gemm_block_scaled(
+                test_tensor_out_list[0].compute_data.data_ptr(),
+                A.data_ptr(),
+                B.data_ptr(),
+                sfA.data_ptr(),
+                sfB.data_ptr(),
+                M,
+                N,
+                K,
+                L,
+                batch_stride,
+            )
+        elif A.dtype == torch.float8_e4m3fn and B.dtype == torch.float8_e4m3fn:
+            narrow_precision.ref_f8e4m3_f8e4m3_f32_gemm_block_scaled(
+                test_tensor_out_list[0].compute_data.data_ptr(),
+                A.data_ptr(),
+                B.data_ptr(),
+                sfA.data_ptr(),
+                sfB.data_ptr(),
+                M,
+                N,
+                K,
+                L,
+                batch_stride,
+            )
+        else:
+            raise ValueError(
+                f"Not supported data types for scaled matmul: {A.dtype} and {B.dtype}"
+            )
+        test_tensor_out_list[0].ref_data = test_tensor_out_list[0].compute_data.to(
+            dtype=ref_type
+        )
+
+        return [test_tensor_out_list[0].ref_data]
 
     @staticmethod
     def add(kwargs, test_tensor_out_list):
@@ -799,6 +863,15 @@ class random_tensor_generator(test_node):
                 device=device,
                 dtype=torch_dtype,
             )
+        elif torch_dtype == torch.uint8:
+            self.output[0].ref_data = torch.randint(
+                1 if self.dist_mean is None else self.dist_mean,
+                3 if self.dist_sd is None else self.dist_sd,
+                self.kwargs["dim"],
+                requires_grad=False,
+                device=device,
+                dtype=torch_dtype,
+            )
         elif torch_dtype == torch.int32:
             self.output[0].ref_data = torch.randint(
                 -2 if self.dist_mean is None else self.dist_mean,
@@ -816,6 +889,14 @@ class random_tensor_generator(test_node):
                 requires_grad=False,
                 device=device,
             ).to(dtype=torch.float8_e4m3fn)
+        elif torch_dtype == torch.float8_e5m2:
+            self.output[0].ref_data = torch.randint(
+                -2 if self.dist_mean is None else self.dist_mean,
+                3 if self.dist_sd is None else self.dist_sd,
+                self.kwargs["dim"],
+                requires_grad=False,
+                device=device,
+            ).to(dtype=torch.float8_e5m2)
         else:
             if self.init_int:
                 min_value = -2 if self.dist_mean is None else int(self.dist_mean)
@@ -865,6 +946,16 @@ class random_tensor_generator(test_node):
             except Exception as error:
                 self.initialize_torch_tensor(torch_dtype, "cpu")
 
+            # Currently we use torch.uint8 to represent FP8_E8M0 and need to re-initialize it if the original data type
+            # is actually FP8_E8M0
+            # TODO: refactor this once PyTorch natively supports FP8_E8M0
+            if self.output[0].data_type == DataType.FP8_E8M0:
+                rand_float_tensor = self.output[0].ref_data.to(dtype=torch.float32)
+                rand_tensor_exponent = (
+                    rand_float_tensor.view(torch.int32) >> 23
+                ) & 0xFF
+                self.output[0].ref_data = rand_tensor_exponent.to(torch.uint8)
+
             if self.get_layout() == "NHWC":
                 size = self.output[0].ref_data.size()
                 if len(size) == 4:
@@ -887,6 +978,13 @@ class random_tensor_generator(test_node):
     def get_layout(self):
         # TODO(mbreughe): Assume NCHW layout by default for now
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
+
+    def get_reordering(self):
+        return (
+            "CUDNN_TENSOR_REORDERING_NONE"
+            if not "reordering" in self.kwargs
+            else self.kwargs["reordering"]
+        )
 
     def run_cudnn_code(self, cudnn_graph):
         if "cudnn" not in sys.modules:
@@ -948,6 +1046,13 @@ class ConstantTensor(test_node):
     def get_layout(self):
         # TODO(mbreughe): Assume NCHW layout by default for now
         return "NCHW" if not "layout" in self.kwargs else self.kwargs["layout"]
+
+    def get_reordering(self):
+        return (
+            "CUDNN_TENSOR_REORDERING_NONE"
+            if not "reordering" in self.kwargs
+            else self.kwargs["reordering"]
+        )
 
     def run_cudnn_code(self, cudnn_graph):
         if "cudnn" not in sys.modules:
@@ -1306,6 +1411,8 @@ class test_graph:
                 elif (
                     Y_expected.dtype == torch.float8_e4m3fn
                     or Y_actual.dtype == torch.float8_e4m3fn
+                    or Y_expected.dtype == torch.float8_e5m2
+                    or Y_actual.dtype == torch.float8_e5m2
                 ):
                     # Convert FP8 tensors to float32 for comparison
                     Y_expected_float = Y_expected.to(torch.float32)
