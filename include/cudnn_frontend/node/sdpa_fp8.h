@@ -13,6 +13,7 @@
 
 namespace cudnn_frontend::graph {
 
+// Deprecated, SDPANode now handles both FP16 and FP8
 class SDPAFP8Node : public NodeCRTP<SDPAFP8Node> {
     using input_names  = SDPA_fp8_attributes::input_names;
     using output_names = SDPA_fp8_attributes::output_names;
