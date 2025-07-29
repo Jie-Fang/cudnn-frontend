@@ -44,7 +44,7 @@ for symbol_name in symbols_to_import:
 
 from .datatypes import _library_type, _is_torch_tensor
 
-__version__ = "1.13.0"
+__version__ = "1.14.0"
 
 
 def _tensor(
