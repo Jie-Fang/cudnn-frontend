@@ -453,7 +453,7 @@ PyGraph::serialize() const {
 }
 
 void
-PyGraph::deserialize(py::object const& pyobj) {
+PyGraph::deserialize(std::optional<std::intptr_t> handle_, py::object const& pyobj) {
     if (py::isinstance<py::str>(pyobj)) {
         json j = json::parse(pyobj.cast<std::string>());
 
@@ -462,11 +462,21 @@ PyGraph::deserialize(py::object const& pyobj) {
         throw_if(status.is_bad(), status.get_code(), status.get_message());
 
     } else {
+        // If handle is provided, use it (AoT compilation).
+        cudnnHandle_t handle =
+            handle_.has_value() ? static_cast<cudnnHandle_t>((void*)(handle_.value())) : this->handle;
+
         std::vector<uint8_t> data = pyobj.cast<std::vector<uint8_t>>();
         auto status               = graph->deserialize(handle, data);
 
         throw_if(status.is_bad(), status.get_code(), status.get_message());
     }
+}
+
+void
+PyGraph::deserialize(py::object const& pyobj) {
+    // Call the overloaded version with default handle (nullopt)
+    deserialize(std::nullopt, pyobj);
 }
 
 void
@@ -582,7 +592,8 @@ init_pygraph_submodule(py::module_& m) {
                       std::optional<std::intptr_t>,
                       py::object,
                       py::object,
-                      std::shared_ptr<KernelCache>>(),
+                      std::shared_ptr<KernelCache>,
+                      std::shared_ptr<cudnn_frontend::DeviceProperties>>(),
              py::arg_v("name", "test_graph"),
              py::arg_v("io_data_type", cudnn_frontend::DataType_t::NOT_SET),
              py::arg_v("intermediate_data_type", cudnn_frontend::DataType_t::NOT_SET),
@@ -590,7 +601,8 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("handle", std::nullopt),
              py::arg_v("sm_count", py::none()),
              py::arg_v("sm_version", py::none()),
-             py::arg_v("kernel_cache", nullptr))
+             py::arg_v("kernel_cache", nullptr),
+             py::arg_v("device_property", nullptr))
         .def("tensor_like",
              py::overload_cast<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const&, std::string const&>(
                  &PyGraph::tensor_like),
@@ -921,7 +933,11 @@ init_pygraph_submodule(py::module_& m) {
         .def("populate_cuda_graph", &PyGraph::populate_cuda_graph)
         .def("update_cuda_graph", &PyGraph::update_cuda_graph)
         .def("serialize", &PyGraph::serialize)
-        .def("deserialize", &PyGraph::deserialize)
+        .def("deserialize",
+             (void(PyGraph::*)(std::optional<std::intptr_t>, py::object const&)) & PyGraph::deserialize,
+             py::arg("handle_"),
+             py::arg("pyobj"))
+        .def("deserialize", (void(PyGraph::*)(py::object const&)) & PyGraph::deserialize, py::arg("pyobj"))
         .def("_execute_plan_at_index", &PyGraph::execute_plan_at_index)
         .def("__repr__", [](PyGraph const& pygraph) {
             std::stringstream ss;

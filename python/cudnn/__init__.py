@@ -25,6 +25,7 @@ symbols_to_import = [
     "knob_type",
     "create_handle",
     "create_kernel_cache",
+    "create_device_properties",
     "get_stream",
     "numerical_note",
     "set_stream",

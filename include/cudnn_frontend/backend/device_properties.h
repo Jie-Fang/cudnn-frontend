@@ -107,11 +107,11 @@ class DeviceProperties : public detail::backend_descriptor {
                                        error_code_t::CUDNN_BACKEND_API_FAILED,
                                        "CUDNN_ATTR_DEVICEPROP_JSON_REPRESENTATION is only available starting 9.8.");
 
-        // Check if the kernel cache is already initialized
+        // Check if the device properties is already initialized
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             get_ptr() != nullptr, error_code_t::CUDNN_BACKEND_API_FAILED, "Device properties is already initialized.");
 
-        // // Initialize the device properties descriptor
+        // Initialize the device properties descriptor
         CHECK_CUDNN_FRONTEND_ERROR(initialize(CUDNN_BACKEND_DEVICEPROP_DESCRIPTOR));
 
         CHECK_CUDNN_ERROR(detail::set_attribute(get_ptr(),
