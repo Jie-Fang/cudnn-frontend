@@ -96,6 +96,10 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                    error_code_t::ATTRIBUTE_NOT_SET,
                                    "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
+    RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && (padding_mask == false),
+                                   error_code_t::GRAPH_NOT_SUPPORTED,
+                                   "Ragged offsets are only supported with padding mask.");
+
     // validate options for dropout mask
     RETURN_CUDNN_FRONTEND_ERROR_IF(
         dropout_probability.has_value() && is_dropout_custom,
@@ -119,10 +123,9 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
         "as max_s_q == max_s_kv");
 
     RETURN_CUDNN_FRONTEND_ERROR_IF(
-        has_causal_mask_bottom_right() && (is_bias || alibi_mask || (is_ragged && !padding_mask) || is_dropout),
+        has_causal_mask_bottom_right() && (is_bias || alibi_mask || is_dropout),
         error_code_t::GRAPH_NOT_SUPPORTED,
-        "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False. Further "
-        "is_ragged==True is only allowed when padding_mask=True.");
+        "Bottom right causal mask is only supported with is_bias=False, is_alibi=False, is_dropout=False.");
 
     RETURN_CUDNN_FRONTEND_ERROR_IF(has_causal_mask_bottom_right() && (detail::get_backend_version() < 90600) &&
                                        ((s_q % 64 != 0) || (s_kv % 64 != 0)),
@@ -234,19 +237,12 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
             "On Hopper architecture, this specific combination of s_q, s_kv, and left_bound + right_bound + bottom "
             "right diagonal alignment is not supported for backend version 9.9 or below");
 
-        if ((detail::get_backend_version() >= 91002)) {
+        if ((detail::get_backend_version() < 91002)) {
             RETURN_CUDNN_FRONTEND_ERROR_IF(
-                (left_bound.has_value() || right_bound.has_value()) && ((is_ragged && !padding_mask)),
+                left_bound.has_value() && (!has_causal_like_masking() || is_dropout || is_bias),
                 error_code_t::GRAPH_NOT_SUPPORTED,
-                "Left and right bounds with is_ragged==True is only allowed when "
-                "padding_mask=True. And the diagonal alignment must be set.");
-        } else {
-            RETURN_CUDNN_FRONTEND_ERROR_IF(
-                left_bound.has_value() &&
-                    (!has_causal_like_masking() || is_dropout || is_bias || (is_ragged && !padding_mask)),
-                error_code_t::GRAPH_NOT_SUPPORTED,
-                "Left and right bounds are only supported with is_dropout=False, is_bias=False. Further "
-                "is_ragged==True is only allowed when padding_mask=True. Lastly the diagonal alignment must be set.");
+                "Left and right bounds are only supported with is_dropout=False, is_bias=False. And the diagonal "
+                "alignment must be set.");
         }
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(right_bound.has_value() && right_bound.value() < 0,
