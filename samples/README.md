@@ -11,6 +11,9 @@ Samples leveraging FE's Python interface are located in [samples/python](python/
 * [03_mixed_precision](python/03_mixed_precision_matmul.ipynb)
     Shows how to mutiply tensors of different data types.
 
+* [33_layer_norm](python/33_layernorm_forward_training_and_backward_with_relu_bitmask.ipynb)
+    Shows how to use layer norm with fusion pattern for relu using a bitmask.
+
 * [50_sdpa](python/50_scaled_dot_product_attention.ipynb)
     Shows how to run causal self attention with dropout in forward pass.
 
@@ -19,9 +22,6 @@ Samples leveraging FE's Python interface are located in [samples/python](python/
 
 * [52_sdpa](python/52_scaled_dot_product_attention_with_paged_caches.ipynb)
     Shows how to run scaled dot product attention where the K and V caches are stored in non contiguous memory.
-
-* [53_layer_norm](python/53_layernorm_forward_training_and_backward_with_relu_bitmask.ipynb)
-    Shows how to use layer norm with fusion pattern for relu using a bitmask.
 
 ## C++ Interface Samples
 Samples leveraging FE's C++ interface are located in [samples/cpp](cpp/).
