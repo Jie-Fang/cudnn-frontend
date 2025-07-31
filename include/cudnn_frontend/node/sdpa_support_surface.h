@@ -59,8 +59,8 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
     // Get device properties
     cudaDeviceProp prop;
     int device;
-    CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-    CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
+    _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
+    _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
     // Common FP16 and FP8 validation
     // validate basic dimension requirements

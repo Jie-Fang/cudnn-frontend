@@ -39,8 +39,8 @@ class SDPAFP8BackwardNode : public NodeCRTP<SDPAFP8BackwardNode> {
 
         cudaDeviceProp prop;
         int device;
-        CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             prop.major < 9,
             error_code_t::GRAPH_NOT_SUPPORTED,

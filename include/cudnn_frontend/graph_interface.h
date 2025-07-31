@@ -200,21 +200,22 @@ class Graph : public ICudnn, public INode {
         void *fe_workspace,
         std::unordered_map<uid_t, std::tuple<int64_t, int64_t, std::vector<float>>> &workspace_modifications) const {
         cudaStream_t stream;
-        CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
+        _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &stream));
         char *workspace = static_cast<char *>(fe_workspace);
 
         for (auto [uid, data] : workspace_modifications) {
             (void)uid;
             if (std::get<0>(data) == 0) {
                 auto &vec_data = std::get<2>(data);
-                CHECK_CUDA_ERROR(detail::cuda_mem_cpy_async(workspace + std::get<1>(data),
-                                                            vec_data.data(),
-                                                            vec_data.size() * sizeof(float),
-                                                            cudaMemcpyHostToDevice,
-                                                            stream));
+                _CUDNN_CHECK_CUDA_ERROR(detail::cuda_mem_cpy_async(workspace + std::get<1>(data),
+                                                                   vec_data.data(),
+                                                                   vec_data.size() * sizeof(float),
+                                                                   cudaMemcpyHostToDevice,
+                                                                   stream));
             } else if (std::get<0>(data) == 1) {
                 int64_t memset_size = (int64_t)std::get<2>(data)[0];
-                CHECK_CUDA_ERROR(detail::cuda_mem_set_async(workspace + std::get<1>(data), 0, memset_size, stream));
+                _CUDNN_CHECK_CUDA_ERROR(
+                    detail::cuda_mem_set_async(workspace + std::get<1>(data), 0, memset_size, stream));
             }
         }
         return {error_code_t::OK, ""};
@@ -310,12 +311,12 @@ class Graph : public ICudnn, public INode {
             cudnn_cuda_graph == nullptr, error_code_t::INVALID_VALUE, "cudnn_cuda_graph should not be a nullptr");
 
         size_t num_root_nodes;
-        CHECK_CUDA_ERROR(detail::cuda_graph_get_root_nodes(cudnn_cuda_graph, nullptr, &num_root_nodes));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_get_root_nodes(cudnn_cuda_graph, nullptr, &num_root_nodes));
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             num_root_nodes != 1, error_code_t::INVALID_VALUE, "cudnn_cuda_graph should have exactly 1 root node.");
 
         cudaGraphNode_t current_node = nullptr;
-        CHECK_CUDA_ERROR(detail::cuda_graph_get_root_nodes(cudnn_cuda_graph, &current_node, &num_root_nodes));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_get_root_nodes(cudnn_cuda_graph, &current_node, &num_root_nodes));
 
         ///////////////////////////////////////
         //// PASS BY VALUE TENSOR HANDLING ////
@@ -345,7 +346,7 @@ class Graph : public ICudnn, public INode {
 
             // 0 means memcpy
             if (operation_type == 0) {
-                CHECK_CUDA_ERROR(
+                _CUDNN_CHECK_CUDA_ERROR(
                     detail::cuda_graph_add_memcpy_node_set_params_1D(current_node,
                                                                      static_cast<char *>(workspace) + offset,
                                                                      vec_data.data(),
@@ -366,7 +367,7 @@ class Graph : public ICudnn, public INode {
                 params.height      = 1;  // 1D memset currently
                 params.pitch       = 0;  // unused
 
-                CHECK_CUDA_ERROR(detail::cuda_graph_add_memset_node_set_params(current_node, &params));
+                _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_add_memset_node_set_params(current_node, &params));
             }
             // Other values do not correspond to CUDA graph nodes
             else {
@@ -374,12 +375,13 @@ class Graph : public ICudnn, public INode {
             }
 
             size_t num_dependent_nodes;
-            CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_dependent_nodes));
+            _CUDNN_CHECK_CUDA_ERROR(
+                detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_dependent_nodes));
             RETURN_CUDNN_FRONTEND_ERROR_IF(
                 num_dependent_nodes != 1,
                 error_code_t::INVALID_VALUE,
                 "Each node of cudnn_cuda_graph before the backend graph node should have exactly 1 dependent node.");
-            CHECK_CUDA_ERROR(
+            _CUDNN_CHECK_CUDA_ERROR(
                 detail::cuda_graph_node_get_dependent_nodes(current_node, &current_node, &num_dependent_nodes));
         }
 
@@ -403,7 +405,7 @@ class Graph : public ICudnn, public INode {
         //// BE GRAPH ////
         ///////////////////
         cudaGraph_t backend_cuda_graph;
-        CHECK_CUDA_ERROR(detail::cuda_graph_child_graph_node_get_graph(current_node, &backend_cuda_graph));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_child_graph_node_get_graph(current_node, &backend_cuda_graph));
 
         detail::backend_descriptor variant_pack_descriptor(CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR);
         RETURN_CUDNN_FRONTEND_ERROR_IF(variant_pack_descriptor.get_status() != CUDNN_STATUS_SUCCESS,
@@ -417,14 +419,15 @@ class Graph : public ICudnn, public INode {
 
         int64_t candidate = plans.candidate;
         CHECK_CUDNN_FRONTEND_ERROR(plans.is_plan_index_executable(candidate));
-        CHECK_CUDNN_ERROR(detail::update_cuda_graph(handle,
-                                                    plans.execution_plans[candidate]->get_raw_desc(),
-                                                    variant_pack_descriptor.get_ptr(),
-                                                    backend_cuda_graph));
+        _CUDNN_CHECK_CUDNN_ERROR(detail::update_cuda_graph(handle,
+                                                           plans.execution_plans[candidate]->get_raw_desc(),
+                                                           variant_pack_descriptor.get_ptr(),
+                                                           backend_cuda_graph));
 
         // There should be nothing after the backend graph
         size_t num_dependent_nodes;
-        CHECK_CUDA_ERROR(detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_dependent_nodes));
+        _CUDNN_CHECK_CUDA_ERROR(
+            detail::cuda_graph_node_get_dependent_nodes(current_node, nullptr, &num_dependent_nodes));
         RETURN_CUDNN_FRONTEND_ERROR_IF(num_dependent_nodes != 0,
                                        error_code_t::INVALID_VALUE,
                                        "cudnn_cuda_graph should have no graph nodes after the backend graph node.");
@@ -495,14 +498,14 @@ class Graph : public ICudnn, public INode {
 
             // 0 means memcpy
             if (operation_type == 0) {
-                CHECK_CUDA_ERROR(detail::cuda_graph_add_memcpy_node_1D(&node,
-                                                                       cudnn_cuda_graph,
-                                                                       &last_node,
-                                                                       last_node != nullptr,
-                                                                       static_cast<char *>(workspace) + offset,
-                                                                       vec_data.data(),
-                                                                       vec_data.size() * sizeof(float),
-                                                                       cudaMemcpyHostToDevice));
+                _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_add_memcpy_node_1D(&node,
+                                                                              cudnn_cuda_graph,
+                                                                              &last_node,
+                                                                              last_node != nullptr,
+                                                                              static_cast<char *>(workspace) + offset,
+                                                                              vec_data.data(),
+                                                                              vec_data.size() * sizeof(float),
+                                                                              cudaMemcpyHostToDevice));
             }
             // 1 means memset
             else if (operation_type == 1) {
@@ -518,7 +521,7 @@ class Graph : public ICudnn, public INode {
                 params.height      = 1;  // 1D memset currently
                 params.pitch       = 0;  // unused
 
-                CHECK_CUDA_ERROR(detail::cuda_graph_add_memset_node(
+                _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_add_memset_node(
                     &node, cudnn_cuda_graph, &last_node, last_node != nullptr, &params));
             }
             // Other values do not correspond to CUDA graph nodes
@@ -571,10 +574,10 @@ class Graph : public ICudnn, public INode {
         // The responsibility to destroy is on the user.
         detail::cu_graph_create(&backend_cuda_graph, 0);  // 0 is just what the API says to pass
 
-        CHECK_CUDNN_ERROR(detail::populate_cuda_graph(handle,
-                                                      plans.execution_plans[candidate]->get_raw_desc(),
-                                                      variant_pack_descriptor.get_ptr(),
-                                                      backend_cuda_graph));
+        _CUDNN_CHECK_CUDNN_ERROR(detail::populate_cuda_graph(handle,
+                                                             plans.execution_plans[candidate]->get_raw_desc(),
+                                                             variant_pack_descriptor.get_ptr(),
+                                                             backend_cuda_graph));
 
         // Clone BE graph into a graph_node
         // This same call also places the newly created into FE's graph
@@ -585,7 +588,7 @@ class Graph : public ICudnn, public INode {
 
         // Destroy the BE graph as it now has been cloned into a node
         // It was initialized by internals of backend, but the responsibility to destroy it is on FE.
-        CHECK_CUDA_ERROR(detail::cuda_graph_destroy(backend_cuda_graph));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_destroy(backend_cuda_graph));
 
         return {error_code_t::OK, ""};
     }
@@ -1555,12 +1558,12 @@ Graph::get_execution_plan_count() const {
 
 inline error_t
 Graph::get_engine_count(int64_t &count) {
-    CHECK_CUDNN_ERROR(detail::get_attribute(operation_graph->get_raw_desc(),
-                                            CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT,
-                                            CUDNN_TYPE_INT64,
-                                            1,
-                                            nullptr,
-                                            &count));
+    _CUDNN_CHECK_CUDNN_ERROR(detail::get_attribute(operation_graph->get_raw_desc(),
+                                                   CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT,
+                                                   CUDNN_TYPE_INT64,
+                                                   1,
+                                                   nullptr,
+                                                   &count));
 
     return {error_code_t::OK, ""};
 }
