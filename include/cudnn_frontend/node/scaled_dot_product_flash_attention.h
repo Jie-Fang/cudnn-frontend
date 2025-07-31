@@ -737,8 +737,8 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
         cudaDeviceProp prop;
         int device;
-        CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
-        CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
         if (prop.major == 9) { 
             // validate basic dimension hquirements
@@ -1028,7 +1028,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
             // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=0      - always disable workspace opt.
             // CUDNN_FRONTEND_ATTN_DP_WORKSPACE_LIMIT=n      - enable workspace opt. until the n byte limit
             struct cudaDeviceProp prop;
-            CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, 0));
+            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, 0));
 
             // hopper or above
             if (prop.major >= 9) {
