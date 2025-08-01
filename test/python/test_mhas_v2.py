@@ -94,7 +94,7 @@ def get_powers_of_two(lo, hi):
     return powers_of_two
 
 def get_multiples_of(val, lo, hi):
-    assert type(val) == int and type(lo) == int and type(hi) == int, "wrong input type"
+    assert type(val) == type(lo) == type(hi) == int, "wrong input type"
     assert val > 0 and lo > 0 and hi > 0 and lo <= hi, "wrong input values"
     multiples = []
     iter = int((lo+val-1)/val) * val
@@ -107,6 +107,10 @@ def get_multiples_of(val, lo, hi):
 def round_down(value, roundTo):
     assert type(value) == type(roundTo) == int and (roundTo & (roundTo - 1)) == 0, "wrong input"
     return value - (value % roundTo)
+
+def round_up(value, roundTo):
+    assert type(value) == type(roundTo) == int and (roundTo & (roundTo - 1)) == 0, "wrong input"
+    return roundTo * ((value + roundTo - 1) // roundTo)
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
@@ -296,8 +300,8 @@ class testConfig:
                  'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 
                  'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 
                  'diag_align', 'left_bound', 'right_bound', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
-                 'is_dropout', 'is_padding', 'is_ragged', 'is_determin', 'data_type', 'batches', 'd_qk', 
-                 'd_v', 's_q', 's_kv', 'h_q', 'h_k', 'h_v', 'block_size', 'in_layout', 'out_layout', 
+                 'is_dropout', 'is_padding', 'is_ragged', 'is_determin', 'data_type', 'batches', 'h_q', 
+                 'h_k', 'h_v', 'd_qk', 'd_v', 's_q', 's_kv', 'block_size', 'in_layout', 'out_layout', 
                  'shape_q', 'gaps_q', 'stride_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'elems_k', 
                  'shape_v', 'gaps_v', 'stride_v', 'elems_v', 'shape_o', 'gaps_o', 'stride_o', 'elems_o',
                  'seq_len_q', 'seq_len_kv']
@@ -432,15 +436,16 @@ class testConfig:
         self.stride_v, _, self.elems_v = get_strides_from_layout(self.shape_v, layout_v, self.gaps_v)
         self.stride_o, _, self.elems_o = get_strides_from_layout(self.shape_o, self.out_layout, self.gaps_o)
 
-    # Keyword-only arguments after "self".
-    def setBatches(self, *, min_batches=1, max_batches=8):
-        assert type(min_batches) == int and type(max_batches) == int, "wrong arg types"
-        assert min_batches > 0 and max_batches > 0 and min_batches <= max_batches, "invalid range"
+    # Keyword-only arguments, all function args must be supplied.
+    def setBatches(self, *, min_batches=None, max_batches=None):
+        arg_list = [min_batches, max_batches]
+        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
+        assert min_batches <= max_batches, "invalid range"
         self.min_batches = min_batches
         self.max_batches = max_batches
 
-    # Keyword-only arguments after "self".
-    def setSequences(self, *, min_s_q=1, max_s_q=16, min_s_kv=1, max_s_kv=16):
+    # Keyword-only arguments, all function args must be supplied.
+    def setSequences(self, *, min_s_q=None, max_s_q=None, min_s_kv=None, max_s_kv=None):
         arg_list = [min_s_q, max_s_q, min_s_kv, max_s_kv]
         assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
         assert min_s_q <= max_s_q and min_s_kv <= max_s_kv, "invalid range"
@@ -449,28 +454,43 @@ class testConfig:
         self.min_s_kv = min_s_kv
         self.max_s_kv = max_s_kv
 
-    # Keyword-only arguments after "self".
-    def setVectors(self, *, min_d_qk=1, max_d_qk=64, min_d_v=1, max_d_v=64):
+    # Keyword-only arguments, all function args must be supplied.
+    def setVectors(self, *, min_d_qk=None, max_d_qk=None, min_d_v=None, max_d_v=None, data_type=None):
         arg_list = [min_d_qk, max_d_qk, min_d_v, max_d_v]
         assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
-        assert min_d_qk <= max_d_qk and min_d_v <= max_d_v, "invalid range"
-        self.min_d_qk = min_d_qk
-        self.max_d_qk = max_d_qk
-        self.min_d_v  = min_d_v
-        self.max_d_v  = max_d_v
+        assert data_type in data_type_options, f"invalid arg data_type='{data_type}'"
 
-    # Keyword-only arguments after "self".
-    def setHeads(self, *, min_h_qkv=1, max_h_qkv=16):
-        assert type(min_h_qkv) == int and type(max_h_qkv) == int, "wrong arg types"
-        assert min_h_qkv > 0 and max_h_qkv > 0 and min_h_qkv <= max_h_qkv, "invalid range"
+        # The size of dense vectors Q,K,V should be divisible into 16 byte chunks.
+        tmp = torch.tensor([1.0], dtype=data_type)
+        elem_align = int(16 / tmp.element_size())
+
+        range_lo_d_qk = round_up(min_d_qk, elem_align)   # include first multiple of 'elem_align'
+        range_hi_d_qk = round_down(max_d_qk, elem_align) # include last multiple of 'elem_align'
+        assert range_hi_d_qk >= range_lo_d_qk, f"invalid range (min_d_qk={min_d_qk}, max_d_qk={max_d_qk})"
+
+        range_lo_d_v = round_up(min_d_v, elem_align)
+        range_hi_d_v = round_down(max_d_v, elem_align)
+        assert range_hi_d_v >= range_lo_d_v, f"invalid range (min_d_v={min_d_v}, max_d_v={max_d_v})"
+
+        self.min_d_qk = range_lo_d_qk
+        self.max_d_qk = range_hi_d_qk
+        self.min_d_v  = range_lo_d_v
+        self.max_d_v  = range_hi_d_v
+
+    # Keyword-only arguments, all function args must be supplied.
+    def setHeads(self, *, min_h_qkv=None, max_h_qkv=None):
+        arg_list = [min_h_qkv, max_h_qkv]
+        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
+        assert min_h_qkv <= max_h_qkv, "invalid range"
         self.min_h_qkv = min_h_qkv
         self.max_h_qkv = max_h_qkv
 
-    # Keyword-only arguments after "self".
-    def setBlockSize(self, *, min_blk_sz=1, max_blk_sz=128):
-        assert type(min_blk_sz) == int and type(max_blk_sz) == int, "wrong arg types"
-        assert min_blk_sz > 0 and max_blk_sz > 0 and min_blk_sz <= max_blk_sz, "invalid range"
-        assert max_blk_sz >= (1 << min_blk_sz.bit_length()), "no power of 2 value in range"
+    # Keyword-only arguments, all function args must be supplied.
+    def setBlockSize(self, *, min_blk_sz=None, max_blk_sz=None):
+        arg_list = [min_blk_sz, max_blk_sz]
+        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
+        assert min_blk_sz <= max_blk_sz, "invalid range"
+        assert (min_blk_sz & (min_blk_sz - 1)) == 0 or  max_blk_sz >= (1 << min_blk_sz.bit_length()), "no power of 2 value in range"
         self.min_blk_sz  = min_blk_sz
         self.max_blk_sz  = max_blk_sz
 
@@ -490,6 +510,7 @@ class testConfig:
             print(f"platform_info    = {self.gpu_arch} ({self.gpu_info}), cudnn_ver={self.cudnn_ver}")
             print(f"head_group       = {self.head_group}")
             print(f"layout           = {self.in_layout}->{self.out_layout}")
+            print(f"basic_dims       = [b={self.batches}, h_q={self.h_q}, h_k={self.h_k}, h_v={self.h_v}, d_qk={self.d_qk}, d_v={self.d_v}, s_q={self.s_q}, s_kv={self.s_kv}]")
             print(f"shape_q(b,h,s,d) = {self.shape_q}, strides={self.stride_q}, gaps={self.gaps_q}, elems={self.elems_q:,}")
             print(f"shape_k(b,h,s,d) = {self.shape_k}, strides={self.stride_k}, gaps={self.gaps_k}, elems={self.elems_k:,}")
             print(f"shape_v(b,h,s,d) = {self.shape_v}, strides={self.stride_v}, gaps={self.gaps_v}, elems={self.elems_v:,}")
@@ -509,9 +530,9 @@ class testConfig:
             print(f"seq_len_kv       = {truncated_list(20, 3, self.seq_len_kv)}")
             print(f"data_type        = {self.data_type}")
             if reg_run:
-                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed} --unlock")
+                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 2:
-            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed} --unlock")
+            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 3:
             print(f"\npytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
         else:
@@ -520,9 +541,9 @@ class testConfig:
         # Make sure to flush everything out.
         print(" ", flush=True)
 
-    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, knob_generate_ragged_tests, knob_avoid_invalid_configs, request):
-        assert type(knob_generate_ragged_tests) == knobNAR, "knob 'generate_ragged_tests' must have type knobNAR"
-        assert type(knob_avoid_invalid_configs) == knobNA, "knob 'avoid_invalid_configs' must have type knobNA"
+    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, request, *, generate_ragged_tests, avoid_invalid_configs):
+        assert type(generate_ragged_tests) == knobNAR, "knob 'generate_ragged_tests' must have type knobNAR"
+        assert type(avoid_invalid_configs) == knobNA, "knob 'avoid_invalid_configs' must have type knobNA"
         assert data_type in data_type_options, "wrong data type"
         assert head_group in head_group_options, "wrong head group"
         assert layout_type in random_layout_options, "wrong layout type"
@@ -550,13 +571,13 @@ class testConfig:
         self.is_padding   = self.rng_geom.choice([True, False])
         self.is_ragged    = self.rng_geom.choice([True, False])
 
-        if knob_generate_ragged_tests == knob_generate_ragged_tests.ALWAYS:
+        if generate_ragged_tests == generate_ragged_tests.ALWAYS:
            self.is_padding = True
            self.is_ragged  = True
-        elif knob_generate_ragged_tests == knob_generate_ragged_tests.NEVER:
+        elif generate_ragged_tests == generate_ragged_tests.NEVER:
            self.is_ragged  = False
 
-        if knob_avoid_invalid_configs == knob_avoid_invalid_configs.ALWAYS:
+        if avoid_invalid_configs == avoid_invalid_configs.ALWAYS:
             # LIMIT: always is_determin=True in inference.
             if self.is_infer:
                 self.is_determin = True
@@ -596,16 +617,24 @@ class testConfig:
 
         if layout_type == "edge_random":
             self.batches = self.max_batches
-            self.s_q = self.max_s_q
-            self.s_kv = self.max_s_kv
+            self.s_q     = self.max_s_q
+            self.s_kv    = self.max_s_kv
         elif layout_type == "inner_random":
-            self.batches = self.rng_geom.randint(1, self.max_batches)
+            self.batches = self.rng_geom.randint(self.min_batches, self.max_batches)
 
-            # Force singleton dim with small probability.
-            self.s_q = 1 if (self.draw() < 0.05) else self.rng_geom.randint(1, self.max_s_q)
-            self.s_kv = 1 if (self.draw() < 0.05) else self.rng_geom.randint(1, self.max_s_kv)
+            self.s_q  = self.rng_geom.randint(self.min_s_q, self.max_s_q)
+            self.s_kv = self.rng_geom.randint(self.min_s_kv, self.max_s_kv)
 
-            if (self.draw() < 0.707 and self.s_q <= self.max_s_kv):
+            # Force s_q=1 with small probability.
+            if self.min_s_q == 1 and self.draw() < 0.05:
+                self.s_q = 1
+
+            # Force s_kv=1 with small probability.
+            if self.min_s_kv == 1 and self.draw() < 0.05:
+                self.s_kv = 1
+
+            # Force s_kv=s_q with some probability.
+            if self.draw() < 0.707 and self.min_s_kv <= self.s_q <= self.max_s_kv:
                 self.s_kv = self.s_q
         else:
             assert False, "wrong layout type"
@@ -642,7 +671,7 @@ class testConfig:
         self.left_bound  = int_cli_option(self.left_bound, request, "--mha_left_bound")
         self.right_bound = int_cli_option(self.right_bound, request, "--mha_right_bound")
 
-        if knob_avoid_invalid_configs == knob_avoid_invalid_configs.ALWAYS:
+        if avoid_invalid_configs == avoid_invalid_configs.ALWAYS:
             # LIMIT: left and right bounds are only supported with is_dropout=False, is_bias=False.
             if self.left_bound != INVALID_BOUND and self.right_bound != INVALID_BOUND:
                 self.is_dropout = False
@@ -671,25 +700,24 @@ class testConfig:
             if self.s_q > self.s_kv and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND:
                 self.right_bound = INVALID_BOUND
 
-        # Make sure all Q,K,V vectors in a tensor are aliagned to 16 bytes.
-        # For dense tensors, vectors should be divisible into 16B chunks.
+        # The size of dense vectors Q,K,V should be divisible into 16 byte chunks.
         tmp = torch.tensor([1.0], dtype=data_type)
         elem_align = int(16 / tmp.element_size())
 
-        assert self.max_d_qk >= elem_align, "Value max_d_qk too small"
-        assert self.max_d_v >= elem_align, "Value max_d_v too small"
+        # Upper and lower limits for 'd_qk' and 'd_v' should be multiple of 'elem_align'.
+        # The min...max values are adjusted by the setVectors() function.
+        assert self.min_d_qk % elem_align == 0 and self.max_d_qk % elem_align == 0, "wrong d_qk range"
+        assert self.min_d_v % elem_align == 0 and self.max_d_v % elem_align == 0, "wrong d_v range"
 
         if layout_type == "edge_random":
             self.d_qk = self.max_d_qk
             self.d_v  = self.max_d_v
         elif layout_type == "inner_random":
-            self.d_qk = self.rng_geom.randint(elem_align, self.max_d_qk)
-            self.d_qk = round_down(self.d_qk, elem_align)
-            if (self.draw() < 0.5 and self.d_qk <= self.max_d_v):
+            self.d_qk = self.rng_geom.choice(get_multiples_of(elem_align, self.min_d_qk, self.max_d_qk))
+            if self.draw() < 0.5 and self.min_d_v <= self.d_qk <= self.max_d_v:
                 self.d_v = self.d_qk
             else:
-                self.d_v = self.rng_geom.randint(elem_align, self.max_d_v)
-                self.d_v = round_down(self.d_v, elem_align)
+                self.d_v = self.rng_geom.choice(get_multiples_of(elem_align, self.min_d_v, self.max_d_v))
         else:
             assert False, "wrong layout type"
 
@@ -697,7 +725,7 @@ class testConfig:
         self.d_qk = int_cli_option(self.d_qk, request, "--mha_d_qk")
         self.d_v  = int_cli_option(self.d_v, request, "--mha_d_v")
 
-        if (layout_type == "edge_random"):
+        if layout_type == "edge_random":
             self.h_q = self.max_h_qkv
             if self.head_group in ("MHA", "GQA"):
                 self.h_k = self.h_q
@@ -707,8 +735,8 @@ class testConfig:
                 self.h_v = 1
             else:
                 assert False, f"wrong attention flavor '{self.head_group}'"
-        elif (layout_type == "inner_random"):
-            self.h_q = self.rng_geom.randint(1, self.max_h_qkv)
+        elif layout_type == "inner_random":
+            self.h_q = self.rng_geom.randint(self.min_h_qkv, self.max_h_qkv)
             if self.head_group == "MHA":
                 self.h_k = self.h_q
                 self.h_v = self.h_q
@@ -752,7 +780,7 @@ class testConfig:
             self.rng_geom.shuffle(base_indices)
             base_indices.append(3)
             gaps = [0, 0, 0, 0]
-            if (self.draw() < 0.5):
+            if self.draw() < 0.5:
                 gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
                 gaps.append(elem_align * self.rng_geom.randint(0, 2))
             (self.stride_q, self.gaps_q, self.elems_q) = get_strides_from_indices(self.shape_q, base_indices, gaps, self.rng_geom)
@@ -760,12 +788,12 @@ class testConfig:
 
             # For K strides, decide with some probability if a new layout should be used.
             indices = base_indices
-            if (self.draw() < 0.707):
+            if self.draw() < 0.707:
                 indices = [0, 1, 2]
                 self.rng_geom.shuffle(indices)
                 indices.append(3)
             gaps = [0, 0, 0, 0]
-            if (self.draw() < 0.5):
+            if self.draw() < 0.5:
                 gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
                 gaps.append(elem_align * self.rng_geom.randint(0, 2))
             (self.stride_k, self.gaps_k, self.elems_k) = get_strides_from_indices(self.shape_k, indices, gaps, self.rng_geom)
@@ -773,12 +801,12 @@ class testConfig:
 
             # For V strides, decide with some probability if a new layout should be used.
             indices = base_indices
-            if (self.draw() < 0.707):
+            if self.draw() < 0.707:
                 indices = [0, 1, 2]
                 self.rng_geom.shuffle(indices)
                 indices.append(3)
             gaps = [0, 0, 0, 0]
-            if (self.draw() < 0.5):
+            if self.draw() < 0.5:
                 gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
                 gaps.append(elem_align * self.rng_geom.randint(0, 2))
             (self.stride_v, self.gaps_v, self.elems_v) = get_strides_from_indices(self.shape_v, indices, gaps, self.rng_geom)
@@ -787,12 +815,12 @@ class testConfig:
             # Q, K, V buffers are not interleaved.
             # For O strides, decide with some probability if a new layout should be used
             indices = base_indices
-            if (self.draw() < 0.5):
+            if self.draw() < 0.5:
                 indices = [0, 1, 2]
                 self.rng_geom.shuffle(indices)
                 indices.append(3)
             gaps = [0, 0, 0, 0]
-            if (self.draw() < 0.5):
+            if self.draw() < 0.5:
                 gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
                 gaps.append(elem_align * self.rng_geom.randint(0, 2))
             (self.stride_o, self.gaps_o, self.elems_o) = get_strides_from_indices(self.shape_o, indices, gaps, self.rng_geom)
@@ -922,7 +950,7 @@ def compute_ref(
         causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
         causal_mask.triu_(diagonal=1 + right_bound)
         s = s.masked_fill(causal_mask, float("-inf"))
-    elif (diag_align == diag_align.BOTTOM_RIGHT and right_bound != INVALID_BOUND):
+    elif diag_align == diag_align.BOTTOM_RIGHT and right_bound != INVALID_BOUND:
         causal_mask_bottom_right = None
         if padding:
             causal_mask_bottom_right = torch.ones(
@@ -1072,6 +1100,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
     # Check if the test is temporarily blocked.
     if is_test_blocked(request.node.name, cfg.blocked_tests):
         print(f"\nWARNING: test '{request.node.name}' is blocked on {cfg.gpu_arch} and cuDNN {cfg.cudnn_ver}")
+        print("@@@@ Overall result: SKIPPED, test blocked.")
         pytest.skip("test blocked")
 
     head_group   = cfg.head_group
@@ -1642,63 +1671,81 @@ def env_info(request):
 # L0 fprop tests
 # ==================================
 
-@pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
 @pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=888), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True], ids=lambda p: "FWD" if p else "BWD")
+@pytest.mark.parametrize("is_infer", [True], ids=["FWD"])
 @pytest.mark.L0
-def test_sdpa_random_fwd(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+def test_sdpa_random_fwd_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
-    cfg.setBatches(max_batches=8)
-    cfg.setSequences(max_s_q=1024, max_s_kv=1024)
-    cfg.setVectors(max_d_v=128, max_d_qk=128)
-    cfg.setHeads(max_h_qkv=8)
-    cfg.setBlockSize(max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, knobNAR.NEVER, knobNA.ALWAYS, request)
+    cfg.setBatches(min_batches=1, max_batches=8)
+    cfg.setSequences(min_s_q=1, max_s_q=1024, min_s_kv=1, max_s_kv=1024)
+    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
+    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
+    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
 # L0 bprop tests
 # ==================================
 
-@pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
 @pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=123), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [False], ids=lambda p: "FWD" if p else "BWD")
+@pytest.mark.parametrize("is_infer", [False], ids=["BWD"])
 @pytest.mark.L0
-def test_sdpa_random_bwd(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+def test_sdpa_random_bwd_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
-    cfg.setBatches(max_batches=8)
-    cfg.setSequences(max_s_q=512, max_s_kv=512)
-    cfg.setVectors(max_d_v=160, max_d_qk=160)
-    cfg.setHeads(max_h_qkv=8)
-    cfg.setBlockSize(max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, knobNAR.NEVER, knobNA.ALWAYS, request)
+    cfg.setBatches(min_batches=1, max_batches=8)
+    cfg.setSequences(min_s_q=1, max_s_q=512, min_s_kv=1, max_s_kv=512)
+    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
+    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
+    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
 # L0 fprop tests with s_q=1
 # ==================================
 
-@pytest.mark.skipif("not config.getoption('--unlock')", reason="used with '--unlock' only")
 @pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=741), ids=lambda p: f"test{p[0]}")
 @pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True], ids=lambda p: "FWD_SQ1" if p else "BWD_SQ1")
+@pytest.mark.parametrize("is_infer", [True], ids=["FWD_SQ1"])
 @pytest.mark.L0
-def test_sdpa_random_sq1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+def test_sdpa_random_sq1_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
-    cfg.setBatches(max_batches=32)
-    cfg.setSequences(max_s_q=1, max_s_kv=512)
-    cfg.setVectors(max_d_v=128, max_d_qk=128)
-    cfg.setHeads(max_h_qkv=32)
-    cfg.setBlockSize(max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, knobNAR.NEVER, knobNA.ALWAYS, request)
+    cfg.setBatches(min_batches=1, max_batches=32)
+    cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=1, max_s_kv=512)
+    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
+    cfg.setHeads(min_h_qkv=1, max_h_qkv=32)
+    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS)
+    exec_sdpa(cfg, request, cudnn_handle)
+
+# =====================================================
+# L1 lean attention, s_kv=513..2048
+# Numerical mismatches, see bug: https://nvbugs/5426554
+# =====================================================
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=32, rng_seed=747), ids=lambda p: f"test{p[0]}")
+@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
+@pytest.mark.parametrize("layout", random_layout_options)
+@pytest.mark.parametrize("head_group", head_group_options)
+@pytest.mark.parametrize("is_infer", [True], ids=["FWD_LEAN_ATTN"])
+@pytest.mark.L1
+def test_sdpa_random_lean_attn_L1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+    cfg = testConfig(**env_info)
+    cfg.setBatches(min_batches=1, max_batches=32)
+    cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=512+1, max_s_kv=2048)
+    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
+    cfg.setHeads(min_h_qkv=1, max_h_qkv=32)
+    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
@@ -1711,14 +1758,14 @@ def test_sdpa_random_sq1(env_info, test_no, data_type, is_infer, head_group, lay
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True, False], ids=lambda p: "FWD_RAGGED" if p else "BWD_RAGGED")
 @pytest.mark.L0
-def test_sdpa_random_ragged(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+def test_sdpa_random_ragged_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
-    cfg.setBatches(max_batches=8)
-    cfg.setSequences(max_s_q=512, max_s_kv=512)
-    cfg.setVectors(max_d_v=128, max_d_qk=128)
-    cfg.setHeads(max_h_qkv=8)
-    cfg.setBlockSize(max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, knobNAR.ALWAYS, knobNA.ALWAYS, request)
+    cfg.setBatches(min_batches=1, max_batches=8)
+    cfg.setSequences(min_s_q=1, max_s_q=512, min_s_kv=1, max_s_kv=512)
+    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
+    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
+    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.ALWAYS, avoid_invalid_configs=knobNA.ALWAYS)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ===================

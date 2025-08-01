@@ -12,11 +12,6 @@
 # test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test68] # always block this test
 # -----------------------------------------------------------------------------------------------------------------
 
-# https://nvbugs/5364384, Segmentation faults on Blackwell
-test_sdpa_random_bwd[BWD-MHA-inner_random-torch.float16-test22]                : SM_100 : 91100,91200
-test_sdpa_random_bwd_rgged[BWD_RAGGED_-GQA-inner_random-torch.bfloat16-test11] : SM_100 : 91100,91200
-test_sdpa_random_bwd_ragged[BWD_RAGGED_-GQA-inner_random-torch.bfloat16-test11] : SM_100 : 91100,91200
-
-# Bug https://nvbugs/5359342, Backward workspace overwritten outside its boundaries on Hopper
-test_sdpa_random_bwd[BWD-GQA-inner_random-torch.bfloat16-test44] : SM_90 : 91100,91200
+# Bug https://nvbugs/5421237 - Segmentation fault in BWD RAGGED test on Blackwell
+test_sdpa_random_ragged_L0[BWD_RAGGED-MQA-inner_random-torch.float16-test13] : SM_100 : 91200,91300
 
