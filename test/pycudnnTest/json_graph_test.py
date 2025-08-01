@@ -123,6 +123,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     tensorir_parser.add_argument("-cluster_shape", action="store")
     tensorir_parser.add_argument("-cta_count", action="store")
     tensorir_parser.add_argument("-stream_k", action="store_true")
+    tensorir_parser.add_argument("-cubin_chip", action="store", default="sm_100a")
     tensorir_parser.add_argument("-sweep_tile_configs", action="store_true")
     tensorir_parser.add_argument("-dump_ir_path", action="store", default="")
     tensorir_parser.add_argument("-load_ir_path", action="store", default="")

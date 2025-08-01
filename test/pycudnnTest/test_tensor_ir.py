@@ -30,6 +30,7 @@ def cal_shapeK(input_data_type):
 
 def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
     stream_k = False
+    cubin_chip = "sm_100a"
 
     kphase = [1, 1, 4]
 
@@ -56,7 +57,9 @@ def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
                 int(m * c * k / cta)
                 for m, c, k, cta in zip(mma_shape, cluster_shape, kphase, kcta_count)
             ]
-            configs.append([tile_size, mma_shape, cluster_shape, cta_count, stream_k])
+            configs.append(
+                [tile_size, mma_shape, cluster_shape, cta_count, stream_k, cubin_chip]
+            )
 
     return configs
 
@@ -67,6 +70,7 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     cluster_shape = [1, 1, 1]
     cta_count = 1
     stream_k = False
+    cubin_chip = "sm_100a"
 
     if hasattr(tensorir_args, "tile_size") and tensorir_args.tile_size is not None:
         tile_size = list(map(int, tensorir_args.tile_size.split(",")))
@@ -86,13 +90,17 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     if hasattr(tensorir_args, "stream_k") and tensorir_args.stream_k is not None:
         stream_k = bool(tensorir_args.stream_k)
 
+    if hasattr(tensorir_args, "cubin_chip") and tensorir_args.cubin_chip is not None:
+        cubin_chip = tensorir_args.cubin_chip
+
     concrete_test_dict["tile_size"] = tile_size
     concrete_test_dict["cluster_shape"] = cluster_shape
     concrete_test_dict["mma_shape"] = mma_shape
     concrete_test_dict["cta_count"] = cta_count
     concrete_test_dict["stream_k"] = stream_k
+    concrete_test_dict["cubin_chip"] = cubin_chip
 
-    return [tile_size, mma_shape, cluster_shape, cta_count, stream_k]
+    return [tile_size, mma_shape, cluster_shape, cta_count, stream_k, cubin_chip]
 
 
 def find_mismatches(tensor_a, tensor_b, atol, rtol):
@@ -852,6 +860,8 @@ class test_tensor_ir:
         ConvDgradNode: ["conv_dgrad"],
         ConvFpropNode: ["conv_fprop"],
     }
+    # Compute capability to cubin chip mapping
+    SUPPORTED_CUBIN_CHIP = {100: "sm_100a", 107: "sm_107f"}
 
     # Map of operation names to node classes - built from the operation groups
     NODE_CLASS_MAP = {}
@@ -1091,13 +1101,29 @@ class test_tensor_ir:
                     cluster_shape,
                     cta_count,
                     stream_k,
+                    cubin_chip,
                 ) in kernel_configs:
-                    cloned_module = ir.Module.parse(str(module))
-
+                    cask_context = nv_tensor_ir.create_cask_context()
+                    cask_context.initialize_cuda_device()
+                    cc = cask_context.get_compute_capability()
+                    # TODO: Add enum to support more cubin_chip
+                    if self.SUPPORTED_CUBIN_CHIP[cc] != cubin_chip:
+                        print(
+                            f"#### cubin_chip={cubin_chip} is not supported for cc={cc}"
+                        )
+                        print(f"#### Skip this config")
+                        continue
+                    cc = nv_tensor_ir.ComputeCapability(cc)
                     compile_options = nv_tensor_ir.TensorIRCompilationOptions(
-                        10,  # Hardcoded for blackwell
+                        cc,
+                        nv_tensor_ir.CompilerBackend.Collective,
                         nv_tensor_ir.TensorConversionOptions(
-                            tile_size, mma_shape, cluster_shape, cta_count, stream_k
+                            tile_size,
+                            mma_shape,
+                            cluster_shape,
+                            cta_count,
+                            stream_k,
+                            cubin_chip,
                         ),
                         nv_tensor_ir.DebugOptions(
                             dump_ir_path, load_ir_path, mlir_timing
@@ -1105,8 +1131,9 @@ class test_tensor_ir:
                     )
 
                     print(
-                        f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}"
+                        f"#### Running tile_size={tile_size}, mma_shape={mma_shape}, cluster_shape={cluster_shape}, cta_count={cta_count}, stream_k={stream_k}, cubin_chip={cubin_chip}"
                     )
+                    cloned_module = ir.Module.parse(str(module))
                     shader = self.compiler_with_kernel_cache.compile(
                         cloned_module, compile_options
                     )
