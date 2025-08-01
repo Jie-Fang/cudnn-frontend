@@ -59,6 +59,7 @@ def _tensor(
     ragged_offset=None,
     reordering_type=tensor_reordering.NONE,
     name="",
+    uid=-1,
 ):
     """
     Create a tensor.
@@ -85,6 +86,7 @@ def _tensor(
         ragged_offset=ragged_offset,
         reordering_type=reordering_type,
         name=name,
+        uid=uid,
     )
 
 
