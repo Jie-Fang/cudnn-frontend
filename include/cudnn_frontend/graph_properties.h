@@ -1523,10 +1523,17 @@ class Rmsnorm_backward_attributes : public Attributes<Rmsnorm_backward_attribute
 //         return *this;
 //     }
 // };
+template <typename DerivedClass>
+class SDPANodeBase;
+class CompositeSDPANode;
+class UnifiedSDPANode;
+
 class SDPA_attributes : public Attributes<SDPA_attributes> {
     friend class Attributes<SDPA_attributes>;
-    friend class SDPANode;
-    friend class SDPAFP8Node;  // Required for backward compatibility with FP8 node
+    friend class SDPANodeBase<CompositeSDPANode>;
+    friend class CompositeSDPANode;
+    friend class SDPANodeBase<UnifiedSDPANode>;
+    friend class UnifiedSDPANode;
     friend class Graph;
 
     using Tensor_t = std::shared_ptr<Tensor_attributes>;
@@ -1550,6 +1557,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     // Deprecated fields for backward compatibility with SDPA_fp8_attributes
     bool causal_mask              = false;
     bool causal_mask_bottom_right = false;
+
+    AttentionImplementation_t implementation = AttentionImplementation_t::AUTO;
 
     bool
     has_causal_like_masking() const {
@@ -1612,7 +1621,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
                                    right_bound,
                                    diagonal_alignment,
                                    causal_mask,
-                                   causal_mask_bottom_right)
+                                   causal_mask_bottom_right,
+                                   implementation)
 
     SDPA_attributes&
     set_generate_stats(bool const value) {
@@ -1778,9 +1788,36 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         return *this;
     }
 
+    SDPA_attributes&
+    set_implementation(AttentionImplementation_t value) {
+        implementation = value;
+        return *this;
+    }
+
     // Implementation is in sdpa_support_surface.h
     error_t
     validate_sdpa_support_surface(const detail::Context& context, int64_t s_kv, bool is_paged_k, bool is_paged_v) const;
+
+    // Internal function - do not use directly in application code
+    void
+    _auto_select_implementation() {
+        if (validate_sdpa_support_surface_for_implementation(AttentionImplementation_t::UNIFIED).is_good()) {
+            implementation = AttentionImplementation_t::UNIFIED;
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Auto-selected SDPA implementation UNIFIED");
+        } else if (validate_sdpa_support_surface_for_implementation(AttentionImplementation_t::COMPOSITE).is_good()) {
+            implementation = AttentionImplementation_t::COMPOSITE;
+            CUDNN_FE_LOG_LABEL_ENDL("INFO: Auto-selected SDPA implementation COMPOSITE");
+        } else {
+            // Leave `implementation` with its previous value (usually AUTO).
+            CUDNN_FE_LOG_LABEL_ENDL("ERROR: No suitable SDPA implementation for given SDPA_attributes");
+        }
+    }
+
+   private:
+    // Check whether implementation `impl` supports the requested features. `impl` must not be AUTO.
+    // (The `implementation` member variable is ignored.)
+    error_t
+    validate_sdpa_support_surface_for_implementation(AttentionImplementation_t impl) const;
 };
 
 // Type alias for backward compatibility - SDPA_fp8_attributes is now an alias to SDPA_attributes
@@ -1789,7 +1826,7 @@ using SDPA_fp8_attributes = SDPA_attributes;
 
 class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
     friend class Attributes<SDPA_backward_attributes>;
-    friend class SDPABackwardNode;
+    friend class CompositeSDPABackwardNode;
     friend class Graph;
     using Tensor_t = std::shared_ptr<Tensor_attributes>;
     using Graph_t  = std::shared_ptr<Graph>;

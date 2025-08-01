@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <stdexcept>
 #include <string>
 
 #include "../cudnn_frontend_version.h"
@@ -23,7 +24,6 @@
 #include "node/slice.h"
 // #include "node/scaled_dot_product_attention.h"
 #include "node/scaled_dot_product_flash_attention.h"
-#include "node/sdpa_fp8.h"
 #include "node/sdpa_fp8_bwd.h"
 #include "node/block_scale_quantize.h"
 #include "node/block_scale_dequantize.h"
@@ -244,7 +244,7 @@ class Graph : public ICudnn, public INode {
     sdpa_internal(std::shared_ptr<Tensor_attributes> q,
                   std::shared_ptr<Tensor_attributes> k,
                   std::shared_ptr<Tensor_attributes> v,
-                  SDPA_attributes attributes) {
+                  SDPA_attributes &&attributes) {
         // Set inputs
         attributes.inputs[SDPA_attributes::input_names::Q] = q;
         attributes.inputs[SDPA_attributes::input_names::K] = k;
@@ -278,7 +278,23 @@ class Graph : public ICudnn, public INode {
                 output_tensor(attributes.name + "::Amax_O");
         }
 
-        sub_nodes.emplace_back(std::make_unique<SDPANode>(std::move(attributes), context));
+        if (attributes.implementation == AttentionImplementation_t::AUTO) {
+            // Sets attributes.implementation to a supporting implementation,
+            // or leaves as AUTO if none found
+            attributes._auto_select_implementation();
+        }
+
+        switch (attributes.implementation) {
+            case AttentionImplementation_t::AUTO:
+                throw std::runtime_error("No suitable implementation for given SDPA_attributes");
+                break;
+            case AttentionImplementation_t::COMPOSITE:
+                sub_nodes.emplace_back(std::make_unique<CompositeSDPANode>(std::move(attributes), context));
+                break;
+            case AttentionImplementation_t::UNIFIED:
+                sub_nodes.emplace_back(std::make_unique<UnifiedSDPANode>(std::move(attributes), context));
+                break;
+        }
 
         return sdpa_outputs;
     }
@@ -1471,13 +1487,24 @@ class Graph : public ICudnn, public INode {
                         auto sdpa_attributes = j_sub_node.get<SDPA_attributes>();
                         CHECK_TENSORS(sdpa_attributes);
                         FILL_GLOBAL_IO_TENSOR_MAP(sdpa_attributes);
-                        sub_nodes.emplace_back(std::make_unique<SDPANode>(std::move(sdpa_attributes), context));
+                        switch (sdpa_attributes.implementation) {
+                            case AttentionImplementation_t::AUTO:
+                                return {error_code_t::INVALID_VALUE,
+                                        "Implementation cannot be AUTO in serialized form"};
+                            case AttentionImplementation_t::COMPOSITE:
+                                sub_nodes.emplace_back(
+                                    std::make_unique<CompositeSDPANode>(std::move(sdpa_attributes), context));
+                                break;
+                            case AttentionImplementation_t::UNIFIED:
+                                sub_nodes.emplace_back(
+                                    std::make_unique<UnifiedSDPANode>(std::move(sdpa_attributes), context));
+                        }
                     } else if (tag == "SDPA_BWD") {
                         auto sdpa_bwd_attributes = j_sub_node.get<SDPA_backward_attributes>();
                         CHECK_TENSORS(sdpa_bwd_attributes);
                         FILL_GLOBAL_IO_TENSOR_MAP(sdpa_bwd_attributes);
                         sub_nodes.emplace_back(
-                            std::make_unique<SDPABackwardNode>(std::move(sdpa_bwd_attributes), context));
+                            std::make_unique<CompositeSDPABackwardNode>(std::move(sdpa_bwd_attributes), context));
                     } else if (tag == "MATMUL") {
                         auto matmul_attributes = j_sub_node.get<Matmul_attributes>();
                         CHECK_TENSORS(matmul_attributes);
@@ -1488,11 +1515,6 @@ class Graph : public ICudnn, public INode {
                         CHECK_TENSORS(slice_attributes);
                         FILL_GLOBAL_IO_TENSOR_MAP(slice_attributes);
                         sub_nodes.emplace_back(std::make_unique<SliceNode>(std::move(slice_attributes), context));
-                    } else if (tag == "SDPA_FP8_FWD") {
-                        auto sdpa_fp8_attributes = j_sub_node.get<SDPA_fp8_attributes>();
-                        CHECK_TENSORS(sdpa_fp8_attributes);
-                        FILL_GLOBAL_IO_TENSOR_MAP(sdpa_fp8_attributes);
-                        sub_nodes.emplace_back(std::make_unique<SDPAFP8Node>(std::move(sdpa_fp8_attributes), context));
                     } else if (tag == "RESAMPLE") {
                         auto resample_attributes = j_sub_node.get<Resample_attributes>();
                         CHECK_TENSORS(resample_attributes);
@@ -2173,7 +2195,7 @@ Graph::sdpa(std::shared_ptr<Tensor_attributes> q,
     }
 
     // Call internal implementation and return only the O and Stats outputs for backward compatibility
-    auto internal_result = sdpa_internal(q, k, v, attributes);
+    auto internal_result = sdpa_internal(q, k, v, std::move(attributes));
     return {internal_result.O, internal_result.Stats};
 }
 
@@ -2201,7 +2223,7 @@ Graph::sdpa_fp8(std::shared_ptr<Tensor_attributes> q,
     attributes.inputs[SDPA_fp8_attributes::input_names::Scale_O]   = scale_o;
 
     // Call internal implementation and return {Output, Stats, Amax_S, Amax_O} as array for backward compatibility
-    auto internal_result = sdpa_internal(q, k, v, attributes);
+    auto internal_result = sdpa_internal(q, k, v, std::move(attributes));
     return {internal_result.O, internal_result.Stats, internal_result.Amax_S, internal_result.Amax_O};
 }
 
@@ -2289,7 +2311,7 @@ Graph::sdpa_backward(std::shared_ptr<Tensor_attributes> q,
     auto dK = attributes.outputs[SDPA_backward_attributes::output_names::dK] = output_tensor(attributes.name + "::dK");
     auto dV = attributes.outputs[SDPA_backward_attributes::output_names::dV] = output_tensor(attributes.name + "::dV");
 
-    sub_nodes.emplace_back(std::make_unique<SDPABackwardNode>(std::move(attributes), context));
+    sub_nodes.emplace_back(std::make_unique<CompositeSDPABackwardNode>(std::move(attributes), context));
 
     return {dQ, dK, dV};
 }

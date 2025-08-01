@@ -38,6 +38,7 @@ symbols_to_import = [
     "knob",
     "cudnnGraphNotSupportedError",
     "diagonal_alignment",
+    "attention_implementation",
 ]
 
 for symbol_name in symbols_to_import:

@@ -41,7 +41,8 @@ PyGraph::sdpa_internal(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_v,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_s,
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_s,
-                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_o) {
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_o,
+                       cudnn_frontend::AttentionImplementation_t const& implementation) {
     auto attributes = cudnn_frontend::graph::SDPA_attributes()
                           .set_bias(bias)
                           .set_alibi_mask(use_alibi_mask)
@@ -51,7 +52,8 @@ PyGraph::sdpa_internal(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                           .set_diagonal_alignment(diagonal_alignment)
                           .set_compute_data_type(compute_data_type)
                           ._set_mma_core_mode(mma_core_mode)
-                          .set_name(name);
+                          .set_name(name)
+                          .set_implementation(implementation);
 
     // Set generate_stats
     if (!generate_stats.is_none()) {
@@ -222,7 +224,8 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
               cudnn_frontend::DataType_t const& compute_data_type,
               std::string const& name,
               std::optional<PyCallback> fn,
-              py::object const& generate_stats) {
+              py::object const& generate_stats,
+              cudnn_frontend::AttentionImplementation_t const& implementation) {
     cudnn_frontend::DataType_t mma_core_mode                            = cudnn_frontend::DataType_t::HALF;
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_q = nullptr;
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_k = nullptr;
@@ -280,37 +283,38 @@ PyGraph::sdpa(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
         actual_right_bound        = py::int_(0);
     }
 
-    auto unified_result = sdpa_internal(q,
-                                        k,
-                                        v,
-                                        attn_scale,
-                                        bias,
-                                        use_alibi_mask,
-                                        use_padding_mask,
-                                        seq_len_q,
-                                        seq_len_kv,
-                                        actual_diagonal_alignment,
-                                        actual_left_bound,
-                                        actual_right_bound,
-                                        dropout,
-                                        rng_dump,
-                                        paged_attention_k_table,
-                                        paged_attention_v_table,
-                                        paged_attention_max_seq_len_kv,
-                                        compute_data_type,
-                                        name,
-                                        fn,
-                                        actual_generate_stats,
-                                        mma_core_mode,
-                                        descale_q,
-                                        descale_k,
-                                        descale_v,
-                                        descale_s,
-                                        scale_s,
-                                        scale_o);
+    auto internal_result = sdpa_internal(q,
+                                         k,
+                                         v,
+                                         attn_scale,
+                                         bias,
+                                         use_alibi_mask,
+                                         use_padding_mask,
+                                         seq_len_q,
+                                         seq_len_kv,
+                                         actual_diagonal_alignment,
+                                         actual_left_bound,
+                                         actual_right_bound,
+                                         dropout,
+                                         rng_dump,
+                                         paged_attention_k_table,
+                                         paged_attention_v_table,
+                                         paged_attention_max_seq_len_kv,
+                                         compute_data_type,
+                                         name,
+                                         fn,
+                                         actual_generate_stats,
+                                         mma_core_mode,
+                                         descale_q,
+                                         descale_k,
+                                         descale_v,
+                                         descale_s,
+                                         scale_s,
+                                         scale_o,
+                                         implementation);
 
     // Return {O, Stats} for backward compatibility
-    return {unified_result.O, unified_result.Stats};
+    return {internal_result.O, internal_result.Stats};
 }
 
 std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
@@ -530,37 +534,37 @@ PyGraph::sdpa_fp8(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& q,
         actual_right_bound        = py::int_(0);
     }
 
-    auto unified_result = sdpa_internal(q,
-                                        k,
-                                        v,
-                                        attn_scale,
-                                        bias,
-                                        use_alibi_mask,
-                                        use_padding_mask,
-                                        seq_len_q,
-                                        seq_len_kv,
-                                        actual_diagonal_alignment,
-                                        actual_left_bound,
-                                        actual_right_bound,
-                                        dropout,
-                                        rng_dump,
-                                        paged_attention_k_table,
-                                        paged_attention_v_table,
-                                        paged_attention_max_seq_len_kv,
-                                        compute_data_type,
-                                        name,
-                                        fn,
-                                        actual_generate_stats,
-                                        mma_core_mode,
-                                        descale_q,
-                                        descale_k,
-                                        descale_v,
-                                        descale_s,
-                                        scale_s,
-                                        scale_o);
+    auto internal_result = sdpa_internal(q,
+                                         k,
+                                         v,
+                                         attn_scale,
+                                         bias,
+                                         use_alibi_mask,
+                                         use_padding_mask,
+                                         seq_len_q,
+                                         seq_len_kv,
+                                         actual_diagonal_alignment,
+                                         actual_left_bound,
+                                         actual_right_bound,
+                                         dropout,
+                                         rng_dump,
+                                         paged_attention_k_table,
+                                         paged_attention_v_table,
+                                         paged_attention_max_seq_len_kv,
+                                         compute_data_type,
+                                         name,
+                                         fn,
+                                         actual_generate_stats,
+                                         mma_core_mode,
+                                         descale_q,
+                                         descale_k,
+                                         descale_v,
+                                         descale_s,
+                                         scale_s,
+                                         scale_o);
 
     // Return all 4 outputs as array for backward compatibility
-    return {unified_result.O, unified_result.Stats, unified_result.Amax_S, unified_result.Amax_O};
+    return {internal_result.O, internal_result.Stats, internal_result.Amax_S, internal_result.Amax_O};
 }
 
 std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 7>
@@ -699,6 +703,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
           py::arg_v("name", ""),
           py::arg_v("score_mod", std::nullopt),
           py::arg_v("generate_stats", py::none()),
+          py::arg_v("implementation", cudnn_frontend::AttentionImplementation_t::AUTO),
           R"pbdoc(
                 Perform scaled dot product attention.
 
@@ -720,6 +725,7 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     compute_data_type (Optional[cudnn.data_type]): The data type for computation. Default is NOT_SET.
                     name (Optional[str]): The name of the operation.
                     generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.
+                    implementation (Optional[cudnn.attention_implementation]): Which underlying implementation to use in the cuDNN backend. Default is AUTO (recommended).              
                 Preferred masking Args:
                     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and diagonal_band_right_bound=0. Default is TOP_LEFT.
                     diagonal_band_left_bound (Optional[int]): An integer >= 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.

@@ -29,6 +29,8 @@ head_group_options     = ["MHA", "GQA", "MQA"]
 random_layout_options  = ["edge_random", "inner_random"]
 diag_alignment_options = [cudnn.diagonal_alignment.TOP_LEFT, cudnn.diagonal_alignment.BOTTOM_RIGHT]
 diag_alignment_names   = ['cudnn.diagonal_alignment.TOP_LEFT', 'cudnn.diagonal_alignment.BOTTOM_RIGHT']
+implementation_options = [cudnn.attention_implementation.AUTO, cudnn.attention_implementation.COMPOSITE, cudnn.attention_implementation.UNIFIED]
+implementation_names   = ['cudnn.attention_implementation.AUTO', 'cudnn.attention_implementation.COMPOSITE', 'cudnn.attention_implementation.UNIFIED']
 
 def tlist(*, num_tests, rng_seed):
     assert num_tests >= 1 and type(num_tests) == int, "wrong input"
@@ -235,6 +237,14 @@ def diag_cli_option(org_val, request, cli_opt):
     val = request.config.getoption(cli_opt)
     return diag_map.get(bool(val)) if type(val) == int else org_val
 
+def implementation_cli_option(org_val, request, cli_opt):
+    implementation_map = {"AUTO" : cudnn.attention_implementation.AUTO,
+                          "COMPOSITE" : cudnn.attention_implementation.COMPOSITE,
+                          "UNIFIED" : cudnn.attention_implementation.UNIFIED}
+    str_val = request.config.getoption(cli_opt)
+    val = implementation_map.get(str_val)
+    return val if isinstance(val, cudnn.attention_implementation) else org_val
+
 def fetch_blocked_tests(file_path, gpu_arch, cudnn_ver):
     assert type(gpu_arch) == type(cudnn_ver) == str, "expecting strings"
     blocked_tests = []
@@ -299,12 +309,12 @@ class testConfig:
     __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_tests',
                  'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 
                  'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 
-                 'diag_align', 'left_bound', 'right_bound', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
+                 'diag_align', 'left_bound', 'right_bound', 'is_attn_scale', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
                  'is_dropout', 'is_padding', 'is_ragged', 'is_determin', 'data_type', 'batches', 'h_q', 
                  'h_k', 'h_v', 'd_qk', 'd_v', 's_q', 's_kv', 'block_size', 'in_layout', 'out_layout', 
                  'shape_q', 'gaps_q', 'stride_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'elems_k', 
                  'shape_v', 'gaps_v', 'stride_v', 'elems_v', 'shape_o', 'gaps_o', 'stride_o', 'elems_o',
-                 'seq_len_q', 'seq_len_kv']
+                 'seq_len_q', 'seq_len_kv', 'implementation']
 
     def __init__(self, *, gpu_arch, gpu_info, cudnn_ver, blocked_tests):
         assert type(gpu_arch) == type(gpu_info) == type(cudnn_ver) == str, "expecting strings as arguments"
@@ -336,6 +346,7 @@ class testConfig:
         self.left_bound  = None
         self.right_bound = None
 
+        self.is_attn_scale = None
         self.is_alibi    = None
         self.is_infer    = None
         self.is_paged    = None
@@ -379,6 +390,8 @@ class testConfig:
         self.gaps_o      = None
         self.stride_o    = None
         self.elems_o     = None
+        
+        self.implementation = None
 
     def config_str(self):
         banned = ("max_", "min_", "gpu_", "rng_", "blocked_tests", "cudnn_ver", "shape_", "stride_", "elems_")
@@ -387,11 +400,13 @@ class testConfig:
             if k.startswith(banned):
                 continue
             v = getattr(self, k)
-            if type(v) == str:
+            if isinstance(v, str):
                 assert len(v) > 0, f"ERROR: empty string in {k}='{v}'"
                 stg += f"{k}='{v}':"
-            elif type(v) == cudnn._compiled_module.diagonal_alignment:
+            elif isinstance(v, cudnn._compiled_module.diagonal_alignment):
                 stg += f"{k}={diag_alignment_names[int(v)]}:"
+            elif isinstance(v, cudnn._compiled_module.attention_implementation):
+                stg += f"{k}={implementation_names[int(v)]}:"
             else:
                 assert v != None, f"ERROR: invalid value in '{k}={v}'"
                 stg += f"{k}={v}:"
@@ -515,6 +530,7 @@ class testConfig:
             print(f"shape_k(b,h,s,d) = {self.shape_k}, strides={self.stride_k}, gaps={self.gaps_k}, elems={self.elems_k:,}")
             print(f"shape_v(b,h,s,d) = {self.shape_v}, strides={self.stride_v}, gaps={self.gaps_v}, elems={self.elems_v:,}")
             print(f"shape_o(b,h,s,d) = {self.shape_o}, strides={self.stride_o}, gaps={self.gaps_o}, elems={self.elems_o:,}")
+            print(f"is_attn_scale    = {self.is_attn_scale}")        
             print(f"is_infer         = {self.is_infer}")
             print(f"is_padding       = {self.is_padding}")
             print(f"is_ragged        = {self.is_ragged}")
@@ -529,6 +545,7 @@ class testConfig:
             print(f"seq_len_q        = {truncated_list(20, 3, self.seq_len_q)}")
             print(f"seq_len_kv       = {truncated_list(20, 3, self.seq_len_kv)}")
             print(f"data_type        = {self.data_type}")
+            print(f"implementation   = {implementation_names[int(self.implementation)]} ({int(self.implementation)})")
             if reg_run:
                 print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 2:
@@ -563,6 +580,10 @@ class testConfig:
         self.data_type    = data_type
         self.is_infer     = is_infer
 
+        # TODO(nvbugs/5102117): Remove is_attn_scale as an option once unified engine
+        # supports it (after that, we should always test with attn_scale).
+        self.is_attn_scale = True
+
         self.is_alibi     = self.rng_geom.choice([True, False])
         self.is_paged     = self.rng_geom.choice([True, False])
         self.is_bias      = self.rng_geom.choice([True, False])
@@ -570,6 +591,10 @@ class testConfig:
         self.is_determin  = self.rng_geom.choice([True, False])
         self.is_padding   = self.rng_geom.choice([True, False])
         self.is_ragged    = self.rng_geom.choice([True, False])
+
+        self.implementation = cudnn.attention_implementation.AUTO
+        # Overwrite implementation from the command line.
+        self.implementation = implementation_cli_option(self.implementation, request, "--mha_implementation")
 
         if generate_ragged_tests == generate_ragged_tests.ALWAYS:
            self.is_padding = True
@@ -598,22 +623,33 @@ class testConfig:
             if self.is_paged and self.is_ragged:
                 self.is_paged = False
 
+            # LIMIT: For now, unified implementation only supports a small subset of features.
+            # TODO(nvbugs/5102117): Remove these hacks as the unified engine gains more capabilities.
+            if self.implementation == cudnn.attention_implementation.UNIFIED:
+                self.is_attn_scale = False
+                self.is_infer = True
+                self.is_determin = True
+                self.is_padding = False
+                self.is_ragged = False
+                self.is_paged = False
+                
         # Block size for paged attention in fprop (must be power of 2 and minimum 1).
         if self.is_infer and self.is_paged:
             self.block_size = self.rng_geom.choice(get_powers_of_two(self.min_blk_sz, self.max_blk_sz))
         else:
             self.block_size = 0
 
-        # Overwrite all boolean varaibles and block_size from the command line.
-        self.is_infer    = bool_cli_option(self.is_infer, request, "--mha_is_infer")
-        self.is_alibi    = bool_cli_option(self.is_alibi, request, "--mha_is_alibi")
-        self.is_bias     = bool_cli_option(self.is_bias, request, "--mha_is_bias")
-        self.is_dropout  = bool_cli_option(self.is_dropout, request, "--mha_is_dropout")
-        self.is_determin = bool_cli_option(self.is_determin, request, "--mha_is_determin")
-        self.is_padding  = bool_cli_option(self.is_padding, request, "--mha_is_padding")
-        self.is_ragged   = bool_cli_option(self.is_ragged, request, "--mha_is_ragged")
-        self.is_paged    = bool_cli_option(self.is_paged, request, "--mha_is_paged")
-        self.block_size  = int_cli_option(self.block_size, request, "--mha_block_size")
+        # Overwrite all boolean variables and block_size from the command line.
+        self.is_attn_scale = bool_cli_option(self.is_attn_scale, request, "--mha_is_attn_scale")
+        self.is_infer      = bool_cli_option(self.is_infer, request, "--mha_is_infer")
+        self.is_alibi      = bool_cli_option(self.is_alibi, request, "--mha_is_alibi")
+        self.is_bias       = bool_cli_option(self.is_bias, request, "--mha_is_bias")
+        self.is_dropout    = bool_cli_option(self.is_dropout, request, "--mha_is_dropout")
+        self.is_determin   = bool_cli_option(self.is_determin, request, "--mha_is_determin")
+        self.is_padding    = bool_cli_option(self.is_padding, request, "--mha_is_padding")
+        self.is_ragged     = bool_cli_option(self.is_ragged, request, "--mha_is_ragged")
+        self.is_paged      = bool_cli_option(self.is_paged, request, "--mha_is_paged")
+        self.block_size    = int_cli_option(self.block_size, request, "--mha_block_size")
 
         if layout_type == "edge_random":
             self.batches = self.max_batches
@@ -666,7 +702,7 @@ class testConfig:
         # if self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND and not self.is_infer:
             self.right_bound = INVALID_BOUND
 
-        # Handle command line options to overwrite diagonal alignment, left bound, and righ tbound.
+        # Handle command line options to overwrite diagonal alignment, left bound, and right bound.
         self.diag_align  = diag_cli_option(self.diag_align, request, "--mha_diag_align")
         self.left_bound  = int_cli_option(self.left_bound, request, "--mha_left_bound")
         self.right_bound = int_cli_option(self.right_bound, request, "--mha_right_bound")
@@ -698,6 +734,16 @@ class testConfig:
 
             # LIMIT: Bottom right causal mask does not support s_q > s_kv. 
             if self.s_q > self.s_kv and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND:
+                self.right_bound = INVALID_BOUND
+
+            # LIMIT: For now, unified implementation only supports a small subset of features.
+            # TODO(nvbugs/5102117): Remove these hacks as the unified engine gains more capabilities.
+            if self.implementation == cudnn.attention_implementation.UNIFIED:
+                self.is_alibi = False
+                self.is_bias = False
+                self.is_dropout = False
+                self.diag_align = self.diag_align.TOP_LEFT
+                self.left_bound = INVALID_BOUND
                 self.right_bound = INVALID_BOUND
 
         # The size of dense vectors Q,K,V should be divisible into 16 byte chunks.
@@ -847,7 +893,7 @@ def compute_ref(
     q,
     k,
     v,
-    attn_scale=1.0,
+    attn_scale=None,
     bias=None,
     is_alibi=False,
     padding=None,
@@ -907,7 +953,9 @@ def compute_ref(
         k = k.masked_fill(k_mask, 0.0)
         v = v.masked_fill(v_mask, 0.0)
 
-    s = torch.einsum("bhqd,bhkd->bhqk", q, k) * attn_scale
+    s = torch.einsum("bhqd,bhkd->bhqk", q, k)
+    if attn_scale is not None:
+        s = s * attn_scale
 
     # Attention masks are applied in the following order:
     # - Bias mask
@@ -1107,6 +1155,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
     data_type    = cfg.data_type
     rng_data     = cfg.rng_data
 
+    is_attn_scale = cfg.is_attn_scale
     is_alibi     = cfg.is_alibi
     is_infer     = cfg.is_infer
     is_paged     = cfg.is_paged
@@ -1150,6 +1199,8 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     seq_len_q    = cfg.seq_len_q
     seq_len_kv   = cfg.seq_len_kv
+
+    implementation = cfg.implementation
 
     # ============================
     # Basic parameter check.
@@ -1218,7 +1269,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         (dBias_gpu, dBias_sep, dBias_raw) = (alloc_tensor((1, h_q, s_q, s_kv), data_type) if is_bias else (None, None, None))
         (dO_gpu, dO_sep, dO_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o, rng=rng_data, mean=0.0, std=0.1)
 
-    # Sequence lenghts for gpu, must be a four dimensional tensor.
+    # Sequence lengths for gpu, must be a four dimensional tensor.
     seq_len_q_gpu = seq_len_kv_gpu = None
     if len(seq_len_q) > 0:
         seq_len_q_gpu = torch.tensor(seq_len_q, dtype=torch.int32, device="cuda")
@@ -1294,7 +1345,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         k.set_ragged_offset(k_ragged_offset)
         v.set_ragged_offset(v_ragged_offset)
 
-    attn_scale = 0.125
+    attn_scale = 0.125 if is_attn_scale else None
     
     o, stats = graph.sdpa(
         name="sdpa_forward",
@@ -1315,7 +1366,8 @@ def exec_sdpa(cfg, request, cudnn_handle):
         rng_dump=rng_dump,
         paged_attention_k_table=page_table_k,
         paged_attention_v_table=page_table_v,
-        paged_attention_max_seq_len_kv=s_kv if is_paged else None
+        paged_attention_max_seq_len_kv=s_kv if is_paged else None,
+        implementation=implementation,
     )
 
     o.set_output(True).set_dim(shape_o).set_stride(stride_o)
@@ -1665,7 +1717,6 @@ def env_info(request):
     show_blocked_tests(blocked_tests, gpu_arch, cudnn_ver)
 
     return {"gpu_arch": gpu_arch, "gpu_info": gpu_info, "cudnn_ver": cudnn_ver, "blocked_tests": blocked_tests}
-
 
 # ==================================
 # L0 fprop tests

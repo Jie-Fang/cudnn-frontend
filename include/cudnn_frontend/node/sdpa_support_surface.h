@@ -374,6 +374,75 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
         RETURN_CUDNN_FRONTEND_ERROR_IF(true, error_code_t::GRAPH_NOT_SUPPORTED, "Unsupported mma core mode");
     }
 
+    // Check whether the selected implementation supports the requested features.
+    CHECK_CUDNN_FRONTEND_ERROR(validate_sdpa_support_surface_for_implementation(implementation));
+
+    return {error_code_t::OK, ""};
+}
+
+inline error_t
+SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImplementation_t impl) const {
+    switch (impl) {
+        case AttentionImplementation_t::AUTO:
+            // This function should not be called with AUTO.
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                true,
+                error_code_t::INVALID_VALUE,
+                "Can't call validate_sdpa_support_surface_for_implementation with impl=AUTO");
+            break;
+        case AttentionImplementation_t::COMPOSITE:
+            // Composite implementation already supports all of the features.
+            break;
+        case AttentionImplementation_t::UNIFIED: {
+            for (const auto& [key, value] : inputs) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(
+                    key != input_names::Q && key != input_names::K && key != input_names::V && value != nullptr,
+                    error_code_t::GRAPH_NOT_SUPPORTED,
+                    "Unified SDPA node doesn't yet support inputs other than Q, K and V");
+            }
+
+            for (const auto& [key, value] : outputs) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(key != output_names::O && key != output_names::Stats && value != nullptr,
+                                               error_code_t::GRAPH_NOT_SUPPORTED,
+                                               "Unified SDPA node doesn't yet support outputs other than O and Stats");
+            }
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                alibi_mask, error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node doesn't yet support alibi mask");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                padding_mask, error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node doesn't yet support padding mask");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(left_bound.has_value() || right_bound.has_value(),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support left bound or right bound");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(diagonal_alignment != DiagonalAlignment_t::TOP_LEFT,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support diagonal alignment");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(dropout_probability.has_value(),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support dropout");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(attn_scale_value.has_value(),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support attention scale");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(max_seq_len_kv.has_value(),
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support max sequence length");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(attention_score_modifier != nullptr,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support attention score modifier");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(mma_core_mode != DataType_t::HALF,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support a data type other than fp16");
+        } break;
+    }
+
     return {error_code_t::OK, ""};
 }
 
