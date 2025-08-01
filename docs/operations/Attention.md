@@ -11,7 +11,9 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 
 - Python sample: [samples/python/50_scaled_dot_product_attention.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/50_scaled_dot_product_attention.ipynb)
 
-- Python sample with paged caches: [samples/python/samples/python/52_scaled_dot_product_attention_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/samples/python/52_scaled_dot_product_attention_with_paged_caches.ipynb)
+- Python prefill sample with paged caches: [samples/python/52_scaled_dot_product_attention_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/52_scaled_dot_product_attention_with_paged_caches.ipynb)
+
+- Python decode sample with packed paged caches: [samples/python/53_scaled_dot_product_attention_decode_with_paged_caches.ipynb](https://github.com/NVIDIA/cudnn-frontend/blob/main/samples/python/53_scaled_dot_product_attention_decode_with_paged_caches.ipynb)
 
 - C++ sample: [samples/cpp/sdpa](https://github.com/NVIDIA/cudnn-frontend/tree/main/samples/cpp/sdpa)
 

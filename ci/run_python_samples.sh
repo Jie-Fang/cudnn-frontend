@@ -23,6 +23,11 @@ if [ "${CUDNN_BE_VERSION}" -ge "90500" ] && [ "${GPU_CC}" -ge "8" ]; then
     jupyter execute samples/python/52*
 fi
 
+# Run paged attention with packed K/V block tables for SM>=80 and cuDNN >= 9.11
+if [ "${CUDNN_BE_VERSION}" -ge "91100" ] && [ "${GPU_CC}" -ge "8" ]; then
+    jupyter execute samples/python/53_scaled_dot*
+fi
+
 if [ "${CUDNN_BE_VERSION}" -ge "91000" ] && [ "${GPU_CC}" -ge "8" ]; then
     jupyter execute samples/python/29*
 fi
