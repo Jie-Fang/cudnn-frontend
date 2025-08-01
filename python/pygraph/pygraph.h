@@ -114,7 +114,8 @@ class PyGraph {
            bool const& is_pass_by_value,
            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& ragged_offset,
            cudnn_frontend::TensorReordering_t const reordering_type,
-           std::string const& name);
+           std::string const& name,
+           int64_t const& uid);
 
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     tensor_like(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> const& pyobj, std::string const&);
