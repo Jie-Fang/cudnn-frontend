@@ -295,6 +295,11 @@ init_properties(py::module_& m) {
     py::enum_<cudnn_frontend::DiagonalAlignment_t>(m, "diagonal_alignment")
         .value("TOP_LEFT", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT)
         .value("BOTTOM_RIGHT", cudnn_frontend::DiagonalAlignment_t::BOTTOM_RIGHT);
+
+    py::enum_<cudnn_frontend::AttentionImplementation_t>(m, "attention_implementation")
+        .value("AUTO", cudnn_frontend::AttentionImplementation_t::AUTO)
+        .value("COMPOSITE", cudnn_frontend::AttentionImplementation_t::COMPOSITE)
+        .value("UNIFIED", cudnn_frontend::AttentionImplementation_t::UNIFIED);
 }
 
 }  // namespace python_bindings

@@ -355,7 +355,8 @@ class PyGraph {
          cudnn_frontend::DataType_t const& compute_data_type,
          std::string const& name,
          std::optional<PyCallback> fn,
-         py::object const& generate_stats);
+         py::object const& generate_stats,
+         cudnn_frontend::AttentionImplementation_t const& implementation);
 
     // return [dQ, dK, dV]
     std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 3>
@@ -606,7 +607,8 @@ class PyGraph {
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_v = nullptr,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> descale_s = nullptr,
                   std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_s   = nullptr,
-                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_o   = nullptr);
+                  std::shared_ptr<cudnn_frontend::graph::Tensor_attributes> scale_o   = nullptr,
+                  cudnn_frontend::AttentionImplementation_t const& implementation = AttentionImplementation_t::AUTO);
 };
 
 }  // namespace cudnn_frontend::python_bindings

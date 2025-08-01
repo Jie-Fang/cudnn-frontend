@@ -70,7 +70,9 @@ inline std::shared_ptr<Tensor_attributes> alibi_mask(
 
 }  // namespace attn::score_modifiers
 
-class SDPANode : public NodeCRTP<SDPANode> {
+template <typename DerivedT>
+class SDPANodeBase : public NodeCRTP<DerivedT> {
+   protected:
     using input_names  = SDPA_attributes::input_names;
     using output_names = SDPA_attributes::output_names;
 
@@ -81,13 +83,8 @@ class SDPANode : public NodeCRTP<SDPANode> {
    public:
     SDPA_attributes attributes;
 
-    SDPANode(SDPA_attributes&& attributes_, detail::Context const& context)
-        : NodeCRTP(context), attributes(std::move(attributes_)) {}
-
-    Type
-    getType() override final {
-        return Type::COMPOSITE;
-    }
+    SDPANodeBase(SDPA_attributes&& attributes_, detail::Context const& context)
+        : NodeCRTP<DerivedT>(context), attributes(std::move(attributes_)) {}
 
     bool
     is_paged_v() const {
@@ -206,7 +203,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         // validate backend limitations for the operation
         auto validation_result =
-            attributes.validate_sdpa_support_surface(context, infer_s_kv(), is_paged_k(), is_paged_v());
+            attributes.validate_sdpa_support_surface(this->context, infer_s_kv(), is_paged_k(), is_paged_v());
         if (validation_result.is_good() == false) {
             return validation_result;
         }
@@ -233,15 +230,79 @@ class SDPANode : public NodeCRTP<SDPANode> {
     }
 
     error_t
+    post_validate_node() const override final {
+#define CUDNN_FE_VALIDATE_STRIDE(port, port_map)                                                                \
+    {                                                                                                           \
+        auto const& t = port_map.find(port);                                                                    \
+        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                                         \
+            t->second->get_stride().back() != 1,                                                                \
+            error_code_t::GRAPH_NOT_SUPPORTED,                                                                  \
+            "The stride for the last dimension corresponding to the embedding size per head should be 1 for " + \
+                std::string(#port));                                                                            \
+    }
+
+        CUDNN_FE_VALIDATE_STRIDE(output_names::O, attributes.outputs);
+
+#undef CUDNN_FE_VALIDATE_STRIDE
+
+        return {error_code_t::OK, ""};
+    }
+
+    virtual int64_t
+    get_fe_workspace_size_node() const override final {
+        int64_t size = 0;
+
+        // align alibi slopes memory to 16 bytes
+        size += ((alibi_slopes_size + 15) / 16 * 16);
+
+        return size;
+    }
+
+    virtual error_t
+    collect_tensors_in_workspace_node(
+        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&
+            workspace_modifications,
+        int64_t& offset) const override final {
+        if (attributes.alibi_mask) {
+            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
+            int64_t const h_q     = Q->second->get_dim()[1];
+            auto alibi_slopes_vec = detail::get_alibi_slope(h_q);
+            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_tuple(0, offset, alibi_slopes_vec));
+            int64_t alibi_slopes_size_padded = ((alibi_slopes_size + 15) / 16 * 16);
+            offset                           = offset + alibi_slopes_size_padded;
+        }
+        return {error_code_t::OK, ""};
+    }
+
+#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
+    virtual void
+    serialize(json& j) const override final {
+        j = attributes;
+        j.update(R"({"tag": "SDPA_FWD"})"_json);
+    }
+#endif
+};
+
+class CompositeSDPANode : public SDPANodeBase<CompositeSDPANode> {
+   public:
+    CompositeSDPANode(SDPA_attributes&& attributes_, detail::Context const& context)
+        : SDPANodeBase(std::move(attributes_), context) {}
+
+    Type
+    getType() override final {
+        return Type::COMPOSITE;
+    }
+
+    error_t
     expand_node() override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for Scaled_dot_product_flash_attention node  "
-                                << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for CompositeSDPANode node  " << attributes.name
+                                                                                             << "...");
 
         // DO NOT REMOVE
         // input data type is needed for:
         // - aType of bmm2
         // - dropout scale in pre 8.9.3
-        attributes.fill_from_context(context);
+        attributes.fill_from_context(this->context);
 
         // Gather dim to fill properties of virtual tensors
         auto const& q_dim = attributes.inputs[input_names::Q]->get_dim();
@@ -349,7 +410,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.attention_score_modifier != nullptr) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
-            node_->context               = context;
+            node_->context               = this->context;
             last_output                  = attributes.attention_score_modifier(graph_, last_output);
             sub_nodes.emplace_back(node_);
         }
@@ -359,7 +420,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
             attributes.inputs[input_names::Bias]) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
-            node_->context               = context;
+            node_->context               = this->context;
             last_output = attn::score_modifiers::bias(graph_, last_output, attributes.inputs[input_names::Bias]);
             sub_nodes.emplace_back(node_);
         }
@@ -367,7 +428,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.alibi_mask) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
-            node_->context               = context;
+            node_->context               = this->context;
             last_output = attn::score_modifiers::alibi_mask(graph_, last_output, alibi_slopes, h_q, alibi_slopes_size);
             sub_nodes.emplace_back(node_);
         }
@@ -377,7 +438,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.padding_mask) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
-            node_->context               = context;
+            node_->context               = this->context;
             last_output                  = attn::score_modifiers::padding_mask(graph_,
                                                               last_output,
                                                               attributes.inputs[input_names::SEQ_LEN_KV],
@@ -413,7 +474,7 @@ class SDPANode : public NodeCRTP<SDPANode> {
         if (attributes.left_bound.has_value() || attributes.right_bound.has_value()) {
             auto graph_                  = std::make_shared<Graph>();
             std::shared_ptr<INode> node_ = std::static_pointer_cast<INode>(graph_);
-            node_->context               = context;
+            node_->context               = this->context;
 
             auto s_kv_ptr = attributes.inputs.find(input_names::SEQ_LEN_KV) != attributes.inputs.end()
                                 ? attributes.inputs[input_names::SEQ_LEN_KV]
@@ -587,62 +648,9 @@ class SDPANode : public NodeCRTP<SDPANode> {
 
         return {error_code_t::OK, ""};
     }
-
-    error_t
-    post_validate_node() const override final {
-#define CUDNN_FE_VALIDATE_STRIDE(port, port_map)                                                                \
-    {                                                                                                           \
-        auto const& t = port_map.find(port);                                                                    \
-        RETURN_CUDNN_FRONTEND_ERROR_IF(                                                                         \
-            t->second->get_stride().back() != 1,                                                                \
-            error_code_t::GRAPH_NOT_SUPPORTED,                                                                  \
-            "The stride for the last dimension corresponding to the embedding size per head should be 1 for " + \
-                std::string(#port));                                                                            \
-    }
-
-        CUDNN_FE_VALIDATE_STRIDE(output_names::O, attributes.outputs);
-
-#undef CUDNN_FE_VALIDATE_STRIDE
-
-        return {error_code_t::OK, ""};
-    }
-
-    virtual int64_t
-    get_fe_workspace_size_node() const override final {
-        int64_t size = 0;
-
-        // align alibi slopes memory to 16 bytes
-        size += ((alibi_slopes_size + 15) / 16 * 16);
-
-        return size;
-    }
-
-    virtual error_t
-    collect_tensors_in_workspace_node(
-        std::unordered_map<Tensor_attributes::uid_t, std::tuple<int64_t, int64_t, std::vector<float>>>&
-            workspace_modifications,
-        int64_t& offset) const override final {
-        if (attributes.alibi_mask) {
-            CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
-            int64_t const h_q     = Q->second->get_dim()[1];
-            auto alibi_slopes_vec = detail::get_abili_slope(h_q);
-            workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_tuple(0, offset, alibi_slopes_vec));
-            int64_t alibi_slopes_size_padded = ((alibi_slopes_size + 15) / 16 * 16);
-            offset                           = offset + alibi_slopes_size_padded;
-        }
-        return {error_code_t::OK, ""};
-    }
-
-#ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
-    virtual void
-    serialize(json& j) const override final {
-        j = attributes;
-        j.update(R"({"tag": "SDPA_FWD"})"_json);
-    }
-#endif
 };
 
-class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
+class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
     using input_names  = SDPA_backward_attributes::input_names;
     using output_names = SDPA_backward_attributes::output_names;
 
@@ -662,7 +670,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
    public:
     SDPA_backward_attributes attributes;
 
-    SDPABackwardNode(SDPA_backward_attributes&& attributes_, detail::Context const& context)
+    CompositeSDPABackwardNode(SDPA_backward_attributes&& attributes_, detail::Context const& context)
         : NodeCRTP(context), attributes(std::move(attributes_)) {}
 
     Type
@@ -672,7 +680,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
     error_t
     pre_validate_node() const override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SDPABackwardNode" << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating CompositeSDPABackwardNode" << attributes.name << "...");
 
         // check that Q, K, V, O, stats, dO, dQ, dK, dV tensors has been assigned
         // check that dim and strides has been assigned and last stride is 1
@@ -911,7 +919,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
                                        "Deterministic kernel or dbias with ragged is not supported for SM Major version 10");
 
         // validate that datatype is set for the graph
-        RETURN_CUDNN_FRONTEND_ERROR_IF(context.get_intermediate_data_type() == DataType_t::NOT_SET,
+        RETURN_CUDNN_FRONTEND_ERROR_IF(this->context.get_intermediate_data_type() == DataType_t::NOT_SET,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Intermediate tensor data type needs to be set as internal tensors require it.");
         // clang-format on
@@ -943,7 +951,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
 
     error_t
     expand_node() override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for SDPABackwardNode " << attributes.name);
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for CompositeSDPABackwardNode " << attributes.name);
 
         attributes.fill_from_context(context);
 
@@ -1535,7 +1543,7 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         if (attributes.alibi_mask) {
             CUDNN_FE_VALIDATE_AND_ASSIGN_INPUT_TENSOR(Q, input_names::Q);
             int64_t const h_q     = Q->second->get_dim()[1];
-            auto alibi_slopes_vec = detail::get_abili_slope(h_q);
+            auto alibi_slopes_vec = detail::get_alibi_slope(h_q);
             workspace_modifications.emplace(alibi_slopes->get_uid(), std::make_tuple(0, offset, alibi_slopes_vec));
             int64_t alibi_slopes_size_padded = ((alibi_slopes_size + 15) / 16 * 16);
             offset                           = offset + alibi_slopes_size_padded;
@@ -1577,6 +1585,104 @@ class SDPABackwardNode : public NodeCRTP<SDPABackwardNode> {
         j.update(R"({"tag": "SDPA_BWD"})"_json);
     }
 #endif
+};
+
+class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
+   public:
+    UnifiedSDPANode(SDPA_attributes&& attributes_, detail::Context const& context)
+        : SDPANodeBase(std::move(attributes_), context) {}
+
+    Type
+    getType() override final {
+        return Type::UNIFIED_SDPA;
+    }
+
+    error_t
+    expand_node() override final {
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for UnifiedSDPANode node  " << attributes.name << "...");
+
+        // DO NOT REMOVE
+        // input data type is needed for:
+        // - aType of bmm2
+        // - dropout scale in pre 8.9.3
+        attributes.fill_from_context(this->context);
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
+    create_cudnn_operations(
+        std::unordered_set<Tensor_attributes::uid_t>& uids_involved_in_operations,
+        std::vector<std::shared_ptr<cudnn_frontend::Operation>>& operations,
+        managed_backend_descriptor_t& raw_operations,
+        std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
+        CUDNN_FRONTEND_UNUSED(raw_operations);
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << "Building UnifiedSDPANode operations " << attributes.name << "...");
+        auto cudnn_ver_error = error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node requires cuDNN 9.13.0"};
+
+#if (CUDNN_VERSION >= 91300)
+        NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91300, cudnn_ver_error);
+        CUDNN_FRONTEND_UNUSED(operations);
+        auto unified_sdpa_operation =
+            make_shared_backend_pointer((cudnnBackendDescriptorType_t)CUDNN_BACKEND_OPERATION_SDPA_FWD_DESCRIPTOR);
+
+        auto Q         = attributes.inputs.find(SDPA_attributes::input_names::Q)->second;
+        auto backend_q = tensors[Q->get_uid()]->get_desc()->get_backend_descriptor();
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                       CUDNN_ATTR_OPERATION_SDPA_FWD_QDESC,
+                                                       CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                       1,
+                                                       &backend_q));
+
+        auto K         = attributes.inputs.find(SDPA_attributes::input_names::K)->second;
+        auto backend_k = tensors[K->get_uid()]->get_desc()->get_backend_descriptor();
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                       CUDNN_ATTR_OPERATION_SDPA_FWD_KDESC,
+                                                       CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                       1,
+                                                       &backend_k));
+
+        auto V         = attributes.inputs.find(SDPA_attributes::input_names::V)->second;
+        auto backend_v = tensors[V->get_uid()]->get_desc()->get_backend_descriptor();
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                       CUDNN_ATTR_OPERATION_SDPA_FWD_VDESC,
+                                                       CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                       1,
+                                                       &backend_v));
+
+        auto O         = attributes.outputs.find(SDPA_attributes::output_names::O)->second;
+        auto backend_o = tensors[O->get_uid()]->get_desc()->get_backend_descriptor();
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                       CUDNN_ATTR_OPERATION_SDPA_FWD_ODESC,
+                                                       CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                       1,
+                                                       &backend_o));
+
+        auto stats_it = attributes.outputs.find(SDPA_attributes::output_names::Stats);
+        if (stats_it != attributes.outputs.end()) {
+            auto backend_stats = tensors[stats_it->second->get_uid()]->get_desc()->get_backend_descriptor();
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_STATSDESC,
+                                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                           1,
+                                                           &backend_stats));
+        }
+
+        _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(unified_sdpa_operation->get_backend_descriptor()));
+
+        raw_operations.push_back(unified_sdpa_operation);
+
+        auto const& non_virtual_uids = attributes.get_non_virtual_uids();
+        uids_involved_in_operations.insert(non_virtual_uids.begin(), non_virtual_uids.end());
+        return {error_code_t::OK, ""};
+#else
+        CUDNN_FRONTEND_UNUSED(uids_involved_in_operations);
+        CUDNN_FRONTEND_UNUSED(operations);
+        CUDNN_FRONTEND_UNUSED(raw_operations);
+        CUDNN_FRONTEND_UNUSED(tensors);
+        return cudnn_ver_error;
+#endif
+    }
 };
 
 }  // namespace cudnn_frontend::graph
