@@ -980,7 +980,7 @@ def run_tensor_ir_test_from_json_definition(
 
     tensor_ir_tester = test_tensor_ir(testGraph, static_shapes_only)
     tensor_ir_module = tensor_ir_tester.build_tensor_ir_module(legacy_args.jsonTestName)
-    tensor_ir_module.dump()
+    print(str(tensor_ir_module))
     # Read in rtol/atol from json
     atol = 1e-2
     rtol = 1e-2
