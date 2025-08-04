@@ -749,7 +749,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
         _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device_properties(&prop, device));
 
         if (prop.major == 9) { 
-            // validate basic dimension hquirements
+            // validate basic dimension requirements
             if (d_qk == d_v) {
                 RETURN_CUDNN_FRONTEND_ERROR_IF((d_qk > 256) || (d_qk % 8 != 0) || (d_v > 256) || (d_v % 8 != 0),
                                             error_code_t::GRAPH_NOT_SUPPORTED,
@@ -874,6 +874,11 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
         RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.dropout_probability.has_value() && attributes.dropout_probability.value() == 1.0,
                                        error_code_t::ATTRIBUTE_NOT_SET,
                                        "Dropout probability cannot be 1 as corresponding scale wont be well formed.");
+
+        // validate options for deterministic algorithm
+        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.is_deterministic_algorithm && (prop.major == 10),
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "Deterministic algorithm is not supported on blackwell architecture");
 
         // version specific validation
         RETURN_CUDNN_FRONTEND_ERROR_IF(detail::get_backend_version() < 8906 && ((s_kv % 64 != 0) || (d_qk % 64 != 0)),
