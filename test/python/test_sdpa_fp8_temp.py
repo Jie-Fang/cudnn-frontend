@@ -10,32 +10,43 @@ import math
 
 torch.nans = lambda *size, **kwargs: torch.full(size, float('nan'), **kwargs)
 
-# sq8_*, sq32_*, sq64_*, sq65_*: BUG mismatches
+# sq1_*, sq4_*, sq32_*, sq64_*: BUG mismatches
 TEST_CONFIGS = {
-    "d128_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-    "d64_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256, "d_qk": 64,  "d_vo": 64,  "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-    "d128_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-    "d64_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256, "d_qk": 64,  "d_vo": 64,  "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-    "d128_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
-    "d64_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256, "d_qk": 64,  "d_vo": 64,  "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
-    "gqa_f16":     {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-    "gqa_f8e4m3":  {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-    "gqa_f8e5m2":  {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
-#   "sq1_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-#   "sq1_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
-#   "sq1_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.32, "rtol": 0.4},
-#   "sq8_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-#   "sq8_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-#   "sq8_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
-#   "sq32_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-#   "sq32_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-#   "sq32_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
-#   "sq64_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-#   "sq64_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-#   "sq64_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
-    "sq65_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
-    "sq65_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
-    "sq65_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
+    "d128_f16":            {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "d64_f16":             {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "d128_f8e4m3":         {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d64_f8e4m3":          {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d128_f8e5m2":         {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
+    "d64_f8e5m2":          {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
+
+    "gqa_f16":             {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "gqa_f8e4m3":          {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "gqa_f8e5m2":          {"b": 2, "h_q": 15, "h_k": 5, "h_v": 3, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
+
+#   "sq1_skv256_f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+#   "sq1_skv1024_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq1_skv256_f8e4m3":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+#   "sq1_skv1024_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+#   "sq1_skv256_f8e5m2":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+#   "sq1_skv1024_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 1,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+
+#   "sq4_skv256_f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+#   "sq4_skv1024_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq4_skv256_f8e4m3":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+#   "sq4_skv1024_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+#   "sq4_skv256_f8e5m2":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+#   "sq4_skv1024_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+
+#   "sq64_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+#   "sq64_skv1024_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq64_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+#   "sq64_skv1024_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+    "sq64_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+#   "sq64_skv1024_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
+
+    "sq65_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq65_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "sq65_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 65,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.4},
 }
 
 def section_begin(msg, width=80):
@@ -265,28 +276,40 @@ def test_sdpa_fwd_fp8(name, config):
         print(f"o_gpu_comp{coord}:", float(o_gpu_comp[coord].item()).hex())
 
 
+    is_failed = False
     try:
         torch.testing.assert_close(o_gpu_comp, o_ref_comp, atol=config["atol"], rtol=config["rtol"])
-        torch.testing.assert_close(amax_s_gpu.item(), s_amax, atol=0.04, rtol=0.10)
-        torch.testing.assert_close(amax_o_gpu.item(),o_amax, atol=0.04, rtol=0.10)
-        print("\033[92m" + "Passed!" + "\033[0m")
     except Exception as e:
+        print("\033[91m" + f"o_gpu: {e}" + "\033[0m\n")
+        is_failed = True
+    try:
+        torch.testing.assert_close(amax_s_gpu.item(), s_amax, atol=0.04, rtol=0.10)
+    except Exception as e:
+        print("\033[91m" + f"amax_s_gpu: {e}" + "\033[0m\n")
+        is_failed = True
+    try:
+        torch.testing.assert_close(amax_o_gpu.item(), o_amax, atol=0.04, rtol=0.10)
+    except Exception as e:
+        print("\033[91m" + f"amax_o_gpu: {e}" + "\033[0m\n")
+        is_failed = True
+    if is_failed:
         print("\033[91m" + "Failed!" + "\033[0m")
-        # if True:
-        #     # used to debug tolerances
-        #     x = o_ref_comp.abs()
-        #     y = o_ref_comp - o_gpu_comp
-        #     import plotly.express as px
-        #     import plotly.io as pio
-        #     fig = px.scatter(
-        #         x=x.cpu().flatten().numpy(),
-        #         y=y.cpu().flatten().numpy(),
-        #         labels={"x": "Absolute value", "y": "Absolute Error"},
-        #         title="Absolute value vs absolute error"
-        #     )
-        #     pio.write_html(fig, file=f"scatter_{name}.html", auto_open=False)
-        #     print(f"wrote scatter_{name}.html")
-        raise e
+        raise AssertionError()
+    print("\033[92m" + "Passed!" + "\033[0m")
+
+    # # used to debug tolerances
+    # x = o_ref_comp.abs()
+    # y = o_ref_comp - o_gpu_comp
+    # import plotly.express as px
+    # import plotly.io as pio
+    # fig = px.scatter(
+    #     x=x.cpu().flatten().numpy(),
+    #     y=y.cpu().flatten().numpy(),
+    #     labels={"x": "Absolute value", "y": "Absolute Error"},
+    #     title="Absolute value vs absolute error"
+    # )
+    # pio.write_html(fig, file=f"scatter_{name}.html", auto_open=False)
+    # print(f"wrote scatter_{name}.html")
 
     section_end()
     print()
@@ -300,7 +323,15 @@ if __name__ == "__main__":
 
     torch.manual_seed(42)
     if args.config == "all":
+        failed = []
         for name, config in TEST_CONFIGS.items():
-            test_sdpa_fwd_fp8(name, config)
+            try:
+                test_sdpa_fwd_fp8(name, config)
+            except Exception as e:
+                print(e)
+                failed.append((name, e))
+        if failed:
+            failed_names = [name for name, _ in failed]
+            raise AssertionError(f"Some tests failed: {failed_names}")
     else:
         test_sdpa_fwd_fp8(args.config, TEST_CONFIGS[args.config])
