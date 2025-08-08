@@ -94,7 +94,7 @@ def _find_tensor(
         ValueError: If the tensor cannot be found in the tensor map
     """
     if isinstance(tensor, str):
-        # look up by cannonical name, than assigned name
+        # look up by canonical name, then assigned name
         if tensor in tensor_map:
             return tensor   # this name is "node::input_name"
         for tensor_name, tensor_value in tensor_map.items():
@@ -265,7 +265,7 @@ class CudnnGraph:
         if exc_type is not None:
             logger.error("Exception during graph construction: %s", exc_value)
             self.__graph = None
-            raise exc_value
+            raise
         # prepare the graph and build plans: Each should return None or raise exception
         self.__graph.validate()
         self.__graph.build_operation_graph()
@@ -448,7 +448,7 @@ class CudnnGraph:
                 continue   # already filled or not needed
             user_tensor = _extract_tensor(name, tensor, tensor_dict)
             if user_tensor is None:
-                missing_tensors[tensor] = name  # overwritting existing entries
+                missing_tensors[tensor] = name  # overwriting existing entries
                 continue
             if not hasattr(user_tensor, "__dlpack__"):
                 raise RuntimeError(f"Tensor {name} is not provided as a dlpack tensor")
@@ -517,7 +517,7 @@ class CudnnGraph:
                 tensors_found.add(id(tensor))
                 input_tensors.append(tensor)
             except ValueError:
-                raise ValueError(f"Input at index {i} ({name}) not found in tensor map")
+                raise ValueError(f"Input at index {i} ({name}) not found in tensor map") from None
         # Convert "outputs" to a list of names that can be looked up in __tensor_out
         output_tensors = []
         for i, name in enumerate(outputs):
@@ -529,11 +529,11 @@ class CudnnGraph:
                 tensors_found.add(id(tensor))
                 output_tensors.append(tensor)
             except ValueError:
-                raise ValueError(f"Output at index {i} ({name}) not found in tensor map")
+                raise ValueError(f"Output at index {i} ({name}) not found in tensor map") from None
         # Verify that all input tensors are non-virtual
         for i, tensor in enumerate(input_tensors):
             if tensor.get_is_virtual():
-                raise ValueError(f"Input at index {i} ({name}) is a virtual tensor")
+                raise ValueError(f"Input at index {i} is a virtual tensor")
         # Verify that all non-virtual tensors are covered by input or output
         for name, tensor in self.__tensor_out.items():
             if not tensor.get_is_virtual() and tensor not in output_tensors:
