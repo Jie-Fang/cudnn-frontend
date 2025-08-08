@@ -9,7 +9,7 @@ RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/
 RUN dnf clean all
 RUN dnf -y module install nvidia-driver:open-dkms --skip-broken
 RUN dnf -y install cuda-toolkit-${CUDA_VERSION}
-RUN dnf -y install cudnn-${CUDNN_VERSION}
+RUN dnf -y install cudnn9-cuda-12
 
 # RUN /opt/python/cp312-cp312/bin/python -m pip wheel --no-deps /builds/cudnn/cudnn_frontend/ -w /wheels/cp312
 # RUN /opt/python/cp311-cp311/bin/python -m pip wheel --no-deps /builds/cudnn/cudnn_frontend/ -w /wheels/cp311

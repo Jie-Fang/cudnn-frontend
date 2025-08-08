@@ -201,7 +201,10 @@ def _dlopen_cudnn():
         ), f"Found {len(lib_path)} libcudnn.so.x in nvidia-cudnn-cuXX."
         lib = ctypes.CDLL(lib_path[0])
     else:  # Fallback
-        lib = ctypes.CDLL("libcudnn.so")
+        try:
+            lib = ctypes.CDLL("libcudnn.so.9")
+        except Exception:
+            lib = ctypes.CDLL("libcudnn.so")
 
     handle = ctypes.cast(lib._handle, ctypes.c_void_p).value
     _pybind_module._set_dlhandle_cudnn(handle)

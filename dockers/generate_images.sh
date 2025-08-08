@@ -21,8 +21,9 @@ docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_front
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.9.0.52_12.9.0 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.9.0 --build-arg CUDNN_VERSION_=9.9.0.52 --build-arg DLFW_MONTH=25.04 .
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.10.1.4_12.9.0 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.9.0 --build-arg CUDNN_VERSION_=9.10.1.4 --build-arg DLFW_MONTH=25.04 .
 docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.11.0.98_12.9.1 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.9.1 --build-arg CUDNN_VERSION_=9.11.0.98 --build-arg DLFW_MONTH=25.06 .
+docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.12.0.46_12.9.1 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.9.1 --build-arg CUDNN_VERSION_=9.12.0.46 --build-arg DLFW_MONTH=25.06 .
 
-docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.0 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.9.0 --build-arg CUDNN_VERSION_=9.9.0.52 --build-arg SKIP_CUDNN=true --build-arg DLFW_MONTH=25.04 .
+docker image build --no-cache -t gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.1 -f dockers/Dockerfile --build-arg CUDA_VERSION_=12.9.1 --build-arg CUDNN_VERSION_=9.12.0.46 --build-arg SKIP_CUDNN=true --build-arg DLFW_MONTH=25.06 .
 
 #############################################
 ############# RUN WITH CAUTION ##############
@@ -47,5 +48,6 @@ docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.8.0.87_12
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.9.0.52_12.9.0
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.10.1.4_12.9.0
 docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.11.0.98_12.9.1
+docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.12.0.46_12.9.1
 
-docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.0
+docker push gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.1
