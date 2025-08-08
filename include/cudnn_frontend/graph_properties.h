@@ -730,45 +730,6 @@ class Conv_dgrad_attributes : public Attributes<Conv_dgrad_attributes> {
     }
 };
 
-class Matmul_attributes : public Attributes<Matmul_attributes> {
-    friend class Attributes<Matmul_attributes>;
-    friend class MatmulNode;
-    friend class INode;
-
-    double padding_value = 0.0;
-
-   public:
-    enum class input_names { A, B, M_override, N_override, K_override };
-    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-    enum class output_names { C };
-    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, compute_data_type, inputs, outputs, padding_value)
-
-    Matmul_attributes&
-    set_m_override(std::shared_ptr<Tensor_attributes> const& value) {
-        inputs[input_names::M_override] = value;
-        return *this;
-    }
-
-    Matmul_attributes&
-    set_n_override(std::shared_ptr<Tensor_attributes> const& value) {
-        inputs[input_names::N_override] = value;
-        return *this;
-    }
-
-    Matmul_attributes&
-    set_k_override(std::shared_ptr<Tensor_attributes> const& value) {
-        inputs[input_names::K_override] = value;
-        return *this;
-    }
-
-    Matmul_attributes&
-    set_padding(double const padding_val) {
-        padding_value = padding_val;
-        return *this;
-    }
-};
-
 class Matmul_fp8_attributes : public Attributes<Matmul_fp8_attributes> {
     friend class Attributes<Matmul_fp8_attributes>;
     friend class MatmulFP8Node;
@@ -802,6 +763,70 @@ class Matmul_fp8_attributes : public Attributes<Matmul_fp8_attributes> {
     }
 
     Matmul_fp8_attributes&
+    set_padding(double const padding_val) {
+        padding_value = padding_val;
+        return *this;
+    }
+
+    double
+    get_padding() const {
+        return padding_value;
+    }
+};
+
+class Matmul_attributes : public Attributes<Matmul_attributes> {
+    friend class Attributes<Matmul_attributes>;
+    friend class MatmulNode;
+    friend class INode;
+
+    double padding_value = 0.0;
+
+   public:
+    enum class input_names { A, B, M_override, N_override, K_override };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { C };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Matmul_attributes, name, compute_data_type, inputs, outputs, padding_value)
+
+    Matmul_attributes&
+    clone_fp8_attributes(Matmul_fp8_attributes const& attributes) {
+        auto m_override = attributes.inputs.find(Matmul_fp8_attributes::input_names::M_override);
+        if (m_override != attributes.inputs.end()) {
+            set_m_override(m_override->second);
+        }
+        auto n_override = attributes.inputs.find(Matmul_fp8_attributes::input_names::N_override);
+        if (n_override != attributes.inputs.end()) {
+            set_n_override(n_override->second);
+        }
+        auto k_override = attributes.inputs.find(Matmul_fp8_attributes::input_names::K_override);
+        if (k_override != attributes.inputs.end()) {
+            set_k_override(k_override->second);
+        }
+
+        set_padding(attributes.get_padding());
+
+        return *this;
+    }
+
+    Matmul_attributes&
+    set_m_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::M_override] = value;
+        return *this;
+    }
+
+    Matmul_attributes&
+    set_n_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::N_override] = value;
+        return *this;
+    }
+
+    Matmul_attributes&
+    set_k_override(std::shared_ptr<Tensor_attributes> const& value) {
+        inputs[input_names::K_override] = value;
+        return *this;
+    }
+
+    Matmul_attributes&
     set_padding(double const padding_val) {
         padding_value = padding_val;
         return *this;
