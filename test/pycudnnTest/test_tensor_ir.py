@@ -267,13 +267,13 @@ def calculate_divisibility_from_alignment(
 class TensorIRNode(ABC):
     """Base class for all Tensor IR operation nodes."""
 
-    def __init__(self, node, node_map, ip, tensor_ir_test):
+    def __init__(self, node, node_map, ip, tensor_ir_test, keep_divisibility=False):
         self.node = node
         self.node_map = node_map
         self.ip = ip
         self.tensor_ir_test = tensor_ir_test
         self.children = [node_map[child] for child in node.producer_nodes]
-
+        self.keep_divisibility = keep_divisibility
         # Get output tensor info with compute data type from node kwargs or output data type
         self.output_tensor_info = (
             self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
@@ -283,6 +283,7 @@ class TensorIRNode(ABC):
                     if "compute_data_type" in node.kwargs
                     else node.output[0].data_type
                 ),
+                keep_divisibility=self.keep_divisibility,
             )
         )
 
@@ -419,7 +420,7 @@ class MatmulNode(TensorIRNode):
         if "compute_data_type" in self.node.kwargs:
             compute_data_type = self.node.kwargs["compute_data_type"]
             return self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
-                self.node, compute_data_type
+                self.node, compute_data_type, self.keep_divisibility
             ).tensor_type
 
         return self.output_tensor_info.tensor_type
@@ -486,23 +487,6 @@ class BinaryOperationNode(TensorIRNode):
         with self.ip:
             lsh, rsh = self.children[0], self.children[1]
 
-            def broadcast_if_needed(tensor, output_tensor_info):
-                if not isinstance(tensor.type, nv_tensor_ir.TensorType):
-                    return tensor
-                transformed_tensor = nv_tensor_ir.TensorType.get_from_tensor_type(
-                    output_tensor_info.tensor_type,
-                    nv_tensor_ir.get_tensor_datatype(tensor.type),
-                )
-                if transformed_tensor != tensor.type:
-                    return nv_tensor_ir.broadcast(
-                        transformed_tensor,
-                        tensor,
-                    )
-                return tensor
-
-            lsh = broadcast_if_needed(lsh, self.output_tensor_info)
-            rsh = broadcast_if_needed(rsh, self.output_tensor_info)
-
             lsh, rsh = self.convert_and_splat_for_binary_pointwise(
                 lsh, rsh, self.output_tensor_info
             )
@@ -555,7 +539,9 @@ class UnaryOperationNode(TensorIRNode):
 
     def run(self):
         with self.ip:
-            if self.output_tensor_info.tensor_type != self.children[0].type:
+            if nv_tensor_ir.get_tensor_datatype(
+                self.output_tensor_info.tensor_type
+            ) != nv_tensor_ir.get_tensor_datatype(self.children[0].type):
                 convert_value = nv_tensor_ir.convert(
                     self.output_tensor_info.tensor_type, self.children[0]
                 )
@@ -886,7 +872,10 @@ class test_tensor_ir:
 
         self.compiler_with_kernel_cache = CompilerWithKernelCacheSingleton()
 
-    def determine_tensor_ir_inout_tensor_type(self, node, dtype=None):
+    def determine_tensor_ir_inout_tensor_type(
+        self, node, dtype=None, keep_divisibility=False
+    ):
+        # We only set the divisibility when keep_divisibility is True.
         assert len(node.output) == 1
         test_tensor = node.output[0]
         if dtype is None:
@@ -984,6 +973,10 @@ class test_tensor_ir:
         )
 
         reorder_mode = self.get_reorder_mode(node)
+
+        if not keep_divisibility:
+            shape_div = [1] * len(shape)
+            stride_div = [1] * len(stride)
 
         ty = nv_tensor_ir.TensorType.get(
             shape=shape,
@@ -1278,7 +1271,9 @@ class test_tensor_ir:
 
             input_tensor_infos = list(
                 map(
-                    lambda x: self.determine_tensor_ir_inout_tensor_type(x),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(
+                        x, keep_divisibility=True
+                    ),
                     input_tensors,
                 )
             )
@@ -1311,7 +1306,9 @@ class test_tensor_ir:
 
             output_tensor_infos = list(
                 map(
-                    lambda x: self.determine_tensor_ir_inout_tensor_type(x),
+                    lambda x: self.determine_tensor_ir_inout_tensor_type(
+                        x, keep_divisibility=True
+                    ),
                     output_tensors,
                 )
             )
@@ -1377,8 +1374,22 @@ class test_tensor_ir:
                     node
                 ) in output_tensors:  # This should be built from output nodes no?
                     # Recursively lower ops
+                    keep_divisibility = True
+                    if (
+                        "compute_data_type" in node.kwargs
+                        and node.output[0]._data_type
+                        != node.kwargs["compute_data_type"]
+                    ):
+                        # If we will convert the data type, we don't need to keep the divisibility for
+                        # the producer nodes
+                        keep_divisibility = False
+
                     self.build_tensor_ir_recursive(
-                        node, node_map, ip
+                        node,
+                        node_map,
+                        ip,
+                        output_tensor_infos[0].tensor_type,
+                        keep_divisibility=keep_divisibility,
                     )  # This is passed the insertion point, which provides a mutable reference to the module. # Consider passing other things, as order in graph module is said to not matter.
 
                 # Generate return op
@@ -1390,7 +1401,7 @@ class test_tensor_ir:
                         != node.kwargs["compute_data_type"]
                     ):
                         tensor_info = self.determine_tensor_ir_inout_tensor_type(
-                            node, node.output[0]._data_type
+                            node, node.output[0]._data_type, keep_divisibility=True
                         )
                         node_map[node] = nv_tensor_ir.convert(
                             tensor_info.tensor_type,
@@ -1461,15 +1472,81 @@ class test_tensor_ir:
         else:
             return scalar_tensor
 
-    def build_tensor_ir_recursive(self, node, node_map, ip):
+    def build_tensor_ir_recursive(
+        self, node, node_map, ip, output_tensor_type, keep_divisibility=False
+    ):
         """Build tensor IR representation recursively for the given node."""
+
+        # for node in input_tensors:
+        if (not self.static_shapes_only) and (len(node.producer_nodes) == 0):
+            input_tensor = node_map[node]
+            # Skip scalars / by-value arguments
+            if not isinstance(input_tensor.type, nv_tensor_ir.TensorType):
+                return
+
+            if keep_divisibility:
+                # Need to keep the same divisibility with the output tensor
+                # Broadcast the input tensor to make them same
+                if nv_tensor_ir.get_tensor_datatype(
+                    output_tensor_type
+                ) == nv_tensor_ir.get_tensor_datatype(input_tensor.type):
+                    broadcast_tensor_type = output_tensor_type
+                else:
+                    # If the data type is the different, we don't need to broadcast.
+                    # Because there will be a convert op after the node.
+                    broadcast_tensor_type = None
+
+            else:
+                # Don't need to keep the same divisibility with the output tensor
+                # Broadcast the input tensor to remove the divisibility
+                dim = node.output[0].dim
+                broad_cast_shape = [-1] * len(dim)
+
+                tensor_type = input_tensor.type
+
+                broadcast_tensor_type = nv_tensor_ir.TensorType.get(
+                    shape=broad_cast_shape,
+                    datatype=nv_tensor_ir.get_tensor_datatype(tensor_type),
+                )
+
+            if (broadcast_tensor_type is not None) and (
+                broadcast_tensor_type != input_tensor.type
+            ):
+                broadcast_tensor = nv_tensor_ir.broadcast(
+                    broadcast_tensor_type,
+                    input_tensor,
+                )
+                node_map[node] = broadcast_tensor
+
         # Skip if node is already processed
         if node in node_map.keys():
             return
 
+        if isinstance(node, tg.operation):
+            # These operations should keep the divisibility as the parent node
+            # Because they require the same divisibility for the input and output tensors
+            if (
+                node.op_name
+                in self.OPERATION_GROUPS[IdentityNode]
+                + self.OPERATION_GROUPS[BinaryOperationNode]
+                + self.OPERATION_GROUPS[UnaryOperationNode]
+                + self.OPERATION_GROUPS[BinarySelectNode]
+                + self.OPERATION_GROUPS[ActivationForwardNode]
+                + self.OPERATION_GROUPS[ActivationBackwardNode]
+            ):
+                child_keep_divisibility = keep_divisibility
+            else:
+                child_keep_divisibility = False
+
         # Process all children first
         for child in node.producer_nodes:
-            self.build_tensor_ir_recursive(child, node_map, ip)
+            self.build_tensor_ir_recursive(
+                child,
+                node_map,
+                ip,
+                output_tensor_type,
+                keep_divisibility=child_keep_divisibility,
+            )
 
         # Only process operation nodes
         if not isinstance(node, tg.operation):
@@ -1507,7 +1584,9 @@ class test_tensor_ir:
             )
 
         # Create and run the node
-        ir_node = node_class(node, node_map, ip, self)
+        ir_node = node_class(
+            node, node_map, ip, self, keep_divisibility=keep_divisibility
+        )
         ir_node.run()
 
     def get_reorder_mode(self, node):
