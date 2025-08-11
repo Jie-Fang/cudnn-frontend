@@ -15,7 +15,7 @@ Key Features:
 Example:
     >>> x = torch.randn(8, 56, 56, 64, device=device, dtype=torch.float16).permute(0, 3, 1, 2)
     >>> w = torch.randn(32, 3, 3, 64, device=device, dtype=torch.float16).permute(0, 3, 1, 2)
-    >>> with CudnnGraph() as graph:
+    >>> with Graph() as graph:
     ...     y = graph.conv_fprop(
     ...         image=x, weight=w,
     ...         padding=[1,1], stride=[1,1], dilation=[1,1],
@@ -39,7 +39,7 @@ import cudnn
 import torch
 from cudnn import data_type, heur_mode
 
-__all__ = ["CudnnGraph", "data_type", "heur_mode", "cudnn"]
+__all__ = ["Graph", "data_type", "heur_mode", "cudnn"]
 
 # typedefs for readability
 CudnnHandle = int
@@ -183,7 +183,7 @@ def _tensor_like(cudnn_tensor: cudnn.tensor, tensor_type: str = "pyt") -> torch.
     return tensor
 
 
-class CudnnGraph:
+class Graph:
     """Wrapper object for cuDNN computation graph
 
     This class simplifies the process of creating, compiling, and executing
