@@ -36,6 +36,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cudnn
+import cudnn.datatypes
 import torch
 from cudnn import data_type, heur_mode
 
@@ -154,28 +155,9 @@ def _tensor_like(cudnn_tensor: cudnn.tensor, tensor_type: str = "pyt") -> torch.
     """
     if tensor_type != "pyt":
         raise NotImplementedError("Only PyTorch tensor is supported for now")
-    pytorch_dtypes = {
-        # not all cudnn data types are supported in PyTorch
-        data_type.BFLOAT16: torch.bfloat16,
-        data_type.BOOLEAN: torch.bool,
-        data_type.DOUBLE: torch.float64,
-        data_type.FAST_FLOAT_FOR_FP8: None,
-        data_type.FLOAT: torch.float32,
-        data_type.FP4_E2M1: None,
-        data_type.FP8_E4M3: torch.float8_e4m3fn,
-        data_type.FP8_E5M2: torch.float8_e5m2,
-        data_type.FP8_E8M0: None,
-        data_type.HALF: torch.float16,
-        data_type.INT32: torch.int32,
-        data_type.INT4: None,
-        data_type.INT64: torch.int64,
-        data_type.INT8: torch.int8,
-        data_type.INT8x32: None,
-        data_type.INT8x4: None,
-        data_type.UINT8: torch.uint8,
-        data_type.UINT8x4: None,
-    }
-    dtype = pytorch_dtypes.get(cudnn_tensor.get_data_type())
+    if not cudnn.datatypes.is_torch_available():
+        raise RuntimeError("PyTorch is not available")
+    dtype = cudnn.datatypes._cudnn_to_torch_data_type(cudnn_tensor.get_data_type())
     if dtype is None:
         raise TypeError(f"cuDNN uses an unsupported data type in PyTorch: {cudnn_tensor.get_data_type()}")
     tensor = torch.empty(cudnn_tensor.get_dim(), device="cuda", dtype=dtype)
