@@ -216,4 +216,4 @@ else:
     _dlopen_cudnn()
 
 from .graph import graph, jit, graph_cache
-from .cudnn_wrapper import Graph
+from .wrapper import Graph

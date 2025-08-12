@@ -357,7 +357,7 @@ class Graph:
                 output_list = output
             for i, obj in enumerate(output_list):
                 if isinstance(obj, cudnn.tensor):
-                    if hasattr(obj, "get_name"):
+                    if hasattr(obj, "get_name") and obj.get_name():
                         tensor_name = obj.get_name()
                     else:
                         tensor_name = f"{node_name}::{i}"
