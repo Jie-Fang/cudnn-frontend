@@ -396,9 +396,10 @@ SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImple
         case AttentionImplementation_t::UNIFIED: {
             for (const auto& [key, value] : inputs) {
                 RETURN_CUDNN_FRONTEND_ERROR_IF(
-                    key != input_names::Q && key != input_names::K && key != input_names::V && value != nullptr,
+                    key != input_names::Q && key != input_names::K && key != input_names::V &&
+                        key != input_names::Attn_scale && value != nullptr,
                     error_code_t::GRAPH_NOT_SUPPORTED,
-                    "Unified SDPA node doesn't yet support inputs other than Q, K and V");
+                    "Unified SDPA node doesn't yet support inputs other than Q, K, V and Attn_scale");
             }
 
             for (const auto& [key, value] : outputs) {
@@ -424,10 +425,6 @@ SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImple
             RETURN_CUDNN_FRONTEND_ERROR_IF(dropout_probability.has_value(),
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "Unified SDPA node doesn't yet support dropout");
-
-            RETURN_CUDNN_FRONTEND_ERROR_IF(attn_scale_value.has_value(),
-                                           error_code_t::GRAPH_NOT_SUPPORTED,
-                                           "Unified SDPA node doesn't yet support attention scale");
 
             RETURN_CUDNN_FRONTEND_ERROR_IF(max_seq_len_kv.has_value(),
                                            error_code_t::GRAPH_NOT_SUPPORTED,

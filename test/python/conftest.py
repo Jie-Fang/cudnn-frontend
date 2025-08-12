@@ -94,9 +94,6 @@ def pytest_addoption(parser):
 
     # MHA command line options to overwrite boolean 'is*' variables in test_mhas_v2.py.
     parser.addoption(
-        "--mha_is_attn_scale", action="store", default=None, type=str, choices=["True", "False"], help="[test_mhas_v2.py], overwrites is_attn_scale",
-    )
-    parser.addoption(
         "--mha_is_infer", action="store", default=None, type=str, choices=["True", "False"], help="[test_mhas_v2.py], overwrites is_infer",
     )
     parser.addoption(

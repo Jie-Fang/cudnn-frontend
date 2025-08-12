@@ -309,7 +309,7 @@ class testConfig:
     __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_tests',
                  'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 
                  'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 
-                 'diag_align', 'left_bound', 'right_bound', 'is_attn_scale', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
+                 'diag_align', 'left_bound', 'right_bound', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
                  'is_dropout', 'is_padding', 'is_ragged', 'is_determin', 'data_type', 'batches', 'h_q', 
                  'h_k', 'h_v', 'd_qk', 'd_v', 's_q', 's_kv', 'block_size', 'in_layout', 'out_layout', 
                  'shape_q', 'gaps_q', 'stride_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'elems_k', 
@@ -346,7 +346,6 @@ class testConfig:
         self.left_bound  = None
         self.right_bound = None
 
-        self.is_attn_scale = None
         self.is_alibi    = None
         self.is_infer    = None
         self.is_paged    = None
@@ -530,7 +529,6 @@ class testConfig:
             print(f"shape_k(b,h,s,d) = {self.shape_k}, strides={self.stride_k}, gaps={self.gaps_k}, elems={self.elems_k:,}")
             print(f"shape_v(b,h,s,d) = {self.shape_v}, strides={self.stride_v}, gaps={self.gaps_v}, elems={self.elems_v:,}")
             print(f"shape_o(b,h,s,d) = {self.shape_o}, strides={self.stride_o}, gaps={self.gaps_o}, elems={self.elems_o:,}")
-            print(f"is_attn_scale    = {self.is_attn_scale}")        
             print(f"is_infer         = {self.is_infer}")
             print(f"is_padding       = {self.is_padding}")
             print(f"is_ragged        = {self.is_ragged}")
@@ -580,10 +578,6 @@ class testConfig:
         self.data_type    = data_type
         self.is_infer     = is_infer
 
-        # TODO(nvbugs/5102117): Remove is_attn_scale as an option once unified engine
-        # supports it (after that, we should always test with attn_scale).
-        self.is_attn_scale = True
-
         self.is_alibi     = self.rng_geom.choice([True, False])
         self.is_paged     = self.rng_geom.choice([True, False])
         self.is_bias      = self.rng_geom.choice([True, False])
@@ -626,7 +620,6 @@ class testConfig:
             # LIMIT: For now, unified implementation only supports a small subset of features.
             # TODO(nvbugs/5102117): Remove these hacks as the unified engine gains more capabilities.
             if self.implementation == cudnn.attention_implementation.UNIFIED:
-                self.is_attn_scale = False
                 self.is_infer = True
                 self.is_determin = True
                 self.is_padding = False
@@ -640,7 +633,6 @@ class testConfig:
             self.block_size = 0
 
         # Overwrite all boolean variables and block_size from the command line.
-        self.is_attn_scale = bool_cli_option(self.is_attn_scale, request, "--mha_is_attn_scale")
         self.is_infer      = bool_cli_option(self.is_infer, request, "--mha_is_infer")
         self.is_alibi      = bool_cli_option(self.is_alibi, request, "--mha_is_alibi")
         self.is_bias       = bool_cli_option(self.is_bias, request, "--mha_is_bias")
@@ -1155,7 +1147,6 @@ def exec_sdpa(cfg, request, cudnn_handle):
     data_type    = cfg.data_type
     rng_data     = cfg.rng_data
 
-    is_attn_scale = cfg.is_attn_scale
     is_alibi     = cfg.is_alibi
     is_infer     = cfg.is_infer
     is_paged     = cfg.is_paged
@@ -1345,8 +1336,8 @@ def exec_sdpa(cfg, request, cudnn_handle):
         k.set_ragged_offset(k_ragged_offset)
         v.set_ragged_offset(v_ragged_offset)
 
-    attn_scale = 0.125 if is_attn_scale else None
-    
+    attn_scale = 0.125
+
     o, stats = graph.sdpa(
         name="sdpa_forward",
         q=q,

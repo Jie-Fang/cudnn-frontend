@@ -1612,6 +1612,13 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
         // - dropout scale in pre 8.9.3
         attributes.fill_from_context(this->context);
 
+        //// Optional Attn scale
+        // In case user provided a scalar value, do a fused scalar.
+        if (attributes.attn_scale_value.has_value()) {
+            attributes.inputs[input_names::Attn_scale] =
+                std::make_shared<Tensor_attributes>(attributes.attn_scale_value.value());
+        }
+
         return {error_code_t::OK, ""};
     }
 
@@ -1671,6 +1678,16 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
                                                            CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                                            1,
                                                            &backend_stats));
+        }
+
+        auto attn_scale_it = attributes.inputs.find(SDPA_attributes::input_names::Attn_scale);
+        if (attn_scale_it != attributes.inputs.end()) {
+            auto backend_scale = tensors[attn_scale_it->second->get_uid()]->get_desc()->get_backend_descriptor();
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_SCALEDESC,
+                                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                           1,
+                                                           &backend_scale));
         }
 
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(unified_sdpa_operation->get_backend_descriptor()));
