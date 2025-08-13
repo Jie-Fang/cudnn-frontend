@@ -743,6 +743,11 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
         //    - validate stats has valid dims
         //    - validate Q and dQ have the same dims
 
+        // Stop s_q = S_kv = 1 from running
+        RETURN_CUDNN_FRONTEND_ERROR_IF(s_q == 1 && s_kv == 1,
+                                       error_code_t::GRAPH_NOT_SUPPORTED,
+                                       "s_q = s_kv = 1 is not supported.");
+
         cudaDeviceProp prop;
         int device;
         _CUDNN_CHECK_CUDA_ERROR(detail::cuda_get_device(&device));
