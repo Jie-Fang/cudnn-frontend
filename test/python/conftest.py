@@ -120,9 +120,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--mha_diag_align", default=None, type=int, choices=[0, 1], help="[test_mhas_v2.py] diagonal alignment: 0-TOP_LEFT, 1-BOTTOM_RIGHT",
     )
-    parser.addoption(
-        "--mha_implementation", action="store", default=None, type=str, choices=["AUTO", "COMPOSITE", "UNIFIED"], help="[test_mhas_v2.py], overwrites implementation",
-    )
 
     # Refined command line option in test_mhas_v2.py to supersede --mha_b (the 'b' variable is too short).
     parser.addoption(

@@ -394,6 +394,11 @@ SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImple
             // Composite implementation already supports all of the features.
             break;
         case AttentionImplementation_t::UNIFIED: {
+            auto cudnn_ver_error =
+                error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node requires cuDNN 9.13.0"};
+#if (CUDNN_VERSION >= 91300)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91300, cudnn_ver_error);
+
             for (const auto& [key, value] : inputs) {
                 RETURN_CUDNN_FRONTEND_ERROR_IF(
                     key != input_names::Q && key != input_names::K && key != input_names::V &&
@@ -437,6 +442,14 @@ SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImple
             RETURN_CUDNN_FRONTEND_ERROR_IF(mma_core_mode != DataType_t::HALF,
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "Unified SDPA node doesn't yet support a data type other than fp16");
+
+            int64_t s_q = inputs.at(SDPA_attributes::input_names::Q)->get_dim()[2];
+            RETURN_CUDNN_FRONTEND_ERROR_IF(s_q == 1,
+                                           error_code_t::GRAPH_NOT_SUPPORTED,
+                                           "Unified SDPA node doesn't yet support decode only mode, i.e. s_q == 1");
+#else
+            return cudnn_ver_error;
+#endif
         } break;
     }
 
