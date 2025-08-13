@@ -53,6 +53,10 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
     - $Kcache[b,h,s,d] = K[page\ table\ k[b,1,s / bs_k, 1],h,s\ mod\ bs_{k},d]$
     - $Vcache[b,h,s,d] = V[page\ table\ v[b,1,s / bs_v, 1],h,s\ mod\ bs_{v},d]$
   - See also the [PagedAttention paper](https://arxiv.org/abs/2309.06180).
+- Implementation: Which underlying SDPA implementation to use. Choices are:
+  - `AUTO`: The default, auto-selects one of the following implementations. Almost all users should use this default.
+  - `COMPOSITE`: The standard cuDNN graph representing SDPA as several distinct operations.
+  - `UNIFIED`: An experimental new SDPA forward operation (cuDNN backend 9.13+ only). For now, only supports a few features.
 
 (tensors-fp16bf16-forward)=
 ### Tensors
@@ -193,6 +197,11 @@ SDPA_attributes& set_dropout(std::shared_ptr<Tensor_attributes> mask,
 SDPA_attributes& set_rng_dump(std::shared_ptr<Tensor_attributes> value);
 // ==========================  END    dropout options =====================
 
+// ========================== BEGIN   experimental options ================
+// Sets the underlying SDPA implementation to use (default is AUTO).
+SDPA_attributes& set_implementation(AttentionImplementation_t value);
+// ==========================  END    experimental options ================
+
 SDPA_attributes& set_compute_data_type(DataType_t value);
 ```
 
@@ -227,6 +236,8 @@ Deprecated masking Args (can cause undetermined behavior when combined with the 
     use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
 Other deprecated Args:
     is_inference (Optional[bool]): If false, compute and output softmax stats. Prefer generate_stats instead (NOTE: generate_stats takes the negation of the argument to is_inference).
+Experimental Args:
+    implementation (Optional[cudnn.attention_implementation]): One of {"AUTO", "COMPOSITE", "UNIFIED"}. Almost all users should use "AUTO" (the default).
 
 Returns:
     o (cudnn_tensor): The output data.

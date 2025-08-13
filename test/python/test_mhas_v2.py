@@ -556,9 +556,10 @@ class testConfig:
         # Make sure to flush everything out.
         print(" ", flush=True)
 
-    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, request, *, generate_ragged_tests, avoid_invalid_configs):
-        assert type(generate_ragged_tests) == knobNAR, "knob 'generate_ragged_tests' must have type knobNAR"
-        assert type(avoid_invalid_configs) == knobNA, "knob 'avoid_invalid_configs' must have type knobNA"
+    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, request, *, generate_ragged_tests, avoid_invalid_configs, implementation):
+        assert isinstance(generate_ragged_tests, knobNAR), "knob 'generate_ragged_tests' must have type knobNAR"
+        assert isinstance(avoid_invalid_configs, knobNA), "knob 'avoid_invalid_configs' must have type knobNA"
+        assert isinstance(implementation, cudnn.attention_implementation), "knob 'implementation' must have type cudnn.attention_implementation"
         assert data_type in data_type_options, "wrong data type"
         assert head_group in head_group_options, "wrong head group"
         assert layout_type in random_layout_options, "wrong layout type"
@@ -577,6 +578,7 @@ class testConfig:
         self.head_group   = head_group
         self.data_type    = data_type
         self.is_infer     = is_infer
+        self.implementation = implementation
 
         self.is_alibi     = self.rng_geom.choice([True, False])
         self.is_paged     = self.rng_geom.choice([True, False])
@@ -585,10 +587,6 @@ class testConfig:
         self.is_determin  = self.rng_geom.choice([True, False])
         self.is_padding   = self.rng_geom.choice([True, False])
         self.is_ragged    = self.rng_geom.choice([True, False])
-
-        self.implementation = cudnn.attention_implementation.AUTO
-        # Overwrite implementation from the command line.
-        self.implementation = implementation_cli_option(self.implementation, request, "--mha_implementation")
 
         if generate_ragged_tests == generate_ragged_tests.ALWAYS:
            self.is_padding = True
@@ -1133,7 +1131,7 @@ def create_container_and_page_table(tensor, block_size):
 
 
 def exec_sdpa(cfg, request, cudnn_handle):
-    # Do not run any test when --dryrn option is provided.
+    # Do not run any test when --dryrun option is provided.
     if request.config.option.dryrun:
         pytest.skip("dry run mode")
 
@@ -1241,6 +1239,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
     if cudnn_version < "9.10.0":
         print("@@@@ Overall result: WAIVED, test_mhas_v2.py supports cudnn 9.10.0 or higher.")
         pytest.skip("test_mhas_v2.py requires cudnn 9.10.0 or higher")
+
+    if cudnn_version < "9.13.0" and implementation == cudnn.attention_implementation.UNIFIED:
+        print("@@@@ Overall result: WAIVED, unified SDPA implementation requires cudnn 9.13.0 or higher.")
+        pytest.skip("unified SDPA implementation requires cudnn 9.13.0 or higher")
 
     if s_q == s_kv == 1:
         print("@@@@ Overall result: WAIVED, skipping known issue of s_q == s_kv == 1.")
@@ -1726,7 +1728,23 @@ def test_sdpa_random_fwd_L0(env_info, test_no, data_type, is_infer, head_group, 
     cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
     cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
     cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
+    exec_sdpa(cfg, request, cudnn_handle)
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
+@pytest.mark.parametrize("layout", random_layout_options)
+@pytest.mark.parametrize("head_group", head_group_options)
+@pytest.mark.parametrize("is_infer", [True], ids=["FWD"])
+@pytest.mark.L0
+def test_unified_sdpa_random_fwd_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+    cfg = testConfig(**env_info)
+    cfg.setBatches(min_batches=1, max_batches=8)
+    cfg.setSequences(min_s_q=1, max_s_q=1024, min_s_kv=1, max_s_kv=1024)
+    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
+    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
+    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.UNIFIED)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
@@ -1746,7 +1764,7 @@ def test_sdpa_random_bwd_L0(env_info, test_no, data_type, is_infer, head_group, 
     cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
     cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
     cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
@@ -1766,7 +1784,7 @@ def test_sdpa_random_sq1_L0(env_info, test_no, data_type, is_infer, head_group, 
     cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
     cfg.setHeads(min_h_qkv=1, max_h_qkv=32)
     cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # =====================================================
@@ -1787,7 +1805,7 @@ def test_sdpa_random_lean_attn_L0(env_info, test_no, data_type, is_infer, head_g
     cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
     cfg.setHeads(min_h_qkv=1, max_h_qkv=32)
     cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ==================================
@@ -1807,7 +1825,7 @@ def test_sdpa_random_ragged_L0(env_info, test_no, data_type, is_infer, head_grou
     cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
     cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
     cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.ALWAYS, avoid_invalid_configs=knobNA.ALWAYS)
+    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.ALWAYS, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
     exec_sdpa(cfg, request, cudnn_handle)
 
 # ===================

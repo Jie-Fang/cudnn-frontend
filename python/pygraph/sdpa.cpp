@@ -736,6 +736,8 @@ init_pygraph_sdpa_submodule(py::class_<PyGraph>& m) {
                     use_causal_mask_bottom_right (Optional[bool]): Whether to use bottom right aligned causal mask. Default is False.
                 Other deprecated Args:
                     is_inference (Optional[bool]): If false, compute and output softmax stats. Prefer generate_stats instead (NOTE: generate_stats takes the negation of the argument to is_inference).
+                Experimental Args:
+                    implementation (Optional[cudnn.attention_implementation]): One of {"AUTO", "COMPOSITE", "UNIFIED"}. Almost all users should use "AUTO" (the default).
 
                 Returns:
                     o (cudnn_tensor): The output data.
