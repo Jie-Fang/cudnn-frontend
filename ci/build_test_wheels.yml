@@ -35,6 +35,12 @@ deploy:build_bdist_wheels:
         paths:
             - wheels/py${PYTHON_VERSION}/*.whl
 
+deploy:build_bdist_wheels_3.13:
+    extends: .windows_wheel_builder_template
+    variables:
+        PYTHON_VERSION: "313"
+        PYTHON_FULL_VERSION: "3.13.6"
+
 deploy:build_bdist_wheels_3.12:
     extends: .windows_wheel_builder_template
     variables:
@@ -58,12 +64,6 @@ deploy:build_bdist_wheels_3.9:
     variables:
         PYTHON_VERSION: "39"
         PYTHON_FULL_VERSION: "3.9.7"
-
-deploy:build_bdist_wheels_3.8:
-    extends: .windows_wheel_builder_template
-    variables:
-        PYTHON_VERSION: "38"
-        PYTHON_FULL_VERSION: "3.8.10"
 
 deploy:test_bdist_wheels_ga_cudnn_3.12:
     parallel:
