@@ -281,7 +281,7 @@ class Graph : public ICudnn, public INode {
         if (attributes.implementation == AttentionImplementation_t::AUTO) {
             // Sets attributes.implementation to a supporting implementation,
             // or leaves as AUTO if none found
-            attributes._auto_select_implementation();
+            attributes._auto_select_implementation(context);
         }
 
         switch (attributes.implementation) {
