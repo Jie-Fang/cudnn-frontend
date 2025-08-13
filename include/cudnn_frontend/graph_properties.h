@@ -1825,11 +1825,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
 
     // Internal function - do not use directly in application code
     void
-    _auto_select_implementation() {
-        if (validate_sdpa_support_surface_for_implementation(AttentionImplementation_t::UNIFIED).is_good()) {
+    _auto_select_implementation(const detail::Context& context) {
+        if (validate_sdpa_support_surface_for_implementation(context, AttentionImplementation_t::UNIFIED).is_good()) {
             implementation = AttentionImplementation_t::UNIFIED;
             CUDNN_FE_LOG_LABEL_ENDL("INFO: Auto-selected SDPA implementation UNIFIED");
-        } else if (validate_sdpa_support_surface_for_implementation(AttentionImplementation_t::COMPOSITE).is_good()) {
+        } else if (validate_sdpa_support_surface_for_implementation(context, AttentionImplementation_t::COMPOSITE)
+                       .is_good()) {
             implementation = AttentionImplementation_t::COMPOSITE;
             CUDNN_FE_LOG_LABEL_ENDL("INFO: Auto-selected SDPA implementation COMPOSITE");
         } else {
@@ -1842,7 +1843,8 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     // Check whether implementation `impl` supports the requested features. `impl` must not be AUTO.
     // (The `implementation` member variable is ignored.)
     error_t
-    validate_sdpa_support_surface_for_implementation(AttentionImplementation_t impl) const;
+    validate_sdpa_support_surface_for_implementation(const detail::Context& context,
+                                                     AttentionImplementation_t impl) const;
 };
 
 // Type alias for backward compatibility - SDPA_fp8_attributes is now an alias to SDPA_attributes

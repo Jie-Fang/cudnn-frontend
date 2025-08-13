@@ -375,13 +375,14 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
     }
 
     // Check whether the selected implementation supports the requested features.
-    CHECK_CUDNN_FRONTEND_ERROR(validate_sdpa_support_surface_for_implementation(implementation));
+    CHECK_CUDNN_FRONTEND_ERROR(validate_sdpa_support_surface_for_implementation(context, implementation));
 
     return {error_code_t::OK, ""};
 }
 
 inline error_t
-SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImplementation_t impl) const {
+SDPA_attributes::validate_sdpa_support_surface_for_implementation(const detail::Context& context,
+                                                                  AttentionImplementation_t impl) const {
     switch (impl) {
         case AttentionImplementation_t::AUTO:
             // This function should not be called with AUTO.
@@ -447,7 +448,14 @@ SDPA_attributes::validate_sdpa_support_surface_for_implementation(AttentionImple
             RETURN_CUDNN_FRONTEND_ERROR_IF(s_q == 1,
                                            error_code_t::GRAPH_NOT_SUPPORTED,
                                            "Unified SDPA node doesn't yet support decode only mode, i.e. s_q == 1");
+
+            RETURN_CUDNN_FRONTEND_ERROR_IF(
+                (compute_data_type != DataType_t::NOT_SET && compute_data_type != DataType_t::FLOAT) ||
+                    context.get_compute_data_type() != DataType_t::FLOAT,
+                error_code_t::GRAPH_NOT_SUPPORTED,
+                "Unified SDPA node doesn't yet support compute data type other than float");
 #else
+            CUDNN_FRONTEND_UNUSED(context);
             return cudnn_ver_error;
 #endif
         } break;
