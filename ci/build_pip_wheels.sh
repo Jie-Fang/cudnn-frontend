@@ -4,7 +4,7 @@ set -e
 
 DATE_FOLDER=`echo $(date '+%Y-%m-%d')`
 
-for version in cp312 cp311 cp310 cp39 cp38
+for version in cp313 cp312 cp311 cp310 cp39
 do
     echo "Building for ${version}"
     /opt/python/${version}-${version}/bin/python -m venv ${version}_env
