@@ -567,30 +567,51 @@ class ComparatorNode(TensorIRNode):
 
     # Map operation names to comparator types
     COMPARATOR_MAP = {
-        "cmp_lt": nv_tensor_ir.Comparator.olt,
-        "cmp_ge": nv_tensor_ir.Comparator.oge,
-        "cmp_gt": nv_tensor_ir.Comparator.ogt,
-        "cmp_le": nv_tensor_ir.Comparator.ole,
-        "cmp_eq": nv_tensor_ir.Comparator.oeq,
-        "cmp_ne": nv_tensor_ir.Comparator.one,
+        "float": {
+            "cmp_lt": nv_tensor_ir.Comparator.olt,
+            "cmp_ge": nv_tensor_ir.Comparator.oge,
+            "cmp_gt": nv_tensor_ir.Comparator.ogt,
+            "cmp_le": nv_tensor_ir.Comparator.ole,
+            "cmp_eq": nv_tensor_ir.Comparator.oeq,
+            "cmp_ne": nv_tensor_ir.Comparator.one,
+        },
+        "integer": {
+            "cmp_lt": nv_tensor_ir.Comparator.lt,
+            "cmp_ge": nv_tensor_ir.Comparator.ge,
+            "cmp_gt": nv_tensor_ir.Comparator.gt,
+            "cmp_le": nv_tensor_ir.Comparator.le,
+            "cmp_eq": nv_tensor_ir.Comparator.eq,
+            "cmp_ne": nv_tensor_ir.Comparator.neq,
+        },
     }
 
     def run(self):
         with self.ip:
             op_name = self.node.op_name
-            if op_name not in self.COMPARATOR_MAP:
+            if (
+                op_name not in self.COMPARATOR_MAP["float"]
+                and op_name not in self.COMPARATOR_MAP["integer"]
+            ):
                 print(f"Unimplemented comparator operation: {op_name}")
                 return
 
-            # Ensure we have float tensors for comparisons
-            if not self.is_float(self.children[0]) or not self.is_float(
-                self.children[1]
-            ):
-                raise ValueError(f"Comparator {op_name} requires float tensors")
-
-            self.node_map[self.node] = nv_tensor_ir.cmpf(
-                self.COMPARATOR_MAP[op_name], self.children[0], self.children[1]
-            )
+            # The input tensors should be both integer or both float
+            if self.is_integer(self.children[0]) and self.is_integer(self.children[1]):
+                self.node_map[self.node] = nv_tensor_ir.cmp(
+                    self.COMPARATOR_MAP["integer"][op_name],
+                    self.children[0],
+                    self.children[1],
+                )
+            elif self.is_float(self.children[0]) and self.is_float(self.children[1]):
+                self.node_map[self.node] = nv_tensor_ir.cmp(
+                    self.COMPARATOR_MAP["float"][op_name],
+                    self.children[0],
+                    self.children[1],
+                )
+            else:
+                raise ValueError(
+                    f"Comparator {op_name} requires float or integer tensors"
+                )
 
 
 class IdentityNode(TensorIRNode):
