@@ -37,8 +37,6 @@ def is_torch_available():
                 torch.int64: cudnn_data_type.INT64,
                 torch.uint8: cudnn_data_type.UINT8,
                 torch.bool: cudnn_data_type.BOOLEAN,
-                torch.float8_e4m3fn: cudnn_data_type.FP8_E4M3,
-                torch.float8_e5m2: cudnn_data_type.FP8_E5M2,
             }
 
             def possibly_add_type(torch_type_name, cudnn_type):
