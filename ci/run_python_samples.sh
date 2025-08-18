@@ -8,7 +8,6 @@ export LD_LIBRARY_PATH=/debug_cudnn/lib64
 
 if [ "${GPU_CC}" -ge "9" ]; then
     jupyter execute samples/python/0*
-    jupyter execute samples/python/2[0-8]*
     jupyter execute samples/python/50*
     jupyter execute samples/python/51*
 else
@@ -25,9 +24,9 @@ fi
 
 # Run paged attention with packed K/V block tables for SM>=80 and cuDNN >= 9.11
 if [ "${CUDNN_BE_VERSION}" -ge "91100" ] && [ "${GPU_CC}" -ge "8" ]; then
-    jupyter execute samples/python/53_scaled_dot*
+    jupyter execute samples/python/53*
 fi
 
 if [ "${CUDNN_BE_VERSION}" -ge "91000" ] && [ "${GPU_CC}" -ge "8" ]; then
-    jupyter execute samples/python/29*
+    jupyter execute samples/python/2[0-9]*
 fi
