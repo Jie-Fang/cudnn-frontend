@@ -433,17 +433,6 @@ python_samples:cudnn_dev_latest:
         - .device_matrix:template
         - .cudnn_dev_image:template    
 
-python_samples:cudnn_9.0.0.312_12.3.1:
-  image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.0.0.312_12.3.1"
-  parallel:
-    matrix:
-      - ARCH: ["Hopper", "Ampere"]
-  tags:
-    - ${ARCH}
-  extends:
-    - .default_job_template
-    - .python_samples:template
-  needs: []
 
 python_samples:cudnn_9.9.0.52_12.9.0:
   image: "gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.9.0.52_12.9.0"
