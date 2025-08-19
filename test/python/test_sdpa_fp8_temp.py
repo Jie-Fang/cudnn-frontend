@@ -44,31 +44,43 @@ TEST_CONFIGS = {
     "sq4_skv256_f8e5m2":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq4_skv1024_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 4,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
 
+    "sq8_skv128_f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq8_skv256_f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq8_skv1024_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq8_skv128_f8e4m3":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq8_skv256_f8e4m3":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq8_skv1024_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+    "sq8_skv128_f8e5m2":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq8_skv256_f8e5m2":   {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq8_skv1024_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 8,   "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
 
+    "sq16_skv128_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq16_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq16_skv1024_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq16_skv128_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq16_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq16_skv1024_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+    "sq16_skv128_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq16_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq16_skv1024_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 16,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
 
+    "sq32_skv128_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq32_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq32_skv1024_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq32_skv128_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq32_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq32_skv1024_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+    "sq32_skv128_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq32_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq32_skv1024_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 32,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
 
+    "sq64_skv128_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq64_skv256_f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
     "sq64_skv1024_f16":    {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp16",     "atol": 0.04, "rtol": 0.1},
+    "sq64_skv128_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq64_skv256_f8e4m3":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
     "sq64_skv1024_f8e4m3": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e4m3", "atol": 0.16, "rtol": 0.2},
+    "sq64_skv128_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 128,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq64_skv256_f8e5m2":  {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 256,  "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
     "sq64_skv1024_f8e5m2": {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 64,  "s_kv": 1024, "d_qk": 128, "d_vo": 128, "otype": "fp8_e5m2", "atol": 0.16, "rtol": 0.2},
 
@@ -79,41 +91,7 @@ TEST_CONFIGS = {
 
 blocked_configs = [
     "d128_f8e4m3_paged",
-    "sq1_skv256_f16",
-    "sq1_skv1024_f16",
-    "sq1_skv1024_f8e4m3",
-    "sq1_skv256_f8e5m2",
-    "sq1_skv1024_f8e5m2",
-    "sq4_skv256_f16",
-    "sq4_skv1024_f16",
-    "sq4_skv256_f8e4m3",
-    "sq4_skv1024_f8e4m3",
-    "sq4_skv256_f8e5m2",
-    "sq4_skv1024_f8e5m2",
-    "sq8_skv256_f16",
-    "sq8_skv1024_f16",
-    "sq8_skv256_f8e4m3",
-    "sq8_skv1024_f8e4m3",
-    "sq8_skv256_f8e5m2",
-    "sq8_skv1024_f8e5m2",
-    "sq16_skv256_f16",
-    "sq16_skv1024_f16",
-    "sq16_skv256_f8e4m3",
-    "sq16_skv1024_f8e4m3",
-    "sq16_skv256_f8e5m2",
-    "sq16_skv1024_f8e5m2",
-    "sq32_skv256_f16",
-    "sq32_skv1024_f16",
-    "sq32_skv256_f8e4m3",
-    "sq32_skv1024_f8e4m3",
-    "sq32_skv256_f8e5m2",
-    "sq32_skv1024_f8e5m2",
-    "sq64_skv256_f16",
-    "sq64_skv1024_f16",
-    "sq64_skv256_f8e4m3",
-    "sq64_skv1024_f8e4m3",
-    "sq64_skv256_f8e5m2",
-    "sq64_skv1024_f8e5m2",
+    "sq1_skv1024_f8e5m2", # fails on prefill as well
 ]
 
 def section_begin(msg, width=80):
@@ -130,11 +108,11 @@ def get_fp8_largest_po2(dtype: torch.dtype):
     else:
         raise ValueError(f"Unsupported dtype: {dtype}")
 
-def get_fp8_scale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 0.5, epsilon = 0.0625):
+def get_fp8_scale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 0.25, epsilon = 0.0625):
     po2_next = 2 ** math.ceil(math.log2(max(amax, epsilon)))
     return get_fp8_largest_po2(dtype) / po2_next * fudge_factor
 
-def get_fp8_descale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 0.5, epsilon = 0.0625):
+def get_fp8_descale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 0.25, epsilon = 0.0625):
     return 1.0 / get_fp8_scale_factor(amax, dtype, fudge_factor, epsilon)
 
 class GraphFwdUid(IntEnum):
@@ -295,8 +273,8 @@ def test_sdpa_fwd_fp8(name):
         pytest.xfail("XFailed: blocked config")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
-    if cudnn_version < "9.13.0":
-        pytest.skip("SDPA FP8 fprop testing is limited to cuDNN 9.13.0 or higher")
+    if cudnn_version < "9.14.0":
+        pytest.skip("SDPA FP8 fprop testing is limited to cuDNN 9.14.0 or higher")
     if torch.cuda.get_device_capability()[0] < 10:
         pytest.skip("SDPA FP8 fprop testing is limited to Blackwell or higher")
 
@@ -413,6 +391,7 @@ def test_sdpa_fwd_fp8(name):
     cudnn_handle = cudnn.create_handle()
     graph_fwd.execute(variant_pack_fwd, workspace, handle=cudnn_handle)
     torch.cuda.synchronize()
+    cudnn.destroy_handle(cudnn_handle)
     section_end()
 
 
