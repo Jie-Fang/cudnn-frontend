@@ -17,26 +17,41 @@ import nv_tensor_ir._mlir.extras.types as T
 from data_types import DataType, convert_datatype
 
 
-def cal_shapeK(input_data_type):
-    if input_data_type in [DataType.FLOAT, DataType.INT32]:
-        return 8
-    elif input_data_type in [DataType.FP8_E4M3]:
+def get_element_bits(data_type):
+    if data_type in [DataType.DOUBLE, DataType.INT64]:
+        return 64
+    elif data_type in [DataType.FLOAT, DataType.INT32]:
         return 32
-    elif input_data_type in [DataType.HALF, DataType.BFLOAT16]:
+    elif data_type in [
+        DataType.FP8_E4M3,
+        DataType.FP8_E8M0,
+        DataType.FP8_E5M2,
+        DataType.INT8,
+    ]:
+        return 8
+    elif data_type in [DataType.HALF, DataType.BFLOAT16]:
         return 16
     else:
-        raise ValueError(f"Unsupported data type: {input_data_type}")
+        raise ValueError(f"Unsupported data type: {data_type}")
 
 
-def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
+def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, cta_count=1):
     stream_k = False
     cubin_chip = "sm_100a"
+
+    config = nv_tensor_ir.recommend_compilation_config_by_problem_size(
+        nv_tensor_ir.MmaShape(m, n, k), matmul_element_bits
+    )
 
     kphase = [1, 1, 4]
 
     kcta_count = [cta_count, 1, 1]
 
-    mma_shapes = [[64, 128, kmmaShapeK], [128, 128, kmmaShapeK], [128, 256, kmmaShapeK]]
+    mma_shapes = [
+        [64, 128, config.mmaShape.k],
+        [128, 128, config.mmaShape.k],
+        [128, 256, config.mmaShape.k],
+    ]
 
     cluster_shapes = [
         [1, 1, 1],
@@ -49,6 +64,10 @@ def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
         [4, 2, 1],
         [4, 4, 1],
     ]
+
+    if cta_count == 2:
+        cluster_shapes = [x for x in cluster_shapes if x[0] >= 2]
+
     configs = []
 
     for mma_shape in mma_shapes:
@@ -58,15 +77,31 @@ def generate_tensorir_compilation_configs(kmmaShapeK=16, cta_count=1):
                 for m, c, k, cta in zip(mma_shape, cluster_shape, kphase, kcta_count)
             ]
             configs.append(
-                [tile_size, mma_shape, cluster_shape, cta_count, stream_k, cubin_chip]
+                [
+                    tile_size,
+                    mma_shape,
+                    cluster_shape,
+                    cta_count,
+                    stream_k,
+                    cubin_chip,
+                    matmul_element_bits,
+                ]
             )
 
     return configs
 
 
-def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
-    tile_size = [128, 128, 64]
-    mma_shape = [128, 128, 16]
+def get_tensorir_compilation_config(
+    m, n, k, matmul_element_bits, tensorir_args, concrete_test_dict
+):
+
+    config = nv_tensor_ir.recommend_compilation_config_by_problem_size(
+        nv_tensor_ir.MmaShape(m, n, k), matmul_element_bits
+    )
+
+    kphase = 4
+    tile_size = [128, 128, kphase * config.mmaShape.k]
+    mma_shape = [128, 128, config.mmaShape.k]
     cluster_shape = [1, 1, 1]
     cta_count = 1
     stream_k = False
@@ -100,7 +135,15 @@ def get_tensorir_compilation_config(tensorir_args, concrete_test_dict):
     concrete_test_dict["stream_k"] = stream_k
     concrete_test_dict["cubin_chip"] = cubin_chip
 
-    return [tile_size, mma_shape, cluster_shape, cta_count, stream_k, cubin_chip]
+    return [
+        tile_size,
+        mma_shape,
+        cluster_shape,
+        cta_count,
+        stream_k,
+        cubin_chip,
+        matmul_element_bits,
+    ]
 
 
 def find_mismatches(tensor_a, tensor_b, atol, rtol):
@@ -1116,7 +1159,23 @@ class test_tensor_ir:
                     cta_count,
                     stream_k,
                     cubin_chip,
+                    matmul_element_bits,
                 ) in kernel_configs:
+                    if not nv_tensor_ir.SM100CompilationConfig.isValidConfiguration(
+                        nv_tensor_ir.MmaShape(mma_shape[0], mma_shape[1], mma_shape[2]),
+                        nv_tensor_ir.MmaShape(tile_size[0], tile_size[1], tile_size[2]),
+                        cta_count,
+                        matmul_element_bits,
+                        nv_tensor_ir.MmaShape(
+                            cluster_shape[0], cluster_shape[1], cluster_shape[2]
+                        ),
+                    ):
+                        print(
+                            f"#### Invalid configuration: {tile_size}, {mma_shape}, {cluster_shape}, {cta_count}"
+                        )
+                        print(f"#### Skip this config")
+                        continue
+
                     cask_context = nv_tensor_ir.create_cask_context()
                     cask_context.initialize_cuda_device()
                     cc = cask_context.get_compute_capability()
