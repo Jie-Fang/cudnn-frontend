@@ -14,7 +14,7 @@ import os
 import sys
 import argparse
 
-from test_graph import test_graph
+from test_graph import test_graph, operation
 
 dumped = False
 
@@ -110,7 +110,7 @@ def replace_abstract_test_params(json_test_def, abstract_params):
 
 def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
     from test_tensor_ir import (
-        cal_shapeK,
+        get_element_bits,
         generate_tensorir_compilation_configs,
         get_tensorir_compilation_config,
     )
@@ -147,14 +147,48 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
         concrete_test_dict,
         -1,
     )
-    input_data_types = get_input_dataTypes(concrete_test_dict)
+
+    compiler_backend = (
+        tensorir_args.compiler_backend if tensorir_args.compiler_backend else "Tile"
+    )
+
+    if compiler_backend == "Tile":
+        m, n, k = 256, 256, 256
+        matmul_element_bits = get_element_bits(
+            get_input_dataTypes(concrete_test_dict)[0]
+        )
+    elif compiler_backend == "Collective":
+        flag_matmul = False
+        for node in testGraph.nodes:
+            if isinstance(node, operation) and (
+                node.op_name == "matmul" or node.op_name == "scaled_matmul"
+            ):
+                tensor_A = node.producer_nodes[0].output[0]
+                tensor_B = node.producer_nodes[1].output[0]
+
+                matmul_element_bits = get_element_bits(tensor_A.data_type)
+                m = tensor_A.dim[1]
+                n = tensor_B.dim[2]
+                k = tensor_A.dim[2]
+                flag_matmul = True
+                break
+
+        if not flag_matmul:
+            raise ValueError(
+                "No matmul or scaled_matmul found in the graph for collective backend"
+            )
+    else:
+        raise ValueError("Invalid compiler backend: {}".format(compiler_backend))
 
     if tensorir_args.sweep_tile_configs:
-        kmmaShapeK = cal_shapeK(input_data_types[0])
-        kernel_config = generate_tensorir_compilation_configs(kmmaShapeK, cta_count=1)
+        kernel_config = generate_tensorir_compilation_configs(
+            m, n, k, matmul_element_bits, cta_count=1
+        )
     else:
         kernel_config = [
-            get_tensorir_compilation_config(tensorir_args, concrete_test_dict)
+            get_tensorir_compilation_config(
+                m, n, k, matmul_element_bits, tensorir_args, concrete_test_dict
+            )
         ]
 
     run_tensor_ir_test_from_json_definition(
