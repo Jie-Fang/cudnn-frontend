@@ -201,6 +201,7 @@ class Graph:
         inputs: Optional[List[Union[str, torch.Tensor, cudnn.tensor]]] = None,
         outputs: Optional[List[Union[str, torch.Tensor, cudnn.tensor]]] = None,
         heuristics: Optional[List[heur_mode]] = None,
+        workspace_alloc: bool = True,
         **kwargs,
     ) -> None:
         if inputs and not isinstance(inputs, (list, tuple)):
@@ -232,6 +233,8 @@ class Graph:
             outputs or []
         )  # hold the list of outputs, to be used by set_io_tuples() implicitly
         self.__heuristics = heuristics or [heur_mode.A, heur_mode.FALLBACK]
+        if not workspace_alloc:
+            self.__workspace = False
         if handle:
             self.__handle = handle  # cudnn handle to use, will be created if None
 
@@ -275,11 +278,13 @@ class Graph:
         # TODO: let user select_behavior_notes() and select_numeric_notes() here
         self.__graph.check_support()
         self.__graph.build_plans()
-        self.__workspace = torch.empty(
-            self.__graph.get_workspace_size(),
-            device="cuda",
-            dtype=torch.uint8,
-        )
+        # Set up workspace if not forbidden by user, then set up I/O tensor orders
+        if not hasattr(self, "__workspace"):
+            self.__workspace = torch.empty(
+                self.__graph.get_workspace_size(),
+                device="cuda",
+                dtype=torch.uint8,
+            )
         if self.__inputs or self.__outputs:
             self.set_io_tuples(self.__inputs, self.__outputs)
         del self.__inputs, self.__outputs
@@ -293,6 +298,8 @@ class Graph:
         attr = getattr(self.__graph, name)
         # calling tensor_like is unnecessary, just pass through
         pass_through = [
+            "get_workspace_size",
+            "get_workspace_size_plan_at_index",
             "serialize",
             "deserialize",
             "query_tensor_attributes_of_uid",
@@ -321,8 +328,6 @@ class Graph:
             "get_execution_plan_count",
             "get_knobs_for_engine",
             "get_plan_name_at_index",
-            "get_workspace_size",
-            "get_workspace_size_plan_at_index",
             "key",
             "populate_cuda_graph",
             "query_tensor_attributes_of_uid",
@@ -449,7 +454,12 @@ class Graph:
         kwargs = dict(kwargs)  # shallow copy
         if "handle" not in kwargs:
             kwargs["handle"] = self.create_handle()
-        self.__graph.execute(variant_pack, self.__workspace, **kwargs)
+        if "workspace" not in kwargs:
+            if self.__workspace is False:
+                raise RuntimeError("Need to specify workspace to execute graph")
+            else:
+                kwargs["workspace"] = self.__workspace
+        self.__graph.execute(variant_pack, **kwargs)
         torch.cuda.synchronize()
         # return the output as a single tensor or a tuple
         if len(output_tuple) == 1:
@@ -522,7 +532,12 @@ class Graph:
         kwargs = dict(kwargs)  # shallow copy
         if "handle" not in kwargs:
             kwargs["handle"] = self.create_handle()
-        self.__graph.execute(variant_pack, self.__workspace, **kwargs)
+        if "workspace" not in kwargs:
+            if self.__workspace is False:
+                raise RuntimeError("Need to specify workspace to execute graph")
+            else:
+                kwargs["workspace"] = self.__workspace
+        self.__graph.execute(variant_pack, **kwargs)
         torch.cuda.synchronize()
         return tensor_dict  # by this time, the output tensors are updated
 
