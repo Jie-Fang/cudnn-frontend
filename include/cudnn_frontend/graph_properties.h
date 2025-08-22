@@ -2431,6 +2431,7 @@ class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequanti
     friend class Graph;
 
     std::vector<int32_t> block_size;
+    bool is_negative_scale;
 
    public:
     enum class input_names { X, scale };
@@ -2442,7 +2443,8 @@ class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequanti
                                    compute_data_type,
                                    inputs,
                                    outputs,
-                                   block_size)
+                                   block_size,
+                                   is_negative_scale)
 
     Block_scale_dequantize_attributes&
     set_block_size(int32_t const value, int32_t idx = 0) {
@@ -2471,6 +2473,17 @@ class Block_scale_dequantize_attributes : public Attributes<Block_scale_dequanti
     Block_scale_dequantize_attributes&
     set_block_size(const std::vector<int32_t>& values) {
         block_size = values;
+        return *this;
+    }
+
+    bool
+    get_is_negative_scale() const {
+        return is_negative_scale;
+    }
+
+    Block_scale_dequantize_attributes&
+    set_is_negative_scale(bool value) {
+        is_negative_scale = value;
         return *this;
     }
 };

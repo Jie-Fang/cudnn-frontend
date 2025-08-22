@@ -118,6 +118,16 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
                                                        attributes.block_size.size(),
                                                        block_size));
 
+#if (CUDNN_VERSION >= 91400)
+        if (detail::get_backend_version() >= 91400) {
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(block_scale_dequantize_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_BLOCK_SCALE_DEQUANTIZE_NEG_SCALE,
+                                                           CUDNN_TYPE_BOOLEAN,
+                                                           1,
+                                                           &attributes.is_negative_scale));
+        }
+#endif
+
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(block_scale_dequantize_operation->get_backend_descriptor()));
 
         raw_operations.push_back(block_scale_dequantize_operation);
