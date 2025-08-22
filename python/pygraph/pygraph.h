@@ -248,6 +248,7 @@ class PyGraph {
     block_scale_dequantize(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& descale,
                            std::vector<int32_t> const& block_size,
+                           bool const is_negative_scale,
                            cudnn_frontend::DataType_t const& compute_data_type,
                            std::string const& name);
 
