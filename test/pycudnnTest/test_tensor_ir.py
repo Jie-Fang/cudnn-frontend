@@ -662,10 +662,27 @@ class IdentityNode(TensorIRNode):
 
     def run(self):
         with self.ip:
-            self.node_map[self.node] = nv_tensor_ir.convert(
-                self.output_tensor_info.tensor_type,
-                self.children[0],
-            )
+            child = self.children[0]
+
+            if isinstance(child.type, (ir.IntegerType, ir.FloatType)) and isinstance(
+                self.output_tensor_info.tensor_type, nv_tensor_ir.TensorType
+            ):
+                child = nv_tensor_ir.splat(
+                    nv_tensor_ir.TensorType.get_from_tensor_type(
+                        self.output_tensor_info.tensor_type, child.type
+                    ),
+                    child,
+                )
+
+            if nv_tensor_ir.get_tensor_datatype(
+                self.output_tensor_info.tensor_type
+            ) != nv_tensor_ir.get_tensor_datatype(child.type):
+                self.node_map[self.node] = nv_tensor_ir.convert(
+                    self.output_tensor_info.tensor_type,
+                    child,
+                )
+            else:
+                self.node_map[self.node] = child
 
 
 class ConvolutionNode(TensorIRNode):
