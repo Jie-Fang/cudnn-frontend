@@ -1641,8 +1641,11 @@ def exec_sdpa(cfg, request, cudnn_handle):
             o_ref[i, :, m:, :] = 0
             o_gpu[i, :, m:, :] = 0
             if is_infer == False:
-                stats_ref[i, :, m:, :] = 0
-                stats_gpu[i, :, m:, :] = 0
+                if cudnn_version < "9.14.0":
+                    stats_ref[i, :, m:, :] = 0
+                    stats_gpu[i, :, m:, :] = 0
+                else:
+                    stats_ref[i, :, m:, :] = -float("inf")
 
     diffs = int_cli_option(10, request, "--diffs")
 
