@@ -181,6 +181,24 @@ def find_mismatches(tensor_a, tensor_b, atol, rtol):
         )
 
 
+def splat_if_scalar(lsh, rsh):
+    if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)) and isinstance(
+        rsh.type, (ir.IntegerType, ir.FloatType)
+    ):
+        raise ValueError(f"One of lsh, rsh must be tensor")
+
+    if isinstance(lsh.type, (ir.IntegerType, ir.FloatType)):
+        lsh = nv_tensor_ir.splat(
+            nv_tensor_ir.TensorType.get_from_tensor_type(rsh.type, lsh.type), lsh
+        )
+
+    if isinstance(rsh.type, (ir.IntegerType, ir.FloatType)):
+        rsh = nv_tensor_ir.splat(
+            nv_tensor_ir.TensorType.get_from_tensor_type(lsh.type, rsh.type), rsh
+        )
+    return lsh, rsh
+
+
 @dataclass
 class TensorInfo:
     tensor_type: nv_tensor_ir.TensorType
@@ -346,13 +364,13 @@ class TensorIRNode(ABC):
         return self.tensor_ir_test.convert_scalar_tensor(scalar_tensor, target_type)
 
     def is_float(self, value):
-        if isinstance(nv_tensor_ir.get_value_datatype(value), ir.FloatType):
+        if isinstance(nv_tensor_ir.get_tensor_datatype(value.type), ir.FloatType):
             return True
         else:
             return False
 
     def is_integer(self, value):
-        if isinstance(nv_tensor_ir.get_value_datatype(value), ir.IntegerType):
+        if isinstance(nv_tensor_ir.get_tensor_datatype(value.type), ir.IntegerType):
             return True
         else:
             return False
@@ -638,18 +656,20 @@ class ComparatorNode(TensorIRNode):
                 print(f"Unimplemented comparator operation: {op_name}")
                 return
 
+            lsh, rsh = splat_if_scalar(self.children[0], self.children[1])
+
             # The input tensors should be both integer or both float
-            if self.is_integer(self.children[0]) and self.is_integer(self.children[1]):
+            if self.is_integer(lsh) and self.is_integer(rsh):
                 self.node_map[self.node] = nv_tensor_ir.cmp(
                     self.COMPARATOR_MAP["integer"][op_name],
-                    self.children[0],
-                    self.children[1],
+                    lsh,
+                    rsh,
                 )
-            elif self.is_float(self.children[0]) and self.is_float(self.children[1]):
+            elif self.is_float(lsh) and self.is_float(rsh):
                 self.node_map[self.node] = nv_tensor_ir.cmp(
                     self.COMPARATOR_MAP["float"][op_name],
-                    self.children[0],
-                    self.children[1],
+                    lsh,
+                    rsh,
                 )
             else:
                 raise ValueError(
@@ -854,7 +874,7 @@ class BinarySelectNode(TensorIRNode):
             condition = self.children[0]
             true_value = self.children[1]
             false_value = self.children[2]
-
+            true_value, false_value = splat_if_scalar(true_value, false_value)
             # Type checking: condition must be integer/boolean, true/false values must be float
             if not self.is_integer(condition):
                 raise ValueError(
