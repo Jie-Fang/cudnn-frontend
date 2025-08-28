@@ -35,7 +35,7 @@ def get_element_bits(data_type):
         raise ValueError(f"Unsupported data type: {data_type}")
 
 
-def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, cta_count=1):
+def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits):
     stream_k = False
     cubin_chip = "sm_100a"
 
@@ -44,8 +44,6 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, cta_coun
     )
 
     kphase = [1, 1, 4]
-
-    kcta_count = [cta_count, 1, 1]
 
     mma_shapes = [
         [64, 128, config.mmaShape.k],
@@ -65,28 +63,33 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, cta_coun
         [4, 4, 1],
     ]
 
-    if cta_count == 2:
-        cluster_shapes = [x for x in cluster_shapes if x[0] >= 2]
-
     configs = []
 
-    for mma_shape in mma_shapes:
-        for cluster_shape in cluster_shapes:
-            tile_size = [
-                int(m * c * k / cta)
-                for m, c, k, cta in zip(mma_shape, cluster_shape, kphase, kcta_count)
-            ]
-            configs.append(
-                [
-                    tile_size,
-                    mma_shape,
-                    cluster_shape,
-                    cta_count,
-                    stream_k,
-                    cubin_chip,
-                    matmul_element_bits,
+    for cta_count in [1, 2]:
+        kcta_count = [cta_count, 1, 1]
+        for mma_shape in mma_shapes:
+            mma_shape = [k * m for k, m in zip(kcta_count, mma_shape)]
+            for cluster_shape in cluster_shapes:
+                if cluster_shape[0] < cta_count:
+                    continue
+
+                tile_size = [
+                    int(m * c * k / cta)
+                    for m, c, k, cta in zip(
+                        mma_shape, cluster_shape, kphase, kcta_count
+                    )
                 ]
-            )
+                configs.append(
+                    [
+                        tile_size,
+                        mma_shape,
+                        cluster_shape,
+                        cta_count,
+                        stream_k,
+                        cubin_chip,
+                        matmul_element_bits,
+                    ]
+                )
 
     return configs
 
