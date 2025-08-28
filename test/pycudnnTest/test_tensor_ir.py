@@ -331,13 +331,20 @@ def calculate_divisibility_from_alignment(
 class TensorIRNode(ABC):
     """Base class for all Tensor IR operation nodes."""
 
-    def __init__(self, node, node_map, ip, tensor_ir_test, keep_divisibility=False):
+    def __init__(
+        self,
+        node,
+        node_map,
+        ip,
+        tensor_ir_test,
+        keep_divisibility=False,
+        output_tensor_type=None,
+    ):
         self.node = node
         self.node_map = node_map
         self.ip = ip
         self.tensor_ir_test = tensor_ir_test
         self.children = [node_map[child] for child in node.producer_nodes]
-        self.keep_divisibility = keep_divisibility
         # Get output tensor info with compute data type from node kwargs or output data type
         self.output_tensor_info = (
             self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
@@ -347,9 +354,11 @@ class TensorIRNode(ABC):
                     if "compute_data_type" in node.kwargs
                     else node.output[0].data_type
                 ),
-                keep_divisibility=self.keep_divisibility,
+                keep_divisibility,
             )
         )
+        if keep_divisibility:
+            self.output_tensor_info.tensor_type = output_tensor_type
 
     @abstractmethod
     def run(self):
@@ -479,16 +488,6 @@ class MatmulNode(TensorIRNode):
 
         return input_value
 
-    def _get_matmul_output_type(self):
-        """Determine the appropriate output tensor type for matmul operation."""
-        if "compute_data_type" in self.node.kwargs:
-            compute_data_type = self.node.kwargs["compute_data_type"]
-            return self.tensor_ir_test.determine_tensor_ir_inout_tensor_type(
-                self.node, compute_data_type, self.keep_divisibility
-            ).tensor_type
-
-        return self.output_tensor_info.tensor_type
-
     def run(self):
         with self.ip:
             # Convert inputs to their original JSON-defined tensor types
@@ -496,7 +495,7 @@ class MatmulNode(TensorIRNode):
             rsh = self._convert_input_to_original_type(self.children[1], 1)
 
             # Get the appropriate output tensor type
-            output_type = self._get_matmul_output_type()
+            output_type = self.output_tensor_info.tensor_type
 
             # Perform matmul operation
             self.node_map[self.node] = nv_tensor_ir.matmul(output_type, lsh, rsh)
@@ -514,7 +513,7 @@ class ScaledMatmulNode(MatmulNode):
             sfB = self._convert_input_to_original_type(self.children[3], 3)
 
             # Get the appropriate output tensor type
-            output_type = self._get_matmul_output_type()
+            output_type = self.output_tensor_info.tensor_type
 
             # Perform scaled matmul operation
             self.node_map[self.node] = nv_tensor_ir.scaled_matmul(
@@ -1642,13 +1641,32 @@ class test_tensor_ir:
         if node in node_map.keys():
             return
 
+        def get_result_type(node):
+            if "compute_data_type" in node.kwargs and node.op_name != "identity":
+                result_type = eval(
+                    convert_datatype(node.kwargs["compute_data_type"], "tensorir")
+                )
+            else:
+                result_type = eval(
+                    convert_datatype(node.output[0].data_type, "tensorir")
+                )
+            return result_type
+
+        # Check if there is implicit data type conversion between the node and the output tensor
+        if keep_divisibility:
+            final_output_data_type = nv_tensor_ir.get_tensor_datatype(
+                output_tensor_type
+            )
+            compute_data_type = get_result_type(node)
+            if compute_data_type != final_output_data_type:
+                keep_divisibility = False
+
         if isinstance(node, tg.operation):
             # These operations should keep the divisibility as the parent node
             # Because they require the same divisibility for the input and output tensors
             if (
                 node.op_name
-                in self.OPERATION_GROUPS[IdentityNode]
-                + self.OPERATION_GROUPS[BinaryOperationNode]
+                in self.OPERATION_GROUPS[BinaryOperationNode]
                 + self.OPERATION_GROUPS[UnaryOperationNode]
                 + self.OPERATION_GROUPS[BinarySelectNode]
                 + self.OPERATION_GROUPS[ActivationForwardNode]
@@ -1656,7 +1674,17 @@ class test_tensor_ir:
             ):
                 child_keep_divisibility = keep_divisibility
             else:
-                child_keep_divisibility = False
+                if node.op_name == "identity":
+                    # If the result type of the parent node is the same as the output tensor type of the identity node,
+                    # this identity node will be skipped.
+                    pre_node = node.producer_nodes[0]
+                    pre_node_result_type = get_result_type(pre_node)
+                    if pre_node_result_type == get_result_type(node):
+                        child_keep_divisibility = keep_divisibility
+                    else:
+                        child_keep_divisibility = False
+                else:
+                    child_keep_divisibility = False
 
         # Process all children first
         for child in node.producer_nodes:
@@ -1705,7 +1733,12 @@ class test_tensor_ir:
 
         # Create and run the node
         ir_node = node_class(
-            node, node_map, ip, self, keep_divisibility=keep_divisibility
+            node,
+            node_map,
+            ip,
+            self,
+            keep_divisibility=keep_divisibility,
+            output_tensor_type=output_tensor_type,
         )
         ir_node.run()
 
