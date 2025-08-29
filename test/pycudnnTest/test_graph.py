@@ -1429,6 +1429,7 @@ class test_graph:
                 if (
                     "The values for attribute 'dtype' do not match" in e.args[0]
                     or "The values for attribute 'shape' do not match" in e.args[0]
+                    or "Tensor-likes are not close" in e.args[0]
                 ):
                     passed = False
                     print("Y_EXPECTED:", Y_expected)

@@ -1213,9 +1213,7 @@ class test_tensor_ir:
                         print(f"#### Skip this config")
                         continue
 
-                    cask_context = nv_tensor_ir.create_cask_context()
-                    cask_context.initialize_cuda_device()
-                    cc = cask_context.get_compute_capability()
+                    cc = self.compiler_with_kernel_cache.get_compute_capability()
                     # TODO: Add enum to support more cubin_chip
                     if self.SUPPORTED_CUBIN_CHIP[cc] != cubin_chip:
                         print(
@@ -1275,10 +1273,12 @@ class test_tensor_ir:
                         self.outputs = outputs_gpu
                         if not self.ref_outputs:
                             self.calc_ref()
+                        torch.cuda.synchronize()
                         passed = self.tensorir_compare_to_reference(atol, rtol)
                         assert passed, "Mismatch between TensorIR and reference"
                     elif timing_loop == 1:
                         execution_plan.launch(device_workspace)
+                        torch.cuda.synchronize()
                     else:
                         # warm the caches
                         execution_plan.launch(device_workspace)
@@ -1296,6 +1296,7 @@ class test_tensor_ir:
                                 "cluster_shape": cluster_shape,
                                 "cta_count": cta_count,
                             }
+                        torch.cuda.synchronize()
             else:
                 for config in kernel_configs:
                     tile_size = config[0]  # Extract first value from the config list
@@ -1339,10 +1340,12 @@ class test_tensor_ir:
                         self.outputs = outputs_gpu
                         if not self.ref_outputs:
                             self.calc_ref()
+                        torch.cuda.synchronize()
                         passed = self.tensorir_compare_to_reference(atol, rtol)
                         assert passed, "Mismatch between TensorIR and reference"
                     elif timing_loop == 1:
                         execution_plan.launch(device_workspace)
+                        torch.cuda.synchronize()
                     else:
                         # warm the caches
                         execution_plan.launch(device_workspace)
@@ -1356,7 +1359,7 @@ class test_tensor_ir:
                             best_config = {
                                 "tile_size": tile_size,
                             }
-
+                        torch.cuda.synchronize()
             print(
                 f"@@@@ Best perf achieved is {best_perf / 1000} msec with kernel config: {best_config}"
             )
