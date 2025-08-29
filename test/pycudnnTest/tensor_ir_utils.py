@@ -22,6 +22,9 @@ class CompilerWithKernelCache:
         self.miss_cnt = 0
         self.lock_kernel_cache = threading.Lock()
 
+    def get_compute_capability(self):
+        return self.base_compiler.cask_context.get_compute_capability()
+
     def compile(self, module, compile_options, use_cache=True):
         if use_cache is False:
             return self.base_compiler.compile(module, compile_options)
