@@ -545,11 +545,11 @@ class testConfig:
             print(f"data_type        = {self.data_type}")
             print(f"implementation   = {implementation_names[int(self.implementation)]} ({int(self.implementation)})")
             if reg_run:
-                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
+                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
         elif request.config.option.dryrun == 2:
             print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 3:
-            print(f"\npytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
+            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         else:
             assert False, "wrong --dryrun command line option"
 
