@@ -165,7 +165,7 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
 
     error_t
     pre_validate_node() const override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SDPANode " << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SDPANode " << attributes.name);
 
         // check that Q, K, V, O tensors has been assigned
         // check that dim and strides has been assigned and last stride is 1
@@ -295,8 +295,7 @@ class CompositeSDPANode : public SDPANodeBase<CompositeSDPANode> {
 
     error_t
     expand_node() override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for CompositeSDPANode node  " << attributes.name
-                                                                                             << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO:     Inferrencing properties for CompositeSDPANode node " << attributes.name);
 
         // DO NOT REMOVE
         // input data type is needed for:
@@ -689,7 +688,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
 
     error_t
     pre_validate_node() const override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating CompositeSDPABackwardNode" << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating CompositeSDPABackwardNode" << attributes.name);
 
         // check that Q, K, V, O, stats, dO, dQ, dK, dV tensors has been assigned
         // check that dim and strides has been assigned and last stride is 1
@@ -983,7 +982,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
 
     error_t
     expand_node() override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for CompositeSDPABackwardNode " << attributes.name);
+        CUDNN_FE_LOG_LABEL_ENDL("INFO:     Inferrencing properties for CompositeSDPABackwardNode " << attributes.name);
 
         attributes.fill_from_context(context);
 
@@ -1663,7 +1662,7 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
 
     error_t
     expand_node() override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for UnifiedSDPANode node  " << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO:     Inferrencing properties for UnifiedSDPANode node  " << attributes.name);
 
         // DO NOT REMOVE
         // input data type is needed for:
@@ -1688,7 +1687,7 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         CUDNN_FRONTEND_UNUSED(raw_operations);
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: " << "Building UnifiedSDPANode operations " << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL("INFO: " << "Building UnifiedSDPANode operations " << attributes.name << " ");
         auto cudnn_ver_error = error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Unified SDPA node requires cuDNN 9.13.0"};
 
 #if (CUDNN_VERSION >= 91300)

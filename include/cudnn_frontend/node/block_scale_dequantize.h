@@ -25,7 +25,7 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
     error_t
     pre_validate_node() const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Validating BlockScaleDequantizeNode " << attributes.name << "..." << std::endl;
+                    << "Validating BlockScaleDequantizeNode " << attributes.name << std::endl;
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.block_size.empty(), error_code_t::ATTRIBUTE_NOT_SET, "Block size not set\n");
@@ -42,7 +42,7 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
     error_t
     infer_properties_node() override final {
         getLogger() << "[cudnn_frontend] INFO: Inferencing properties for BlockScaleDequantizeNode " << attributes.name
-                    << "..." << std::endl;
+                    << std::endl;
 
         attributes.fill_from_context(context);
 
@@ -69,7 +69,7 @@ class BlockScaleDequantizeNode : public NodeCRTP<BlockScaleDequantizeNode> {
         managed_backend_descriptor_t& raw_operations,
         std::unordered_map<int64_t, std::shared_ptr<cudnn_frontend::Tensor>>& tensors) const override final {
         getLogger() << "[cudnn_frontend] INFO: "
-                    << "Building BlockScaleDequantizeNode operations " << attributes.name << "..." << std::endl;
+                    << "Building BlockScaleDequantizeNode operations " << attributes.name << std::endl;
         auto cudnn_ver_error =
             error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Block scale dequantize requires cuDNN v9.7.0"};
 

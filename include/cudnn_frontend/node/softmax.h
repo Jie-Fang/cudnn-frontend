@@ -25,7 +25,7 @@ class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
 
     error_t
     pre_validate_node() const override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SoftmaxNode " << attributes.name << "...");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: Validating SoftmaxNode " << attributes.name);
 
         RETURN_CUDNN_FRONTEND_ERROR_IF(
             attributes.use_stats.has_value() == false, error_code_t::ATTRIBUTE_NOT_SET, "use_stats attribute not set.");
@@ -44,7 +44,7 @@ class SoftmaxNode : public NodeCRTP<SoftmaxNode> {
 
     error_t
     expand_node() override final {
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: Inferrencing properties for Softmax node " << attributes.name << ".");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO:     Inferrencing properties for Softmax node " << attributes.name);
 
         attributes.fill_from_context(context);
 
