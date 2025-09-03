@@ -1779,8 +1779,8 @@ def test_sdpa_random_bwd_L0(env_info, test_no, data_type, is_infer, head_group, 
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=["FWD_SQ1"])
-@pytest.mark.L0
-def test_sdpa_random_sq1_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+@pytest.mark.L1
+def test_sdpa_random_sq1_L1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
     cfg.setBatches(min_batches=1, max_batches=32)
     cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=1, max_s_kv=512)
@@ -1800,8 +1800,8 @@ def test_sdpa_random_sq1_L0(env_info, test_no, data_type, is_infer, head_group, 
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=["FWD_LEAN_ATTN"])
-@pytest.mark.L0
-def test_sdpa_random_lean_attn_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+@pytest.mark.L1
+def test_sdpa_random_lean_attn_L1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
     cfg.setBatches(min_batches=1, max_batches=32)
     cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=512+1, max_s_kv=2048)
