@@ -764,7 +764,7 @@ class CompositeSDPABackwardNode : public NodeCRTP<CompositeSDPABackwardNode> {
         if (prop.major == 9) { 
             // validate basic dimension requirements
 
-            if (detail::get_backend_version() >= 91100 and detail::get_backend_version() < 91300) {
+            if ((detail::get_backend_version() >= 91100) && (detail::get_backend_version() < 91300)) {
                 
                 if ((128 < d_qk) && (d_qk <= 192) && (64 < d_v) && (d_v <= 128)) {
 
