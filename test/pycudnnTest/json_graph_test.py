@@ -182,7 +182,7 @@ def run_tensor_ir_from_legacy_args(parent_args, unknown_args):
 
     if tensorir_args.sweep_tile_configs:
         kernel_config = generate_tensorir_compilation_configs(
-            m, n, k, matmul_element_bits
+            m, n, k, matmul_element_bits, tensorir_args
         )
     else:
         kernel_config = [
