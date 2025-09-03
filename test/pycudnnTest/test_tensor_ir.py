@@ -16,6 +16,11 @@ from nv_tensor_ir._mlir.dialects import nv_tensor_ir
 import nv_tensor_ir._mlir.extras.types as T
 from data_types import DataType, convert_datatype
 
+import sys
+
+# Redirect stderr to stdout to preserve chronological order of output
+sys.stderr = sys.stdout
+
 
 def get_element_bits(data_type):
     if data_type in [DataType.DOUBLE, DataType.INT64]:
