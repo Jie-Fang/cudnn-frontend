@@ -847,6 +847,10 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     std::optional<float> relu_upper_clip;
     std::optional<float> relu_lower_clip_slope;
 
+    std::optional<float> swish_beta;
+    std::optional<float> elu_alpha;
+    std::optional<float> softplus_beta;
+
    public:
     enum class input_names { IN_0, IN_1, IN_2 };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
@@ -861,7 +865,10 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
                                    axis,
                                    relu_lower_clip,
                                    relu_upper_clip,
-                                   relu_lower_clip_slope)
+                                   relu_lower_clip_slope,
+                                   swish_beta,
+                                   elu_alpha,
+                                   softplus_beta)
 
     Pointwise_attributes&
     set_mode(PointwiseMode_t const value) {
@@ -895,6 +902,24 @@ class Pointwise_attributes : public Attributes<Pointwise_attributes> {
     Pointwise_attributes&
     set_relu_upper_clip(float const value) {
         this->relu_upper_clip = value;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_swish_beta(float const value) {
+        this->swish_beta = value;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_elu_alpha(float const value) {
+        this->elu_alpha = value;
+        return *this;
+    }
+
+    Pointwise_attributes&
+    set_softplus_beta(float const value) {
+        this->softplus_beta = value;
         return *this;
     }
 };
