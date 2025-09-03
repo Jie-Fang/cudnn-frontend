@@ -40,7 +40,8 @@ def get_element_bits(data_type):
         raise ValueError(f"Unsupported data type: {data_type}")
 
 
-def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits):
+def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits, tensorir_args):
+    # Set the default values for the config sweep lists
     stream_k = False
     cubin_chip = "sm_100a"
 
@@ -68,9 +69,30 @@ def generate_tensorir_compilation_configs(m, n, k, matmul_element_bits):
         [4, 4, 1],
     ]
 
+    cta_counts = [1, 2]
+
+    # Override the default values with the user provided values
+    if (
+        hasattr(tensorir_args, "cluster_shape")
+        and tensorir_args.cluster_shape is not None
+    ):
+        cluster_shapes = [list(map(int, tensorir_args.cluster_shape.split(",")))]
+
+    if hasattr(tensorir_args, "mma_shape") and tensorir_args.mma_shape is not None:
+        mma_shapes = [list(map(int, tensorir_args.mma_shape.split(",")))]
+
+    if hasattr(tensorir_args, "cta_count") and tensorir_args.cta_count is not None:
+        cta_counts = list(map(int, tensorir_args.cta_count.split(",")))
+
+    if hasattr(tensorir_args, "stream_k") and tensorir_args.stream_k is not None:
+        stream_k = bool(tensorir_args.stream_k)
+
+    if hasattr(tensorir_args, "cubin_chip") and tensorir_args.cubin_chip is not None:
+        cubin_chip = tensorir_args.cubin_chip
+
     configs = []
 
-    for cta_count in [1, 2]:
+    for cta_count in cta_counts:
         kcta_count = [cta_count, 1, 1]
         for mma_shape in mma_shapes:
             mma_shape = [k * m for k, m in zip(kcta_count, mma_shape)]
