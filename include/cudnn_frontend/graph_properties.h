@@ -1642,6 +1642,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Descale_S,
         Scale_S,
         Scale_O,
+        SINK_TOKEN,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { O, Stats, RNG_DUMP, Amax_S, Amax_O };
@@ -1839,6 +1840,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     SDPA_attributes&
+    set_sink_token(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_attributes::input_names::SINK_TOKEN] = std::move(value);
+        return *this;
+    }
+
+    SDPA_attributes&
     set_implementation(AttentionImplementation_t value) {
         implementation = value;
         return *this;
@@ -1929,9 +1936,10 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
         Dropout_mask,
         Dropout_scale,
         Dropout_scale_inv,
+        SINK_TOKEN,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-    enum class output_names { dQ, dK, dV, dBias, RNG_DUMP };
+    enum class output_names { dQ, dK, dV, dBias, RNG_DUMP, DSINK_TOKEN };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(SDPA_backward_attributes,
                                    name,
@@ -2105,6 +2113,18 @@ class SDPA_backward_attributes : public Attributes<SDPA_backward_attributes> {
         is_deterministic_algorithm = value;
         return *this;
     }
+
+    SDPA_backward_attributes&
+    set_sink_token(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_backward_attributes::input_names::SINK_TOKEN] = value;
+        return *this;
+    }
+
+    SDPA_backward_attributes&
+    set_dsink_token(std::shared_ptr<Tensor_attributes> value) {
+        outputs[SDPA_backward_attributes::output_names::DSINK_TOKEN] = value;
+        return *this;
+    }
 };
 
 class SDPA_fp8_backward_attributes : public Attributes<SDPA_fp8_backward_attributes> {
@@ -2247,7 +2267,7 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     std::optional<bool> use_M_Zinv;
 
    public:
-    enum class input_names { P };
+    enum class input_names { P, SINK };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { S, Stats, M, Zinv };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
@@ -2262,6 +2282,12 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     Softmax_attributes&
     has_M_Zinv(bool const value) {
         use_M_Zinv = value;
+        return *this;
+    }
+
+    Softmax_attributes&
+    set_sink(std::shared_ptr<Tensor_attributes> value) {
+        inputs[Softmax_attributes::input_names::SINK] = value;
         return *this;
     }
 };
