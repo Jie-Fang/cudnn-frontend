@@ -8,6 +8,12 @@ import torch
 
 def _env_supported():
     """Check if the environment supports NSA tests."""
+    try:
+        import cutlass
+    except ImportError:
+        print("cutlass is not available")
+        return False
+
     if not torch.cuda.is_available():
         print("CUDA is not available")
         return False
