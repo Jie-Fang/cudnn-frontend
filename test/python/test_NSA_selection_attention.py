@@ -1,7 +1,4 @@
-from cudnn import NSA
 import torch
-import cutlass.torch as cutlass_torch
-import cutlass
 import math
 
 import pytest
@@ -22,6 +19,7 @@ Use this method when running one static configuration for each FmhaCute object.
 def test_nsa_selection_compile_execute(test_config):
     if not _env_supported():
         pytest.skip("Environment not supported")
+    from cudnn import NSA
 
     Q, K, V, block_counts, block_indices, seq_offsets, max_length = init_input_tensors(
         test_config
@@ -88,9 +86,9 @@ Use the wrapper to directly call SelectionAttention without explicit setup and c
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_nsa_selection_wrapper(test_config):
-
     if not _env_supported():
         pytest.skip("Environment not supported")
+    from cudnn import NSA
 
     Q, K, V, block_counts, block_indices, seq_offsets, max_length = init_input_tensors(
         test_config

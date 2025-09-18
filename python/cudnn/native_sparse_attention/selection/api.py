@@ -9,7 +9,7 @@ import cutlass
 import cutlass.cute as cute
 from cutlass.cute.runtime import from_dlpack
 
-from ..utils import convert_to_cutlass_data_type
+from cudnn.datatypes import _convert_to_cutlass_data_type
 
 
 class SelectionAttention:
@@ -236,8 +236,8 @@ class SelectionAttention:
             value_dim=self.value_dim,
             GQA_group_size=self.gqa_group_size,
             block_size=self.block_size,
-            dtype=convert_to_cutlass_data_type(self.dtype),
-            acc_dtype=convert_to_cutlass_data_type(self.acc_dtype),
+            dtype=_convert_to_cutlass_data_type(self.dtype),
+            acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
         )
 
         q_reshaped, k_reshaped, v_reshaped, o_reshaped, l_reshaped, m_reshaped = (
@@ -339,8 +339,8 @@ class SelectionAttention:
                 value_dim=self.value_dim,
                 GQA_group_size=self.gqa_group_size,
                 block_size=self.block_size,
-                dtype=convert_to_cutlass_data_type(self.dtype),
-                acc_dtype=convert_to_cutlass_data_type(self.acc_dtype),
+                dtype=_convert_to_cutlass_data_type(self.dtype),
+                acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
             )
             selection_attention(
                 mQ,
