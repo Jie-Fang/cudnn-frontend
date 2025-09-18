@@ -8,8 +8,8 @@ import pytest
 from test_utils import torch_fork_set_rng
 
 from nsa_fixtures import test_config
-from nsa_utils import _env_supported, init_input_tensors
-from nsa_reference import run_ref_nsa_selection_attention
+from nsa_utils import _env_supported, init_input_tensors, allocate_output_tensors
+from nsa_reference import check_ref_nsa_selection_attention
 
 """
 SelectionAttention API with explicitset_params, compile, and execute paths. 
@@ -41,7 +41,7 @@ def test_nsa_selection_compile_execute(test_config):
         sample_seq_offsets=seq_offsets,
         acc_dtype=test_config["acc_dtype"],
         max_s=max_length,
-        block_size=block_size,
+        block_size=test_config["block_size"],
         scale_softmax=test_config["softmax_scale"],
     )
 
@@ -59,7 +59,7 @@ def test_nsa_selection_compile_execute(test_config):
         block_indices_tensor=block_indices,
         block_counts_tensor=block_counts,
         seq_offsets_tensor=seq_offsets,
-        scale_softmax=softmax_scale,
+        scale_softmax=test_config["softmax_scale"],
     )
 
     check_ref_nsa_selection_attention(
@@ -72,7 +72,7 @@ def test_nsa_selection_compile_execute(test_config):
         test_config["s_q"],
         block_indices,
         block_counts,
-        block_size,
+        test_config["block_size"],
         test_config["softmax_scale"],
         test_config["dtype"],
         test_config["skip_ref"],
@@ -103,9 +103,9 @@ def test_nsa_selection_wrapper(test_config):
         block_indices_tensor=block_indices,
         block_counts_tensor=block_counts,
         seq_offsets_tensor=seq_offsets,
-        block_size=block_size,
-        scale_softmax=softmax_scale,
-        acc_dtype=acc_dtype,
+        block_size=test_config["block_size"],
+        scale_softmax=test_config["softmax_scale"],
+        acc_dtype=test_config["acc_dtype"],
     )
 
     check_ref_nsa_selection_attention(
@@ -118,7 +118,7 @@ def test_nsa_selection_wrapper(test_config):
         test_config["s_q"],
         block_indices,
         block_counts,
-        block_size,
+        test_config["block_size"],
         test_config["softmax_scale"],
         test_config["dtype"],
         test_config["skip_ref"],
