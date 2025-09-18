@@ -217,3 +217,18 @@ else:
 
 from .graph import graph, jit, graph_cache
 from .wrapper import Graph
+
+from typing import Any
+
+
+def __getattr__(name: str) -> Any:
+    if name == "NSA":
+        try:
+            from .native_sparse_attention import NSA as _NSA
+
+            return _NSA
+        except Exception as e:
+            raise ImportError(
+                "NSA requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+            ) from e
+    raise AttributeError(name)

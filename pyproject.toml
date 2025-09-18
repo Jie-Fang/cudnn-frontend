@@ -14,7 +14,7 @@ classifiers = [
 ]
 
 [tool.setuptools]
-packages = ["cudnn", "include"]
+packages = ["cudnn", "include", "cudnn.native_sparse_attention", "cudnn.native_sparse_attention.selection"]
 package-dir = {"" = "python", "include" = "include"}
 include-package-data = true
 
@@ -27,3 +27,10 @@ version = {attr = "cudnn.__version__"}
 
 [tool.setuptools.package-data]
 include = ["**/*"]
+
+[project.optional-dependencies]
+cutedsl = [
+    "nvidia-cutlass-dsl",
+    "cuda-python",
+    "torch",
+]

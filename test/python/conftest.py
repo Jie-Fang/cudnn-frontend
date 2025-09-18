@@ -125,3 +125,16 @@ def pytest_addoption(parser):
     parser.addoption(
         "--mha_batches", default=None, type=int, help="[test_mhas_v2.py] update batch dimension"
     )
+
+    # NSA (Native Sparse Attention) command line options for test_NSA_selection_attention.py
+    parser.addoption("--nsa-batch-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Batch size")
+    parser.addoption("--nsa-seq-len", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Sequence length (will be replicated for all batches)")
+    parser.addoption("--nsa-num-q-heads", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Number of query heads")
+    parser.addoption("--nsa-num-kv-heads", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Number of key/value heads")
+    parser.addoption("--nsa-head-dim", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Head dimension")
+    parser.addoption("--nsa-value-dim", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Value dimension")
+    parser.addoption("--nsa-block-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Block size")
+    parser.addoption("--nsa-topk-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Top-k size (will be replicated for all batches)")
+    parser.addoption("--nsa-dtype", action="store", default=None, type=str, help="[test_NSA_selection_attention.py] Data type (float16, bfloat16, float32)")
+    parser.addoption("--nsa-acc-dtype", action="store", default=None, type=str, help="[test_NSA_selection_attention.py] Accumulator data type (float16, bfloat16, float32)")
+    parser.addoption("--nsa-skip-ref", action="store_true", help="[test_NSA_selection_attention.py] Skip reference computation for performance testing")
