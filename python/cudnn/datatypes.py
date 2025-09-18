@@ -113,11 +113,24 @@ def _torch_to_cudnn_data_type(torch_data_type) -> cudnn_data_type:
 
 
 def _torch_to_cutlass_data_type(data_type):
+    if is_cutlass_available() and is_torch_available():
+        return _torch_to_cutlass_data_type_dict.get(data_type, None)
+    return None
+
+
+def _convert_to_cutlass_data_type(data_type):
     if is_cutlass_available():
+        import cutlass
+
         if isinstance(data_type, type) and issubclass(data_type, cutlass.Numeric):
             return data_type
-        elif data_type is not None and is_torch_available():
-            return _torch_to_cutlass_data_type_dict.get(data_type, None)
+        elif data_type is not None:
+            cutlass_data_type = _torch_to_cutlass_data_type(data_type)
+            if cutlass_data_type is None:
+                raise ValueError("Unsupported tensor data type.")
+            return cutlass_data_type
+        else:
+            raise ValueError("None is not a valid tensor data type.")
     return None
 
 

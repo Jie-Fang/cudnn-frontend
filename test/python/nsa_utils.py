@@ -19,7 +19,19 @@ def _env_supported():
         return False
 
     major, _ = torch.cuda.get_device_capability()
-    return major >= 9
+    if major < 9:
+        print(f"NSA requires compute capability >= 9.0, found {major}.x")
+        return False
+
+    try:
+        from cudnn import NSA
+    except ImportError:
+        print(
+            "NSA requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+        )
+        return False
+
+    return True
 
 
 def generate_block_indices(
