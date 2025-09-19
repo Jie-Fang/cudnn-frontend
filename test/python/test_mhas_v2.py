@@ -1693,6 +1693,46 @@ def exec_sdpa(cfg, request, cudnn_handle):
         pytest.fail("disallowed mismatches", pytrace=False)
     else:
         print("@@@@ Overall result: PASSED, everything looks good!")
+    
+    del workspace
+    del graph
+    del variant_pack
+
+    if is_paged:
+        del container_k_gpu, container_v_gpu, page_table_k_gpu, page_table_v_gpu
+    if is_ragged:
+        del q_ragged_offset_gpu, k_ragged_offset_gpu, v_ragged_offset_gpu, o_ragged_offset_gpu
+    if is_dropout:
+        del seed_gpu, offset_gpu
+        del rng_dump_gpu
+        del rng_dump_ref
+    if is_padding:
+        del seq_len_q_gpu, seq_len_kv_gpu
+        del seq_len_q_ref, seq_len_kv_ref
+
+    del q_gpu, k_gpu, v_gpu, o_gpu
+    if is_bias:
+        del bias_gpu
+    if not is_infer:
+        del dQ_gpu, dK_gpu, dV_gpu, dO_gpu, stats_gpu
+        if is_bias:
+            del dBias_gpu
+
+        del q_ref, k_ref, v_ref, dO_ref, o_ref, stats_ref
+        if is_bias:
+            del dBias_ref, bias_ref
+        del dQ_ref, dK_ref, dV_ref
+    else:
+        del q_ref, k_ref, v_ref, o_ref
+        if is_bias:
+            del bias_ref
+
+    del o_sep, o_raw
+    if not is_infer:
+        del dQ_sep, dQ_raw, dK_sep, dK_raw, dV_sep, dV_raw
+        del stats_sep, stats_raw
+
+    torch.cuda.empty_cache()
 
 @pytest.fixture(scope="package")
 def env_info(request):
@@ -1800,8 +1840,8 @@ def test_sdpa_random_sq1_L1(env_info, test_no, data_type, is_infer, head_group, 
 @pytest.mark.parametrize("layout", random_layout_options)
 @pytest.mark.parametrize("head_group", head_group_options)
 @pytest.mark.parametrize("is_infer", [True], ids=["FWD_LEAN_ATTN"])
-@pytest.mark.L1
-def test_sdpa_random_lean_attn_L1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
+@pytest.mark.L0
+def test_sdpa_random_lean_attn_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
     cfg = testConfig(**env_info)
     cfg.setBatches(min_batches=1, max_batches=32)
     cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=512+1, max_s_kv=2048)
