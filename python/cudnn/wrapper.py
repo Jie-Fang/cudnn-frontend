@@ -237,6 +237,13 @@ class Graph:
             self.__workspace = False
         if handle:
             self.__handle = handle  # cudnn handle to use, will be created if None
+        # silently replace the PyTorch dtype into cuDNN dtype
+        for key in ["io_data_type", "intermediate_data_type", "compute_data_type"]:
+            if key in kwargs:
+                kwargs[key] = (
+                    cudnn.datatypes._torch_to_cudnn_data_type(kwargs[key])
+                    or kwargs[key]
+                )
 
     def __del__(self):
         self.destroy_handle()
