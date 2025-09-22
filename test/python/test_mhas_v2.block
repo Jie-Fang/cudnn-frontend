@@ -11,10 +11,3 @@
 # test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test67] : : 90000 # block on any GPU when cudnn 9.0 
 # test_sdpa_random_bwd[BWD-MHA-inner_random-torch.bfloat16-test68] # always block this test
 # -----------------------------------------------------------------------------------------------------------------
-
-# Bug https://nvbugs/5421237 - Segmentation fault in BWD RAGGED test on Blackwell
-test_sdpa_random_ragged_L0[BWD_RAGGED-MQA-inner_random-torch.float16-test13] : SM_100 : 91200,91300
-
-# Bug https://nvbugs/5426554 - 46+ lean attention tests fail with random numerical mismatches on Blackwell
-test_sdpa_random_lean_attn_L0[FWD_LEAN_ATTN-GQA-inner_random-torch.bfloat16-test29] : SM_100 :
-
