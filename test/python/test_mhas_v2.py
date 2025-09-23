@@ -14,9 +14,20 @@ import sys
 from looseversion import LooseVersion
 from datetime import datetime
 from enum import IntEnum
+from dataclasses import dataclass, asdict
 
-# Invalid left/right attention bound (negative values may be used in the future).
-INVALID_BOUND = 99999
+from mha_v2_utils import (
+    exec_cfg,
+    INVALID_BOUND,
+    RandomizationContext,
+    RandomBatchSize,
+    RandomBlockSize,
+    RandomSequenceLength,
+    RandomHiddenDimSize,
+    RandomHeadGenerator,
+    RandomChoice,
+    SlidingWindowMaskGenerator,
+)
 
 # fmt: off
 
@@ -24,95 +35,19 @@ if __name__ == "__main__":
     print("This is pytest script.")
     sys.exit(0)
 
-data_type_options      = [torch.float16, torch.bfloat16]
-head_group_options     = ["MHA", "GQA", "MQA"]
-random_layout_options  = ["edge_random", "inner_random"]
-diag_alignment_options = [cudnn.diagonal_alignment.TOP_LEFT, cudnn.diagonal_alignment.BOTTOM_RIGHT]
-diag_alignment_names   = ['cudnn.diagonal_alignment.TOP_LEFT', 'cudnn.diagonal_alignment.BOTTOM_RIGHT']
-implementation_options = [cudnn.attention_implementation.AUTO, cudnn.attention_implementation.COMPOSITE, cudnn.attention_implementation.UNIFIED]
-implementation_names   = ['cudnn.attention_implementation.AUTO', 'cudnn.attention_implementation.COMPOSITE', 'cudnn.attention_implementation.UNIFIED']
-
 def tlist(*, num_tests, rng_seed):
     assert num_tests >= 1 and type(num_tests) == int, "wrong input"
     rng = random.Random(rng_seed)
     return [(i+1, num_tests, rng.randint(65536, 2147483647)) for i in range(num_tests)]
-
-def tname_hash(tname):
-    tname = tname[tname.find('[')+1 : tname.find(']')]
-    assert len(tname) > 0, "empty test name"
-    hash = 0
-    for chr in tname:
-        hash = (hash * 65599 + ord(chr)) & (2**31 - 1)
-    return hash
-
-def get_strides_from_indices(shape, indices = [0, 1, 2, 3], gaps = [0, 0, 0, 0], rng_geom = None):
-    assert len(shape) == len(gaps) == 4 and sorted(indices) == [0, 1, 2, 3], "wrong input"
-    strides = [0, 0, 0, 0]
-    curr_stride = 1
-    j = indices[3]
-    strides[j] = curr_stride
-    for i in range(3, 0, -1):
-        j = indices[i]
-        curr_stride = (shape[j] + gaps[j]) * curr_stride
-        j = indices[i-1]
-        strides[j] = curr_stride
-
-        # Corrupt strides intentionally for dim=1. When computing offsets,
-        # the index used with this stride should always be zero.
-        if rng_geom is not None and shape[j] == 1:
-            strides[j] = rng_geom.choice([0, 3331333, 99990001])
-
-    total_size = shape[j] * curr_stride
-    return tuple(strides), tuple(gaps), total_size
-
-def get_strides_from_layout(shape, layout, gaps = [0, 0, 0, 0], rng_geom = None):
-     assert ''.join(sorted(layout)) == 'bdhs', f"wrong layout '{layout}'"
-     indices = ['bhsd'.index(ch) for ch in layout]
-     return get_strides_from_indices(shape, indices, gaps, rng_geom)
 
 def get_layout_name(string, indices):
     assert len(string) == 4 and sorted(indices) == [0, 1, 2, 3], "wrong input"
     chars = [string[i] for i in indices]
     return ''.join(chars)
 
-def get_all_divisers(num):
-    assert num >= 1 and type(num) == int, "wrong input"
-    divisors = [1]
-    for x in range(2, num):
-        if num % x == 0:
-            divisors.append(x)
-    divisors.append(num)
-    return divisors
-
-def get_powers_of_two(lo, hi):
-    assert type(lo) == int and type(hi) == int, "wrong input type"
-    assert lo > 0 and hi > 0 and lo <= hi, "wrong input values"
-    powers_of_two = []
-    val = (1 << lo.bit_length()) if (lo & (lo - 1)) != 0 else lo
-    while val <= hi:
-        powers_of_two.append(val)
-        val *= 2
-    assert len(powers_of_two) > 0, "empty return list"
-    return powers_of_two
-
-def get_multiples_of(val, lo, hi):
-    assert type(val) == type(lo) == type(hi) == int, "wrong input type"
-    assert val > 0 and lo > 0 and hi > 0 and lo <= hi, "wrong input values"
-    multiples = []
-    iter = int((lo+val-1)/val) * val
-    while iter <= hi:
-        multiples.append(iter)
-        iter += val
-    assert len(multiples) > 0, "empty return list"
-    return multiples
-
-def round_down(value, roundTo):
-    assert type(value) == type(roundTo) == int and (roundTo & (roundTo - 1)) == 0, "wrong input"
-    return value - (value % roundTo)
-
-def round_up(value, roundTo):
-    assert type(value) == type(roundTo) == int and (roundTo & (roundTo - 1)) == 0, "wrong input"
-    return roundTo * ((value + roundTo - 1) // roundTo)
+def int_cli_option(org_val, request, cli_opt):
+    val = request.config.getoption(cli_opt)
+    return val if type(val) == int else org_val
 
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
@@ -222,29 +157,6 @@ def alloc_tensor(shape, data_type, *, elems=None, strides=None, rng=None, mean=0
 
     return tensor, sepbuf, rawbuf
 
-def bool_cli_option(org_val, request, cli_opt):
-    bool_map = {"False": False, "True": True}
-    str_val = request.config.getoption(cli_opt)
-    val = bool_map.get(str_val)
-    return val if type(val) == bool else org_val
-
-def int_cli_option(org_val, request, cli_opt):
-    val = request.config.getoption(cli_opt)
-    return val if type(val) == int else org_val
-
-def diag_cli_option(org_val, request, cli_opt):
-    diag_map = {False : cudnn.diagonal_alignment.TOP_LEFT, True : cudnn.diagonal_alignment.BOTTOM_RIGHT}
-    val = request.config.getoption(cli_opt)
-    return diag_map.get(bool(val)) if type(val) == int else org_val
-
-def implementation_cli_option(org_val, request, cli_opt):
-    implementation_map = {"AUTO" : cudnn.attention_implementation.AUTO,
-                          "COMPOSITE" : cudnn.attention_implementation.COMPOSITE,
-                          "UNIFIED" : cudnn.attention_implementation.UNIFIED}
-    str_val = request.config.getoption(cli_opt)
-    val = implementation_map.get(str_val)
-    return val if isinstance(val, cudnn.attention_implementation) else org_val
-
 def fetch_blocked_tests(file_path, gpu_arch, cudnn_ver):
     assert type(gpu_arch) == type(cudnn_ver) == str, "expecting strings"
     blocked_tests = []
@@ -305,211 +217,25 @@ class knobNA(IntEnum):
     ALWAYS = 1
 
 class testConfig:
-    # To prevent creation of misspelled variables, listing all local variables of the class.
-    __slots__ = ['rng_geom', 'geom_seed', 'rng_data', 'data_seed', 'gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_tests',
-                 'min_batches', 'max_batches', 'min_s_q', 'max_s_q', 'min_s_kv', 'max_s_kv', 'min_d_qk', 'max_d_qk', 
-                 'min_d_v', 'max_d_v', 'min_h_qkv', 'max_h_qkv', 'min_blk_sz', 'max_blk_sz', 'head_group', 
-                 'diag_align', 'left_bound', 'right_bound', 'is_infer', 'is_alibi', 'is_paged', 'is_bias', 
-                 'is_dropout', 'is_padding', 'is_ragged', 'is_determin', 'data_type', 'batches', 'h_q', 
-                 'h_k', 'h_v', 'd_qk', 'd_v', 's_q', 's_kv', 'block_size', 'in_layout', 'out_layout', 
-                 'shape_q', 'gaps_q', 'stride_q', 'elems_q', 'shape_k', 'gaps_k', 'stride_k', 'elems_k', 
-                 'shape_v', 'gaps_v', 'stride_v', 'elems_v', 'shape_o', 'gaps_o', 'stride_o', 'elems_o',
-                 'seq_len_q', 'seq_len_kv', 'implementation']
+    __slots__ = ['gpu_arch', 'gpu_info', 'cudnn_ver', 'blocked_tests', 'implementation', 'cfg']
 
-    def __init__(self, *, gpu_arch, gpu_info, cudnn_ver, blocked_tests):
+    def __init__(self, *, gpu_arch, gpu_info, cudnn_ver, blocked_tests, implementation):
         assert type(gpu_arch) == type(gpu_info) == type(cudnn_ver) == str, "expecting strings as arguments"
         assert isinstance(blocked_tests, list), "argument 'blocked_tests' must be list"
+
+        # Initialize all attributes to None.
+        for k in self.__slots__:
+            setattr(self, k, None)
 
         self.gpu_arch      = gpu_arch
         self.gpu_info      = gpu_info
         self.cudnn_ver     = cudnn_ver
         self.blocked_tests = blocked_tests
 
-        self.rng_geom    = random.Random()
-        self.geom_seed   = None
+        self.implementation = implementation
 
-        self.rng_data    = torch.Generator(device="cuda")
-        self.data_seed   = None
+        self.cfg = exec_cfg()
 
-        self.min_batches = self.max_batches = 1
-        self.min_s_q     = self.max_s_q     = 1
-        self.min_s_kv    = self.max_s_kv    = 1
-        self.min_d_qk    = self.max_d_qk    = 1
-        self.min_d_v     = self.max_d_v     = 1
-        self.min_h_qkv   = self.max_h_qkv   = 1
-        self.min_blk_sz  = self.max_blk_sz  = 1
-
-        self.head_group  = None
-        self.data_type   = None
-
-        self.diag_align  = None
-        self.left_bound  = None
-        self.right_bound = None
-
-        self.is_alibi    = None
-        self.is_infer    = None
-        self.is_paged    = None
-        self.is_bias     = None
-        self.is_dropout  = None
-        self.is_determin = None
-
-        self.is_padding  = None
-        self.is_ragged   = None
-        self.seq_len_q   = None
-        self.seq_len_kv  = None
-
-        self.batches     = None
-        self.d_qk        = None
-        self.d_v         = None
-        self.s_q         = None
-        self.s_kv        = None
-        self.h_q         = None
-        self.h_k         = None
-        self.h_v         = None
-        self.block_size  = None
-        self.in_layout   = None
-        self.out_layout  = None
-
-        self.shape_q     = None
-        self.gaps_q      = None
-        self.stride_q    = None
-        self.elems_q     = None
-
-        self.shape_k     = None
-        self.gaps_k      = None
-        self.stride_k    = None
-        self.elems_k     = None
-
-        self.shape_v     = None
-        self.gaps_v      = None
-        self.stride_v    = None
-        self.elems_v     = None
-
-        self.shape_o     = None
-        self.gaps_o      = None
-        self.stride_o    = None
-        self.elems_o     = None
-        
-        self.implementation = None
-
-    def config_str(self):
-        banned = ("max_", "min_", "gpu_", "rng_", "blocked_tests", "cudnn_ver", "shape_", "stride_", "elems_")
-        stg = ""
-        for k in self.__slots__:
-            if k.startswith(banned):
-                continue
-            v = getattr(self, k)
-            if isinstance(v, str):
-                assert len(v) > 0, f"ERROR: empty string in {k}='{v}'"
-                stg += f"{k}='{v}':"
-            elif isinstance(v, cudnn._compiled_module.diagonal_alignment):
-                stg += f"{k}={diag_alignment_names[int(v)]}:"
-            elif isinstance(v, cudnn._compiled_module.attention_implementation):
-                stg += f"{k}={implementation_names[int(v)]}:"
-            else:
-                assert v != None, f"ERROR: invalid value in '{k}={v}'"
-                stg += f"{k}={v}:"
-        stg = "".join(stg.split())  # remove whitespaces
-        stg = stg[:-1]  # remove last ':' character
-        return stg
-
-    def load_config(self, code):
-        print(f"\nLoading config: '{code}'")
-        code = "".join(code.split())  # remove whitespaces
-        for assign in filter(None, code.split(":")):
-            code_to_run = "self." + assign
-            try:
-                exec(code_to_run)
-            except Exception as e:
-                assert False, f"ERROR: {e} in '{assign}'"
-
-        banned = ("max_", "min_", "gpu_", "rng_", "blocked_tests", "cudnn_ver", "shape_", "stride_", "elems_")
-        for k in self.__slots__:
-            if k.startswith(banned):
-                continue
-            v = getattr(self, k)
-            assert v != None, f"ERROR: config value '{k}' not set"
-
-        self.rng_geom.seed(self.geom_seed)  # not used in repro
-        self.rng_data.manual_seed(self.data_seed)
-
-        self.shape_q = (self.batches, self.h_q, self.s_q, self.d_qk)
-        self.shape_k = (self.batches, self.h_k, self.s_kv, self.d_qk)
-        self.shape_v = (self.batches, self.h_v, self.s_kv, self.d_v)
-        self.shape_o = (self.batches, self.h_q, self.s_q, self.d_v)
-
-        assert all(x > 0 and type(x) == int for x in self.shape_q), f"wrong shape_q(b,h,s,d)={self.shape_q}"
-        assert all(x > 0 and type(x) == int for x in self.shape_k), f"wrong shape_k(b,h,s,d)={self.shape_k}"
-        assert all(x > 0 and type(x) == int for x in self.shape_v), f"wrong shape_v(b,h,s,d)={self.shape_v}"
-        assert all(x > 0 and type(x) == int for x in self.shape_o), f"wrong shape_o(b,h,s,d)={self.shape_o}"
-
-        layout_q, layout_k, layout_v = (self.in_layout+'_'+'_').split('_')[:3]
-
-        self.stride_q, _, self.elems_q = get_strides_from_layout(self.shape_q, layout_q, self.gaps_q)
-        self.stride_k, _, self.elems_k = get_strides_from_layout(self.shape_k, layout_k, self.gaps_k)
-        self.stride_v, _, self.elems_v = get_strides_from_layout(self.shape_v, layout_v, self.gaps_v)
-        self.stride_o, _, self.elems_o = get_strides_from_layout(self.shape_o, self.out_layout, self.gaps_o)
-
-    # Keyword-only arguments, all function args must be supplied.
-    def setBatches(self, *, min_batches=None, max_batches=None):
-        arg_list = [min_batches, max_batches]
-        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
-        assert min_batches <= max_batches, "invalid range"
-        self.min_batches = min_batches
-        self.max_batches = max_batches
-
-    # Keyword-only arguments, all function args must be supplied.
-    def setSequences(self, *, min_s_q=None, max_s_q=None, min_s_kv=None, max_s_kv=None):
-        arg_list = [min_s_q, max_s_q, min_s_kv, max_s_kv]
-        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
-        assert min_s_q <= max_s_q and min_s_kv <= max_s_kv, "invalid range"
-        self.min_s_q  = min_s_q
-        self.max_s_q  = max_s_q
-        self.min_s_kv = min_s_kv
-        self.max_s_kv = max_s_kv
-
-    # Keyword-only arguments, all function args must be supplied.
-    def setVectors(self, *, min_d_qk=None, max_d_qk=None, min_d_v=None, max_d_v=None, data_type=None):
-        arg_list = [min_d_qk, max_d_qk, min_d_v, max_d_v]
-        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
-        assert data_type in data_type_options, f"invalid arg data_type='{data_type}'"
-
-        # The size of dense vectors Q,K,V should be divisible into 16 byte chunks.
-        tmp = torch.tensor([1.0], dtype=data_type)
-        elem_align = int(16 / tmp.element_size())
-
-        range_lo_d_qk = round_up(min_d_qk, elem_align)   # include first multiple of 'elem_align'
-        range_hi_d_qk = round_down(max_d_qk, elem_align) # include last multiple of 'elem_align'
-        assert range_hi_d_qk >= range_lo_d_qk, f"invalid range (min_d_qk={min_d_qk}, max_d_qk={max_d_qk})"
-
-        range_lo_d_v = round_up(min_d_v, elem_align)
-        range_hi_d_v = round_down(max_d_v, elem_align)
-        assert range_hi_d_v >= range_lo_d_v, f"invalid range (min_d_v={min_d_v}, max_d_v={max_d_v})"
-
-        self.min_d_qk = range_lo_d_qk
-        self.max_d_qk = range_hi_d_qk
-        self.min_d_v  = range_lo_d_v
-        self.max_d_v  = range_hi_d_v
-
-    # Keyword-only arguments, all function args must be supplied.
-    def setHeads(self, *, min_h_qkv=None, max_h_qkv=None):
-        arg_list = [min_h_qkv, max_h_qkv]
-        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
-        assert min_h_qkv <= max_h_qkv, "invalid range"
-        self.min_h_qkv = min_h_qkv
-        self.max_h_qkv = max_h_qkv
-
-    # Keyword-only arguments, all function args must be supplied.
-    def setBlockSize(self, *, min_blk_sz=None, max_blk_sz=None):
-        arg_list = [min_blk_sz, max_blk_sz]
-        assert all(isinstance(x, int) and (x > 0) for x in arg_list), "all args must be int and positive" 
-        assert min_blk_sz <= max_blk_sz, "invalid range"
-        assert (min_blk_sz & (min_blk_sz - 1)) == 0 or  max_blk_sz >= (1 << min_blk_sz.bit_length()), "no power of 2 value in range"
-        self.min_blk_sz  = min_blk_sz
-        self.max_blk_sz  = max_blk_sz
-
-    def draw(self):
-        return self.rng_geom.random()
 
     def showConfig(self, test_no, request, reg_run=True):
         if request.config.option.dryrun == 0 or request.config.option.dryrun == 1:
@@ -519,81 +245,58 @@ class testConfig:
                 print("\n" + "=" * 40 + "Dry-RUN" + "=" * 40)
             print(f"#### Test #{test_no[0]} of {test_no[1]} at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "\n")
             print(f"test_name        = {request.node.name}")
-            print(f"geom_seed        = {self.geom_seed}")
-            print(f"data_seed        = {self.data_seed}")
+            # print(f"geom_seed        = {self.geom_seed}")
+            # print(f"data_seed        = {self.data_seed}")
             print(f"platform_info    = {self.gpu_arch} ({self.gpu_info}), cudnn_ver={self.cudnn_ver}")
-            print(f"head_group       = {self.head_group}")
-            print(f"layout           = {self.in_layout}->{self.out_layout}")
-            print(f"basic_dims       = [b={self.batches}, h_q={self.h_q}, h_k={self.h_k}, h_v={self.h_v}, d_qk={self.d_qk}, d_v={self.d_v}, s_q={self.s_q}, s_kv={self.s_kv}]")
-            print(f"shape_q(b,h,s,d) = {self.shape_q}, strides={self.stride_q}, gaps={self.gaps_q}, elems={self.elems_q:,}")
-            print(f"shape_k(b,h,s,d) = {self.shape_k}, strides={self.stride_k}, gaps={self.gaps_k}, elems={self.elems_k:,}")
-            print(f"shape_v(b,h,s,d) = {self.shape_v}, strides={self.stride_v}, gaps={self.gaps_v}, elems={self.elems_v:,}")
-            print(f"shape_o(b,h,s,d) = {self.shape_o}, strides={self.stride_o}, gaps={self.gaps_o}, elems={self.elems_o:,}")
-            print(f"is_infer         = {self.is_infer}")
-            print(f"is_padding       = {self.is_padding}")
-            print(f"is_ragged        = {self.is_ragged}")
-            print(f"is_alibi         = {self.is_alibi}")
-            print(f"is_paged         = {self.is_paged} (block_size={self.block_size})")
-            print(f"is_bias          = {self.is_bias}")
-            print(f"is_dropout       = {self.is_dropout}")
-            print(f"is_determin      = {self.is_determin}")
-            print(f"diag_align       = {diag_alignment_names[int(self.diag_align)]} ({int(self.diag_align)})")
-            print(f"left_bound       = {self.left_bound}", '(NO BOUND)' if self.left_bound == INVALID_BOUND else '')
-            print(f"right_bound      = {self.right_bound}", '(NO BOUND)' if self.right_bound == INVALID_BOUND else '')
-            print(f"seq_len_q        = {truncated_list(20, 3, self.seq_len_q)}")
-            print(f"seq_len_kv       = {truncated_list(20, 3, self.seq_len_kv)}")
-            print(f"data_type        = {self.data_type}")
-            print(f"implementation   = {implementation_names[int(self.implementation)]} ({int(self.implementation)})")
+            print(f"rng_data_seed    = {self.cfg.rng_data_seed}")
+            # print(f"head_group       = {self.cfg.head_group}")
+            # print(f"layout           = {self.in_layout}->{self.out_layout}")
+            print(f"basic_dims       = [b={self.cfg.batches}, h_q={self.cfg.h_q}, h_k={self.cfg.h_k}, h_v={self.cfg.h_v}, d_qk={self.cfg.d_qk}, d_v={self.cfg.d_v}, s_q={self.cfg.s_q}, s_kv={self.cfg.s_kv}]")
+            print(f"shape_q(b,h,s,d) = {self.cfg.shape_q}, strides={self.cfg.stride_q}, elems={self.cfg.elems_q}")
+            print(f"shape_k(b,h,s,d) = {self.cfg.shape_k}, strides={self.cfg.stride_k}, elems={self.cfg.elems_k}")
+            print(f"shape_v(b,h,s,d) = {self.cfg.shape_v}, strides={self.cfg.stride_v}, elems={self.cfg.elems_v}")
+            print(f"shape_o(b,h,s,d) = {self.cfg.shape_o}, strides={self.cfg.stride_o}, elems={self.cfg.elems_o}")
+            
+            print(f"is_infer         = {self.cfg.is_infer}")
+            print(f"is_padding       = {self.cfg.is_padding} ({'ragged' if self.cfg.is_ragged else 'no ragged'})")
+            print(f"is_alibi         = {self.cfg.is_alibi}")
+            print(f"is_paged         = {self.cfg.is_paged} (block_size={self.cfg.block_size})")
+            print(f"is_bias          = {self.cfg.is_bias}")
+            print(f"is_dropout       = {self.cfg.is_dropout}")
+            if self.cfg.is_infer == False:
+                print(f"is_determin      = {self.cfg.is_determin}")
+            print(f"diag_align       = {self.cfg.diag_align}")
+            print(f"left_bound       = {self.cfg.left_bound}", '(NO BOUND)' if self.cfg.left_bound == INVALID_BOUND else '')
+            print(f"right_bound      = {self.cfg.right_bound}", '(NO BOUND)' if self.cfg.right_bound == INVALID_BOUND else '')
+            # print(f"seq_len_q        = {truncated_list(20, 3, self.seq_len_q)}")
+            # print(f"seq_len_kv       = {truncated_list(20, 3, self.seq_len_kv)}")
+            print(f"data_type        = {self.cfg.data_type}")
+            print(f"implementation   = {implementation_names[int(self.cfg.implementation)]} ({int(self.cfg.implementation)})")
             if reg_run:
-                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{self.config_str()}\"")
+                # Convert enums to integers and handle torch dtypes for proper serialization
+                cfg_dict = asdict(self.cfg)
+                # Convert enum values to integers
+                if cfg_dict.get('diag_align') is not None:
+                    cfg_dict['diag_align'] = cfg_dict['diag_align'].value
+                if cfg_dict.get('implementation') is not None:
+                    cfg_dict['implementation'] = cfg_dict['implementation'].value
+                # Convert torch dtype to string
+                if cfg_dict.get('data_type') is not None:
+                    cfg_dict['data_type'] = str(cfg_dict['data_type'])
+                print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::test_repro --repro \"{repr(cfg_dict)}\"")
         elif request.config.option.dryrun == 2:
             print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
         elif request.config.option.dryrun == 3:
-            print(f"\npytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
+            print(f"repro_cmd        = pytest -vv -s -rA {request.module.__file__}::{request.node.name} --geom_seed {self.geom_seed} --data_seed {self.data_seed}")
+
         else:
             assert False, "wrong --dryrun command line option"
 
         # Make sure to flush everything out.
         print(" ", flush=True)
 
-    def random_layout(self, test_no, is_infer, data_type, head_group, layout_type, request, *, generate_ragged_tests, avoid_invalid_configs, implementation):
-        assert isinstance(generate_ragged_tests, knobNAR), "knob 'generate_ragged_tests' must have type knobNAR"
-        assert isinstance(avoid_invalid_configs, knobNA), "knob 'avoid_invalid_configs' must have type knobNA"
-        assert isinstance(implementation, cudnn.attention_implementation), "knob 'implementation' must have type cudnn.attention_implementation"
-        assert data_type in data_type_options, "wrong data type"
-        assert head_group in head_group_options, "wrong head group"
-        assert layout_type in random_layout_options, "wrong layout type"
 
-        # Get the initial seed from the 'test_no' sequence. Add to it the test name hash to generate unique RNG seed.
-        self.geom_seed = test_no[2] + tname_hash(request.node.name)
-        self.data_seed = test_no[2]
-
-        # Overwrite RNG seeds from the command line.
-        self.geom_seed = int_cli_option(self.geom_seed, request, "--geom_seed")
-        self.data_seed = int_cli_option(self.data_seed, request, "--data_seed")
-
-        self.rng_geom.seed(self.geom_seed)
-        self.rng_data.manual_seed(self.data_seed)
-
-        self.head_group   = head_group
-        self.data_type    = data_type
-        self.is_infer     = is_infer
-        self.implementation = implementation
-
-        self.is_alibi     = self.rng_geom.choice([True, False])
-        self.is_paged     = self.rng_geom.choice([True, False])
-        self.is_bias      = self.rng_geom.choice([True, False])
-        self.is_dropout   = self.rng_geom.choice([True, False])
-        self.is_determin  = self.rng_geom.choice([True, False])
-        self.is_padding   = self.rng_geom.choice([True, False])
-        self.is_ragged    = self.rng_geom.choice([True, False])
-
-        if generate_ragged_tests == generate_ragged_tests.ALWAYS:
-           self.is_padding = True
-           self.is_ragged  = True
-        elif generate_ragged_tests == generate_ragged_tests.NEVER:
-           self.is_ragged  = False
-
+    def avoid_invalid_configs(self, avoid_invalid_configs):
         if avoid_invalid_configs == avoid_invalid_configs.ALWAYS:
             # LIMIT: always is_determin=True in inference.
             if self.is_infer:
@@ -602,10 +305,6 @@ class testConfig:
             # LIMIT: Paged attention only in inference.
             if not self.is_infer:
                 self.is_paged = False
-
-            # LIMIT: Ragged tensor always with variable sequence length (is_padding=False).
-            if self.is_ragged and not self.is_padding:
-                self.is_padding = True
 
             # LIMIT: Paged caches can only be used in combination with padding mask (variable sequence length).
             if self.is_paged and not self.is_padding:
@@ -623,81 +322,7 @@ class testConfig:
                 self.is_padding = False
                 self.is_ragged = False
                 self.is_paged = False
-                
-        # Block size for paged attention in fprop (must be power of 2 and minimum 1).
-        if self.is_infer and self.is_paged:
-            self.block_size = self.rng_geom.choice(get_powers_of_two(self.min_blk_sz, self.max_blk_sz))
-        else:
-            self.block_size = 0
-
-        # Overwrite all boolean variables and block_size from the command line.
-        self.is_infer      = bool_cli_option(self.is_infer, request, "--mha_is_infer")
-        self.is_alibi      = bool_cli_option(self.is_alibi, request, "--mha_is_alibi")
-        self.is_bias       = bool_cli_option(self.is_bias, request, "--mha_is_bias")
-        self.is_dropout    = bool_cli_option(self.is_dropout, request, "--mha_is_dropout")
-        self.is_determin   = bool_cli_option(self.is_determin, request, "--mha_is_determin")
-        self.is_padding    = bool_cli_option(self.is_padding, request, "--mha_is_padding")
-        self.is_ragged     = bool_cli_option(self.is_ragged, request, "--mha_is_ragged")
-        self.is_paged      = bool_cli_option(self.is_paged, request, "--mha_is_paged")
-        self.block_size    = int_cli_option(self.block_size, request, "--mha_block_size")
-
-        if layout_type == "edge_random":
-            self.batches = self.max_batches
-            self.s_q     = self.max_s_q
-            self.s_kv    = self.max_s_kv
-        elif layout_type == "inner_random":
-            self.batches = self.rng_geom.randint(self.min_batches, self.max_batches)
-
-            self.s_q  = self.rng_geom.randint(self.min_s_q, self.max_s_q)
-            self.s_kv = self.rng_geom.randint(self.min_s_kv, self.max_s_kv)
-
-            # Force s_q=1 with small probability.
-            if self.min_s_q == 1 and self.draw() < 0.05:
-                self.s_q = 1
-
-            # Force s_kv=1 with small probability.
-            if self.min_s_kv == 1 and self.draw() < 0.05:
-                self.s_kv = 1
-
-            # Force s_kv=s_q with some probability.
-            if self.draw() < 0.707 and self.min_s_kv <= self.s_q <= self.max_s_kv:
-                self.s_kv = self.s_q
-        else:
-            assert False, "wrong layout type"
-
-        # Overwrite batches, s_q, s_kv from the command line.
-        self.batches = int_cli_option(self.batches, request, "--mha_batches")
-        self.s_q     = int_cli_option(self.s_q, request, "--mha_s_q")
-        self.s_kv    = int_cli_option(self.s_kv, request, "--mha_s_kv")
-
-        # To avoid 'diag_align' being None we always assign TOP_LEFT or BOTTOM_RIGHT.
-        self.diag_align = self.rng_geom.choice(diag_alignment_options)
-
-        # The left_bound must be >= 1 or None.
-        if self.draw() < 0.75:
-            self.left_bound = self.rng_geom.randint(1, max(1, self.s_kv//2))
-        else:
-            self.left_bound = INVALID_BOUND
-
-        # The right_bound must be >= 0 or None; right_bound=0 is a very common case.
-        draw = self.draw()
-        if draw < 0.5:
-            self.right_bound = self.rng_geom.randint(1, max(1, self.s_kv//2))
-        elif draw < 0.75:
-            self.right_bound = 0
-        else:
-            self.right_bound = INVALID_BOUND
-
-        # TODO: remove this workaround for bug https://nvbugs/5279917.
-        # if self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND and not self.is_infer:
-            self.right_bound = INVALID_BOUND
-
-        # Handle command line options to overwrite diagonal alignment, left bound, and right bound.
-        self.diag_align  = diag_cli_option(self.diag_align, request, "--mha_diag_align")
-        self.left_bound  = int_cli_option(self.left_bound, request, "--mha_left_bound")
-        self.right_bound = int_cli_option(self.right_bound, request, "--mha_right_bound")
-
-        if avoid_invalid_configs == avoid_invalid_configs.ALWAYS:
+        
             # LIMIT: left and right bounds are only supported with is_dropout=False, is_bias=False.
             if self.left_bound != INVALID_BOUND and self.right_bound != INVALID_BOUND:
                 self.is_dropout = False
@@ -719,11 +344,11 @@ class testConfig:
                 self.is_bias    = False
 
             # LIMIT: Left bound (a.k.a sliding window) does not support s_q > s_kv
-            if self.left_bound != INVALID_BOUND and self.s_q > self.s_kv:
+            if self.left_bound != INVALID_BOUND and self.s_q.val > self.s_kv.val:
                 self.left_bound = INVALID_BOUND
 
             # LIMIT: Bottom right causal mask does not support s_q > s_kv. 
-            if self.s_q > self.s_kv and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND:
+            if self.s_q.val > self.s_kv.val and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND:
                 self.right_bound = INVALID_BOUND
 
             # LIMIT: For now, unified implementation only supports a small subset of features.
@@ -735,149 +360,6 @@ class testConfig:
                 self.diag_align = self.diag_align.TOP_LEFT
                 self.left_bound = INVALID_BOUND
                 self.right_bound = INVALID_BOUND
-
-        # The size of dense vectors Q,K,V should be divisible into 16 byte chunks.
-        tmp = torch.tensor([1.0], dtype=data_type)
-        elem_align = int(16 / tmp.element_size())
-
-        # Upper and lower limits for 'd_qk' and 'd_v' should be multiple of 'elem_align'.
-        # The min...max values are adjusted by the setVectors() function.
-        assert self.min_d_qk % elem_align == 0 and self.max_d_qk % elem_align == 0, "wrong d_qk range"
-        assert self.min_d_v % elem_align == 0 and self.max_d_v % elem_align == 0, "wrong d_v range"
-
-        if layout_type == "edge_random":
-            self.d_qk = self.max_d_qk
-            self.d_v  = self.max_d_v
-        elif layout_type == "inner_random":
-            self.d_qk = self.rng_geom.choice(get_multiples_of(elem_align, self.min_d_qk, self.max_d_qk))
-            if self.draw() < 0.5 and self.min_d_v <= self.d_qk <= self.max_d_v:
-                self.d_v = self.d_qk
-            else:
-                self.d_v = self.rng_geom.choice(get_multiples_of(elem_align, self.min_d_v, self.max_d_v))
-        else:
-            assert False, "wrong layout type"
-
-        # Overwrite d_qk, d_v from command line arguments.
-        self.d_qk = int_cli_option(self.d_qk, request, "--mha_d_qk")
-        self.d_v  = int_cli_option(self.d_v, request, "--mha_d_v")
-
-        if layout_type == "edge_random":
-            self.h_q = self.max_h_qkv
-            if self.head_group in ("MHA", "GQA"):
-                self.h_k = self.h_q
-                self.h_v = self.h_q
-            elif self.head_group == "MQA":
-                self.h_k = 1
-                self.h_v = 1
-            else:
-                assert False, f"wrong attention flavor '{self.head_group}'"
-        elif layout_type == "inner_random":
-            self.h_q = self.rng_geom.randint(self.min_h_qkv, self.max_h_qkv)
-            if self.head_group == "MHA":
-                self.h_k = self.h_q
-                self.h_v = self.h_q
-            elif self.head_group == "GQA":
-                h_kv_sizes = get_all_divisers(self.h_q)
-                self.h_k = self.rng_geom.choice(h_kv_sizes)
-                self.h_v = self.rng_geom.choice(h_kv_sizes)
-            elif self.head_group == "MQA":
-                self.h_k = 1
-                self.h_v = 1
-            else:
-                assert False, f"wrong attention flavor '{self.head_group}'"
-        else:
-            assert False, "wrong layout type"
-
-        # Overwrite h_q, h_k, h_v from command line arguments.
-        self.h_q = int_cli_option(self.h_q, request, "--mha_h_q")
-        self.h_k = int_cli_option(self.h_k, request, "--mha_h_k")
-        self.h_v = int_cli_option(self.h_v, request, "--mha_h_v")
-
-        # Using the 'bhsd' order for shape.
-        self.shape_q = (self.batches, self.h_q, self.s_q, self.d_qk)
-        self.shape_k = (self.batches, self.h_k, self.s_kv, self.d_qk)
-        self.shape_v = (self.batches, self.h_v, self.s_kv, self.d_v)
-        self.shape_o = (self.batches, self.h_q, self.s_q, self.d_v)
-
-        if self.is_ragged:
-            self.in_layout  = "bshd_bshd_bshd"
-            self.out_layout = "bshd"
-
-            layout_q, layout_k, layout_v = (self.in_layout+'_'+'_').split('_')[:3]
-
-            # Regular gaps are zero in thd format.
-            (self.stride_q, self.gaps_q, self.elems_q) = get_strides_from_layout(self.shape_q, layout_q)
-            (self.stride_k, self.gaps_k, self.elems_k) = get_strides_from_layout(self.shape_k, layout_k)
-            (self.stride_v, self.gaps_v, self.elems_v) = get_strides_from_layout(self.shape_v, layout_v)
-            (self.stride_o, self.gaps_o, self.elems_o) = get_strides_from_layout(self.shape_o, self.out_layout)
-        else:
-            # Q strides, permute first three dimensions in the original layout 'bhsd'.
-            base_indices = [0, 1, 2]
-            self.rng_geom.shuffle(base_indices)
-            base_indices.append(3)
-            gaps = [0, 0, 0, 0]
-            if self.draw() < 0.5:
-                gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
-                gaps.append(elem_align * self.rng_geom.randint(0, 2))
-            (self.stride_q, self.gaps_q, self.elems_q) = get_strides_from_indices(self.shape_q, base_indices, gaps, self.rng_geom)
-            self.in_layout = get_layout_name("bhsd", base_indices) + '_'
-
-            # For K strides, decide with some probability if a new layout should be used.
-            indices = base_indices
-            if self.draw() < 0.707:
-                indices = [0, 1, 2]
-                self.rng_geom.shuffle(indices)
-                indices.append(3)
-            gaps = [0, 0, 0, 0]
-            if self.draw() < 0.5:
-                gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
-                gaps.append(elem_align * self.rng_geom.randint(0, 2))
-            (self.stride_k, self.gaps_k, self.elems_k) = get_strides_from_indices(self.shape_k, indices, gaps, self.rng_geom)
-            self.in_layout += get_layout_name("bhsd", indices) + '_'
-
-            # For V strides, decide with some probability if a new layout should be used.
-            indices = base_indices
-            if self.draw() < 0.707:
-                indices = [0, 1, 2]
-                self.rng_geom.shuffle(indices)
-                indices.append(3)
-            gaps = [0, 0, 0, 0]
-            if self.draw() < 0.5:
-                gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
-                gaps.append(elem_align * self.rng_geom.randint(0, 2))
-            (self.stride_v, self.gaps_v, self.elems_v) = get_strides_from_indices(self.shape_v, indices, gaps, self.rng_geom)
-            self.in_layout += get_layout_name("bhsd", indices)
-
-            # Q, K, V buffers are not interleaved.
-            # For O strides, decide with some probability if a new layout should be used
-            indices = base_indices
-            if self.draw() < 0.5:
-                indices = [0, 1, 2]
-                self.rng_geom.shuffle(indices)
-                indices.append(3)
-            gaps = [0, 0, 0, 0]
-            if self.draw() < 0.5:
-                gaps = [self.rng_geom.randint(0, 8) for _ in range(3)]
-                gaps.append(elem_align * self.rng_geom.randint(0, 2))
-            (self.stride_o, self.gaps_o, self.elems_o) = get_strides_from_indices(self.shape_o, indices, gaps, self.rng_geom)
-            self.out_layout = get_layout_name("bhsd", indices)
-
-        self.seq_len_q  = []
-        self.seq_len_kv = []
-        if self.is_padding:
-            for _ in range(self.batches):
-                self.seq_len_q.append(self.rng_geom.randint(1, self.s_q))
-                self.seq_len_kv.append(self.rng_geom.randint(1, self.s_kv))
-
-            if self.draw() < 0.1 and self.s_q == self.s_kv:
-                # Force seq_len_q and seq_len_kv to be the same in small number of tests.
-                self.seq_len_kv = self.seq_len_q.copy()
-            elif self.left_bound != INVALID_BOUND or (self.right_bound != INVALID_BOUND and self.diag_align == self.diag_align.BOTTOM_RIGHT):
-                # TODO: fix the reference model and remove this work-around.
-                # Force seq_len_q to be less or equal seq_len_kv.
-                self.seq_len_q = [min(x, y) for x, y in zip(self.seq_len_q, self.seq_len_kv)]
-
-        self.showConfig(test_no, request)
 
 def compute_ref(
     q,
@@ -1078,7 +560,6 @@ def generate_ragged_offset(h_q, h_k, h_v, d_qk, d_v, seq_len_q, seq_len_kv):
 
     return q_ragged_offset, k_ragged_offset, v_ragged_offset, o_ragged_offset
 
-
 def convert_ragged_to_uniform(ragged_tensor, seq_len):
     # limitations:
     # 1. tensor is bhsd dim order and bshd stride order (may be interleaved)
@@ -1129,211 +610,150 @@ def create_container_and_page_table(tensor, block_size):
 
     return(reshaped, page_table)
 
-
 def exec_sdpa(cfg, request, cudnn_handle):
     # Do not run any test when --dryrun option is provided.
+
     if request.config.option.dryrun:
         pytest.skip("dry run mode")
 
-    # Check if the test is temporarily blocked.
-    if is_test_blocked(request.node.name, cfg.blocked_tests):
-        print(f"\nWARNING: test '{request.node.name}' is blocked on {cfg.gpu_arch} and cuDNN {cfg.cudnn_ver}")
-        print("@@@@ Overall result: SKIPPED, test blocked.")
-        pytest.skip("test blocked")
-
-    head_group   = cfg.head_group
-    data_type    = cfg.data_type
-    rng_data     = cfg.rng_data
-
-    is_alibi     = cfg.is_alibi
-    is_infer     = cfg.is_infer
-    is_paged     = cfg.is_paged
-    is_bias      = cfg.is_bias
-    is_padding   = cfg.is_padding
-    is_ragged    = cfg.is_ragged
-    is_dropout   = cfg.is_dropout
-    is_determin  = cfg.is_determin
-
-    diag_align   = cfg.diag_align
-    left_bound   = cfg.left_bound
-    right_bound  = cfg.right_bound
-
-    batches      = cfg.batches
-    d_qk         = cfg.d_qk
-    d_v          = cfg.d_v
-    s_q          = cfg.s_q
-    s_kv         = cfg.s_kv
-    h_q          = cfg.h_q
-    h_k          = cfg.h_k
-    h_v          = cfg.h_v
-    block_size   = cfg.block_size
-    in_layout    = cfg.in_layout
-    out_layout   = cfg.out_layout
-
-    shape_q      = cfg.shape_q
-    stride_q     = cfg.stride_q
-    elems_q      = cfg.elems_q
-
-    shape_k      = cfg.shape_k
-    stride_k     = cfg.stride_k
-    elems_k      = cfg.elems_k
-
-    shape_v      = cfg.shape_v
-    stride_v     = cfg.stride_v
-    elems_v      = cfg.elems_v
-
-    shape_o      = cfg.shape_o
-    stride_o     = cfg.stride_o
-    elems_o      = cfg.elems_o
-
-    seq_len_q    = cfg.seq_len_q
-    seq_len_kv   = cfg.seq_len_kv
-
-    implementation = cfg.implementation
+    # # Check if the test is temporarily blocked.
+    # if is_test_blocked(request.node.name, cfg.blocked_tests):
+    #     print(f"\nWARNING: test '{request.node.name}' is blocked on {cfg.gpu_arch} and cuDNN {cfg.cudnn_ver}")
+    #     print("@@@@ Overall result: SKIPPED, test blocked.")
+    #     pytest.skip("test blocked")
 
     # ============================
     # Basic parameter check.
     # ============================
 
-    if not all((x > 0 and type(x) == int) for x in (batches, d_qk, d_v, s_q, s_kv, h_q, h_k, h_v)):
+    if not all((x > 0 and type(x) == int) for x in (cfg.batches, cfg.d_qk, cfg.d_v, cfg.s_q, cfg.s_kv, cfg.h_q, cfg.h_k, cfg.h_v)):
        assert False, "tensor dimensions must be integer and positive"
 
-    if head_group == "MHA":
-        assert h_q == h_k == h_v, f"invalid heads, h_q={h_q}, h_k={h_k}, h_v={h_v} for '{head_group}' attention"
-    elif head_group == "GQA":
-        assert h_q % h_k == 0 and h_q % h_v == 0, f"invalid heads, h_q={h_q}, h_k={h_k}, h_v={h_v} for '{head_group}' attention"
-    elif head_group == "MQA":
-        assert h_k == 1 and h_v == 1, f"invalid heads, h_q={h_q}, h_k={h_k}, h_v={h_v} for '{head_group}' attention"
+    assert cfg.shape_q == (cfg.batches, cfg.h_q, cfg.s_q, cfg.d_qk), f"wrong shape_q={cfg.shape_q}"
+    assert cfg.shape_k == (cfg.batches, cfg.h_k, cfg.s_kv, cfg.d_qk), f"wrong shape_k={cfg.shape_k}"
+    assert cfg.shape_v == (cfg.batches, cfg.h_v, cfg.s_kv, cfg.d_v), f"wrong shape_v={cfg.shape_v}"
+    assert cfg.shape_o == (cfg.batches, cfg.h_q, cfg.s_q, cfg.d_v), f"wrong shape_o={cfg.shape_o}"
+
+    if not cfg.is_infer:
+        assert cfg.is_paged == False and cfg.block_size == None, "paged attention not allowed in backward pass"
+
+    if cfg.is_ragged:
+        assert cfg.is_padding == True, "is_ragged=True and is_padding=False not allowed"
+
+    assert isinstance(cfg.seq_len_q, (list, tuple)), "input 'seq_len_q' must be list or tuple"
+    if cfg.is_padding:
+        assert len(cfg.seq_len_q) == cfg.batches, f"wrong 'seq_len_q' length"
     else:
-        assert False, f"invalid '{head_group}' attention flavor"
+        assert len(cfg.seq_len_q) == 0, f"wrong 'seq_len_q' length, expecting 0"
 
-    assert shape_q == (batches, h_q, s_q, d_qk), f"wrong shape_q={shape_q}"
-    assert shape_k == (batches, h_k, s_kv, d_qk), f"wrong shape_k={shape_k}"
-    assert shape_v == (batches, h_v, s_kv, d_v), f"wrong shape_v={shape_v}"
-    assert shape_o == (batches, h_q, s_q, d_v), f"wrong shape_o={shape_o}"
-
-    if not is_infer:
-        assert is_paged == False and block_size == 0, "paged attention not allowed in backward pass"
-
-    if is_ragged:
-        assert is_padding == True, "is_ragged=True and is_padding=False not allowed"
-        assert in_layout == "bshd_bshd_bshd", f"wrong input layout '{in_layout}' for ragged variable seq len"
-        assert out_layout == "bshd", f"wrong output layout '{out_layout}' for ragged variable seq len"
-
-    assert isinstance(seq_len_q, (list, tuple)), "input 'seq_len_q' must be list or tuple"
-    if is_padding:
-        assert len(seq_len_q) == batches, f"wrong 'seq_len_q' length, expecting {batches}"
+    assert isinstance(cfg.seq_len_kv, (list, tuple)), "input 'seq_len_kv' must be list or tuple"
+    if cfg.is_padding:
+        assert len(cfg.seq_len_kv) == cfg.batches, f"wrong 'seq_len_kv' length, expecting {cfg.batches}"
     else:
-        assert len(seq_len_q) == 0, f"wrong 'seq_len_q' length, expecting 0"
+        assert len(cfg.seq_len_kv) == 0, f"wrong 'seq_len_kv' length, expecting 0"
 
-    assert isinstance(seq_len_kv, (list, tuple)), "input 'seq_len_kv' must be list or tuple"
-    if is_padding:
-        assert len(seq_len_kv) == batches, f"wrong 'seq_len_kv' length, expecting {batches}"
-    else:
-        assert len(seq_len_kv) == 0, f"wrong 'seq_len_kv' length, expecting 0"
-
-    assert all(x >= 0 and type(x) == int for x in seq_len_q), f"wrong seq_len_q={seq_len_q}"
-    assert all(x >= 0 and type(x) == int for x in seq_len_kv), f"wrong seq_len_kv={seq_len_kv}"
+    assert all(x >= 0 and type(x) == int for x in cfg.seq_len_q), f"wrong seq_len_q={cfg.seq_len_q}"
+    assert all(x >= 0 and type(x) == int for x in cfg.seq_len_kv), f"wrong seq_len_kv={cfg.seq_len_kv}"
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.10.0":
         print("@@@@ Overall result: WAIVED, test_mhas_v2.py supports cudnn 9.10.0 or higher.")
         pytest.skip("test_mhas_v2.py requires cudnn 9.10.0 or higher")
 
-    if cudnn_version < "9.13.0" and implementation == cudnn.attention_implementation.UNIFIED:
+    if cudnn_version < "9.13.0" and cfg.implementation == cudnn.attention_implementation.UNIFIED:
         print("@@@@ Overall result: WAIVED, unified SDPA implementation requires cudnn 9.13.0 or higher.")
         pytest.skip("unified SDPA implementation requires cudnn 9.13.0 or higher")
 
-    if s_q == s_kv == 1:
+    if cfg.s_q == cfg.s_kv == 1:
         print("@@@@ Overall result: WAIVED, skipping known issue of s_q == s_kv == 1.")
         pytest.skip("skipping known issue of s_q == s_kv == 1")
 
-    qkv_num_elems = elems_q + elems_k + elems_v
+    qkv_num_elems = cfg.elems_q + cfg.elems_k + cfg.elems_v
 
-    (q_gpu, _, _) = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q, rng=rng_data, mean=-0.5, std=1.0)
-    (k_gpu, _, _) = alloc_tensor(shape_k, data_type, elems=elems_k, strides=stride_k, rng=rng_data, mean=-0.5, std=1.0)
-    (v_gpu, _, _) = alloc_tensor(shape_v, data_type, elems=elems_v, strides=stride_v, rng=rng_data, mean=-0.5, std=1.0)
-    (bias_gpu, _, _) = (alloc_tensor((1, h_q, s_q, s_kv), data_type, rng=rng_data, mean=0.0, std=1.0) if is_bias else (None, None, None))
+    rng_data_gen = torch.Generator(device="cuda").manual_seed(cfg.rng_data_seed)
 
-    if not is_infer:
-        (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(shape_q, data_type, elems=elems_q, strides=stride_q)
-        (dK_gpu, dK_sep, dK_raw) = alloc_tensor(shape_k, data_type, elems=elems_k, strides=stride_k)
-        (dV_gpu, dV_sep, dV_raw) = alloc_tensor(shape_v, data_type, elems=elems_v, strides=stride_v)
-        (dBias_gpu, dBias_sep, dBias_raw) = (alloc_tensor((1, h_q, s_q, s_kv), data_type) if is_bias else (None, None, None))
-        (dO_gpu, dO_sep, dO_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o, rng=rng_data, mean=0.0, std=0.1)
+    (q_gpu, _, _) = alloc_tensor(cfg.shape_q, cfg.data_type, elems=cfg.elems_q, strides=cfg.stride_q, rng=rng_data_gen, mean=-0.5, std=1.0)
+    (k_gpu, _, _) = alloc_tensor(cfg.shape_k, cfg.data_type, elems=cfg.elems_k, strides=cfg.stride_k, rng=rng_data_gen, mean=-0.5, std=1.0)
+    (v_gpu, _, _) = alloc_tensor(cfg.shape_v, cfg.data_type, elems=cfg.elems_v, strides=cfg.stride_v, rng=rng_data_gen, mean=-0.5, std=1.0)
+    (bias_gpu, _, _) = (alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type, rng=rng_data_gen, mean=0.0, std=1.0) if cfg.is_bias else (None, None, None))
+
+    if not cfg.is_infer:
+        (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(cfg.shape_q, cfg.data_type, elems=cfg.elems_q, strides=cfg.stride_q)
+        (dK_gpu, dK_sep, dK_raw) = alloc_tensor(cfg.shape_k, cfg.data_type, elems=cfg.elems_k, strides=cfg.stride_k)
+        (dV_gpu, dV_sep, dV_raw) = alloc_tensor(cfg.shape_v, cfg.data_type, elems=cfg.elems_v, strides=cfg.stride_v)
+        (dBias_gpu, dBias_sep, dBias_raw) = (alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type) if cfg.is_bias else (None, None, None))
+        (dO_gpu, dO_sep, dO_raw) = alloc_tensor(cfg.shape_o, cfg.data_type, elems=cfg.elems_o, strides=cfg.stride_o, rng=rng_data_gen, mean=0.0, std=0.1)
 
     # Sequence lengths for gpu, must be a four dimensional tensor.
     seq_len_q_gpu = seq_len_kv_gpu = None
-    if len(seq_len_q) > 0:
-        seq_len_q_gpu = torch.tensor(seq_len_q, dtype=torch.int32, device="cuda")
+    if len(cfg.seq_len_q) > 0:
+        seq_len_q_gpu = torch.tensor(cfg.seq_len_q, dtype=torch.int32, device="cuda")
         seq_len_q_gpu = seq_len_q_gpu[:, None, None, None]  # batches x 1 x 1 x 1
-    if len(seq_len_kv) > 0:
-        seq_len_kv_gpu = torch.tensor(seq_len_kv, dtype=torch.int32, device="cuda")
+    if len(cfg.seq_len_kv) > 0:
+        seq_len_kv_gpu = torch.tensor(cfg.seq_len_kv, dtype=torch.int32, device="cuda")
         seq_len_kv_gpu = seq_len_kv_gpu[:, None, None, None]  # batches x 1 x 1 x 1
 
     # maxT = next_multiple_of_64(sum(seq_len))
-    max_t_q = ((torch.sum(seq_len_q_gpu).item() + 63) // 64) * 64 if is_ragged else None
-    max_t_kv = ((torch.sum(seq_len_kv_gpu).item() + 63) // 64) * 64 if is_ragged else None
+    max_t_q = ((torch.sum(seq_len_q_gpu).item() + 63) // 64) * 64 if cfg.is_ragged else None
+    max_t_kv = ((torch.sum(seq_len_kv_gpu).item() + 63) // 64) * 64 if cfg.is_ragged else None
 
-    if is_dropout:
+    if cfg.is_dropout:
         seed_gpu = torch.full((1, 1, 1, 1), 123456, dtype=torch.int64, device="cuda")
         offset_gpu = torch.full((1, 1, 1, 1), 789, dtype=torch.int64, device="cuda")
 
-    rng_dump_gpu = torch.zeros((batches, h_q, s_q, s_kv), dtype=torch.float32, device="cuda") if is_dropout else None
+    rng_dump_gpu = torch.zeros((cfg.batches, cfg.h_q, cfg.s_q, cfg.s_kv), dtype=torch.float32, device="cuda") if cfg.is_dropout else None
 
-    if is_ragged:
-       q_ragged_offset_gpu, k_ragged_offset_gpu, v_ragged_offset_gpu, o_ragged_offset_gpu = generate_ragged_offset(h_q, h_k, h_v, d_qk, d_v, seq_len_q_gpu, seq_len_kv_gpu)
+    if cfg.is_ragged:
+       q_ragged_offset_gpu, k_ragged_offset_gpu, v_ragged_offset_gpu, o_ragged_offset_gpu = generate_ragged_offset(cfg.h_q, cfg.h_k, cfg.h_v, cfg.d_qk, cfg.d_v, seq_len_q_gpu, seq_len_kv_gpu)
 
-    (o_gpu, o_sep, o_raw) = alloc_tensor(shape_o, data_type, elems=elems_o, strides=stride_o)
-    (stats_gpu, stats_sep, stats_raw) = (alloc_tensor((batches, h_q, s_q, 1), torch.float32) if not is_infer else (None, None, None))
+    (o_gpu, o_sep, o_raw) = alloc_tensor(cfg.shape_o, cfg.data_type, elems=cfg.elems_o, strides=cfg.stride_o)
+    (stats_gpu, stats_sep, stats_raw) = (alloc_tensor((cfg.batches, cfg.h_q, cfg.s_q, 1), torch.float32) if not cfg.is_infer else (None, None, None))
 
     container_k_gpu  = None
     container_v_gpu  = None
     page_table_k_gpu = None
     page_table_v_gpu = None
 
-    if is_paged:
-        container_k_gpu, page_table_k_gpu = create_container_and_page_table(k_gpu, block_size)
-        container_v_gpu, page_table_v_gpu = create_container_and_page_table(v_gpu, block_size)
+    if cfg.is_paged:
+        container_k_gpu, page_table_k_gpu = create_container_and_page_table(k_gpu, cfg.block_size)
+        container_v_gpu, page_table_v_gpu = create_container_and_page_table(v_gpu, cfg.block_size)
 
     stream = torch.cuda.current_stream().cuda_stream
     cudnn.set_stream(handle=cudnn_handle, stream=stream)
 
     # Forward cuDNN graph
     graph = cudnn.pygraph(
-        io_data_type=convert_to_cudnn_type(data_type),
+        io_data_type=convert_to_cudnn_type(cfg.data_type),
         intermediate_data_type=cudnn.data_type.FLOAT,
         compute_data_type=cudnn.data_type.FLOAT,
         handle=cudnn_handle,
     )
 
     q = graph.tensor_like(q_gpu)
-    k = graph.tensor_like(k_gpu) if not is_paged else graph.tensor_like(container_k_gpu)
-    v = graph.tensor_like(v_gpu) if not is_paged else graph.tensor_like(container_v_gpu)
+    k = graph.tensor_like(k_gpu) if not cfg.is_paged else graph.tensor_like(container_k_gpu)
+    v = graph.tensor_like(v_gpu) if not cfg.is_paged else graph.tensor_like(container_v_gpu)
 
-    page_table_k = graph.tensor_like(page_table_k_gpu) if is_paged else None
-    page_table_v = graph.tensor_like(page_table_v_gpu) if is_paged else None
+    page_table_k = graph.tensor_like(page_table_k_gpu) if cfg.is_paged else None
+    page_table_v = graph.tensor_like(page_table_v_gpu) if cfg.is_paged else None
 
-    bias = graph.tensor_like(bias_gpu) if is_bias else None
+    bias = graph.tensor_like(bias_gpu) if cfg.is_bias else None
 
-    seq_len_q = graph.tensor_like(seq_len_q_gpu) if is_padding else None
-    seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if is_padding else None
+    seq_len_q = graph.tensor_like(seq_len_q_gpu) if cfg.is_padding else None
+    seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if cfg.is_padding else None
 
-    dropout_prob = 0.1 if is_dropout else 0.0
-
-    if is_dropout:
+    if cfg.is_dropout:
         seed = graph.tensor_like(seed_gpu)
         offset = graph.tensor_like(offset_gpu)
-        dropout_tuple = (dropout_prob, seed, offset)
+        dropout_tuple = (cfg.dropout_prob, seed, offset)
 
-    rng_dump = graph.tensor_like(rng_dump_gpu) if is_dropout else None
+    rng_dump = graph.tensor_like(rng_dump_gpu) if cfg.is_dropout else None
 
-    q_ragged_offset = graph.tensor_like(q_ragged_offset_gpu) if is_ragged else None
-    k_ragged_offset = graph.tensor_like(k_ragged_offset_gpu) if is_ragged else None
-    v_ragged_offset = graph.tensor_like(v_ragged_offset_gpu) if is_ragged else None
-    o_ragged_offset = graph.tensor_like(o_ragged_offset_gpu) if is_ragged else None
+    q_ragged_offset = graph.tensor_like(q_ragged_offset_gpu) if cfg.is_ragged else None
+    k_ragged_offset = graph.tensor_like(k_ragged_offset_gpu) if cfg.is_ragged else None
+    v_ragged_offset = graph.tensor_like(v_ragged_offset_gpu) if cfg.is_ragged else None
+    o_ragged_offset = graph.tensor_like(o_ragged_offset_gpu) if cfg.is_ragged else None
 
-    if is_ragged:
+    if cfg.is_ragged:
         q.set_ragged_offset(q_ragged_offset)
         k.set_ragged_offset(k_ragged_offset)
         v.set_ragged_offset(v_ragged_offset)
@@ -1345,29 +765,29 @@ def exec_sdpa(cfg, request, cudnn_handle):
         q=q,
         k=k,
         v=v,
-        generate_stats=not is_infer,
+        generate_stats=not cfg.is_infer,
         attn_scale=attn_scale,
         bias=bias,
-        use_alibi_mask=is_alibi,
-        use_padding_mask=is_padding,
+        use_alibi_mask=cfg.is_alibi,
+        use_padding_mask=cfg.is_padding,
         seq_len_q=seq_len_q,
         seq_len_kv=seq_len_kv,
-        diagonal_band_left_bound=left_bound if left_bound != INVALID_BOUND else None,
-        diagonal_band_right_bound=right_bound if right_bound != INVALID_BOUND else None,
-        diagonal_alignment=diag_align,
-        dropout=dropout_tuple if is_dropout else None,
+        diagonal_band_left_bound=cfg.left_bound if cfg.left_bound != INVALID_BOUND else None,
+        diagonal_band_right_bound=cfg.right_bound if cfg.right_bound != INVALID_BOUND else None,
+        diagonal_alignment=cfg.diag_align,
+        dropout=dropout_tuple if cfg.is_dropout else None,
         rng_dump=rng_dump,
         paged_attention_k_table=page_table_k,
         paged_attention_v_table=page_table_v,
-        paged_attention_max_seq_len_kv=s_kv if is_paged else None,
-        implementation=implementation,
+        paged_attention_max_seq_len_kv=cfg.s_kv if cfg.is_paged else None,
+        implementation=cfg.implementation,
     )
 
-    o.set_output(True).set_dim(shape_o).set_stride(stride_o)
-    if is_ragged:
+    o.set_output(True).set_dim(cfg.shape_o).set_stride(cfg.stride_o)
+    if cfg.is_ragged:
         o.set_ragged_offset(o_ragged_offset)
 
-    if is_infer == False:
+    if cfg.is_infer == False:
         stats.set_output(True).set_data_type(cudnn.data_type.FLOAT)
 
     try:
@@ -1393,15 +813,15 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     variant_pack = {
         q: q_gpu,
-        k: k_gpu if not is_paged else container_k_gpu,
-        v: v_gpu if not is_paged else container_v_gpu,
+        k: k_gpu if not cfg.is_paged else container_k_gpu,
+        v: v_gpu if not cfg.is_paged else container_v_gpu,
         bias: bias_gpu,
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
-        q_ragged_offset: q_ragged_offset_gpu if is_ragged else None,
-        k_ragged_offset: k_ragged_offset_gpu if is_ragged else None,
-        v_ragged_offset: v_ragged_offset_gpu if is_ragged else None,
-        o_ragged_offset: o_ragged_offset_gpu if is_ragged else None,
+        q_ragged_offset: q_ragged_offset_gpu if cfg.is_ragged else None,
+        k_ragged_offset: k_ragged_offset_gpu if cfg.is_ragged else None,
+        v_ragged_offset: v_ragged_offset_gpu if cfg.is_ragged else None,
+        o_ragged_offset: o_ragged_offset_gpu if cfg.is_ragged else None,
         o: o_gpu,
         stats: stats_gpu,
         rng_dump: rng_dump_gpu,
@@ -1409,7 +829,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         page_table_v: page_table_v_gpu
     }
 
-    if is_dropout:
+    if cfg.is_dropout:
         variant_pack[seed] = seed_gpu
         variant_pack[offset] = offset_gpu
 
@@ -1430,8 +850,8 @@ def exec_sdpa(cfg, request, cudnn_handle):
         print(ws_sep)
         pytest.fail("forward workspace overwritten outside boundaries", pytrace=False)
 
-    if not is_infer:
-        if cudnn_version < "8.9.6" and is_padding:
+    if not cfg.is_infer:
+        if cudnn_version < "8.9.6" and cfg.is_padding:
             # zero out padded region of the output and stats
             for i, m in enumerate(seq_len_q_gpu):
                 o_gpu[i, :, m:, :] = 0
@@ -1443,7 +863,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
         # Backward cuDNN graph
         graph = cudnn.pygraph(
-            io_data_type=convert_to_cudnn_type(data_type),
+            io_data_type=convert_to_cudnn_type(cfg.data_type),
             intermediate_data_type=cudnn.data_type.FLOAT,
             compute_data_type=cudnn.data_type.FLOAT,
             handle=cudnn_handle,
@@ -1457,23 +877,23 @@ def exec_sdpa(cfg, request, cudnn_handle):
         dO = graph.tensor_like(dO_gpu)
         stats = graph.tensor_like(stats_gpu)
 
-        bias = graph.tensor_like(bias_gpu) if is_bias else None
-        dBias = (graph.tensor_like(dBias_gpu).set_stride((h_q * s_q * s_kv, s_q * s_kv, s_kv, 1)) if is_bias else None)
+        bias = graph.tensor_like(bias_gpu) if cfg.is_bias else None
+        dBias = (graph.tensor_like(dBias_gpu).set_stride((cfg.h_q * cfg.s_q * cfg.s_kv, cfg.s_q * cfg.s_kv, cfg.s_kv, 1)) if cfg.is_bias else None)
 
-        seq_len_q = graph.tensor_like(seq_len_q_gpu) if is_padding else None
-        seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if is_padding else None
+        seq_len_q = graph.tensor_like(seq_len_q_gpu) if cfg.is_padding else None
+        seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if cfg.is_padding else None
 
-        if is_dropout:
+        if cfg.is_dropout:
             seed = graph.tensor_like(seed_gpu)
             offset = graph.tensor_like(offset_gpu)
-            dropout_tuple = (dropout_prob, seed, offset)
+            dropout_tuple = (cfg.dropout_prob, seed, offset)
 
-        q_ragged_offset = graph.tensor_like(q_ragged_offset_gpu) if is_ragged else None
-        k_ragged_offset = graph.tensor_like(k_ragged_offset_gpu) if is_ragged else None
-        v_ragged_offset = graph.tensor_like(v_ragged_offset_gpu) if is_ragged else None
-        o_ragged_offset = graph.tensor_like(o_ragged_offset_gpu) if is_ragged else None
+        q_ragged_offset = graph.tensor_like(q_ragged_offset_gpu) if cfg.is_ragged else None
+        k_ragged_offset = graph.tensor_like(k_ragged_offset_gpu) if cfg.is_ragged else None
+        v_ragged_offset = graph.tensor_like(v_ragged_offset_gpu) if cfg.is_ragged else None
+        o_ragged_offset = graph.tensor_like(o_ragged_offset_gpu) if cfg.is_ragged else None
 
-        if is_ragged:
+        if cfg.is_ragged:
             q.set_ragged_offset(q_ragged_offset)
             k.set_ragged_offset(k_ragged_offset)
             v.set_ragged_offset(v_ragged_offset)
@@ -1491,23 +911,23 @@ def exec_sdpa(cfg, request, cudnn_handle):
             attn_scale=attn_scale,
             bias=bias,
             dBias=dBias,
-            use_alibi_mask=is_alibi,
-            use_padding_mask=is_padding,
+            use_alibi_mask=cfg.is_alibi,
+            use_padding_mask=cfg.is_padding,
             seq_len_q=seq_len_q,
             seq_len_kv=seq_len_kv,
             max_total_seq_len_q=max_t_q,
             max_total_seq_len_kv=max_t_kv,
-            diagonal_band_left_bound=left_bound if left_bound != INVALID_BOUND else None,
-            diagonal_band_right_bound=right_bound if right_bound != INVALID_BOUND else None,
-            diagonal_alignment=diag_align,
-            dropout=dropout_tuple if is_dropout else None,
-            use_deterministic_algorithm=is_determin,
+            diagonal_band_left_bound=cfg.left_bound if cfg.left_bound != INVALID_BOUND else None,
+            diagonal_band_right_bound=cfg.right_bound if cfg.right_bound != INVALID_BOUND else None,
+            diagonal_alignment=cfg.diag_align,
+            dropout=dropout_tuple if cfg.is_dropout else None,
+            use_deterministic_algorithm=cfg.is_determin,
         )
 
         dQ.set_output(True).set_dim(dQ_gpu.size()).set_stride(dQ_gpu.stride())
         dK.set_output(True).set_dim(dK_gpu.size()).set_stride(dK_gpu.stride())
         dV.set_output(True).set_dim(dV_gpu.size()).set_stride(dV_gpu.stride())
-        if is_ragged:
+        if cfg.is_ragged:
             dQ.set_ragged_offset(q_ragged_offset)
             dK.set_ragged_offset(k_ragged_offset)
             dV.set_ragged_offset(v_ragged_offset)
@@ -1547,13 +967,13 @@ def exec_sdpa(cfg, request, cudnn_handle):
             dBias: dBias_gpu,
             seq_len_q: seq_len_q_gpu,
             seq_len_kv: seq_len_kv_gpu,
-            q_ragged_offset: q_ragged_offset_gpu if is_ragged else None,
-            k_ragged_offset: k_ragged_offset_gpu if is_ragged else None,
-            v_ragged_offset: v_ragged_offset_gpu if is_ragged else None,
-            o_ragged_offset: o_ragged_offset_gpu if is_ragged else None,
+            q_ragged_offset: q_ragged_offset_gpu if cfg.is_ragged else None,
+            k_ragged_offset: k_ragged_offset_gpu if cfg.is_ragged else None,
+            v_ragged_offset: v_ragged_offset_gpu if cfg.is_ragged else None,
+            o_ragged_offset: o_ragged_offset_gpu if cfg.is_ragged else None,
         }
 
-        if is_dropout:
+        if cfg.is_dropout:
             variant_pack[seed] = seed_gpu
             variant_pack[offset] = offset_gpu
 
@@ -1577,15 +997,15 @@ def exec_sdpa(cfg, request, cudnn_handle):
     bias_ref = None
     rng_dump_ref = None
 
-    if not is_infer:
+    if not cfg.is_infer:
         # Using torch autograd reference in the backward pass.
         q_ref  = q_gpu.detach().float().requires_grad_()
         k_ref  = k_gpu.detach().float().requires_grad_()
         v_ref  = v_gpu.detach().float().requires_grad_()
         dO_ref = dO_gpu.detach().float()
-        if is_ragged:
+        if cfg.is_ragged:
             dO_ref = convert_ragged_to_uniform(dO_ref, seq_len_q_gpu.detach())
-        if is_bias:
+        if cfg.is_bias:
             bias_ref = bias_gpu.detach().float().requires_grad_()
     else:
         # No autograd in the forward pass.
@@ -1593,19 +1013,19 @@ def exec_sdpa(cfg, request, cudnn_handle):
         k_ref  = k_gpu.detach().float()
         v_ref  = v_gpu.detach().float()
         dO_ref = None
-        if is_bias:
+        if cfg.is_bias:
             bias_ref = bias_gpu.detach().float()
 
-    if is_ragged:
+    if cfg.is_ragged:
         q_ref  = convert_ragged_to_uniform(q_ref, seq_len_q_gpu.detach())
         k_ref  = convert_ragged_to_uniform(k_ref, seq_len_kv_gpu.detach())
         v_ref  = convert_ragged_to_uniform(v_ref, seq_len_kv_gpu.detach())
 
-    if is_padding:
+    if cfg.is_padding:
         seq_len_q_ref = seq_len_q_gpu.detach().flatten()
         seq_len_kv_ref = seq_len_kv_gpu.detach().flatten()
 
-    if is_dropout:
+    if cfg.is_dropout:
         rng_dump_ref = rng_dump_gpu.detach().float()
 
     # Compute forward reference output.
@@ -1615,32 +1035,32 @@ def exec_sdpa(cfg, request, cudnn_handle):
         v_ref,
         attn_scale=attn_scale,
         bias=bias_ref,
-        is_alibi=is_alibi,
-        padding=(seq_len_q_ref, seq_len_kv_ref) if is_padding else None,
-        left_bound=left_bound,
-        right_bound=right_bound,
-        diag_align=diag_align,
-        dropout_prob=dropout_prob,
+        is_alibi=cfg.is_alibi,
+        padding=(seq_len_q_ref, seq_len_kv_ref) if cfg.is_padding else None,
+        left_bound=cfg.left_bound,
+        right_bound=cfg.right_bound,
+        diag_align=cfg.diag_align,
+        dropout_prob=cfg.dropout_prob,
         dropout_mask=rng_dump_ref,
-        generate_stats=(is_infer == False),
+        generate_stats=(cfg.is_infer == False),
     )
 
-    if not is_infer:
+    if not cfg.is_infer:
         o_ref, stats_ref = ret
     else:
         o_ref = ret
 
-    if is_ragged:
+    if cfg.is_ragged:
         o_gpu = convert_ragged_to_uniform(o_gpu, seq_len_q_gpu.detach())
 
     err_count = 0
 
-    if is_padding:
+    if cfg.is_padding:
         # zero out padded region of the output for comparison
         for i, m in enumerate(seq_len_q_ref):
             o_ref[i, :, m:, :] = 0
             o_gpu[i, :, m:, :] = 0
-            if is_infer == False:
+            if cfg.is_infer == False:
                 if cudnn_version < "9.14.0":
                     stats_ref[i, :, m:, :] = 0
                     stats_gpu[i, :, m:, :] = 0
@@ -1651,26 +1071,26 @@ def exec_sdpa(cfg, request, cudnn_handle):
 
     err_count += approx_equal(o_gpu, o_ref, o_sep, o_raw, atol=2e-2, rtol=2e-2, tag="o", disp_elems=diffs)
 
-    if not is_infer:
+    if not cfg.is_infer:
         err_count += approx_equal(stats_gpu, stats_ref, stats_sep, stats_raw, atol=2e-2, rtol=2e-2, tag="stats", disp_elems=diffs)
 
         inputs_ref = [q_ref, k_ref, v_ref]
-        if is_bias:
+        if cfg.is_bias:
             inputs_ref.append(bias_ref)
 
         [dQ_ref, dK_ref, dV_ref, *opt_refs] = list(
             torch.autograd.grad(outputs=o_ref, inputs=inputs_ref, grad_outputs=dO_ref)
         )
 
-        if is_bias:
+        if cfg.is_bias:
             dBias_ref = opt_refs.pop(0)
 
-        if is_ragged:
+        if cfg.is_ragged:
             dQ_gpu = convert_ragged_to_uniform(dQ_gpu, seq_len_q_gpu.detach())
             dK_gpu = convert_ragged_to_uniform(dK_gpu, seq_len_kv_gpu.detach())
             dV_gpu = convert_ragged_to_uniform(dV_gpu, seq_len_kv_gpu.detach())
 
-        if is_padding:
+        if cfg.is_padding:
             # zero out padded region of the output for comparison
             for i, (m, n) in enumerate(zip(seq_len_q_ref, seq_len_kv_ref)):
                 dQ_ref[i, :, m:, :] = 0
@@ -1683,9 +1103,9 @@ def exec_sdpa(cfg, request, cudnn_handle):
         torch.cuda.synchronize()
 
         err_count += approx_equal(dQ_gpu, dQ_ref, dQ_sep, dQ_raw, atol=2e-2, rtol=2e-2, tag="dQ", disp_elems=diffs)
-        err_count += approx_equal(dK_gpu, dK_ref, dK_sep, dK_raw, atol=2e-2 if data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dK", disp_elems=diffs)
-        err_count += approx_equal(dV_gpu, dV_ref, dV_sep, dV_raw, atol=2e-2 if data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dV", disp_elems=diffs)
-        if is_bias:
+        err_count += approx_equal(dK_gpu, dK_ref, dK_sep, dK_raw, atol=2e-2 if cfg.data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dK", disp_elems=diffs)
+        err_count += approx_equal(dV_gpu, dV_ref, dV_sep, dV_raw, atol=2e-2 if cfg.data_type != torch.bfloat16 else 7e-2, rtol=2e-2, tag="dV", disp_elems=diffs)
+        if cfg.is_bias:
             err_count += approx_equal(dBias_gpu, dBias_ref, dBias_sep, dBias_raw, atol=2e-2, rtol=2e-2, tag="dBias", disp_elems=diffs)
 
     if err_count != 0:
@@ -1698,37 +1118,37 @@ def exec_sdpa(cfg, request, cudnn_handle):
     del graph
     del variant_pack
 
-    if is_paged:
+    if cfg.is_paged:
         del container_k_gpu, container_v_gpu, page_table_k_gpu, page_table_v_gpu
-    if is_ragged:
+    if cfg.is_ragged:
         del q_ragged_offset_gpu, k_ragged_offset_gpu, v_ragged_offset_gpu, o_ragged_offset_gpu
-    if is_dropout:
+    if cfg.is_dropout:
         del seed_gpu, offset_gpu
         del rng_dump_gpu
         del rng_dump_ref
-    if is_padding:
+    if cfg.is_padding:
         del seq_len_q_gpu, seq_len_kv_gpu
         del seq_len_q_ref, seq_len_kv_ref
 
     del q_gpu, k_gpu, v_gpu, o_gpu
-    if is_bias:
+    if cfg.is_bias:
         del bias_gpu
-    if not is_infer:
+    if not cfg.is_infer:
         del dQ_gpu, dK_gpu, dV_gpu, dO_gpu, stats_gpu
-        if is_bias:
+        if cfg.is_bias:
             del dBias_gpu
 
         del q_ref, k_ref, v_ref, dO_ref, o_ref, stats_ref
-        if is_bias:
+        if cfg.is_bias:
             del dBias_ref, bias_ref
         del dQ_ref, dK_ref, dV_ref
     else:
         del q_ref, k_ref, v_ref, o_ref
-        if is_bias:
+        if cfg.is_bias:
             del bias_ref
 
     del o_sep, o_raw
-    if not is_infer:
+    if not cfg.is_infer:
         del dQ_sep, dQ_raw, dK_sep, dK_raw, dV_sep, dV_raw
         del stats_sep, stats_raw
 
@@ -1754,126 +1174,296 @@ def env_info(request):
 
     return {"gpu_arch": gpu_arch, "gpu_info": gpu_info, "cudnn_ver": cudnn_ver, "blocked_tests": blocked_tests}
 
+# These options are common to all test lists
+data_type_options      = {torch.float16 : 1, torch.bfloat16 : 2}
+diag_alignment_options = [cudnn.diagonal_alignment.TOP_LEFT, cudnn.diagonal_alignment.BOTTOM_RIGHT]
+implementation_options = [cudnn.attention_implementation.AUTO, cudnn.attention_implementation.COMPOSITE, cudnn.attention_implementation.UNIFIED]
+implementation_names   = ['cudnn.attention_implementation.AUTO', 'cudnn.attention_implementation.COMPOSITE', 'cudnn.attention_implementation.UNIFIED']
+
 # ==================================
 # L0 fprop tests
 # ==================================
-
-@pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=888), ids=lambda p: f"test{p[0]}")
-@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("layout", random_layout_options)
-@pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True], ids=["FWD"])
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
-def test_sdpa_random_fwd_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
-    cfg = testConfig(**env_info)
-    cfg.setBatches(min_batches=1, max_batches=8)
-    cfg.setSequences(min_s_q=1, max_s_q=1024, min_s_kv=1, max_s_kv=1024)
-    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
-    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
-    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
-    exec_sdpa(cfg, request, cudnn_handle)
+def test_sdpa_random_fwd_L0(env_info, test_no, request, cudnn_handle):
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=888), ids=lambda p: f"test{p[0]}")
-@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("layout", random_layout_options)
-@pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True], ids=["FWD"])
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=32, rng_seed=888), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
-def test_unified_sdpa_random_fwd_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
-    cfg = testConfig(**env_info)
-    cfg.setBatches(min_batches=1, max_batches=8)
-    cfg.setSequences(min_s_q=1, max_s_q=1024, min_s_kv=1, max_s_kv=1024)
-    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
-    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
-    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.UNIFIED)
-    exec_sdpa(cfg, request, cudnn_handle)
+def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
 
-# ==================================
-# L0 bprop tests
-# ==================================
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=64, rng_seed=123), ids=lambda p: f"test{p[0]}")
-@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("layout", random_layout_options)
-@pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [False], ids=["BWD"])
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+    test.cfg.implementation = cudnn.attention_implementation.UNIFIED
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+# # ==================================
+# # L0 bprop tests
+# # ==================================
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=844), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
-def test_sdpa_random_bwd_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
-    cfg = testConfig(**env_info)
-    cfg.setBatches(min_batches=1, max_batches=8)
-    cfg.setSequences(min_s_q=1, max_s_q=512, min_s_kv=1, max_s_kv=512)
-    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
-    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
-    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.NEVER, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
-    exec_sdpa(cfg, request, cudnn_handle)
+def test_sdpa_random_bwd_L0(env_info, test_no, request, cudnn_handle):
 
-# ==================================
-# L0 fprop tests with s_q=1
-# ==================================
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=741), ids=lambda p: f"test{p[0]}")
-@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("layout", random_layout_options)
-@pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True], ids=["FWD_SQ1"])
-@pytest.mark.L1
-def test_sdpa_random_sq1_L1(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
-    cfg = testConfig(**env_info)
-    cfg.setBatches(min_batches=1, max_batches=32)
-    cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=1, max_s_kv=512)
-    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
-    cfg.setHeads(min_h_qkv=1, max_h_qkv=32)
-    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
-    exec_sdpa(cfg, request, cudnn_handle)
+    print(f"test: {test} hash {abs(hash(test_no))}")
 
-# =====================================================
-# L0 lean attention, s_kv=513..2048
-# Numerical mismatches, see bug: https://nvbugs/5426554
-# =====================================================
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=32, rng_seed=747), ids=lambda p: f"test{p[0]}")
-@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("layout", random_layout_options)
-@pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True], ids=["FWD_LEAN_ATTN"])
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+
+    test.cfg.is_infer = False
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+# # ==================================
+# # L0 fprop tests with s_q=1
+# # ==================================
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=111), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
-def test_sdpa_random_lean_attn_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
-    cfg = testConfig(**env_info)
-    cfg.setBatches(min_batches=1, max_batches=32)
-    cfg.setSequences(min_s_q=1, max_s_q=1, min_s_kv=512+1, max_s_kv=2048)
-    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
-    cfg.setHeads(min_h_qkv=1, max_h_qkv=32)
-    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.RANDOM, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
-    exec_sdpa(cfg, request, cudnn_handle)
+def test_sdpa_random_sq1_L0(env_info, test_no, request, cudnn_handle):
 
-# ==================================
-# L0 ragged tests
-# ==================================
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
 
-@pytest.mark.parametrize("test_no", tlist(num_tests=16, rng_seed=555), ids=lambda p: f"test{p[0]}")
-@pytest.mark.parametrize("data_type", data_type_options, ids=lambda p: str(p))
-@pytest.mark.parametrize("layout", random_layout_options)
-@pytest.mark.parametrize("head_group", head_group_options)
-@pytest.mark.parametrize("is_infer", [True, False], ids=lambda p: "FWD_RAGGED" if p else "BWD_RAGGED")
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=32),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":100, "s_q=s_kv":1, "s_q=random":0}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=32, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+# # =====================================================
+# # L0 lean attention, s_kv=513..2048
+# # =====================================================
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=222), ids=lambda p: f"test{p[0]}")
 @pytest.mark.L0
-def test_sdpa_random_ragged_L0(env_info, test_no, data_type, is_infer, head_group, layout, request, cudnn_handle):
-    cfg = testConfig(**env_info)
-    cfg.setBatches(min_batches=1, max_batches=8)
-    cfg.setSequences(min_s_q=1, max_s_q=512, min_s_kv=1, max_s_kv=512)
-    cfg.setVectors(min_d_v=1, max_d_v=128, min_d_qk=1, max_d_qk=128, data_type=data_type)
-    cfg.setHeads(min_h_qkv=1, max_h_qkv=8)
-    cfg.setBlockSize(min_blk_sz=1, max_blk_sz=256)
-    cfg.random_layout(test_no, is_infer, data_type, head_group, layout, request, generate_ragged_tests=knobNAR.ALWAYS, avoid_invalid_configs=knobNA.ALWAYS, implementation=cudnn.attention_implementation.AUTO)
-    exec_sdpa(cfg, request, cudnn_handle)
+def test_sdpa_random_lean_attn_L0(env_info, test_no, request, cudnn_handle):
 
-# ===================
-# Single repro test
-# ===================
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=32),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1, s_kv_min=513, s_kv_max=2048, s_q_distribution={"s_q=1":100, "s_q=s_kv":0, "s_q=random":0}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=32, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+# # ==================================
+# # L0 ragged tests
+# # ==================================
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_random_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_random_bwd_ragged_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+
+    test.cfg.is_infer = False
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+# # ==================================
+# # L0 paged tests
+# # ==================================
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=64, s_kv_min=1, s_kv_max=512, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(causal=10, left_window_only=5, right_window_only=5, band_around_diag=10, no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 1}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 0}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "diabled" : 1}),
+        block_size=RandomBlockSize(min=1, max=1024, with_high_probability=[1,32,128]),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg.is_paged = True
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+# # ===================
+# # Single repro test
+# # ===================
 
 @pytest.mark.skipif("not config.getoption('--repro')", reason="used with '--repro' only")
 @pytest.mark.L0
@@ -1883,7 +1473,29 @@ def test_sdpa_random_ragged_L0(env_info, test_no, data_type, is_infer, head_grou
 @pytest.mark.L4
 def test_repro(env_info, request, cudnn_handle):
     repro_str = request.config.getoption("--repro")
-    cfg = testConfig(**env_info)
-    cfg.load_config(repro_str)
+    cfg = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+    print(f"repro_str: {repro_str}")
+
+    # Parse the dictionary string and reconstruct the exec_cfg object
+    import ast
+    repro_dict = ast.literal_eval(repro_str)
+
+    # Convert integer enum values back to enum objects
+    if 'diag_align' in repro_dict and repro_dict['diag_align'] is not None:
+        repro_dict['diag_align'] = cudnn.diagonal_alignment(repro_dict['diag_align'])
+    if 'implementation' in repro_dict and repro_dict['implementation'] is not None:
+        repro_dict['implementation'] = cudnn.attention_implementation(repro_dict['implementation'])
+    # Convert string dtype back to torch dtype
+    if 'data_type' in repro_dict and repro_dict['data_type'] is not None:
+        if 'torch.float16' in repro_dict['data_type']:
+            repro_dict['data_type'] = torch.float16
+        elif 'torch.bfloat16' in repro_dict['data_type']:
+            repro_dict['data_type'] = torch.bfloat16
+        elif 'torch.float32' in repro_dict['data_type']:
+            repro_dict['data_type'] = torch.float32
+
+    cfg.cfg = exec_cfg(**repro_dict)
+    print(f"cfg.cfg: {cfg.cfg}")
+
     cfg.showConfig((1,1), request, False)
-    exec_sdpa(cfg, request, cudnn_handle)
+    exec_sdpa(cfg.cfg, request, cudnn_handle)

@@ -88,6 +88,9 @@ class Tensor_v8 : public BackendDescriptor {
 #else
         ss << "\n                                   reorder_type: " << int(reorder_type);
 #endif
+        if (raggedOffset != nullptr) {
+            ss << "\n                                   raggedOffset: Enabled UID: " << raggedOffset->getId();
+        }
         return ss.str();
     }
 
