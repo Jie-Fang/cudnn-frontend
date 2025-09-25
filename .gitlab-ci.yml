@@ -15,13 +15,13 @@ before_script:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 .cudnn_dev_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.1
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.0.0
 
 .cudnn_rel_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_12.9.1
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_13.0.0
 
 .cudnn_ga_image:template:
-    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.12.0.46_12.9.1
+    image: gitlab-master.nvidia.com:5005/cudnn/cudnn_frontend:cudnn_9.13.0.50_13.0.0
 
 .device_matrix:template:
     parallel:
@@ -38,7 +38,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.14_cuda_12.9/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.14_cuda_13.0/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -51,7 +51,7 @@ before_script:
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.13_cuda_12.9/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.13_cuda_13.0/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
