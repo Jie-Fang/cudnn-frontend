@@ -497,7 +497,7 @@ def test_randomization_context(seed):
         is_kv_ragged_or_paged_or_padded_or_full=RandomChoice(
             {"ragged": 1, "paged": 1, "padded": 1, "full": 1}
         ),
-        stats_layout=RandomChoice({"ragged": 1, "full": 1, "diabled": 2}),
+        stats_layout=RandomChoice({"ragged": 1, "full": 1, "disabled": 2}),
     ) as ctx:
         return ctx
 
