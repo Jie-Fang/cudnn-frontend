@@ -896,7 +896,89 @@ class Graph : public ICudnn, public INode {
     }
 
     error_t
+    warmup(cudnnHandle_t handle) {
+        cudaStream_t fake_stream;
+
+        cudaStream_t original_stream;
+
+        detail::get_stream(handle, &original_stream);
+
+        CUDNN_FE_LOG_BANNER("WARMUP (BEGIN FAKE GRAPH CAPTURE) ");
+
+        if (original_stream == nullptr) {
+            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_create(&fake_stream));
+            detail::set_stream(handle, fake_stream);
+        } else {
+            fake_stream = original_stream;
+        }
+
+        cudaGraph_t graph_obj;
+
+        cudaStreamCaptureStatus capture_status;
+
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_is_capturing(fake_stream, &capture_status));
+
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: capture_status "
+                                << capture_status << " original_stream "
+                                << ((original_stream == nullptr) ? "DEFAULT (NULL) Stream" : "NON-DEFAULT Stream"));
+
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_begin_capture(fake_stream, cudaStreamCaptureModeRelaxed));
+
+        std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
+
+        void *tmp_pointer = reinterpret_cast<void *>(0x7f0000000000llu);
+        float tmp_double  = 1.0f;
+        void *cpu_pointer = reinterpret_cast<void *>(&tmp_double);
+
+        for (auto const &tensor : deserialized_tensor_properties) {
+            if (tensor->get_is_virtual() == false) {
+                if (tensor->get_is_pass_by_value() == false) {
+                    tensor_uid_to_pointer_map.emplace(tensor->get_uid(), tmp_pointer);
+                } else {
+                    tensor_uid_to_pointer_map.emplace(tensor->get_uid(), cpu_pointer);
+                }
+            }
+        }
+
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: full_graph_inputs: " << full_graph_inputs.size() << "elements");
+        for (auto const &tensor : full_graph_inputs) {
+            CUDNN_FE_LOG_LABEL_ENDL("\tuid: " << tensor->get_uid()
+                                              << ", is_pass_by_value = " << tensor->get_is_pass_by_value());
+            if (tensor->get_is_pass_by_value() == false) {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), tmp_pointer);
+            } else {
+                tensor_uid_to_pointer_map.emplace(tensor->get_uid(), cpu_pointer);
+            }
+        }
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: full_graph_outputs: " << full_graph_outputs.size() << "elements");
+        for (auto const &tensor : full_graph_outputs) {
+            CUDNN_FE_LOG_LABEL_ENDL("\tuid: " << tensor->get_uid());
+            tensor_uid_to_pointer_map.emplace(tensor->get_uid(), tmp_pointer);
+        }
+
+        CHECK_CUDNN_FRONTEND_ERROR(
+            extend_tensor_map_with_pass_by_value_tensors_(tensor_uid_to_pointer_map, deserialized_pass_by_value));
+
+        CHECK_CUDNN_FRONTEND_ERROR(execute(handle, tensor_uid_to_pointer_map, tmp_pointer));
+
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_end_capture(fake_stream, &graph_obj));
+
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_destroy(graph_obj));
+
+        detail::set_stream(handle, original_stream);
+
+        if (original_stream == nullptr) {
+            _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_destroy(fake_stream));
+        }
+
+        CUDNN_FE_LOG_BANNER("WARMUP (END FAKE GRAPH CAPTURE) ");
+
+        return {error_code_t::OK, ""};
+    }
+
+    error_t
     serialize(std::vector<uint8_t> &data) const {
+        CUDNN_FE_LOG_BANNER(" SERIALIZE PLAN  ");
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j;
         serialize(j);
@@ -925,6 +1007,7 @@ class Graph : public ICudnn, public INode {
         j["fe_workspace_size"] = fe_workspace_size;
 
         data = json::to_ubjson(j);
+        CUDNN_FE_LOG_BANNER(" SERIALIZE PLAN (ALL OK) ");
         return {error_code_t::OK, ""};
 #else
         CUDNN_FRONTEND_UNUSED(data);
@@ -934,6 +1017,8 @@ class Graph : public ICudnn, public INode {
 
     error_t
     deserialize(cudnnHandle_t handle, std::vector<uint8_t> const &data) {
+        CUDNN_FE_LOG_BANNER(" DESERIALIZE PLAN WITH HANDLE  ");
+
 #ifndef CUDNN_FRONTEND_SKIP_JSON_LIB
         json j = json::from_ubjson(data);
 
@@ -947,6 +1032,7 @@ class Graph : public ICudnn, public INode {
         }
 
         auto serialized_plan = j["cudnn_backend_data"];
+
         CHECK_CUDNN_FRONTEND_ERROR(plans.build_plans(handle, serialized_plan));
 
         plans.behavior_notes = j["behavior_notes"].get<std::vector<std::vector<BehaviorNote_t>>>();
@@ -960,6 +1046,10 @@ class Graph : public ICudnn, public INode {
         variant_pack_replacements = j["variant_pack_replacements"];
 
         fe_workspace_size = j["fe_workspace_size"];
+
+        CHECK_CUDNN_FRONTEND_ERROR(warmup(handle));
+
+        CUDNN_FE_LOG_BANNER(" DESERIALIZE PLAN WITH HANDLE (ALL OK) ");
 
         return {error_code_t::OK, ""};
 #else
