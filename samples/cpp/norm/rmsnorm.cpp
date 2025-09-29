@@ -74,6 +74,8 @@ TEST_CASE("RmsNorm Training", "[rmsnorm][graph]") {
 
     REQUIRE(graph.build_plans().is_good());
 
+    REQUIRE(graph.warmup(handle).is_good());
+
     Surface<float> X_tensor(batch_size * seq_length * hidden_size, false);
     Surface<float> Var_tensor(batch_size * seq_length, false);
     Surface<float> Scale_tensor(hidden_size, false);
