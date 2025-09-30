@@ -402,6 +402,16 @@ cuda_device_synchronize() {
     NV_FE_CALL_TO_CUDA(cuda_device_synchronize, cudaDeviceSynchronize);
 }
 
+inline cudaError_t
+cuda_malloc(void **ptr, size_t sz) {
+    NV_FE_CALL_TO_CUDA(cuda_malloc, cudaMalloc, ptr, sz);
+}
+
+inline cudaError_t
+cuda_free(void *ptr) {
+    NV_FE_CALL_TO_CUDA(cuda_free, cudaFree, ptr);
+}
+
 inline cudnnStatus_t
 create_handle(cudnnHandle_t *handle) {
     NV_FE_CALL_TO_BACKEND(create_handle, cudnnCreate, handle);
