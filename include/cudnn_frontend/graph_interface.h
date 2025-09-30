@@ -901,13 +901,13 @@ class Graph : public ICudnn, public INode {
 
         cudaStream_t original_stream;
 
-        detail::get_stream(handle, &original_stream);
+        _CUDNN_CHECK_CUDNN_ERROR(detail::get_stream(handle, &original_stream));
 
         CUDNN_FE_LOG_BANNER("WARMUP (BEGIN FAKE GRAPH CAPTURE) ");
 
         if (original_stream == nullptr) {
             _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_create(&fake_stream));
-            detail::set_stream(handle, fake_stream);
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_stream(handle, fake_stream));
         } else {
             fake_stream = original_stream;
         }
@@ -927,6 +927,9 @@ class Graph : public ICudnn, public INode {
         std::unordered_map<int64_t, void *> tensor_uid_to_pointer_map;
 
         void *tmp_pointer = reinterpret_cast<void *>(0x7f0000000000llu);
+
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_malloc((void **)&tmp_pointer, 1024 * 1024));
+
         float tmp_double  = 1.0f;
         void *cpu_pointer = reinterpret_cast<void *>(&tmp_double);
 
@@ -940,7 +943,7 @@ class Graph : public ICudnn, public INode {
             }
         }
 
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: full_graph_inputs: " << full_graph_inputs.size() << "elements");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: full_graph_inputs: " << full_graph_inputs.size() << " elements");
         for (auto const &tensor : full_graph_inputs) {
             CUDNN_FE_LOG_LABEL_ENDL("\tuid: " << tensor->get_uid()
                                               << ", is_pass_by_value = " << tensor->get_is_pass_by_value());
@@ -950,7 +953,7 @@ class Graph : public ICudnn, public INode {
                 tensor_uid_to_pointer_map.emplace(tensor->get_uid(), cpu_pointer);
             }
         }
-        CUDNN_FE_LOG_LABEL_ENDL("INFO: full_graph_outputs: " << full_graph_outputs.size() << "elements");
+        CUDNN_FE_LOG_LABEL_ENDL("INFO: full_graph_outputs: " << full_graph_outputs.size() << " elements");
         for (auto const &tensor : full_graph_outputs) {
             CUDNN_FE_LOG_LABEL_ENDL("\tuid: " << tensor->get_uid());
             tensor_uid_to_pointer_map.emplace(tensor->get_uid(), tmp_pointer);
@@ -965,7 +968,9 @@ class Graph : public ICudnn, public INode {
 
         _CUDNN_CHECK_CUDA_ERROR(detail::cuda_graph_destroy(graph_obj));
 
-        detail::set_stream(handle, original_stream);
+        _CUDNN_CHECK_CUDA_ERROR(detail::cuda_free(tmp_pointer));
+
+        _CUDNN_CHECK_CUDNN_ERROR(detail::set_stream(handle, original_stream));
 
         if (original_stream == nullptr) {
             _CUDNN_CHECK_CUDA_ERROR(detail::cuda_stream_destroy(fake_stream));
