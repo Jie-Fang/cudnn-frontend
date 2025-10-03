@@ -1358,8 +1358,7 @@ class Resample_attributes : public Attributes<Resample_attributes> {
         return *this;
     }
 
-    [[deprecated]]
-    auto
+    [[deprecated]] auto
     set_is_inference(bool const value) -> Resample_attributes& {
         return set_generate_index(!value);
     }
@@ -1681,8 +1680,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         return *this;
     }
 
-    [[deprecated]]
-    SDPA_attributes&
+    [[deprecated]] SDPA_attributes&
     set_is_inference(bool const value) {
         return set_generate_stats(!value);
     }
@@ -2573,6 +2571,27 @@ class Concatenate_attributes : public Attributes<Concatenate_attributes> {
     Concatenate_attributes&
     set_in_place_index(int64_t const value) {
         in_place_index = value;
+        return *this;
+    }
+};
+
+class Moe_grouped_matmul_attributes : public Attributes<Moe_grouped_matmul_attributes> {
+    friend class Attributes<Moe_grouped_matmul_attributes>;
+    friend class MoeGroupedMatmulNode;
+    friend class Graph;
+
+    MoeGroupedMatmulMode_t mode = MoeGroupedMatmulMode_t::NONE;
+
+   public:
+    enum class input_names { Token, Weight, FirstTokenOffset, TokenIndex, TokenKs };
+    std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
+    enum class output_names { Output };
+    std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Moe_grouped_matmul_attributes, name, inputs, outputs, mode)
+
+    Moe_grouped_matmul_attributes&
+    set_mode(MoeGroupedMatmulMode_t mode) {
+        this->mode = mode;
         return *this;
     }
 };

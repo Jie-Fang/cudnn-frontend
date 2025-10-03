@@ -336,6 +336,23 @@ PyGraph::reshape(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& inpu
     return OUT_0;
 }
 
+std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+PyGraph::moe_grouped_matmul(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token,
+                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
+                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& first_token_offset,
+                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token_index,
+                            std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token_ks,
+                            cudnn_frontend::MoeGroupedMatmulMode_t const& mode,
+                            cudnn_frontend::DataType_t const& compute_data_type,
+                            std::string const& name) {
+    auto attributes =
+        cudnn_frontend::graph::Moe_grouped_matmul_attributes().set_name(name).set_mode(mode).set_compute_data_type(
+            compute_data_type);
+
+    auto output = graph->moe_grouped_matmul(token, weight, first_token_offset, token_index, token_ks, attributes);
+    return output;
+}
+
 void
 PyGraph::validate() {
     auto status = graph->validate();
@@ -874,6 +891,29 @@ init_pygraph_submodule(py::module_& m) {
 
                 Returns:
                     cudnn_tensor: The result of reshape operation. Please set the dims for the output tensor.
+            )pbdoc")
+        .def("moe_grouped_matmul",
+             &PyGraph::moe_grouped_matmul,
+             py::arg("token"),
+             py::arg("weight"),
+             py::arg("first_token_offset"),
+             py::arg_v("token_index", nullptr),
+             py::arg_v("token_ks", nullptr),
+             py::arg_v("mode", cudnn_frontend::MoeGroupedMatmulMode_t::NONE),
+             py::arg_v("compute_data_type", cudnn_frontend::DataType_t::FLOAT),
+             py::arg_v("name", ""),
+             R"pbdoc(
+                Perform MoE Grouped Matmul operation.
+
+                Args:
+                    token (cudnn_tensor): The token tensor.
+                    weight (cudnn_tensor): The weight tensor.
+                    first_token_offset (cudnn_tensor): The first token offset tensor.
+                    token_index (cudnn_tensor): The token index tensor or nullptr.
+                    token_ks (cudnn_tensor): The token ks tensor or nullptr.
+                    mode (cudnn.moe_grouped_matmul_mode): The mode of the operation.
+                    compute_data_type (cudnn.data_type): The data type for computation.
+                    name (str): The name of the operation.
             )pbdoc")
         .def("get_behavior_notes", &PyGraph::get_behavior_notes)
         .def("get_behavior_notes_for_plan_at_index", &PyGraph::get_behavior_notes_for_plan_at_index)

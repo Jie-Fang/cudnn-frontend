@@ -466,6 +466,16 @@ class PyGraph {
                       cudnn_frontend::DataType_t const& compute_data_type,
                       std::string const& name);
 
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
+    moe_grouped_matmul(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& weight,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& first_token_offset,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token_index,
+                       std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token_ks,
+                       cudnn_frontend::MoeGroupedMatmulMode_t const& mode,
+                       cudnn_frontend::DataType_t const& compute_data_type,
+                       std::string const& name);
+
     void
     validate();
 

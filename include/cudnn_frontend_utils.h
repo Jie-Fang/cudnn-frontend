@@ -417,6 +417,22 @@ NLOHMANN_JSON_SERIALIZE_ENUM(NormFwdPhase_t,
                                  {NormFwdPhase_t::TRAINING, "TRAINING"},
                              })
 
+enum class MoeGroupedMatmulMode_t {
+    NOT_SET,
+
+    NONE,
+    GATHER,
+    SCATTER
+};
+
+NLOHMANN_JSON_SERIALIZE_ENUM(MoeGroupedMatmulMode_t,
+                             {
+                                 {MoeGroupedMatmulMode_t::NOT_SET, nullptr},
+                                 {MoeGroupedMatmulMode_t::NONE, "NONE"},
+                                 {MoeGroupedMatmulMode_t::GATHER, "GATHER"},
+                                 {MoeGroupedMatmulMode_t::SCATTER, "SCATTER"},
+                             })
+
 enum class DescriptorType_t {
     NOT_SET,
 
@@ -457,7 +473,8 @@ enum class DescriptorType_t {
     OPERATION_PAGED_CACHE_LOAD_DESCRIPTOR,
     OPERATION_BLOCK_SCALE_QUANTIZE_DESCRIPTOR,
     OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR,
-    OPERATION_CONCATENATE_DESCRIPTOR
+    OPERATION_CONCATENATE_DESCRIPTOR,
+    OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR
 };
 
 enum class NormMode_t {
@@ -916,6 +933,9 @@ operator<<(std::ostream& os, const DescriptorType_t& mode) {
             break;
         case DescriptorType_t::OPERATION_CONCATENATE_DESCRIPTOR:
             os << "OPERATION_CONCATENATE_DESCRIPTOR";
+            break;
+        case DescriptorType_t::OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR:
+            os << "OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR";
             break;
         case DescriptorType_t::NOT_SET:
             os << "NOT_SET";
@@ -1596,6 +1616,14 @@ convert_to_cudnn_type(cudnn_frontend::DescriptorType_t const mode, cudnnBackendD
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
 #endif
+        case DescriptorType_t::OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR:
+#if (CUDNN_VERSION >= 91500)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91500, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_BACKEND_OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
@@ -1997,6 +2025,10 @@ convert_from_cudnn_type(cudnnBackendDescriptorType_t const cudnn_mode) {
         case CUDNN_BACKEND_OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR:
             return DescriptorType_t::OPERATION_BLOCK_SCALE_DEQUANTIZE_DESCRIPTOR;
 #endif
+#if (CUDNN_VERSION >= 91500)
+        case CUDNN_BACKEND_OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR:
+            return DescriptorType_t::OPERATION_MOE_GROUPED_MATMUL_DESCRIPTOR;
+#endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
@@ -2300,6 +2332,46 @@ convert_from_cudnn_type(cudnnRngDistribution_t const cudnn_mode) {
 #endif
     }
     return RngDistribution_t::NOT_SET;
+}
+#endif
+
+#if (CUDNN_VERSION >= 91500)
+static inline cudnnStatus_t
+convert_to_cudnn_type(cudnn_frontend::MoeGroupedMatmulMode_t const mode, cudnnMoeGroupedMatmulMode_t& cudnn_mode) {
+    NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91500, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+    switch (mode) {
+        case MoeGroupedMatmulMode_t::NONE:
+            cudnn_mode = CUDNN_MOE_GROUPED_MATMUL_MODE_NONE;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        case MoeGroupedMatmulMode_t::GATHER:
+            cudnn_mode = CUDNN_MOE_GROUPED_MATMUL_MODE_GATHER;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+        case MoeGroupedMatmulMode_t::SCATTER:
+            cudnn_mode = CUDNN_MOE_GROUPED_MATMUL_MODE_SCATTER;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
+    }
+    return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+}
+
+static inline cudnn_frontend::MoeGroupedMatmulMode_t
+convert_from_cudnn_type(cudnnMoeGroupedMatmulMode_t const cudnn_mode) {
+    switch (cudnn_mode) {
+        case CUDNN_MOE_GROUPED_MATMUL_MODE_NONE:
+            return MoeGroupedMatmulMode_t::NONE;
+        case CUDNN_MOE_GROUPED_MATMUL_MODE_GATHER:
+            return MoeGroupedMatmulMode_t::GATHER;
+        case CUDNN_MOE_GROUPED_MATMUL_MODE_SCATTER:
+            return MoeGroupedMatmulMode_t::SCATTER;
+#ifndef NO_DEFAULT_IN_SWITCH
+        default:
+            return MoeGroupedMatmulMode_t::NOT_SET;
+#endif
+    }
+    return MoeGroupedMatmulMode_t::NOT_SET;
 }
 #endif
 
