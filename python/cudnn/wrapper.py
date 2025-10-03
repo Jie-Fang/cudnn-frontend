@@ -210,6 +210,8 @@ class Graph:
             raise ValueError("outputs must be a list or tuple")
         if heuristics and not isinstance(heuristics, (list, tuple)):
             raise ValueError("heuristics must be a list or tuple")
+        if cudnn.backend_version() < 91200:
+            raise RuntimeError("cuDNN version 9.12.0 or higher is required")
         self.__kwargs = kwargs
         self.__graph = None  # to hold the cudnn.pygraph object
         self.__tensor_map = {}  # obj id of dlpack tensor -> cudnn tensor
@@ -236,7 +238,7 @@ class Graph:
         if not workspace_alloc:
             self.__workspace = False
         if handle:
-            self.__handle = handle  # cudnn handle to use, will be created if None
+            self.__handle = handle
         # silently replace the PyTorch dtype into cuDNN dtype
         for key in ["io_data_type", "intermediate_data_type", "compute_data_type"]:
             if key in kwargs:
@@ -246,13 +248,14 @@ class Graph:
                 )
 
     def __del__(self):
-        self.destroy_handle()
+        pass
 
     def __enter__(self):
         if self.__graph is not None:
             raise RuntimeError("Graph already created")
         self.__graph = cudnn.pygraph(
-            handle=self.create_handle(),  # handle is needed to validate the graph
+            # Pass handle only if self.__handle is not None
+            **({"handle": self.__handle} if self.__handle is not None else {}),
             **self.__kwargs,
         )
         return self
@@ -459,8 +462,12 @@ class Graph:
             variant_pack[cudnn_tensor.get_uid()] = user_tensor
         # execute the graph
         kwargs = dict(kwargs)  # shallow copy
+
         if "handle" not in kwargs:
-            kwargs["handle"] = self.create_handle()
+            if self.__handle is not None:
+                kwargs["handle"] = self.__handle
+            else:
+                raise RuntimeError("Need to specify cudnn handle to execute graph")
         if "workspace" not in kwargs:
             if self.__workspace is False:
                 raise RuntimeError("Need to specify workspace to execute graph")
@@ -538,7 +545,10 @@ class Graph:
         # execute the graph
         kwargs = dict(kwargs)  # shallow copy
         if "handle" not in kwargs:
-            kwargs["handle"] = self.create_handle()
+            if self.__handle is not None:
+                kwargs["handle"] = self.__handle
+            else:
+                raise RuntimeError("Need to specify cudnn handle to execute graph")
         if "workspace" not in kwargs:
             if self.__workspace is False:
                 raise RuntimeError("Need to specify workspace to execute graph")
@@ -628,15 +638,3 @@ class Graph:
         # Set the input and output names
         self.__input_tuples = tuple(input_tensors)
         self.__output_tuples = tuple(output_tensors)
-
-    @classmethod
-    def create_handle(cls) -> CudnnHandle:
-        if cls.__handle is None:
-            cls.__handle = cudnn.create_handle()
-        return cls.__handle
-
-    @classmethod
-    def destroy_handle(cls):
-        if cls.__handle is not None and cudnn.destroy_handle is not None:
-            cudnn.destroy_handle(cls.__handle)
-            cls.__handle = None
