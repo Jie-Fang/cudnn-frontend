@@ -300,6 +300,11 @@ init_properties(py::module_& m) {
         .value("AUTO", cudnn_frontend::AttentionImplementation_t::AUTO)
         .value("COMPOSITE", cudnn_frontend::AttentionImplementation_t::COMPOSITE)
         .value("UNIFIED", cudnn_frontend::AttentionImplementation_t::UNIFIED);
+
+    py::enum_<cudnn_frontend::MoeGroupedMatmulMode_t>(m, "moe_grouped_matmul_mode")
+        .value("NONE", cudnn_frontend::MoeGroupedMatmulMode_t::NONE)
+        .value("GATHER", cudnn_frontend::MoeGroupedMatmulMode_t::GATHER)
+        .value("SCATTER", cudnn_frontend::MoeGroupedMatmulMode_t::SCATTER);
 }
 
 }  // namespace python_bindings
