@@ -27,15 +27,15 @@ RUN CUDNN_VERSION_M=${CUDNN_VERSION_%%.*} && \
     if [ "${CUDNN_VERSION_M}" == "9" ]; then \
         if [ "${SKIP_CUDNN}" = false ]; then \
             CUDNN_PACKAGE_NAME="${CUDNN_VERSION_}-1" && \
-            apt update -qq --fix-missing && \
-            apt upgrade -y --allow-change-held-packages \
+            apt-get install --only-upgrade -y \
+            libcudnn9-headers-cuda-${CUDA_VERSION_M}=${CUDNN_PACKAGE_NAME} \
             libcudnn9-cuda-${CUDA_VERSION_M}=${CUDNN_PACKAGE_NAME} \
             libcudnn9-dev-cuda-${CUDA_VERSION_M}=${CUDNN_PACKAGE_NAME} \
             && \
             rm -rf /root/.cache && \
             rm -rf /var/lib/apt/lists/*; \
         else \
-            apt-get purge -y libcudnn9-cuda-12; \
+            apt-get purge -y libcudnn9-cuda-${CUDA_VERSION_M}; \
         fi \
     else \
         CUDNN_PACKAGE_NAME="${CUDNN_VERSION_}-1+cuda${CUDA_VERSION_%.*}" && \
