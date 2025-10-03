@@ -35,6 +35,7 @@ add_executable(
     matmul/mixed_matmul.cpp
     matmul/blackwell_nvfp4_mxfp8_block_scale_matmul.cpp
     matmul/general_block_scale_matmul.cpp
+    matmul/complex_fp32_matmul.cpp
 
     moe_grouped_matmul/moe_grouped_matmul.cpp
 
