@@ -204,10 +204,14 @@ def _dlopen_cudnn():
         try:
             lib = ctypes.CDLL("libcudnn.so.9")
         except Exception:
-            lib = ctypes.CDLL("libcudnn.so")
+            try:
+                lib = ctypes.CDLL("libcudnn.so")
+            except Exception:
+                lib = None
 
-    handle = ctypes.cast(lib._handle, ctypes.c_void_p).value
-    _pybind_module._set_dlhandle_cudnn(handle)
+    if lib is not None:
+        handle = ctypes.cast(lib._handle, ctypes.c_void_p).value
+        _pybind_module._set_dlhandle_cudnn(handle)
 
 
 if is_windows():

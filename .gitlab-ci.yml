@@ -32,26 +32,26 @@ before_script:
 
 .fetch_cudnn_dev:template:
     cache:
-        - key: dev_cudnn_9_14_cuda_13_0
+        - key: dev_cudnn_9_15_cuda_13_0
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.14_cuda_13.0/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.15_cuda_13.0/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
 
 .fetch_cudnn_rel:template:
     cache:
-        - key: rel_cudnn_9_13_cuda_13_0
+        - key: rel_cudnn_9_14_cuda_13_0
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.13_cuda_13.0/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.14_cuda_13.0/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE

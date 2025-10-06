@@ -8,7 +8,10 @@ import argparse
 # =================== Fixtures =====================
 @pytest.fixture(scope="session", autouse=True)
 def cudnn_handle():
+    # Create CUDA stream and graph objects
+    stream = torch.cuda.Stream()
     cudnn_handle = cudnn.create_handle()
+    cudnn.set_stream(handle=cudnn_handle, stream=stream.cuda_stream)
     yield cudnn_handle
     cudnn.destroy_handle(cudnn_handle)
 
