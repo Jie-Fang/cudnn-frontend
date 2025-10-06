@@ -96,7 +96,7 @@ SDPA_attributes::validate_sdpa_support_surface(const detail::Context& context,
                                    error_code_t::ATTRIBUTE_NOT_SET,
                                    "seq_len_q and seq_len_kv needs to be set only if padding mask is enabled.");
 
-    RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && (padding_mask == false),
+    RETURN_CUDNN_FRONTEND_ERROR_IF(is_ragged && ((padding_mask == false) && (attention_score_modifier == nullptr)),
                                    error_code_t::GRAPH_NOT_SUPPORTED,
                                    "Ragged offsets are only supported with padding mask.");
 
