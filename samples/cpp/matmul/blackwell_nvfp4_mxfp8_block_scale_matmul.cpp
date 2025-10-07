@@ -570,6 +570,10 @@ TEST_CASE("Block Scale Matmul Swiglu", "[matmul][graph][FP4]") {
     SKIP("Block Scale Matmul with Swiglu epilogue fusion is not supported in cudnn versions prior to 9.15.0");
 #endif
 
+    if (check_device_arch_newer_than("blackwell") == false) {
+        SKIP("Hardware accelerated NVFP4/MXFP8 block scale matmul requires Blackwell and up");
+    }
+
     auto test_params = GENERATE(TestParams(1,
                                            256,
                                            256,
