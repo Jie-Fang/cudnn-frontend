@@ -21,6 +21,7 @@ add_executable(
     sdpa/fp8_bwd_bottom_right_causal_mask.cpp
     sdpa/fp16_fwd_with_sink_token.cpp
     sdpa/fp16_bwd_with_sink_token.cpp
+    sdpa/fp16_fwd_with_max_and_sum_exp.cpp
 
     convolution/fprop.cpp
     convolution/fp8_fprop.cpp

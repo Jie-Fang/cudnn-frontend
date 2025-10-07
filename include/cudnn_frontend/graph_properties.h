@@ -1644,12 +1644,14 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         SINK_TOKEN,
     };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-    enum class output_names { O, Stats, RNG_DUMP, Amax_S, Amax_O };
+    enum class output_names { O, Stats, Max, Sum_exp, RNG_DUMP, Amax_S, Amax_O };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
     // Convenience struct for named access to SDPA outputs
     struct SDPA_outputs {
         std::shared_ptr<Tensor_attributes> O;         ///< Main attention output tensor
         std::shared_ptr<Tensor_attributes> Stats;     ///< Statistics/softmax output (when generate_stats=true)
+        std::shared_ptr<Tensor_attributes> Max;       ///< Max output tensor
+        std::shared_ptr<Tensor_attributes> Sum_exp;   ///< Sum_exp output tensor
         std::shared_ptr<Tensor_attributes> RNG_DUMP;  ///< Random number generator dump for dropout
                                                       ///< check why we don't return RNG_DUMP this way
         std::shared_ptr<Tensor_attributes> Amax_S;    ///< FP8 absolute maximum for attention scores
@@ -1677,6 +1679,18 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     SDPA_attributes&
     set_generate_stats(bool const value) {
         generate_stats = value;
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_score_max(std::shared_ptr<Tensor_attributes> value) {
+        outputs[SDPA_attributes::output_names::Max] = std::move(value);
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_score_sum_exp(std::shared_ptr<Tensor_attributes> value) {
+        outputs[SDPA_attributes::output_names::Sum_exp] = std::move(value);
         return *this;
     }
 
@@ -2261,27 +2275,12 @@ class Softmax_attributes : public Attributes<Softmax_attributes> {
     friend class SoftmaxNode;
     friend class INode;
 
-    std::optional<bool> use_stats;
-    std::optional<bool> use_M_Zinv;
-
    public:
     enum class input_names { P, SINK };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
-    enum class output_names { S, Stats, M, Zinv };
+    enum class output_names { S, Stats, Max, Sum_exp };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Softmax_attributes, name, compute_data_type, inputs, outputs, use_stats, use_M_Zinv)
-
-    Softmax_attributes&
-    has_stats(bool const value) {
-        use_stats = value;
-        return *this;
-    }
-
-    Softmax_attributes&
-    has_M_Zinv(bool const value) {
-        use_M_Zinv = value;
-        return *this;
-    }
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Softmax_attributes, name, compute_data_type, inputs, outputs)
 
     Softmax_attributes&
     set_sink(std::shared_ptr<Tensor_attributes> value) {
