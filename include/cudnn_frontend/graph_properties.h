@@ -2581,16 +2581,24 @@ class Moe_grouped_matmul_attributes : public Attributes<Moe_grouped_matmul_attri
 
     MoeGroupedMatmulMode_t mode = MoeGroupedMatmulMode_t::NONE;
 
+    int32_t top_k = 0;
+
    public:
     enum class input_names { Token, Weight, FirstTokenOffset, TokenIndex, TokenKs };
     std::unordered_map<input_names, std::shared_ptr<Tensor_attributes>> inputs;
     enum class output_names { Output };
     std::unordered_map<output_names, std::shared_ptr<Tensor_attributes>> outputs;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Moe_grouped_matmul_attributes, name, inputs, outputs, mode)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Moe_grouped_matmul_attributes, name, inputs, outputs, mode, top_k)
 
     Moe_grouped_matmul_attributes&
     set_mode(MoeGroupedMatmulMode_t mode) {
         this->mode = mode;
+        return *this;
+    }
+
+    Moe_grouped_matmul_attributes&
+    set_top_k(int32_t top_k) {
+        this->top_k = top_k;
         return *this;
     }
 };

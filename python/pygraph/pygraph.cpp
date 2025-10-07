@@ -344,10 +344,13 @@ PyGraph::moe_grouped_matmul(std::shared_ptr<cudnn_frontend::graph::Tensor_attrib
                             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token_ks,
                             cudnn_frontend::MoeGroupedMatmulMode_t const& mode,
                             cudnn_frontend::DataType_t const& compute_data_type,
+                            int32_t const& top_k,
                             std::string const& name) {
-    auto attributes =
-        cudnn_frontend::graph::Moe_grouped_matmul_attributes().set_name(name).set_mode(mode).set_compute_data_type(
-            compute_data_type);
+    auto attributes = cudnn_frontend::graph::Moe_grouped_matmul_attributes()
+                          .set_name(name)
+                          .set_mode(mode)
+                          .set_compute_data_type(compute_data_type)
+                          .set_top_k(top_k);
 
     auto output = graph->moe_grouped_matmul(token, weight, first_token_offset, token_index, token_ks, attributes);
     return output;
@@ -901,6 +904,7 @@ init_pygraph_submodule(py::module_& m) {
              py::arg_v("token_ks", nullptr),
              py::arg_v("mode", cudnn_frontend::MoeGroupedMatmulMode_t::NONE),
              py::arg_v("compute_data_type", cudnn_frontend::DataType_t::FLOAT),
+             py::arg_v("top_k", 0),
              py::arg_v("name", ""),
              R"pbdoc(
                 Perform MoE Grouped Matmul operation.
@@ -913,6 +917,7 @@ init_pygraph_submodule(py::module_& m) {
                     token_ks (cudnn_tensor): The token ks tensor or nullptr.
                     mode (cudnn.moe_grouped_matmul_mode): The mode of the operation.
                     compute_data_type (cudnn.data_type): The data type for computation.
+                    top_k (int): The top k value.
                     name (str): The name of the operation.
             )pbdoc")
         .def("get_behavior_notes", &PyGraph::get_behavior_notes)
