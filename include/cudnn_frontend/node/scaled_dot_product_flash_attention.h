@@ -190,13 +190,20 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(input_names::V, attributes.inputs);
         CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE(output_names::O, attributes.outputs);
 
-        // validate options for generate_stats and stats tensor
-        RETURN_CUDNN_FRONTEND_ERROR_IF(attributes.generate_stats.has_value() == false,
-                                       error_code_t::ATTRIBUTE_NOT_SET,
-                                       "generate_stats attribute not set");
-
-        if (attributes.generate_stats.value() == true) {
+        if (attributes.generate_stats.value_or(false) == true) {
             CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::Stats);
+        }
+
+        // If max is requested, validate that the output tensor is present
+        if (attributes.outputs.find(output_names::Max) != attributes.outputs.end() &&
+            attributes.outputs.at(output_names::Max) != nullptr) {
+            CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::Max);
+        }
+
+        // If sum_exp is requested, validate that the output tensor is present
+        if (attributes.outputs.find(output_names::Sum_exp) != attributes.outputs.end() &&
+            attributes.outputs.at(output_names::Sum_exp) != nullptr) {
+            CUDNN_FE_VALIDATE_OUTPUT_TENSOR(output_names::Sum_exp);
         }
 
 #undef CUDNN_FE_SDPA_VALIDATE_DIM_STRIDE
@@ -219,7 +226,7 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
 
     error_t
     infer_properties_node() override final {
-        if (attributes.generate_stats.value() == true) {
+        if (attributes.generate_stats.value_or(false)) {
             auto stats     = attributes.outputs.at(output_names::Stats);
             auto stats_dim = stats->get_dim();
 
@@ -230,6 +237,32 @@ class SDPANodeBase : public NodeCRTP<DerivedT> {
                 auto h            = p_dim[1];
                 auto s_q          = p_dim[2];
                 stats->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
+            }
+        }
+
+        if (attributes.outputs[output_names::Max] != nullptr) {
+            auto max = attributes.outputs.at(output_names::Max);
+
+            if (max->get_dim().empty()) {
+                // Fill properties of virtual tensors
+                auto const& p_dim = attributes.inputs[input_names::Q]->get_dim();
+                auto b            = p_dim[0];
+                auto h            = p_dim[1];
+                auto s_q          = p_dim[2];
+                max->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
+            }
+        }
+
+        if (attributes.outputs[output_names::Sum_exp] != nullptr) {
+            auto sum_exp = attributes.outputs.at(output_names::Sum_exp);
+
+            if (sum_exp->get_dim().empty()) {
+                // Fill properties of virtual tensors
+                auto const& p_dim = attributes.inputs[input_names::Q]->get_dim();
+                auto b            = p_dim[0];
+                auto h            = p_dim[1];
+                auto s_q          = p_dim[2];
+                sum_exp->set_dim({b, h, s_q, 1}).set_stride({h * s_q, s_q, 1, 1});
             }
         }
         return {error_code_t::OK, ""};
@@ -504,21 +537,18 @@ class CompositeSDPANode : public SDPANodeBase<CompositeSDPANode> {
         auto softmax_output = std::make_shared<Tensor_attributes>();
         softmax_output->set_is_virtual(true);
 
-        // Create a virtual output for stats if inference step otherwise output.Stats is already set
-        auto softmax_stats = attributes.outputs[output_names::Stats];
-        if (attributes.generate_stats.value() == false) {
-            softmax_stats = std::make_shared<Tensor_attributes>();
-            softmax_stats->set_is_virtual(true);
-        }
-
-        auto softmax_attributes =
-            Softmax_attributes().set_name("softmax").has_stats(true).has_M_Zinv(false);  // As this is flash attention
+        auto softmax_attributes = Softmax_attributes().set_name("softmax");
         // Set sink for softmax if user has provided a sink tensor
         if (attributes.inputs.find(input_names::SINK_TOKEN) != attributes.inputs.end()) {
             softmax_attributes.set_sink(attributes.inputs[input_names::SINK_TOKEN]);
         }
         // Special non-functional-style call. Needed because output already created and provided to user.
-        softmax(last_output, softmax_attributes, softmax_output, softmax_stats);
+        softmax(last_output,
+                softmax_attributes,
+                softmax_output,
+                attributes.outputs[output_names::Stats],
+                attributes.outputs[output_names::Max],
+                attributes.outputs[output_names::Sum_exp]);
         last_output = softmax_output;
 
         // Two cases for training: dropout present or not

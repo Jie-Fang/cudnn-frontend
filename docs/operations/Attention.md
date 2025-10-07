@@ -137,6 +137,11 @@ The `options` parameter of type `SDPA_attributes` is used to control the attribu
 // If false, the softmax_stats output will be nullptr.
 SDPA_attributes& set_generate_stats(bool const value);
 
+// Indicates whether the kernel should output max of attention score
+// and numerically stable sum of exponents using normalized values wrt max score
+SDPA_attributes& set_score_max(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_score_sum_exp(std::shared_ptr<Tensor_attributes> value);
+
 SDPA_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value);
 SDPA_attributes& set_attn_scale(float const value);
 
@@ -505,6 +510,12 @@ The `options` parameter of type `SDPA_fp8_attributes` is used to control the att
 // If false, the softmax_stats output will be nullptr.
 SDPA_fp8_attributes&
 set_generate_stats(bool const value);
+
+SDPA_fp8_attributes&
+set_score_max(std::shared_ptr<Tensor_attributes> value);
+
+SDPA_fp8_attributes&
+set_score_sum_exp(std::shared_ptr<Tensor_attributes> value);
 
 SDPA_fp8_attributes&
 set_attn_scale(std::shared_ptr<Tensor_attributes> value);
