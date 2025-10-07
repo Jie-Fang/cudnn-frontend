@@ -114,7 +114,8 @@ TEST_CASE("WoQ MoeGroupedMatmul", "[MoeGroupedMatmul][graph]") {
     auto moe_grouped_matmul_attr = fe::graph::Moe_grouped_matmul_attributes()
                                        .set_name("moe_grouped_matmul")
                                        .set_mode(fe::MoeGroupedMatmulMode_t::NONE)
-                                       .set_compute_data_type(fe::DataType_t::HALF);
+                                       .set_compute_data_type(fe::DataType_t::HALF)
+                                       .set_top_k(top_k);
 
     auto tensor_moe_grouped_matmul = graph.moe_grouped_matmul(
         tensor_token, tensor_dequantized_weight, tensor_first_token_offset, nullptr, nullptr, moe_grouped_matmul_attr);

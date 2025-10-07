@@ -478,6 +478,7 @@ class PyGraph {
                        std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& token_ks,
                        cudnn_frontend::MoeGroupedMatmulMode_t const& mode,
                        cudnn_frontend::DataType_t const& compute_data_type,
+                       int32_t const& top_k,
                        std::string const& name);
 
     void

@@ -143,6 +143,12 @@ class MoeGroupedMatmulNode : public NodeCRTP<MoeGroupedMatmulNode> {
                                                            CUDNN_TYPE_BACKEND_DESCRIPTOR,
                                                            1,
                                                            &backend_token_ks));
+
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(moe_grouped_matmul_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_MOE_GROUPED_MATMUL_TOP_K,
+                                                           CUDNN_TYPE_INT32,
+                                                           1,
+                                                           &(attributes.top_k)));
         }
 
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(moe_grouped_matmul_operation->get_backend_descriptor()));
