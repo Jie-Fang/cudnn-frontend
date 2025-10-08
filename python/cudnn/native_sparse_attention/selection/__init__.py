@@ -1,6 +1,6 @@
-from .api import SelectionAttention, SelectionAttentionWrapper
+from .api import SelectionAttention, selection_attention_wrapper
 
 __all__ = [
     "SelectionAttention",
-    "SelectionAttentionWrapper",
+    "selection_attention_wrapper",
 ]

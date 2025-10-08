@@ -1,9 +1,9 @@
-from .selection import SelectionAttention, SelectionAttentionWrapper
+from .selection import SelectionAttention, selection_attention_wrapper
 
 
 class NSANamespace:
     SelectionAttention = staticmethod(SelectionAttention)
-    SelectionAttentionWrapper = staticmethod(SelectionAttentionWrapper)
+    selection_attention_wrapper = staticmethod(selection_attention_wrapper)
 
 
 NSA = NSANamespace()
