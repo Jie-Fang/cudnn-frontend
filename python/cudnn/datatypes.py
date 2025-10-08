@@ -94,6 +94,12 @@ def is_cutlass_available():
                 getattr(torch, "float8_e5m2", None): getattr(
                     cutlass, "Float8E5M2", None
                 ),
+                getattr(torch, "float8_e8m0fnu", None): getattr(
+                    cutlass, "Float8E8M0FNU", None
+                ),
+                getattr(torch, "float4_e2m1fn_x2", None): getattr(
+                    cutlass, "Float4E2M1FN", None
+                ),
             }
             _torch_to_cutlass_data_type_dict = {
                 t: c for t, c in mapping.items() if t is not None and c is not None

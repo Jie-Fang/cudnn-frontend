@@ -4,9 +4,13 @@ import math
 import pytest
 from test_utils import torch_fork_set_rng
 
-from nsa_fixtures import test_config
-from nsa_utils import _env_supported, init_input_tensors, allocate_output_tensors
-from nsa_reference import check_ref_nsa_selection_attention
+from oss.nsa.nsa_fixtures import test_config
+from oss.nsa.nsa_utils import (
+    _env_supported,
+    init_input_tensors,
+    allocate_output_tensors,
+)
+from oss.nsa.nsa_reference import check_ref_nsa_selection_attention
 
 """
 SelectionAttention API with explicitset_params, compile, and execute paths. 
@@ -78,7 +82,7 @@ def test_nsa_selection_compile_execute(test_config):
 
 
 """
-SelectionAttention API with SelectionAttentionWrapper:
+SelectionAttention API with selection_attention_wrapper:
 Use the wrapper to directly call SelectionAttention without explicit setup and compilation.
 """
 
@@ -94,7 +98,7 @@ def test_nsa_selection_wrapper(test_config):
         test_config
     )
 
-    O, L, M = NSA.SelectionAttentionWrapper(
+    O, L, M = NSA.selection_attention_wrapper(
         q_tensor=Q,
         k_tensor=K,
         v_tensor=V,

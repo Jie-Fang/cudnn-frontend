@@ -1,18 +1,21 @@
-from .NSA_select_attn_fwd_hmma import HopperSelectAttentionFwd
-from typing import Tuple, Type
-import math
+from .NSA_select_attn_fwd_hmma import (
+    HopperSelectAttentionFwd,
+)
 
 from cuda.bindings import driver as cuda
 import torch
+from typing import Tuple, Optional
+import math
 
 import cutlass
 import cutlass.cute as cute
 from cutlass.cute.runtime import from_dlpack
 
 from cudnn.datatypes import _convert_to_cutlass_data_type
+from cudnn.api_base import APIBase
 
 
-class SelectionAttention:
+class SelectionAttention(APIBase):
     def __init__(
         self,
         sample_q: torch.Tensor,
@@ -29,6 +32,12 @@ class SelectionAttention:
         block_size: int = 64,
         scale_softmax: float | None = None,
     ):
+        super().__init__()
+        self._kernel = HopperSelectAttentionFwd
+
+        self._logger.warning("SelectionAttention is an experimental API")
+        self._logger.debug("Entering __init__")
+
         # Store sample tensors only; defer validation to check_support
         self.sample_q = sample_q
         self.sample_k = sample_k
@@ -56,11 +65,15 @@ class SelectionAttention:
 
         self.scale_softmax = scale_softmax
 
-        # Compiled kernel cache
-        self._compiled_selection_attention = None
+        self._logger.debug(
+            f"__init__ completed with args: sample_q {sample_q.shape}, sample_k {sample_k.shape}, sample_v {sample_v.shape}, sample_o {sample_o.shape}, sample_l {sample_l.shape}, sample_m {sample_m.shape}, sample_block_indices {sample_block_indices.shape}, sample_block_counts {sample_block_counts.shape}, sample_seq_offsets {sample_seq_offsets.shape}, acc_dtype {acc_dtype}, max_s {max_s}, block_size {block_size}, scale_softmax {scale_softmax}"
+        )
 
     def check_support(self) -> bool:
+        self._logger.debug("Entering check_support")
+
         # Shape normalization and validation
+        self._logger.debug("Checking shape normalization and validation")
         if self.sample_q.ndim == 4:
             # B, H_q, S, D  format
             self.input_layout = "B,H,S,D"
@@ -121,6 +134,7 @@ class SelectionAttention:
         self.value_dim = d_v
 
         # Validate dtypes and config
+        self._logger.debug("Checking dtypes and config")
         self.dtype = self.sample_q.dtype
         assert (
             self.dtype
@@ -140,6 +154,7 @@ class SelectionAttention:
             self.scale_softmax = 1.0 / math.sqrt(self.head_dim)
 
         if not torch.cuda.is_available():
+            self._logger.error("CUDA is not available")
             raise AssertionError("CUDA is not available")
 
         device = torch.cuda.current_device()
@@ -147,10 +162,15 @@ class SelectionAttention:
         compute_capability = major * 10 + minor
 
         if compute_capability < 90:
+            self._logger.error(
+                f"Requires SM90+ compute capability, but found SM{compute_capability} on device {device}"
+            )
             raise AssertionError(
                 f"Requires SM90+ compute capability, but found SM{compute_capability} on device {device}"
             )
 
+        self._is_supported = True
+        self._logger.debug("check_support completed successfully")
         return True
 
     def _reshape_tensors(
@@ -219,19 +239,12 @@ class SelectionAttention:
 
         return q_reshaped, k_reshaped, v_reshaped, o_reshaped, l_reshaped, m_reshaped
 
-    def compile(self, current_stream: cuda.CUstream = None) -> None:
-        if current_stream is None:
-            current_stream = cutlass.cuda.default_stream()
-        if (
-            self.h_q is None
-            or self.h_kv is None
-            or self.gqa_group_size is None
-            or self.head_dim is None
-            or self.value_dim is None
-        ):
-            assert self.check_support()
+    def compile(self, current_stream: Optional[cuda.CUstream] = None) -> None:
+        self._logger.debug("Entering compile")
+        current_stream = self._get_default_stream(current_stream)
+        self._ensure_support_checked()
 
-        selection_attention = HopperSelectAttentionFwd(
+        selection_attention = self._kernel(
             head_dim=self.head_dim,
             value_dim=self.value_dim,
             GQA_group_size=self.gqa_group_size,
@@ -240,6 +253,7 @@ class SelectionAttention:
             acc_dtype=_convert_to_cutlass_data_type(self.acc_dtype),
         )
 
+        self._logger.debug("Reshaping tensors to kernel expected format")
         q_reshaped, k_reshaped, v_reshaped, o_reshaped, l_reshaped, m_reshaped = (
             self._reshape_tensors(
                 self.sample_q,
@@ -261,7 +275,8 @@ class SelectionAttention:
         m_block_counts = from_dlpack(self.sample_block_counts)
         m_seq_offsets = from_dlpack(self.sample_seq_offsets)
 
-        compiled_selection_attention = cute.compile(
+        self._logger.debug("Compiling selection_attention")
+        self._compiled_kernel = cute.compile(
             selection_attention,
             mQ,
             mK,
@@ -276,7 +291,7 @@ class SelectionAttention:
             self.scale_softmax,
             current_stream,
         )
-        self._compiled_selection_attention = compiled_selection_attention
+        self._logger.debug("Kernel compiled successfully")
 
     def execute(
         self,
@@ -290,16 +305,13 @@ class SelectionAttention:
         block_counts_tensor: torch.Tensor,
         seq_offsets_tensor: torch.Tensor,
         scale_softmax: float | None = None,
-        current_stream: cuda.CUstream = None,
+        current_stream: Optional[cuda.CUstream] = None,
         skip_compile: bool = False,
     ):
-        if current_stream is None:
-            current_stream = cutlass.cuda.default_stream()
-        if not skip_compile:
-            assert (
-                self._compiled_selection_attention is not None
-            ), "SelectionAttention kernel not compiled"
+        self._logger.debug("Entering execute")
+        current_stream = self._get_default_stream(current_stream)
 
+        self._logger.debug("Reshaping tensors to kernel expected format")
         q_reshaped, k_reshaped, v_reshaped, o_reshaped, l_reshaped, m_reshaped = (
             self._reshape_tensors(
                 q_tensor, k_tensor, v_tensor, o_tensor, l_tensor, m_tensor
@@ -319,7 +331,11 @@ class SelectionAttention:
         scale_softmax = self.scale_softmax if scale_softmax is None else scale_softmax
 
         if not skip_compile:
-            self._compiled_selection_attention(
+            assert (
+                self._compiled_kernel is not None
+            ), "SelectionAttention kernel not compiled"
+            self._logger.debug("Executing with compiled kernel")
+            self._compiled_kernel(
                 mQ,
                 mK,
                 mV,
@@ -333,8 +349,10 @@ class SelectionAttention:
                 scale_softmax,
                 current_stream,
             )
+            self._logger.debug("Executed with compiled kernel successfully")
         else:
-            selection_attention = HopperSelectAttentionFwd(
+            self._logger.debug("Executing without compiled kernel (JIT)")
+            selection_attention = self._kernel(
                 head_dim=self.head_dim,
                 value_dim=self.value_dim,
                 GQA_group_size=self.gqa_group_size,
@@ -356,16 +374,16 @@ class SelectionAttention:
                 scale_softmax,
                 current_stream,
             )
-
-    def __call__(self, *args, **kwargs):
-        self.execute(*args, skip_compile=True, **kwargs)
+            self._logger.debug("Executed successfully")
 
 
-# Cache for SelectionAttention objects
+import logging
+
+_logger = logging.getLogger(__name__)
 _cache_of_SelectionAttentionObjects = {}
 
 
-def SelectionAttentionWrapper(
+def selection_attention_wrapper(
     q_tensor: torch.Tensor,
     k_tensor: torch.Tensor,
     v_tensor: torch.Tensor,
@@ -376,7 +394,7 @@ def SelectionAttentionWrapper(
     scale_softmax: float | None = None,
     acc_dtype: torch.dtype = torch.float32,
     max_s: int | None = None,
-    stream: cuda.CUstream = None,
+    stream: Optional[cuda.CUstream] = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Selection Attention Wrapper that returns output tensors directly.
@@ -384,8 +402,10 @@ def SelectionAttentionWrapper(
     Returns:
         tuple: (o_tensor, l_tensor, m_tensor) - Output, logsumexp, and max tensors
     """
-    if stream is None:
-        stream = cutlass.cuda.default_stream()
+    _logger.debug(
+        "selection_attention_wrapper: Creating empty output tensors o, l, and m"
+    )
+
     dtype = q_tensor.dtype
     max_s = (
         max(seq_offsets_tensor[1:] - seq_offsets_tensor[:-1]).item()
@@ -400,49 +420,33 @@ def SelectionAttentionWrapper(
     l_tensor = torch.zeros((t, h_q), dtype=torch.float32).cuda()
     m_tensor = torch.zeros((t, h_q), dtype=torch.float32).cuda()
 
-    # TODO: cache
-    # if (q_tensor.shape, q_tensor.dtype, q_tensor.stride(),
-    #     k_tensor.shape, k_tensor.dtype, k_tensor.stride(),
-    #     v_tensor.shape, v_tensor.dtype, v_tensor.stride(),
-    #     o_tensor.shape, o_tensor.dtype, o_tensor.stride(),
-    #     l_tensor.shape, l_tensor.dtype, l_tensor.stride(),
-    #     m_tensor.shape, m_tensor.dtype, m_tensor.stride(),
-    #     block_indices_tensor.shape, block_indices_tensor.dtype, block_indices_tensor.stride(),
-    #     block_counts_tensor.shape, block_counts_tensor.dtype, block_counts_tensor.stride(),
-    #     seq_offsets_tensor.shape, seq_offsets_tensor.dtype, seq_offsets_tensor.stride(),
-    #     max_s, block_size, scale_softmax, acc_dtype) in _cache_of_SelectionAttentionObjects:
-    #     selection_attention_object = _cache_of_SelectionAttentionObjects[(q_tensor.shape, q_tensor.dtype, q_tensor.stride(),
-    #                                                                        k_tensor.shape, k_tensor.dtype, k_tensor.stride(),
-    #                                                                        v_tensor.shape, v_tensor.dtype, v_tensor.stride(),
-    #                                                                        o_tensor.shape, o_tensor.dtype, o_tensor.stride(),
-    #                                                                        l_tensor.shape, l_tensor.dtype, l_tensor.stride(),
-    #                                                                        m_tensor.shape, m_tensor.dtype, m_tensor.stride(),
-    #                                                                        block_indices_tensor.shape, block_indices_tensor.dtype, block_indices_tensor.stride(),
-    #                                                                        block_counts_tensor.shape, block_counts_tensor.dtype, block_counts_tensor.stride(),
-    #                                                                        seq_offsets_tensor.shape, seq_offsets_tensor.dtype, seq_offsets_tensor.stride(),
-    #                                                                        max_s, block_size, scale_softmax, acc_dtype)]
-    if False:
-        pass
-    else:
-        selection_attention_object = SelectionAttention(
-            sample_q=q_tensor,
-            sample_k=k_tensor,
-            sample_v=v_tensor,
-            sample_o=o_tensor,
-            sample_l=l_tensor,
-            sample_m=m_tensor,
-            sample_block_indices=block_indices_tensor,
-            sample_block_counts=block_counts_tensor,
-            sample_seq_offsets=seq_offsets_tensor,
-            # dtype=dtype,
-            acc_dtype=acc_dtype,
-            max_s=max_s,
-            block_size=block_size,
-            scale_softmax=scale_softmax,
+    cache_key = (
+        q_tensor.shape,
+        k_tensor.shape,
+        v_tensor.shape,
+        block_indices_tensor.shape,
+        block_counts_tensor.shape,
+        seq_offsets_tensor.shape,
+        q_tensor.dtype,
+        k_tensor.dtype,
+        v_tensor.dtype,
+        q_tensor.stride(),
+        k_tensor.stride(),
+        v_tensor.stride(),
+        block_indices_tensor.stride(),
+        block_counts_tensor.stride(),
+        seq_offsets_tensor.stride(),
+        block_size,
+        scale_softmax,
+        acc_dtype,
+        max_s,
+    )
+    if cache_key in _cache_of_SelectionAttentionObjects:
+        _logger.debug(
+            "selection_attention_wrapper: Using previously cached SelectionAttention object"
         )
-        selection_attention_object.check_support()
-        selection_attention_object.compile()
-        selection_attention_object.execute(
+        selection_attention = _cache_of_SelectionAttentionObjects[cache_key]
+        selection_attention.execute(
             q_tensor=q_tensor,
             k_tensor=k_tensor,
             v_tensor=v_tensor,
@@ -454,17 +458,41 @@ def SelectionAttentionWrapper(
             seq_offsets_tensor=seq_offsets_tensor,
             scale_softmax=scale_softmax,
             current_stream=stream,
-            # skip_compile=True,
         )
-        # _cache_of_SelectionAttentionObjects[(q_tensor.shape, q_tensor.dtype, q_tensor.stride(),
-        #                                      k_tensor.shape, k_tensor.dtype, k_tensor.stride(),
-        #                                      v_tensor.shape, v_tensor.dtype, v_tensor.stride(),
-        #                                      o_tensor.shape, o_tensor.dtype, o_tensor.stride(),
-        #                                      l_tensor.shape, l_tensor.dtype, l_tensor.stride(),
-        #                                      m_tensor.shape, m_tensor.dtype, m_tensor.stride(),
-        #                                      block_indices_tensor.shape, block_indices_tensor.dtype, block_indices_tensor.stride(),
-        #                                      block_counts_tensor.shape, block_counts_tensor.dtype, block_counts_tensor.stride(),
-        #                                      seq_offsets_tensor.shape, seq_offsets_tensor.dtype, seq_offsets_tensor.stride(),
-        #                                      max_s, block_size, scale_softmax, acc_dtype)] = selection_attention_object
+    else:
+        _logger.debug(
+            "selection_attention_wrapper: No previously cached SelectionAttention object found, creating new SelectionAttention object"
+        )
+        selection_attention = SelectionAttention(
+            sample_q=q_tensor,
+            sample_k=k_tensor,
+            sample_v=v_tensor,
+            sample_o=o_tensor,
+            sample_l=l_tensor,
+            sample_m=m_tensor,
+            sample_block_indices=block_indices_tensor,
+            sample_block_counts=block_counts_tensor,
+            sample_seq_offsets=seq_offsets_tensor,
+            acc_dtype=acc_dtype,
+            max_s=max_s,
+            block_size=block_size,
+            scale_softmax=scale_softmax,
+        )
+        assert selection_attention.check_support()
+        selection_attention.compile()
+        selection_attention.execute(
+            q_tensor=q_tensor,
+            k_tensor=k_tensor,
+            v_tensor=v_tensor,
+            o_tensor=o_tensor,
+            l_tensor=l_tensor,
+            m_tensor=m_tensor,
+            block_indices_tensor=block_indices_tensor,
+            block_counts_tensor=block_counts_tensor,
+            seq_offsets_tensor=seq_offsets_tensor,
+            scale_softmax=scale_softmax,
+            current_stream=stream,
+        )
+        _cache_of_SelectionAttentionObjects[cache_key] = selection_attention
 
     return o_tensor, l_tensor, m_tensor
