@@ -1,6 +1,6 @@
-from .NSA_select_attn_fwd_hmma import (
-    HopperSelectAttentionFwd,
-)
+from .NSA_select_attn_fwd_hmma import HopperSelectAttentionFwd
+from typing import Tuple
+import math
 
 from cuda.bindings import driver as cuda
 import torch
@@ -66,7 +66,7 @@ class SelectionAttention(APIBase):
         self.scale_softmax = scale_softmax
 
         self._logger.debug(
-            f"__init__ completed with args: sample_q {sample_q.shape}, sample_k {sample_k.shape}, sample_v {sample_v.shape}, sample_o {sample_o.shape}, sample_l {sample_l.shape}, sample_m {sample_m.shape}, sample_block_indices {sample_block_indices.shape}, sample_block_counts {sample_block_counts.shape}, sample_seq_offsets {sample_seq_offsets.shape}, acc_dtype {acc_dtype}, max_s {max_s}, block_size {block_size}, scale_softmax {scale_softmax}"
+            f"__init__ completed with args: sample_q {sample_q.shape}, sample_k {sample_k.shape}, sample_v {sample_v.shape}, sample_o {sample_o.shape}, sample_l {sample_l.shape}, sample_m {sample_m.shape}, sample_block_indices {sample_block_indices.shape}, sample_block_counts {sample_block_counts.shape}, sample_seq_offsets {sample_seq_offsets.shape if sample_seq_offsets is not None else 'None'}, acc_dtype {acc_dtype}, max_s {max_s}, block_size {block_size}, scale_softmax {scale_softmax}"
         )
 
     def check_support(self) -> bool:
@@ -104,14 +104,16 @@ class SelectionAttention(APIBase):
                 and self.sample_o.shape[1] == h_q
                 and self.sample_o.shape[2] == d_v
             ), "O must be (T, H_q, D_v)"
-            assert self.sample_l.ndim == 2 and self.sample_l.shape == (
+            assert self.sample_l.ndim == 3 and self.sample_l.shape == (
                 t,
                 h_q,
-            ), "L must be (T, H_q)"
-            assert self.sample_m.ndim == 2 and self.sample_m.shape == (
+                1,
+            ), "L must be (T, H_q, 1)"
+            assert self.sample_m.ndim == 3 and self.sample_m.shape == (
                 t,
                 h_q,
-            ), "M must be (T, H_q)"
+                1,
+            ), "M must be (T, H_q, 1)"
 
             assert self.sample_seq_offsets is not None and isinstance(
                 self.sample_seq_offsets, torch.Tensor
@@ -206,10 +208,14 @@ class SelectionAttention(APIBase):
             v_reshaped = v.permute(0, 2, 1)
             # Reshape O: (T, H_q, D_v) -> (gqa_group_size, D_v, T, H_kv)
             o_reshaped = o.view(T, h_kv, self.gqa_group_size, d_v).permute(2, 3, 0, 1)
-            # Reshape L: (T, H_q) -> (gqa_group_size, T, H_kv)
-            l_reshaped = l.view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
-            # Reshape M: (T, H_q) -> (gqa_group_size, T, H_kv)
-            m_reshaped = m.view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
+            # Reshape L: (T, H_q, 1) -> (T, H_q) -> (gqa_group_size, T, H_kv)
+            l_reshaped = (
+                l.squeeze(-1).view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
+            )
+            # Reshape M: (T, H_q, 1) -> (T, H_q) -> (gqa_group_size, T, H_kv)
+            m_reshaped = (
+                m.squeeze(-1).view(T, h_kv, self.gqa_group_size).permute(2, 0, 1)
+            )
         else:
             raise ValueError(f"Invalid input layout: {self.input_layout}")
 
@@ -417,8 +423,8 @@ def selection_attention_wrapper(
     _, h_kv, d_v = v_tensor.shape
 
     o_tensor = torch.zeros((t, h_q, d_v), dtype=dtype).cuda()
-    l_tensor = torch.zeros((t, h_q), dtype=torch.float32).cuda()
-    m_tensor = torch.zeros((t, h_q), dtype=torch.float32).cuda()
+    l_tensor = torch.zeros((t, h_q, 1), dtype=torch.float32).cuda()
+    m_tensor = torch.zeros((t, h_q, 1), dtype=torch.float32).cuda()
 
     cache_key = (
         q_tensor.shape,

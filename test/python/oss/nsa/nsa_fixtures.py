@@ -23,7 +23,7 @@ def test_config(request):
     dtype_map = get_dtype_map()
 
     b = request.config.getoption("--nsa-batch-size")
-    seq_len = request.config.getoption("--nsa-seq-len")
+    s_q = request.config.getoption("--nsa-seq-len")
     h_q = request.config.getoption("--nsa-num-q-heads")
     h_kv = request.config.getoption("--nsa-num-kv-heads")
     d = request.config.getoption("--nsa-head-dim")
@@ -33,9 +33,11 @@ def test_config(request):
     dtype_str = request.config.getoption("--nsa-dtype")
     acc_dtype_str = request.config.getoption("--nsa-acc-dtype")
     skip_ref = request.config.getoption("--nsa-skip-ref")
+    window_size = request.config.getoption("--nsa-window-size")
+    layout = request.config.getoption("--nsa-layout")
 
     b = 2 if b is None else b
-    seq_len = 1024 if seq_len is None else seq_len
+    s_q = 1024 if s_q is None else s_q
     h_q = 4 if h_q is None else h_q
     h_kv = 1 if h_kv is None else h_kv
     d = 128 if d is None else d
@@ -44,17 +46,21 @@ def test_config(request):
     topk_size = 16 if topk_size is None else topk_size
     dtype_str = "bfloat16" if dtype_str is None else dtype_str
     acc_dtype_str = "float32" if acc_dtype_str is None else acc_dtype_str
+    window_size = 64 if window_size is None else window_size
+    layout = "thd" if layout is None else layout
+    assert layout in ["bshd", "thd"], "Layout must be 'bshd' or 'thd'"
 
     dtype = dtype_map[dtype_str]
     acc_dtype = dtype_map[acc_dtype_str]
 
-    s_q = [seq_len] * b
-    topk_sizes = [topk_size] * b
+    actual_s_q = torch.tensor([s_q] * b, dtype=torch.int32) if layout == "thd" else None
+    topk_sizes = torch.tensor([topk_size] * b, dtype=torch.int32)
     softmax_scale = 1.0 / math.sqrt(d)
 
     return {
         "b": b,
         "s_q": s_q,
+        "actual_s_q": actual_s_q,
         "h_q": h_q,
         "h_kv": h_kv,
         "d": d,
@@ -65,4 +71,6 @@ def test_config(request):
         "acc_dtype": acc_dtype,
         "softmax_scale": softmax_scale,
         "skip_ref": skip_ref,
+        "window_size": window_size,
+        "layout": layout,
     }

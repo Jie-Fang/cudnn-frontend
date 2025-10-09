@@ -281,6 +281,13 @@ class GemmAmax(APIBase):
         self._logger.debug("Entering execute")
         current_stream = self._get_default_stream(current_stream)
 
+        if amax_tensor.dim() < 3:
+            self._logger.info(
+                f"Reshaping amax_tensor to (1, 1, 1) from {amax_tensor.shape}"
+            )
+            for _ in range(3 - amax_tensor.dim()):
+                amax_tensor = amax_tensor.unsqueeze(-1)
+
         a_tensor_cute = from_dlpack(
             a_tensor, assumed_align=16
         ).mark_compact_shape_dynamic(
