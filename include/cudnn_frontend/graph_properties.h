@@ -1683,7 +1683,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     }
 
     SDPA_attributes&
-    set_score_max(std::shared_ptr<Tensor_attributes> value) {
+    set_logit_max(std::shared_ptr<Tensor_attributes> value) {
         outputs[SDPA_attributes::output_names::Max] = std::move(value);
         return *this;
     }

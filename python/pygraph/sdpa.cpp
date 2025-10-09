@@ -56,7 +56,7 @@ PyGraph::sdpa_internal(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
                           ._set_mma_core_mode(mma_core_mode)
                           .set_name(name)
                           .set_implementation(implementation)
-                          .set_score_max(score_max)
+                          .set_logit_max(score_max)
                           .set_score_sum_exp(score_sum_exp);
 
     // Set generate_stats
