@@ -233,7 +233,7 @@ def __getattr__(name: str) -> Any:
             return _NSA
         except Exception as e:
             raise ImportError(
-                "NSA requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+                f"NSA requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
     elif name == "GemmSwiglu":
         try:
@@ -242,7 +242,7 @@ def __getattr__(name: str) -> Any:
             return _GemmSwiglu
         except Exception as e:
             raise ImportError(
-                "GemmSwiglu requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+                f"GemmSwiglu requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
     elif name == "gemm_swiglu_wrapper":
         try:
@@ -251,7 +251,7 @@ def __getattr__(name: str) -> Any:
             return _gemm_swiglu_wrapper
         except Exception as e:
             raise ImportError(
-                "gemm_swiglu_wrapper requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+                f"gemm_swiglu_wrapper requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
     elif name == "GemmAmax":
         try:
@@ -260,7 +260,7 @@ def __getattr__(name: str) -> Any:
             return _GemmAmax
         except Exception as e:
             raise ImportError(
-                "GemmAmax requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+                f"GemmAmax requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
     elif name == "gemm_amax_wrapper":
         try:
@@ -269,7 +269,7 @@ def __getattr__(name: str) -> Any:
             return _gemm_amax_wrapper
         except Exception as e:
             raise ImportError(
-                "gemm_amax_wrapper requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]'"
+                f"gemm_amax_wrapper requires optional dependencies. Install with 'pip install nvidia-cudnn-frontend[cutedsl]': {e}"
             ) from e
     else:
         raise AttributeError(name)

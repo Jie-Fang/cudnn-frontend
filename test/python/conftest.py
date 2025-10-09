@@ -92,18 +92,20 @@ def pytest_addoption(parser):
         "--implementation", action="store", default=None, type=str, choices=["AUTO", "COMPOSITE", "UNIFIED"], help="[test_mhas_v2.py], overwrites implementation",
     )
 
-    # NSA (Native Sparse Attention) command line options for test_NSA_selection_attention.py
-    parser.addoption("--nsa-batch-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Batch size")
-    parser.addoption("--nsa-seq-len", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Sequence length (will be replicated for all batches)")
-    parser.addoption("--nsa-num-q-heads", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Number of query heads")
-    parser.addoption("--nsa-num-kv-heads", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Number of key/value heads")
-    parser.addoption("--nsa-head-dim", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Head dimension")
-    parser.addoption("--nsa-value-dim", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Value dimension")
+    # NSA (Native Sparse Attention) command line options for test_NSA_selection_attention.py, test_NSA_swa.py
+    parser.addoption("--nsa-batch-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Batch size")
+    parser.addoption("--nsa-seq-len", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Sequence length (will be replicated for all batches)")
+    parser.addoption("--nsa-num-q-heads", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Number of query heads")
+    parser.addoption("--nsa-num-kv-heads", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Number of key/value heads")
+    parser.addoption("--nsa-head-dim", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Head dimension")
+    parser.addoption("--nsa-value-dim", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Value dimension")
+    parser.addoption("--nsa-dtype", action="store", default=None, type=str, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Data type (float16, bfloat16, float32)")
+    parser.addoption("--nsa-acc-dtype", action="store", default=None, type=str, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Accumulator data type (float16, bfloat16, float32)")
+    parser.addoption("--nsa-skip-ref", action="store_true", help="[test_NSA_selection_attention.py, test_NSA_swa.py] Skip reference computation for performance testing")
     parser.addoption("--nsa-block-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Block size")
     parser.addoption("--nsa-topk-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py] Top-k size (will be replicated for all batches)")
-    parser.addoption("--nsa-dtype", action="store", default=None, type=str, help="[test_NSA_selection_attention.py] Data type (float16, bfloat16, float32)")
-    parser.addoption("--nsa-acc-dtype", action="store", default=None, type=str, help="[test_NSA_selection_attention.py] Accumulator data type (float16, bfloat16, float32)")
-    parser.addoption("--nsa-skip-ref", action="store_true", help="[test_NSA_selection_attention.py] Skip reference computation for performance testing")
+    parser.addoption("--nsa-window-size", action="store", default=None, type=int, help="[test_NSA_swa.py] Window size")
+    parser.addoption("--nsa-layout", action="store", default=None, type=str, help="[test_NSA_swa.py] Layout (bshd, thd)")
 
     # GEMM SwiGLU command line options for test_gemm_swiglu.py
     parser.addoption("--gemm-swiglu-mnkl", action="store", default=None, type=str, help="[test_gemm_swiglu.py] M,N,K,L dimensions as comma-separated values (e.g., '256,256,512,1')")

@@ -4,6 +4,8 @@ Contains CPU/GPU reference implementations for verification.
 """
 
 import torch
+from nsa_utils import convert_thd_to_bshd, convert_bshd_to_thd
+import cudnn
 
 
 def run_ref_nsa_selection_attention(
@@ -31,8 +33,8 @@ def run_ref_nsa_selection_attention(
         K_in: Key tensor of shape (T, H_kv, D)
         V_in: Value tensor of shape (T, H_kv, D_v)
         O_out: Output tensor of shape (T, H_q, D_v)
-        L_out: Log-sum-exp tensor of shape (T, H_q)
-        M_out: Max values tensor of shape (T, H_q)
+        L_out: Log-sum-exp tensor of shape (T, H_q, 1)
+        M_out: Max values tensor of shape (T, H_q, 1)
         seq_lens: List of sequence lengths for each batch
         block_indices: Block indices tensor
         block_counts: Block counts tensor
@@ -47,8 +49,8 @@ def run_ref_nsa_selection_attention(
     # K.shape: (T, H_kv, D) -> (T, h_kv, 1, D)
     # V.shape: (T, H_kv, D_v) -> (T, h_kv, 1, D_v)
     # O.shape: (T, H_q, D_v) -> (T, h_kv, g, D_v)
-    # L.shape: (T, H_q) -> (T, h_kv, g)
-    # M.shape: (T, H_q) -> (T, h_kv, g)
+    # L.shape: (T, H_q, 1) -> (T, h_kv, g)
+    # M.shape: (T, H_q, 1) -> (T, h_kv, g)
     # seq_lens.shape: (batch_size)
     # block_indices.shape: (T, h_kv, topk_size)
     # block_counts.shape: (T, h_kv)
@@ -179,7 +181,106 @@ def run_ref_nsa_selection_attention(
 
         seq_offset = seq_end
 
-    return O.view(t, h_q, d_v), L.view(t, h_q), M.view(t, h_q)
+    return O.view(t, h_q, d_v), L.view(t, h_q, 1), M.view(t, h_q, 1)
+
+
+def run_ref_nsa_swa(
+    q,
+    k,
+    v,
+    attn_scale=None,
+    padding=None,
+    left_bound=None,
+    right_bound=None,
+    generate_stats=False,
+    device="cuda",
+):
+    b, h_q, s_q, d_qk = q.shape
+    _, h_k, s_kv, _ = k.shape
+    _, h_v, _, d_v = v.shape
+
+    assert k.shape == (b, h_k, s_kv, d_qk)
+    assert v.shape == (b, h_v, s_kv, d_v)
+
+    # use float32 datatype and math for reference computation
+    q = q.to(dtype=torch.float32, device=device)
+    k = k.to(dtype=torch.float32, device=device)
+    v = v.to(dtype=torch.float32, device=device)
+
+    # expand tensors for GQA and MQA
+    if h_q != h_k:
+        assert h_q % h_k == 0
+        k = k.unsqueeze(2)
+        k = k.expand(-1, -1, h_q // h_k, -1, -1)
+        k = k.reshape(k.size(0), -1, k.size(3), k.size(4))
+    if h_q != h_v:
+        assert h_q % h_v == 0
+        v = v.unsqueeze(2)
+        v = v.expand(-1, -1, h_q // h_v, -1, -1)
+        v = v.reshape(v.size(0), -1, v.size(3), v.size(4))
+
+    if left_bound != None:
+        swa_mask_zero = torch.ones(1, 1, s_q, 1, dtype=torch.bool, device=device)
+        swa_mask_zero[:, :, s_kv + left_bound - 1 :, :] = False
+        q = q * swa_mask_zero
+
+    # generate masks to compute reference values for padding mask (also called variable sequence length)
+    if padding is not None:
+        q_mask = torch.zeros(b, 1, s_q, 1, dtype=torch.bool, device=device)
+        k_mask = torch.zeros(b, 1, s_kv, 1, dtype=torch.bool, device=device)
+        v_mask = torch.zeros(b, 1, s_kv, 1, dtype=torch.bool, device=device)
+        s_mask = torch.zeros(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
+        p_mask = torch.zeros(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
+        seq_len_q, seq_len_kv = padding
+        for i, (m, n) in enumerate(zip(seq_len_q, seq_len_kv)):
+            q_mask[i, :, m:, :] = True
+            k_mask[i, :, n:, :] = True
+            v_mask[i, :, n:, :] = True
+            s_mask[i, :, :, n:] = True
+            p_mask[i, :, m:, :] = True
+
+        q = q.masked_fill(q_mask, 0.0)
+        k = k.masked_fill(k_mask, 0.0)
+        v = v.masked_fill(v_mask, 0.0)
+
+    s = torch.einsum("bhqd,bhkd->bhqk", q, k)
+    if attn_scale is not None:
+        s = s * attn_scale
+
+    if padding is not None:
+        s = s.masked_fill(s_mask, float("-inf"))
+
+    if right_bound != None:
+        causal_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+        causal_mask.triu_(diagonal=1 + right_bound)
+        s = s.masked_fill(causal_mask, float("-inf"))
+
+    if left_bound != None:
+        swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
+        swa_mask.tril_(diagonal=-1 * left_bound)
+        swa_mask &= swa_mask_zero.view(s_q, 1)
+        s = s.masked_fill(swa_mask, float("-inf"))
+
+    p = torch.softmax(s, dim=-1)
+
+    if left_bound != None:
+        p = p * swa_mask_zero
+    if padding is not None:
+        p = p.masked_fill(p_mask, 0.0)
+
+    o = torch.einsum("bhqk,bhkd->bhqd", p, v)
+
+    # softmax stats is used for backwards computation
+    if generate_stats:
+        # amax (NOT absolute max) is used here to evenly distribute gradient
+        row_max = torch.amax(s, -1, True)
+        row_exp = torch.exp(s - row_max)
+        row_sum = torch.sum(row_exp, -1, True)
+        stats = row_max + torch.log(row_sum)
+        # stats = stats.squeeze(dim=-1)
+        return o, stats
+
+    return o
 
 
 def check_ref_nsa_selection_attention(
@@ -189,37 +290,81 @@ def check_ref_nsa_selection_attention(
     O,
     L,
     M,
-    seq_lens,
     block_indices,
     block_counts,
-    block_size,
-    softmax_scale,
-    dtype,
-    skip_ref,
+    test_config,
 ):
-    if not skip_ref:
-        O_ref = torch.zeros_like(O, dtype=torch.float32)
-        L_ref = torch.zeros_like(L, dtype=torch.float32)
-        M_ref = torch.zeros_like(M, dtype=torch.float32)
-        O_ref, L_ref, M_ref = run_ref_nsa_selection_attention(
-            Q,
-            K,
-            V,
-            O_ref,
-            L_ref,
-            M_ref,
-            seq_lens,
-            block_indices,
-            block_counts,
-            block_size,
-            softmax_scale,
-            dtype=dtype,
-        )
-
-        torch.testing.assert_close(O, O_ref, atol=0.01, rtol=1e-05)
-        # torch.testing.assert_close(L, L_ref, atol=0.01, rtol=1e-05)
-        # torch.testing.assert_close(M, M_ref, atol=0.01, rtol=1e-05)
-    else:
+    if test_config["skip_ref"]:
         print(
-            f"Skipped reference computation for performance test with config: b={b}, seq_len={s_q}, h_q={h_q}, h_kv={h_kv}, d={d}"
+            f'Skipped reference computation for selection attention with config: b={test_config["b"]}, seq_len={test_config["s_q"]}, h_q={test_config["h_q"]}, h_kv={test_config["h_kv"]}, d={test_config["d"]}'
         )
+    O_ref = torch.zeros_like(O, dtype=torch.float32)
+    L_ref = torch.zeros_like(L, dtype=torch.float32)
+    M_ref = torch.zeros_like(M, dtype=torch.float32)
+    O_ref, L_ref, M_ref = run_ref_nsa_selection_attention(
+        Q,
+        K,
+        V,
+        O_ref,
+        L_ref,
+        M_ref,
+        test_config["actual_s_q"].cuda(),
+        block_indices,
+        block_counts,
+        test_config["block_size"],
+        test_config["softmax_scale"],
+        dtype=test_config["dtype"],
+    )
+
+    torch.testing.assert_close(O, O_ref, atol=0.01, rtol=1e-05)
+    # torch.testing.assert_close(L, L_ref, atol=0.01, rtol=1e-05)
+    # torch.testing.assert_close(M, M_ref, atol=0.01, rtol=1e-05)
+
+
+def check_ref_nsa_swa(
+    Q,
+    K,
+    V,
+    O,
+    Stats=None,
+    seq_len_q=None,
+    seq_len_kv=None,
+    max_seq_len_q=None,
+    max_seq_len_kv=None,
+    test_config=None,
+):
+    if test_config is not None and test_config["skip_ref"]:
+        print(
+            f'Skipped reference computation for SWA with config: b={test_config["b"]}, seq_len={test_config["s_q"]}, h_q={test_config["h_q"]}, h_kv={test_config["h_kv"]}, d={test_config["d"]}'
+        )
+        return
+    q_ref, k_ref, v_ref, o_ref, stats_ref = None, None, None, None, None
+
+    if test_config["layout"] == "thd":
+        q_ref = convert_thd_to_bshd(Q, seq_len_q, max_seq_len_q).float()
+        k_ref = convert_thd_to_bshd(K, seq_len_kv, max_seq_len_kv).float()
+        v_ref = convert_thd_to_bshd(V, seq_len_kv, max_seq_len_kv).float()
+    else:
+        q_ref = Q.float()
+        k_ref = K.float()
+        v_ref = V.float()
+    o_ref, stats_ref = run_ref_nsa_swa(
+        q_ref,
+        k_ref,
+        v_ref,
+        attn_scale=test_config["softmax_scale"],
+        padding=(seq_len_q, seq_len_kv) if test_config["layout"] == "thd" else None,
+        left_bound=test_config["window_size"],
+        right_bound=0,
+        generate_stats=True,
+    )
+
+    if test_config["layout"] == "thd":
+        total_seq_len_q = torch.sum(seq_len_q).item()
+        o_ref = convert_bshd_to_thd(o_ref, seq_len_q, total_seq_len_q)
+        stats_ref = convert_bshd_to_thd(stats_ref, seq_len_q, total_seq_len_q)
+
+    o_ref = o_ref.to(dtype=test_config["dtype"])
+
+    torch.testing.assert_close(O, o_ref, atol=0.01, rtol=1e-05)
+    torch.testing.assert_close(Stats, stats_ref, atol=0.01, rtol=1e-05)

@@ -1,5 +1,4 @@
 import torch
-import math
 
 import pytest
 from test_utils import torch_fork_set_rng
@@ -25,8 +24,12 @@ def test_nsa_selection_compile_execute(test_config):
         pytest.skip("Environment not supported")
     from cudnn import NSA
 
-    Q, K, V, block_counts, block_indices, seq_offsets, max_length = init_input_tensors(
-        test_config
+    assert (
+        test_config["layout"] == "thd"
+    ), "bshd layout for selection attention not yet implemented"
+
+    Q, K, V, block_counts, block_indices, _, seq_offsets, max_length = (
+        init_input_tensors(test_config)
     )
 
     O, L, M = allocate_output_tensors(test_config)
@@ -71,13 +74,9 @@ def test_nsa_selection_compile_execute(test_config):
         O,
         L,
         M,
-        test_config["s_q"],
         block_indices,
         block_counts,
-        test_config["block_size"],
-        test_config["softmax_scale"],
-        test_config["dtype"],
-        test_config["skip_ref"],
+        test_config,
     )
 
 
@@ -94,8 +93,12 @@ def test_nsa_selection_wrapper(test_config):
         pytest.skip("Environment not supported")
     from cudnn import NSA
 
-    Q, K, V, block_counts, block_indices, seq_offsets, max_length = init_input_tensors(
-        test_config
+    assert (
+        test_config["layout"] == "thd"
+    ), "bshd layout for selection attention not yet implemented"
+
+    Q, K, V, block_counts, block_indices, _, seq_offsets, max_length = (
+        init_input_tensors(test_config)
     )
 
     O, L, M = NSA.selection_attention_wrapper(
@@ -117,11 +120,7 @@ def test_nsa_selection_wrapper(test_config):
         O,
         L,
         M,
-        test_config["s_q"],
         block_indices,
         block_counts,
-        test_config["block_size"],
-        test_config["softmax_scale"],
-        test_config["dtype"],
-        test_config["skip_ref"],
+        test_config,
     )
