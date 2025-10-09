@@ -131,7 +131,7 @@ create_sdpa_forward_graph_with_max_and_sum_exp(int64_t const b,
                                      .set_dim({b, h_q, s_q, 1})
                                      .set_stride({h_q * s_q, s_q, 1, 1})
                                      .set_data_type(fe::DataType_t::FLOAT));
-        sdpa_options.set_score_max(Max);
+        sdpa_options.set_logit_max(Max);
     }
 
     if (generate_sum_exp) {

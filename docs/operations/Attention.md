@@ -139,7 +139,7 @@ SDPA_attributes& set_generate_stats(bool const value);
 
 // Indicates whether the kernel should output max of attention score
 // and numerically stable sum of exponents using normalized values wrt max score
-SDPA_attributes& set_score_max(std::shared_ptr<Tensor_attributes> value);
+SDPA_attributes& set_logit_max(std::shared_ptr<Tensor_attributes> value);
 SDPA_attributes& set_score_sum_exp(std::shared_ptr<Tensor_attributes> value);
 
 SDPA_attributes& set_attn_scale(std::shared_ptr<Tensor_attributes> value);
@@ -512,7 +512,7 @@ SDPA_fp8_attributes&
 set_generate_stats(bool const value);
 
 SDPA_fp8_attributes&
-set_score_max(std::shared_ptr<Tensor_attributes> value);
+set_logit_max(std::shared_ptr<Tensor_attributes> value);
 
 SDPA_fp8_attributes&
 set_score_sum_exp(std::shared_ptr<Tensor_attributes> value);
