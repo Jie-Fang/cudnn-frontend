@@ -32,26 +32,26 @@ before_script:
 
 .fetch_cudnn_dev:template:
     cache:
-        - key: dev_cudnn_9_15_cuda_13_0
+        - key: dev_cudnn_9_16_cuda_13_0
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.15_cuda_13.0/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.16_cuda_13.0/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
 
 .fetch_cudnn_rel:template:
     cache:
-        - key: rel_cudnn_9_14_cuda_13_0
+        - key: rel_cudnn_9_15_cuda_13_0
           paths:
               - downloads
     before_script:
         - mkdir -p downloads
         - ls -1 downloads
-        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.14_cuda_13.0/
+        - python3 ci/fetch_cudnn.py https://urm.nvidia.com/artifactory/hw-cudnn-generic/CUDNN/v9.15_cuda_13.0/
         - find /debug_cudnn
         - export CUDNN_PATH=/debug_cudnn # This is required for source building FE
         - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/debug_cudnn/lib64 # This is required for dlopening BE
@@ -69,34 +69,23 @@ before_script:
     stage: cpp_samples
     script:
         - ci/run_cpp_samples.sh
-    # Upload test report to gitlab
-    artifacts:
-        when: always
-        reports:
-            junit: result-junit.xml
-        expire_in: 1 week
+
+.oss_tests:template:
+    stage: oss_tests
+    allow_failure: true
+    script:
+        - pip install -v nvidia-cutlass-dsl
+        - ci/run_test_oss.sh
 
 .python_tests:template:
     stage: python_tests
     script:
         - ci/run_python_tests.sh
-    # Upload test report to gitlab
-    artifacts:
-        when: always
-        reports:
-            junit: result-junit.xml
-        expire_in: 1 week
 
 .mha_v2_tests:template:
     stage: mha_v2_tests
     script:
         - ci/run_test_mhas_v2.sh
-    # Upload test report to gitlab
-    artifacts:
-        when: always
-        reports:
-            junit: result-junit.xml
-        expire_in: 1 week
 
 .pycudnntest:template:
     stage: pycudnnTest
@@ -174,18 +163,27 @@ include:
 #     rules:
 #         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
+#   - local: ci/job-template.yml
+#     inputs:
+#         cuda_version: "12.9.1"
+#         cudnn_version: "9.11.0.98"
+#     rules:
+#         - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
+
   - local: ci/job-template.yml
     inputs:
-        cuda_version: "12.9.1"
-        cudnn_version: "9.11.0.98"
+        cuda_version: "13.0.0"
+        cudnn_version: "9.14.0.64"
     rules:
-        - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "merge_request_event"
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+
 
 stages:
     - analysis
     - build
     - cpp_samples
     - cpp_tests
+    - oss_tests
     - python_samples
     - python_tests
     - mha_v2_tests
@@ -221,6 +219,15 @@ mha_v2_tests:cudnn_dev_latest:
     needs: ["build:cudnn_dev_latest"]
     resource_group: memory_heavy_${ARCH}
 
+oss_tests:cudnn_dev_latest:
+    extends:
+        - .default_job_template
+        - .device_matrix:template
+        - .cudnn_dev_image:template
+        - .fetch_cudnn_dev:template
+        - .oss_tests:template
+    needs: ["build:cudnn_dev_latest"]
+
 python_tests:cudnn_dev_latest:
     extends:
         - .default_job_template
@@ -230,7 +237,7 @@ python_tests:cudnn_dev_latest:
         - .python_tests:template
     needs: ["build:cudnn_dev_latest"]
     resource_group: memory_heavy_${ARCH}
-    
+
 pycudnntest:cudnn_dev_latest:
     extends:
         - .default_job_template
@@ -240,6 +247,7 @@ pycudnntest:cudnn_dev_latest:
         - .pycudnntest:template
     needs: ["build:cudnn_dev_latest"]
 
+
 cpp_tests:cudnn_dev_latest:
     extends:
         - .default_job_template
@@ -248,7 +256,7 @@ cpp_tests:cudnn_dev_latest:
         - .fetch_cudnn_dev:template
         - .cpp_tests:template
     needs: ["build:cudnn_dev_latest"]
-    
+
 L4_graph_runner:cudnn_dev_latest:
     extends:
         - .default_job_template
@@ -267,6 +275,7 @@ L4_graph_runner_large:cudnn_dev_latest:
     needs: ["build:cudnn_dev_latest"]
     only:
         - schedules
+
 
 build:cudnn_rel_latest:
     needs: []
@@ -295,6 +304,15 @@ mha_v2_tests:cudnn_rel_latest:
     needs: ["build:cudnn_rel_latest"]
     resource_group: memory_heavy_${ARCH}
 
+oss_tests:cudnn_rel_latest:
+    extends:
+        - .default_job_template
+        - .device_matrix:template
+        - .cudnn_rel_image:template
+        - .fetch_cudnn_rel:template
+        - .oss_tests:template
+    needs: ["build:cudnn_rel_latest"]
+
 python_tests:cudnn_rel_latest:
     extends:
         - .default_job_template
@@ -304,7 +322,7 @@ python_tests:cudnn_rel_latest:
         - .python_tests:template
     needs: ["build:cudnn_rel_latest"]
     resource_group: memory_heavy_${ARCH}
-    
+
 pycudnntest:cudnn_rel_latest:
     extends:
         - .default_job_template
@@ -322,7 +340,7 @@ cpp_tests:cudnn_rel_latest:
         - .fetch_cudnn_rel:template
         - .cpp_tests:template
     needs: ["build:cudnn_rel_latest"]
-    
+
 L4_graph_runner:cudnn_rel_latest:
     extends:
         - .default_job_template
@@ -405,84 +423,3 @@ python_samples:cudnn_ga_latest:
     - .python_samples:template
     - .cudnn_ga_image:template
   needs: []
-
-
-build:cudnn_local_source:
-    needs: []
-    stage: build
-    extends:
-        - .manual_job_template
-        - .cudnn_dev_image:template
-    script:
-        - echo "Nothing to build as using local source at:"
-        - echo $CUDNN_SOURCE_BUILD_DIR
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
-
-cpp_samples:cudnn_local_source:
-    extends:
-        - .manual_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .cpp_samples:template
-    needs: ["build:cudnn_local_source"]
-    before_script:
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
-    
-mha_v2_tests:cudnn_local_source:
-    extends:
-        - .manual_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .fetch_cudnn_dev:template
-        - .mha_v2_tests:template
-    needs: ["build:cudnn_local_source"]
-    before_script:
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
-
-python_tests:cudnn_local_source:
-    extends:
-        - .manual_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .python_tests:template
-    needs: ["build:cudnn_local_source"]
-    resource_group: memory_heavy_${ARCH}
-    before_script:
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
-    
-pycudnntest:cudnn_local_source:
-    extends:
-        - .manual_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .pycudnntest:template
-    needs: ["build:cudnn_local_source"]
-    before_script:
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
-
-cpp_tests:cudnn_local_source:
-    extends:
-        - .manual_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .cpp_tests:template
-    needs: ["build:cudnn_local_source"]
-    before_script:
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
-    
-L4_graph_runner:cudnn_local_source:
-    extends:
-        - .manual_job_template
-        - .device_matrix:template
-        - .cudnn_dev_image:template
-        - .L4_graph_runner:template
-    needs: ["build:cudnn_local_source"]
-    before_script:
-        - export LD_LIBRARY_PATH=$CUDNN_SOURCE_BUILD_DIR:$LD_LIBRARY_PATH
-        - echo $LD_LIBRARY_PATH
