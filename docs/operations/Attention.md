@@ -233,8 +233,8 @@ Args:
     generate_stats (Optional[bool]): If true, compute and output softmax stats (useful at training time). Default is None, but one of {generate_stats, is_inference} must be set.
 Preferred masking Args:
     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-    left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
-    right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
+    diagonal_band_left_bound (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+    diagonal_band_right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
 Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
     use_causal_mask (Optional[bool]): Whether to use causal mask. Default is False.
@@ -387,7 +387,7 @@ Args:
     name (Optional[str]): The name of the operation.
 Preferred masking Args:
     diagonal_alignment (Optional[cudnn.diagonal_alignment]): One of {"TOP_LEFT", "BOTTOM_RIGHT"}. E.g., causal masking can be performed by setting diagonal_alignment=TOP_LEFT, and right_bound=0. Default is TOP_LEFT.
-    left_bround (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
+    left_bound (Optional[cudnn.diagonal_alignment]): An integer > 1 specifying the offset to the left of the main diagonal to attend to. Default is None, implying +Inf.
     right_bound (Optional[cudnn.diagonal_alignment]): An integer > 0 specifying the offset to the right of the main diagonal to attend to. Default is None, implying +Inf.
 Deprecated masking Args (can cause undetermined behavior when combined with the Preferred masking args):
     sliding_window_length (Optional[int]): A positive int specifying the left bound sliding window length
