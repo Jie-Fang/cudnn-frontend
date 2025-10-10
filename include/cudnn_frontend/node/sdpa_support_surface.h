@@ -396,7 +396,11 @@ SDPA_attributes::verify_sdpa_support_surface_for_implementation(const detail::Co
             return {error_code_t::INVALID_VALUE,
                     "Can't call verify_sdpa_support_surface_for_implementation with impl=AUTO"};
         case AttentionImplementation_t::COMPOSITE:
-            // Composite implementation already supports all of the features.
+            for (const auto& [key, value] : inputs) {
+                RETURN_CUDNN_FRONTEND_ERROR_IF(key == input_names::Block_mask && value != nullptr,
+                                               error_code_t::GRAPH_NOT_SUPPORTED,
+                                               "Composite SDPA node doesn't support Block_mask input");
+            }
             break;
         case AttentionImplementation_t::UNIFIED: {
             auto cudnn_ver_error =
@@ -404,11 +408,22 @@ SDPA_attributes::verify_sdpa_support_surface_for_implementation(const detail::Co
 #if (CUDNN_VERSION >= 91301)
             NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91301, cudnn_ver_error);
 
+            std::unordered_set<SDPA_attributes::input_names> allowed_input_names{
+                input_names::Q, input_names::K, input_names::V, input_names::Attn_scale};
+            std::string allowed_input_msg =
+                "Unified SDPA node doesn't yet support inputs other than Q, K, V, Attn_scale";
+
+#if (CUDNN_VERSION >= 91400)
+            auto block_mask_cudnn_ver_error =
+                error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Block mask in unified SDPA node requires cuDNN 9.14.0"};
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91400, block_mask_cudnn_ver_error);
+            allowed_input_names.insert({input_names::Block_mask});
+            allowed_input_msg += ", Block_mask";
+#endif
+
             for (const auto& [key, value] : inputs) {
-                if (key != input_names::Q && key != input_names::K && key != input_names::V &&
-                    key != input_names::Attn_scale && value != nullptr) {
-                    return {error_code_t::GRAPH_NOT_SUPPORTED,
-                            "Unified SDPA node doesn't yet support inputs other than Q, K, V and Attn_scale"};
+                if (allowed_input_names.find(key) == allowed_input_names.end() && value != nullptr) {
+                    return {error_code_t::GRAPH_NOT_SUPPORTED, allowed_input_msg};
                 }
             }
 

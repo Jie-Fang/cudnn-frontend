@@ -52,6 +52,7 @@ class exec_cfg:
     is_infer: bool = True
     is_paged: bool = False
     is_bias: bool = None
+    is_block_mask: bool = None
     is_padding: bool = None
     is_ragged: bool = None
     is_dropout: bool = None

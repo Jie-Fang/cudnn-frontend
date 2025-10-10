@@ -1815,6 +1815,23 @@ class UnifiedSDPANode : public SDPANodeBase<UnifiedSDPANode> {
                                                            &backend_scale));
         }
 
+        auto block_mask_it = attributes.inputs.find(SDPA_attributes::input_names::Block_mask);
+        if (block_mask_it != attributes.inputs.end() && block_mask_it->second != nullptr) {
+            auto block_mask_cudnn_ver_error =
+                error_t{error_code_t::GRAPH_NOT_SUPPORTED, "Block mask in unified SDPA node requires cuDNN 9.14.0"};
+#if CUDNN_VERSION >= 91400
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91400, block_mask_cudnn_ver_error);
+            auto backend_block_mask = tensors[block_mask_it->second->get_uid()]->get_desc()->get_backend_descriptor();
+            _CUDNN_CHECK_CUDNN_ERROR(detail::set_attribute(unified_sdpa_operation->get_backend_descriptor(),
+                                                           CUDNN_ATTR_OPERATION_SDPA_FWD_BLOCK_MASK_DESC,
+                                                           CUDNN_TYPE_BACKEND_DESCRIPTOR,
+                                                           1,
+                                                           &backend_block_mask));
+#else
+            return block_mask_cudnn_ver_error;
+#endif
+        }
+
         _CUDNN_CHECK_CUDNN_ERROR(detail::finalize(unified_sdpa_operation->get_backend_descriptor()));
 
         raw_operations.push_back(unified_sdpa_operation);

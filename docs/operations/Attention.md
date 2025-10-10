@@ -24,6 +24,7 @@ using the FlashAttention-2 algorithm as described in the paper [FlashAttention-2
 
 - Attention scale (`attn_scale`): Applies a scaling factor to attention scores before the softmax, such as $\frac{1}{\sqrt{\text{d}}}$. Set to 1.0 by default.
 - Bias mask: Applies an additive bias mask to attention scores. You must pass a bias tensor as specified in the tensors section below. The dimensions that are passed as 1 will apply a broadcasted mask over attention scores.
+- Block mask: Masks out tiles attention scores.
 - Alibi mask: Attention with Linear Biases (ALiBi) is an additive mask applied to the attention scores as described in the paper [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 - Padding mask: Also called variable sequence length, this option masks out padded time steps to ignore them in computation. You must pass a per-batch sequence length as specified in the tensors section below. In padded or ragged layout (discussed below) where the actual seqlen can be less than the max seqlens of a graph, certain batches can be skipped by setting the actual seqlen of the corresponding batch to 0
 - Causal mask: Fills the upper triangular matrix of attention scores with negative infinity. The diagonal of the matrix starts at the top left. As explained below, this can be set by calling `set_diagonal_band_right_bound(0)` and `set_diagonal_alignment(DiagonalAlignment_t::TOP_LEFT)`, or with the deprecated option `set_causal_mask`.
@@ -187,6 +188,8 @@ SDPA_attributes& set_sliding_window_length(int const value);
 
 SDPA_attributes& set_bias(std::shared_ptr<Tensor_attributes> value);
 
+SDPA_attributes& set_block_mask(std::shared_ptr<Tensor_attributes> value);
+
 SDPA_attributes& set_alibi_mask(bool const value);
 // ==========================  END  score mod options =====================
 
@@ -219,6 +222,7 @@ Args:
     v (cudnn_tensor): The value data. When page_table_v is provided, 'v' is a container of non-contiguous value data.
     attn_scale (Optional[Union[float, cudnn_tensor]]): The scale factor for attention. Default is None.
     bias (Optional[cudnn_tensor]): The bias data for attention. Default is None.
+    block_mask (Optional[cudnn_tensor]): The block mask data for attention. Default is None.
     use_alibi_mask (Optional[bool]): Whether to use alibi mask. Default is False.
     use_padding_mask (Optional[bool]): Whether to use padding mask. Default is False.
     seq_len_q (Optional[cudnn_tensor]): The sequence length of the query.
