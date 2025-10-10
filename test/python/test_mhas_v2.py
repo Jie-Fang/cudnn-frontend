@@ -262,6 +262,7 @@ class testConfig:
             print(f"is_alibi         = {self.cfg.is_alibi}")
             print(f"is_paged         = {self.cfg.is_paged} (block_size={self.cfg.block_size})")
             print(f"is_bias          = {self.cfg.is_bias}")
+            print(f"is_block_mask    = {self.cfg.is_block_mask}")
             print(f"is_dropout       = {self.cfg.is_dropout}")
             if self.cfg.is_infer == False:
                 print(f"is_determin      = {self.cfg.is_determin}")
@@ -341,6 +342,9 @@ class testConfig:
             # LIMIT: Bottom right causal mask does not support s_q > s_kv. 
             if self.s_q.val > self.s_kv.val and self.diag_align == self.diag_align.BOTTOM_RIGHT and self.right_bound != INVALID_BOUND:
                 self.right_bound = INVALID_BOUND
+            
+            if not self.is_infer:
+                self.is_block_mask = False
 
 def compute_ref(
     q,
@@ -348,6 +352,7 @@ def compute_ref(
     v,
     attn_scale=None,
     bias=None,
+    block_mask=None,
     is_alibi=False,
     padding=None,
     diag_align=cudnn.diagonal_alignment.TOP_LEFT,
@@ -490,7 +495,24 @@ def compute_ref(
         swa_mask &= swa_mask_zero.view(s_q, 1)
         s = s.masked_fill(swa_mask, float("-inf"))
 
+    if block_mask is not None:
+        TILE_M = 128
+        TILE_N = 128
+
+        block_mask = block_mask.to(dtype=torch.uint8, device=device)
+        block_mask = ((block_mask[..., None] & (1 << torch.arange(8, device=block_mask.device))) != 0).reshape(block_mask.shape[0], block_mask.shape[1], block_mask.shape[2], block_mask.shape[3] * 8)
+        block_mask = block_mask.unsqueeze(3).unsqueeze(5)
+        block_mask = block_mask.repeat(1, 1, 1, TILE_M, 1, TILE_N)
+        block_mask = block_mask.reshape(block_mask.shape[0], block_mask.shape[1], block_mask.shape[2] * TILE_M, block_mask.shape[4] * TILE_N)
+        block_mask = block_mask[:, :, :s_q, :s_kv]
+        s += torch.where(block_mask, torch.tensor(0.0), torch.tensor(float('-inf')))
+
     p = torch.softmax(s, dim=-1)
+
+    if block_mask is not None:
+        all_inf = torch.isneginf(s).all(dim=-1, keepdim=True)
+        if torch.any(all_inf):
+            p = torch.where(all_inf, torch.zeros_like(p), p)
 
     if left_bound != INVALID_BOUND:
         p = p * swa_mask_zero
@@ -658,6 +680,10 @@ def exec_sdpa(cfg, request, cudnn_handle):
     (v_gpu, _, _) = alloc_tensor(cfg.shape_v, cfg.data_type, elems=cfg.elems_v, strides=cfg.stride_v, rng=rng_data_gen, mean=-0.5, std=1.0)
     (bias_gpu, _, _) = (alloc_tensor((1, cfg.h_q, cfg.s_q, cfg.s_kv), cfg.data_type, rng=rng_data_gen, mean=0.0, std=1.0) if cfg.is_bias else (None, None, None))
 
+    TILE_M = 128
+    TILE_N = 128
+    block_mask_gpu = torch.randint(0, 256, (cfg.batches, cfg.h_q, (cfg.s_q + TILE_M - 1) // TILE_M, ((cfg.s_kv + TILE_N - 1) // TILE_N + 7) // 8), dtype=torch.uint8, device="cuda")
+
     if not cfg.is_infer:
         (dQ_gpu, dQ_sep, dQ_raw) = alloc_tensor(cfg.shape_q, cfg.data_type, elems=cfg.elems_q, strides=cfg.stride_q)
         (dK_gpu, dK_sep, dK_raw) = alloc_tensor(cfg.shape_k, cfg.data_type, elems=cfg.elems_k, strides=cfg.stride_k)
@@ -718,6 +744,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
     page_table_v = graph.tensor_like(page_table_v_gpu) if cfg.is_paged else None
 
     bias = graph.tensor_like(bias_gpu) if cfg.is_bias else None
+    block_mask = graph.tensor_like(block_mask_gpu) if cfg.is_block_mask else None
 
     seq_len_q = graph.tensor_like(seq_len_q_gpu) if cfg.is_padding else None
     seq_len_kv = graph.tensor_like(seq_len_kv_gpu) if cfg.is_padding else None
@@ -749,6 +776,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         generate_stats=not cfg.is_infer,
         attn_scale=attn_scale,
         bias=bias,
+        block_mask=block_mask,
         use_alibi_mask=cfg.is_alibi,
         use_padding_mask=cfg.is_padding,
         seq_len_q=seq_len_q,
@@ -797,6 +825,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         k: k_gpu if not cfg.is_paged else container_k_gpu,
         v: v_gpu if not cfg.is_paged else container_v_gpu,
         bias: bias_gpu,
+        block_mask: block_mask_gpu if cfg.is_block_mask else None,
         seq_len_q: seq_len_q_gpu,
         seq_len_kv: seq_len_kv_gpu,
         q_ragged_offset: q_ragged_offset_gpu if cfg.is_ragged else None,
@@ -1016,6 +1045,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         v_ref,
         attn_scale=attn_scale,
         bias=bias_ref,
+        block_mask=block_mask_gpu if cfg.is_block_mask else None,
         is_alibi=cfg.is_alibi,
         padding=(seq_len_q_ref, seq_len_kv_ref) if cfg.is_padding else None,
         left_bound=cfg.left_bound,
@@ -1471,6 +1501,39 @@ def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
         test.cfg.is_paged = True
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=32, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_random_fwd_unified_block_mask_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg.is_block_mask = True
+    test.cfg.implementation = cudnn.attention_implementation.UNIFIED
 
     test.showConfig(test_no, request, reg_run=True)
 

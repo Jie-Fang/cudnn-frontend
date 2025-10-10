@@ -1634,6 +1634,7 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
         Dropout_scale,
         Page_table_K,
         Page_table_V,
+        Block_mask,
         // FP8-specific scaling inputs
         Descale_Q,
         Descale_K,
@@ -1714,6 +1715,12 @@ class SDPA_attributes : public Attributes<SDPA_attributes> {
     SDPA_attributes&
     set_bias(std::shared_ptr<Tensor_attributes> value) {
         inputs[SDPA_attributes::input_names::Bias] = std::move(value);
+        return *this;
+    }
+
+    SDPA_attributes&
+    set_block_mask(std::shared_ptr<Tensor_attributes> value) {
+        inputs[SDPA_attributes::input_names::Block_mask] = std::move(value);
         return *this;
     }
 
