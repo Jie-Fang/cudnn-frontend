@@ -90,7 +90,14 @@ TEST_CONFIGS_FWD = {
 }
 
 TEST_CONFIGS_BWD = {
-    "d128_f8e4m3":         {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d64_f8e4m3":            {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d64_f8e4m3_gqa":        {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d64_f8e4m3_o-f16":      {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.08, "rtol": 0.2},
+    "d64_f8e4m3_o-f16_gqa":  {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 64,  "d_vo": 64,  "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.08, "rtol": 0.2},
+    "d128_f8e4m3":           {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d128_f8e4m3_gqa":       {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp8_e4m3", "atol": 0.08, "rtol": 0.2},
+    "d128_f8e4m3_o-f16":     {"b": 2, "h_q": 4,  "h_k": 4, "h_v": 4, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.08, "rtol": 0.2},
+    "d128_f8e4m3_o-f16_gqa": {"b": 2, "h_q": 4,  "h_k": 2, "h_v": 2, "s_qo": 256, "s_kv": 256,  "d_qk": 128, "d_vo": 128, "itype": "fp8_e4m3", "otype": "fp16",     "atol": 0.08, "rtol": 0.2},
 }
 
 BLOCKED_CONFIGS_FWD = [
@@ -99,6 +106,18 @@ BLOCKED_CONFIGS_FWD = [
 ]
 
 BLOCKED_CONFIGS_BWD = []
+
+def get_torch_and_cudnn_type(type_str):
+    if type_str == "fp8_e4m3":
+        return torch.float8_e4m3fn, cudnn.data_type.FP8_E4M3
+    elif type_str == "fp8_e5m2":
+        return torch.float8_e5m2, cudnn.data_type.FP8_E5M2
+    elif type_str == "fp16":
+        return torch.float16, cudnn.data_type.HALF
+    elif type_str == "bf16":
+        return torch.bfloat16, cudnn.data_type.BFLOAT16
+    else:
+        return None, None
 
 def section_begin(msg, width=80):
     print(f" {msg} ".center(width, "="))
@@ -115,6 +134,8 @@ def get_fp8_largest_po2(dtype: torch.dtype):
         raise ValueError(f"Unsupported dtype: {dtype}")
 
 def get_fp8_scale_factor(amax: float, dtype: torch.dtype, fudge_factor: float = 0.25, epsilon = 0.0625):
+    if dtype == torch.float16 or dtype == torch.bfloat16:
+        return 1.0
     po2_next = 2 ** math.ceil(math.log2(max(amax, epsilon)))
     return get_fp8_largest_po2(dtype) / po2_next * fudge_factor
 
@@ -175,8 +196,8 @@ class GraphBwdUid(IntEnum):
     dV_amax = 123
     dP_amax = 124
 
-def generate_graph_fwd(cudnn_input_type, cudnn_output_type, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size):
-    graph_fwd = cudnn.pygraph(io_data_type=cudnn_input_type, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
+def generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size):
+    graph_fwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
     # Variable sequence lenths are required for paged attention
     use_padding_mask = None
@@ -186,16 +207,16 @@ def generate_graph_fwd(cudnn_input_type, cudnn_output_type, b, h_q, h_k, h_v, s_
     v_block_table = None
 
     if block_size == 0:
-        q = graph_fwd.tensor(uid=GraphFwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_input_type)
-        k = graph_fwd.tensor(uid=GraphFwdUid.k, dim=(b, h_k, s_kv, d_qk), stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_input_type)
-        v = graph_fwd.tensor(uid=GraphFwdUid.v, dim=(b, h_v, s_kv, d_vo), stride=(s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_input_type)
+        q = graph_fwd.tensor(uid=GraphFwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_itype)
+        k = graph_fwd.tensor(uid=GraphFwdUid.k, dim=(b, h_k, s_kv, d_qk), stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_itype)
+        v = graph_fwd.tensor(uid=GraphFwdUid.v, dim=(b, h_v, s_kv, d_vo), stride=(s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_itype)
     else:
         table_size = math.ceil(s_kv / block_size)
         num_blocks = table_size * b
 
-        q = graph_fwd.tensor(uid=GraphFwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_input_type)
-        k = graph_fwd.tensor(uid=GraphFwdUid.k, dim=(num_blocks, h_k, block_size, d_qk), stride=(block_size * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_input_type)
-        v = graph_fwd.tensor(uid=GraphFwdUid.v, dim=(num_blocks, h_v, block_size, d_vo), stride=(block_size * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_input_type)
+        q = graph_fwd.tensor(uid=GraphFwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_itype)
+        k = graph_fwd.tensor(uid=GraphFwdUid.k, dim=(num_blocks, h_k, block_size, d_qk), stride=(block_size * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_itype)
+        v = graph_fwd.tensor(uid=GraphFwdUid.v, dim=(num_blocks, h_v, block_size, d_vo), stride=(block_size * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_itype)
 
         use_padding_mask = True
         kv_seq_len = graph_fwd.tensor(uid=GraphFwdUid.kv_seq_len, dim=(b, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.INT32)
@@ -231,21 +252,21 @@ def generate_graph_fwd(cudnn_input_type, cudnn_output_type, b, h_q, h_k, h_v, s_
         paged_attention_max_seq_len_kv=s_kv,  # The maximum sequence length for K caches (this is optional, but recommended)
     )
 
-    o.set_uid(GraphFwdUid.o).set_output(True).set_dim((b, h_q, s_qo, d_vo)).set_stride((s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1)).set_data_type(cudnn_output_type)
+    o.set_uid(GraphFwdUid.o).set_output(True).set_dim((b, h_q, s_qo, d_vo)).set_stride((s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1)).set_data_type(cudnn_otype)
     stats.set_uid(GraphFwdUid.stats).set_output(True).set_dim((b, h_q, s_qo, 1)).set_stride((s_qo * h_q, s_qo, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_s.set_uid(GraphFwdUid.s_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_o.set_uid(GraphFwdUid.o_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
 
     return graph_fwd
 
-def generate_graph_bwd(cudnn_input_type, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale):
-    graph_bwd = cudnn.pygraph(io_data_type=cudnn_input_type, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
+def generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale):
+    graph_bwd = cudnn.pygraph(io_data_type=cudnn_itype, intermediate_data_type=cudnn.data_type.FLOAT, compute_data_type=cudnn.data_type.FLOAT)
 
-    q = graph_bwd.tensor(uid=GraphBwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_input_type)
-    k = graph_bwd.tensor(uid=GraphBwdUid.k, dim=(b, h_k, s_kv, d_qk), stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_input_type)
-    v = graph_bwd.tensor(uid=GraphBwdUid.v, dim=(b, h_v, s_kv, d_vo), stride=(s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_input_type)
-    o = graph_bwd.tensor(uid=GraphBwdUid.o, dim=(b, h_q, s_qo, d_vo), stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1), data_type=cudnn_input_type)
-    dO = graph_bwd.tensor(uid=GraphBwdUid.dO, dim=(b, h_q, s_qo, d_vo), stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1), data_type=cudnn_input_type)
+    q = graph_bwd.tensor(uid=GraphBwdUid.q, dim=(b, h_q, s_qo, d_qk), stride=(s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1), data_type=cudnn_itype)
+    k = graph_bwd.tensor(uid=GraphBwdUid.k, dim=(b, h_k, s_kv, d_qk), stride=(s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1), data_type=cudnn_itype)
+    v = graph_bwd.tensor(uid=GraphBwdUid.v, dim=(b, h_v, s_kv, d_vo), stride=(s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1), data_type=cudnn_itype)
+    o = graph_bwd.tensor(uid=GraphBwdUid.o, dim=(b, h_q, s_qo, d_vo), stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1), data_type=cudnn_otype)
+    dO = graph_bwd.tensor(uid=GraphBwdUid.dO, dim=(b, h_q, s_qo, d_vo), stride=(s_qo * h_q * d_vo, d_vo, h_q * d_vo, 1), data_type=cudnn_itype)
     stats = graph_bwd.tensor(uid=GraphBwdUid.stats, dim=(b, h_q, s_qo, 1), stride=(s_qo * h_q, s_qo, 1, 1), data_type=cudnn.data_type.FLOAT)
 
     q_descale = graph_bwd.tensor(uid=GraphBwdUid.q_descale, dim=(1, 1, 1, 1), stride=(1, 1, 1, 1), data_type=cudnn.data_type.FLOAT)
@@ -285,9 +306,9 @@ def generate_graph_bwd(cudnn_input_type, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_v
         use_padding_mask=False,
     )
 
-    dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)).set_data_type(cudnn_input_type)
-    dK.set_uid(GraphBwdUid.dK).set_output(True).set_dim((b, h_k, s_kv, d_qk)).set_stride((s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1)).set_data_type(cudnn_input_type)
-    dV.set_uid(GraphBwdUid.dV).set_output(True).set_dim((b, h_v, s_kv, d_vo)).set_stride((s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1)).set_data_type(cudnn_input_type)
+    dQ.set_uid(GraphBwdUid.dQ).set_output(True).set_dim((b, h_q, s_qo, d_qk)).set_stride((s_qo * h_q * d_qk, d_qk, h_q * d_qk, 1)).set_data_type(cudnn_itype)
+    dK.set_uid(GraphBwdUid.dK).set_output(True).set_dim((b, h_k, s_kv, d_qk)).set_stride((s_kv * h_k * d_qk, d_qk, h_k * d_qk, 1)).set_data_type(cudnn_itype)
+    dV.set_uid(GraphBwdUid.dV).set_output(True).set_dim((b, h_v, s_kv, d_vo)).set_stride((s_kv * h_v * d_vo, d_vo, h_v * d_vo, 1)).set_data_type(cudnn_itype)
 
     amax_dQ.set_uid(GraphBwdUid.dQ_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
     amax_dK.set_uid(GraphBwdUid.dK_amax).set_output(True).set_dim((1, 1, 1, 1)).set_stride((1, 1, 1, 1)).set_data_type(cudnn.data_type.FLOAT)
@@ -377,29 +398,10 @@ def test_sdpa_fwd_fp8(name):
     if torch.cuda.get_device_capability()[0] < 10:
         pytest.skip("SDPA FP8 fprop testing is limited to Blackwell or higher")
 
-    if config["itype"] == "fp8_e4m3":
-        torch_itype = torch.float8_e4m3fn
-        cudnn_itype = cudnn.data_type.FP8_E4M3
-    elif config["itype"] == "fp8_e5m2":
-        torch_itype = torch.float8_e5m2
-        cudnn_itype = cudnn.data_type.FP8_E5M2
-    elif config["itype"] == "fp16":
-        torch_itype = torch.float16
-        cudnn_itype = cudnn.data_type.HALF
-    else:
-        raise ValueError(f"Unsupported input type: {config['itype']}")
-
-    if config["otype"] == "fp8_e4m3":
-        torch_otype = torch.float8_e4m3fn
-        cudnn_otype = cudnn.data_type.FP8_E4M3
-    elif config["otype"] == "fp8_e5m2":
-        torch_otype = torch.float8_e5m2
-        cudnn_otype = cudnn.data_type.FP8_E5M2
-    elif config["otype"] == "fp16":
-        torch_otype = torch.float16
-        cudnn_otype = cudnn.data_type.HALF
-    else:
-        raise ValueError(f"Unsupported input type: {config['otype']}")
+    torch_itype, cudnn_itype = get_torch_and_cudnn_type(config["itype"])
+    torch_otype, cudnn_otype = get_torch_and_cudnn_type(config["otype"])
+    assert torch_itype is not None and cudnn_itype is not None
+    assert torch_otype is not None and cudnn_otype is not None
 
     b = config["b"]
     h_q = config["h_q"]
@@ -453,7 +455,7 @@ def test_sdpa_fwd_fp8(name):
     v_descale_gpu = torch.tensor([get_fp8_descale_factor(v_amax, torch_itype)], dtype=torch.float, device="cuda")
     s_scale_gpu = torch.tensor([get_fp8_scale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
     s_descale_gpu = torch.tensor([get_fp8_descale_factor(s_amax, torch_itype)], dtype=torch.float, device="cuda")
-    o_scale_gpu = torch.tensor([get_fp8_scale_factor(o_amax, torch_itype)], dtype=torch.float, device="cuda")
+    o_scale_gpu = torch.tensor([get_fp8_scale_factor(o_amax, torch_otype)], dtype=torch.float, device="cuda")
 
     s_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
     o_amax_gpu = torch.tensor([float('nan')], dtype=torch.float, device="cuda")
@@ -502,7 +504,7 @@ def test_sdpa_fwd_fp8(name):
     o_ref = compute_ref(q_ref, k_ref, v_ref, attn_scale=attn_scale)
 
     o_ref_comp = o_ref
-    o_gpu_comp = o_gpu.detach().float() * get_fp8_descale_factor(o_amax, torch_itype)
+    o_gpu_comp = o_gpu.detach().float() * get_fp8_descale_factor(o_amax, torch_otype)
 
     print("o_ref_comp.numel()", o_ref_comp.numel())
     print("o_gpu_comp.numel()", o_gpu_comp.numel())
@@ -571,26 +573,10 @@ def test_sdpa_bwd_fp8(name):
     if torch.cuda.get_device_capability()[0] < 10:
         pytest.skip("SDPA FP8 bprop testing is limited to Blackwell or higher")
 
-    if config["itype"] == "fp8_e4m3":
-        torch_itype = torch.float8_e4m3fn
-        cudnn_itype = cudnn.data_type.FP8_E4M3
-    elif config["itype"] == "fp8_e5m2":
-        torch_itype = torch.float8_e5m2
-        cudnn_itype = cudnn.data_type.FP8_E5M2
-    elif config["itype"] == "fp16":
-        torch_itype = torch.float16
-        cudnn_itype = cudnn.data_type.HALF
-    else:
-        raise ValueError(f"Unsupported input type: {config['itype']}")
-
-    if config["otype"] == "fp8_e4m3":
-        torch_otype = torch.float8_e4m3fn
-    elif config["otype"] == "fp8_e5m2":
-        torch_otype = torch.float8_e5m2
-    elif config["otype"] == "fp16":
-        torch_otype = torch.float16
-    else:
-        raise ValueError(f"Unsupported input type: {config['otype']}")
+    torch_itype, cudnn_itype = get_torch_and_cudnn_type(config["itype"])
+    torch_otype, cudnn_otype = get_torch_and_cudnn_type(config["otype"])
+    assert torch_itype is not None and cudnn_itype is not None
+    assert torch_otype is not None and cudnn_otype is not None
 
     b = config["b"]
     h_q = config["h_q"]
@@ -604,8 +590,8 @@ def test_sdpa_bwd_fp8(name):
     attn_scale = 0.125
 
     section_begin("Build Graphs")
-    graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_itype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0)
-    graph_bwd = generate_graph_bwd(cudnn_itype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale)
+    graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0)
+    graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale)
     graph_fwd.validate(); graph_fwd.build_operation_graph(); graph_fwd.create_execution_plans([cudnn.heur_mode.A]); graph_fwd.check_support(); graph_fwd.build_plans()
     graph_bwd.validate(); graph_bwd.build_operation_graph(); graph_bwd.create_execution_plans([cudnn.heur_mode.A]); graph_bwd.check_support(); graph_bwd.build_plans()
     section_end()
@@ -629,7 +615,7 @@ def test_sdpa_bwd_fp8(name):
     k_gpu = k_gen.to(torch_itype)
     v_gpu = v_gen.to(torch_itype)
 
-    o_gpu = torch.nans(b, s_qo, h_q, d_vo, dtype=torch_itype, device="cuda")
+    o_gpu = torch.nans(b, s_qo, h_q, d_vo, dtype=torch_otype, device="cuda")
     stats_gpu = torch.nans(b, h_q, s_qo, 1, dtype=torch.float, device="cuda")
 
     # dO_gpu = (dO_gen * get_fp8_scale_factor(dO_amax, torch_itype)).to(torch_itype)
