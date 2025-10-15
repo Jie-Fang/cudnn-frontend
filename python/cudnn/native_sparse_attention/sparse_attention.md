@@ -9,13 +9,21 @@ Currently, only the selection component of NSA is implemented.
 
 ```
 python/cudnn/native_sparse_attention/
-├── __init__.py                           # Main module initialization and NSA namespace
-├── sparse_attention.md                   # This documentation file  
+├── __init__.py                          # Main module initialization and NSA namespace
+├── sparse_attention.md                  # This documentation file  
 └── selection/                           # Selection attention implementation
     ├── __init__.py                      # Selection module exports (SelectionAttention and SelectionAttentionWrapper)
     ├── api.py                           # High-level API class and wrapper function
     └── NSA_select_attn_fwd_hmma.py      # CuteDSL kernel implementation
-└── (future folders): compression, sliding_window, etc.
+├── compression/                         # Compression attention implementation
+    ├── __init__.py                      # Compression module exports (CompressionAttention and CompressionAttentionWrapper)
+    ├── api.py                           # High-level API class and wrapper function
+    └── fmha.py                          # CuteDSL kernel implementation
+├── sliding_window/                      # Sliding window attention implementation
+    ├── __init__.py                      # Sliding window module exports (SlidingWindowAttention and SlidingWindowAttentionWrapper)
+    ├── api.py                           # High-level API class and wrapper function
+    └── NSA_swa_fwd_hmma.py              # CuteDSL kernel implementation
+└── top-k/                               # TODO, not implemented yet
 ```
 
 ## Installation
@@ -28,8 +36,9 @@ pip install nvidia-cudnn-frontend[cutedsl]
 ## Usage
 
 Sample usage and tests can be found in the (test/python) folder:
-- [test_NSA_selection_attention.py](test/python/test_NSA_selection_attention.py)\
-usage: `pytest test/python/test_NSA_selection_attention.py`
+- [test_NSA_selection_attention.py](test/python/test_NSA_selection_attention.py), `pytest test/python/test_NSA_selection_attention.py`
+- [test_NSA_compression_attention.py](test/python/test_NSA_compression_attention.py), `pytest test/python/test_NSA_compression_attention.py`
+- [test_NSA_swa.py](test/python/test_NSA_swa.py), `pytest test/python/test_NSA_swa.py`
 
 Once all components are implemented, we will offer a central NSA API that will do the full NSA computation end-to-end. We will also offer the individual components as standalone APIs, as demonstrated below.
 
@@ -120,8 +129,9 @@ selection_attention.execute(
 
 ### Input Tensors
 
-Currently, only T,H,D input format is supported. B,H,S,D is not yet supported.
+Selection Attention currently only supports T,H,D input format. B,H,S,D is not yet supported.
 
+#### T,H,D Format:
 - **Q (Query)**: `(T, H_q, D)`
 - **K (Key)**: `(T, H_kv, D)`  
 - **V (Value)**: `(T, H_kv, D_v)`
@@ -129,9 +139,21 @@ Currently, only T,H,D input format is supported. B,H,S,D is not yet supported.
 - **block_counts**: `(batch_size,)`
 - **seq_offsets**: `(batch_size + 1,)`
 
+Compression Attention and SWA support both T,H,D and B,H,S,D input formats.
+#### B,H,S,D Format:
+- **Q (Query)**: `(B, H_q, S_q, D)`
+- **K (Key)**: `(B, H_kv, S_kv, D)`
+- **V (Value)**: `(B, H_kv, S_kv, D_v)`
+- **O (Output)**: `(B, H_q, S_q, D_v)`
 
 ### Output Tensors
 
+#### T,H,D Format:
 - **O (Output)**: `(T, H_q, D_v)`
 - **L (LogSumExp)**: `(T, H_q)`
 - **M (Max)**: `(T, H_q)`
+
+#### B,H,S,D Format:
+- **O (Output)**: `(B, H_q, S_q, D_v)`
+- **L (LogSumExp)**: `(B, H_q, S_q)`
+- **M (Max)**: `(B, H_q, S_q)`

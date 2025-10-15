@@ -7,7 +7,7 @@ import torch
 import traceback
 
 
-def _env_supported():
+def _env_supported(target_major=9.0):
     """Check if the environment supports NSA tests."""
     try:
         import cutlass
@@ -20,8 +20,8 @@ def _env_supported():
         return False
 
     major, _ = torch.cuda.get_device_capability()
-    if major < 9:
-        print(f"NSA requires compute capability >= 9.0, found {major}.x")
+    if major < target_major:
+        print(f"NSA requires compute capability >= {target_major}, found {major}.x")
         return False
 
     try:

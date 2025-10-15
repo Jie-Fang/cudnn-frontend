@@ -44,7 +44,7 @@ def test_config(request):
     d_v = 128 if d_v is None else d_v
     block_size = 64 if block_size is None else block_size
     topk_size = 16 if topk_size is None else topk_size
-    dtype_str = "bfloat16" if dtype_str is None else dtype_str
+    dtype_str = "float16" if dtype_str is None else dtype_str
     acc_dtype_str = "float32" if acc_dtype_str is None else acc_dtype_str
     window_size = 64 if window_size is None else window_size
     layout = "thd" if layout is None else layout
