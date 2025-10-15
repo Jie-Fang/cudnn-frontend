@@ -184,6 +184,85 @@ def run_ref_nsa_selection_attention(
     return O.view(t, h_q, d_v), L.view(t, h_q, 1), M.view(t, h_q, 1)
 
 
+def run_ref_nsa_compression_attention(
+    Q,
+    K,
+    V,
+    scale_softmax,
+    scale_output,
+    lse_calculation=False,
+    bottom_right_align=False,
+):
+    """
+    Reference implementation for CompressionAttention.
+
+    Args:
+        Q: (B, H_q, S_q, D)
+        K: (B, H_k, S_k, D)
+        V: (B, H_k, S_k, D_v)
+        scale_softmax (float): softmax scale
+        scale_output (float): output scale applied after matmul
+        lse_calculation (bool): whether to compute LSE
+        bottom_right_align (bool): align end of q to end of k (not used here)
+
+    Returns:
+        Tuple[torch.Tensor, Optional[torch.Tensor]]: (O_ref, LSE_ref or None)
+            O_ref: (B, H_q, S_q, D_v)
+            LSE_ref: (B, H_q, S_q) if lse_calculation else None
+    """
+    assert Q.dim() == 4 and K.dim() == 4 and V.dim() == 4
+    b, h_q, s_q, d = Q.shape
+    _, h_k, s_k, d_v = V.shape
+
+    # Handle GQA/MQA head broadcasting
+    if h_q != h_k:
+        repeat_factor = h_q // h_k
+        K = K.repeat_interleave(repeat_factor, dim=1)
+        V = V.repeat_interleave(repeat_factor, dim=1)
+
+    batch_size = Q.size(0)
+    ref_list = []
+    lse_list = [] if lse_calculation else None
+    for batch_idx in range(batch_size):
+        q_i = Q[batch_idx]
+        k_i = K[batch_idx]
+        v_i = V[batch_idx]
+
+        s_i = torch.einsum("hqd,hkd->hqk", q_i, k_i) * scale_softmax
+        s_q_i = q_i.shape[1]
+        s_k_i = k_i.shape[1]
+
+        # Causal compressed mask
+        q_coords = torch.arange(0, s_q_i, device=s_i.device).view(-1, 1)
+        num_compress_blocks = s_k_i
+        stride = max(1, s_q_i // max(1, s_k_i))
+        k_coords = (
+            ((torch.arange(0, num_compress_blocks, device=s_i.device) + 1) * stride) - 1
+        ).view(1, -1)
+        _mask = k_coords > q_coords
+        s_i = s_i.masked_fill(_mask, -torch.inf)
+
+        if lse_calculation:
+            lse_i = torch.logsumexp(s_i, dim=-1)
+
+        p_i = torch.softmax(s_i, dim=-1)
+        p_i = p_i.masked_fill(_mask, 0)
+
+        ref_i = torch.einsum("hqk,hkd->hqd", p_i, v_i)
+        ref_i = ref_i * scale_output
+        ref_list.append(ref_i)
+        if lse_calculation:
+            lse_list.append(lse_i)
+
+    O_ref = torch.stack(ref_list)
+    if lse_calculation:
+        LSE_ref = torch.stack(lse_list).float()
+    else:
+        LSE_ref = None
+
+    return O_ref, LSE_ref
+
+
 def run_ref_nsa_swa(
     q,
     k,
@@ -319,6 +398,81 @@ def check_ref_nsa_selection_attention(
     torch.testing.assert_close(O, O_ref, atol=0.01, rtol=1e-05)
     # torch.testing.assert_close(L, L_ref, atol=0.01, rtol=1e-05)
     # torch.testing.assert_close(M, M_ref, atol=0.01, rtol=1e-05)
+
+
+def check_ref_nsa_compression_attention(
+    Q,
+    K,
+    V,
+    O,
+    LSE=None,
+    scale_output=1.0,
+    atol=0.01,
+    rtol=1e-05,
+    test_config=None,
+    scale_softmax=None,
+):
+    if test_config["skip_ref"]:
+        print(
+            f'Skipped reference computation for compression attention with config: b={test_config["b"]}, seq_len={test_config["s_q"]}, h_q={test_config["h_q"]}, h_k={test_config["h_k"]}, d={test_config["d"]}'
+        )
+        return
+
+    used_scale_softmax = (
+        scale_softmax
+        if scale_softmax is not None
+        else (test_config["softmax_scale"] if test_config is not None else 1.0)
+    )
+
+    if test_config["layout"] == "thd":
+        assert (
+            "actual_s_q" in test_config
+        ), "actual_s_q is required when using T,H,D layout"
+        seq_len_q = test_config["actual_s_q"].to(device=Q.device)
+        max_seq_len_q = int(seq_len_q.max().item())
+
+        # Convert THD -> (B, H, S, D)
+        q_bshd = convert_thd_to_bshd(Q, seq_len_q, max_seq_len_q)
+        k_bshd = convert_thd_to_bshd(K, seq_len_q, max_seq_len_q)
+        v_bshd = convert_thd_to_bshd(V, seq_len_q, max_seq_len_q)
+
+        O_ref_bshd, LSE_ref_bsh = run_ref_nsa_compression_attention(
+            q_bshd,
+            k_bshd,
+            v_bshd,
+            scale_softmax=used_scale_softmax,
+            scale_output=scale_output,
+            lse_calculation=LSE is not None,
+        )
+
+        # Convert O_ref back to THD for comparison
+        total_T = int(seq_len_q.sum().item())
+        O_ref_thd = convert_bshd_to_thd(O_ref_bshd, seq_len_q, total_T).to(
+            dtype=O.dtype
+        )
+        torch.testing.assert_close(O, O_ref_thd, atol=atol, rtol=rtol)
+
+        if LSE is not None:
+            LSE_bhs1 = LSE_ref_bsh.unsqueeze(-1)
+            LSE_thd = convert_bshd_to_thd(LSE_bhs1, seq_len_q, total_T)
+            torch.testing.assert_close(LSE, LSE_thd, atol=atol, rtol=rtol)
+    elif test_config["layout"] == "bshd":
+        O_ref, LSE_ref = run_ref_nsa_compression_attention(
+            Q,
+            K,
+            V,
+            scale_softmax=used_scale_softmax,
+            scale_output=scale_output,
+            lse_calculation=LSE is not None,
+        )
+
+        torch.testing.assert_close(O, O_ref.to(dtype=O.dtype), atol=atol, rtol=rtol)
+        if LSE is not None:
+            if (LSE.ndim == LSE_ref.ndim + 1) and (LSE.shape[-1] == 1):
+                LSE_ref = LSE_ref.unsqueeze(-1)
+            torch.testing.assert_close(LSE, LSE_ref, atol=atol, rtol=rtol)
+    else:
+        raise ValueError(f"Invalid layout: {test_config['layout']}")
 
 
 def check_ref_nsa_swa(
