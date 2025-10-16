@@ -80,7 +80,7 @@ def test_nsa_compression_compile_execute(test_config):
 @pytest.mark.L0
 @torch_fork_set_rng(seed=0)
 def test_nsa_compression_wrapper(test_config):
-    if not _env_supported(target_major=9.0):
+    if not _env_supported(target_major=10.0):
         pytest.skip("Environment not supported")
     from cudnn import NSA
 

@@ -25,6 +25,11 @@ def test_gemm_swiglu(test_config):
         pytest.skip(
             "Environment not supported: cudnn optional dependencies not installed"
         )
+    major, _ = torch.cuda.get_device_capability()
+    if major < 10:
+        pytest.skip(
+            f"Environment not supported: requires compute capability >= 10, found {major}"
+        )
 
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
     a_torch, b_torch = allocate_input_tensors(test_config)
@@ -69,6 +74,11 @@ def test_gemm_swiglu_wrapper(test_config):
     except ImportError:
         pytest.skip(
             "Environment not supported: cudnn optional dependencies not installed"
+        )
+    major, _ = torch.cuda.get_device_capability()
+    if major < 10:
+        pytest.skip(
+            f"Environment not supported: requires compute capability >= 10, found {major}"
         )
 
     a_torch, b_torch = allocate_input_tensors(test_config)
