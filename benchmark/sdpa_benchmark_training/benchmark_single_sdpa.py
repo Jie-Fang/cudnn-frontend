@@ -1032,7 +1032,14 @@ for i in range(num_iters):
     )
     if args.data_type != "fp8":
         try:
-            output_ref = functools.partial(pyt_backend_sdpa, backend=SDPBackend.MATH)(query, key, value)
+            output_ref = torch.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                enable_gqa=enable_gqa,
+                is_causal=args.attn_mask == "top_left",
+                attn_mask=causal_lower_right(q_seqlen, kv_seqlen) if args.attn_mask == "bottom_right" else None,
+            )
             torch.testing.assert_close(output, output_ref, rtol=1e-2, atol=1e-2)
             forward_diffs.append(
                 torch.max(torch.abs(output.detach() - output_ref.detach())).item()
