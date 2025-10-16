@@ -27,6 +27,11 @@ def test_gemm_amax_compile_execute(test_config):
         pytest.skip(
             "Environment not supported: cudnn optional dependencies not installed"
         )
+    major, _ = torch.cuda.get_device_capability()
+    if major < 10:
+        pytest.skip(
+            f"Environment not supported: requires compute capability >= 10, found {major}"
+        )
 
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
     a_torch, a_ref, b_torch, b_ref, sfa_torch, sfa_ref, sfb_torch, sfb_ref = (
@@ -82,6 +87,11 @@ def test_gemm_amax_wrapper(test_config):
     except ImportError as e:
         pytest.skip(
             "Environment not supported: cudnn optional dependencies not installed"
+        )
+    major, _ = torch.cuda.get_device_capability()
+    if major < 10:
+        pytest.skip(
+            f"Environment not supported: requires compute capability >= 10, found {major}"
         )
 
     stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
