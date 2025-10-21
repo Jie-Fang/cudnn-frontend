@@ -390,7 +390,7 @@ def test_sdpa_fwd_fp8(name):
     config = TEST_CONFIGS_FWD[name]
 
     if name in BLOCKED_CONFIGS_FWD:
-        pytest.xfail("XFailed: blocked config")
+        pytest.skip("XFailed: blocked config")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.14.0":
@@ -565,7 +565,7 @@ def test_sdpa_bwd_fp8(name):
     config = TEST_CONFIGS_BWD[name]
 
     if name in BLOCKED_CONFIGS_BWD:
-        pytest.xfail("XFailed: blocked config")
+        pytest.skip("XFailed: blocked config")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.14.0":
