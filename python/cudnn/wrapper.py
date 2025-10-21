@@ -30,6 +30,7 @@ Example:
 """
 
 from collections import OrderedDict
+import atexit
 import itertools
 import inspect
 import logging
@@ -37,13 +38,18 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cudnn
 import cudnn.datatypes
-import torch
 from cudnn import data_type, heur_mode
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 __all__ = ["Graph", "data_type", "heur_mode", "cudnn"]
 
 # typedefs for readability
 CudnnHandle = int
+_default_cudnn_handle = None
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -173,6 +179,27 @@ def _tensor_like(cudnn_tensor: cudnn.tensor, tensor_type: str = "pyt") -> torch.
     return tensor
 
 
+def get_default_handle(stream: Optional[torch.cuda.Stream] = None) -> CudnnHandle:
+    """Get the default cuDNN handle and set to torch's current stream"""
+    global _default_cudnn_handle
+    if torch is None:
+        raise RuntimeError("PyTorch is not available")
+    if _default_cudnn_handle is None:
+        _default_cudnn_handle = cudnn.create_handle()
+    if stream is None:
+        stream = torch.cuda.current_stream().cuda_stream
+    cudnn.set_stream(handle=_default_cudnn_handle, stream=stream)
+    return _default_cudnn_handle
+
+
+def destroy_default_handle():
+    if _default_cudnn_handle is not None:
+        cudnn.destroy_handle(_default_cudnn_handle)
+
+
+atexit.register(destroy_default_handle)
+
+
 class Graph:
     """Wrapper object for cuDNN computation graph
 
@@ -204,6 +231,8 @@ class Graph:
         workspace_alloc: bool = True,
         **kwargs,
     ) -> None:
+        if torch is None:
+            raise RuntimeError("PyTorch is not available")
         if inputs and not isinstance(inputs, (list, tuple)):
             raise ValueError("inputs must be a list or tuple")
         if outputs and not isinstance(outputs, (list, tuple)):
@@ -255,7 +284,9 @@ class Graph:
             raise RuntimeError("Graph already created")
         self.__graph = cudnn.pygraph(
             # Pass handle only if self.__handle is not None
-            **({"handle": self.__handle} if self.__handle is not None else {}),
+            **(
+                {"handle": self.__handle} if self.__handle not in ["auto", None] else {}
+            ),
             **self.__kwargs,
         )
         return self
@@ -464,7 +495,9 @@ class Graph:
         kwargs = dict(kwargs)  # shallow copy
 
         if "handle" not in kwargs:
-            if self.__handle is not None:
+            if self.__handle == "auto":
+                kwargs["handle"] = get_default_handle()
+            elif self.__handle is not None:
                 kwargs["handle"] = self.__handle
             else:
                 raise RuntimeError("Need to specify cudnn handle to execute graph")
@@ -545,7 +578,9 @@ class Graph:
         # execute the graph
         kwargs = dict(kwargs)  # shallow copy
         if "handle" not in kwargs:
-            if self.__handle is not None:
+            if self.__handle == "auto":
+                kwargs["handle"] = get_default_handle()
+            elif self.__handle is not None:
                 kwargs["handle"] = self.__handle
             else:
                 raise RuntimeError("Need to specify cudnn handle to execute graph")
