@@ -905,7 +905,7 @@ def test_sdpa(
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
         print("Graph not supported")
-        pytest.xfail(repr(e))
+        pytest.skip(repr(e))
     except Exception as e:
         pytest.fail(repr(e))
 
@@ -1315,13 +1315,19 @@ def test_sdpa_backward(
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
-        pytest.xfail(repr(e))
+        pytest.skip(repr(e))
     except Exception as e:
         pytest.fail(repr(e))
 
     graph.build_operation_graph()
-    graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-    graph.check_support()
+    
+    try:
+        graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        graph.check_support()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        print(f"TEST WAIVED: unsupported graph. {e}")
+        pytest.skip("TEST WAIVED: unsupported graph.")
+    
     graph.build_plans()
 
     variant_pack = {
@@ -1438,13 +1444,19 @@ def test_sdpa_backward(
     try:
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
-        pytest.xfail(repr(e))
+        pytest.skip(repr(e))
     except Exception as e:
         pytest.fail(repr(e))
 
     graph.build_operation_graph()
-    graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
-    graph.check_support()
+    
+    try:
+        graph.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        graph.check_support()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        print(f"TEST WAIVED: unsupported graph. {e}")
+        pytest.skip("TEST WAIVED: unsupported graph.")
+    
     graph.build_plans()
 
     variant_pack = {

@@ -803,7 +803,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         graph.validate()
     except cudnn.cudnnGraphNotSupportedError as e:
         print(f"@@@@ Overall result: WAIVED, not supported forward graph. {e}")
-        pytest.xfail("not supported forward graph")
+        pytest.skip("not supported forward graph")
     except Exception as e:
         print(f"@@@@ Overall result: FAILED, unexpected '{e.__class__.__name__}' exception during forward graph validate. {e}")
         pytest.fail("unexpected exception during forward graph validate", pytrace=False)
@@ -815,7 +815,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
         graph.build_plans()
     except cudnn.cudnnGraphNotSupportedError as e:
         print(f"@@@@ Overall result: WAIVED, not supported forward graph after validate. {e}")
-        pytest.xfail("not supported forward graph after validate")
+        pytest.skip("not supported forward graph after validate")
     except Exception as e:
         print(f"@@@@ Overall result: FAILED, unexpected '{e.__class__.__name__}' exception after forward validate. {e}")
         pytest.fail("unexpected exception after forward validate", pytrace=False)
@@ -946,7 +946,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
             graph.validate()
         except cudnn.cudnnGraphNotSupportedError as e:
             print(f"@@@@ Overall result: WAIVED, not supported backward graph. {e}")
-            pytest.xfail("not supported backward graph")
+            pytest.skip("not supported backward graph")
         except Exception as e:
             print(f"@@@@ Overall result: FAILED, unexpected '{e.__class__.__name__}' exception during backward graph validate. {e}")
             pytest.fail("unexpected exception during backward graph validate", pytrace=False)
@@ -958,7 +958,7 @@ def exec_sdpa(cfg, request, cudnn_handle):
             graph.build_plans()
         except cudnn.cudnnGraphNotSupportedError as e:
             print(f"@@@@ Overall result: WAIVED, not supported backward graph after validate. {e}")
-            pytest.xfail("not supported backward graph after validate")
+            pytest.skip("not supported backward graph after validate")
         except Exception as e:
             print(f"@@@@ Overall result: FAILED, unexpected '{e.__class__.__name__}' exception after backward validate. {e}")
             pytest.fail("unexpected exception after backward validate", pytrace=False)
