@@ -503,6 +503,59 @@ def test_randomization_context(seed):
         return ctx
 
 
+def time_execution(
+    fn,
+    *args,
+    num_warmup: int = 3,
+    num_trials: int = 10,
+) -> torch.Tensor:
+    elapsed_times = torch.zeros(num_trials, dtype=torch.float)
+
+    for _ in range(num_warmup):
+        fn(*args)
+        torch.cuda.synchronize()
+
+    for i in range(num_trials):
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+
+        start_event.record()
+        fn(*args)
+        end_event.record()
+        torch.cuda.synchronize()
+
+        elapsed_times[i] = start_event.elapsed_time(end_event)
+
+    return elapsed_times
+
+
+def profile_execution(fn, *args, trace_dir=None):
+    activities = [torch.profiler.ProfilerActivity.CUDA]
+    if trace_dir:
+        activities.append(torch.profiler.ProfilerActivity.CPU)
+
+    with torch.profiler.profile(
+        activities=activities,
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True,
+        on_trace_ready=(
+            torch.profiler.tensorboard_trace_handler(trace_dir) if trace_dir else None
+        ),
+    ) as prof:
+        fn(*args)
+        torch.cuda.synchronize()
+
+    print("Sorted by CUDA time:")
+    print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=10))
+    print()
+
+    if torch.profiler.ProfilerActivity.CPU in activities:
+        print("Sorted by CPU time:")
+        print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
+        print()
+
+
 if __name__ == "__main__":
     num_tests = 10
     seed = 768

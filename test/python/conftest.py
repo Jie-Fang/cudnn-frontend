@@ -36,61 +36,29 @@ def pytest_configure(config):
     print(f"PyTorch CUDA Version: {torch.version.cuda}")
     print(f"PyTorch cuDNN Version: {torch.backends.cudnn.version()}")
 
-
+# fmt: off
 def pytest_addoption(parser):
     # Generic options that may be used by all scripts.
-    parser.addoption(
-        "--dryrun", action="store", nargs="?", const=1, type=int, default=0, help="show repro commands when 1, 2, or 3 (use with '-s')",
-    )
-    parser.addoption(
-        "--diffs", action="store", type=int, default=10, help="set number of numerical mismatches to display",
-    )
-    parser.addoption(
-        "--repro", action="store", type=str, default=None, help="specify config string to run repro function",
-    )
-
+    parser.addoption("--dryrun", action="store", nargs="?", const=1, type=int, default=0, help="show repro commands when 1, 2, or 3 (use with '-s')")
+    parser.addoption("--diffs", action="store", type=int, default=10, help="set number of numerical mismatches to display")
+    parser.addoption("--repro", action="store", type=str, default=None, help="specify config string to run repro function")
+    parser.addoption("--perf", action="store_true", help="enable performance profiling")
 
     # MHA command line options to overwrite specific test dimensions in test_mhas.py and test_mhas_v2.py.
-    parser.addoption(
-        "--b", default=None, type=int, help="[test_mhas.py] batch dimension"
-    )
-    parser.addoption(
-        "--s_q", default=None, type=int, help="[test_mhas.py] query sequence length"
-    )
-    parser.addoption(
-        "--s_kv", default=None, type=int, help="[test_mhas.py] key/value sequence length"
-    )
-    parser.addoption(
-        "--d_qk", default=None, type=int, help="[test_mhas.py] query/key embedding dimension per head",
-    )
-    parser.addoption(
-        "--d_v", default=None, type=int, help="[test_mhas.py] value embedding dimension per head",
-    )
-    parser.addoption(
-        "--h_q", default=None, type=int, help="[test_mhas.py] query number of heads"
-    )
-    parser.addoption(
-        "--h_k", default=None, type=int, help="[test_mhas.py] key number of heads"
-    )
-    parser.addoption(
-        "--h_v", default=None, type=int, help="[test_mhas.py] value number of heads"
-    )
-    parser.addoption(
-        "--deterministic", default=None, type=int, choices=[0, 1], help="[test_mhas.py] force deterministic algorithm",
-    )
-    parser.addoption(
-        "--block_size", default=None, type=int, help="[test_mhas.py] block size for paged attention",
-    )
-    parser.addoption(
-        "--left_bound", default=None, type=int, help="[test_mhas.py] size of the window to the left of the diagonal",
-    )
-    parser.addoption(
-        "--right_bound", default=None, type=int, help="[test_mhas.py] size of the window to the right of the diagonal",
-    )
+    parser.addoption("--b", default=None, type=int, help="[test_mhas.py] batch dimension")
+    parser.addoption("--s_q", default=None, type=int, help="[test_mhas.py] query sequence length")
+    parser.addoption("--s_kv", default=None, type=int, help="[test_mhas.py] key/value sequence length")
+    parser.addoption("--d_qk", default=None, type=int, help="[test_mhas.py] query/key embedding dimension per head")
+    parser.addoption("--d_v", default=None, type=int, help="[test_mhas.py] value embedding dimension per head")
+    parser.addoption("--h_q", default=None, type=int, help="[test_mhas.py] query number of heads")
+    parser.addoption("--h_k", default=None, type=int, help="[test_mhas.py] key number of heads")
+    parser.addoption("--h_v", default=None, type=int, help="[test_mhas.py] value number of heads")
+    parser.addoption("--deterministic", default=None, type=int, choices=[0, 1], help="[test_mhas.py] force deterministic algorithm")
+    parser.addoption("--block_size", default=None, type=int, help="[test_mhas.py] block size for paged attention")
+    parser.addoption("--left_bound", default=None, type=int, help="[test_mhas.py] size of the window to the left of the diagonal")
+    parser.addoption("--right_bound", default=None, type=int, help="[test_mhas.py] size of the window to the right of the diagonal")
 
-    parser.addoption(
-        "--implementation", action="store", default=None, type=str, choices=["AUTO", "COMPOSITE", "UNIFIED"], help="[test_mhas_v2.py], overwrites implementation",
-    )
+    parser.addoption("--implementation", action="store", default=None, type=str, choices=["AUTO", "COMPOSITE", "UNIFIED"], help="[test_mhas_v2.py], overwrites implementation")
 
     # NSA (Native Sparse Attention) command line options for test_NSA_selection_attention.py, test_NSA_swa.py
     parser.addoption("--nsa-batch-size", action="store", default=None, type=int, help="[test_NSA_selection_attention.py, test_NSA_swa.py] Batch size")
@@ -135,3 +103,4 @@ def pytest_addoption(parser):
     parser.addoption("--gemm-amax-mma-tiler", action="store", default=None, type=str, help="[test_gemm_amax.py] MMA tiler (M,N) dimensions as comma-separated values (e.g., '128,128')")
     parser.addoption("--gemm-amax-cluster-shape", action="store", default=None, type=str, help="[test_gemm_amax.py] Cluster shape (M,N) dimensions as comma-separated values (e.g., '1,1')")
     parser.addoption("--gemm-amax-skip-ref", action="store_true", help="[test_gemm_amax.py] Skip reference computation for performance testing")
+# fmt: on

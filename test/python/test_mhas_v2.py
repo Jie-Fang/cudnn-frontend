@@ -27,6 +27,8 @@ from mha_v2_utils import (
     RandomHeadGenerator,
     RandomChoice,
     SlidingWindowMaskGenerator,
+    time_execution,
+    profile_execution,
 )
 
 # fmt: off
@@ -459,18 +461,12 @@ def compute_ref(
     elif diag_align == diag_align.BOTTOM_RIGHT and right_bound != INVALID_BOUND:
         causal_mask_bottom_right = None
         if padding:
-            causal_mask_bottom_right = torch.ones(
-                b, 1, s_q, s_kv, dtype=torch.bool, device=device
-            )
+            causal_mask_bottom_right = torch.ones(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
             seq_len_q, seq_len_kv = padding
             for i in range(b):
-                causal_mask_bottom_right[i, :, :, :].triu_(
-                    diagonal=seq_len_kv[i] - seq_len_q[i] + 1 + right_bound
-                )
+                causal_mask_bottom_right[i, :, :, :].triu_(diagonal=seq_len_kv[i] - seq_len_q[i] + 1 + right_bound)
         else:
-            causal_mask_bottom_right = torch.ones(
-                s_q, s_kv, dtype=torch.bool, device=device
-            )
+            causal_mask_bottom_right = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
             causal_mask_bottom_right.triu_(diagonal=s_kv - s_q + 1 + right_bound)
         s = s.masked_fill(causal_mask_bottom_right, float("-inf"))
 
@@ -485,9 +481,7 @@ def compute_ref(
                 swa_mask = torch.ones(b, 1, s_q, s_kv, dtype=torch.bool, device=device)
                 seq_len_q, seq_len_kv = padding
                 for i in range(b):
-                    swa_mask[i, :, :, :].tril_(
-                        diagonal=seq_len_kv[i] - seq_len_q[i] - left_bound
-                    )
+                    swa_mask[i, :, :, :].tril_(diagonal=seq_len_kv[i] - seq_len_q[i] - left_bound)
             # BRCM + SWA for fixed sequence lengths
             else:
                 swa_mask = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
@@ -542,7 +536,6 @@ def compute_ref(
 # output tensor has shape (B+1, 1, 1, 1)
 # example input seq_len: [2, 4, 1, 6] (along the B dimension)
 # example output ragged_offset: [0, 2, 6, 7, 13] (along the B dimension)
-
 def compute_exclusive_prefix_sum(tensor):
     assert list(tensor.size())[1:]==[1,1,1]
     # We need to provide a tuple of two tensors to torch.cat().
@@ -851,8 +844,13 @@ def exec_sdpa(cfg, request, cudnn_handle):
     # free_mem, total_mem = torch.cuda.mem_get_info()
     # print(f"Free GPU memory (before forward): {free_mem / (1024**3):.4f} GB of {total_mem / (1024**3):.4f} GB")
 
-    # Execute forward cuDNN graph.
-    graph.execute(variant_pack, workspace, handle=cudnn_handle)
+    if request.config.getoption("--perf"):
+        forward_times_ms = time_execution(graph.execute, variant_pack, workspace, cudnn_handle)
+        print(f"@@@@ Forward graph.execute avg_time_ms={forward_times_ms.mean().item():.3f}")
+        profile_execution(graph.execute, variant_pack, workspace, cudnn_handle)
+
+    # Execute forward cuDNN graph
+    graph.execute(variant_pack, workspace, cudnn_handle)
     torch.cuda.synchronize()
 
     if ws_sep is not None and not torch.all(ws_sep==-1).item():
@@ -995,8 +993,13 @@ def exec_sdpa(cfg, request, cudnn_handle):
         # free_mem, total_mem = torch.cuda.mem_get_info()
         # print(f"Free GPU memory (before backward): {free_mem / (1024**3):.4f} GB of {total_mem / (1024**3):.4f} GB")
 
-        # Execute backward cuDNN graph.
-        graph.execute(variant_pack, workspace, handle=cudnn_handle)
+        if request.config.getoption("--perf"):
+            backward_times_ms = time_execution(graph.execute, variant_pack, workspace, cudnn_handle)
+            print(f"@@@@ Backward graph.execute avg_time_ms={backward_times_ms.mean().item():.3f}")
+            profile_execution(graph.execute, variant_pack, workspace, cudnn_handle)
+
+        # Execute backward cuDNN graph
+        graph.execute(variant_pack, workspace, cudnn_handle)
         torch.cuda.synchronize()
 
         if ws_sep is not None and not torch.all(ws_sep==-1).item():
