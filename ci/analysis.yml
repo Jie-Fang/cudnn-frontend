@@ -1,8 +1,7 @@
 .clang_install:template:
     before_script:
         # key rotation required for older ngc images
-        - apt-key del 7fa2af80
-        - apt-get update && apt-get install -y clang
+        - apt update && apt install --allow-unauthenticated -y clang
 
 
 analysis:cudnn_clang_disable_exception:
