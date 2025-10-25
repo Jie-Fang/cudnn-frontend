@@ -163,6 +163,14 @@ init_properties(py::module_& m) {
         .def("set_is_pass_by_value", &cudnn_frontend::graph::Tensor_attributes::set_is_pass_by_value)
         .def("get_uid", &cudnn_frontend::graph::Tensor_attributes::get_uid)
         .def("set_uid", &cudnn_frontend::graph::Tensor_attributes::set_uid)
+        .def("get_reordering_type", &cudnn_frontend::graph::Tensor_attributes::get_reordering_type)
+        .def("set_reordering_type",
+             &cudnn_frontend::graph::Tensor_attributes::set_reordering_type,
+             py::return_value_policy::reference)
+        .def("get_alignment", &cudnn_frontend::graph::Tensor_attributes::get_alignment)
+        .def("set_alignment",
+             &cudnn_frontend::graph::Tensor_attributes::set_alignment,
+             py::return_value_policy::reference)
         .def("set_ragged_offset", &cudnn_frontend::graph::Tensor_attributes::set_ragged_offset)
         .def("__repr__", [](cudnn_frontend::graph::Tensor_attributes const& props) {
             std::ostringstream out;

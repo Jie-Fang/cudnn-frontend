@@ -265,6 +265,14 @@ class PyGraph {
                            cudnn_frontend::DataType_t const& compute_data_type,
                            std::string const& name);
 
+    std::array<std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, 2>
+    block_scale_quantize(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
+                         int32_t block_size,
+                         std::optional<int64_t> axis,
+                         bool transpose,
+                         cudnn_frontend::DataType_t const& compute_data_type,
+                         std::string const& name);
+
     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>
     gen_index(std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>& input,
               int64_t const axis,
