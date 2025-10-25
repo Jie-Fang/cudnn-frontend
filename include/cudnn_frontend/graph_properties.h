@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <iostream>
@@ -72,6 +73,7 @@ class Tensor_attributes {
     bool uid_assigned                  = false;
 
     std::shared_ptr<Tensor_attributes> ragged_offset;
+    int64_t alignment = 16;  // Default to 16 bytes
 
     auto
     fill_from_context(detail::Context const& context) -> Tensor_attributes& {
@@ -229,6 +231,17 @@ class Tensor_attributes {
     auto
     set_reordering_type(TensorReordering_t const value) -> Tensor_attributes& {
         reordering_type = value;
+        return *this;
+    }
+
+    int64_t
+    get_alignment() const {
+        return alignment;
+    }
+
+    auto
+    set_alignment(int64_t const value) -> Tensor_attributes& {
+        alignment = value;
         return *this;
     }
 
