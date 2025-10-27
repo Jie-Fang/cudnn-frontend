@@ -47,7 +47,7 @@ class cudnn_test_graph(test_graph):
         # Some backendEngines are ints, some are strings. Make them all string.
         engine = str(backendEngine)
         if engine == "-1":
-            self.set_heuristics([cudnn.heur_mode.A])
+            self.set_heuristics([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
         elif engine == "-2":
             self.set_heuristics([cudnn.heur_mode.B])
         elif engine == "-3":

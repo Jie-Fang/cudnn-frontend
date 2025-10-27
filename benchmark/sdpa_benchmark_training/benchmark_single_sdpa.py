@@ -358,7 +358,7 @@ if args.sdpa_backend == "cudnn_fe":
         ).set_data_type(cudnn.data_type.FLOAT)
     graph_fwd.validate()
     graph_fwd.build_operation_graph()
-    graph_fwd.create_execution_plans([cudnn.heur_mode.A])
+    graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     graph_fwd.check_support()
     graph_fwd.build_plans()
 
@@ -485,7 +485,7 @@ if args.sdpa_backend == "cudnn_fe":
 
         graph_bwd.validate()
         graph_bwd.build_operation_graph()
-        graph_bwd.create_execution_plans([cudnn.heur_mode.A])
+        graph_bwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
         graph_bwd.check_support()
         graph_bwd.build_plans()
 

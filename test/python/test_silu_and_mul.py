@@ -106,7 +106,7 @@ def test_gemm_silu_and_mul(cudnn_handle):
     # C_fp8.set_output(True)
 
     try:
-        graph.build([cudnn.heur_mode.A])
+        graph.build([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
     except cudnn.cudnnGraphNotSupportedError as e:
         pytest.skip(repr(e))
     except Exception as e:
