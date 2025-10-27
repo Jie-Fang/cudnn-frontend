@@ -390,13 +390,13 @@ def test_sdpa_fwd_fp8(name):
     config = TEST_CONFIGS_FWD[name]
 
     if name in BLOCKED_CONFIGS_FWD:
-        pytest.skip("XFailed: blocked config")
+        pytest.skip("TEST WAIVED: blocked config")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.14.0":
-        pytest.skip("SDPA FP8 fprop testing is limited to cuDNN 9.14.0 or higher")
+        pytest.skip("TEST WAIVED: SDPA FP8 fprop testing is limited to cuDNN 9.14.0 or higher")
     if torch.cuda.get_device_capability()[0] < 10:
-        pytest.skip("SDPA FP8 fprop testing is limited to Blackwell or higher")
+        pytest.skip("TEST WAIVED: SDPA FP8 fprop testing is limited to Blackwell or higher")
 
     torch_itype, cudnn_itype = get_torch_and_cudnn_type(config["itype"])
     torch_otype, cudnn_otype = get_torch_and_cudnn_type(config["otype"])
@@ -418,12 +418,19 @@ def test_sdpa_fwd_fp8(name):
     is_paged_attention = block_size > 0
 
     section_begin("Building Graph")
-    graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size)
-    graph_fwd.validate()
-    graph_fwd.build_operation_graph()
-    graph_fwd.create_execution_plans([cudnn.heur_mode.A])
-    graph_fwd.check_support()
-    graph_fwd.build_plans()
+    try:
+        graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, block_size)
+        graph_fwd.validate()
+        graph_fwd.build_operation_graph()
+        graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
+        graph_fwd.check_support()
+        graph_fwd.build_plans()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        print(f"TEST WAIVED: unsupported graph. {e}")
+        pytest.skip("TEST WAIVED: unsupported graph.")
+    except Exception as e:
+        print(f"Error building graph: {e}")
+        pytest.fail(f"Error building graph: {e}")
     section_end()
 
     section_begin("Allocate and Generate")
@@ -565,13 +572,13 @@ def test_sdpa_bwd_fp8(name):
     config = TEST_CONFIGS_BWD[name]
 
     if name in BLOCKED_CONFIGS_BWD:
-        pytest.skip("XFailed: blocked config")
+        pytest.skip("TEST WAIVED: blocked config")
 
     cudnn_version = LooseVersion(cudnn.backend_version_string())
     if cudnn_version < "9.14.0":
-        pytest.skip("SDPA FP8 bprop testing is limited to cuDNN 9.14.0 or higher")
+        pytest.skip("TEST WAIVED: SDPA FP8 bprop testing is limited to cuDNN 9.14.0 or higher")
     if torch.cuda.get_device_capability()[0] < 10:
-        pytest.skip("SDPA FP8 bprop testing is limited to Blackwell or higher")
+        pytest.skip("TEST WAIVED: SDPA FP8 bprop testing is limited to Blackwell or higher")
 
     torch_itype, cudnn_itype = get_torch_and_cudnn_type(config["itype"])
     torch_otype, cudnn_otype = get_torch_and_cudnn_type(config["otype"])
@@ -592,8 +599,18 @@ def test_sdpa_bwd_fp8(name):
     section_begin("Build Graphs")
     graph_fwd = generate_graph_fwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale, 0)
     graph_bwd = generate_graph_bwd(cudnn_itype, cudnn_otype, b, h_q, h_k, h_v, s_qo, s_kv, d_qk, d_vo, attn_scale)
-    graph_fwd.validate(); graph_fwd.build_operation_graph(); graph_fwd.create_execution_plans([cudnn.heur_mode.A]); graph_fwd.check_support(); graph_fwd.build_plans()
-    graph_bwd.validate(); graph_bwd.build_operation_graph(); graph_bwd.create_execution_plans([cudnn.heur_mode.A]); graph_bwd.check_support(); graph_bwd.build_plans()
+
+    try:
+        graph_fwd.validate(); graph_fwd.build_operation_graph(); graph_fwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK]); graph_fwd.check_support(); graph_fwd.build_plans()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        print(f"TEST WAIVED: unsupported fwd graph. {e}")
+        pytest.skip("TEST WAIVED: unsupported fwd graph.")
+    try:
+        graph_bwd.validate(); graph_bwd.build_operation_graph(); graph_bwd.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK]); graph_bwd.check_support(); graph_bwd.build_plans()
+    except cudnn.cudnnGraphNotSupportedError as e:
+        print(f"TEST WAIVED: unsupported bwd graph. {e}")
+        pytest.skip("TEST WAIVED: unsupported bwd graph.")
+
     section_end()
 
     section_begin("Allocate and Generate")

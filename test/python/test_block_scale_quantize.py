@@ -238,7 +238,7 @@ class TestBlockScaleQuantizeMatmul:
         # Build and validate graph (lines 540-551)
         g.validate()
         g.build_operation_graph()
-        g.create_execution_plans([cudnn.heur_mode.A])
+        g.create_execution_plans([cudnn.heur_mode.A, cudnn.heur_mode.FALLBACK])
         g.check_support()
         g.build_plans()
 
