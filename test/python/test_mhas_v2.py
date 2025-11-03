@@ -51,6 +51,11 @@ def int_cli_option(org_val, request, cli_opt):
     val = request.config.getoption(cli_opt)
     return val if type(val) == int else org_val
 
+def implementation_cli_option(org_val, request, cli_opt):
+    str_val = request.config.getoption(cli_opt)
+    val = getattr(cudnn.attention_implementation, str_val, None) if str_val else None
+    return val if isinstance(val, cudnn.attention_implementation) else org_val
+
 def convert_to_cudnn_type(torch_type):
     if torch_type == torch.float16:
         return cudnn.data_type.HALF
@@ -274,7 +279,7 @@ class testConfig:
             # print(f"seq_len_q        = {truncated_list(20, 3, self.seq_len_q)}")
             # print(f"seq_len_kv       = {truncated_list(20, 3, self.seq_len_kv)}")
             print(f"data_type        = {self.cfg.data_type}")
-            print(f"implementation   = {implementation_names[int(self.cfg.implementation)]} ({int(self.cfg.implementation)})")
+            print(f"implementation   = {self.cfg.implementation.name}")
             if reg_run:
                 # Convert enums to integers and handle torch dtypes for proper serialization
                 cfg_dict = asdict(self.cfg)
@@ -282,7 +287,7 @@ class testConfig:
                 if cfg_dict.get('diag_align') is not None:
                     cfg_dict['diag_align'] = cfg_dict['diag_align'].value
                 if cfg_dict.get('implementation') is not None:
-                    cfg_dict['implementation'] = cfg_dict['implementation'].value
+                    cfg_dict['implementation'] = cfg_dict['implementation'].name
                 # Convert torch dtype to string
                 if cfg_dict.get('data_type') is not None:
                     cfg_dict['data_type'] = str(cfg_dict['data_type'])
@@ -1249,13 +1254,13 @@ def test_sdpa_random_fwd_unified_L0(env_info, test_no, request, cudnn_handle):
         d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(64,64), (128,128), (192,128)]),
         head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
-        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
-        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),
-        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),  # Modified from non-unified test
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
-    test.cfg.implementation = cudnn.attention_implementation.UNIFIED
+    test.cfg.implementation = implementation_cli_option(cudnn.attention_implementation.UNIFIED, request, "--implementation")
 
     test.showConfig(test_no, request, reg_run=True)
 
@@ -1356,12 +1361,12 @@ def test_sdpa_random_sq1_unified_L0(env_info, test_no, request, cudnn_handle):
         head_count=RandomHeadGenerator(min=1, max=32, head_group_options=(1, 4, 1)),
         data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
         with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
-        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
         is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 0, "full" : 1}),
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
-    test.cfg.implementation = cudnn.attention_implementation.UNIFIED
+    test.cfg.implementation = implementation_cli_option(cudnn.attention_implementation.UNIFIED, request, "--implementation")
 
     test.showConfig(test_no, request, reg_run=True)
 
@@ -1403,6 +1408,39 @@ def test_sdpa_random_lean_attn_L0(env_info, test_no, request, cudnn_handle):
 
     exec_sdpa(test.cfg, request, cudnn_handle)
 
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=222), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_random_lean_attn_unified_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=32),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1, s_kv_min=513, s_kv_max=2048, s_q_distribution={"s_q=1":100, "s_q=s_kv":0, "s_q=random":0}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=32, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 1}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+    test.cfg.implementation = implementation_cli_option(cudnn.attention_implementation.UNIFIED, request, "--implementation")
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
 # # ==================================
 # # L0 ragged tests
 # # ==================================
@@ -1433,6 +1471,39 @@ def test_sdpa_random_fwd_ragged_L0(env_info, test_no, request, cudnn_handle):
         stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_random_fwd_ragged_unified_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=1024, s_kv_min=1, s_kv_max=1024, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),  # Modified from non-unified test
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 1, "padded" : 0, "full" : 0}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+    test.cfg.implementation = implementation_cli_option(cudnn.attention_implementation.UNIFIED, request, "--implementation")
 
     test.showConfig(test_no, request, reg_run=True)
 
@@ -1504,6 +1575,42 @@ def test_sdpa_fwd_paged_L0(env_info, test_no, request, cudnn_handle):
     ) as randomization_ctx:
         test.cfg = randomization_ctx(rng, data_seed)
         test.cfg.is_paged = True
+        test.cfg.implementation=cudnn.attention_implementation.COMPOSITE  # FIXNOW
+
+    test.showConfig(test_no, request, reg_run=True)
+
+    exec_sdpa(test.cfg, request, cudnn_handle)
+
+
+@pytest.mark.parametrize("test_no", tlist(num_tests=128, rng_seed=888), ids=lambda p: f"test{p[0]}")
+@pytest.mark.L0
+def test_sdpa_fwd_paged_unified_L0(env_info, test_no, request, cudnn_handle):
+
+    test = testConfig(**env_info, implementation=cudnn.attention_implementation.AUTO)
+
+    print(f"test: {test} hash {abs(hash(test_no))}")
+
+    geom_seed = abs(hash(test_no))
+    data_seed = test_no[2]
+
+    rng = random.Random(geom_seed)
+
+    # Create the randomization context within the test
+    with RandomizationContext(
+        batches=RandomBatchSize(min=1, max=8, with_high_probability=[1,4]),
+        s_q_s_kv = RandomSequenceLength(s_q_min=1, s_q_max=64, s_kv_min=1, s_kv_max=512, s_q_distribution={"s_q=1":0, "s_q=s_kv":5, "s_q=random":10}),
+        d_qk_d_v=RandomHiddenDimSize(d_qk_min=1, d_qk_max=128, d_v_min=1, d_v_max=128, head_dim_distribution={"d_qk=d_v":1, "d_qk=random":1}, with_high_probability=[(128,128), (192,128)]),
+        head_count=RandomHeadGenerator(min=1, max=8, head_group_options=(1, 4, 1)),
+        data_type=RandomChoice({torch.float16 : 1, torch.bfloat16 : 2}),
+        with_sliding_mask=SlidingWindowMaskGenerator(no_mask=10),  # Modified from non-unified test
+        diag_align=RandomChoice({cudnn.diagonal_alignment.TOP_LEFT : 1, cudnn.diagonal_alignment.BOTTOM_RIGHT : 0}),  # Modified from non-unified test
+        is_q_ragged_or_padded_or_full=RandomChoice({"ragged" : 0, "padded" : 1, "full" : 0}),
+        stats_layout=RandomChoice({"ragged" : 0, "full" : 0, "disabled" : 1}),
+        block_size=RandomBlockSize(min=1, max=1024, with_high_probability=[1,32,128]),
+    ) as randomization_ctx:
+        test.cfg = randomization_ctx(rng, data_seed)
+        test.cfg.is_paged = True
+    test.cfg.implementation = implementation_cli_option(cudnn.attention_implementation.UNIFIED, request, "--implementation")
 
     test.showConfig(test_no, request, reg_run=True)
 
@@ -1566,7 +1673,7 @@ def test_repro(env_info, request, cudnn_handle):
     if 'diag_align' in repro_dict and repro_dict['diag_align'] is not None:
         repro_dict['diag_align'] = cudnn.diagonal_alignment(repro_dict['diag_align'])
     if 'implementation' in repro_dict and repro_dict['implementation'] is not None:
-        repro_dict['implementation'] = cudnn.attention_implementation(repro_dict['implementation'])
+        repro_dict['implementation'] = getattr(cudnn.attention_implementation, repro_dict['implementation'])
     # Convert string dtype back to torch dtype
     if 'data_type' in repro_dict and repro_dict['data_type'] is not None:
         if 'torch.float16' in repro_dict['data_type']:
