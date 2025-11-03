@@ -261,6 +261,10 @@ to_string(cudnnBackendBehaviorNote_t note) {
         case CUDNN_BEHAVIOR_NOTE_SUPPORTS_CUDA_GRAPH_NATIVE_API:
             return std::string("CUDNN_BEHAVIOR_NOTE_SUPPORTS_CUDA_GRAPH_NATIVE_API");
 #endif
+#if (CUDNN_VERSION >= 91500)
+        case CUDNN_BEHAVIOR_NOTE_CUBLASLT_DEPENDENCY:
+            return std::string("CUDNN_BEHAVIOR_NOTE_CUBLASLT_DEPENDENCY");
+#endif
 #ifndef NO_DEFAULT_IN_SWITCH
         default:
             return std::string("UNKNOWN_BEHAVIOR_NOTE");
@@ -629,6 +633,7 @@ enum class BehaviorNote_t {
     REQUIRES_FILTER_INT8x32_REORDER,
     REQUIRES_BIAS_INT8x32_REORDER,
     SUPPORTS_CUDA_GRAPH_NATIVE_API,
+    CUBLASLT_DEPENDENCY,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(BehaviorNote_t,
@@ -638,6 +643,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(BehaviorNote_t,
                                  {BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER, "REQUIRES_FILTER_INT8x32_REORDER"},
                                  {BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER, "REQUIRES_BIAS_INT8x32_REORDER"},
                                  {BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API, "SUPPORTS_CUDA_GRAPH_NATIVE_API"},
+                                 {BehaviorNote_t::CUBLASLT_DEPENDENCY, "CUBLASLT_DEPENDENCY"},
                              })
 
 enum class NumericalNote_t {
@@ -1413,8 +1419,16 @@ convert_to_cudnn_type(cudnn_frontend::BehaviorNote_t const mode, cudnnBackendBeh
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
         case BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API:
 #if (CUDNN_VERSION >= 90500)
-            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90300, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(90500, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
             cudnn_mode = CUDNN_BEHAVIOR_NOTE_SUPPORTS_CUDA_GRAPH_NATIVE_API;
+            return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+#else
+            return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
+#endif
+        case BehaviorNote_t::CUBLASLT_DEPENDENCY:
+#if (CUDNN_VERSION >= 91500)
+            NV_CUDNN_FE_DYNAMIC_CHECK_CUDNN_BACKEND_VERSION(91500, cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE);
+            cudnn_mode = CUDNN_BEHAVIOR_NOTE_CUBLASLT_DEPENDENCY;
             return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 #else
             return cudnnStatus_t::CUDNN_STATUS_INVALID_VALUE;
@@ -1440,6 +1454,10 @@ convert_from_cudnn_type(cudnnBackendBehaviorNote_t const cudnn_mode) {
 #if (CUDNN_VERSION >= 90500)
         case CUDNN_BEHAVIOR_NOTE_SUPPORTS_CUDA_GRAPH_NATIVE_API:
             return BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API;
+#endif
+#if (CUDNN_VERSION >= 91500)
+        case CUDNN_BEHAVIOR_NOTE_CUBLASLT_DEPENDENCY:
+            return BehaviorNote_t::CUBLASLT_DEPENDENCY;
 #endif
 
 #ifndef NO_DEFAULT_IN_SWITCH
