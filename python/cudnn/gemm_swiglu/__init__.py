@@ -1,6 +1,9 @@
-from .api import GemmSwiglu, gemm_swiglu_wrapper
+from .api import (
+    GemmSwigluSm100,
+    gemm_swiglu_wrapper_sm100,
+)
 
 __all__ = [
-    "GemmSwiglu",
-    "gemm_swiglu_wrapper",
+    "GemmSwigluSm100",
+    "gemm_swiglu_wrapper_sm100",
 ]

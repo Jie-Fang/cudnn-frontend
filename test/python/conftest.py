@@ -8,6 +8,13 @@ import argparse
 # =================== Fixtures =====================
 @pytest.fixture(scope="session", autouse=True)
 def cudnn_handle():
+    try:
+        _ = cudnn.backend_version()
+    except Exception:
+        # cuDNN not available; do not create a handle so tests not requiring it can run
+        yield None
+        return
+    
     # Create CUDA stream and graph objects
     stream = torch.cuda.Stream()
     cudnn_handle = cudnn.create_handle()
@@ -28,7 +35,10 @@ def pytest_configure(config):
     print("===== cudnn-frontend conftest.py ====")
     print(f"cuDNN Frontend Version: {cudnn.__version__}")
     print(f"cuDNN Frontend Path: {cudnn.__file__}")
-    print(f"cuDNN Backend Version: {cudnn.backend_version()}")
+    try:
+        print(f"cuDNN Backend Version: {cudnn.backend_version()}")
+    except Exception as e:
+        print(f"cuDNN Backend not available: {e}")
     print(f"PyTorch Version: {torch.__version__}")
     print(f"PyTorch Path: {torch.__file__}")
     print(f"PyTorch GPU Name: {torch.cuda.get_device_name()}")
@@ -77,14 +87,7 @@ def pytest_addoption(parser):
 
     # GEMM SwiGLU command line options for test_gemm_swiglu.py
     parser.addoption("--gemm-swiglu-mnkl", action="store", default=None, type=str, help="[test_gemm_swiglu.py] M,N,K,L dimensions as comma-separated values (e.g., '256,256,512,1')")
-    parser.addoption("--gemm-swiglu-ab-dtype", action="store", default=None, type=str, help="[test_gemm_swiglu.py] A and B matrix data type (float16, bfloat16, float32)")
-    parser.addoption("--gemm-swiglu-c-dtype", action="store", default=None, type=str, help="[test_gemm_swiglu.py] C matrix data type (float16, bfloat16, float32)")
-    parser.addoption("--gemm-swiglu-glu-dtype", action="store", default=None, type=str, help="[test_gemm_swiglu.py] GLU output data type (float16, bfloat16, float32)")
-    parser.addoption("--gemm-swiglu-acc-dtype", action="store", default=None, type=str, help="[test_gemm_swiglu.py] Accumulator data type (float16, bfloat16, float32)")
-    parser.addoption("--gemm-swiglu-a-major", action="store", default=None, type=str, help="[test_gemm_swiglu.py] A matrix major layout (m or k)")
-    parser.addoption("--gemm-swiglu-b-major", action="store", default=None, type=str, help="[test_gemm_swiglu.py] B matrix major layout (n or k)")
-    parser.addoption("--gemm-swiglu-c-major", action="store", default=None, type=str, help="[test_gemm_swiglu.py] C matrix major layout (m or n)")
-    parser.addoption("--gemm-swiglu-use-2cta-instrs", action="store_true", help="[test_gemm_swiglu.py] Use 2CTA instructions")
+    
     parser.addoption("--gemm-swiglu-mma-tiler", action="store", default=None, type=str, help="[test_gemm_swiglu.py] MMA tiler (M,N) dimensions as comma-separated values (e.g., '128,128')")
     parser.addoption("--gemm-swiglu-cluster-shape", action="store", default=None, type=str, help="[test_gemm_swiglu.py] Cluster shape (M,N) dimensions as comma-separated values (e.g., '1,1')")
     parser.addoption("--gemm-swiglu-alpha", action="store", default=None, type=float, help="[test_gemm_swiglu.py] Alpha scaling factor")
@@ -92,14 +95,6 @@ def pytest_addoption(parser):
 
     # GEMM Amax command line options for test_gemm_amax.py
     parser.addoption("--gemm-amax-mnkl", action="store", default=None, type=str, help="[test_gemm_amax.py] M,N,K,L dimensions as comma-separated values (e.g., '512,256,256,1')")
-    parser.addoption("--gemm-amax-ab-dtype", action="store", default=None, type=str, help="[test_gemm_amax.py] A and B matrix data type (float16, bfloat16, float32, fp8_e4m3, fp8_e5m2)")
-    parser.addoption("--gemm-amax-sf-dtype", action="store", default=None, type=str, help="[test_gemm_amax.py] Scale factor data type (fp8_e8m0fnu, fp8_e4m3, fp8_e5m2)")
-    parser.addoption("--gemm-amax-sf-vec-size", action="store", default=None, type=int, help="[test_gemm_amax.py] Scale factor vector size (e.g., 32)")
-    parser.addoption("--gemm-amax-c-dtype", action="store", default=None, type=str, help="[test_gemm_amax.py] C matrix data type (float16, bfloat16, float32)")
-    parser.addoption("--gemm-amax-acc-dtype", action="store", default=None, type=str, help="[test_gemm_amax.py] Accumulator data type (float16, bfloat16, float32)")
-    parser.addoption("--gemm-amax-a-major", action="store", default=None, type=str, help="[test_gemm_amax.py] A matrix major layout (m or k)")
-    parser.addoption("--gemm-amax-b-major", action="store", default=None, type=str, help="[test_gemm_amax.py] B matrix major layout (n or k)")
-    parser.addoption("--gemm-amax-c-major", action="store", default=None, type=str, help="[test_gemm_amax.py] C matrix major layout (m or n)")
     parser.addoption("--gemm-amax-mma-tiler", action="store", default=None, type=str, help="[test_gemm_amax.py] MMA tiler (M,N) dimensions as comma-separated values (e.g., '128,128')")
     parser.addoption("--gemm-amax-cluster-shape", action="store", default=None, type=str, help="[test_gemm_amax.py] Cluster shape (M,N) dimensions as comma-separated values (e.g., '1,1')")
     parser.addoption("--gemm-amax-skip-ref", action="store_true", help="[test_gemm_amax.py] Skip reference computation for performance testing")

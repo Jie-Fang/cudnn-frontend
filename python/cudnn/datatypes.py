@@ -86,7 +86,7 @@ def is_cutlass_available():
                 getattr(torch, "int8", None): getattr(cutlass, "Int8", None),
                 getattr(torch, "int32", None): getattr(cutlass, "Int32", None),
                 getattr(torch, "int64", None): getattr(cutlass, "Int64", None),
-                getattr(torch, "uint8", None): getattr(cutlass, "UInt8", None),
+                getattr(torch, "uint8", None): getattr(cutlass, "Uint8", None),
                 getattr(torch, "bool", None): getattr(cutlass, "Boolean", None),
                 getattr(torch, "float8_e4m3fn", None): getattr(
                     cutlass, "Float8E4M3FN", None
