@@ -298,7 +298,8 @@ init_properties(py::module_& m) {
         .value("RUNTIME_COMPILATION", cudnn_frontend::BehaviorNote_t::RUNTIME_COMPILATION)
         .value("REQUIRES_FILTER_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_FILTER_INT8x32_REORDER)
         .value("REQUIRES_BIAS_INT8x32_REORDER", cudnn_frontend::BehaviorNote_t::REQUIRES_BIAS_INT8x32_REORDER)
-        .value("SUPPORTS_CUDA_GRAPH_NATIVE_API", cudnn_frontend::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API);
+        .value("SUPPORTS_CUDA_GRAPH_NATIVE_API", cudnn_frontend::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API)
+        .value("CUBLASLT_DEPENDENCY", cudnn_frontend::BehaviorNote_t::CUBLASLT_DEPENDENCY);
 
     py::enum_<cudnn_frontend::DiagonalAlignment_t>(m, "diagonal_alignment")
         .value("TOP_LEFT", cudnn_frontend::DiagonalAlignment_t::TOP_LEFT)

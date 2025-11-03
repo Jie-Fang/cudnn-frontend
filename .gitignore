@@ -6,6 +6,7 @@ venv/
 .cache/
 __pycache__/
 .vscode/
+.cursor/
 .nvcode/
 CMakePresets.json
 _compiled_module.cpython*.so
